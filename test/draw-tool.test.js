@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -671,4 +671,79 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map, 'medium')), { left: 156, right: 264, top: 91, bottom: 149 })
   const { at, ...rest } = pinned
   assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
+})
+
+// A SudokuPad with every internal the features declare, and the helpers that take one away.
+const completeRoots = () => {
+  const app = { on () {}, getToolNames () {}, puzzle: { on () {} } }
+  const Framework = { getApp () {}, getData () {}, setData () {}, removeData () {}, addTool () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { svgRenderer: { getElem () {} }, puzzle: {}, tools: { colour: {} } } }
+  return { Framework, app }
+}
+const withoutPath = (roots, internal) => {
+  const [root, ...keys] = internal.split('.')
+  const last = keys.pop()
+  delete keys.reduce((owner, key) => owner[key], roots[root])[last]
+  return roots
+}
+
+test('Text Annotation declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeRoots()), new Map())
+})
+
+test('without one internal, only the features that need it are lacking', () => {
+  const cases = [
+    ['Framework.addTool', ['tool']], ['app.getToolNames', ['tool']],
+    ['Framework.showDialog', ['tool', 'settings']],
+    ['Framework.getApp', ['notes', 'tool']],
+    ['Framework.app.svgRenderer.getElem', ['notes', 'tool']], ['Framework.app.puzzle', ['notes', 'tool']],
+    ['app.puzzle.on', ['notes', 'tool']], ['app.on', ['notes', 'tool']],
+    ['Framework.getData', ['saved']], ['Framework.setData', ['saved']], ['Framework.removeData', ['saved']],
+    ['Framework.addSetting', ['settings']], ['Framework.closeDialog', ['settings']],
+    ['Framework.app.tools.colour', ['presets']]
+  ]
+  for (const [internal, features] of cases) {
+    assert.deepEqual(lackingInternals(FEATURES, withoutPath(completeRoots(), internal)), new Map([[internal, features]]), internal)
+  }
+})
+
+test('Text Annotation declares its features through the shared guard, with no guard code of its own', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'draw-tool.user.js'), 'utf8')
+  const own = source.replace(/\/\/ <lib:[a-z-]+>[\s\S]*?\/\/ <\/lib:[a-z-]+>/g, '')
+  assert.match(own, /createGuard\(\{ script: 'draw-tool'[^\n]*features: FEATURES \}\)/)
+  for (const text of ['has no getApp or addTool', 'no Text Annotation tool was added']) assert.equal(own.includes(text), false, text)
+})
+
+// Every call into SudokuPad in the script's own code, by its line: the declarations aside, each one is inside a feature's `run` or `wrap`, or in a function only
+// a feature's entry point calls (a window listener, a SudokuPad callback or a tool handler, all made through `under`, `onWindow` or the `tool` wrapper).
+const SUDOKUPAD_CALLS = [
+  'const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)',
+  'const writeData = (key, value) => storage.run(() => Framework.setData(key, value))',
+  'addSetting: (setting) => Framework.addSetting(setting),',
+  'showDialog: (options) => Framework.showDialog(options),',
+  'closeDialog: () => settingsUi.run(() => Framework.closeDialog())',
+  'const boardSvg = () => Framework.app.svgRenderer.getElem()',
+  'boardNotes.run(() => { if (Framework.app.puzzle.currentPuzzle) redraw() })',
+  'const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)',
+  'textTool.run(() => Framework.showDialog({',
+  'saveDrawingTo(Framework, currentPuzzleKey(), drawing)',
+  'drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))',
+  'if (Framework.app.tool === TOOL_NAME && !overControl(event)) event.preventDefault()',
+  'if (Framework.app.tool !== TOOL_NAME) return false',
+  'return Framework.app.tool === TOOL_NAME && selected.length > 0 && Boolean(ARROWS[event.key])',
+  'guard.probe({ roots: { Framework, app }, store: Framework })',
+  'Framework.addTool({',
+  'app.puzzle.on(\'loaded\', under(boardNotes, showSavedDrawing))',
+  'app.on(\'restarted\', under(boardNotes, emptyDrawing))',
+  'if (app.puzzle.currentPuzzle) showSavedDrawing()',
+  'if (typeof Framework.getApp === \'function\') Framework.getApp().then(start)',
+  'Framework.closeDialog()'
+]
+
+test('every call into SudokuPad sits under a feature: a new bare Framework or app call fails until it is placed', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'draw-tool.user.js'), 'utf8')
+  const own = source.replace(/\/\/ <lib:[a-z-]+>[\s\S]*?\/\/ <\/lib:[a-z-]+>/g, '')
+  const calls = own.split('\n').map((line) => line.trim())
+    .filter((line) => /\bFramework\b|\bapp\.|\bToolPen\b/.test(line) && !line.startsWith('//') && !/^(const BOARD|\w+: \{ label|needs:)/.test(line) && !/typeof Framework === 'undefined'/.test(line))
+  assert.deepEqual(calls.filter((line) => !SUDOKUPAD_CALLS.includes(line)), [])
+  assert.deepEqual(SUDOKUPAD_CALLS.filter((line) => !calls.includes(line)), [])
 })
