@@ -29,7 +29,7 @@ describe('the error log', { concurrency: false }, () => {
   after(async () => { await context?.close() })
 
   it('records the feature turned off, with the script, both versions and the page', async () => {
-    const [record, ...rest] = JSON.parse(await p.evaluate((key) => localStorage.getItem(key), LOG_KEY))
+    const [record, ...rest] = JSON.parse(await p.evaluate((key) => window.localStorage.getItem(key), LOG_KEY))
     assert.deepEqual(rest, [])
     assert.deepEqual({ script: record.script, feature: record.feature, missing: record.missing }, { script: 'dark-page', feature: 'saved color', missing: 'Framework.getData' })
     assert.match(record.version, /^\d+\.\d+\.\d+$/)
@@ -50,7 +50,7 @@ describe('the error log', { concurrency: false }, () => {
   it('Clear empties the log, and Copy error log then says so', async () => {
     await actButton(p, 'clear-error-log').click()
     await p.locator(STATUS).filter({ hasText: 'Error log cleared.' }).waitFor()
-    assert.equal(await p.evaluate((key) => localStorage.getItem(key), LOG_KEY), null)
+    assert.equal(await p.evaluate((key) => window.localStorage.getItem(key), LOG_KEY), null)
     await actButton(p, 'copy-error-log').click()
     await p.locator(STATUS).filter({ hasText: 'The error log is empty.' }).waitFor()
   })
