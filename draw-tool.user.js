@@ -1140,6 +1140,12 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
+  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  function snapshotStore (store, keys) {
+    const before = keys.map((key) => [key, store.getData(key)])
+    return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
+  }
+
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
@@ -1236,19 +1242,30 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
+    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
+      let restore = null
       try {
-        if (failed || changed()) save()
+        if (failed || changed()) {
+          restore = snapshot ? snapshot() : null
+          save()
+        }
       } catch (error) {
         failed = true
+        let message = `Not saved: ${errorText(error)}`
+        try {
+          if (restore) restore()
+        } catch (restoreError) {
+          message += `; the earlier values could not be put back: ${errorText(restoreError)}`
+        }
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), message)
         return
       }
       close()
@@ -1657,7 +1674,7 @@
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)
   const writeData = (key, value) => storage.run(() => Framework.setData(key, value))
-  const savedData = { getData: readData }
+  const savedData = { getData: readData, setData: writeData, removeData: (key) => storage.run(() => Framework.removeData(key)) }
   // What the settings dialog's shell is handed in place of Framework: its calls into SudokuPad run under the settings.
   const dialogs = {
     addSetting: (setting) => Framework.addSetting(setting),
@@ -2034,6 +2051,22 @@
     style.textContent = colors ? colorsCss(colors) : ''
   }
 
+  // The colors, outline, box color and frame as stored and as shown, as a function that puts them all back after a Save that failed half-way.
+  function snapshotSave () {
+    const restoreStored = snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY])
+    const was = { colors, outline, boxColor, frame }
+    return () => {
+      try {
+        restoreStored()
+      } finally {
+        ;({ colors, outline, boxColor, frame } = was)
+        showColors()
+        if (colors) refreshPickers(CLASS_PREFIX, (n) => colors[n])
+        showBoxes()
+      }
+    }
+  }
+
   function saveColors (next) {
     colors = next
     writeData(COLORS_KEY, colors)
@@ -2131,13 +2164,14 @@
       styleId: DIALOG_STYLE_ID,
       css: DIALOG_CSS,
       changed: () => Object.values(edits()).some(Boolean),
-      save: under(settingsUi, () => {
+      snapshot: snapshotSave,
+      save: () => {
         const edited = edits()
         if (edited.colors) saveColors(draft)
         if (edited.outline) saveOutline(draftOutline)
         if (edited.box) saveBoxColor(draftBox)
         if (edited.frame) saveFrame(draftFrame)
-      })
+      }
     }), () => null)
     if (!box) return
     const draw = () => {

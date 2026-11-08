@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.30.3
+// @version      1.30.4
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.30.3'
+  const VERSION = '1.30.4'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   // SudokuPad gives `.grid` the hand (`cursor: pointer`) under every tool; the pen draws at the exact point, so it gets the crosshair. `.controls-main` carries `tool-pen` while the pen is the current tool.
@@ -1057,6 +1057,25 @@
   function saveColors (set, pickedPreset) {
     savedData.setData(COLORS_KEY, storedPenColors(set))
     adoptColors(set, pickedPreset)
+  }
+
+  // The saved pen colors and settings with the state mirroring them, as a function that puts them all back after a Save that failed half-way.
+  function snapshotSave () {
+    const restoreStored = snapshotStore(savedData, [COLORS_KEY, ...SETTING_NAMES.map((name) => SETTINGS[name].key)])
+    const wasActive = active
+    const wasPicked = activePickedPreset
+    const wasSettings = { ...inForce }
+    return () => {
+      try {
+        restoreStored()
+      } finally {
+        active = wasActive
+        activePickedPreset = wasPicked
+        Object.assign(inForce, wasSettings)
+        effectsOf(SETTING_NAMES).forEach((effect) => effect())
+        adoptColors(wasActive, wasPicked)
+      }
+    }
   }
 
   function savePenColor (pen, value) {
@@ -2811,6 +2830,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       bodyId: EDITOR_ID,
       centerOverBoard: false,
       changed: () => colorsChosen || changedSettings(draft, inForce).length > 0,
+      snapshot: snapshotSave,
       save: () => {
         if (colorsChosen) saveColors(set, pickedPreset)
         saveSettings(draft)
@@ -2891,6 +2911,12 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
+  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  function snapshotStore (store, keys) {
+    const before = keys.map((key) => [key, store.getData(key)])
+    return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
+  }
+
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
@@ -2987,19 +3013,30 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
+    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
+      let restore = null
       try {
-        if (failed || changed()) save()
+        if (failed || changed()) {
+          restore = snapshot ? snapshot() : null
+          save()
+        }
       } catch (error) {
         failed = true
+        let message = `Not saved: ${errorText(error)}`
+        try {
+          if (restore) restore()
+        } catch (restoreError) {
+          message += `; the earlier values could not be put back: ${errorText(restoreError)}`
+        }
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), message)
         return
       }
       close()
