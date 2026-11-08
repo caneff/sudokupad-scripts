@@ -22,6 +22,9 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   show it, with their scripts (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
   After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
   and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
+- **Slideshows**: `site/slideshows.json` is the one source of every slideshow's pictures, `alt` text and captions. After editing it, or retaking a slide picture,
+  run `node sync-slides.js`: it rewrites each `<!-- slideshow:id -->` block on the homepage and the details page, picture tags included.
+  Never edit inside a block; `test/site.test.js` fails until you run it.
 - **Shared code**: after editing `lib/<name>.js`, run `node sync-lib.js`, as `node tag-pictures.js` is run after a picture: it rewrites each
   marked block in the `*.user.js` and raises the version of every script it changed. `test/sync-lib.test.js` fails until you do.
 - **No feature relies on a right-button drag** (Chris, 2026-11-07): SudokuPad's Test Large Puzzle UI setting pans the board on it and no
