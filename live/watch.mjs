@@ -26,26 +26,25 @@ export const FULL_RUN_MS = 7 * 24 * 60 * 60 * 1000
 export const fullRunPath = (env, home) => join(dirname(harPath(env, home)), 'last-full-run')
 
 // Due with no usable record: a damaged file forces a run rather than skipping one.
-export const fullRunDue = ({ lastFullRun, now }) => lastFullRun === null || now - lastFullRun >= FULL_RUN_MS
+// A record in the future (a skewed clock, a corrupted number) would make the run never due, so it counts as none.
+export const fullRunDue = ({ lastFullRun, now }) => lastFullRun === null || lastFullRun > now || now - lastFullRun >= FULL_RUN_MS
 
-export function readLastVersion (file) {
+export function readState (file) {
   try { return readFileSync(file, 'utf8').trim() || null } catch (e) {
     if (e.code === 'ENOENT') return null
     throw e
   }
 }
 
-export function writeLastVersion (file, version) {
+export function writeState (file, version) {
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, `${version}\n`)
 }
 
 export function readLastFullRun (file) {
-  const ms = Number(readLastVersion(file))
+  const ms = Number(readState(file))
   return Number.isFinite(ms) && ms > 0 ? ms : null
 }
-
-export const writeLastFullRun = (file, ms) => writeLastVersion(file, String(ms))
 
 // What failed in `node --test --test-reporter=tap` output. `checks` are tests that ran and failed. `unrun` are
 // what never got to run: a file that failed to load (a failure at the top level) and a test cancelled by a
@@ -68,8 +67,10 @@ export function failedChecks (tap) {
   return { checks, unrun }
 }
 
+// `once`: a weekly run on a version that is still red must not file the same bug again while one is open.
 export const issueFor = (version, { checks, unrun }, { weekly = false } = {}) => ({
   title: `Live tests fail on SudokuPad ${version}`,
+  once: true,
   body: [
     `\`npm run test:live\` is red against SudokuPad ${version}, recorded again for the run${weekly ? ' (the weekly run: the version had not changed)' : ''}. Failing checks:`,
     '',
@@ -85,7 +86,7 @@ export const didNotRunIssue = (version, why) => ({
   title: 'Watch did not run: the live suite could not be checked',
   once: true,
   body: [
-    `\`npm run watch:live\` could not check SudokuPad ${version}. Nothing was remembered, so the next run tries again. This is not a SudokuPad failure; what stopped it:`,
+    `\`npm run watch:live\` could not check SudokuPad ${version}. Nothing was remembered, so the next run tries again. The cause may be this machine (no Chromium, no network) or a SudokuPad change that stopped the suite starting (the version tag gone, a control renamed); what stopped it:`,
     '',
     why,
     '',
@@ -93,8 +94,8 @@ export const didNotRunIssue = (version, why) => ({
   ].join('\n')
 })
 
-// 'unchanged', 'green', 'red', or 'did-not-run': the suite could not get to its checks (or the version could not be
-// read), so a bug for it would blame SudokuPad. That files the did-not-run issue and remembers nothing.
+// A suite that could not get to its checks (or a version that could not be read) files the did-not-run issue and
+// remembers nothing: a bug for it would blame SudokuPad, which may or may not be at fault.
 export async function watch ({ liveVersion, lastVersion, lastFullRun, now, runSuite, fileIssue, remember, rememberFullRun }) {
   let version = 'unknown'
   const didNotRun = async (why) => {
@@ -141,13 +142,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const fullFile = fullRunPath(process.env, homedir())
   const outcome = await watch({
     liveVersion,
-    lastVersion: () => readLastVersion(file),
+    lastVersion: () => readState(file),
     lastFullRun: () => readLastFullRun(fullFile),
     now: () => Date.now(),
     runSuite: () => run('npm', ['run', 'test:live'], { env: { ...process.env, LIVE_REFRESH: '1', NODE_OPTIONS: '--test-reporter=tap' } }),
     fileIssue,
-    remember: (v) => writeLastVersion(file, v),
-    rememberFullRun: (ms) => writeLastFullRun(fullFile, ms)
+    remember: (v) => writeState(file, v),
+    rememberFullRun: (ms) => writeState(fullFile, String(ms))
   })
   console.error(`watch:live: ${outcome}`)
   process.exitCode = outcome === 'red' || outcome === 'did-not-run' ? 1 : 0

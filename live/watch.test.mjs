@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { didNotRunIssue, failedChecks, FULL_RUN_MS, fileIssue, fullRunDue, fullRunPath, issueFor, readLastFullRun, readLastVersion, statePath, watch, writeLastFullRun, writeLastVersion } from './watch.mjs'
+import { didNotRunIssue, failedChecks, FULL_RUN_MS, fileIssue, fullRunDue, fullRunPath, issueFor, readLastFullRun, readState, statePath, watch, writeState } from './watch.mjs'
 
 describe('statePath', () => {
   it('sits beside the recording', () => {
@@ -19,17 +19,17 @@ describe('the remembered version', () => {
     const dir = mkdtempSync(join(tmpdir(), 'watch-'))
     try {
       const file = join(dir, 'nested', 'last-version')
-      assert.equal(readLastVersion(file), null)
-      writeLastVersion(file, '0.612.0')
+      assert.equal(readState(file), null)
+      writeState(file, '0.612.0')
       assert.equal(readFileSync(file, 'utf8'), '0.612.0\n')
-      assert.equal(readLastVersion(file), '0.612.0')
+      assert.equal(readState(file), '0.612.0')
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
   it('throws when the file cannot be read, so an unreadable state does not pass for a new version', () => {
     const dir = mkdtempSync(join(tmpdir(), 'watch-'))
     try {
-      assert.throws(() => readLastVersion(dir), { code: 'EISDIR' })
+      assert.throws(() => readState(dir), { code: 'EISDIR' })
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
@@ -101,15 +101,17 @@ describe('watch', () => {
   const REAL_FAILURE = "    not ok 1 - the check\n      ---\n      failureType: 'testCodeFailure'\n      ...\n"
   const harness = (over = {}) => {
     const calls = []
+    const issues = []
     return {
       calls,
+      issues,
       deps: {
         liveVersion: async () => '0.612.0',
         lastVersion: () => '0.611.0',
         lastFullRun: () => NOW,
         now: () => NOW,
         runSuite: async () => { calls.push('run'); return { ok: true, output: '' } },
-        fileIssue: async (i) => { calls.push(`file:${i.title}`) },
+        fileIssue: async (i) => { calls.push(`file:${i.title}`); issues.push(i) },
         remember: (v) => calls.push(`remember:${v}`),
         rememberFullRun: (t) => calls.push(`full:${t}`),
         ...over
@@ -130,11 +132,12 @@ describe('watch', () => {
   })
 
   it('files one issue naming the failing checks on red, then remembers the version', async () => {
-    const { calls, deps } = harness({
+    const { calls, issues, deps } = harness({
       runSuite: async () => { calls.push('run'); return { ok: false, output: REAL_FAILURE } }
     })
     assert.equal(await watch(deps), 'red')
     assert.deepEqual(calls, ['run', 'file:Live tests fail on SudokuPad 0.612.0', 'remember:0.612.0', `full:${NOW}`])
+    assert.doesNotMatch(issues[0].body, /weekly/, 'a new version is not the weekly run')
   })
 
   it('does not remember a version whose issue could not be filed', async () => {
@@ -147,8 +150,9 @@ describe('watch', () => {
   })
 
   it('files the did-not-run issue, remembers nothing and reports it when the tests never ran', async () => {
-    const { calls, deps } = harness({ runSuite: async () => { calls.push('run'); return { ok: false, output: "    not ok 1 - a\n      ---\n      failureType: 'hookFailed'\n      ...\n" } } })
+    const { calls, issues, deps } = harness({ runSuite: async () => { calls.push('run'); return { ok: false, output: "    not ok 1 - a\n      ---\n      failureType: 'hookFailed'\n      ...\n" } } })
     assert.equal(await watch(deps), 'did-not-run')
+    assert.equal(issues[0].once, true, 'filed once, not every night')
     assert.deepEqual(calls, ['run', `file:${didNotRunIssue('0.612.0', 'x').title}`])
   })
 
@@ -164,9 +168,10 @@ describe('watch', () => {
     assert.deepEqual(calls, [`file:${didNotRunIssue('unknown', 'x').title}`])
   })
 
-  it('does not remember a did-not-run when its issue could not be filed', async () => {
-    const { deps } = harness({ liveVersion: async () => { throw new Error('offline') }, fileIssue: async () => { throw new Error('gh down') } })
+  it('remembers nothing when the did-not-run issue could not be filed', async () => {
+    const { calls, deps } = harness({ liveVersion: async () => { throw new Error('offline') }, fileIssue: async () => { throw new Error('gh down') } })
     await assert.rejects(watch(deps), /gh down/)
+    assert.deepEqual(calls, [])
   })
 
   describe('the weekly forced run', () => {
@@ -193,10 +198,10 @@ describe('watch', () => {
         lastVersion: () => '0.612.0',
         lastFullRun: () => 0,
         runSuite: async () => ({ ok: false, output: REAL_FAILURE }),
-        fileIssue: async (i) => { calls.push(`file:${i.body.includes('weekly') ? 'weekly' : 'new-version'}`) }
+        fileIssue: async (i) => { calls.push(`file:${i.body.includes('weekly') ? 'weekly' : 'new-version'}:${i.once}`) }
       })
       assert.equal(await watch(deps), 'red')
-      assert.deepEqual(calls, ['file:weekly', 'remember:0.612.0', `full:${NOW}`])
+      assert.deepEqual(calls, ['file:weekly:true', 'remember:0.612.0', `full:${NOW}`])
     })
   })
 })
@@ -206,6 +211,7 @@ describe('fullRunDue', () => {
     assert.equal(fullRunDue({ lastFullRun: null, now: 1000 }), true)
     assert.equal(fullRunDue({ lastFullRun: 1000, now: 1000 + FULL_RUN_MS }), true)
     assert.equal(fullRunDue({ lastFullRun: 1000, now: 1000 + FULL_RUN_MS - 1 }), false)
+    assert.equal(fullRunDue({ lastFullRun: 5000, now: 1000 }), true, 'a record in the future is none')
   })
 })
 
@@ -216,7 +222,7 @@ describe('the remembered full run', () => {
     try {
       const file = join(dir, 'last-full-run')
       assert.equal(readLastFullRun(file), null)
-      writeLastFullRun(file, 1762473600000)
+      writeState(file, '1762473600000')
       assert.equal(readLastFullRun(file), 1762473600000)
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
@@ -225,9 +231,18 @@ describe('the remembered full run', () => {
     const dir = mkdtempSync(join(tmpdir(), 'watch-'))
     try {
       const file = join(dir, 'last-full-run')
-      writeLastVersion(file, 'garbage')
+      writeState(file, 'garbage')
+      assert.equal(readLastFullRun(file), null)
+      writeState(file, 'Infinity')
       assert.equal(readLastFullRun(file), null)
     } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+})
+
+describe('the did-not-run title in the workflow', () => {
+  it('is the same text watch.yml files under, so the open-issue check matches across the two', () => {
+    const yml = readFileSync(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
+    assert.ok(yml.includes(`TITLE: '${didNotRunIssue('x', 'y').title}'`))
   })
 })
 
