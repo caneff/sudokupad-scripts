@@ -1,4 +1,4 @@
-// Takes the five slides of Text Annotation's slideshow on site/index.html, each an 800 x 320 crop of the board round the notes it shows, with the panel hidden, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in.
+// Takes the five slides of Text Annotation's slideshow on site/index.html, each an 800 x 320 crop (PICTURE) of the board round the notes it shows, with the panel hidden, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in.
 // The notes are what a solver writes: formulas (A=B+5, X+Y=2Z) and short deductions, mostly in the margin beside the grid or above it, as solvers do, and on the board only where the slide needs it (a note on a cell's edge, in a box), never one digit and never centered in a cell (the script checks both).
 //   draw-tool-slide-1-type.png        a three-line note typed with Enter in the margin beside rows 1 and 2
 //   draw-tool-slide-3-background.png  the Background button on: a formula in a page-colored box over the grid lines, beside one made with it off
@@ -15,10 +15,11 @@ import { saved, slideTo, valueOf } from '../../../live/draw-tool/draw-tool-fixtu
 
 const out = (name) => new URL(`./draw-tool-slide-${name}.png`, import.meta.url).pathname
 const DRAG_STEPS = 10
-// Every picture is the same size in cells, 10 across and 4 down, and each starts at its own [column, row] from the grid's top left, so it takes in the notes it shows and the grid round them. The panel is hidden.
-const CLIP_CELLS = [10, 4]
-// The page is shot at this scale, so a note looks as large as it does in SudokuPad.
-const SCALE = 80 / 70.592
+// Every picture is PICTURE pixels: 10 x 4 cells, each starting at its own [row, column] from the grid's top left (whole cells, so no digit is cut at an edge) and taking in the notes it shows. The panel is hidden.
+const PICTURE = [800, 320]
+// A cell's width in page pixels at the recorded puzzle's layout. The page is shot at the scale that makes it 80 picture pixels, so a note looks as large as it does in SudokuPad; a layout that moves it fails the run.
+const CELL = 70.592
+const SCALE = PICTURE[0] / 10 / CELL
 const GREEN = 1
 const ORANGE = 3
 const RED = 4
@@ -50,7 +51,9 @@ async function scene (origin) {
     return [box.x, box.y, box.width]
   })
   const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
-  const clipRect = () => ({ x: x0 + origin[1] * cell, y: y0 + origin[0] * cell, width: CLIP_CELLS[0] * cell, height: CLIP_CELLS[1] * cell })
+  if (Math.abs(cell - CELL) > 0.01) throw new Error(`a cell is ${cell} page pixels wide, not ${CELL}: the pictures would not be ${PICTURE.join(' x ')}`)
+  // The clip is half a picture pixel over, so rounding down never drops a pixel row.
+  const clipRect = () => ({ x: x0 + origin[1] * cell, y: y0 + origin[0] * cell, width: (PICTURE[0] + 0.5) / SCALE, height: (PICTURE[1] + 0.5) / SCALE })
   const items = () => p.locator(NOTES).count()
   // Sets the Size slider to the text size `size` (2 x width + 8), then checks it landed.
   const pickSize = async (size) => {
@@ -108,7 +111,9 @@ async function scene (origin) {
   const shoot = async (name, { keepOpen = false } = {}) => {
     await checkNotes()
     await p.addStyleTag({ content: '#controls { visibility: hidden !important }' })
-    await p.screenshot({ path: out(name), clip: clipRect() })
+    const picture = await p.screenshot({ path: out(name), clip: clipRect() })
+    const size = [picture.readUInt32BE(16), picture.readUInt32BE(20)]
+    if (size.join() !== PICTURE.join()) throw new Error(`the picture is ${size.join(' x ')}, not ${PICTURE.join(' x ')}`)
     console.log(`wrote ${out(name)}`)
     if (!keepOpen) await p.close()
   }
@@ -123,7 +128,7 @@ const ABOVE_COL_8 = [-0.55, 7.3]
 
 // 1: a three-line note typed with Enter in the margin beside the first two rows.
 {
-  const s = await scene([-1, 4.2])
+  const s = await scene([-1, 4])
   await s.pick(ORANGE, 26)
   await s.note(BESIDE_ROWS_1_2, 'A=B+5\nA+B=11\nB=3, A=8')
   await s.p.mouse.move(0, 0)
@@ -132,7 +137,7 @@ const ABOVE_COL_8 = [-0.55, 7.3]
 
 // 3: one formula made with Background off, one with it on, both on the board over grid lines, where the box is what the slide shows.
 {
-  const s = await scene([2.3, 2.2])
+  const s = await scene([2, 2])
   await s.pick(RED, 26)
   await s.background(false)
   await s.note([3.3, 6.2], '**A+B=11**')
@@ -145,13 +150,13 @@ const ABOVE_COL_8 = [-0.55, 7.3]
 
 // 6: three orange margin notes selected by a drag that starts on empty space, then recolored blue with one click on a color button; the dragged box is drawn solid purple where it was.
 {
-  const s = await scene([-1, 3.7])
+  const s = await scene([-1, 3])
   await s.pick(ORANGE, 26)
   await s.note(ABOVE_COL_5, 'A=B+5')
   await s.note(ABOVE_COL_8, 'X+Y=2Z')
-  await s.note(BESIDE_ROWS_1_2, 'r1: 4,6 in c7-9')
-  const FROM = [-0.9, 3.8]
-  const TO = [1.7, 13.5]
+  await s.note([0.1, 10.3], 'r1: 4,6 in c7-9')
+  const FROM = [-0.9, 3.1]
+  const TO = [1.7, 12.9]
   await s.p.mouse.move(...s.at(FROM))
   await s.p.mouse.down()
   await s.p.mouse.move(...s.at(TO), { steps: DRAG_STEPS })
@@ -168,7 +173,7 @@ const ABOVE_COL_8 = [-0.55, 7.3]
 
 // 7: the pointer on a note with a ring round it, where a right click lands. The click itself follows the shot and must erase the note.
 {
-  const s = await scene([-1, 1.2])
+  const s = await scene([-1, 1])
   await s.pick(GREEN, 32)
   await s.note(ABOVE_COL_5, 'A=B+5')
   const box = await s.p.locator(NOTES).boundingBox()
@@ -183,15 +188,15 @@ const ABOVE_COL_8 = [-0.55, 7.3]
   await s.p.mouse.move(x, y)
   await s.shoot('7-erase', { keepOpen: true })
   await s.p.mouse.click(x, y, { button: 'right' })
-  // The erase redraws on the next frame, so give it one.
-  await s.p.waitForFunction((selector) => !document.querySelector(selector), NOTES, { timeout: 2000 }).catch(() => {})
+  // The erase redraws on the next frame, so wait for the note to go; a wait that times out fails the run.
+  await s.p.waitForFunction((selector) => !document.querySelector(selector), NOTES, { timeout: 2000 })
   if ((await s.items()) !== 0) throw new Error('the right click did not erase the note')
   await s.p.close()
 }
 
 // 9: a four-line note with a background box, open for typing, dragged by its bottom right corner handle to two lines tall, so its text scrolls; a ring marks the dragged handle and the pointer rests on the note, which shows its scroll bar.
 {
-  const s = await scene([-1, 4.2])
+  const s = await scene([-1, 4])
   await s.pick(BLUE, 26)
   await s.background(true)
   await s.p.mouse.click(...s.at([0.35, 10.9]))
