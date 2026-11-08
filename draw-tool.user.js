@@ -1203,6 +1203,8 @@
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${BACKGROUND_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every 'svg path', which would turn the icons' lines into blobs.
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}) :is(path, circle, rect, ellipse), .${BACKGROUND_CLASS} :is(path, circle, rect, ellipse):not(.${BACKGROUND_FILL_CLASS}) { fill: none !important; }`,
+    // SudokuPad's toolbar CSS fills the paths in a tool button's icon, which would turn the outlined note into a solid square.
+    `#control-${TOOL_NAME} svg :is(path, circle, rect, ellipse) { fill: none !important; }`,
     `.${BACKGROUND_CLASS}[aria-pressed="true"] { background-color: ${TRAY_COLOR}; outline: 2px solid ${PANEL_COLOR}; }`,
     // Some selected notes have a box and some do not: a dashed ring, neither on nor off.
     `.${BACKGROUND_CLASS}[aria-pressed="mixed"] { outline: 2px dashed ${PANEL_COLOR}; }`,
