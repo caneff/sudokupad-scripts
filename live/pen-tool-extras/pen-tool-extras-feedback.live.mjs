@@ -250,10 +250,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.move(5, 5)
       const drawn = await read(async ([points, moves, gapMs]) => {
         const grid = document.querySelector('#svgrenderer')
-        const layer = document.getElementById('pen-tool-extras-hint')
+        const layer = document.getElementById('cell-pen').parentNode
         let added = 0
         const watch = new MutationObserver((records) => { added += records.flatMap((r) => [...r.addedNodes]).filter((n) => n.classList && n.classList.contains('pen-tool-extras-ghost')).length })
-        watch.observe(layer, { childList: true })
+        watch.observe(layer, { childList: true, subtree: true })
         for (let i = 0; i < moves; i++) {
           const [x, y] = points[i % 2]
           grid.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true, buttons: 0 }))
