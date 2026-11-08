@@ -13,7 +13,7 @@ const { TEXTS } = draw
 // In cells from the grid's top left: the note nudged, and a note of bullets.
 const NOTE_AT = [4.5, 4.5]
 const CURSOR_AT = [8.5, 0.5]
-const EDGE_AT = [2.5, 2.5]
+const EDGE_AT = [4.5, 2.5]
 const WIDE_NOTE = 'W'.repeat(14)
 const BULLETS_AT = [1.5, 6.5]
 const BULLET_TEXT = '- one\n- **two**'
