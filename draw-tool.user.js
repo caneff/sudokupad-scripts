@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.26.3
+// @version      0.26.4
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.26.3'
+  const VERSION = '0.26.4'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -208,6 +208,7 @@
   // On the layer while Text Annotation is current: only then do the notes take the pointer.
   const ACTIVE_CLASS = 'draw-tool-active'
   const HANDLE_CLASS = 'draw-tool-resize'
+  const SELECTION_CLASS = 'draw-tool-selection'
   const HANDLE_PX = 10
   const RECTANGLE_CLASS = 'draw-tool-selection-rectangle'
   const TRAY_CLASS = 'draw-tool-tray'
@@ -1118,9 +1119,6 @@
   // Until Text Annotation is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
   const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
 
-  // The opacity is the text's alone, so a note's background box stays solid.
-  const textColor = (item) => itemOpacity(item) === 100 ? itemColor(item.color) : `color-mix(in srgb, ${itemColor(item.color)} ${itemOpacity(item)}%, transparent)`
-
   // A note's style, centred on `point` and drawn at `scale` pixels of its box per board unit; a background is a rounded box around the text, in the box color and framed when the frame is on.
   // A resized note is exactly its stored box; any other takes the stylesheet's auto width and height. A note with no background is padded by its
   // halo's reach, since its box clips what overflows it.
@@ -1137,7 +1135,8 @@
       height,
       maxWidth: limit,
       maxHeight: limit,
-      color: textColor(item),
+      color: itemColor(item.color),
+      opacity: String(itemOpacity(item) / 100),
       backgroundColor: item.bg ? boxFill(boxColor, itemColor(item.color)) : 'transparent',
       boxShadow: item.bg ? frameShadow(frame) : 'none',
       textShadow: item.bg ? 'none' : haloShadow(outline, PAGE_COLOR),
@@ -1315,7 +1314,8 @@
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: default; }`,
     `.${ACTIVE_CLASS} .${BOARD_NOTES_CLASS} .${TEXT_CLASS} { cursor: pointer; }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
-    `.${SELECTED_CLASS} { outline: calc(2 * var(${PIXEL_VAR}, 1px)) dashed ${PANEL_COLOR}; outline-offset: calc(2 * var(${PIXEL_VAR}, 1px)); }`,
+    // The outline is a box of its own in the layer, since a note's opacity would fade an outline drawn on the note itself.
+    `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: 2px dashed ${PANEL_COLOR}; outline-offset: 2px; }`,
     `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
     `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; pointer-events: auto; }`,
     `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; outline: 1px dashed currentColor; outline-offset: 1px; cursor: text; }`,
@@ -1835,6 +1835,7 @@
     if (drag?.move) showMove(drag, map)
     if (editing) showEditing(map)
     else showHandles(drag?.move ? null : selectedBox(map))
+    if (!drag?.move) showSelection(map)
   }
 
   // A fixed note the window or the layout has put out of reach is moved, and its new point kept, to the nearest point inside the window and clear of the
@@ -1871,6 +1872,18 @@
 
   // The screen box of the one selected note, or null when no note or several are selected.
   const selectedBox = (map) => selected.length === 1 ? noteScreenBox(drawing[selected[0]], map, outline) : null
+
+  // An outline for each selected note, moved by `offset` screen pixels while the selection is dragged; none while a note is open.
+  function showSelection (map, offset = [0, 0]) {
+    const boxes = editing ? [] : selected.map((index) => noteScreenBox(drawing[index], map, outline))
+    const layer = drawingLayer()
+    const shown = [...layer.querySelectorAll(`.${SELECTION_CLASS}`)]
+    for (const element of shown.slice(boxes.length)) element.remove()
+    boxes.forEach((box, i) => {
+      const element = shown[i] ?? layer.appendChild(Object.assign(document.createElement('div'), { className: SELECTION_CLASS }))
+      Object.assign(element.style, { left: `${roundToTenth(box.left + offset[0])}px`, top: `${roundToTenth(box.top + offset[1])}px`, width: `${roundToTenth(box.right - box.left)}px`, height: `${roundToTenth(box.bottom - box.top)}px` })
+    })
+  }
 
   // The handles on the corners of screen box `box`, made when there are none; null takes them off the page.
   function showHandles (box) {
@@ -2232,6 +2245,7 @@
   function showMove (d, map) {
     const [dx, dy] = dragOffset(d)
     showHandles(null)
+    showSelection(map, [dx, dy])
     for (const { item } of d.move) {
       const element = item[NOTE_ELEMENT]
       if (!element) continue
