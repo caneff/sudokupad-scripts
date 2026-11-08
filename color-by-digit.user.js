@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.11
+// @version      0.25.12
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.11'
+  const VERSION = '0.25.12'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -2332,6 +2332,34 @@
     if (target !== undefined) showMode(allowedMode(target, usesDigitColors(loadState())))
   }
 
+  // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
+  function colorAfterRestart (app) {
+    if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
+  }
+
+  // The board an Undo loads from before a Restart ends in the Restart's clears. Its coloring joins their undo step, so taking that step back changes no mode,
+  // and its replay entries go, because SudokuPad puts the Restart's own coloring back on the replay once the board has loaded.
+  function colorLoadedBoard (app) {
+    if (!colorsCells(mode)) return
+    coloring.run(() => {
+      const { undoStack, replayStack } = app.puzzle
+      const replayLength = replayStack.length
+      const end = undoStack.pop()
+      app.puzzle.inGroup = true
+      try {
+        colorEnteredCells(app)
+      } finally {
+        app.puzzle.inGroup = false
+        undoStack.push(end)
+      }
+      replayStack.length = replayLength
+    })
+  }
+
+  // The undo stack's length once the last Restart's coloring was done: SudokuPad loads the board from before a Restart on an Undo that finds the stack empty,
+  // and the stack holds that coloring, so the Undo that finds only it is shown an empty stack. Null once that board has loaded.
+  let restartDepth = null
+
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
   // stack and leaves a dead undo step.
   function mayChange (action, cell) {
@@ -2366,7 +2394,14 @@
       coloring.wrap(app, 'act', function (stock, action) {
         if (action?.type === 'undo' || action?.type === 'redo') {
           // SudokuPad keeps the board from before a Restart in `preRestartSavedProgress`, and an Undo on the empty stack loads it.
-          const loadsBeforeRestart = action.type === 'undo' && app.puzzle.undoStack.length === 0 && app.preRestartSavedProgress !== undefined
+          const loadsBeforeRestart = action.type === 'undo' && app.preRestartSavedProgress !== undefined &&
+            (app.puzzle.undoStack.length === 0 || app.puzzle.undoStack.length === restartDepth)
+          if (loadsBeforeRestart) {
+            restartDepth = null
+            // The board it loads ends in the Restart's clears, and arrives after `act` returns.
+            app.puzzle.addEventListener('progressloaded', () => colorLoadedBoard(app), { once: true })
+            coloring.run(() => { app.puzzle.undoStack.length = 0 })
+          }
           const result = stock(action)
           if (loadsBeforeRestart) modeHistory.restoreBeforeRestart()
           else followUndo(app, action.type)
@@ -2380,8 +2415,8 @@
       })
       app.on('restarted', () => {
         modeHistory.restart()
-        // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
-        if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
+        colorAfterRestart(app)
+        restartDepth = app.puzzle.undoStack.length
       })
     })
   }

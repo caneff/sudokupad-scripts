@@ -10,6 +10,7 @@ import { POLL_MS, settle } from '../settle.mjs'
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by puzzle-url.txt; the
 // 'the board holds the givens' test in color-by-digit.live.mjs checks it.
 export const GIVENS = '530070000600195000098000060800060003400803001700020006060000280000419005000080079'
+export const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 
 export const group = (key, digits) => ({ key, digits })
 export const ODD_EVEN = [group('1', ['1', '3', '5', '7', '9']), group('2', ['0', '2', '4', '6', '8'])]

@@ -36,7 +36,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     assert.equal(await labelOn(p), 'Cell', 'Color by Digit stayed in its mode')
   }))
 
-  it('49 Undo after Restart brings the note back', { todo: '#606' }, () => attack(browser, async (p) => {
+  it('49 Undo after Restart brings the note back', () => attack(browser, async (p) => {
     await fillBoard(p, await cellsState(p))
     await flushSave(p)
     await restart(p)
@@ -45,7 +45,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     assert.equal(await settle(() => noteCount(p), 1), 1, 'Undo brought the note back')
   }))
 
-  it('49 Undo after Restart leaves Color by Digit in its mode', { todo: '#606' }, () => attack(browser, async (p) => {
+  it('49 Undo after Restart leaves Color by Digit in its mode', () => attack(browser, async (p) => {
     const start = await cellsState(p)
     await fillBoard(p, start)
     await flushSave(p)

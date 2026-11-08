@@ -129,7 +129,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await assertWorks('Escape mid-move')
   })
 
-  it('11: a move drag, Delete mid-drag, then the mouse-up leaves the note deleted, drawn nowhere and saved nowhere', { todo: '#608' }, async () => {
+  it('11: a move drag, Delete mid-drag, then the mouse-up leaves the note deleted, drawn nowhere and saved nowhere', async () => {
     await startMove()
     await p.keyboard.press('Delete')
     await draw.frames(p)
@@ -137,7 +137,8 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await p.mouse.up()
     await draw.frames(p)
     assert.deepEqual(await stable(() => draw.texts(p)), [], 'the deleted note is not drawn again at the drop point')
-    assert.equal((await noteItems()).length, 0, 'the deleted note is not saved again')
+    // Deleting the only note leaves nothing to save, so the saved drawing is gone rather than empty.
+    assert.deepEqual((await draw.saved(p) ?? []).filter((i) => i.kind === 'text'), [], 'the deleted note is not saved again')
     assert.deepEqual(errors, [], 'the page shows no error')
     await draw.reload(p)
     await pickText()
