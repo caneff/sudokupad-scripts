@@ -7,7 +7,7 @@ import { chromium } from 'playwright'
 import { attack, NOTES, noteCount, pickDraw, placeNote, rulesScroll, rulesWidth, setLongRules } from './attacks.mjs'
 import { DIGITS, BLACK, LETTER_MODE_KEY } from './scripts.mjs'
 import { gridPoint, keydownDefaults, mouseDrag, openPenTool, penEntries, setInputValue } from './pen.mjs'
-import { settle, SETTLE_MS, stable } from './settle.mjs'
+import { settle, stable } from './settle.mjs'
 import { closeDialogWith, dialogButton, openExtrasEditor, openScriptDialog, openSettings } from './settings.mjs'
 
 const DARK_STYLE = '#dark-page-style'
@@ -42,7 +42,8 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     assert.equal(await settle(() => pageColor(p), BLACK), BLACK, 'the page starts dark')
     for (const [name, open, surface, close = async () => {}] of SURFACES) {
       await open()
-      const box = await p.locator(surface).first().boundingBox()
+      // Read once the layout holds, since the strict comparison below is against this box.
+      const box = await stable(() => p.locator(surface).first().boundingBox())
       assert.equal(box.width > 0, true, `${name} shows`)
       await darkPage(p, false)
       assert.equal(await settle(() => pageColor(p), WHITE), WHITE, `${name}: Dark Page off lightens the page`)
@@ -53,17 +54,17 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
       assert.deepEqual(await p.locator(surface).first().boundingBox(), box, `${name} kept its place and size`)
       await close()
     }
-    // The switch above runs none of the script's code: a page color saved in its dialog does, with a panel open. The script applies it after Save returns, so these waits do not give up on the old color.
+    // The switch above runs none of the script's code: a page color saved in its dialog does, with a panel open.
     await openPenTool(p)
     await openScriptDialog(p, 'Dark Page', DARK_EDITOR)
     await setInputValue(p.locator(`.dialog ${DARK_EDITOR}`), '#ffffff')
     await dialogButton(p, 'Save').click()
-    assert.equal(await settle(() => pageColor(p), WHITE, SETTLE_MS, Infinity), WHITE, 'a saved white page color lightens the page')
+    assert.equal(await settle(() => pageColor(p), WHITE), WHITE, 'a saved white page color lightens the page')
     assert.equal(await p.locator('.pen-tool-extras-sliders').isVisible(), true, 'the pen panel shows on the white page')
     await openScriptDialog(p, 'Dark Page', DARK_EDITOR)
     await p.locator('#dark-page-reset').click()
     await dialogButton(p, 'Save').click()
-    assert.equal(await settle(() => pageColor(p), BLACK, SETTLE_MS, Infinity), BLACK, 'Black puts the dark page back')
+    assert.equal(await settle(() => pageColor(p), BLACK), BLACK, 'Black puts the dark page back')
   }))
 
   it('58 Pen Tool Extras\' and Text Anywhere\'s settings dialogs asked for one after the other, the first still open', () => attack(browser, async (p) => {

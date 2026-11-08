@@ -9,7 +9,7 @@ import { BUTTON as CBD_BUTTON, labelOn } from './color-by-digit/color-by-digit-f
 import { captureConsoleErrors, gotoPuzzle, newPage, startPuzzle } from './page.mjs'
 import { BLACK } from './scripts.mjs'
 import { draw, gridPoint, openPenTool, penEntries, setInputValue } from './pen.mjs'
-import { settle, SETTLE_MS } from './settle.mjs'
+import { settle, stable } from './settle.mjs'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -133,21 +133,21 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     for (const [name, button, selectors] of PANELS) {
       await p.click(button)
       for (const sel of selectors) await p.locator(sel).waitFor({ state: 'visible' })
-      const roomy = await boxes([...selectors, CBD_BUTTON])
+      // The reference sizes are read once the layout holds: the rules refit lands a moment after the panel opens, and a size read before it is not the one to come back to.
+      const roomy = await stable(() => boxes([...selectors, CBD_BUTTON]))
       assert.equal(await settle(() => rulesScroll(p), false), false, `${name}: the rules do not scroll at 1200x900`)
-      const roomyWidth = await rulesWidth(p)
+      const roomyWidth = await stable(() => rulesWidth(p))
       await p.setViewportSize({ width: 1024, height: 600 })
       for (const sel of selectors) await p.locator(sel).waitFor({ state: 'visible' })
       assert.equal(await settle(() => rulesScroll(p), false), false, `${name}: the rules do not scroll at 1024x600`)
-      assert.equal(await settle(async () => (await rulesWidth(p)) < roomyWidth, true, SETTLE_MS, Infinity), true, `${name}: the rules pane is narrower in the smaller window`)
+      assert.equal(await settle(async () => (await rulesWidth(p)) < roomyWidth, true), true, `${name}: the rules pane is narrower in the smaller window`)
       assert.equal(await p.locator(CBD_BUTTON).isVisible(), true, `${name}: Color by Digit's button shows at 1024x600`)
-      // The script refits on a trailing timer after the resize, later on a loaded box: each wait below is for the refit itself, so none gives up on a width that holds before it.
       await p.setViewportSize({ width: 1200, height: 900 })
       // A box may differ by a pixel after the rules refit: layout rounds a fractional height.
       const near = async () => (await boxes([...selectors, CBD_BUTTON])).every((box, i) => box.every((side, j) => Math.abs(side - roomy[i][j]) <= 1))
-      assert.equal(await settle(near, true, SETTLE_MS, Infinity), true, `${name}: the panel is the size it was`)
-      assert.equal(await settle(() => rulesScroll(p), false, SETTLE_MS, Infinity), false, `${name}: the rules do not scroll again`)
-      assert.equal(await settle(async () => Math.abs((await rulesWidth(p)) - roomyWidth) <= 2, true, SETTLE_MS, Infinity), true, `${name}: the rules pane is as wide as it was`)
+      assert.equal(await settle(near, true), true, `${name}: the panel is the size it was`)
+      assert.equal(await settle(() => rulesScroll(p), false), false, `${name}: the rules do not scroll again`)
+      assert.equal(await settle(async () => Math.abs((await rulesWidth(p)) - roomyWidth) <= 2, true), true, `${name}: the rules pane is as wide as it was`)
     }
   }))
 
