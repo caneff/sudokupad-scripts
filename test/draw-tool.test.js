@@ -973,13 +973,14 @@ test('each of the three sample rows has its sub-line', () => {
 })
 
 // Ten column lines 64 px apart from 100: the board's span is 100..676, middles at 132, 196 ... 644.
-const LINES = Array.from({ length: 10 }, (_, k) => 100 + k * 64)
+const lineAt = (k) => 100 + k * 64
+const LINES = Array.from({ length: 10 }, (_, k) => lineAt(k))
 
 // The same board with the one implied ring of cells round it: lines from one cell before the first to one cell after the last, 36..740.
-const RING_LINES = gridLines(9, (k) => 100 + k * 64)
+const RING_LINES = gridLines(9, lineAt)
 
 test('gridLines runs from one cell before the board to one cell after it, for any grid size', () => {
-  assert.deepEqual(gridLines(9, (k) => 100 + k * 64), [36, 100, 164, 228, 292, 356, 420, 484, 548, 612, 676, 740])
+  assert.deepEqual(gridLines(9, lineAt), [36, 100, 164, 228, 292, 356, 420, 484, 548, 612, 676, 740])
   assert.deepEqual(gridLines(2, (k) => k * 10), [-10, 0, 10, 20, 30])
 })
 
@@ -993,9 +994,9 @@ test('snapAxis pulls a note\'s middle onto the middle of an outer-ring cell', ()
   assert.deepEqual(snapAxis(42, 96, { lines: RING_LINES }), { shift: -1, guide: 68 })
 })
 
-test('snapAxis does not snap to anything two cells outside the board', () => {
-  assert.equal(snapAxis(-40, -10, { lines: RING_LINES }), null)
-  assert.equal(snapAxis(790, 830, { lines: RING_LINES }), null)
+test('snapAxis does not snap to the lines two cells outside the board (-28 and 804)', () => {
+  assert.equal(snapAxis(-40, -26, { lines: RING_LINES }), null)
+  assert.equal(snapAxis(790, 802, { lines: RING_LINES }), null)
 })
 
 test('snapAxis pulls a note\'s middle onto a cell\'s middle and guides at that middle', () => {

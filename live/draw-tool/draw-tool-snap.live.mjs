@@ -224,11 +224,22 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(await noteMiddle() - middle) < NEAR_PX, true, `the note's middle ${await noteMiddle()} is on the outer cell's middle ${middle}`)
   })
 
-  it('a note dragged to 2 px from the line two cells outside the board stays where the pointer put it', async () => {
+  it('a note whose outline is 2 px from the line two cells outside the board is not pulled onto it: no guide, and it stays where the pointer put it', async () => {
     const [, , size] = await cellCentre(p, 0, 0)
     const line = (await lineX(RIGHT_LINE)) + 2 * size
-    const { guides } = await dragBy(line - 2 - ((await noteBox('15')).x + (await noteBox('15')).width + OUTLINE_MIDDLE_PX))
+    const note = await noteBox('15')
+    const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
+    const dx = line - 2 - (note.x + note.width + OUTLINE_MIDDLE_PX)
+    await p.mouse.move(px, py)
+    await p.mouse.down()
+    await p.mouse.move(px + dx, py, { steps: 6 })
+    // Nothing is to happen: the pointer rests for longer than the 100 ms after which a pull would show.
+    await p.waitForTimeout(300)
+    const guides = await p.locator(GUIDE_X).count()
+    await p.mouse.up()
+    const after = await noteBox('15')
     assert.equal(guides, 0, 'no guide')
+    assert.equal(Math.abs(after.x - (note.x + dx)) < draw.CRISP_PX + 0.05, true, `the note is at ${after.x}, where the pointer put it: ${note.x + dx}`)
   })
 
   it('a note dragged to 2 px from another note\'s left edge lands with the two left edges equal and the guide where its outline lies', async () => {

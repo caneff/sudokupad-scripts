@@ -1593,7 +1593,6 @@
   const SNAP_PX = 4
   const CELL_UNITS = 64
   // The grid's lines on one axis, from one cell before the first to one cell after the last: the implied ring of cells round the board, drawn nowhere, that notes snap to too.
-  // `lineAt(k)` is the screen position of the grid's line `k`, and `cells` the grid's cells on the axis.
   function gridLines (cells, lineAt) {
     return Array.from({ length: cells + 3 }, (_, i) => lineAt(i - 1))
   }
