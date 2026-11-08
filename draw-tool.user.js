@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.38.6
+// @version      0.39.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.38.6'
+  const VERSION = '0.39.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -2449,6 +2449,8 @@
   let resizing = null
   // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
+  // Set when Ctrl+Enter or Cmd+Enter closes a note, until that Enter is released or another key is pressed.
+  let endedByEnter = false
   let drawing = []
   // The saved entries that are not notes, strokes or shapes (a note that failed its check, say): never drawn, and saved back as they were.
   let keptEntries = []
@@ -3146,15 +3148,25 @@
   // a key typed in the box is stopped in the window's capture phase, before them all. Its default is left alone, so
   // the note types, edits, pastes and composes as any editable text does, and F5 does what it does anywhere.
   function keepBoxKeys (event) {
+    // The Enter that closed a note is released after the box is gone, and SudokuPad would end the selection on it. A key
+    // pressed since means that release never came (a Mac sends no keyup for a key released under Cmd).
+    if (event.type === 'keydown') endedByEnter = false
+    if (event.type === 'keyup' && event.key === 'Enter' && endedByEnter) {
+      endedByEnter = false
+      event.stopImmediatePropagation()
+      return
+    }
     if (!editing || event.target !== editing.element) return
     event.stopImmediatePropagation()
     if (event.type !== 'keydown' || event.isComposing) return
     // Tab does nothing in the note: it neither closes it nor reaches SudokuPad.
     if (event.key === 'Tab') event.preventDefault()
-    if (event.key === 'Escape') {
+    // Ctrl+Enter and Cmd+Enter finish the note as Escape does and add no line; Shift+Enter and Enter still do.
+    if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
       event.preventDefault()
       // A resize in progress is put back and the note stays open; otherwise the note closes and stays selected.
       if (resizing && !resizing.cancelled) return cancelResize()
+      endedByEnter = event.key === 'Enter'
       const left = finishText()
       if (left !== -1) select([left])
     }

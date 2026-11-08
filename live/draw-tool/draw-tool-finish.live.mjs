@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's ways to finish a note and to click, on sudokupad.app: Escape closes the open note and leaves it selected, Enter reopens the one
+// Live check of draw-tool.user.js's ways to finish a note and to click, on sudokupad.app: Escape or Ctrl+Enter closes the open note and leaves it selected, Enter reopens the one
 // selected note with the caret at its end, a click that slips a few pixels still opens a note or selects one, a note of only spaces is removed and trailing
 // spaces are trimmed when it closes, Escape during a drag or a resize puts the note back, and Tab in an open note does nothing. Real mouse and keyboard
 // input throughout, at a desktop size.
@@ -57,6 +57,22 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   const handleMiddle = async () => {
     const { x, y, width, height } = await p.locator(HANDLE).nth(BOTTOM_RIGHT).boundingBox()
     return [x + width / 2, y + height / 2]
+  }
+
+  // Opens the note at A_AT, drags its resize handle, presses `key` mid-drag and releases: the size is back and the note is still open.
+  const resizeUndoneBy = async (key) => {
+    await draw.reopen(p, await gridPoint(p, A_AT))
+    const open = await p.locator(TEXT_BOX).boundingBox()
+    const [ox, oy] = await handleMiddle()
+    await p.mouse.move(ox, oy)
+    await p.mouse.down()
+    await p.mouse.move(ox + 90, oy + 50, { steps: 6 })
+    assert.ok((await p.locator(TEXT_BOX).boundingBox()).width > open.width + 20, 'the drag resized the open note')
+    await p.keyboard.press(key)
+    await p.mouse.up()
+    assert.equal(await boxOpen(), true, 'the note stays open')
+    const back = await p.locator(TEXT_BOX).boundingBox()
+    assert.ok(Math.abs(back.width - open.width) < 1 && Math.abs(back.height - open.height) < 1, `size back to ${open.width}x${open.height}, now ${back.width}x${back.height}`)
   }
 
   before(async () => {
@@ -224,21 +240,65 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     assert.deepEqual(await selectedTexts(), ['Az'])
     await p.keyboard.press('Escape')
 
-    await draw.reopen(p, await gridPoint(p, A_AT))
-    const open = await p.locator(TEXT_BOX).boundingBox()
-    const [ox, oy] = await handleMiddle()
-    await p.mouse.move(ox, oy)
-    await p.mouse.down()
-    await p.mouse.move(ox + 90, oy + 50, { steps: 6 })
-    assert.ok((await p.locator(TEXT_BOX).boundingBox()).width > open.width + 20, 'the drag resized the open note')
-    await p.keyboard.press('Escape')
-    await p.mouse.up()
-    assert.equal(await boxOpen(), true, 'the note stays open')
-    const back = await p.locator(TEXT_BOX).boundingBox()
-    assert.ok(Math.abs(back.width - open.width) < 1 && Math.abs(back.height - open.height) < 1, 'size back')
+    await resizeUndoneBy('Escape')
     await p.keyboard.press('Escape')
     assert.equal(await boxOpen(), false, 'a second Escape closes it')
     assert.equal((await savedNote('Az')).box, undefined)
+  })
+
+  it('Ctrl+Enter closes the open note like Escape, with no extra line, and leaves it selected; Shift+Enter still adds a line', async () => {
+    await p.keyboard.press('Escape')
+    await clickAt(FREE)
+    await p.keyboard.type('one')
+    await p.keyboard.press('Shift+Enter')
+    assert.equal(await boxOpen(), true, 'Shift+Enter keeps the note open')
+    await p.keyboard.type('two')
+    await p.keyboard.press('Control+Enter')
+    assert.equal(await boxOpen(), false, 'Ctrl+Enter closed the note')
+    assert.deepEqual(await selectedTexts(), ['one\ntwo'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['Az', 'X', 'S', 'one\ntwo'])
+    await p.keyboard.press('Delete')
+    assert.deepEqual((await saved()).map((item) => item.text), ['Az', 'X', 'S'])
+  })
+
+  it('Ctrl+Enter and Cmd+Enter keydowns in the open note are default-prevented, and Shift+Enter and Enter are not', async () => {
+    await clickAt(FREE)
+    await p.keyboard.type('x')
+    // The page's own keydown events, since the browser adds no line on its own and closing trims one anyway.
+    const prevented = (init) => p.evaluate(([selector, options]) => {
+      const event = new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...options })
+      document.querySelector(selector).dispatchEvent(event)
+      return event.defaultPrevented
+    }, [TEXT_BOX, init])
+    assert.equal(await prevented({ shiftKey: true }), false)
+    assert.equal(await prevented({}), false)
+    assert.equal(await boxOpen(), true)
+    assert.equal(await prevented({ metaKey: true }), true)
+    assert.equal(await boxOpen(), false, 'Cmd+Enter closed the note')
+    await p.keyboard.press('Delete')
+    await clickAt(FREE)
+    await p.keyboard.type('y')
+    assert.equal(await prevented({ ctrlKey: true }), true)
+    assert.equal(await boxOpen(), false, 'Ctrl+Enter closed the note')
+    await p.keyboard.press('Delete')
+    assert.deepEqual((await saved()).map((item) => item.text), ['Az', 'X', 'S'])
+  })
+
+  it('Meta+Enter closes the open note the same way', async () => {
+    await clickAt(FREE)
+    await p.keyboard.type('m')
+    await p.keyboard.press('Meta+Enter')
+    assert.equal(await boxOpen(), false)
+    assert.deepEqual(await selectedTexts(), ['m'])
+    await p.keyboard.press('Delete')
+  })
+
+  it('Ctrl+Enter during a resize puts the size back like Escape, and the note stays open', async () => {
+    await resizeUndoneBy('Control+Enter')
+    await p.keyboard.press('Control+Enter')
+    assert.equal(await boxOpen(), false, 'a second Ctrl+Enter closes it')
+    assert.equal((await savedNote('Az')).box, undefined)
+    await p.keyboard.press('Escape')
   })
 
   it('Tab in an open note does nothing: the note stays open and nothing reaches the cells or the tool', async () => {
