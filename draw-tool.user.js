@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.27.1
+// @version      0.28.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.27.1'
+  const VERSION = '0.28.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -226,6 +226,8 @@
   const OK_LABEL = 'OK'
   const DRAWING_PREFIX = 'DrawTool_drawing_'
   const INDEX_KEY = 'DrawTool_index'
+  // The notes a Restart cleared, kept until Undo straight after it brings them back.
+  const RESTARTED_PREFIX = 'DrawTool_restarted_'
   const KEPT_PUZZLES = 50
   // How far, in board units, an erase may pass from a text's box and still erase it.
   const ERASE_TOLERANCE = 4
@@ -870,6 +872,13 @@
   }
 
   const drawingKey = (key) => DRAWING_PREFIX + key
+  const restartedKey = (key) => RESTARTED_PREFIX + key
+
+  // A puzzle dropped from the index loses its drawing and the notes its Restart kept.
+  function forgetPuzzle (store, key) {
+    store.removeData(drawingKey(key))
+    store.removeData(restartedKey(key))
+  }
 
   // `store` has Framework's getData, setData and removeData. The drawing is written before the index, and the dropped
   // puzzles' drawings are removed last, so a write that throws (a full localStorage) loses no drawing already saved.
@@ -884,7 +893,21 @@
     const touched = touchIndex(index, key)
     store.setData(drawingKey(key), drawing)
     store.setData(INDEX_KEY, touched.index)
-    for (const dropped of touched.dropped) store.removeData(drawingKey(dropped))
+    for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
+  }
+
+  // Keeps the notes a Restart cleared, in place of any kept before. A puzzle with kept notes stays in the index, so they
+  // go with its drawing when it drops out.
+  function keepRestartedTo (store, key, notes) {
+    const index = readIndex(store.getData(INDEX_KEY))
+    if (notes.length === 0) {
+      store.removeData(restartedKey(key))
+      return
+    }
+    const touched = touchIndex(index, key)
+    store.setData(restartedKey(key), notes)
+    store.setData(INDEX_KEY, touched.index)
+    for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
   }
 
   // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Text Anywhere out of the
@@ -2066,6 +2089,8 @@
     }
     try {
       saveDrawingTo(Framework, currentPuzzleKey(), drawing)
+      // Any edit after a Restart ends what Undo can bring back.
+      Framework.removeData(restartedKey(currentPuzzleKey()))
     } catch (err) {
       report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
     }
@@ -2369,6 +2394,44 @@
     save()
   }
 
+  // Restart clears the notes and keeps them, so Undo straight after brings them back as it brings back the digits.
+  function restartDrawing () {
+    const cleared = drawing.filter((item) => item.kind === TEXT_KIND)
+    emptyDrawing()
+    try {
+      keepRestartedTo(Framework, currentPuzzleKey(), cleared)
+    } catch (err) {
+      report(`Text Anywhere could not keep this puzzle's notes for Undo: ${err.message}`)
+    }
+  }
+
+  // SudokuPad's Undo brings back what Restart cleared when the undo stack is empty: the first Undo after a Restart, past any selection made since. Its puzzle
+  // triggers `act` after each action, so whether the stack was empty before an Undo is read off the last action, a reset or a load.
+  const undoStackEmpty = () => Framework.app.puzzle.undoStack.length === 0
+  let undoWasEmpty = false
+
+  function followUndo (_, action) {
+    if (action?.type === 'undo' && undoWasEmpty) restoreRestarted()
+    undoWasEmpty = undoStackEmpty()
+  }
+
+  function restoreRestarted () {
+    const key = restartedKey(currentPuzzleKey())
+    let notes
+    try {
+      notes = readDrawing(Framework.getData(key))
+    } catch (err) {
+      console.warn(`draw-tool: the notes Restart kept cannot be read, so Undo does not bring them back: ${err.message}`)
+      Framework.removeData(key)
+      return
+    }
+    if (notes.length === 0) return
+    cancelInput()
+    drawing = drawing.concat(notes)
+    redraw()
+    save()
+  }
+
   // Deletes, whole, every note the drag from `from` to `to`, in board units, passes near. Whether any went.
   function eraseAlong (from, to, map) {
     if (!keepItems((item) => item.kind !== TEXT_KIND || !touchesText(boardView(item, map.toBoard), from, to))) return false
@@ -2528,7 +2591,9 @@
     })
     addSettingsEntry(Framework, { name: 'drawtool', content: 'Text Anywhere', open: openDialog })
     app.puzzle.on('loaded', showSavedDrawing)
-    app.on('restarted', emptyDrawing)
+    app.on('restarted', restartDrawing)
+    app.puzzle.on('act', followUndo)
+    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, () => { undoWasEmpty = undoStackEmpty() })
     window.addEventListener('contextmenu', suppressMenu)
     installColorPickers()
     window.addEventListener('blur', endGesture)
