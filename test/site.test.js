@@ -442,7 +442,7 @@ test(`${HOME} describes Text Anywhere in a short summary ending in a Details lin
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Typed notes anywhere Click to type; Esc finishes; double-click a note to edit.',
-    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets or - [ ] checklist items. Typing ->, != or sum gives → ≠ Σ.',
+    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets or [ ] checklist items (- [ ] and [] work too). Typing ->, != or sum gives → ≠ Σ.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',

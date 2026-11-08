@@ -82,7 +82,7 @@ test('nudgedFontPx: one px per press from the automatic size, below SudokuPad\'s
 // SudokuPad's own font is 17.6 px. `scale` is visual px per css px, as SudokuPad scales the controls column.
 const VIEWPORT = { width: 2048, height: 1064 }
 function fakePane (chars, scale = 1, spareRoom = 0) {
-  const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '', overflowY: '' }
+  const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '' }
   const font = () => parseFloat(style.fontSize) || 17.6
   const width = () => parseFloat(style.width) || 480
   const scrollHeight = () => Math.ceil((chars * font() * 0.5) / (width() - 32)) * font() * 1.2 + 32
@@ -313,7 +313,7 @@ test('fitRulesPane: a pane SudokuPad does not show (a puzzle with no rules) gets
   fit({ box: { w: 0, h: 30, x: 0, y: -30 } })
   Object.defineProperty(rules, 'offsetWidth', { get: () => 0 })
   assert.equal(fit(), null)
-  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '', overflowY: '' })
+  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '' })
   assert.equal(controls.style.translate, '')
 })
 
@@ -337,7 +337,7 @@ test('clearFit: takes the fit\'s output off the pane and the controls', () => {
   fit({ box: { w: -20, h: 30, x: 20, y: -30 } })
   assert.notEqual(controls.style.translate, '')
   clearFit(rules, controls)
-  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '', overflowY: '' })
+  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '' })
   assert.equal(controls.style.translate, '')
 })
 
@@ -454,6 +454,20 @@ test('watchCornerDrag: follows move and release on the window, so a fast drag pa
   win.fire('pointermove', 200, 200)
   assert.equal(moves.length, 2, 'released: later moves are ignored')
   assert.deepEqual(active, [true, false])
+})
+
+test('watchCornerDrag: vertical drift under 4 px from the press is ignored, and past it all of the vertical movement counts', () => {
+  const corner = fakeTarget()
+  const win = fakeTarget()
+  const moves = []
+  watchCornerDrag(corner, win, (dx, dy) => moves.push([dx, dy]), () => {})
+  corner.fire('pointerdown', 100, 100)
+  win.fire('pointermove', 110, 102)
+  win.fire('pointermove', 120, 103)
+  assert.deepEqual(moves, [[10, 0], [10, 0]], 'drift of 3 px')
+  win.fire('pointermove', 130, 104)
+  win.fire('pointermove', 130, 110)
+  assert.deepEqual(moves.slice(2), [[10, 4], [0, 6]], 'at 4 px the whole 4 px counts, then each move')
 })
 
 test('copiedSettings: both limits in force, null for no limit', () => {
