@@ -2057,6 +2057,7 @@
 
   function select (indices) {
     selected = [...new Set(indices)].sort((a, b) => a - b)
+    if (selected.length === 0) stopHold()
     redraw()
   }
 
