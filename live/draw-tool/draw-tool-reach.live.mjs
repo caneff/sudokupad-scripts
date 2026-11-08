@@ -108,7 +108,9 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     assert.notDeepEqual(dropped, RIGHT_OF_PANEL, 'the new point is saved')
     await reload()
     assert.deepEqual((await saved())[0].fixed, dropped, 'the same point over a reload')
-    assert.deepEqual((await boxes()).point.map(Math.round), dropped.map(Math.round), 'drawn at the drop point')
+    // Drawn on a whole device pixel, so within a pixel of the stored point.
+    const drawn = (await boxes()).point
+    assert.equal(drawn.every((v, i) => Math.abs(v - dropped[i]) <= 1), true, `drawn from ${drawn}, stored at ${dropped}`)
     await resizeTo(HOME)
     await reload()
     assert.deepEqual((await saved())[0].fixed, dropped, 'the drop point, with the window restored')
