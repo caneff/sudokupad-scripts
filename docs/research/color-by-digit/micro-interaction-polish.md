@@ -67,7 +67,7 @@ shared `lib/` code with a test. L is more.
 
 - **Fade the board's cell colors in on a mode or profile change.** SudokuPad remakes its color layer's nodes on each change
   (`color-by-digit-redraw-cost.md`: about 80 nodes per entry), so a fade would also catch nodes that did not change. Undo
-  bypasses `app.act` and would still snap. Apple HIG advises against motion on frequent interactions.
+  (a replay or a progress load, which bypass `app.act`) would still snap. Apple HIG advises against motion on frequent interactions.
 - **A toast or flash when the mode changes.** The word above the chips and the chips' look already change on the press.
   A second signal would repeat them, and Apple HIG, Feedback keeps confirmations for important actions.
 - **Animate the dialog's close.** SudokuPad's `Framework.closeDialog` removes it. Animating only this script's dialog

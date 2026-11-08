@@ -85,3 +85,33 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
     assert.equal(await settle(label, 'Off'), 'Off')
   })
 })
+
+describe('Undo after a Restart', { concurrency: false }, () => {
+  let context, p
+
+  const undo = () => p.click('#control-undo')
+  const coloredCount = () => coloredCountOn(p)
+  const label = () => labelOn(p)
+
+  before(async () => {
+    ({ context, p } = await openSession(browser, script))
+  })
+  after(async () => { await context.close() })
+
+  it('every Undo leaves the button and the board agreeing, down to the Off before the Cell step', async () => {
+    await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
+    await pressTo(p, 'Cell')
+    assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
+    await p.evaluate(() => Framework.app.restartPuzzle())
+    await settle(async () => (await coloredCount()) > 0, true)
+    // Whatever each Undo takes back, a colored board means Cell and an uncolored one means Off.
+    const agree = async () => (await label()) === ((await coloredCount()) > 0 ? 'Cell' : 'Off')
+    let undos = 0
+    while (!(await label() === 'Off' && (await coloredCount()) === 0) && undos < 8) {
+      await undo()
+      undos++
+      assert.equal(await settle(agree, true), true, `after Undo ${undos}: ${await label()}, ${await coloredCount()} colored`)
+    }
+    assert.deepEqual([await label(), await coloredCount()], ['Off', 0])
+  })
+})

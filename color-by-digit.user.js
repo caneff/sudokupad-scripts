@@ -1890,31 +1890,40 @@
   function createModeHistory () {
     const done = []
     let undone = []
+    let beforeRestart = null
     return {
       record (at, from, to) {
         done.push({ at, from, to })
         undone = []
       },
-      // The mode before the earliest step an Undo down to stack length `length` took back; undefined when it took back none.
-      undo (length) {
-        const first = done.findIndex((step) => step.at > length)
+      // The mode before the earliest step an Undo down to `stackLength` took back.
+      undo (stackLength) {
+        const first = done.findIndex((step) => step.at > stackLength)
         if (first < 0) return undefined
         const taken = done.splice(first)
         undone.push(...taken.reverse())
         return taken[taken.length - 1].from
       },
-      // The mode after the latest step a Redo up to stack length `length` put back; undefined when it put back none.
-      redo (length) {
+      // The mode after the latest step a Redo up to `stackLength` put back.
+      redo (stackLength) {
         const put = []
-        while (undone.length > 0 && undone[undone.length - 1].at <= length) put.push(undone.pop())
+        while (undone.length > 0 && undone[undone.length - 1].at <= stackLength) put.push(undone.pop())
         if (put.length === 0) return undefined
         done.push(...put)
         return put[put.length - 1].to
       },
       forgetRedo () { undone = [] },
-      clear () {
+      // A Restart empties the undo stack, but SudokuPad's next Undo on the empty stack brings back the board from before it, stack included.
+      restart () {
+        if (done.length > 0 || undone.length > 0) beforeRestart = { done: [...done], undone }
         done.length = 0
         undone = []
+      },
+      restoreBeforeRestart () {
+        if (!beforeRestart) return
+        done.splice(0, done.length, ...beforeRestart.done)
+        undone = beforeRestart.undone
+        beforeRestart = null
       }
     }
   }
@@ -2067,23 +2076,31 @@
   }
 
   const modeHistory = createModeHistory()
-  const undoLength = (app) => coloring.run(() => app.puzzle.undoStack.length, () => 0)
+
+  // Runs `step`, which may color or clear cells, and records it as a mode step from `from` when it left an undo step.
+  function recordingModeStep (app, from, to, step) {
+    coloring.run(() => {
+      const before = app.puzzle.undoStack.length
+      step()
+      const after = app.puzzle.undoStack.length
+      if (after > before) modeHistory.record(after, from, to)
+    })
+  }
 
   // Leaving cell coloring takes the colors of `keys`, the group keys to take off, off every cell.
   function setMode (app, next, keys = groupKeys(loadGroups())) {
     const was = mode
     showMode(next)
-    const before = undoLength(app)
-    if (colorsCells(next) && !colorsCells(was)) colorEnteredCells(app)
-    if (!colorsCells(next) && colorsCells(was)) recolor(app, (plans) => planClear(plans, keys))
-    const after = undoLength(app)
-    if (after > before) modeHistory.record(after, was, next)
+    recordingModeStep(app, was, next, () => {
+      if (colorsCells(next) && !colorsCells(was)) colorEnteredCells(app)
+      if (!colorsCells(next) && colorsCells(was)) recolor(app, (plans) => planClear(plans, keys))
+    })
   }
 
   // Undo and Redo move the mode with the board: a mode step that colored or cleared cells is an undo step, so taking it back or putting it again changes the mode too.
   function followUndo (app, type) {
-    const length = app.puzzle.undoStack.length
-    const target = type === 'undo' ? modeHistory.undo(length) : modeHistory.redo(length)
+    const stackLength = app.puzzle.undoStack.length
+    const target = type === 'undo' ? modeHistory.undo(stackLength) : modeHistory.redo(stackLength)
     if (target !== undefined) showMode(allowedMode(target, usesDigitColors(loadState())))
   }
 
@@ -2117,8 +2134,11 @@
       }
       coloring.wrap(app, 'act', function (stock, action) {
         if (action?.type === 'undo' || action?.type === 'redo') {
+          // SudokuPad keeps the board from before a Restart in `preRestartSavedProgress`, and an Undo on the empty stack loads it.
+          const loadsBeforeRestart = action.type === 'undo' && app.puzzle.undoStack.length === 0 && app.preRestartSavedProgress !== undefined
           const result = stock(action)
-          followUndo(app, action.type)
+          if (loadsBeforeRestart) modeHistory.restoreBeforeRestart()
+          else followUndo(app, action.type)
           return result
         }
         // A new action empties SudokuPad's redo stack, and the mode steps that could have been redone go with it.
@@ -2128,8 +2148,9 @@
         return result
       })
       app.on('restarted', () => {
-        modeHistory.clear()
-        if (colorsCells(mode)) colorEnteredCells(app)
+        modeHistory.restart()
+        // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
+        if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
       })
     })
   }
