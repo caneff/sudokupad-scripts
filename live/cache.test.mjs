@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, statSync, utimesSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { checkVersion, cleanHar, ensureRecording, harPath, LOCK_STALE_MS, MAX_AGE_MS, misses, modeFor, pageVersion, puzzleUrl, routeSudokuPad } from './cache.mjs'
+import { checkVersion, cleanHar, ensureRecording, missingFromRecording, harPath, LOCK_STALE_MS, MAX_AGE_MS, misses, modeFor, pageVersion, puzzleUrl, routeSudokuPad } from './cache.mjs'
 
 const HOUR = 60 * 60 * 1000
 
@@ -155,6 +155,23 @@ describe('checkVersion', () => {
 
   it('lets a failed request through', async () => {
     await assert.rejects(checkVersion(join(dir, 'a.har'), async () => { throw new Error('offline') }), /offline/)
+  })
+})
+
+describe('missingFromRecording', () => {
+  const har = (...urls) => ({ log: { entries: urls.map((url) => ({ request: { method: 'GET', url }, response: { status: 200, content: {} } })) } })
+
+  it('names fabric.js when the recording holds the page but not the file Test Markup loads on demand', () => {
+    assert.deepEqual(missingFromRecording(har('https://sudokupad.app/', 'https://sudokupad.app/main.js')), ['fabric.js (Test Markup)'])
+  })
+
+  it('names nothing when the recording holds it, whatever version of fabric.js SudokuPad ships', () => {
+    assert.deepEqual(missingFromRecording(har('https://sudokupad.app/fabric-5.3.1.min.js')), [])
+    assert.deepEqual(missingFromRecording(har('https://sudokupad.app/fabric-6.0.0.min.js')), [])
+  })
+
+  it('does not count a fabric file from another host', () => {
+    assert.deepEqual(missingFromRecording(har('https://cdn.example/fabric-5.3.1.min.js')), ['fabric.js (Test Markup)'])
   })
 })
 

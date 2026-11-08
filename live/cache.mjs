@@ -113,6 +113,16 @@ export function cleanHar (har) {
   return { ...har, log: { ...har.log, entries: [...byRequest.values()] } }
 }
 
+// Files a live check needs that SudokuPad loads only on demand, so a plain visit does not fetch them and the
+// recorder must. A recording without one fails its check with the request unrecorded, long after the recording.
+const LOADED_ON_DEMAND = [
+  { name: 'fabric.js (Test Markup)', url: /^https:\/\/sudokupad\.app\/fabric[^/?]*\.js(\?|$)/ }
+]
+
+// The names of the on-demand files `har` lacks, empty when it holds them all.
+export const missingFromRecording = (har) =>
+  LOADED_ON_DEMAND.filter(({ url }) => !har.log.entries.some((e) => url.test(e.request.url))).map(({ name }) => name)
+
 const writeAtomic = (file, text) => {
   const tmp = `${file}.${process.pid}.tmp`
   try { writeFileSync(tmp, text); renameSync(tmp, file) } catch (e) { rmSync(tmp, { force: true }); throw e }
@@ -180,11 +190,16 @@ async function record (file) {
     await openSettings(p)
     // Test Markup loads fabric.js only once it is turned on, and Text Anywhere's live check turns it on.
     await p.evaluate(() => Framework.setSetting('markup', true))
+    // Idle can come before the load has started, so wait for what the loaded file builds.
+    await p.locator('.fabcan canvas').first().waitFor({ state: 'attached', timeout: LOAD_MS })
     await p.waitForLoadState('networkidle')
     await loadEveryWebFont(p, stylesheet)
     await context.close()
+    const har = cleanHar(JSON.parse(readFileSync(tmp, 'utf8')))
+    const missing = missingFromRecording(har)
+    if (missing.length > 0) throw new Error(`the recording lacks ${missing.join(', ')}, which a live check needs; nothing was written`)
     mkdirSync(dirname(file), { recursive: true })
-    writeAtomic(file, JSON.stringify(cleanHar(JSON.parse(readFileSync(tmp, 'utf8')))))
+    writeAtomic(file, JSON.stringify(har))
   } finally {
     await browser.close()
     rmSync(tmp, { force: true })
