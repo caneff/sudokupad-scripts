@@ -1,4 +1,4 @@
-// Takes docs/research/color-by-digit/color-by-digit-outline.png (#578): the Color by Digit button in Cell, Digit and Both, on a normal
+// Takes docs/research/color-by-digit/color-by-digit-outline.png (#578, #585): the Color by Digit button in Cell, Digit, Both and Off, on a normal
 // page (top row) and on Dark Page (bottom row), at 3x, to judge the white outline on the mode word. Run from the repo root:
 // node docs/research/color-by-digit/color-by-digit-outline-screenshot.mjs
 import { chromium } from 'playwright'
@@ -8,7 +8,7 @@ const url = readFileSync(new URL('../../../live/puzzle-url.txt', import.meta.url
 const script = readFileSync(new URL('../../../color-by-digit.user.js', import.meta.url), 'utf8')
 const darkScript = readFileSync(new URL('../../../dark-page.user.js', import.meta.url), 'utf8')
 const out = new URL('./color-by-digit-outline.png', import.meta.url).pathname
-const MODES = ['CELL', 'DIGIT', 'BOTH']
+const MODES = ['CELL', 'DIGIT', 'BOTH', 'OFF']
 
 const browser = await chromium.launch()
 const newContext = () => browser.newContext({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 3 })
