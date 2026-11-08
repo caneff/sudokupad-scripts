@@ -228,6 +228,7 @@
   const HANDLE_CLASS = 'draw-tool-resize'
   const SELECTION_CLASS = 'draw-tool-selection'
   const GUIDE_CLASS = 'draw-tool-snap-guide'
+  const GUIDE_PX = 1
   const SELECTION_OUTLINE_PX = 2
   const SELECTION_OFFSET_PX = 2
   const OPEN_OUTLINE_CLASS = 'draw-tool-open-outline'
@@ -1444,7 +1445,7 @@
     },
     tool: {
       label: 'Text tool',
-      needs: { ...BOARD, 'Framework.addTool': 'function', 'Framework.showDialog': 'function', 'app.getToolNames': 'function' },
+      needs: { ...BOARD, 'Framework.addTool': 'function', 'Framework.showDialog': 'function', 'app.getToolNames': 'function', 'Framework.app.grid.rows': 'integer', 'Framework.app.grid.cols': 'integer' },
       onSkip () {
         const button = document.getElementById(`control-${TOOL_NAME}`)
         if (button) button.remove()
@@ -1477,23 +1478,19 @@
   const NUDGE_REPEAT_MS = 300
   const NUDGE_RAMP_MS = 1500
   const NUDGE_TICK_MS = 50
-  // Dragging a note pulls it onto the grid and onto the other notes. The grid is 9 cells of 64 board units from the board's origin. On one axis the dragged
-  // note's box spans `lo`..`hi` in screen pixels, and its selection outline's line lies `reach` past it. It moves by the `shift` of the nearest target within `pull`:
-  //  - the grid's `lines` (its 10 lines, ascending): the outline's line meets a cell line, or the box's middle meets a cell's middle; none when the box is wholly
-  //    outside the grid's span;
-  //  - each of `others`, the other notes' `{ lo, hi }` boxes: the same edge or the middle of the box meets theirs, so the notes line up.
-  // `guide` is where the target lies on the axis, where the dragged note's outline then is. A cell target beats a note target only by being nearer.
+  // Dragging a note pulls it onto the grid and the other notes. On one axis the dragged note's box spans `lo`..`hi` in screen pixels and its selection outline's line
+  // lies `reach` past it. The nearest target within SNAP_PX gives the `shift` and the `guide`, where the outline then lies: the grid's `lines` for the outline's line
+  // (or a cell's middle for the box's middle), or one of `others`' `{ lo, hi }` boxes for the same edge or middle. A tie goes to the first target found, a cell's.
   const SNAP_PX = 4
-  const GRID_CELLS = 9
   const CELL_UNITS = 64
-  function snapAxis (lo, hi, { lines, others = [], reach = 0, pull = SNAP_PX }) {
+  function snapAxis (lo, hi, { lines, others = [], reach = 0 }) {
     const middle = (lo + hi) / 2
     let best = null
     const consider = (from, to, guide) => {
       const shift = to - from
-      if (Math.abs(shift) <= pull && (!best || Math.abs(shift) < Math.abs(best.shift))) best = { shift, guide }
+      if (Math.abs(shift) <= SNAP_PX && (!best || Math.abs(shift) < Math.abs(best.shift))) best = { shift, guide }
     }
-    if (hi >= lines[0] && lo <= lines[lines.length - 1]) {
+    if (hi + reach >= lines[0] && lo - reach <= lines[lines.length - 1]) {
       lines.forEach((line, i) => {
         consider(lo - reach, line, line)
         consider(hi + reach, line, line)
@@ -2773,13 +2770,16 @@
     const item = drawing[d.start]
     if (!item) return { offset: raw, guides: [] }
     const reach = SELECTION_OFFSET_PX + SELECTION_OUTLINE_PX / 2
-    const lines = (axis) => Array.from({ length: GRID_CELLS + 1 }, (_, k) => map.toScreen(axis === 0 ? [k * CELL_UNITS, 0] : [0, k * CELL_UNITS])[axis])
+    const lines = (axis) => Array.from({ length: Framework.app.grid[axis === 0 ? 'cols' : 'rows'] + 1 }, (_, k) => map.toScreen(axis === 0 ? [k * CELL_UNITS, 0] : [0, k * CELL_UNITS])[axis])
     const box = noteScreenBox(item, map, outline)
     const others = drawing.filter((other, i) => other.kind === TEXT_KIND && !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, outline))
     const snaps = [['left', 'right'], ['top', 'bottom']].map(([near, far], axis) => snapAxis(box[near] + raw[axis], box[far] + raw[axis], {
       lines: lines(axis), reach, others: others.map((other) => ({ lo: other[near], hi: other[far] }))
     }))
-    return { offset: raw.map((v, axis) => v + (snaps[axis]?.shift ?? 0)), guides: snaps.map((snap) => snap?.guide ?? null) }
+    const offset = raw.map((v, axis) => v + (snaps[axis]?.shift ?? 0))
+    // The pull may carry a note past what the pointer left reachable, so then the note stays where the pointer put it.
+    if (!movedBy(d.move, offset, map).every(({ point }) => reachable(point))) return { offset: raw, guides: [] }
+    return { offset, guides: snaps.map((snap) => snap?.guide ?? null) }
   }
 
   // The faint guide lines across the page at `[x, y]` (null for an axis that is not snapped); none for null.
@@ -2790,8 +2790,9 @@
       if (guides?.[i] == null) return line?.remove()
       line ??= layer.appendChild(Object.assign(document.createElement('div'), { className: GUIDE_CLASS }))
       line.dataset.axis = axis
-      const at = `${roundToTenth(guides[i] - 0.5)}px`
-      Object.assign(line.style, axis === 'x' ? { left: at, top: '0', width: '1px', height: '100%' } : { top: at, left: '0', height: '1px', width: '100%' })
+      const at = `${roundToTenth(guides[i] - GUIDE_PX / 2)}px`
+      const thick = `${GUIDE_PX}px`
+      Object.assign(line.style, axis === 'x' ? { left: at, top: '0', width: thick, height: '100%' } : { top: at, left: '0', height: thick, width: '100%' })
     })
   }
 

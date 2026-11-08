@@ -752,7 +752,7 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
 // A SudokuPad with every internal the features declare, and the helpers that take one away.
 const completeRoots = () => {
   const app = { on () {}, getToolNames () {}, puzzle: { on () {} } }
-  const Framework = { getApp () {}, getData () {}, setData () {}, removeData () {}, addTool () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { svgRenderer: { getElem () {} }, puzzle: { undoStack: [] }, tools: { colour: {} } } }
+  const Framework = { getApp () {}, getData () {}, setData () {}, removeData () {}, addTool () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { svgRenderer: { getElem () {} }, puzzle: { undoStack: [] }, grid: { rows: 9, cols: 9 }, tools: { colour: {} } } }
   return { Framework, app }
 }
 const withoutPath = (roots, internal) => {
@@ -776,6 +776,7 @@ test('without one internal, only the features that need it are lacking', () => {
     ['app.puzzle.on', ['notes', 'tool', 'undoRestart']], ['app.on', ['notes', 'tool']],
     ['Framework.getData', ['saved']], ['Framework.setData', ['saved']], ['Framework.removeData', ['saved']],
     ['Framework.addSetting', ['settings']], ['Framework.closeDialog', ['settings']],
+    ['Framework.app.grid.rows', ['tool']], ['Framework.app.grid.cols', ['tool']],
     ['Framework.app.tools.colour', ['presets']]
   ]
   for (const [internal, features] of cases) {
@@ -952,4 +953,14 @@ test('snapAxis lets the nearer of a cell target and a note target win', () => {
 
 test('snapAxis snaps to a note beside the board even where the grid has no target', () => {
   assert.deepEqual(snapAxis(800, 830, { lines: LINES, others: [{ lo: 802, hi: 900 }] }), { shift: 2, guide: 802 })
+})
+
+test('snapAxis snaps a note whose edge lies exactly on the grid\'s outer line, and not one just short of it', () => {
+  assert.deepEqual(snapAxis(10, 100, { lines: LINES }), { shift: 0, guide: 100 })
+  assert.equal(snapAxis(10, 99.9, { lines: LINES }), null)
+})
+
+test('snapAxis takes the grid\'s span from the outline, which lies reach past the box', () => {
+  assert.deepEqual(snapAxis(10, 97, { lines: LINES, reach: 3 }), { shift: 0, guide: 100 })
+  assert.equal(snapAxis(10, 96.9, { lines: LINES, reach: 3 }), null)
 })

@@ -16,6 +16,10 @@ const TEXT_AT = [7.5, 5.5]
 const OTHER_AT = [2.5, 2.5]
 const COLUMN_LINE = 5
 const NEAR_PX = 0.6
+// What an earlier version saved, planted as it wrote it, and a note.
+const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [[100, 100], [300, 200], [500, 100]] }
+const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 60, box: [64, 320, 256, 448] }
+const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -31,13 +35,14 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
   }
   const outlineLeft = async () => (await p.locator(SELECTION).boundingBox()).x - OUTLINE_MIDDLE_PX
   const noteBox = (text) => p.locator(TEXTS, { hasText: text }).boundingBox()
-  // Presses the note '15' and drags it by `dx` px along the row, reading its outline and the x guide before the release.
-  const dragBy = async (dx) => {
+  // Presses the note '15' and drags it by `dx` px along the row, then `wiggle` px further, reading its outline and the x guide before the release.
+  const dragBy = async (dx, wiggle = 0) => {
     const note = await noteBox('15')
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
     await p.mouse.move(px, py)
     await p.mouse.down()
     await p.mouse.move(px + dx, py, { steps: 6 })
+    if (wiggle) await p.mouse.move(px + dx + wiggle, py)
     const during = { left: await outlineLeft(), guides: await p.locator(GUIDE_X).count() }
     const guideBox = during.guides ? await p.locator(GUIDE_X).boundingBox() : null
     await p.mouse.up()
@@ -80,6 +85,25 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(left - (line + 6)) < NEAR_PX, true, `the outline's line ${left} is 6 px past ${line}`)
   })
 
+  it('a note dragged 3 px from where it began, clear of every target, moves exactly 3 px: the notes being dragged are no targets', async () => {
+    const before = (await noteBox('15')).x
+    const { guides } = await dragBy(3)
+    assert.equal(guides, 0, 'no guide')
+    assert.equal(Math.abs((await noteBox('15')).x - (before + 3)) < NEAR_PX, true, 'the note moved with the pointer')
+  })
+
+  it('releasing a snapped note never jumps: the pointer moving 0.5 px further within the pull leaves it on the line, drawn and saved', async () => {
+    const line = await lineX(COLUMN_LINE)
+    const gap = line + 2 - ((await noteBox('15')).x - OUTLINE_MIDDLE_PX)
+    const { left } = await dragBy(gap, 0.5)
+    assert.equal(Math.abs(left - line) < NEAR_PX, true, `the outline's line ${left} is on the line ${line} before the release`)
+    assert.equal(Math.abs(await outlineLeft() - left) < 0.05, true, 'the release moved the outline')
+    const [at] = (await draw.saved(p)).filter((item) => item.kind === 'text' && item.text === '15').map((item) => item.at)
+    await draw.reload(p)
+    await draw.pickDraw(p)
+    assert.equal(Math.abs((await noteBox('15')).x - OUTLINE_MIDDLE_PX - line) < NEAR_PX, true, `the saved note ${at} is drawn on the line again after a reload`)
+  })
+
   it('a note dragged to 2 px from another note\'s left edge lands with the two left edges equal and the guide where its outline lies', async () => {
     const other = await noteBox('2')
     const { x } = await noteBox('15')
@@ -88,6 +112,15 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(left - (other.x - OUTLINE_MIDDLE_PX)) < NEAR_PX, true, `the outline's line ${left} is ${OUTLINE_MIDDLE_PX} px left of the other note's left edge ${other.x}`)
     assert.equal(Math.abs(guideBox.x + guideBox.width / 2 - left) < NEAR_PX, true, `the guide ${guideBox.x} is on the outline's line ${left}`)
     assert.equal(Math.abs((await noteBox('15')).x - other.x) < NEAR_PX, true, 'the two left edges are equal after the release')
+  })
+
+  it('a note still drags beside an older version\'s stroke and shape, which are no targets', async () => {
+    await draw.plantDrawing(p, [OLD_STROKE, NOTE, OLD_SHAPE])
+    await draw.reload(p)
+    await draw.pickDraw(p)
+    const before = (await noteBox('15')).x
+    await dragBy(40)
+    assert.equal(Math.abs((await noteBox('15')).x - (before + 40)) < 4 + NEAR_PX, true, 'the note moved with the pointer, to within the pull')
   })
 
   it('the page raised no error', () => assert.deepEqual(errors, []))
