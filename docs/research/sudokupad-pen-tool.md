@@ -232,3 +232,12 @@ So a click with a modifier held doesn't reach the pen tool unless the script sto
 - SudokuPad stops updating its cached pointer position (`inputPos`, what `getInputRc()` reads) while a dialog is open. A pointer moved during a
   dialog and a middle press right after it closes would hit the old position, so the erase hit-tests the press's own `clientX`/`clientY` through
   `app.xyToRCExact`, which gives the same cell units (checked live: the point 2 cells right and 3 down of cell (0,0)'s middle gave 3.5, 2.5).
+
+## A button a script adds after startup leaks its press to the board (#521)
+
+Traced in the page on 2026-11-07, SudokuPad 0.611.0.
+
+- `App.attachButtonHandlers` binds `handleButton` to every `<button>` present when it runs. `handleButton` calls `stopPropagation()` on `mousedown` and `touchstart`, so a press on SudokuPad's own button never reaches `App.handleInputdown`, which listens on `window`.
+- A button a script inserts later never gets `handleButton`. Its `mousedown` bubbles to `window`, then `handleInputup`, then the pen tool's `clickCell` with `getInputRc()` near the pointer.
+- SudokuPad's edge hit test finds an edge for a press up to one cell beyond the grid. A button within that distance of the grid draws an edge X: Pen Tool Extras' line mode, page and settings buttons (c = 9.8 to 10.7), and Auto Rules Resizer's font bar on a 1920x1080 window.
+- The fix is a `mousedown` `stopPropagation()` on the added control. Color by Digit and Draw Tool already do this for their controls. Their dialog buttons and banners were not probed.

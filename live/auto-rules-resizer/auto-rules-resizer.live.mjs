@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
+import { openPenTool, penEntries } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 
@@ -228,6 +229,28 @@ describe('a landscape window, short rules', { concurrency: false }, () => {
 
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
+  })
+})
+
+describe('a press on the left of a font button (#521)', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await rulesPage(LANDSCAPE, (p) => p.evaluate(() => Framework.setSetting('toolpen', true))))
+    await openPenTool(p)
+    await p.locator('.tool-pen button[data-key="1"]').click()
+    await inject(p)
+  })
+  after(async () => { await context.close() })
+
+  it('reaches no tool on the board: the pen tool drew an X on the grid\'s right edge', async () => {
+    await hoverPane(p)
+    await p.locator(FONT_BAR).waitFor({ state: 'visible' })
+    const box = await p.locator(`${FONT_BAR} button`, { hasText: 'f+' }).boundingBox()
+    await p.mouse.click(box.x + 3, box.y + box.height / 2)
+    // A sleep, allowed here: a "nothing happened in N ms" check.
+    await p.waitForTimeout(300)
+    assert.deepEqual(await penEntries(p), [])
   })
 })
 
