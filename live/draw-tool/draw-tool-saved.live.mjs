@@ -327,9 +327,8 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await read((k) => Framework.removeData(k), INDEX_KEY)
   })
 
-  // The open note autosaves 500 ms after a key (#631), so on a slow machine the failed save and its dialog come while the note is still open, and the Escape that
-  // ends the note then dismisses the dialog (#647). The dialog is waited for and closed before the note ends: it is there from the autosave on, whichever came first.
-  // The index is mended in `finally`, so a failure here cannot leave every test after it with an index that cannot be read.
+  // The open note autosaves (OPEN_NOTE_SAVE_MS after a key, #631). Under load the failed save's dialog can come before the note ends, and the Escape that ends it would
+  // dismiss the dialog (#647). So the dialog is waited for and closed first, and the index is mended in `finally`: a failure here must not leave the later tests an unreadable one.
   it('an index that cannot be read leaves every saved drawing as it is, and the solver is told these notes were not saved', async () => {
     await reload()
     await read((k) => Framework.setData(k, 'not an index {'), INDEX_KEY)
