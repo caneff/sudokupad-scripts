@@ -558,13 +558,13 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
     })
     const heldAt = await topOffset()
     assert.equal(heldAt > 1000, true, `scrolled to text offset ${heldAt}`)
-    await p.setViewportSize(SMALLER)
-    const moved = await settle(async () => (await pane(p)).top !== undefined && Math.abs((await topOffset()) - heldAt) <= 10, true)
-    const after = await topOffset()
-    assert.equal(moved, true, `the top line was at text offset ${heldAt} and is at ${after}`)
-    await p.setViewportSize(LANDSCAPE)
-    const back = await settle(async () => Math.abs((await topOffset()) - heldAt) <= 10, true)
-    assert.equal(back, true, `back in the first window: text offset ${await topOffset()}, was ${heldAt}`)
+    // Read once the offset has held through the window's trailing refit.
+    const refitTo = async (viewport) => {
+      await p.setViewportSize(viewport)
+      return stable(topOffset)
+    }
+    assert.equal(Math.abs((await refitTo(SMALLER)) - heldAt) <= 10, true, `smaller window: the top line was at text offset ${heldAt}`)
+    assert.equal(Math.abs((await refitTo(LANDSCAPE)) - heldAt) <= 10, true, `back in the first window: the top line was at text offset ${heldAt}`)
   })
 
   it('the page raised no error', () => {
