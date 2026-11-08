@@ -132,7 +132,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       if (ghosts.length > 1) return { count: ghosts.length }
       const el = ghosts[0]
       if (!el) return null
-      return { count: 1, value: /\bpen-(\S+)/.exec(el.getAttribute('class'))[1], pen: /\bpencolor-(\S+)/.exec(el.getAttribute('class'))[1], opacity: getComputedStyle(el).opacity, layer: el.parentNode.id, d: el.getAttribute('d') }
+      return { count: 1, value: el.getAttribute('value'), classValue: /\bpen-(\S+)/.exec(el.getAttribute('class'))[1], pen: /\bpencolor-(\S+)/.exec(el.getAttribute('class'))[1], opacity: getComputedStyle(el).opacity, layer: el.parentNode.id, d: el.getAttribute('d') }
     }, GHOST)
     const marksOf = (row, col) => penEntries(p).then((all) => all.filter((v) => v.startsWith(`${row},${col}:`)).map((v) => v[v.indexOf(':') + 1]))
     const NEXT_MS = 2000
@@ -157,9 +157,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         assert.equal(ghost.layer, 'pen-tool-extras-hint', `${label}: in the hint layer`)
         assert.notEqual(ghost.d, null, `${label}: it has a shape`)
         seen.push(ghost.value)
+        assert.equal(ghost.classValue, ghost.value, `${label}: the ghost is classed as the mark it draws`)
         await p.mouse.click(...await gridPoint(p, point))
         const stored = await settle(async () => (await marksOf(row, col)).includes(ghost.value), true)
         assert.equal(stored, true, `${label}: the click stores the ghost's mark ${ghost.value}; the cell holds ${await marksOf(row, col)} after ${seen}`)
+        // The mark the click stored is drawn as the ghost was.
+        const drawn = await read((value) => [...document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)')].filter((el) => el.getAttribute('value') === value).map((el) => el.getAttribute('d')), ghost.value)
+        assert.deepEqual(drawn, [ghost.d], `${label}: the stored ${ghost.value} has the ghost's shape`)
         const shown = ghost.value
         // The pointer has not moved: the ghost shows the step after the click made, with no move to ask for it.
         ghost = await settle(async () => JSON.stringify(await ghostOf()), undefined, NEXT_MS).then(ghostOf)
@@ -186,9 +190,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await hover([3.5, 4.0])
       const ghost = await settle(async () => (await ghostOf()) !== null, true).then(ghostOf)
       assert.equal(ghost.pen, '6', 'pen color 6')
-      // a press
+      // a press, right on the heels of a move whose preview is still waiting for its turn
+      await moveTo([3.5, 3.0])
       await p.mouse.down()
-      assert.equal(await settle(ghostOf, null), null, 'a press hides it')
+      await sleep(150) // "nothing happened in 150 ms" check: the waiting preview must not show under the press
+      assert.equal(await ghostOf(), null, 'a press hides it, and a move just before it does not bring it back')
       await p.mouse.up()
       await undoAll()
       await hover([3.5, 4.0])
