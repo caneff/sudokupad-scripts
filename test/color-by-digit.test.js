@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -925,7 +925,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
   delete require.cache[path]
   const calls = []
   const app = {
-    puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [], addEventListener: () => {} },
+    puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [], undoStack: [], redoStack: [], addEventListener: () => {} },
     act: (a) => calls.push(['act', a.type]),
     deselect: () => {},
     select: () => {},
@@ -1016,7 +1016,7 @@ function mockApp (cellDefs, { single = false } = {}) {
     cell.propGet = () => [...(def.centre || [])]
     return cell
   })
-  const puzzle = { cells, selectedCells: [], inGroup: false, addEventListener: () => {} }
+  const puzzle = { cells, selectedCells: [], undoStack: [], redoStack: [], inGroup: false, addEventListener: () => {} }
   const app = {
     puzzle,
     calls,
@@ -1843,7 +1843,7 @@ test('shownChips: Both with unsynced profiles lists its chips in ascending digit
 
 // A SudokuPad with every internal Color by Digit needs.
 const completeRoots = () => {
-  const app = { act () {}, select () {}, deselect () {}, on () {}, refreshControls () {}, puzzle: { cells: [], selectedCells: [], addEventListener () {} } }
+  const app = { act () {}, select () {}, deselect () {}, on () {}, refreshControls () {}, puzzle: { cells: [], selectedCells: [], undoStack: [], redoStack: [], addEventListener () {} } }
   return { Framework: { getApp () {}, getData () {}, setData () {}, addControlButton () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }, app }
 }
 const withoutPath = (roots, internal) => {
@@ -1860,7 +1860,7 @@ test('Color by Digit declares each SudokuPad internal it calls, and a complete S
 test('without one internal, only the features that need it are lacking', () => {
   const cases = [
     ['app.act', ['cells']], ['app.select', ['cells']], ['app.deselect', ['cells']], ['app.on', ['cells']],
-    ['app.puzzle.cells', ['cells', 'loading']], ['app.puzzle.selectedCells', ['cells']], ['app.puzzle.addEventListener', ['loading']],
+    ['app.puzzle.cells', ['cells', 'loading']], ['app.puzzle.selectedCells', ['cells']], ['app.puzzle.undoStack', ['cells']], ['app.puzzle.redoStack', ['cells']], ['app.puzzle.addEventListener', ['loading']],
     ['app.refreshControls', ['button']], ['Framework.addControlButton', ['button']],
     ['Framework.getApp', ['cells', 'button', 'loading']],
     ['Framework.getData', ['saved', 'editor']], ['Framework.setData', ['saved', 'editor']],
@@ -2034,4 +2034,42 @@ test('gridTarget: arrows move by one along a row and by a row down a column, ski
   assert.equal(gridTarget('ArrowDown', 6, usable, 3), 9)
   assert.equal(gridTarget('ArrowRight', 9, usable, 3), null)
   assert.equal(gridTarget('a', 0, usable, 3), null)
+})
+
+test('createModeHistory: Undo to a length below a step gives the mode before the earliest step taken back, Redo the mode after the latest put back', () => {
+  const history = createModeHistory()
+  history.record(6, 'off', 'cell')
+  history.record(12, 'cell', 'digit')
+  history.record(18, 'digit', 'both')
+  assert.equal(history.undo(18), undefined)
+  assert.equal(history.undo(5), 'off')
+  assert.equal(history.redo(5), undefined)
+  assert.equal(history.redo(18), 'both')
+  assert.equal(history.undo(11), 'cell')
+  assert.equal(history.undo(0), 'off')
+})
+
+test('createModeHistory: a new step or forgetRedo drops the steps that could have been redone', () => {
+  const history = createModeHistory()
+  history.record(6, 'off', 'cell')
+  history.undo(0)
+  history.forgetRedo()
+  assert.equal(history.redo(99), undefined)
+  history.record(6, 'off', 'cell')
+  history.undo(0)
+  history.record(4, 'off', 'both')
+  assert.equal(history.redo(99), undefined)
+})
+
+test('createModeHistory: a restart sets the steps aside, and the Undo that loads the board from before it brings them back', () => {
+  const history = createModeHistory()
+  history.record(6, 'off', 'cell')
+  history.restart()
+  assert.equal(history.undo(0), undefined)
+  history.restoreBeforeRestart()
+  assert.equal(history.undo(0), 'off')
+  history.restart()
+  history.restart()
+  history.restoreBeforeRestart()
+  assert.equal(history.redo(99), 'cell')
 })

@@ -56,7 +56,7 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
 
 SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a stray Tab left the number pad on letters after a refresh.
 
-- During play, Tab does what it did before, minus the toggle.
+- During play, Tab does what it did before, minus the toggle, and a held Tab is stopped too.
 - The letter button and `/` still toggle, and Tab still moves focus in dialogs.
 - It works whenever you turn the letter tool on in settings, and it has no settings entry.
 - If a SudokuPad update changes the letter tool or its Tab binding, it logs a console warning and changes nothing.

@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { buildCss, BOARD, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSaved, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 function rules () {
@@ -36,15 +37,25 @@ test('readSaved reads the saved color through the Framework, and lets a Framewor
 
 test('the credit line takes the text color for the page color given', () => {
   const credit = (color) => buildCss(color).split('\n').find((line) => line.startsWith(`${BOARD} .controls-footer`))
-  assert.equal(credit('#ffffff'), `${BOARD} .controls-footer, ${BOARD} .controls-footer a { color: #222222 !important }`)
-  assert.equal(credit('#000000'), `${BOARD} .controls-footer, ${BOARD} .controls-footer a { color: #dddddd !important }`)
+  assert.equal(credit('#ffffff'), `${BOARD} .controls-footer, ${BOARD} .controls-footer a { color: #000000 !important }`)
+  assert.equal(credit('#000000'), `${BOARD} .controls-footer, ${BOARD} .controls-footer a { color: #ffffff !important }`)
+})
+
+test('the credit line and the replay readout reach 4.5:1 on each of these page colors, mid greys either side of where white and black swap included', () => {
+  const textOf = (line) => /color: (#[0-9a-f]{6}) !important/.exec(line)[1]
+  for (const color of ['#808080', '#767676', '#757575', '#747474', '#6b6b6b', '#777777', '#ffcc00', '#336699', '#000000', '#ffffff', '#0000ff']) {
+    for (const start of [`${BOARD} .controls-footer`, `${BOARD} .controls-input::after`]) {
+      const line = buildCss(color).split('\n').find((l) => l.startsWith(start))
+      assert.ok(contrastRatio(hexChannels(textOf(line)), hexChannels(color)) >= 4.5, `${start} on ${color}: ${textOf(line)}`)
+    }
+  }
 })
 
 test('the replay tool\'s readout (the ::after of .controls-input) takes the text color for the page color given', () => {
   const readout = (color) => buildCss(color).split('\n').find((line) => line.startsWith(`${BOARD} .controls-input::after`))
-  assert.equal(readout('#ffffff'), `${BOARD} .controls-input::after { color: #222222 !important }`)
-  assert.equal(readout('#000000'), `${BOARD} .controls-input::after { color: #dddddd !important }`)
-  assert.equal(readout('#ffcc00'), `${BOARD} .controls-input::after { color: #222222 !important }`)
+  assert.equal(readout('#ffffff'), `${BOARD} .controls-input::after { color: #000000 !important }`)
+  assert.equal(readout('#000000'), `${BOARD} .controls-input::after { color: #ffffff !important }`)
+  assert.equal(readout('#ffcc00'), `${BOARD} .controls-input::after { color: #000000 !important }`)
 })
 
 const buttonRules = (color) => buildCss(color).split('\n').filter((line) => /button/.test(line.split(' {')[0]))
@@ -55,7 +66,10 @@ test('on a dark page color the control buttons go dark gray with light purple te
   assert.deepEqual(buttonRules('#000000'), [
     `${scoped(groups.map((g) => `${g} button:not(.selected):not(.selectedperm)`))} { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }`,
     `${scoped(groups.flatMap((g) => [`${g} button.selected`, `${g} button.selectedperm`]))} { border-color: #d2a8f0 !important }`,
-    `${scoped(['.button-row button'])} { border-color: #4a4a4a !important }`
+    `${scoped(['.button-row button'])} { border-color: #4a4a4a !important }`,
+    `${scoped(groups.map((g) => `${g} button:focus-visible`))} { outline: 2px solid #d2a8f0 !important; outline-offset: 2px !important }`,
+    `${scoped(groups.map((g) => `${g} button:not(.selected):not(.selectedperm):hover`))} { background-color: #37343a !important }`,
+    `${scoped(groups.map((g) => `${g} button:not(.selected):not(.selectedperm):active`))} { background-color: #3b373e !important }`
   ])
 })
 
