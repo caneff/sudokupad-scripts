@@ -41,7 +41,7 @@
 </style>
 </head>
 <body>
-<header><b>Prototype, throwaway.</b> Text Anywhere polish ideas 1–4 and 6. Snap: 4 px pull to cell middles and to cell edges (a note's top, bottom, left or right meeting a cell line), with a guide line. Each switch in the bar turns one idea on; off is today's look.
+<header><b>Prototype, throwaway.</b> Text Anywhere polish ideas 1–4 and 6. Snap: 4 px pull to cell middles and to cell edges (a note's top, bottom, left or right meeting a cell line), with a guide line; also to other notes' edges and middles. Each switch in the bar turns one idea on; off is today's look.
 Click a note to select it, drag to move it, drag on empty space to select several, double-click to edit, drag a corner to resize.</header>
 <div id="stage">
   <div id="board"></div>
@@ -58,6 +58,7 @@ Click a note to select it, drag to move it, drag on empty space to select severa
   <label><input type="checkbox" data-f="snap" checked> 6 Snap</label>
   <label>pull <select id="snapPx"><option value="3">3 px</option><option value="4" selected>4 px</option><option value="5">5 px</option><option value="8">8 px</option></select></label>
   <label><input type="checkbox" id="guideOn" checked> show guide line</label>
+  <label><input type="checkbox" id="notesOn" checked> snap to other notes</label>
 </div>
 <script>
 const stage = document.getElementById('stage'), boardEl = document.getElementById('board'), band = document.getElementById('band')
@@ -127,11 +128,27 @@ function outlineReach () {
   const el = stage.querySelector('.note.sel'); if (!el) return 0
   const cs = getComputedStyle(el); return parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth) / 2
 }
-function snapped (x, y, w, h) {
+// Another note's targets on one axis: its near edge, its far edge and its middle, each met by the same part of the dragged note. Boxes meet
+// boxes, so aligned notes line up; the guide is drawn where the dragged note's outline then lies.
+function noteSnap (c, half, out, others, lo, hi, px) {
+  let best = null
+  for (const o of others) {
+    for (const [to, guideAt, name] of [[o[lo] + half, o[lo] - out, o.text + ' ' + lo], [o[hi] - half, o[hi] + out, o.text + ' ' + hi], [(o[lo] + o[hi]) / 2, (o[lo] + o[hi]) / 2, o.text + ' middle']]) {
+      const d = Math.abs(c - to)
+      if (d <= px && (!best || d < best.d)) best = { d, to, guideAt, name }
+    }
+  }
+  return best
+}
+const nearer = (a, b) => !a ? b : !b ? a : (b.d < a.d ? b : a)
+function snapped (x, y, w, h, others = []) {
   lastSnap = { x: null, y: null }; gx.style.display = gy.style.display = 'none'
   if (!flags.snap) return [x, y]
   const px = Number(document.getElementById('snapPx').value), b = B(), guide = document.getElementById('guideOn').checked
-  const out = outlineReach(), sx = axisSnap(x, w / 2 + out, b.left, px, 'c'), sy = axisSnap(y, h / 2 + out, b.top, px, 'r')
+  const withNotes = document.getElementById('notesOn').checked ? others : []
+  const out = outlineReach()
+  const sx = nearer(axisSnap(x, w / 2 + out, b.left, px, 'c'), noteSnap(x, w / 2, out, withNotes, 'l', 'r', px))
+  const sy = nearer(axisSnap(y, h / 2 + out, b.top, px, 'r'), noteSnap(y, h / 2, out, withNotes, 't', 'b', px))
   if (sx) { x = sx.to; lastSnap.x = sx.name; if (guide) { gx.style.left = sx.guideAt + 'px'; gx.style.display = 'block' } }
   if (sy) { y = sy.to; lastSnap.y = sy.name; if (guide) { gy.style.top = sy.guideAt + 'px'; gy.style.display = 'block' } }
   return [x, y]
@@ -158,7 +175,9 @@ stage.addEventListener('mousedown', (e) => {
     const id = Number(noteEl.dataset.id)
     if (!selected.includes(id)) selected = [id]
     const lr = noteEl.getBoundingClientRect()
-    drag = { kind: 'move', lead: id, size: [lr.width, lr.height], start: [px, py], from: selected.map(i => [i, notes[i].x, notes[i].y]) }
+    const sr = stage.getBoundingClientRect()
+    const others = [...stage.querySelectorAll('.note')].filter(el => !selected.includes(Number(el.dataset.id))).map(el => { const r = el.getBoundingClientRect(); return { l: r.left - sr.left, r: r.right - sr.left, t: r.top - sr.top, b: r.bottom - sr.top, text: el.textContent } })
+    drag = { kind: 'move', lead: id, others, size: [lr.width, lr.height], start: [px, py], from: selected.map(i => [i, notes[i].x, notes[i].y]) }
   } else {
     selected = []
     drag = { kind: 'band', start: [px, py] }
@@ -172,7 +191,7 @@ window.addEventListener('mousemove', (e) => {
   if (drag.kind === 'move') {
     const [dx, dy] = [px - drag.start[0], py - drag.start[1]]
     const lead = drag.from.find(([i]) => i === drag.lead)
-    const [sx, sy] = snapped(lead[1] + dx, lead[2] + dy, ...drag.size)
+    const [sx, sy] = snapped(lead[1] + dx, lead[2] + dy, ...drag.size, drag.others)
     const [ax, ay] = [sx - lead[1], sy - lead[2]]
     for (const [i, x, y] of drag.from) { notes[i].x = x + ax; notes[i].y = y + ay }
     render()
