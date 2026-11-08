@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.29.1
+// @version      0.29.2
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.29.1'
+  const VERSION = '0.29.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -560,6 +560,9 @@
 
   const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
 
+  // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
+  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
+
   function save (store, key, data) {
     store.setData(key, { v: STORE_VERSION, data })
   }
@@ -919,9 +922,6 @@
     const { value, unreadable } = load(store, { key: drawingKey(key), read: readDrawing })
     return { ...(value ?? { items: [], kept: [] }), unreadable }
   }
-
-  // As Auto Rules Resizer keys its saved data: a puzzle with no id falls back to the page URL.
-  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
   // The index lists puzzle keys oldest change first.
   function readIndex (saved) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.29.1
+// @version      1.29.2
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.29.1'
+  const VERSION = '1.29.2'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -53,6 +53,31 @@
   const rem = (value) => Math.round(value * 100) / 100
   /* eslint-enable no-unused-vars */
   // </lib:plain>
+  // <lib:pointer-session>
+  // Generated from lib/pointer-session.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // One press, from after its `pointerdown` to its release: `move` hears each `pointermove` and `end` the `pointerup` or `pointercancel`.
+  // The session listens in the capture phase, so a page handler that stops a release cannot leave it listening, and it is gone before
+  // `end` runs. The returned stop ends it with no `end`.
+  const PRESS_END_EVENTS = ['pointerup', 'pointercancel']
+  // The object form: Node's EventTarget, which the tests use, keeps a listener removed with a bare `true`.
+  const CAPTURE = { capture: true }
+
+  function trackPointer (target, { move, end = () => {} }) {
+    const finish = (event) => {
+      stop()
+      end(event)
+    }
+    const stop = () => {
+      target.removeEventListener('pointermove', move, CAPTURE)
+      PRESS_END_EVENTS.forEach((type) => target.removeEventListener(type, finish, CAPTURE))
+    }
+    target.addEventListener('pointermove', move, CAPTURE)
+    PRESS_END_EVENTS.forEach((type) => target.addEventListener(type, finish, CAPTURE))
+    return stop
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:pointer-session>
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -1897,23 +1922,24 @@
       // The point is read before the default is prevented, so a failure leaves the press to SudokuPad.
       const point = pointOf(event)
       event.preventDefault()
-      erase = startErase(point)
+      const started = startErase(point)
+      erase = started
       menuOwed = true
-      crossPoint(marksAtPoint, erase, point)
+      crossPoint(marksAtPoint, started, point)
+      // A `pointerup` comes only once the last button is up, whichever it is, so a drag with a second button pressed ends at that release.
+      trackPointer(window, {
+        move: guarded((moveEvent) => {
+          if (erase === started && (moveEvent.buttons & RIGHT_BIT)) crossTo(marksAtPoint, started, pointOf(moveEvent))
+        }),
+        end: guarded((endEvent) => {
+          if (erase !== started) return
+          erase = null
+          if (endEvent.type === 'pointercancel') return
+          crossTo(marksAtPoint, started, pointOf(endEvent))
+          finishErase(tool, started)
+        })
+      })
     }), true)
-    window.addEventListener('pointermove', guarded((event) => {
-      if (erase === null) return
-      if (event.buttons & RIGHT_BIT) crossTo(marksAtPoint, erase, pointOf(event))
-    }), true)
-    window.addEventListener('pointerup', guarded((event) => {
-      // With two buttons held, the `pointerup` is the last button's, whichever it is, so the drag ends when the right button is no longer held.
-      if (erase === null || (event.buttons & RIGHT_BIT)) return
-      const done = erase
-      erase = null
-      crossTo(marksAtPoint, done, pointOf(event))
-      finishErase(tool, done)
-    }), true)
-    window.addEventListener('pointercancel', guarded(() => { erase = null }), true)
     document.addEventListener('contextmenu', guarded((event) => {
       const overGrid = inForce.eraseClicks && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
       if (overGrid || menuOwed) event.preventDefault()
