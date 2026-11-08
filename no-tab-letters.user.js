@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad No Tab Letters
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.5
-// @description  Stops a stray Tab from switching SudokuPad's number pad to letters. The letter button and the / key still switch it.
+// @version      0.2.0
+// @description  Now UI Tweaks (ui-tweaks.user.js). Stops a stray Tab from switching SudokuPad's number pad to letters, and leaves it to UI Tweaks when that is installed too.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -19,9 +19,14 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.5'
+  const VERSION = '0.2.0'
   const TOGGLE_KEY = '/'
   const TAB_KEY = 'Tab'
+  // The marker and the event UI Tweaks (ui-tweaks.user.js) sets and fires, so Tab is handled by one script and not two.
+  const UI_TWEAKS_ATTRIBUTE = 'data-ui-tweaks'
+  const UI_TWEAKS_EVENT = 'ui-tweaks-running'
+  const UI_TWEAKS_URL = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js'
+  const MOVED_KEY = 'no-tab-letters-moved-notice'
 
   // SudokuPad's toggle handler also stops Tab's default, so focus stays on the puzzle; keep that.
   function ignoreKey (event) {
@@ -252,25 +257,75 @@
   const FEATURES = { tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array', 'Framework.app.tools': 'object' } } }
   const guard = createGuard({ script: 'no-tab-letters', name: 'No Tab Letters', version: VERSION, features: FEATURES })
 
+  // The notice that this script is now UI Tweaks shows until it is dismissed, and a dismissal is remembered under MOVED_KEY.
+  const movedNoticeDismissed = (store) => typeof store.getData === 'function' && store.getData(MOVED_KEY) === true
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
+    module.exports = { VERSION, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, movedNoticeDismissed, MOVED_KEY, UI_TWEAKS_URL }
   }
   if (typeof document === 'undefined') return
 
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
 
+  const uiTweaksRunning = () => document.documentElement.hasAttribute(UI_TWEAKS_ATTRIBUTE)
+
+  function showMovedNotice () {
+    if (movedNoticeDismissed(Framework) || !document.body) return
+    let host = document.getElementById(NOTICE_HOST_ID)
+    if (!host) {
+      host = document.createElement('div')
+      host.id = NOTICE_HOST_ID
+      host.style.cssText = NOTICE_HOST_CSS
+      document.body.append(host)
+    }
+    const bar = document.createElement('div')
+    bar.setAttribute('data-script', 'no-tab-letters-moved')
+    bar.style.cssText = NOTICE_BAR_CSS
+    const text = document.createElement('span')
+    text.textContent = 'No Tab Letters is now UI Tweaks.'
+    const link = document.createElement('a')
+    link.href = UI_TWEAKS_URL
+    link.target = '_blank'
+    link.rel = 'noopener'
+    link.textContent = 'Install UI Tweaks'
+    link.style.cssText = NOTICE_LINK_CSS
+    const dismiss = document.createElement('button')
+    dismiss.type = 'button'
+    dismiss.textContent = '×'
+    dismiss.title = 'Dismiss'
+    dismiss.setAttribute('aria-label', 'Dismiss')
+    dismiss.style.cssText = NOTICE_DISMISS_CSS
+    dismiss.addEventListener('click', () => {
+      if (typeof Framework.setData === 'function') Framework.setData(MOVED_KEY, true)
+      bar.remove()
+    })
+    bar.append(text, link, dismiss)
+    host.append(bar)
+  }
+
   // The "Enable Letter Tool" setting adds and removes ToolLetter's one `tool` object, so a list set
   // on it holds whenever the tool is on. Setting it on the object shadows the shared prototype's list.
   // Without getApp the Tab key is off, and the bar says so.
   const start = () => {
     guard.probe({ roots: { Framework, ToolLetter: typeof ToolLetter === 'undefined' ? undefined : ToolLetter }, store: Framework })
+    // UI Tweaks handles Tab, and no notice is owed to a user who has it. One that starts later asks this script to put the list back.
+    let standingDown = uiTweaksRunning()
+    if (!standingDown) showMovedNotice()
     guard.features.tab.run(() => {
       const tool = ToolLetter.tool
+      const original = tool.keyHandlers
+      document.addEventListener(UI_TWEAKS_EVENT, () => {
+        standingDown = true
+        if (tool.keyHandlers !== original) tool.keyHandlers = original
+        document.querySelector('[data-script="no-tab-letters-moved"]')?.remove()
+      })
+      if (standingDown) return
       const changed = withInertTab(tool.keyHandlers, ignoreKey)
       if (!changed) throw new Error('the letter tool has no Tab binding to the toggle')
       tool.keyHandlers = changed
       document.addEventListener('keydown', (event) => {
+        if (standingDown) return
         guard.features.tab.run(() => {
           const tools = Framework.app.tools
           const toolOn = Object.values(tools).includes(tool)

@@ -2,7 +2,7 @@
 // check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { openSettings } from './settings.mjs'
+import { openScriptDialog, openSettings } from './settings.mjs'
 import { gridPoint, keydownDefaults, openPenTool, penEntries } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
@@ -46,6 +46,23 @@ export const SCRIPTS = [
     act: async (p) => {
       const background = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
       assert.equal(await settle(background, BLACK), BLACK)
+    }
+  },
+  {
+    name: 'UI Tweaks',
+    file: 'ui-tweaks.user.js',
+    ready: async (p) => {
+      await p.locator('#ui-tweaks-style').waitFor({ state: 'attached' })
+    },
+    control: (p) => settingsEntry(p, /^\s*UI Tweaks\s*$/),
+    // Hide the Toggle Selection button in the dialog and Save: the button goes. The Tab option is checked in live/ui-tweaks/, since No Tab Letters does the same alone.
+    act: async (p) => {
+      const select = p.locator('.controls-aux [data-control="select"]')
+      await select.waitFor({ state: 'visible' })
+      await openScriptDialog(p, 'UI Tweaks', '#ui-tweaks-dialog')
+      await p.locator('#ui-tweaks-dialog input[data-option="hideSelect"]').check()
+      await p.locator('.dialog button').filter({ hasText: /^\s*Save\s*$/ }).click()
+      await select.waitFor({ state: 'hidden' })
     }
   },
   {

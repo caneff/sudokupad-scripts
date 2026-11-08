@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.8
+// @version      0.25.9
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.8'
+  const VERSION = '0.25.9'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -950,10 +950,16 @@
   // The mode in words for the title and aria-label, which the chips' look alone does not say.
   const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
 
-  // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.
+  // <lib:bottom-row>
+  // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The bottom row of tool buttons; Color by Digit adds a button to it and UI Tweaks wraps it.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
+  /* eslint-enable no-unused-vars */
+  // </lib:bottom-row>
+  // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.
   const BOTTOM_ROW_STYLE_ID = 'color-by-digit-row'
 
   // SudokuPad binds button handlers only to buttons present when the controls were built, so a

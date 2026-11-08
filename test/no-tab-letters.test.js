@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES } = require('../no-tab-letters.user.js')
+const { VERSION, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, movedNoticeDismissed, MOVED_KEY, UI_TWEAKS_URL } = require('../no-tab-letters.user.js')
 
 const toggle = () => {}
 const typeLetter = () => {}
@@ -82,7 +82,7 @@ test('without getApp or the letter tool\'s key list, the Tab feature is lacking,
 })
 
 // Starts the script on a page with `framework` as its Framework; returns the warnings and the notice bar's text, or null for none.
-function startWith (framework) {
+function startWith (framework, { uiTweaks = false } = {}) {
   const file = require.resolve('../no-tab-letters.user.js')
   const inBody = []
   const element = () => {
@@ -91,7 +91,7 @@ function startWith (framework) {
   }
   const textOf = (el) => el.textContent + el.children.map(textOf).join('')
   const saved = { document: global.document, Framework: global.Framework }
-  global.document = { createElement: element, body: { append: (el) => inBody.push(el) }, documentElement: { outerHTML: '' }, getElementById: () => null }
+  global.document = { createElement: element, body: { append: (el) => inBody.push(el) }, documentElement: { outerHTML: '', hasAttribute: (name) => uiTweaks && name === 'data-ui-tweaks' }, getElementById: () => null }
   global.Framework = framework
   const warnings = []
   const realWarn = console.warn
@@ -108,7 +108,8 @@ function startWith (framework) {
     delete require.cache[file]
   }
   const [bar] = inBody.flatMap((host) => host.children).filter((el) => el.attributes['data-script'] === 'no-tab-letters' && !el.removed)
-  return { warnings, bar: bar ? textOf(bar) : null }
+  const [moved] = inBody.flatMap((host) => host.children).filter((el) => el.attributes['data-script'] === 'no-tab-letters-moved' && !el.removed)
+  return { warnings, bar: bar ? textOf(bar) : null, moved: moved ? { text: textOf(moved), href: moved.children.find((kid) => kid.href)?.href } : null }
 }
 
 test('a Framework without getApp turns the Tab key off with one warning naming getApp, and the bar names it', () => {
@@ -128,4 +129,21 @@ test('isHeldTabToStop stops only a repeated Tab, while the letter tool is on and
   assert.equal(isHeldTabToStop({ key: '/', repeat: true }, play), false, 'another key')
   assert.equal(isHeldTabToStop({ key: 'Tab', repeat: true }, { ...play, dialogOpen: true }), false, 'dialog open')
   assert.equal(isHeldTabToStop({ key: 'Tab', repeat: true }, { ...play, toolOn: false }), false, 'letter tool off')
+})
+
+test('the notice that this script is now UI Tweaks shows with an install link, and not once it is dismissed', () => {
+  const page = startWith({})
+  assert.deepEqual(page.moved, { text: 'No Tab Letters is now UI Tweaks.Install UI Tweaks×', href: UI_TWEAKS_URL })
+  assert.equal(UI_TWEAKS_URL, 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js')
+  assert.equal(startWith({ getData: (key) => (key === MOVED_KEY ? true : null) }).moved, null)
+})
+
+test('with UI Tweaks running, no notice shows', () => {
+  assert.equal(startWith({}, { uiTweaks: true }).moved, null)
+})
+
+test('movedNoticeDismissed: only a saved true counts, and a store with no getData has none', () => {
+  assert.equal(movedNoticeDismissed({ getData: () => true }), true)
+  for (const value of [null, false, 'true', 1]) assert.equal(movedNoticeDismissed({ getData: () => value }), false, String(value))
+  assert.equal(movedNoticeDismissed({}), false)
 })

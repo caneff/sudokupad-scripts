@@ -197,7 +197,9 @@
 - **letter tool** — SudokuPad's tool, switched on by its "Enable Letter Tool" setting, that adds a toggle
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per
-  browser under `ToolLetter_letterMode`. The button and `/` toggle it; No Tab Letters makes Tab do nothing in play instead.
+  browser under `ToolLetter_letterMode`. The button and `/` toggle it; UI Tweaks' Tab option (No Tab Letters before it) makes Tab do nothing in play instead.
+- **UI Tweaks** — the script `ui-tweaks.user.js`, which replaces No Tab Letters (`no-tab-letters.user.js`, kept so installed copies get a last version that points to it). Three **options** in one settings dialog: Tab never switches to letters (on at first), Hide the Toggle Selection button and Wrap buttons (off at first).
+- **bottom row** — SudokuPad's `.controls-aux`, the row of buttons under the number pad: undo, redo, check, select, and the buttons other scripts add (Color by Digit's). Wrap buttons caps it at five a row.
 - **Text Anywhere** — the script `draw-tool.user.js` (the file keeps its old name so installed copies keep updating), and the tool it adds to SudokuPad's tool buttons, named **Text** on the button. It takes no
   tool key. Called Draw Tool before 0.17.0, when it also drew lines and shapes, and Text Annotation until 0.27.0.
 - **notes** — everything Text Anywhere has put on one puzzle: its texts, oldest first. Saved per puzzle (keyed by

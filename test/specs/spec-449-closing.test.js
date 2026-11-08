@@ -15,7 +15,7 @@ const SCRIPTS = readdirSync(ROOT).filter((file) => file.endsWith('.user.js')).so
 // the console and each script's other features after a missing internal are `npm run test:live`'s (`live/*/*-guard.live.mjs` and the
 // rest), and neither run covers a real Tampermonkey install.
 test('every script declares its features through the shared guard', () => {
-  assert.equal(SCRIPTS.length, 6, SCRIPTS.join(', '))
+  assert.equal(SCRIPTS.length, 7, SCRIPTS.join(', '))
   for (const file of SCRIPTS) {
     const source = readFileSync(join(ROOT, file), 'utf8')
     const own = source.replace(/\/\/ <lib:[a-z-]+>[\s\S]*?\/\/ <\/lib:[a-z-]+>/g, '')

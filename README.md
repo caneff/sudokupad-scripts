@@ -18,12 +18,12 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 | Pen Tool Extras | Adds pen colors, solid, dashed and arrow pens, sliders, and edge and corner marks. [Details](docs/pen-tool-extras.md) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js) |
 | Text Anywhere | Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes. [Details](https://caneff.github.io/sudokupad-scripts/draw-tool.html) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/draw-tool.user.js) |
 | Dark Page | Makes the page black around the puzzle, or a color you pick. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |
-| No Tab Letters | Stops Tab from toggling SudokuPad's letter mode. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/no-tab-letters.user.js) |
 | Auto Rules Resizer | Fits the rules pane to the screen in landscape: the largest text that fits, widening the pane only when the rules need it. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js) |
+| UI Tweaks | Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches to letters, hide the Toggle Selection button, and wrap the bottom row after five buttons. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js) |
 
 ## Settings
 
-Each script except No Tab Letters adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it. A script's dialog shows its version beside the heading.
+Each script adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it. UI Tweaks also adds a settings command to Tampermonkey's menu. A script's dialog shows its version beside the heading.
 
 Settings live in the browser's own storage, so another browser profile or device starts with none. Each of those dialogs has **Copy settings** and **Paste settings**, two icons at the right end of the title row: Copy puts that script's settings, as they are now, on the clipboard as one line of JSON, and Paste, in the other browser, saves what the clipboard holds and applies it at once. Paste keeps only that script's own settings, skips any value the script would not accept and says how many, and tells you when the text is not settings. It needs the browser's clipboard permission, which the browser asks for on first use.
 
@@ -52,14 +52,17 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
 - On a dark color, the control buttons go dark gray with light purple icons. On a light color, they stay as SudokuPad draws them.
 - Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 
-### No Tab Letters
+### UI Tweaks
 
-SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a stray Tab left the number pad on letters after a refresh.
+Replaces No Tab Letters. Its dialog has three options, each applied at once on Save and kept in the browser:
 
-- During play, Tab does what it did before, minus the toggle, and a held Tab is stopped too.
-- The letter button and `/` still toggle, and Tab still moves focus in dialogs.
-- It works whenever you turn the letter tool on in settings, and it has no settings entry.
-- If a SudokuPad update changes the letter tool or its Tab binding, it logs a console warning and changes nothing.
+- **Tab never switches to letters** (on at first): SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a stray Tab left the number pad on letters after a refresh. During play, Tab does what it did before, minus the toggle, and a held Tab is stopped too. The letter button and `/` still toggle, and Tab still moves focus in dialogs. It works whenever you turn the letter tool on in settings.
+- **Hide the Toggle Selection button** (off at first): hides SudokuPad's Select button in the bottom row, and the other buttons close up.
+- **Wrap buttons** (off at first): the bottom row of tool buttons wraps onto a second line after five. Color by Digit already caps that row at five on its own, so with it installed this option changes nothing.
+
+If a SudokuPad update changes what an option needs, that option logs a console warning and turns itself off, and a bar at the bottom of the page says so.
+
+**No Tab Letters** (`no-tab-letters.user.js`) stays installable only so copies already installed keep updating. Its last version shows a one-time notice, "No Tab Letters is now UI Tweaks", with an install link, and keeps handling Tab until UI Tweaks is installed too, when it does nothing.
 
 ### Auto Rules Resizer
 

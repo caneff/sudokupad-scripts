@@ -34,11 +34,11 @@ describe('captureConsoleErrors and collectSkipLines together', () => {
 })
 
 describe('collectSkipLines', () => {
-  it('collects the skip line of each of the six scripts and nothing else', () => {
+  it('collects the skip line of each of each script and nothing else', () => {
     const page = fakePage()
     const errors = []
     collectSkipLines(page, errors)
-    const scripts = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'draw-tool', 'no-tab-letters', 'pen-tool-extras']
+    const scripts = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'draw-tool', 'no-tab-letters', 'pen-tool-extras', 'ui-tweaks']
     const skips = scripts.map((s) => `${s}: marks skipped because SudokuPad has no grid.rows`)
     skips.push('pen-tool-extras: marks, line erase skipped because SudokuPad changed: TypeError: boom')
     for (const line of skips) page.say('warning', line)

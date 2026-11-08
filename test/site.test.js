@@ -50,9 +50,12 @@ test('every picture the site loads is in a script folder of docs/research/ or in
   }
 })
 
-test('every *.user.js in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
+// A retired script's file stays only so installed copies keep updating; the homepage sends new installs to its replacement.
+const RETIRED = ['no-tab-letters.user.js']
+
+test('every *.user.js in the repo root but a retired one has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
-  for (const s of rootScripts()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const s of rootScripts().filter((file) => !RETIRED.includes(file))) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
 })
 
 for (const name of PAGES) {
@@ -197,7 +200,7 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
 
 // One row per script, in this order; Details only where a details page exists; a script whose file name is not its shown name gives the file name third.
 const ROWS = [
-  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW, 'draw-tool'], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined]
+  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW, 'draw-tool'], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined]
 ]
 const rowsOf = html => html.split('<section class="row">').slice(1)
 
@@ -483,7 +486,7 @@ test(`${DRAW} good to know says the notes stay in this browser, and what clears 
 test('the README has a Text Anywhere row with a Details link, and the Settings sentence is kept', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
   assert.match(readme, /^\| Text Anywhere \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/draw-tool\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
-  assert.match(readme, /Each script except No Tab Letters adds an entry to SudokuPad's settings/)
+  assert.match(readme, /Each script adds an entry to SudokuPad's settings/)
 })
 
 test('the README has a Color by Digit row with the short summary and a Details link', () => {
@@ -519,3 +522,9 @@ for (const { heading, page: file } of SHOWS) {
     assert.equal(sizes.size, 1, `slide sizes: ${[...sizes].join(', ')}`)
   })
 }
+
+test('the homepage links no retired script, and its replacement\'s row says it takes over', () => {
+  const home = read(HOME)
+  for (const file of RETIRED) assert.ok(!scriptLinks(home).includes(RAW + file), `${file} is retired but the homepage links it`)
+  assert.match(home, /It takes over from No Tab Letters\./)
+})
