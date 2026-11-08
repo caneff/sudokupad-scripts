@@ -13,6 +13,7 @@ const { DIALOG, DRAWING_PREFIX, INDEX_KEY, NOT_NOTES, script, TEXTS } = draw
 // What an earlier version saved, planted as it wrote it.
 const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [[100, 100], [300, 200], [500, 100]] }
 const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 60, box: [64, 320, 256, 448] }
+const B_ID = 'puzzle-b-490'
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
 let browser
@@ -195,6 +196,52 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await saved(), null)
     assert.equal(await read((k) => Framework.getData(k), INDEX_KEY), 'not an index {')
     await read((k) => Framework.removeData(k), INDEX_KEY)
+  })
+
+  // Loads the puzzle on the page again through the page's own loader, as a puzzle with `id`, in place and with no reload.
+  const openPuzzleAs = async (id) => {
+    await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
+    await read(async ([key, as]) => {
+      const { parsePuzzleData, fetchPuzzle } = window.pageLoader
+      const data = await parsePuzzleData(await fetchPuzzle(key))
+      data.id = as
+      await Framework.app.loadCTCPuzzle(data)
+    }, [new URL(await p.url()).pathname.slice(1), id])
+    await p.waitForFunction((as) => Framework.app.puzzle.puzzleId === as, id)
+  }
+
+  // The page's id for the puzzle changes before it triggers 'loaded'. A key released in that gap is made to arrive there:
+  // the nudge of A's selected note saves when its arrow key goes up, and the save must land under A.
+  it('A\'s notes are never saved under B when a save lands while B is loading', async () => {
+    await draw.forgetDrawings(p)
+    await reload()
+    const a = await puzzleKey()
+    await pickDraw()
+    await typeText([2.5, 2.5], '15')
+    await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+    await p.keyboard.down('ArrowRight')
+    // The puzzle's id is watched: the moment it becomes B's, the key goes up, before the puzzle triggers 'loaded'.
+    await read((bId) => {
+      const puzzle = Framework.app.puzzle
+      let id = puzzle.puzzleId
+      Object.defineProperty(puzzle, 'puzzleId', {
+        configurable: true,
+        get: () => id,
+        set: (value) => {
+          id = value
+          if (value === bId) {
+            window.keyupInGap = true
+            window.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'ArrowRight', code: 'ArrowRight' }))
+          }
+        }
+      })
+    }, B_ID)
+    await openPuzzleAs(B_ID)
+    await p.keyboard.up('ArrowRight')
+    assert.equal(await read(() => window.keyupInGap), true, 'the key went up between B\'s id and its load')
+    assert.deepEqual(await settle(texts, []), [], 'puzzle B shows no notes')
+    assert.equal(await read((k) => Framework.getData(k), DRAWING_PREFIX + B_ID), null, 'nothing is saved under B')
+    assert.deepEqual((await read((k) => Framework.getData(k), DRAWING_PREFIX + a)).map((item) => item.text), ['15'], 'A keeps its note')
   })
 
   it('the page raised no error', () => {
