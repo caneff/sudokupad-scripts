@@ -287,7 +287,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await planted(), 'not a drawing {', 'after a note')
     await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])
     assert.equal(await planted(), 'not a drawing {', 'after a move')
-    await mouseDrag(p, [[2.2, 4.5], [2.8, 4.5]], { button: 'right' })
+    await mouseDrag(p, [[2.5, 4.2], [2.5, 5.2]], { button: 'right' })
     assert.deepEqual(await texts(), [])
     assert.equal(await planted(), 'not a drawing {', 'after an erase')
     assert.equal(await p.locator(DIALOG).count(), 0, 'the dialog is shown once a page')

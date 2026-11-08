@@ -40,6 +40,8 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
     return [box.x + box.width / 2, box.y + box.height / 2]
   }, [TEXTS, text])
+  const notePoint = (text) => draw.notePoint(p, text)
+  const noteStart = (text) => draw.noteStart(p, text)
   const noteInCells = (text) => draw.noteInCells(p, text)
   // Blank page points clear of the board and the controls: right of the controls, and below the board.
   const blankPoints = () => read(() => {
@@ -69,16 +71,18 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('a click right of the controls and one below the board each start a note there, fixed on the screen and centred on the click', async () => {
+  it('a click right of the controls and one below the board each start a note there, fixed on the screen and starting at the click', async () => {
     const { right, below } = await blankPoints()
     await typeAt(right, 'R')
     await typeAt(below, 'B')
     assert.deepEqual(await texts(), ['R', 'B'])
     for (const [text, point] of [['R', right], ['B', below]]) {
       const note = await savedNote(text)
-      assert.deepEqual([note.fixed, note.at], [point, undefined], `${text} is stored at its screen point`)
-      const middle = await noteMiddle(text)
-      assert.equal(near(middle, point), true, `${text} is drawn at ${middle}, clicked at ${point}`)
+      assert.equal(note.at, undefined)
+      const stored = await notePoint(text)
+      assert.equal(near(stored, note.fixed), true, `${text} is stored at its screen point ${note.fixed}, drawn from ${stored}`)
+      const start = await noteStart(text)
+      assert.equal(near(start, point), true, `${text} starts at ${start}, clicked at ${point}`)
     }
   })
 
@@ -139,11 +143,11 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
 
   it('after a window resize that leaves it in reach an off-board note keeps its screen point and an on-board note stays over its cells', async () => {
     await typeAt(await gridPoint(p, ON_AT), 'G')
-    const below = await noteMiddle('B')
+    const below = await notePoint('B')
     const cells = await noteInCells('G')
     await p.setViewportSize({ width: 1000, height: 900 })
     assert.deepEqual(await stable(() => noteInCells('G')), cells)
-    assert.equal(near(await noteMiddle('B'), below), true, `the off-board note moved from ${below} to ${await noteMiddle('B')}`)
+    assert.equal(near(await notePoint('B'), below), true, `the off-board note moved from ${below} to ${await notePoint('B')}`)
     await p.setViewportSize({ width: 1200, height: 900 })
     assert.deepEqual(await stable(() => noteInCells('G')), cells)
   })
@@ -170,10 +174,11 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     const { right } = await blankPoints()
     await dragFromTo(await gridPoint(p, ON_AT), right)
     const off = await savedNote('G')
-    assert.equal(near(off.fixed, right), true, `stored at ${off.fixed}, dropped at ${right}`)
+    assert.equal(near(await noteStart('G'), right), true, `starts at ${await noteStart('G')}, dropped at ${right}`)
+    assert.equal(near(off.fixed, await notePoint('G')), true, `stored at ${off.fixed}, drawn from ${await notePoint('G')}`)
     assert.equal(off.at, undefined)
     await reload()
-    assert.equal(near(await settle(() => noteMiddle('G'), await noteMiddle('G')), right), true, 'after a reload')
+    assert.equal(near(await settle(() => noteStart('G'), await noteStart('G')), right), true, 'after a reload')
     const back = [6.5, 4.5]
     await dragFromTo(right, await gridPoint(p, back))
     const on = await savedNote('G')
@@ -187,7 +192,8 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     await draw.plantDrawing(p, [OLD_NOTE])
     await reload()
     assert.deepEqual(await settle(texts, ['old']), ['old'])
-    assert.deepEqual(await noteInCells('old'), ON_AT)
+    // Its stored point is where the text starts, so it starts in the cell the old version drew its middle in.
+    assert.deepEqual((await noteInCells('old')).map(Math.floor), ON_AT.map(Math.floor))
   })
 
   it('a corner drag that carries a selected off-board note past the window\'s edge ends with the note wholly inside the window, and saved there', async () => {
@@ -211,7 +217,7 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     assert.equal(edges.right <= edges.width && edges.bottom <= edges.height, true, `the note ends at ${edges.right}, ${edges.bottom} in a ${edges.width} x ${edges.height} window`)
     const note = await savedNote('N')
     assert.equal(note.box.length, 2)
-    assert.equal(near(note.fixed, await noteMiddle('N')), true, `saved at ${note.fixed}, drawn at ${await noteMiddle('N')}`)
+    assert.equal(near(note.fixed, await notePoint('N')), true, `saved at ${note.fixed}, drawn from ${await notePoint('N')}`)
     await draw.finishNote(p)
   })
 

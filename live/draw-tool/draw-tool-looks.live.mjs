@@ -31,7 +31,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
   let context, p, errors
 
   const moveTo = async (at) => {
-    await p.mouse.move(...await gridPoint(p, at))
+    await p.mouse.move(...await draw.middleAt(p, await gridPoint(p, at)))
     await draw.frames(p)
   }
   // The computed values of `props` on the first element matching `selector` whose text is `text`, or the first at all.
@@ -96,7 +96,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     assert.equal((await noteStyle('A', ['outlineStyle'])).outlineStyle, 'none', 'the selected note has no hover outline')
     assert.equal(await p.locator(SELECTION).count(), 1)
     await draw.finishNote(p)
-    await p.mouse.dblclick(...await gridPoint(p, A))
+    await draw.reopen(p, await gridPoint(p, A))
     await p.locator(TEXT_BOX).waitFor()
     await moveTo(A)
     const open = await styleOf(TEXT_BOX, ['outlineStyle', 'backgroundImage'])
@@ -108,7 +108,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
   it('the cursor is move on a closed note and text in the open one', async () => {
     assert.equal((await noteStyle('B', ['cursor'])).cursor, 'move')
     assert.equal((await noteStyle('A', ['cursor'])).cursor, 'move')
-    await p.mouse.dblclick(...await gridPoint(p, B))
+    await draw.reopen(p, await gridPoint(p, B))
     await p.locator(TEXT_BOX).waitFor()
     assert.equal((await styleOf(TEXT_BOX, ['cursor'])).cursor, 'text')
     await draw.finishNote(p)

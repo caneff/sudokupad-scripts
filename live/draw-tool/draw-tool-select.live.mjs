@@ -21,9 +21,10 @@ const EMPTY = [6.2, 1.5]
 // The group move takes A, B and C this many (rows, columns).
 const MOVE_BY = [2, 3]
 const shifted = ([r, c]) => [r + MOVE_BY[0], c + MOVE_BY[1]]
-// SudokuPad's board draws a cell 64 units wide; a real mouse lands on whole page pixels, so places are checked to within a unit.
+// SudokuPad's board draws a cell 64 units wide; a real mouse lands on whole page pixels and a drag is pulled up to the snap's 4 px onto the grid and the other notes,
+// so places are checked to within 4 units, a fraction of a cell.
 const CELL = 64
-const NEAR_UNITS = 1.5
+const NEAR_UNITS = 4
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -36,6 +37,18 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   const savedNote = async (text) => (await saved()).find((item) => item.text === text)
   const selectedTexts = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent).sort(), SELECTED)
   const clickAt = async (at, options) => p.mouse.click(...await gridPoint(p, at), options)
+  // A press on the note that starts at cell spot `at` lands in its middle, and a drag keeps the offset between that and the spot.
+  const noteAt = async (at) => draw.middleAt(p, await gridPoint(p, at))
+  const clickNote = async (at) => p.mouse.click(...await noteAt(at))
+  const dragNote = async (from, to) => {
+    const [x, y] = await noteAt(from)
+    const [startX, startY] = await gridPoint(p, from)
+    const [toX, toY] = await gridPoint(p, to)
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.move(toX + x - startX, toY + y - startY, { steps: 8 })
+    await p.mouse.up()
+  }
   const shiftClickAt = async (at) => {
     await p.keyboard.down('Shift')
     try {
@@ -76,7 +89,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     await clickAt(NOTES.A)
     assert.deepEqual(await selectedTexts(), ['A'])
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
-    await p.mouse.dblclick(...await gridPoint(p, NOTES.B))
+    await draw.reopen(p, await gridPoint(p, NOTES.B))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'B', 'the double-click opened the note')
     assert.deepEqual(await selectedTexts(), [], 'opening the note ended the selection its first click made')
     await draw.finishNote(p)
@@ -155,7 +168,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     const at = async () => Object.fromEntries(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => [t, (await savedNote(t)).at])))
     const before = await at()
     await selectThree()
-    await mouseDrag(p, [NOTES.C, shifted(NOTES.C)])
+    await dragNote(NOTES.C, shifted(NOTES.C))
     const after = await at()
     for (const t of ['A', 'B', 'C']) {
       const moved = [after[t][0] - before[t][0], after[t][1] - before[t][1]]
@@ -170,7 +183,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   it('a drag on an unselected note selects just it and moves it', async () => {
     await selectThree(true)
     const before = (await savedNote('D')).at
-    await mouseDrag(p, [NOTES.D, [NOTES.D[0], NOTES.D[1] - 1]])
+    await dragNote(NOTES.D, [NOTES.D[0], NOTES.D[1] - 1])
     assert.deepEqual(await selectedTexts(), ['D'])
     const after = (await savedNote('D')).at
     assert.equal(Math.abs(after[0] - (before[0] - CELL)) <= NEAR_UNITS, true, `D moved from ${before} to ${after}`)
@@ -179,7 +192,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   it('Delete deletes only the selected notes, and Clear all with a selection deletes only it, with no question', async () => {
     await reload()
     const texts = () => draw.texts(p)
-    await clickAt([NOTES.D[0], NOTES.D[1] - 1])
+    await clickNote([NOTES.D[0], NOTES.D[1] - 1])
     assert.deepEqual(await selectedTexts(), ['D'])
     await p.keyboard.press('Delete')
     assert.deepEqual((await texts()).sort(), ['A', 'B', 'C', 'E'])
