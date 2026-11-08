@@ -39,13 +39,40 @@ function bumpPatch (source) {
     source)
 }
 
+const GLOBAL_COMMENT = /\/\*\s*globals?\s([^*]*)\*\//g
+const ESCAPE = /[.*+?^${}()|[\]\\]/g
+
+// Names a module reads from other modules, per its `/* global */` comments (ESLint's `name:writable` form included).
+const globalNames = (module) => [...module.matchAll(GLOBAL_COMMENT)]
+  .flatMap((comment) => comment[1].split(','))
+  .map((name) => name.split(':')[0].trim())
+  .filter(Boolean)
+
+// Matches the one-declaration-per-line form every lib module uses for a top-level name.
+const definesName = (module, name) => new RegExp(`^(?:const|let|var|function\\*?|async function|class) ${name.replace(ESCAPE, '\\$&')}(?![\\w$])`, 'm').test(module)
+
+// One problem per name a copied module reads from a lib module the script does not copy. A name no other lib module defines is a
+// browser global or the script's own, and is allowed.
+function dependencyProblems (copied, readModule, libNames) {
+  const problems = []
+  for (const name of copied) {
+    for (const used of globalNames(readModule(name))) {
+      const owner = libNames.find((other) => other !== name && definesName(readModule(other), used))
+      if (owner !== undefined && !copied.includes(owner)) problems.push(`lib:${name} reads ${used} from lib:${owner}, which this script does not copy in`)
+    }
+  }
+  return problems
+}
+
 // Rewrites every lib block of one script from readModule(name) (undefined for a missing module).
+// libNames lists every module in lib/, so a block's dependencies can be found.
 // Returns the new text, the names of the blocks that changed, and the problems found; a script with a problem is left as it was.
-function syncText (source, readModule) {
+function syncText (source, readModule, libNames) {
   const lines = source.split('\n')
   const out = []
   const changed = []
   const problems = []
+  const copied = []
   for (let i = 0; i < lines.length; i++) {
     const open = OPEN.exec(lines[i])
     if (open === null) {
@@ -71,9 +98,11 @@ function syncText (source, readModule) {
       const block = blockLines(name, module, indent)
       if (block.join('\n') !== lines.slice(i, end + 1).join('\n')) changed.push(name)
       out.push(...block)
+      copied.push(name)
     }
     i = end
   }
+  problems.push(...dependencyProblems(copied, readModule, libNames))
   if (problems.length > 0) return { text: source, changed: [], problems }
   const text = out.join('\n')
   if (changed.length === 0) return { text, changed, problems }
@@ -87,13 +116,14 @@ const readLib = (name) => {
   const file = path.join(LIB_DIR, `${name}.js`)
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined
 }
+const libNamesOnDisk = () => fs.readdirSync(LIB_DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.test.js')).map((f) => f.slice(0, -3)).sort()
 const scriptFiles = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js')).sort()
 
 if (require.main === module) {
   let failed = false
   for (const file of scriptFiles()) {
     const page = path.join(__dirname, file)
-    const { text, changed, problems } = syncText(fs.readFileSync(page, 'utf8'), readLib)
+    const { text, changed, problems } = syncText(fs.readFileSync(page, 'utf8'), readLib, libNamesOnDisk())
     for (const problem of problems) { console.error(`${file}: ${problem}`); failed = true }
     if (changed.length === 0) continue
     fs.writeFileSync(page, text)
@@ -102,4 +132,4 @@ if (require.main === module) {
   if (failed) process.exit(1)
 }
 
-module.exports = { syncText, readLib, scriptFiles, generatedLine, RUN }
+module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, generatedLine, RUN }
