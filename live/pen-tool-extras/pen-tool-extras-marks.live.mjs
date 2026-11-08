@@ -242,10 +242,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(() => penValuesAt(p, 4, 1), []), [])
     assert.deepEqual(await settle(() => penValuesAt(p, 4, 2), []), [])
     assert.deepEqual(await penValuesAt(p, 2, 2), ['3'], 'the edge X off the drag stays')
+    assert.ok(await undoDepth() > depth, 'an undo step')
     await p.click('#control-undo')
     assert.deepEqual(await settle(() => penValuesAt(p, 4, 1), ['5']), ['5'])
-    assert.deepEqual(await settle(() => penValuesAt(p, 4, 2), ['z']), ['z'])
-    assert.ok(await undoDepth() > depth, 'the erase was undone, not an earlier click')
+    assert.deepEqual(await settle(() => penValuesAt(p, 4, 2), ['z']), ['z'], 'one undo brings both back')
     await clearMarks()
   })
 

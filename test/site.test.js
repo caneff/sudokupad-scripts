@@ -159,7 +159,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Marks on cell edges', 'Marks on grid corners', 'Erase a whole line', 'White outlines']
+const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
 
 test(`${DETAILS} lists what the script adds as a grid of short items, one per feature, and never mentions the middle button`, () => {
   assert.deepEqual(section(DETAILS, 'What it adds'), [
@@ -167,7 +167,7 @@ test(`${DETAILS} lists what the script adds as a grid of short items, one per fe
     'Dashed and arrow lines Two more pages of pens.',
     'Marks on cell edges Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners Click near a corner for an X or a circle.',
-    "Marks in cells Click a cell's middle for a circle, a cross or a dot.",
+    'Marks in cells Click the centre of a cell for a circle, a cross or a dot.',
     'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
     'White outlines An outline keeps lines readable over colored cells.'
   ])
