@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.3
+// @version      0.5.4
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.3'
+  const VERSION = '0.5.4'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -225,7 +225,7 @@
   }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }) {
+  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
     framework.addSetting({
       tag: 'button',
       name,
@@ -233,7 +233,9 @@
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(open, 0)
+        setTimeout(() => {
+          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
+        }, 0)
       }
     })
   }
@@ -297,8 +299,18 @@
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
+    const saveAndClose = () => {
+      try {
+        if (changed()) save()
+      } catch (error) {
+        // The dialog stays open so the failure is read and the choices are kept.
+        doc.getElementById(bodyId).closest('.dialog').querySelector('[data-role="settings-status"]').textContent = `Not saved: ${error.message}`
+        return
+      }
+      close()
+    }
     const buttons = [
-      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
       ...extraButtons
     ]

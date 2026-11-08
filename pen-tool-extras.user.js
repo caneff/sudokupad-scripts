@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.28.0
+// @version      1.28.1
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.28.0'
+  const VERSION = '1.28.1'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -2382,7 +2382,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }) {
+  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
     framework.addSetting({
       tag: 'button',
       name,
@@ -2390,7 +2390,9 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(open, 0)
+        setTimeout(() => {
+          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
+        }, 0)
       }
     })
   }
@@ -2454,8 +2456,18 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
+    const saveAndClose = () => {
+      try {
+        if (changed()) save()
+      } catch (error) {
+        // The dialog stays open so the failure is read and the choices are kept.
+        doc.getElementById(bodyId).closest('.dialog').querySelector('[data-role="settings-status"]').textContent = `Not saved: ${error.message}`
+        return
+      }
+      close()
+    }
     const buttons = [
-      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
       ...extraButtons
     ]

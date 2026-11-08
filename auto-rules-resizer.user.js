@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.8
+// @version      0.3.9
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.8'
+  const VERSION = '0.3.9'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -325,7 +325,7 @@
   }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }) {
+  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
     framework.addSetting({
       tag: 'button',
       name,
@@ -333,7 +333,9 @@
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(open, 0)
+        setTimeout(() => {
+          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
+        }, 0)
       }
     })
   }
@@ -397,8 +399,18 @@
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
+    const saveAndClose = () => {
+      try {
+        if (changed()) save()
+      } catch (error) {
+        // The dialog stays open so the failure is read and the choices are kept.
+        doc.getElementById(bodyId).closest('.dialog').querySelector('[data-role="settings-status"]').textContent = `Not saved: ${error.message}`
+        return
+      }
+      close()
+    }
     const buttons = [
-      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
       ...extraButtons
     ]
