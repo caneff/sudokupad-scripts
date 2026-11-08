@@ -1,5 +1,5 @@
 // Takes docs/research/color-by-digit/color-by-digit-outline.png (#578, #585): the Color by Digit button in Cell, Digit, Both and Off, on a normal
-// page (top row) and on Dark Page (bottom row), at 3x, to judge the white outline on the mode word. Run from the repo root:
+// page (top row) and on Dark Page (bottom row), at 3x, to judge the translucent white box behind the mode word. Run from the repo root:
 // node docs/research/color-by-digit/color-by-digit-outline-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync, writeFileSync } from 'node:fs'
