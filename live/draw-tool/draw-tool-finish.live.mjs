@@ -253,16 +253,33 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     await p.keyboard.press('Shift+Enter')
     assert.equal(await boxOpen(), true, 'Shift+Enter keeps the note open')
     await p.keyboard.type('two')
-    // Closing trims trailing newlines, so only the box's own edits can show a line the key inserted.
-    await p.evaluate((selector) => {
-      window.draftEdits = new window.MutationObserver(() => {})
-      window.draftEdits.observe(document.querySelector(selector), { childList: true, characterData: true, subtree: true })
-    }, TEXT_BOX)
     await p.keyboard.press('Control+Enter')
-    assert.equal(await p.evaluate(() => window.draftEdits.takeRecords().length), 0, 'Ctrl+Enter edited the text')
     assert.equal(await boxOpen(), false, 'Ctrl+Enter closed the note')
     assert.deepEqual(await selectedTexts(), ['one\ntwo'])
     assert.deepEqual((await saved()).map((item) => item.text), ['Az', 'X', 'S', 'one\ntwo'])
+    await p.keyboard.press('Delete')
+    assert.deepEqual((await saved()).map((item) => item.text), ['Az', 'X', 'S'])
+  })
+
+  it('Ctrl+Enter and Cmd+Enter keydowns in the open note are default-prevented, and Shift+Enter and Enter are not', async () => {
+    await clickAt(FREE)
+    await p.keyboard.type('x')
+    // The page's own keydown events, since the browser adds no line on its own and closing trims one anyway.
+    const prevented = (init) => p.evaluate(([selector, options]) => {
+      const event = new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...options })
+      document.querySelector(selector).dispatchEvent(event)
+      return event.defaultPrevented
+    }, [TEXT_BOX, init])
+    assert.equal(await prevented({ shiftKey: true }), false)
+    assert.equal(await prevented({}), false)
+    assert.equal(await boxOpen(), true)
+    assert.equal(await prevented({ metaKey: true }), true)
+    assert.equal(await boxOpen(), false, 'Cmd+Enter closed the note')
+    await p.keyboard.press('Delete')
+    await clickAt(FREE)
+    await p.keyboard.type('y')
+    assert.equal(await prevented({ ctrlKey: true }), true)
+    assert.equal(await boxOpen(), false, 'Ctrl+Enter closed the note')
     await p.keyboard.press('Delete')
     assert.deepEqual((await saved()).map((item) => item.text), ['Az', 'X', 'S'])
   })
