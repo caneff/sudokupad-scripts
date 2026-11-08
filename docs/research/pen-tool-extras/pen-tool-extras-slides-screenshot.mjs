@@ -24,7 +24,7 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
-import { cellCentre, gridPoint, mouseDrag, openPenTool, PAGE_BUTTON, penStrings, setInputValue } from '../../../live/pen.mjs'
+import { cellCentre, gridPoint, mouseDrag, openPenTool, PAGE_BUTTON, penStrings, penValuesNoColor, setInputValue } from '../../../live/pen.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../../../live/settings.mjs'
 import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extras-recolor.mjs'
 
@@ -56,9 +56,8 @@ sheet.save(target)
 const [TEAL_ROW, SOLID_ROW, DASHED_ROW, ARROW_ROW] = [0.5, 1, 1.5, 2]
 const DARK_ROW = 3
 const OUTLINE_ROW = DARK_ROW + 0.5
-// The row whose cells take the edge marks, and the grid corners (row, column) that take the corner marks.
+// The row whose cells take the edge marks, and the grid corners that take the corner marks, which are written beside the slide.
 const EDGE_MARK_ROW = 2
-const CORNER_MARKS = [[[3, 1], 2, 'a circle'], [[3, 2], 1, 'an X']]
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
 const [NEW_COLOR] = PICTURE_PEN_COLORS
@@ -92,6 +91,11 @@ const changing = async (what, act) => {
   const before = JSON.stringify(await penStrings(p))
   await act()
   if (JSON.stringify(await penStrings(p)) === before) throw new Error(`${what} changed nothing`)
+}
+// Throws when no cell holds the pen value `value` after `act`, so a click that cycled to the wrong mark fails the run, not only one that changed nothing.
+const marking = async (what, value, act) => {
+  await act()
+  if (!(await penValuesNoColor(p)).includes(value)) throw new Error(`${what} did not give the pen value ${value}`)
 }
 const frames = mkdtempSync(join(tmpdir(), 'pte-slides-'))
 const [, , cell] = await cellCentre(p, 0, 0)
@@ -171,20 +175,28 @@ await turnPage()
 
 // 7. Four edges, clicked once to four times: an X, a circle and an arrow each way. The arrows are on cells' bottom edges, so they stay inside the picture.
 await pick(EDGE_PEN)
-for (const [col, down, clicks, what] of [[0, false, 1, 'an X'], [1, false, 2, 'a circle'], [0, true, 3, 'an arrow'], [2, true, 4, 'the arrow turned round']]) {
+// Each edge's last click gives the pen value of the mark it names: the right edge's X is 3 and its circle j, the bottom edge's arrows k and l.
+for (const [col, down, clicks, what, value] of [[0, false, 1, 'an X', '3'], [1, false, 2, 'a circle', 'j'], [0, true, 3, 'an arrow', 'k'], [2, true, 4, 'the arrow turned round', 'l']]) {
   const [ex, ey, ew] = await cellCentre(p, EDGE_MARK_ROW, col)
   const edge = down ? [ex, ey + ew / 2 - EDGE_INSET_PX] : [ex + ew / 2 - EDGE_INSET_PX, ey]
   for (let i = 0; i < clicks; i++) {
-    await changing(`${what} on the edge of column ${col}`, async () => { await p.mouse.click(...edge); await park() })
+    const click = async () => { await p.mouse.click(...edge); await park() }
+    if (i === clicks - 1) await marking(`${what} on the edge of column ${col}`, value, click)
+    else await changing(`click ${i + 1} on the edge of column ${col}`, click)
   }
 }
 await slide('7-edges')
 
 // 8. Two grid corners, clicked once and twice: an X and a circle.
 await pick(CORNER_PEN)
-for (const [at, clicks, what] of CORNER_MARKS) {
+// An inner corner is stored as the X u or the circle x.
+for (const [at, clicks, what, value] of [[[3, 1], 2, 'a circle', 'x'], [[3, 2], 1, 'an X', 'u']]) {
   const corner = await gridPoint(p, at)
-  for (let i = 0; i < clicks; i++) await changing(`${what} on the corner ${at}`, async () => { await p.mouse.click(...corner); await park() })
+  for (let i = 0; i < clicks; i++) {
+    const click = async () => { await p.mouse.click(...corner); await park() }
+    if (i === clicks - 1) await marking(`${what} on the corner ${at}`, value, click)
+    else await changing(`click ${i + 1} on the corner ${at}`, click)
+  }
 }
 await slide('8-corner')
 
