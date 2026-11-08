@@ -2162,8 +2162,8 @@
       if (text === '') drawing.splice(index, 1)
       else if (index === -1) drawing.push({ ...item, text })
       else drawing[index] = { ...item, text }
+      save()
     }
-    if (changed) save()
     renderDrawing()
     showPanelValues()
   }
