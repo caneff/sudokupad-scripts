@@ -116,7 +116,7 @@ function fakePane (chars, scale = 1, spareRoom = 0, pageSpare = 0) {
     getBoundingClientRect: () => ({ top: 240 + moved(), bottom: VIEWPORT.height - pageSpare + (height() - ownHeight) * scale + moved() })
   }
   const fit = (opts = {}) => fitRulesPane({
-    rules, container, controls, getStyle, viewport: VIEWPORT, pageTop: 240, boardRight: 900, nudgePx: 0, box: noRulesDrag(), ...opts
+    rules, container, controls, getStyle, viewport: VIEWPORT, pageTop: 240, useSpare: true, boardRight: 900, nudgePx: 0, box: noRulesDrag(), ...opts
   })
   return { rules, container, controls, fit, height }
 }
@@ -438,6 +438,26 @@ test('fitRulesPane: a height drag adds to the grown pane, so it never shrinks it
   assert.deepEqual(fit({ pageTop: 0, box: { w: 0, h: 20, x: 0, y: -20 } }), { w: 0, h: 20, x: 0, y: -20 })
   assert.equal(rules.style.maxHeight, `${grown + 20}px`)
   assert.equal(controls.style.translate, `0px ${-20 + lift}px`)
+})
+
+test('fitRulesPane: the lift is measured with the width and font the fit chose, for any nudge', () => {
+  for (const chars of [230, 400, 1500, 5000]) {
+    for (const nudgePx of [-3, 0, 3]) {
+      const { rules, controls, fit } = fakePane(chars, 1, 0, 10)
+      fit({ pageTop: 0, nudgePx })
+      const bottom = controls.getBoundingClientRect().bottom
+      const grown = rules.offsetHeight > 224 + 1
+      assert.equal(bottom <= VIEWPORT.height, true, `${chars} chars, nudge ${nudgePx}: column bottom ${bottom} runs off the window`)
+      if (grown) assert.equal(bottom >= VIEWPORT.height - 1, true, `${chars} chars, nudge ${nudgePx}: column bottom ${bottom} short of the window's bottom, pane ${rules.offsetHeight}`)
+    }
+  }
+})
+
+test('fitRulesPane: without the spare height (the refit is off) the pane keeps the room it had and the column stays put', () => {
+  const { rules, controls, fit } = fakePane(5000, 1, 0, 300)
+  fit({ pageTop: 0, useSpare: false })
+  assert.equal(rules.clientHeight <= 224 + 8, true, `pane ${rules.clientHeight} px`)
+  assert.equal(controls.style.translate, '')
 })
 
 test('clearFit: takes the fit\'s output off the pane and the controls', () => {

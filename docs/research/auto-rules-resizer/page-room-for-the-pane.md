@@ -4,6 +4,8 @@ Checked 2026-11-08 on a recorded SudokuPad, 1920x1080 window, landscape, with Au
 
 **Yes, about 260 px, and the fit cannot take it.**
 
+*Superseded by #625 (the last section): the fit takes it by taking itself off around SudokuPad's `App.resize`.*
+
 - The controls column (`#controls`) is centred in the page: its top is at 274 px and its bottom at 1054 px, in a game area that runs 40 px to 1080 px.
   The pane is at most 14rem high (235 px at SudokuPad's 1.048 scale), and the fit's room (the pane's top to its container's bottom) is that height.
 - Growing the pane pushes the buttons, number pad and footer down (probe: `max-height` 400, 600, 800 px gave a column bottom of 1238, 1448, 1657 px).

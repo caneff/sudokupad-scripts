@@ -936,6 +936,7 @@ describe('the pane takes the page\'s spare height without SudokuPad shrinking th
   })
 
   it('a window resize and a SudokuPad resize leave the same scale and pane height, and no frame between has the column rescaled', async () => {
+    const heights = { [LANDSCAPE.width]: (await stable(() => pane(p))).height }
     await logFrames(p)
     for (const size of [SMALLER, LANDSCAPE]) {
       await p.setViewportSize(size)
@@ -945,7 +946,9 @@ describe('the pane takes the page\'s spare height without SudokuPad shrinking th
         return near(await columnScale(p), want.scale, 0.01) && cssHeight > want.pane
       }, true)
       assert.equal(now, true, `at ${size.width} px: scale ${await columnScale(p)}, script off ${want.scale}`)
-      await stable(() => pane(p))
+      const settled = await stable(() => pane(p))
+      if (size.width in heights) assert.equal(near(settled.height, heights[size.width], 1), true, `back at ${size.width} px the pane is ${settled.height} px tall, was ${heights[size.width]}`)
+      heights[size.width] = settled.height
     }
     await p.evaluate(() => Framework.app.resize())
     await stable(() => pane(p))
@@ -954,9 +957,8 @@ describe('the pane takes the page\'s spare height without SudokuPad shrinking th
     for (const f of seen) {
       assert.equal(near(f.scale, off[f.width].scale, 0.01), true, `a frame at ${f.width} px had the column at scale ${f.scale}, script off ${off[f.width].scale}`)
       assert.equal(f.bottom <= f.height + 1, true, `a frame at ${f.width} px had the column's bottom at ${f.bottom} in a ${f.height} px window`)
+      assert.equal(near(f.pane, heights[f.width], 1), true, `a frame at ${f.width} px had the pane ${f.pane} px tall, settled at ${heights[f.width]}`)
     }
-    const settled = await pane(p)
-    assert.equal(near(settled.cssHeight, (await pane(p)).cssHeight, 1), true)
     assert.equal(near(await columnScale(p), off[LANDSCAPE.width].scale, 0.01), true)
   })
 

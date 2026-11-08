@@ -220,9 +220,9 @@
   // Fits the pane to the room below it and the page's spare height, at SudokuPad's width, widening only as the rules need,
   // and returns the drag it applied. The spare height is what the controls column, as SudokuPad laid it out, has above it
   // down to `pageTop` and below it to the window's bottom: a taller pane lifts the column by what would run off the window.
-  // `limits` cap the automatic fit, never a drag. Returns null when the pane is not shown, with the fit taken off, or has no
+  // Without `useSpare` (the refit is off, so SudokuPad would measure the taller pane) the pane keeps its room. `limits` cap the automatic fit, never a drag. Returns null when the pane is not shown, with the fit taken off, or has no
   // room yet, with the last fit put back.
-  function fitRulesPane ({ rules, container, controls, getStyle, viewport, pageTop, boardRight, nudgePx, onNudge = () => {}, box, limits = noLimits(), readable }) {
+  function fitRulesPane ({ rules, container, controls, getStyle, viewport, pageTop, useSpare, boardRight, nudgePx, onNudge = () => {}, box, limits = noLimits(), readable }) {
     const before = FIT_STYLES.map((k) => rules.style[k])
     const movedBefore = controls.style.translate
     // Measure the pane as SudokuPad laid it out: the container wraps the pane, so a room read under the last
@@ -250,7 +250,7 @@
       return null
     }
     // The container's own slack below the pane is part of the column already, so the spare height adds only what is left of it.
-    const spare = Math.max(0, column.top - pageTop + viewport.height - column.bottom - Math.max(0, visualRoom - home.height))
+    const spare = useSpare ? Math.max(0, column.top - pageTop + viewport.height - column.bottom - Math.max(0, visualRoom - home.height)) : 0
     const room = (visualRoom + spare) / scale
     const autoRoom = limits.maxHeight === null ? room : Math.min(room, limits.maxHeight)
     // SudokuPad caps the pane at 14rem: the fit may use the whole room, never less than SudokuPad gives, and a
@@ -271,6 +271,7 @@
       readable
     })
     onNudge(appliedNudge)
+    fitsAt(width, fontPx) // the search left the pane at its last try, and the lift is measured on the chosen size
     // A pane taller than SudokuPad's runs the column off the window's bottom: it is lifted by that much, and a drag adds to the lift.
     const lift = Math.max(0, Math.ceil(controls.getBoundingClientRect().bottom - viewport.height))
     if (lift) controls.style.translate = `0px ${-lift}px`
@@ -284,10 +285,7 @@
     const dragging = Boolean(applied.w || applied.h)
     const sideways = Boolean(applied.w && !applied.h)
     let startRoom = autoRoom
-    if (dragging) {
-      fitsAt(width, fontPx)
-      startRoom = rules.offsetHeight
-    }
+    if (dragging) startRoom = rules.offsetHeight
     const fitted = draggedPane({ width, room: startRoom, box: applied, scale })
     if (dragging) rules.style.maxHeight = `${fitted.room}px`
     if (applied.x || applied.y || lift) controls.style.translate = `${applied.x}px ${applied.y - lift}px`
@@ -1206,7 +1204,7 @@
     rules.classList.remove(TEXT_CLASS)
   }
 
-  // `given` is the reading place kept from before the fit came off; without one the pane's current place is kept.
+  // `given` is the reading place kept from before the fit came off: null is nothing to keep, and undefined reads the pane's current place.
   function fitPage (given) {
     rulesFit.run(() => {
       const rules = rulesPane()
@@ -1230,6 +1228,7 @@
         getStyle,
         viewport: { width: window.innerWidth, height: window.innerHeight },
         pageTop: game.getBoundingClientRect().top,
+        useSpare: !rulesRefit.off,
         boardRight: board ? board.getBoundingClientRect().right : 0,
         nudgePx,
         onNudge: (px) => { nudgePx = px },
