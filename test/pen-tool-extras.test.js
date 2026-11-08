@@ -15,7 +15,7 @@ const {
   PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
-  linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS,
+  linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX,
   lackingInternals, FEATURES,
   edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf
 } = require('../pen-tool-extras.user.js')
@@ -517,6 +517,21 @@ test('cornerAt finds the grid corner within the radius, inner and outer, and not
   assert.deepEqual(cornerAt(3.19, 3, 9, 9), { row: 3, col: 3 })
   assert.equal(cornerAt(0.2, 0, 9, 9), null, 'exactly the radius is outside')
   assert.deepEqual(cornerAt(0.19, 0, 9, 9), { row: 0, col: 0 })
+})
+
+test('cornerAt takes the radius it is given, so a corner on a small cell keeps a wider zone', () => {
+  assert.equal(cornerAt(3.25, 3, 9, 9), null, 'outside the default radius')
+  assert.deepEqual(cornerAt(3.25, 3, 9, 9, 0.3), { row: 3, col: 3 })
+  assert.equal(cornerAt(3.31, 3, 9, 9, 0.3), null)
+})
+
+test('hitRadiusAt keeps the cell-unit radius on a big cell, floors it at 10 px on a small one and stops at the cap', () => {
+  assert.equal(HIT_FLOOR_PX, 10)
+  assert.equal(hitRadiusAt(CORNER_RADIUS, CORNER_RADIUS_MAX, 75), CORNER_RADIUS, '75 px cell: 0.2 of it is 15 px, above the floor')
+  assert.equal(hitRadiusAt(CORNER_RADIUS, CORNER_RADIUS_MAX, 50), CORNER_RADIUS, '50 px cell: 0.2 is exactly 10 px')
+  assert.equal(hitRadiusAt(CORNER_RADIUS, CORNER_RADIUS_MAX, 40), 0.25, '40 px cell: 10 px is 0.25')
+  assert.equal(hitRadiusAt(CORNER_RADIUS, CORNER_RADIUS_MAX, 20), 0.3, '20 px cell: 10 px is 0.5, capped at 0.3')
+  assert.equal(hitRadiusAt(LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX, 20), 0.24, 'the line cap keeps a centre line and the edge line beside it (0.5 apart) from both hitting')
 })
 
 test('cornerAt measures distance, so a point in the square around a corner but outside the circle is not a corner', () => {
@@ -1592,9 +1607,9 @@ test('the outline setting is off only for a saved false: nothing saved and anyth
   for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(SETTINGS.outline.normalize(ok), true, JSON.stringify(ok))
 })
 
-test('buildOutlineCss is empty when the outline is off and filters the pen layer, and only it, when on', () => {
+test('buildOutlineCss is empty when the outline is off and filters the pen layer and the copies of an erased line fading beside it, and not the highlight, when on', () => {
   assert.equal(buildOutlineCss(false), '')
-  assert.equal(buildOutlineCss(true), `:root:root #cell-pen { filter: url(#${OUTLINE_FILTER_ID}); }`)
+  assert.equal(buildOutlineCss(true), `:root:root #cell-pen, :root:root .pen-tool-extras-erasing { filter: url(#${OUTLINE_FILTER_ID}); }`)
   assert.doesNotMatch(buildOutlineCss(true), /penhint|pen-tool-extras-hint/)
 })
 
@@ -2085,7 +2100,7 @@ const LACKING_ALONE = [
   ['Framework.app.svgRenderer.constructor.rcToPathData', (s) => { delete s.Framework.app.svgRenderer.constructor.rcToPathData }, ['marks']],
   ['Framework.app.svgRenderer.renderPen', (s) => { delete Object.getPrototypeOf(s.Framework.app.svgRenderer).renderPen }, ['arrowLines', 'marks']],
   ['Framework.app.svgRenderer.renderPart', (s) => { delete s.Framework.app.svgRenderer.renderPart }, ['arrowLines']],
-  ['Framework.app.xyToRCExact', (s) => { delete s.Framework.app.xyToRCExact }, ['lineErase']],
+  ['Framework.app.xyToRCExact', (s) => { delete s.Framework.app.xyToRCExact }, ['marks', 'lineErase']],
   ['Framework.app.tools.colour', (s) => { delete s.Framework.app.tools.colour }, ['colors']],
   ['Framework.getApp', (s) => { delete s.Framework.getApp }, ['colors', 'pages', 'arrowLines', 'dragHint', 'marks', 'penPanel', 'lineErase']],
   ...['getData', 'removeData'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['saved']]),

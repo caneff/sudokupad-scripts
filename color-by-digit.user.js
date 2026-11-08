@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.23.0
+// @version      0.23.1
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.23.0'
+  const VERSION = '0.23.1'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -687,6 +687,9 @@
   // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
   const PICKER_INPUT_REM = 2.4
   const PICKER_COLUMNS = 3
+  // The pickers fade in from this scale over this long. They are rare, and ending edit mode takes them away at once.
+  const PICKER_ENTRY_SCALE = 0.95
+  const PICKER_ENTRY_MS = 150
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
   const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
 
@@ -737,7 +740,9 @@
     const rows = PEN_COLOR_NUMBERS.length / PICKER_COLUMNS
     return [
       `.${prefix}editing .controls-input button[data-key]::after { opacity: 0; }`,
-      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; }`,
+      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; animation: ${prefix}picker-in ${PICKER_ENTRY_MS}ms ease-out; }`,
+      `@keyframes ${prefix}picker-in { from { opacity: 0; transform: scale(${PICKER_ENTRY_SCALE}); } }`,
+      `@media (prefers-reduced-motion: reduce) { .${prefix}editing .${prefix}picker { animation: none; } }`,
       `.${prefix}editing .${prefix}picker input { position: absolute; inset: 0; margin: auto; width: ${PICKER_INPUT_REM}rem; height: ${PICKER_INPUT_REM}rem; padding: 0; pointer-events: all; }`,
       ...PEN_COLOR_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
       // SudokuPad's Keypad Flipped swaps the first and third rows of buttons, so each picker follows its button.

@@ -3,6 +3,7 @@
 
 import { readdirSync } from 'node:fs'
 import { LOAD_MS, puzzleUrl, routeSudokuPad, START } from './cache.mjs'
+import { settle } from './settle.mjs'
 
 export { START }
 
@@ -91,6 +92,23 @@ export async function startPuzzle (p, { beforeStart, injection } = {}) {
 // The scale of a computed `transform` (a `matrix(s, 0, 0, s, 0, 0)` or `none`): pen-tool-extras grows edge and corner marks
 // by a CSS scale, so a mark's width on screen is its stroke width times this.
 export const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
+
+// The scale a panel button settles at while the real mouse holds it down (1 when it never shrinks), then lets go away from the button. A press held 1000 ms on a color button
+// opens edit mode, so the read ends well before that.
+export async function scaleWhilePressed (page, selector) {
+  const box = await page.locator(selector).boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  try {
+    return await settle(() => page.evaluate((s) => {
+      const { transform } = window.getComputedStyle(document.querySelector(s))
+      return transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
+    }, selector), 0.97)
+  } finally {
+    await page.mouse.move(2, 2)
+    await page.mouse.up()
+  }
+}
 
 // The width a stroke draws at on screen, from its computed `strokeWidth` and `transform`, rounded to 4 places.
 export const drawnWidth = ({ strokeWidth, transform }) => Math.round(parseFloat(strokeWidth) * scaleOf(transform) * 1e4) / 1e4

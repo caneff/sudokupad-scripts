@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.32.0
+// @version      0.32.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.32.0'
+  const VERSION = '0.32.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -756,6 +756,9 @@
   // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
   const PICKER_INPUT_REM = 2.4
   const PICKER_COLUMNS = 3
+  // The pickers fade in from this scale over this long. They are rare, and ending edit mode takes them away at once.
+  const PICKER_ENTRY_SCALE = 0.95
+  const PICKER_ENTRY_MS = 150
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
   const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
 
@@ -806,7 +809,9 @@
     const rows = PEN_COLOR_NUMBERS.length / PICKER_COLUMNS
     return [
       `.${prefix}editing .controls-input button[data-key]::after { opacity: 0; }`,
-      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; }`,
+      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; animation: ${prefix}picker-in ${PICKER_ENTRY_MS}ms ease-out; }`,
+      `@keyframes ${prefix}picker-in { from { opacity: 0; transform: scale(${PICKER_ENTRY_SCALE}); } }`,
+      `@media (prefers-reduced-motion: reduce) { .${prefix}editing .${prefix}picker { animation: none; } }`,
       `.${prefix}editing .${prefix}picker input { position: absolute; inset: 0; margin: auto; width: ${PICKER_INPUT_REM}rem; height: ${PICKER_INPUT_REM}rem; padding: 0; pointer-events: all; }`,
       ...PEN_COLOR_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
       // SudokuPad's Keypad Flipped swaps the first and third rows of buttons, so each picker follows its button.
@@ -1682,6 +1687,9 @@
   const SLIDERS_ROW = CONTROLS_ROW + 1
   const CONTROLS_GAP_REM = 0.75
   const TRAY_RADIUS_PX = 14
+  // A pressed button shrinks to this scale over this long, so a click shows before it lets go; SudokuPad's own buttons have no pressed look.
+  const PRESS_SCALE = 0.97
+  const PRESS_MS = 120
   // The tray reaches this far past the color block on each side, and holds its buttons this far from its edge on every side, so the margin of a button and the reach make up most of it.
   const TRAY_REACH_REM = 0.25
   const TRAY_PADDING_REM = 0.4
@@ -1719,6 +1727,8 @@
   // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out.
   function panelCss ({ panel, colorButton, controlButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
+    const pressable = [`${panel} ${colorButton}`, ...controlButtons.split(', ')]
+    const pressed = pressable.map((selector) => `${selector}:active`).join(', ')
     return [
       `${panel} { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; position: relative; }`,
       `${panel} > .button-row { display: contents !important; }`,
@@ -1732,6 +1742,9 @@
       // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
       ...rows.flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${panel} button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
       `.${sliders} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; }`,
+      `${pressable.join(', ')} { transition: transform ${PRESS_MS}ms ease-out; }`,
+      `${pressed} { transform: scale(${PRESS_SCALE}); }`,
+      `@media (prefers-reduced-motion: reduce) { ${pressable.join(', ')} { transition: none; } ${pressed} { transform: none; } }`,
       ...(sliderRow ? sliderRules(sliders, sliderRow, wedgeSlider, fadeSlider) : [])
     ]
   }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.29.3
+// @version      1.29.4
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,9 +21,11 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.29.3'
+  const VERSION = '1.29.4'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
+  // SudokuPad gives `.grid` the hand (`cursor: pointer`) under every tool; the pen draws at the exact point, so it gets the crosshair. `.controls-main` carries `tool-pen` while the pen is the current tool.
+  const CROSSHAIR_CSS = `:root:has(.controls-main.tool-pen) .grid, :root:has(.controls-main.tool-pen) ${GRID_SELECTOR} { cursor: crosshair; }`
   const PEN_LAYER = '#cell-pen'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
   const RIGHT_BUTTON = 2
@@ -446,6 +448,7 @@
         'Framework.app.svgRenderer.renderPen': 'function',
         'Framework.app.svgRenderer.constructor.rcToPathData': 'function',
         'Framework.app.svgRenderer.constructor.CellSize': 'number',
+        'Framework.app.xyToRCExact': 'function',
         ...CELLS
       }
     },
@@ -501,6 +504,7 @@
       buildOutlineCss(inForce.outline),
       buildPagesCss(inForce.thickness, inForce.dash),
       DOT_FILL_CSS,
+      CROSSHAIR_CSS,
       pickerCss(CLASS_PREFIX, 'pen'),
       DIALOG_CSS,
       steps.penPanel.off ? '' : PANEL_CSS
@@ -867,6 +871,9 @@
   // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
   const PICKER_INPUT_REM = 2.4
   const PICKER_COLUMNS = 3
+  // The pickers fade in from this scale over this long. They are rare, and ending edit mode takes them away at once.
+  const PICKER_ENTRY_SCALE = 0.95
+  const PICKER_ENTRY_MS = 150
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
   const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
 
@@ -917,7 +924,9 @@
     const rows = PEN_COLOR_NUMBERS.length / PICKER_COLUMNS
     return [
       `.${prefix}editing .controls-input button[data-key]::after { opacity: 0; }`,
-      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; }`,
+      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; animation: ${prefix}picker-in ${PICKER_ENTRY_MS}ms ease-out; }`,
+      `@keyframes ${prefix}picker-in { from { opacity: 0; transform: scale(${PICKER_ENTRY_SCALE}); } }`,
+      `@media (prefers-reduced-motion: reduce) { .${prefix}editing .${prefix}picker { animation: none; } }`,
       `.${prefix}editing .${prefix}picker input { position: absolute; inset: 0; margin: auto; width: ${PICKER_INPUT_REM}rem; height: ${PICKER_INPUT_REM}rem; padding: 0; pointer-events: all; }`,
       ...PEN_COLOR_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
       // SudokuPad's Keypad Flipped swaps the first and third rows of buttons, so each picker follows its button.
@@ -1515,6 +1524,11 @@
   // An edge's midpoint is 0.5 from its corners and a cell's middle 0.71, so neither comes near 0.2, which is a circle about 12 px across at a cell 60 px wide. It takes the corner end
   // of an edge click (SudokuPad's edge zone reaches 0.57 along the side from the midpoint).
   const CORNER_RADIUS = 0.2
+  // On a big grid the cells are small, and a zone in cell units shrinks with them: at a 40 px cell 0.2 is 8 px. Both zones are held to at least this many screen pixels (Excalidraw and tldraw keep their
+  // hit margin a constant size on screen too), and each stops at a cap: an edge click 0.3 from a corner stays an edge, and a centre line and the edge line beside it (0.5 apart) never both hit.
+  const HIT_FLOOR_PX = 10
+  const CORNER_RADIUS_MAX = 0.3
+  const LINE_HIT_RADIUS_MAX = 0.24
   // A grid corner is stored as a mark on one cell. `br` is a cell's bottom right corner, which is every corner with a cell up and to the left of it, so a corner shared by four
   // cells is stored once; `tl` is the top left corner, for the grid's top and left edge; `far` is the top right corner of the top row's last cell or the bottom left corner of the
   // bottom row's first, the two grid corners the other kinds cannot reach. Each kind lists the X, then the circle.
@@ -1592,11 +1606,21 @@
     return planCycleClick(CELL_CYCLE, (type) => CELL_CYCLE.values[type], present, settings)
   }
 
+  function hitRadiusAt (base, cap, cellPx) {
+    return Math.min(cap, Math.max(base, HIT_FLOOR_PX / cellPx))
+  }
+
+  // A cell's side in screen pixels, from two points 100 px apart.
+  function cellPixels () {
+    const [from, to] = [Framework.app.xyToRCExact(0, 0), Framework.app.xyToRCExact(100, 0)]
+    return 100 / Math.hypot(to.r - from.r, to.c - from.c)
+  }
+
   // A point just outside the grid is measured too, so the outer corners can be clicked.
-  function cornerAt (r, c, rows, cols) {
+  function cornerAt (r, c, rows, cols, radius = CORNER_RADIUS) {
     const row = Math.max(0, Math.min(rows, Math.round(r)))
     const col = Math.max(0, Math.min(cols, Math.round(c)))
-    return Math.hypot(r - row, c - col) < CORNER_RADIUS ? { row, col } : null
+    return Math.hypot(r - row, c - col) < radius ? { row, col } : null
   }
 
   function cornerStorage (row, col, rows, cols) {
@@ -1732,7 +1756,7 @@
     if (!inForce.marks.cornerX && !inForce.marks.cornerCircle) return null
     const { r, c } = tool.getInputRc()
     const { rows, cols } = Framework.app.grid
-    return cornerAt(r, c, rows, cols)
+    return cornerAt(r, c, rows, cols, hitRadiusAt(CORNER_RADIUS, CORNER_RADIUS_MAX, cellPixels()))
   }
 
   // The cell that stores a corner's marks, and the kind of corner it stores.
@@ -1747,7 +1771,7 @@
     return planActs(cell, planCornerClick(kind, penValuesOf(cell), inForce.marks))
   }
 
-  // A click within CORNER_RADIUS of a grid corner is a corner click, checked first. Otherwise the original `clickCell` runs unchanged, so its edge-versus-cell hit test decides what
+  // A click within the corner radius (CORNER_RADIUS, floored for small cells) of a grid corner is a corner click, checked first. Otherwise the original `clickCell` runs unchanged, so its edge-versus-cell hit test decides what
   // was clicked, its `actSend` held back to see the actions it queued. The actions still go out through `actSend`, one group per click, so one undo reverses one click. A right click while the erase is on
   // is left to the erase; a right click with the erase off steps the mark as SudokuPad's own right click, which acts as a left click, does.
   function wrapClickCell (tool, original) {
@@ -1790,6 +1814,9 @@
   const RIGHT_BIT = 2
   // A drag is tested every this many cells along its way, so a fast move cannot step over a line (LINE_HIT_RADIUS) or a mark.
   const ERASE_SAMPLE_STEP = 0.1
+  // An erased line fades out over this long; short enough that the next stroke is not waiting on it.
+  const ERASE_FADE_MS = 120
+  const ERASING_CLASS = 'pen-tool-extras-erasing'
 
   // An arrow pen's two direction characters are one pen.
   function lineIdentityOf (color) {
@@ -1872,7 +1899,7 @@
   // The marks at the point as `{ cell, values }`, or null: a grid corner first, as a click does, then the edge or cell middle SudokuPad's own click would take.
   function marksAt (tool, stockClick, point) {
     const { rows, cols } = Framework.app.grid
-    const corner = cornerAt(point.r, point.c, rows, cols)
+    const corner = cornerAt(point.r, point.c, rows, cols, hitRadiusAt(CORNER_RADIUS, CORNER_RADIUS_MAX, cellPixels()))
     const held = (cell, values) => {
       const present = penValuesOf(cell)
       const there = values.filter((value) => present.includes(value))
@@ -1893,7 +1920,7 @@
   }
 
   function crossPoint (marksAtPoint, erase, point) {
-    const hit = segmentNear([point.r, point.c], erase.segments, LINE_HIT_RADIUS)
+    const hit = segmentNear([point.r, point.c], erase.segments, hitRadiusAt(LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX, cellPixels()))
     if (hit !== null) {
       connectedLine(erase.segments, hit).forEach((segment) => erase.lines.add(segment))
       return
@@ -1915,11 +1942,39 @@
     erase.at = to
   }
 
+  // SudokuPad's pen elements carry their cell and value as attributes (`<path row col value>`), the marks layer's too.
+  function drawnPenElements (row, col, value) {
+    return document.querySelectorAll(`${PEN_LAYER} [row="${row}"][col="${col}"][value="${value}"]`)
+  }
+
+  // Copies of what an erase is about to remove, taken before the puzzle changes, in a group beside the pen layer that takes no pointer. It starts at the layer's own opacity and carries its outline.
+  function erasedCopies (erase) {
+    const copies = [
+      ...[...erase.lines].flatMap(({ row, col, value }) => [...drawnPenElements(row, col, value)]),
+      ...[...erase.marks].flatMap(([cell, values]) => [...values].flatMap((value) => [...drawnPenElements(cell.row, cell.col, value)]))
+    ]
+    const group = document.createElementNS(SVG_NAMESPACE, 'g')
+    group.setAttribute('class', ERASING_CLASS)
+    group.setAttribute('pointer-events', 'none')
+    copies.forEach((element) => group.appendChild(element.cloneNode(true)))
+    return group
+  }
+
+  // Keyboard-started erases would not fade; this script has none (the right button is the only way to erase here), and a reader who asks for reduced motion gets no copies at all.
+  function fadeOut (group) {
+    const layer = hintLayer()
+    if (!layer || !group.childElementCount || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    layer.appendChild(group)
+    group.animate([{ opacity: inForce.opacity / 100 }, { opacity: 0 }], { duration: ERASE_FADE_MS, easing: 'ease-out' }).onfinish = () => group.remove()
+  }
+
   function finishErase (tool, erase) {
     const marks = [...erase.marks].map(([cell, values]) => ({ cell, values: [...values] }))
     const acts = eraseActs([...erase.lines], marks, (row, col) => Framework.app.grid.getCell(row, col))
+    const copies = erasedCopies(erase)
     tool.actStart()
     sendActs(tool, acts)
+    fadeOut(copies)
   }
 
   // A right press over the grid in the pen tool starts an erase and has its default prevented, which stops SudokuPad's own draw. A prevented `pointerdown` also stops the browser sending `mousedown`, `mouseup` and so SudokuPad's `clickCell` (checked live), so no pen mark or drag
@@ -2016,7 +2071,7 @@
 
   // A filter runs on the layer's picture before its opacity does, so the outline fades with the marks. The highlight (`.penhint`) is in its own group beside the layer, so it is not outlined.
   function buildOutlineCss (outline) {
-    return outline ? `:root:root ${PEN_LAYER} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
+    return outline ? `:root:root ${PEN_LAYER}, :root:root .${ERASING_CLASS} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
   }
 
   // The layer's alpha is grown in the two steps described at OUTLINE_SQUARE_SHARE, as one shape, so the outline does not cut across where lines join or cross. The filter works
@@ -2104,6 +2159,9 @@
   const SLIDERS_ROW = CONTROLS_ROW + 1
   const CONTROLS_GAP_REM = 0.75
   const TRAY_RADIUS_PX = 14
+  // A pressed button shrinks to this scale over this long, so a click shows before it lets go; SudokuPad's own buttons have no pressed look.
+  const PRESS_SCALE = 0.97
+  const PRESS_MS = 120
   // The tray reaches this far past the color block on each side, and holds its buttons this far from its edge on every side, so the margin of a button and the reach make up most of it.
   const TRAY_REACH_REM = 0.25
   const TRAY_PADDING_REM = 0.4
@@ -2141,6 +2199,8 @@
   // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out.
   function panelCss ({ panel, colorButton, controlButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
+    const pressable = [`${panel} ${colorButton}`, ...controlButtons.split(', ')]
+    const pressed = pressable.map((selector) => `${selector}:active`).join(', ')
     return [
       `${panel} { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; position: relative; }`,
       `${panel} > .button-row { display: contents !important; }`,
@@ -2154,6 +2214,9 @@
       // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
       ...rows.flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${panel} button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
       `.${sliders} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; }`,
+      `${pressable.join(', ')} { transition: transform ${PRESS_MS}ms ease-out; }`,
+      `${pressed} { transform: scale(${PRESS_SCALE}); }`,
+      `@media (prefers-reduced-motion: reduce) { ${pressable.join(', ')} { transition: none; } ${pressed} { transform: none; } }`,
       ...(sliderRow ? sliderRules(sliders, sliderRow, wedgeSlider, fadeSlider) : [])
     ]
   }
@@ -2821,7 +2884,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
+    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return
