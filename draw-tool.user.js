@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.30.1
+// @version      0.31.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.30.1'
+  const VERSION = '0.31.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -230,7 +230,9 @@
   const HANDLE_CLASS = 'draw-tool-resize'
   const SELECTION_CLASS = 'draw-tool-selection'
   const OPEN_OUTLINE_CLASS = 'draw-tool-open-outline'
-  const HANDLE_PX = 10
+  const HANDLE_PX = 11
+  // A note's own opacity, as a number, for the hover look: it draws on the note and the note's opacity multiplies into it.
+  const NOTE_OPACITY_VAR = '--draw-tool-note-opacity'
   const RECTANGLE_CLASS = 'draw-tool-selection-rectangle'
   const TRAY_CLASS = 'draw-tool-tray'
   const SLIDERS_CLASS = 'draw-tool-sliders'
@@ -1565,6 +1567,7 @@
       maxHeight: limit,
       color: itemColor(item.color),
       opacity: String(itemOpacity(item) / 100),
+      [NOTE_OPACITY_VAR]: String(itemOpacity(item) / 100),
       backgroundColor: item.bg ? boxFill(boxColor, itemColor(item.color)) : 'transparent',
       boxShadow: item.bg ? frameShadow(frame) : 'none',
       textShadow: item.bg ? 'none' : haloShadow(outline, PAGE_COLOR),
@@ -1573,9 +1576,17 @@
     }
   }
 
+  // Sets a noteStyle on an element: a custom property needs setProperty, which assigning to the style's own fields does not do.
+  function applyNoteStyle (element, style) {
+    for (const [name, value] of Object.entries(style)) {
+      if (name.startsWith('--')) element.style.setProperty(name, value)
+      else element.style[name] = value
+    }
+  }
+
   // The open note sits in the layer itself, in screen pixels, on the board or off it.
   function styleNote (element, item, map) {
-    Object.assign(element.style, noteStyle(item, screenPoint(item, map.toScreen), map.scale))
+    applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale))
     element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
   }
 
@@ -1715,6 +1726,8 @@
   const PANEL = '.tool-draw .controls-input'
   const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
   // Each color button shows "Aa" in its draw color, so a recolor follows.
+  const hoverShare = (percent) => `color-mix(in srgb, ${PANEL_COLOR} min(100%, calc(${percent}% / var(${NOTE_OPACITY_VAR}))), transparent)`
+  const hoverLook = (outlinePercent, fillPercent) => `outline: 1px solid ${hoverShare(outlinePercent)}; outline-offset: 2px; background-image: linear-gradient(${hoverShare(fillPercent)}, ${hoverShare(fillPercent)});`
   const PANEL_CSS = [
     ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
@@ -1737,16 +1750,18 @@
     // A thin bar whose room is kept whether it shows or not, so the text does not wrap again as the pointer comes and goes.
     `.${TEXT_CLASS}.${SCROLLS_CLASS} { overflow-y: auto; scrollbar-width: thin; scrollbar-color: transparent transparent; }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}.${SCROLLS_CLASS}:hover { scrollbar-color: currentColor transparent; }`,
-    // Under every other tool a press or a move over a note goes to what lies under it, as if the notes were not there. A note keeps the cursor of the
-    // page around it: SudokuPad's pointer on the board, the arrow beside it.
-    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: default; }`,
-    `.${ACTIVE_CLASS} .${BOARD_NOTES_CLASS} .${TEXT_CLASS} { cursor: pointer; }`,
+    // Under every other tool a press or a move over a note goes to what lies under it, as if the notes were not there. Under this one a closed note shows
+    // the move cursor, and a note neither selected nor open shows a faint outline and fill, so a click reads as selecting it and not as starting a new note.
+    // The hover look is drawn on the note itself, so each share is divided by the note's opacity, to a cap of all of it: a faded note's cue stays about as visible as the note.
+    // The fill is a background image because the note's inline background color, empty or its box, wins over any stylesheet color.
+    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: move; }`,
+    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS}):hover { ${hoverLook(35, 4)} }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
     // The outline is a box of its own in the layer, since a note's opacity would fade an outline drawn on the note itself.
-    `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: 2px dashed ${PANEL_COLOR}; outline-offset: 2px; }`,
+    `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: 2px solid ${PANEL_COLOR}; outline-offset: 2px; }`,
     `.${SELECTION_CLASS}.${OPEN_OUTLINE_CLASS} { outline-width: 1px; outline-offset: 1px; }`,
-    `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
-    `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; pointer-events: auto; }`,
+    `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px solid ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 6%, transparent); }`,
+    `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; box-shadow: 0 0 0 1px ${PANEL_COLOR}, 0 1px 3px rgb(0 0 0 / .3); pointer-events: auto; }`,
     `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; cursor: text; }`,
     // The tool bar is a grid and stock buttons have order 0, so Text Anywhere's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
@@ -2202,7 +2217,7 @@
     const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale) : noteStyle(item, item.at, 1)
     const look = JSON.stringify(style)
     if (look !== shown.look) {
-      Object.assign(element.style, style)
+      applyNoteStyle(element, style)
       element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
     }
     shownNotes.set(element, { ...shown, item, text: item.text, look })
