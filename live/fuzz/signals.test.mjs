@@ -6,13 +6,16 @@ import { crashSignals, newestErrorRecords } from './signals.mjs'
 describe('crashSignals', () => {
   it('a clean snapshot has none', () => {
     assert.deepEqual(crashSignals({ errors: [], notices: [] }), [])
-    assert.deepEqual(crashSignals({}), [])
   })
 
   it('a page error, a console error and a skip line each count, as the lines the page collected', () => {
     const errors = ['Error: boom', 'console.error: bad', 'console.warn: draw-tool: x skipped because SudokuPad changed: y']
     assert.equal(crashSignals({ errors, notices: [] }).length, 3)
     assert.match(crashSignals({ errors, notices: [] })[2], /skipped because SudokuPad changed/)
+  })
+
+  it('a snapshot missing a field is refused, not read as clean', () => {
+    assert.throws(() => crashSignals({ errors: [] }))
   })
 
   it('the notice bar counts, with the script\'s own words', () => {

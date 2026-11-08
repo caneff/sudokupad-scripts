@@ -4,7 +4,6 @@
 //   npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--plant-escape-error]
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright'
-import { DEFAULT_MINUTES, DEFAULT_SHRINK_MINUTES } from './engine.mjs'
 import { fuzz } from './fuzz.mjs'
 
 const { values } = parseArgs({
@@ -12,14 +11,14 @@ const { values } = parseArgs({
 })
 
 // A number option, or `fallback` when absent; a value that is not a number stops the run, since NaN would switch a limit off.
-const number = (name, fallback) => {
+const number = (name, fallback, { integer = false } = {}) => {
   if (values[name] == null) return fallback
   const n = Number(values[name])
-  if (Number.isNaN(n)) throw new Error(`--${name} needs a number, got "${values[name]}"`)
+  if (Number.isNaN(n) || (integer && !Number.isInteger(n))) throw new Error(`--${name} needs ${integer ? 'a whole number' : 'a number'}, got "${values[name]}"`)
   return n
 }
 
-const seed = number('seed', Math.floor(Math.random() * 2 ** 31))
+const seed = number('seed', Math.floor(Math.random() * 2 ** 31), { integer: true })
 const started = Date.now()
 const browser = await chromium.launch()
 try {
@@ -27,8 +26,8 @@ try {
     browser,
     seed,
     runs: number('runs'),
-    minutes: number('minutes', DEFAULT_MINUTES),
-    shrinkMinutes: number('shrink-minutes', DEFAULT_SHRINK_MINUTES),
+    minutes: number('minutes'),
+    shrinkMinutes: number('shrink-minutes'),
     path: values.path,
     planted: values['plant-escape-error']
   })

@@ -1,18 +1,15 @@
 // The fuzz on real SudokuPad: opens the recorded page of `live/page.mjs` with all six scripts installed the way a userscript manager does (at
 // DOMContentLoaded of every load, so a reload keeps them), gives the engine (`engine.mjs`) a page of its own for every action list, and reads the crash
 // signals (`signals.mjs`) from it. The seed picks the puzzle. Not a check itself; `fuzz.smoke.mjs` is the test, `run.mjs` the command line.
-import { readFileSync } from 'node:fs'
-import { captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
-import { cellCentre, openPenTool } from '../pen.mjs'
-import { openScriptDialog } from '../settings.mjs'
-import { DRAW_BUTTON, finishNote, TEXT_BOX, TEXTS } from '../draw-tool/draw-tool-fixtures.mjs'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { ERROR_LOG_KEY, captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
+import { NOTICE_BAR } from '../attacks.mjs'
+import { cellCentre, openPenTool, PAGE_BUTTON } from '../pen.mjs'
+import { closeExtrasEditorWith, openExtrasEditor, openScriptDialog } from '../settings.mjs'
+import { finishNote, pickDraw, TEXT_BOX, TEXTS } from '../draw-tool/draw-tool-fixtures.mjs'
 import { installAll, puzzleData, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
-import { clickUntil, SETTLE_MS } from '../settle.mjs'
 import { runFuzz } from './engine.mjs'
-import { newestErrorRecords, NOTICE_SELECTOR } from './signals.mjs'
-
-// The key the scripts' guard writes the shared error log under, read from the shared module so this cannot drift from it.
-const ERROR_LOG_KEY = /const ERROR_LOG_KEY = '([^']+)'/.exec(readFileSync(new URL('../../lib/sudokupad.js', import.meta.url), 'utf8'))[1]
+import { newestErrorRecords } from './signals.mjs'
 
 // A 6x6 with 2x3 boxes and six givens: a puzzle that is not a standard 9x9 (#590 Q7).
 const SIX_BY_SIX = puzzleData({ id: 'fuzz-6x6', rows: 6, cols: 6, boxRows: 2, boxCols: 3, givens: [[0, 0, 1], [1, 3, 2], [2, 1, 3], [3, 4, 4], [4, 2, 5], [5, 5, 6]], metadata: { title: 'fuzz 6x6' } })
@@ -32,32 +29,39 @@ const plantEscapeError = (p) => p.addInitScript(() => {
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && down) setTimeout(() => { throw new Error('planted page error') }, 0) }, true)
 })
 
-// A real click on the middle of the element `selector` matches, which waits for nothing: a button that cannot be pressed now (Undo with nothing to undo)
-// is pressed like a user presses it, and nothing happens. Returns false when there is no such element.
+// A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
+// with nothing to undo) is pressed like a user presses it, and nothing happens. An element that is not there is a crash: a script lost its control.
 async function clickIn (p, selector) {
-  const box = await p.locator(selector).first().boundingBox({ timeout: 2000 }).catch(() => null)
-  if (!box) return false
+  const box = await p.locator(selector).first().boundingBox({ timeout: 2000 })
+  if (!box) throw new Error(`no ${selector} on the page to click`)
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
-  return true
 }
 
 // The env `actions.mjs` runs on, over a real page whose free cells are `cells`.
 function envFor (p, cells) {
-  const useTool = (button, name) => clickUntil(() => clickIn(p, button), () => p.evaluate(() => Framework.app.tool), name, SETTLE_MS)
+  const openPen = async () => {
+    if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
+  }
+  const pickNotes = async () => {
+    if (await pickDraw(p) !== 'draw') throw new Error('Text Anywhere\'s tool could not be picked')
+  }
   return {
     page: p,
     cellPoint: async (i) => (await cellCentre(p, ...cells[i])).slice(0, 2),
     async usePen (color) {
-      await openPenTool(p)
+      await openPen()
       await clickIn(p, `.tool-pen button[data-key="${color}"]`)
     },
-    useNotes: () => useTool(DRAW_BUTTON, 'draw'),
-    turnPenPage: () => clickIn(p, '.pen-tool-extras-page'),
+    useNotes: pickNotes,
+    async turnPenPage () {
+      await openPen()
+      await clickIn(p, PAGE_BUTTON)
+    },
     undo: () => clickIn(p, '#control-undo'),
     redo: () => clickIn(p, '#control-redo'),
     clickColorMode: () => clickIn(p, '#control-colorbydigit'),
     async placeNote (text, i) {
-      await useTool(DRAW_BUTTON, 'draw')
+      await pickNotes()
       await p.mouse.click(...await this.cellPoint(i))
       // A click that lands on a note selects it and opens no box; that is a user's click too, not a failure.
       const opened = await p.locator(TEXT_BOX).waitFor({ state: 'attached', timeout: 1500 }).then(() => true, () => false)
@@ -70,6 +74,10 @@ function envFor (p, cells) {
       const box = note.getBoundingClientRect()
       return [box.x + box.width / 2, box.y + box.height / 2]
     }, TEXTS),
+    async extrasDialog (save) {
+      await openExtrasEditor(p)
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
+    },
     resize: (size) => p.setViewportSize(size),
     blurFocus: () => p.evaluate(() => {
       window.dispatchEvent(new Event('blur'))
@@ -106,7 +114,8 @@ export async function openTarget (browser, puzzle, { planted }) {
     return {
       env: envFor(p, cells),
       cells,
-      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_SELECTOR) }),
+      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR) }),
+      wait: (ms) => sleep(ms),
       errorLog: async () => newestErrorRecords(await p.evaluate((key) => window.localStorage.getItem(key), ERROR_LOG_KEY)),
       close: () => context.close()
     }

@@ -82,7 +82,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **The seed picks the puzzle**: an even seed the recorded 9x9 (`live/puzzle-url.txt`), an odd one a 6x6 with 2x3 boxes (`PUZZLES` in `fuzz.mjs`).
   Without `--seed` one is drawn and printed. `--runs` ends the run after that many action lists, whichever of it and `--minutes` comes first.
 - **The actions** (`actions.mjs`) are weighted so ordinary use is the bulk: ordinary use of every script and of SudokuPad (click, digit, undo,
-  redo, a tool key, Tab, pen lines and erase, the pen page, notes placed and moved, the Color by Digit button); interruptions in the middle of a
+  redo, a tool key, Tab, pen lines and erase, the pen page, notes placed and moved, the Color by Digit button, Pen Tool Extras' settings dialog saved or cancelled); interruptions in the middle of a
   gesture (a pen drag, a held right-click erase or a note drag, each cut by Escape, Delete, a tool key, Ctrl+Z, a window resize, a second button,
   a blur, or the pointer leaving the window); and page events (blur and focus, a reload, a window resize, the Dark Page dialog saved or cancelled
   with a dark color: Dark Page has no off switch). Every action leaves the mouse up, so a shrunk list is plain steps and replays from numbers alone.
@@ -91,7 +91,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
   a late error is blamed on the action that caused it: fast-check never removes the last action of a list while shrinking.
 - **A failure** is shrunk (for 10 minutes at most) and printed with the seed, the shortest list that still fails as numbered steps, the one command that
   replays it (`npm run test:fuzz -- --seed <n> --path <path>`, which runs that one list and does not shrink) and the newest records of the shared error log
-  (kept in the page's `localStorage` by the scripts' guard) when the page has any. The exit is 1.
+  (kept in the page's `localStorage` by the scripts' guard), or a line saying the log could not be read. The exit is 1.
 - **A page is never reused between lists**: Restart empties the board but leaves the earlier digits behind Undo (`docs/research/ui-fuzz-tools.md`).
 - **The tests**: `actions.test.mjs`, `signals.test.mjs` and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
   seed gives the same actions, every kind is generated and runs, and a planted page error is caught, shrunk to one step and replayed.

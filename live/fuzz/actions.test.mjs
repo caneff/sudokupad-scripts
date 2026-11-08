@@ -13,6 +13,13 @@ const sample = (seed, count = 6) => fc.sample(actionList(CELLS, { maxCommands: 2
 const actionsOf = (lists) => lists.flatMap((l) => [...l].map((wrapped) => wrapped.cmd))
 const stepsOf = (lists) => actionsOf(lists).map(String)
 
+// Runs `action` on a fresh fake page and returns it.
+const runOn = async (action, options) => {
+  const target = await fakeTargets(options).openTarget()
+  await action.run({ selected: true }, { env: target.env })
+  return target
+}
+
 describe('the action vocabulary', () => {
   it('a seed always gives the same actions, and another seed gives others', () => {
     assert.deepEqual(stepsOf(sample(7)), stepsOf(sample(7)))
@@ -36,19 +43,38 @@ describe('the action vocabulary', () => {
     for (const a of actionsOf(sample(3, 100))) assert.doesNotMatch(String(a), /,/, `${a.kind}: ${a}`)
   })
 
-  it('every kind runs on the fake page, calls it, and leaves no mouse button down', async () => {
+  const firstOfEachKind = () => {
     const byKind = new Map()
     for (const a of actionsOf(sample(4, 300))) if (!byKind.has(a.kind)) byKind.set(a.kind, a)
     assert.equal(byKind.size, KIND_NAMES.length)
-    for (const [kind, action] of byKind) {
-      const { openTarget } = fakeTargets()
-      const target = await openTarget()
+    return byKind
+  }
+
+  it('every kind runs on the fake page, calls it, and leaves no mouse button down', async () => {
+    for (const [kind, action] of firstOfEachKind()) {
+      const target = await fakeTargets().openTarget()
       await action.run({ selected: true }, { env: target.env })
-      assert.ok(target.log.length > 0 || kind === 'move note', `${kind} made a call`)
+      assert.ok(target.log.length > 0, `${kind} made a call`)
       const downs = target.log.filter(([n]) => n === 'mouse.down').length
       const ups = target.log.filter(([n]) => n === 'mouse.up').length
       assert.equal(downs, ups, `${kind} leaves no button down`)
     }
+  })
+
+  it('an interruption does something between the first button down and the last up: a key, a resize, a blur, a second button or a move out of the window', async () => {
+    for (const [kind, action] of firstOfEachKind()) {
+      if (action.group !== 'interruption') continue
+      const { log } = await runOn(action)
+      const inside = log.slice(log.findIndex(([n]) => n === 'mouse.down') + 1, log.map(([n]) => n).lastIndexOf('mouse.up'))
+      const interrupts = inside.filter(([n, ...args]) => n !== 'mouse.move' || args[0] < 0)
+      assert.ok(interrupts.length > 0, `${kind}: ${JSON.stringify(inside)}`)
+    }
+  })
+
+  it('a note drag places a note first when there is none, and only then', async () => {
+    const drag = firstOfEachKind().get('note drag, Escape')
+    assert.ok((await runOn(drag, { withNote: false })).log.some(([n]) => n === 'placeNote'), 'placed one')
+    assert.ok(!(await runOn(drag, { withNote: true })).log.some(([n]) => n === 'placeNote'), 'used the note there')
   })
 
   it('a digit can be typed only after a cell was clicked', () => {

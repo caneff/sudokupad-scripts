@@ -8,6 +8,7 @@
 //   env.usePen(color)                        opens the pen tool and picks its pen color 1 to 9
 //   env.useNotes()                           picks Text Anywhere's tool
 //   env.turnPenPage()  env.undo()  env.redo()  env.clickColorMode()
+//   env.extrasDialog(save)                   opens Pen Tool Extras' settings dialog and presses Save or Cancel
 //   env.placeNote(text, i)                   a note with `text` at cell `i`, finished with Escape
 //   env.noteCentre() -> [x, y] | null        the middle of the first note drawn
 //   env.resize({ width, height })  env.blurFocus()  env.reload()  env.darkPage(color, save)
@@ -25,9 +26,9 @@ const OUTSIDE = [-5, -5]
 
 // The kinds. `arg(n)` is the arbitrary of an action's numbers (`n` free cells); `label(arg, at)` its readable step (no comma, which fast-check
 // joins steps with; `at(i)` names a cell); `run(env, arg, model)` does it. `check(model)` says whether it can run now.
-function kinds () {
+function buildKinds () {
   const cell = (n) => fc.nat(n - 1)
-  const colour = fc.integer({ min: 1, max: 9 })
+  const color = fc.integer({ min: 1, max: 9 })
   const toolKey = fc.constantFrom(...TOOL_KEYS)
   const note = (n) => fc.tuple(fc.nat(NOTE_TEXTS.length - 1), cell(n))
 
@@ -43,7 +44,7 @@ function kinds () {
     kind,
     group: 'interruption',
     weight: 1,
-    arg: (n) => fc.tuple(cell(n), cell(n), colour, extra),
+    arg: (n) => fc.tuple(cell(n), cell(n), color, extra),
     label: ([a, b, c, x], at) => `pen drag ${at(a)} -> ${at(b)} color ${c} then ${words(x)} then release`,
     run: async (env, arg) => {
       await penDragStart(env, arg)
@@ -73,13 +74,16 @@ function kinds () {
     }
   })
 
-  // A drag of the first note (placed first when there is none) with the left button still down.
-  async function noteDragStart (env, [t, a]) {
-    const centre = await env.noteCentre() ?? (await env.placeNote(NOTE_TEXTS[t], a), await env.noteCentre())
+  // A drag of the note whose middle is `centre`, with the left button still down.
+  async function dragNote (env, centre) {
     await env.useNotes()
     await env.page.mouse.move(...centre)
     await env.page.mouse.down()
     await env.page.mouse.move(centre[0] + NOTE_DRAG[0], centre[1] + NOTE_DRAG[1], { steps: 6 })
+  }
+  // The same on the first note, placed first when there is none.
+  async function noteDragStart (env, [t, a]) {
+    await dragNote(env, await env.noteCentre() ?? (await env.placeNote(NOTE_TEXTS[t], a), await env.noteCentre()))
   }
   const noteDrag = (kind, words, interrupt) => ({
     kind,
@@ -125,7 +129,7 @@ function kinds () {
       kind: 'pen line',
       group: 'ordinary',
       weight: 4,
-      arg: (n) => fc.tuple(cell(n), cell(n), colour),
+      arg: (n) => fc.tuple(cell(n), cell(n), color),
       label: ([a, b, c], at) => `pen line ${at(a)} -> ${at(b)} color ${c}`,
       run: async (env, arg) => {
         await penDragStart(env, arg)
@@ -162,12 +166,17 @@ function kinds () {
       run: async (env) => {
         const centre = await env.noteCentre()
         if (!centre) return
-        await env.useNotes()
-        await env.page.mouse.move(...centre)
-        await env.page.mouse.down()
-        await env.page.mouse.move(centre[0] + NOTE_DRAG[0], centre[1] + NOTE_DRAG[1], { steps: 6 })
+        await dragNote(env, centre)
         await env.page.mouse.up()
       }
+    },
+    {
+      kind: 'pen settings',
+      group: 'ordinary',
+      weight: 1,
+      arg: () => fc.boolean(),
+      label: (save) => `Pen Tool Extras settings dialog ${save ? 'Save' : 'Cancel'}`,
+      run: (env, save) => env.extrasDialog(save)
     },
     { kind: 'color mode', group: 'ordinary', weight: 2, arg: () => fc.constant(null), label: () => 'press the Color by Digit button', run: (env) => env.clickColorMode() },
 
@@ -185,7 +194,7 @@ function kinds () {
       kind: 'pen drag, leave window',
       group: 'interruption',
       weight: 1,
-      arg: (n) => fc.tuple(cell(n), cell(n), colour, cell(n)),
+      arg: (n) => fc.tuple(cell(n), cell(n), color, cell(n)),
       label: ([a, b, c, d], at) => `pen drag ${at(a)} -> ${at(b)} color ${c} then leave the window then release outside then click ${at(d)}`,
       run: async (env, arg) => {
         await penDragStart(env, arg)
@@ -203,7 +212,7 @@ function kinds () {
     noteDrag('note drag, Escape', 'Escape', press('Escape')),
     noteDrag('note drag, Delete', 'Delete', press('Delete')),
     noteDrag('note drag, undo', 'Ctrl+Z', press('Control+z')),
-    noteDrag('note drag, resize', 'resize the window to 1024x600', (env) => env.resize(WINDOW_SIZES[0])),
+    noteDrag('note drag, resize', `resize the window to ${WINDOW_SIZES[0].width}x${WINDOW_SIZES[0].height}`, (env) => env.resize(WINDOW_SIZES[0])),
 
     // Page-level events.
     { kind: 'blur and focus', group: 'page', weight: 1, arg: () => fc.constant(null), label: () => 'window blur and focus', run: (env) => env.blurFocus() },
@@ -220,19 +229,20 @@ function kinds () {
   ]
 }
 
+const KINDS = buildKinds()
 // Every kind's name, in the order above.
-export const KIND_NAMES = kinds().map((k) => k.kind)
-export const KIND_GROUPS = Object.fromEntries(kinds().map((k) => [k.kind, k.group]))
+export const KIND_NAMES = KINDS.map((k) => k.kind)
+export const KIND_GROUPS = Object.fromEntries(KINDS.map((k) => [k.kind, k.group]))
 
 // The arbitrary of one weighted action over a puzzle with free cells `cells` (`[row, col]`, 0-based): a command fast-check can run, shrink and print.
 export function actionArbitrary (cells) {
   const at = (i) => `r${cells[i][0] + 1}c${cells[i][1] + 1}`
-  return fc.oneof(...kinds().map((k) => ({
+  return fc.oneof(...KINDS.map((k) => ({
     weight: k.weight,
     arbitrary: k.arg(cells.length).map((arg) => ({
       kind: k.kind,
       group: k.group,
-      check: (model) => k.check ? k.check(model, arg) : true,
+      check: (model) => k.check ? k.check(model) : true,
       run: async (model, real) => { await k.run(real.env, arg, model) },
       toString: () => k.label(arg, at)
     }))
