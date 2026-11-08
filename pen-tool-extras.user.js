@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.2
+// @version      1.31.3
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.2'
+  const VERSION = '1.31.3'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1519,6 +1519,9 @@
   // Faded strokes: what the right-click erase will take is drawn at this opacity, a little under tldraw's 0.32 for the same.
   const FADED_OPACITY = 0.3
   const FADED_CLASS = 'pen-tool-extras-faded'
+  const FADED_GROUP_CLASS = 'pen-tool-extras-faded-group'
+  // The layer, beside the pen layer, that holds the faded copies of what an erase will take.
+  const PREVIEW_LAYER_ID = 'pen-tool-extras-erase-preview'
 
   // `Cell.renderPropPen` keeps each stroke's element in `childElems` under the class it was drawn with (docs/research/sudokupad-pen-tool.md). A stroke with no element throws,
   // which turns off the feature that asked, rather than leaving the stroke unfaded.
@@ -1529,10 +1532,37 @@
     return element
   }
 
-  // Exactly `elements` carry the faded class.
+  // Exactly `elements` carry the faded class, which hides them, and copies of them show in one group at the faded opacity, so the set fades as one picture: where two segments
+  // of a line join, the joint shows the same shade as the rest (each stroke fading on its own would stack there). The group is beside the pen layer, so the layer's opacity is
+  // applied to it here and the outline filter is applied by `buildOutlineCss`.
+  let fadedGroup = null
+
+  // What the faded group shows: the faded opacity under the pen layer's own, which the group, being beside the layer, does not get from it.
+  const fadedOpacity = () => FADED_OPACITY * inForce.opacity / 100
+
+  // A group of copies of `elements`, in `className`.
+  function copiesOf (className, elements) {
+    const group = document.createElementNS(SVG_NAMESPACE, 'g')
+    group.setAttribute('class', className)
+    elements.forEach((element) => {
+      const copy = element.cloneNode(true)
+      copy.classList.remove(FADED_CLASS)
+      group.appendChild(copy)
+    })
+    return group
+  }
+
   function fadeStrokes (elements) {
-    document.querySelectorAll(`.${FADED_CLASS}`).forEach((el) => { if (!elements.includes(el)) el.classList.remove(FADED_CLASS) })
-    elements.forEach((el) => el.classList.add(FADED_CLASS))
+    const layer = previewLayer()
+    const shown = layer ? elements : []
+    document.querySelectorAll(`.${FADED_CLASS}`).forEach((el) => { if (!shown.includes(el)) el.classList.remove(FADED_CLASS) })
+    shown.forEach((el) => el.classList.add(FADED_CLASS))
+    if (fadedGroup !== null) fadedGroup.remove()
+    fadedGroup = null
+    if (!shown.length) return
+    fadedGroup = copiesOf(FADED_GROUP_CLASS, shown)
+    fadedGroup.style.opacity = fadedOpacity()
+    layer.appendChild(fadedGroup)
   }
 
   // Whether `event` is over the grid in the pen tool.
@@ -2112,24 +2142,29 @@
   // SudokuPad's `.penhint` is 16 wide and 0.6 opaque whatever the pen (tool-pen.css).
   const HINT_WIDTH = 16
   const HINT_OPACITY = 0.6
+  const HINT_ERASE_OPACITY = 0.5
   const HINT_ARROWS_CLASS = 'pen-tool-extras-hint-arrows'
 
-  // The faded strokes, which are `.cell-pen`s, and the drag hint in the pen's style: a dashed page's dashes, laid out for the hint's width as a line's are for its own, and the
-  // fill of the arrowheads beside an arrow page's hint. `:root:root` outranks SudokuPad's rules whichever stylesheet loads last.
+  // The faded strokes, which are `.cell-pen`s (hidden: their copies in one group show the fade), the hint layer's opacity (the layer fades the hint and its arrowheads as one picture),
+  // and the drag hint in the pen's style: a dashed page's dashes, laid out for the hint's width as a line's are for its own, and the fill of the arrowheads beside an arrow page's hint. `:root:root` outranks SudokuPad's rules whichever stylesheet loads last.
   function buildFeedbackCss (dash) {
     const colorsOf = (pages) => pages.flatMap((page) => page.chars.map((char, i) => [char, PEN_COLOR_KEYS[i]]))
     const dashed = PEN_PAGES.filter((page) => page.dashed).flatMap((page) => page.chars)
     return [
-      `:root:root .cell-pen.${FADED_CLASS} { opacity: ${FADED_OPACITY}; }`,
+      `:root:root .cell-pen.${FADED_CLASS} { opacity: 0; }`,
+      // The hint layer fades as one picture, so an arrowhead over the line shows the line's shade. The erase hint keeps its stock 0.5 overall.
+      `:root:root #${HINT_LAYER_ID} { opacity: ${HINT_OPACITY}; }`,
+      `:root:root #${HINT_LAYER_ID} .penhint { opacity: 1; }`,
+      `:root:root #${HINT_LAYER_ID} .penhint.pencolor-erase { opacity: calc(${HINT_ERASE_OPACITY} / ${HINT_OPACITY}); }`,
       `:root:root .penhint:is(${dashed.map((char) => `.pencolor-${char}`).join(', ')}) { ${dashDeclarations(HINT_WIDTH, dash, CELL_UNITS)} }`,
       ...colorsOf(PEN_PAGES.filter((page) => page.arrowLines)).map(([char, key]) =>
-        `:root:root .${HINT_ARROWS_CLASS}.pencolor-${char} { fill: var(--puzzle-pencolor-${key}); stroke: none; opacity: ${HINT_OPACITY}; }`)
+        `:root:root .${HINT_ARROWS_CLASS}.pencolor-${char} { fill: var(--puzzle-pencolor-${key}); stroke: none; }`)
     ].join('\n')
   }
 
   // A filter runs on the layer's picture before its opacity does, so the outline fades with the marks. The highlight (`.penhint`) is in its own group beside the layer, so it is not outlined.
   function buildOutlineCss (outline) {
-    return outline ? `:root:root ${PEN_LAYER} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
+    return outline ? `:root:root ${PEN_LAYER}, :root:root .${FADED_GROUP_CLASS} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
   }
 
   // The layer's alpha is grown in the two steps described at OUTLINE_SQUARE_SHARE, as one shape, so the outline does not cut across where lines join or cross. The filter works
@@ -2168,6 +2203,10 @@
 
   function hintLayer () {
     return layerIn(HINT_LAYER_ID, true)
+  }
+
+  function previewLayer () {
+    return layerIn(PREVIEW_LAYER_ID, true)
   }
 
   // SudokuPad draws the drag highlight inside the pen layer; it moves to the layer beside it, so the pen layer's opacity and outline do not touch it.
