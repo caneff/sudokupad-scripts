@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.1
+// @version      0.5.2
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.1'
+  const VERSION = '0.5.2'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -270,19 +270,21 @@
     ].join('\n')
   }
 
+  function addStyleOnce (id, css, doc = document) {
+    if (doc.getElementById(id)) return
+    const style = doc.createElement('style')
+    style.id = id
+    style.textContent = css
+    doc.head.appendChild(style)
+  }
+
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
 
-  // The frame every script's settings dialog shares: the title, a body container the script fills, then Save, Cancel and the script's extra buttons, in that order.
-  // Save writes only when `changed()` says something did. Escape needs nothing here: SudokuPad's own dialog closes on it.
+  // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
-    if (css && !doc.getElementById(styleId)) {
-      const style = doc.createElement('style')
-      style.id = styleId
-      style.textContent = css
-      doc.head.appendChild(style)
-    }
+    if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },

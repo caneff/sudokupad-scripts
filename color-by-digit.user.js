@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.4
+// @version      0.22.5
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.4'
+  const VERSION = '0.22.5'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1247,19 +1247,21 @@
     ].join('\n')
   }
 
+  function addStyleOnce (id, css, doc = document) {
+    if (doc.getElementById(id)) return
+    const style = doc.createElement('style')
+    style.id = id
+    style.textContent = css
+    doc.head.appendChild(style)
+  }
+
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
 
-  // The frame every script's settings dialog shares: the title, a body container the script fills, then Save, Cancel and the script's extra buttons, in that order.
-  // Save writes only when `changed()` says something did. Escape needs nothing here: SudokuPad's own dialog closes on it.
+  // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
-    if (css && !doc.getElementById(styleId)) {
-      const style = doc.createElement('style')
-      style.id = styleId
-      style.textContent = css
-      doc.head.appendChild(style)
-    }
+    if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
@@ -1597,13 +1599,7 @@
 
   let menu = null
 
-  function addStyle (id = STYLE_ID, css = STYLE_CSS) {
-    if (document.getElementById(id)) return
-    const style = document.createElement('style')
-    style.id = id
-    style.textContent = css
-    document.head.appendChild(style)
-  }
+  const addStyle = (id = STYLE_ID, css = STYLE_CSS) => addStyleOnce(id, css)
 
   const closeMenu = () => {
     if (menu) menu.remove()

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.1
+// @version      0.25.2
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.25.1'
+  const VERSION = '0.25.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -959,19 +959,21 @@
     ].join('\n')
   }
 
+  function addStyleOnce (id, css, doc = document) {
+    if (doc.getElementById(id)) return
+    const style = doc.createElement('style')
+    style.id = id
+    style.textContent = css
+    doc.head.appendChild(style)
+  }
+
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
 
-  // The frame every script's settings dialog shares: the title, a body container the script fills, then Save, Cancel and the script's extra buttons, in that order.
-  // Save writes only when `changed()` says something did. Escape needs nothing here: SudokuPad's own dialog closes on it.
+  // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
-    if (css && !doc.getElementById(styleId)) {
-      const style = doc.createElement('style')
-      style.id = styleId
-      style.textContent = css
-      doc.head.appendChild(style)
-    }
+    if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
@@ -1418,7 +1420,7 @@
     // Until the colors are first copied, the draft is the pen colors a first use would copy.
     let draft = colors ?? copiedPenColors(readPenColor)
     let chosen = null
-    let changed = false
+    let colorsEdited = false
     let draftOutline = outline
     let draftBox = boxColor
     let draftCustom = savedHex(boxColor) ?? BOX_WHITE
@@ -1431,6 +1433,7 @@
       console.warn(`draw-tool: ${error.message}`)
       paletteNote = error.message
     }
+    const edits = () => ({ colors: colorsEdited, outline: draftOutline !== outline, box: draftBox !== boxColor, frame: draftFrame !== frame })
     const box = showSettingsDialog(Framework, {
       prefix: CLASS_PREFIX,
       name: 'Text Annotation',
@@ -1438,12 +1441,13 @@
       bodyId: DIALOG_ID,
       styleId: DIALOG_STYLE_ID,
       css: DIALOG_CSS,
-      changed: () => changed || draftOutline !== outline || draftBox !== boxColor || draftFrame !== frame,
+      changed: () => Object.values(edits()).some(Boolean),
       save: () => {
-        if (changed) saveColors(draft)
-        if (draftOutline !== outline) saveOutline(draftOutline)
-        if (draftBox !== boxColor) saveBoxColor(draftBox)
-        if (draftFrame !== frame) saveFrame(draftFrame)
+        const edited = edits()
+        if (edited.colors) saveColors(draft)
+        if (edited.outline) saveOutline(draftOutline)
+        if (edited.box) saveBoxColor(draftBox)
+        if (edited.frame) saveFrame(draftFrame)
       }
     })
     if (!box) return
@@ -1466,7 +1470,7 @@
         chosen = target.value || null
         if (chosen) {
           draft = presetColors(chosen, pages, readCellColor, readPenColor)
-          changed = true
+          colorsEdited = true
         }
         draw()
       } else if (target.matches('[data-role="outline"]')) {
@@ -1481,7 +1485,7 @@
       } else if (target.matches('input[data-role="swatch"]')) {
         draft = editedColor(draft, Number(target.dataset.key), target.value)
         chosen = null
-        changed = true
+        colorsEdited = true
         draw()
       }
     })
@@ -1493,7 +1497,7 @@
       draftFrame = frame
       draft = colors ?? draft
       chosen = null
-      changed = false
+      colorsEdited = false
       draw()
     })
   }

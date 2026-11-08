@@ -551,7 +551,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         return { x: box.x, y: Math.round(box.y + box.height / 2), height: Math.round(box.height), fontSize: parseFloat(style.fontSize), underline: style.textDecorationLine, background: style.backgroundColor, color: style.color }
       }))
       assert.deepEqual([restore.y, cancel.y].map((y) => Math.abs(y - save.y) <= 3), [true, true], 'one row')
-      assert.equal(restore.x < cancel.x && cancel.x < save.x, true, 'Save, Cancel, Restore defaults from the left')
+      assert.equal(save.x < cancel.x && cancel.x < restore.x, true, 'Save, Cancel, Restore defaults from the left')
       assert.equal(cancel.height, save.height)
       assert.equal(restore.fontSize < save.fontSize, true, 'small text')
       assert.match(restore.underline, /underline/)
