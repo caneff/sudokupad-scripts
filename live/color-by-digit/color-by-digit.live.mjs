@@ -55,6 +55,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator(BUTTON).waitFor({ state: 'attached' })
   }
   const label = () => labelOn(p)
+  // Undo moves the mode back with the board, so a test that undid a mode step steps on from the mode it is at now.
+  const MODE_ORDER = ['Off', 'Cell', 'Digit', 'Both']
+  const stepTo = async (want) => {
+    for (let presses = 0; (await label()) !== want; presses++) {
+      assert.equal(presses < MODE_ORDER.length, true, `no way to ${want}`)
+      await pressTo(p, MODE_ORDER[(MODE_ORDER.indexOf(await label()) + 1) % MODE_ORDER.length])
+    }
+  }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
@@ -174,8 +182,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(JSON.stringify(await digitsOnBoard()), baseline)
     await undo()
     assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
+    assert.equal(await settle(label, 'Cell'), 'Cell')
     await undo()
     assert.equal(await settle(coloredCount, 0), 0)
+    assert.equal(await settle(label, 'Off'), 'Off')
   })
 
   describe('Multi-color', { concurrency: false }, () => {
@@ -185,13 +195,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await setMultiColor(true)
       await paint(0, 0, '3')
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
+      await stepTo('Digit')
+      assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
       await pressTo(p, 'Both')
       assert.deepEqual((await settle(async () => [...await colorsAt(0, 0)].sort(), ['1', '3'])), ['1', '3'])
       await undo()
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
-      // Nothing to take off, so stepping back to Off adds no undo step.
-      await pressTo(p, 'Off')
-      assert.deepEqual(await watch(() => colorsAt(0, 0)), [['3']])
+      assert.equal(await settle(label, 'Digit'), 'Digit')
+      await stepTo('Off')
+      assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
     })
 
     it('off: the group color replaces the existing one, and stepping to Digit takes the cell\'s color off', async () => {
@@ -329,6 +341,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
 
     it('the saved list, the mode and the button survive a reload, and a step to Both uses the saved list', async () => {
+      await stepTo('Digit')
       const saved = await getData()
       await p.reload({ waitUntil: 'load' })
       await boot()
@@ -344,12 +357,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       })
       assert.equal(await settle(coloredCount, 0), 0)
       assert.equal(await label(), 'Digit')
-      await pressTo(p, 'Both')
+      await stepTo('Both')
       assert.equal(await settle(() => wrongCount(lowFiveHigh), 0), 0)
       assert.equal(await coloredCount() > 0, true)
       await undo()
       assert.equal(await settle(coloredCount, 0), 0)
-      await pressTo(p, 'Off')
+      await stepTo('Off')
     })
 
     // Saved groups are Low/5/High here, so centre marks 6, 7 and 9 all belong to key 9.
@@ -361,7 +374,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.click('#control-normal')
       const marks = () => read(() => [[8, 0], [8, 1]].map(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join('')))
       assert.deepEqual(await settle(marks, ['679', '17']), ['679', '17'])
-      await pressTo(p, 'Cell')
+      await stepTo('Cell')
       assert.equal(await settle(coloredCount, DIGIT_CELLS + 1), DIGIT_CELLS + 1)
       const s = await cellsState()
       assert.deepEqual(at(s, 8, 0).colours, ['9'])
@@ -369,7 +382,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await wrongCount((x) => (x.r === 8 && x.c === 0 ? ['9'] : lowFiveHigh(x))), 0)
       await undo()
       assert.equal(await settle(coloredCount, 0), 0)
-      await pressTo(p, 'Digit')
+      assert.equal(await settle(label, 'Off'), 'Off')
+      await stepTo('Digit')
     })
 
     it('a color and a digit painted are saved with the emptied group gone, and the cells recolor at once', async () => {
@@ -386,9 +400,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await getGroups(), [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: free, digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }])
       assert.equal(await settle(() => wrongCount(withMarks(expectedColours((d) => (Number(d) < 5 ? '1' : d === '5' ? free : '9')))), 0), 0)
       // Back to Digit through Off and Cell, which take the cell colors off again.
-      await pressTo(p, 'Off')
-      await pressTo(p, 'Cell')
-      await pressTo(p, 'Digit')
+      await stepTo('Off')
+      await stepTo('Digit')
       assert.equal(await settle(coloredCount, 0), 0)
     })
 

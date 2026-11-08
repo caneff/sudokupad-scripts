@@ -50,15 +50,9 @@ test('every picture the site loads is in a script folder of docs/research/ or in
   }
 })
 
-// Chris's ruling on #359: this script is for him only, so it is not on the site.
-const NOT_ON_SITE = 'no-tab-letters.user.js'
-
-test(`every *.user.js in the repo root except ${NOT_ON_SITE} has an install link on the homepage, and ${NOT_ON_SITE} has none anywhere on the site`, () => {
-  const scripts = rootScripts()
-  assert.ok(scripts.includes(NOT_ON_SITE), `${NOT_ON_SITE} is gone, so the exception is stale`)
+test('every *.user.js in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
-  for (const s of scripts.filter(f => f !== NOT_ON_SITE)) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
-  for (const name of PAGES) assert.doesNotMatch(read(name), /no-tab-letters|No Tab Letters/i, `site/${name} names No Tab Letters`)
+  for (const s of rootScripts()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
 })
 
 for (const name of PAGES) {
@@ -429,7 +423,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
   assert.deepEqual(section(CBD, 'Good to know'), [
-    'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
+    'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color, but undoing or redoing a mode change that colored or cleared cells moves the button to the mode it had then.',
     "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.",
     'The button sits in the bottom row with Undo, Redo, Check and Select. That row holds five buttons, and any more, from this script or another, wrap onto a second row under it.'
   ])

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad No Tab Letters
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.4
+// @version      0.1.5
 // @description  Stops a stray Tab from switching SudokuPad's number pad to letters. The letter button and the / key still switch it.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -19,7 +19,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.4'
+  const VERSION = '0.1.5'
   const TOGGLE_KEY = '/'
   const TAB_KEY = 'Tab'
 
@@ -36,6 +36,12 @@
     const isTabToggle = (entry) => entry.key === TAB_KEY && entry.handler === toggle.handler
     if (!handlers.some(isTabToggle)) return null
     return handlers.map((entry) => (isTabToggle(entry) ? { ...entry, handler: inert } : entry))
+  }
+
+  // SudokuPad's keydown handler returns early on an auto-repeat, so the swapped Tab entry never sees a held Tab. A repeated Tab is stopped
+  // here instead, so a dialog keeps its normal Tab.
+  function isHeldTabToStop (event, { toolOn, dialogOpen }) {
+    return event.key === TAB_KEY && event.repeat === true && toolOn && !dialogOpen
   }
 
   // <lib:sudokupad>
@@ -243,11 +249,11 @@
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
   // The letter tool is read once `Framework.getApp` says the app is ready.
-  const FEATURES = { tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array' } } }
+  const FEATURES = { tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array', 'Framework.app.tools': 'object' } } }
   const guard = createGuard({ script: 'no-tab-letters', name: 'No Tab Letters', version: VERSION, features: FEATURES })
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, withInertTab, ignoreKey, lackingInternals, FEATURES }
+    module.exports = { VERSION, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -264,6 +270,13 @@
       const changed = withInertTab(tool.keyHandlers, ignoreKey)
       if (!changed) throw new Error('the letter tool has no Tab binding to the toggle')
       tool.keyHandlers = changed
+      document.addEventListener('keydown', (event) => {
+        guard.features.tab.run(() => {
+          const tools = Framework.app.tools
+          const toolOn = Object.values(tools).includes(tool)
+          if (isHeldTabToStop(event, { toolOn, dialogOpen: document.querySelector('.dialog') !== null })) event.preventDefault()
+        })
+      }, true)
     })
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
