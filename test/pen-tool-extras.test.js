@@ -2017,7 +2017,9 @@ const LACKING_ALONE = [
   ['Framework.app.tools.colour', (s) => { delete s.Framework.app.tools.colour }, ['colors']],
   ['Framework.getApp', (s) => { delete s.Framework.getApp }, ['colors', 'pages', 'arrowLines', 'dragHint', 'marks', 'penPanel', 'lineErase']],
   ...['getData', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['saved']]),
-  ...['addSetting', 'showDialog', 'closeDialog'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['settings']])
+  ...['addSetting', 'closeDialog'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['settings']]),
+  // The dialog's overlay is SudokuPad's dialog's, so it goes with showDialog.
+  ['Framework.showDialog', (s) => { delete s.Framework.showDialog }, ['settings', 'overlay']]
 ]
 for (const [internal, remove, featureNames] of LACKING_ALONE) {
   test(`without ${internal}, exactly ${featureNames.join(', ')} are lacking`, () => {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.28.4
+// @version      1.28.6
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.28.4'
+  const VERSION = '1.28.6'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -391,6 +391,8 @@
     saved: { label: 'saved settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' } },
     // The dialog opens from SudokuPad's settings and from the pen panel's settings button.
     settings: { label: 'settings dialog', needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' } },
+    // The press on the settings dialog's overlay is held back on its own, so a throw installing it costs the dialog nothing; the overlay is SudokuPad's dialog's.
+    overlay: { label: 'dialog overlay', needs: { 'Framework.showDialog': 'function' } },
     colors: { label: 'colors', needs: { ...APP, 'Framework.app.tools.colour': 'object' } },
     // With pen pages off the pad cannot turn back from page 2 or 3, so it and the pen go back to page 1.
     pages: {
@@ -1679,10 +1681,9 @@
   }
 
   // Wrapped after the line erase and the arrow lines, so a mark's click and drawing come first and the marks layer stays on top of an arrow line.
-  function installMarks (app, tool) {
+  function installMarks (app, tool, sudokupadClick) {
     wrapRenderPenMarks(app.svgRenderer)
-    const original = tool.clickCell
-    wrapClickCell(tool, original)
+    wrapClickCell(tool, sudokupadClick)
     // Cells drawn before the wrap hold values the old `renderPen` drew as nothing (this script's marks) or in the pen layer (every mark).
     redrawCells((valueColor) => MARK_VALUES.includes(valueColor[0]))
   }
@@ -1833,9 +1834,8 @@
   // follows.
   // The press's own coordinates are hit-tested, not SudokuPad's cached pointer position, which a dialog stops updating.
   // The browser's menu stays shut: Linux raises it on the press, over the grid, and Windows on the release, wherever the drag ended, so a right press owes it one refusal.
-  function installLineErase (app, tool) {
-    const stockClick = tool.clickCell
-    const marksAtPoint = (point) => marksAt(tool, stockClick, point)
+  function installLineErase (app, tool, sudokupadClick) {
+    const marksAtPoint = (point) => marksAt(tool, sudokupadClick, point)
     let erase = null
     let menuOwed = false
     // A press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
@@ -2726,15 +2726,17 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     // Read before any step runs, so only the startup check can have turned the colors step off.
     const hasColorTool = !steps.colors.off
     trackButton()
-    steps.lineErase.run(() => installLineErase(app, ToolPen.tool))
+    // SudokuPad's own clickCell, read once before either wrap, so both wraps call SudokuPad's and not each other's whatever their order.
+    const sudokupadClick = typeof ToolPen !== 'undefined' && ToolPen.tool ? ToolPen.tool.clickCell : undefined
+    steps.lineErase.run(() => installLineErase(app, ToolPen.tool, sudokupadClick))
     steps.arrowLines.run(() => installArrowLines(app, ToolPen.tool))
-    steps.marks.run(() => installMarks(app, ToolPen.tool))
+    steps.marks.run(() => installMarks(app, ToolPen.tool, sudokupadClick))
     steps.pages.run(() => installPenPages(ToolPen.tool))
     steps.dragHint.run(() => installHintLayer(ToolPen.tool))
     steps.colors.run(installPenPickers)
     steps.penPanel.run(installPenPanel)
     watchControls()
-    installOverlayPressSwallow()
+    steps.overlay.run(installOverlayPressSwallow)
     effectsOf(SETTING_NAMES).forEach((effect) => effect())
     applyStyle()
     steps.settings.run(() => addSettingsEntry(dialogs, { name: 'pentoolextras', content: 'Pen Tool Extras', open: openSettings }))
@@ -2754,6 +2756,8 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
     if (derived) saveColors(derived)
   }
-  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
-  else start()
+  // A failure outside every feature names the script, instead of an unhandled rejection naming nothing.
+  const startFailed = (error) => console.error('pen-tool-extras: startup failed:', error)
+  if (typeof Framework.getApp === 'function') Framework.getApp().then(start).catch(startFailed)
+  else start().catch(startFailed)
 })()
