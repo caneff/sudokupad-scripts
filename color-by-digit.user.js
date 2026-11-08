@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.11
+// @version      0.22.12
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.11'
+  const VERSION = '0.22.12'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1430,6 +1430,31 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:store>
+  // <lib:pointer-session>
+  // Generated from lib/pointer-session.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // One press, from after its `pointerdown` to its release: `move` hears each `pointermove` and `end` the `pointerup` or `pointercancel`.
+  // The session listens in the capture phase, so a page handler that stops a release cannot leave it listening, and it is gone before
+  // `end` runs. The returned stop ends it with no `end`.
+  const PRESS_END_EVENTS = ['pointerup', 'pointercancel']
+  // The object form: Node's EventTarget, which the tests use, keeps a listener removed with a bare `true`.
+  const CAPTURE = { capture: true }
+
+  function trackPointer (target, { move = () => {}, end = () => {} }) {
+    const finish = (event) => {
+      stop()
+      end(event)
+    }
+    const stop = () => {
+      target.removeEventListener('pointermove', move, CAPTURE)
+      PRESS_END_EVENTS.forEach((type) => target.removeEventListener(type, finish, CAPTURE))
+    }
+    target.addEventListener('pointermove', move, CAPTURE)
+    PRESS_END_EVENTS.forEach((type) => target.addEventListener(type, finish, CAPTURE))
+    return stop
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:pointer-session>
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -2059,21 +2084,17 @@
       if (!onButtonProper(event) || (event.pointerType === 'mouse' && event.button !== 0)) return
       const { clientX, clientY } = event
       const moved = (e) => Math.hypot(e.clientX - clientX, e.clientY - clientY) > HOLD_SLOP
-      const watch = (e) => { if (moved(e)) endHold() }
-      document.addEventListener('pointermove', watch)
       hold = setTimeout(() => {
         hold = null
         modeButton.run(openMenu)
       }, HOLD_MS)
-      const stop = (e) => {
-        document.removeEventListener('pointermove', watch)
-        document.removeEventListener('pointerup', stop, true)
-        document.removeEventListener('pointercancel', stop, true)
-        modeButton.run(() => { if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode, usesDigitColors(loadState()))) })
-        endHold()
-      }
-      document.addEventListener('pointerup', stop, true)
-      document.addEventListener('pointercancel', stop, true)
+      trackPointer(document, {
+        move: (e) => { if (moved(e)) endHold() },
+        end: (e) => {
+          modeButton.run(() => { if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode, usesDigitColors(loadState()))) })
+          endHold()
+        }
+      })
     }, true)
     listen('keydown', (event) => {
       if (event.key !== 'Escape' || !menu) return
@@ -2194,20 +2215,14 @@
         setGroups(setDigitColor(groupsShown(), key, paintKey))
       }
       if (pressed) paint(pressed.dataset.digit)
-      const move = (e) => {
-        if (e.buttons === 0) { finish(); return }
-        const under = document.elementFromPoint(e.clientX, e.clientY)
-        const digit = under && box.contains(under) && under.closest('[data-act="digit"]')
-        if (digit) paint(digit.dataset.digit)
-      }
-      const finish = () => {
-        document.removeEventListener('pointermove', move)
-        document.removeEventListener('pointerup', finish)
-        document.removeEventListener('pointercancel', finish)
-      }
-      document.addEventListener('pointermove', move)
-      document.addEventListener('pointerup', finish)
-      document.addEventListener('pointercancel', finish)
+      const stop = trackPointer(document, {
+        move: (e) => {
+          if (e.buttons === 0) { stop(); return }
+          const under = document.elementFromPoint(e.clientX, e.clientY)
+          const digit = under && box.contains(under) && under.closest('[data-act="digit"]')
+          if (digit) paint(digit.dataset.digit)
+        }
+      })
     })
     box.addEventListener('pointerdown', (event) => {
       const handle = event.target.closest('[data-role="handle"]')
@@ -2219,20 +2234,16 @@
       let to = from
       rows[from].style.opacity = '0.5'
       handle.setPointerCapture(event.pointerId)
-      const move = (e) => {
-        to = dropIndex(mids, from, e.clientY)
-        rows.forEach((row, i) => { row.style.outline = i === to && to !== from ? `2px solid ${PURPLE}` : '' })
-      }
-      const finish = (e) => {
-        handle.removeEventListener('pointermove', move)
-        handle.removeEventListener('pointerup', finish)
-        handle.removeEventListener('pointercancel', finish)
-        if (e.type === 'pointerup' && to !== from) reshow(moveProfile(draft, from, to), indexAfterMove(selected, from, to))
-        draw()
-      }
-      handle.addEventListener('pointermove', move)
-      handle.addEventListener('pointerup', finish)
-      handle.addEventListener('pointercancel', finish)
+      trackPointer(handle, {
+        move: (e) => {
+          to = dropIndex(mids, from, e.clientY)
+          rows.forEach((row, i) => { row.style.outline = i === to && to !== from ? `2px solid ${PURPLE}` : '' })
+        },
+        end: (e) => {
+          if (e.type === 'pointerup' && to !== from) reshow(moveProfile(draft, from, to), indexAfterMove(selected, from, to))
+          draw()
+        }
+      })
     })
     const selectRow = (index, refocus) => {
       reshow(draft, index)

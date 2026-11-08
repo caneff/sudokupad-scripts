@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.13
+// @version      0.3.14
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.13'
+  const VERSION = '0.3.14'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -281,22 +281,16 @@
       e.preventDefault()
       let x = e.clientX
       let y = e.clientY
-      const move = (m) => {
-        const dx = m.clientX - x
-        const dy = m.clientY - y
-        x = m.clientX
-        y = m.clientY
-        if (dx || dy) onMove(dx, dy)
-      }
-      const stop = () => {
-        win.removeEventListener('pointermove', move)
-        win.removeEventListener('pointerup', stop)
-        win.removeEventListener('pointercancel', stop)
-        onActive(false)
-      }
-      win.addEventListener('pointermove', move)
-      win.addEventListener('pointerup', stop)
-      win.addEventListener('pointercancel', stop)
+      trackPointer(win, {
+        move: (m) => {
+          const dx = m.clientX - x
+          const dy = m.clientY - y
+          x = m.clientX
+          y = m.clientY
+          if (dx || dy) onMove(dx, dy)
+        },
+        end: () => onActive(false)
+      })
       onActive(true)
     })
   }
@@ -506,6 +500,31 @@
   const rem = (value) => Math.round(value * 100) / 100
   /* eslint-enable no-unused-vars */
   // </lib:plain>
+  // <lib:pointer-session>
+  // Generated from lib/pointer-session.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // One press, from after its `pointerdown` to its release: `move` hears each `pointermove` and `end` the `pointerup` or `pointercancel`.
+  // The session listens in the capture phase, so a page handler that stops a release cannot leave it listening, and it is gone before
+  // `end` runs. The returned stop ends it with no `end`.
+  const PRESS_END_EVENTS = ['pointerup', 'pointercancel']
+  // The object form: Node's EventTarget, which the tests use, keeps a listener removed with a bare `true`.
+  const CAPTURE = { capture: true }
+
+  function trackPointer (target, { move = () => {}, end = () => {} }) {
+    const finish = (event) => {
+      stop()
+      end(event)
+    }
+    const stop = () => {
+      target.removeEventListener('pointermove', move, CAPTURE)
+      PRESS_END_EVENTS.forEach((type) => target.removeEventListener(type, finish, CAPTURE))
+    }
+    target.addEventListener('pointermove', move, CAPTURE)
+    PRESS_END_EVENTS.forEach((type) => target.addEventListener(type, finish, CAPTURE))
+    return stop
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:pointer-session>
   // <lib:store>
   // Generated from lib/store.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
