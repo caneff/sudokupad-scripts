@@ -8,7 +8,7 @@ const { fakeStore, quietly } = require('./fake-store.js')
 const {
   VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
-  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag
+  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
 } = require('../auto-rules-resizer.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -458,4 +458,76 @@ test('pastedSettings: text with none of this script\'s keys pastes and skips not
 test('the script has no pointerover or pointerout listener', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')
   assert.doesNotMatch(source, /pointerover|pointerout/)
+})
+
+// A SudokuPad with every internal Auto Rules Resizer needs.
+const completeSudokuPad = () => ({
+  Framework: { getApp () {}, app: { puzzle: {}, resizeBoard () {} }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} }
+})
+
+test('Auto Rules Resizer declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeSudokuPad()), new Map())
+})
+
+test('without one internal, only the features that need it are lacking: getApp holds off the fit and the refit', () => {
+  const removals = [
+    ['Framework.app.puzzle', (r) => { delete r.Framework.app.puzzle }, 'fit'],
+    ['Framework.app.resizeBoard', (r) => { delete r.Framework.app.resizeBoard }, 'refit'],
+    ...['addSetting', 'showDialog', 'closeDialog', 'getData', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, 'settings'])
+  ]
+  for (const [internal, remove, feature] of removals) {
+    const roots = completeSudokuPad()
+    remove(roots)
+    assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[internal, [feature]]]), internal)
+  }
+  const roots = completeSudokuPad()
+  delete roots.Framework.getApp
+  assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['fit', 'refit']]]))
+})
+
+// Starts the script on a page with `framework` as its Framework; returns the warnings and the notice bar's text, or null for none.
+function startWith (framework) {
+  const file = require.resolve('../auto-rules-resizer.user.js')
+  const inBody = []
+  const element = () => {
+    const el = { style: {}, children: [], textContent: '', attributes: {}, classList: { toggle () {} }, setAttribute (name, value) { el.attributes[name] = value }, addEventListener () {}, append (...kids) { el.children.push(...kids) }, appendChild (kid) { el.children.push(kid) }, remove () { el.removed = true } }
+    return el
+  }
+  const textOf = (el) => el.textContent + el.children.map(textOf).join('')
+  const saved = { document: global.document, window: global.window, Framework: global.Framework }
+  global.document = {
+    createElement: element,
+    head: { appendChild () {} },
+    body: { append: (el) => inBody.push(el), appendChild () {}, classList: { toggle () {} } },
+    documentElement: { outerHTML: '' },
+    getElementById: () => null,
+    querySelector: () => null
+  }
+  global.window = { addEventListener () {} }
+  global.Framework = framework
+  const warnings = []
+  const realWarn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  delete require.cache[file]
+  try {
+    require(file)
+  } finally {
+    console.warn = realWarn
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete global[name]
+      else global[name] = value
+    }
+    delete require.cache[file]
+  }
+  const [bar] = inBody.flatMap((host) => host.children).filter((el) => el.attributes['data-script'] === 'auto-rules-resizer' && !el.removed)
+  return { warnings, bar: bar ? textOf(bar) : null }
+}
+
+test('a Framework without getApp turns the fit and the refit off with one warning naming getApp, the bar names them, and the settings entry is still added', () => {
+  const entries = []
+  const framework = { addSetting: (setting) => entries.push(setting.name), showDialog () {}, closeDialog () {}, getData: () => null, setData () {}, removeData () {} }
+  const page = startWith(framework)
+  assert.deepEqual(page.warnings, ['auto-rules-resizer: rules fit, rules refit skipped because SudokuPad has no Framework.getApp'])
+  assert.match(page.bar, /^Auto Rules Resizer: rules fit, rules refit are off — SudokuPad changed\.Report/)
+  assert.deepEqual(entries, ['rulesresizer'])
 })

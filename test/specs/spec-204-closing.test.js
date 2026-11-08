@@ -30,12 +30,12 @@ const VERSIONS_BEFORE = { 'pen-tool-extras.user.js': '1.14.11', 'color-by-digit.
 test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a feature or a saved setting', () => {
   const pen = read('pen-tool-extras.user.js')
 
-  // Sections: 11 headings in the ruled order, with the exports and the start() call below the last.
+  // Sections: 11 headings in the ruled order, with the exports, the Framework guard and getApp() all below the last.
   const headings = [...pen.matchAll(/^ {2}\/\/ (\d+)\. ([^:\n]+)/gm)]
   assert.deepEqual(headings.map((m) => Number(m[1])), SECTIONS.map((_, i) => i + 1))
   headings.forEach((m, i) => assert.ok(m[2].startsWith(SECTIONS[i]), `section ${i + 1} is ${m[2]}`))
   const startup = headings[10].index
-  for (const tail of ['module.exports = {', 'start(SCRIPT, {']) assert.ok(pen.indexOf(tail) > startup, `${tail} is in Startup`)
+  for (const tail of ['module.exports = {', 'Framework.getApp()']) assert.ok(pen.indexOf(tail) > startup, `${tail} is in Startup`)
 
   // One mark table: the parallel tables and their searches are gone, and the pen values and the marks that grow are as before.
   for (const gone of ['edgeOf', 'shapeOf', 'cornerMarkOf', 'ADDED', 'SHAPES', 'DEFAULT_MARK_SETTINGS', 'MARKS_KEY']) {

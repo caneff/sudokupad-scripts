@@ -7,6 +7,7 @@ import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
 import { keydownDefaults } from '../pen.mjs'
 import { LETTER_MODE_KEY as MODE_KEY } from '../scripts.mjs'
+import { settle } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../no-tab-letters.user.js', import.meta.url), 'utf8')
 
@@ -14,6 +15,7 @@ const DIGITS = '1234567890'
 const LETTERS = 'ABCDEFGHIO'
 const TOGGLE_BUTTON = 'button[data-control="toggleletter"]'
 const WARNING = /no-tab-letters/
+const BAR = '#sudokupad-scripts-notices [data-script="no-tab-letters"]'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -109,8 +111,58 @@ describe('the Tab binding is not found', () => {
       const handlers = await p.evaluate(() => ToolLetter.tool.keyHandlers.map((e) => (typeof e.key === 'string' ? e.key : 'fn')))
       assert.deepEqual(handlers, ['/', 'fn'])
       assert.equal(warnings.filter((w) => WARNING.test(w)).length, 1, JSON.stringify(warnings))
+      await p.locator(BAR).waitFor({ state: 'attached' })
+      assert.match(await p.locator(BAR).textContent(), /^No Tab Letters: Tab key is off — SudokuPad changed\.Report/)
     } finally {
       await context.close()
     }
+  })
+})
+
+// The letter tool's key list is missing before the script loads: the Tab feature is off, so SudokuPad's own Tab toggle works, and its "/" does.
+// The snippet runs ahead of the script's own startup check and puts the list back after it.
+describe('SudokuPad has no ToolLetter.tool.keyHandlers', { concurrency: false }, () => {
+  let context, p, errors
+  const warned = []
+  const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
+
+  before(async () => {
+    ;({ context, p, errors } = await openPage(browser, {
+      seed: (page) => {
+        page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })
+      }
+    }))
+    await startPuzzle(p)
+    const breaks = 'const original = ToolLetter.tool.keyHandlers; ToolLetter.tool.keyHandlers = undefined; Framework.getApp().then(() => { ToolLetter.tool.keyHandlers = original })'
+    await p.addScriptTag({ content: `;Framework.getApp().then(() => { ${breaks} });\n${script}` })
+    await p.evaluate(() => Framework.setSetting('toolletter', true))
+    await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })
+  })
+  after(async () => { await context.close() })
+
+  it('one console warning names the feature', async () => {
+    assert.equal(await settle(async () => warned.length, 1), 1, warned.join('\n'))
+    assert.equal(warned[0], 'no-tab-letters: Tab key skipped because SudokuPad has no ToolLetter.tool.keyHandlers')
+  })
+
+  it('the bar names the feature with a Report link, and goes when dismissed', async () => {
+    const bar = p.locator(BAR)
+    assert.match(await bar.textContent(), /^No Tab Letters: Tab key is off — SudokuPad changed\.Report/)
+    assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
+    await bar.locator('button[aria-label="Dismiss"]').click()
+    assert.equal(await bar.count(), 0)
+  })
+
+  it('Tab switches the number pad to letters as SudokuPad does, and "/" switches it back', async () => {
+    assert.equal(await pad(), DIGITS)
+    await keydownDefaults(p, 'Tab')
+    assert.equal(await settle(pad, LETTERS), LETTERS, 'Tab toggled to letters')
+    await keydownDefaults(p, '/')
+    assert.equal(await settle(pad, DIGITS), DIGITS, '"/" toggled back')
+  })
+
+  it('the page raised no error, and no further warning came', () => {
+    assert.deepEqual(errors, [])
+    assert.equal(warned.length, 1, warned.join('\n'))
   })
 })
