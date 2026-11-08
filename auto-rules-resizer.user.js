@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.11
+// @version      0.3.12
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.11'
+  const VERSION = '0.3.12'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -53,21 +53,24 @@
     return text.trim() === '' ? null : (normalizeLimit(text) ?? current)
   }
 
+  // The one reader of a limit, saved or pasted: a whole number of pixels, or null for none; a string or boolean that `normalizeLimit`
+  // would coerce is not one.
+  const readLimit = (data) => (data === null || (Number.isInteger(data) && data > 0) ? data : undefined)
+
   function readLimits (store) {
-    return { maxWidth: normalizeLimit(store.getData(MAX_WIDTH_KEY)), maxHeight: normalizeLimit(store.getData(MAX_HEIGHT_KEY)) }
+    const limit = (key) => load(store, { key, read: readLimit }).value ?? null
+    return { maxWidth: limit(MAX_WIDTH_KEY), maxHeight: limit(MAX_HEIGHT_KEY) }
   }
 
   // No limit is no key, so a fresh install saves nothing.
   function saveLimits (store, limits) {
     for (const [key, px] of [[MAX_WIDTH_KEY, limits.maxWidth], [MAX_HEIGHT_KEY, limits.maxHeight]]) {
       if (px === null) store.removeData(key)
-      else store.setData(key, px)
+      else save(store, key, px)
     }
   }
 
-  // A saved limit is a whole number of pixels, or null for none; a string or boolean that `normalizeLimit` would coerce is not one.
-  const readPastedLimit = (data) => (data === null || (Number.isInteger(data) && data > 0) ? data : undefined)
-  const READERS = { [MAX_WIDTH_KEY]: readPastedLimit, [MAX_HEIGHT_KEY]: readPastedLimit }
+  const READERS = { [MAX_WIDTH_KEY]: readLimit, [MAX_HEIGHT_KEY]: readLimit }
 
   // null is no limit, so a paste can clear one.
   function copiedSettings (store) {
@@ -496,6 +499,67 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
+  /* eslint-enable no-unused-vars */
+  // </lib:plain>
+  // <lib:store>
+  // Generated from lib/store.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain.
+  /* global isPlainObject */
+  // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
+  // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
+  const STORE_VERSION = 0
+  const UNREADABLE_SUFFIX = '_unreadable'
+
+  const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
+
+  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
+  function keptSlot (store, key, raw) {
+    const same = JSON.stringify(raw)
+    for (let n = 1; ; n++) {
+      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const held = store.getData(slot)
+      if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
+    }
+  }
+
+  function readSaved (raw, read) {
+    if (isEnvelope(raw) && raw.v > STORE_VERSION) throw new Error(`it was saved by a later version (version ${raw.v})`)
+    const value = read(isEnvelope(raw) ? raw.data : raw)
+    if (value === undefined) throw new Error('its reader refused it')
+    return value
+  }
+
+  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
+  // anything can save over it.
+  function load (store, { key, read }) {
+    const raw = store.getData(key)
+    if (raw === null) return { value: undefined }
+    try {
+      return { value: readSaved(raw, read) }
+    } catch (error) {
+      const unreadable = error.message || String(error) || 'its reader threw'
+      const { slot, copied } = keptSlot(store, key, raw)
+      if (copied) {
+        store.setData(slot, raw)
+        console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
+      }
+      return { value: undefined, unreadable }
+    }
+  }
+
+  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
+
+  function save (store, key, data) {
+    store.setData(key, { v: STORE_VERSION, data })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:store>
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
       READERS,
