@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.36.3
+// @version      0.36.4
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.36.3'
+  const VERSION = '0.36.4'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -1234,7 +1234,7 @@
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves nothing stored.
+    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
       let restore = null
       try {
@@ -1631,8 +1631,7 @@
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)
   const writeData = (key, value) => storage.run(() => Framework.setData(key, value))
-  const savedData = { getData: readData }
-  const removeData = (key) => storage.run(() => Framework.removeData(key))
+  const savedData = { getData: readData, setData: writeData, removeData: (key) => storage.run(() => Framework.removeData(key)) }
   // What the settings dialog's shell is handed in place of Framework: its calls into SudokuPad run under the settings.
   const dialogs = {
     addSetting: (setting) => Framework.addSetting(setting),
@@ -2002,7 +2001,7 @@
 
   // The colors, outline, box color and frame as stored and as shown, as a function that puts them all back after a Save that failed half-way.
   function snapshotSave () {
-    const restoreStored = snapshotStore({ getData: readData, setData: writeData, removeData }, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY])
+    const restoreStored = snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY])
     const was = { colors, outline, boxColor, frame }
     return () => {
       try {

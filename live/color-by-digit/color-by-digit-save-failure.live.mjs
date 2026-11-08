@@ -1,10 +1,11 @@
 // Live check that Color by Digit's Save is all-or-nothing, on sudokupad.app in headless Chromium: a Save that throws after storing the
-// profiles leaves the stored profiles and mode, and the profiles the button's menu lists, exactly as they were before Save.
+// profiles leaves the stored profiles, and the mode as it was (still unsaved), exactly as they were before Save. The throw comes before the mode step, which runs under guards that swallow a throw,
+// so the mode restore has no failing step to witness it.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { EDITOR, openSession, PROFILES_KEY, savedProfiles, SEED } from './color-by-digit-fixtures.mjs'
+import { EDITOR, MODE_KEY, openSession, PROFILES_KEY, savedProfiles, SEED } from './color-by-digit-fixtures.mjs'
 import { dialogButton, openScriptDialog } from '../settings.mjs'
 
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
@@ -25,13 +26,16 @@ describe('Color by Digit\'s Save is all-or-nothing', { concurrency: false }, () 
 
   it('a Save that throws after the profiles were stored leaves the stored profiles as they were, and says Not saved', async () => {
     const before = await stored(PROFILES_KEY)
+    const modeBefore = await stored(MODE_KEY)
     // Once the profiles are written, the next JSON.stringify throws, once: the comparison of the old and new groups, which no guard wraps.
     await p.evaluate((key) => {
       const set = Framework.setData
       const stringify = JSON.stringify
+      let armed = false
       Framework.setData = (k, v) => {
         const result = set.call(Framework, k, v)
-        if (k === key) {
+        if (k === key && !armed) {
+          armed = true
           JSON.stringify = (...args) => {
             JSON.stringify = stringify
             throw new Error('groups unreadable')
@@ -46,6 +50,7 @@ describe('Color by Digit\'s Save is all-or-nothing', { concurrency: false }, () 
     await dialogButton(p, 'Save').click()
     await p.locator('.dialog [data-role="settings-status"]').filter({ hasText: 'Not saved: groups unreadable' }).waitFor()
     assert.deepEqual(await stored(PROFILES_KEY), before)
+    assert.equal(await stored(MODE_KEY), modeBefore)
     await dialogButton(p, 'Cancel').click()
   })
 })

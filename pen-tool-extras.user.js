@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.30.2
+// @version      1.30.3
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.30.2'
+  const VERSION = '1.30.3'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -2960,7 +2960,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves nothing stored.
+    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
       let restore = null
       try {

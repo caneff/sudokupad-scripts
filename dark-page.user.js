@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.3
+// @version      0.7.4
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.3'
+  const VERSION = '0.7.4'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -341,7 +341,7 @@
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves nothing stored.
+    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
       let restore = null
       try {

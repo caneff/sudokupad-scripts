@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.2
+// @version      0.25.3
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.2'
+  const VERSION = '0.25.3'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1269,7 +1269,7 @@
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves nothing stored.
+    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
       let restore = null
       try {

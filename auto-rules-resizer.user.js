@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.3
+// @version      0.4.4
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.4.3'
+  const VERSION = '0.4.4'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -431,7 +431,7 @@
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves nothing stored.
+    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
       let restore = null
       try {

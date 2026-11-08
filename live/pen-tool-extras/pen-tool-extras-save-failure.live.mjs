@@ -1,5 +1,5 @@
 // Live check that Pen Tool Extras' Save is all-or-nothing, on sudokupad.app in headless Chromium: a Save whose second step throws
-// (the settings step, after the pen colors were stored) leaves the stored pen colors and thickness, and the pen colors in force, as they were.
+// (the settings step, after the pen colors were stored) leaves the stored pen colors and thickness, and the style the page draws with, as they were.
 /* global Framework, Node */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -34,6 +34,7 @@ describe('Pen Tool Extras\' Save is all-or-nothing', { concurrency: false }, () 
   it('a Save whose settings step throws leaves the stored pen colors and thickness as they were, and says Not saved', async () => {
     const colorsBefore = await stored(COLORS_KEY)
     const thicknessBefore = await stored(THICKNESS_KEY)
+    const styleBefore = await p.locator(STYLE).evaluate((el) => el.textContent)
     // The style is written once for the colors and once after the settings; the second write throws, once.
     await p.evaluate((selector) => {
       const style = document.querySelector(selector)
@@ -59,6 +60,7 @@ describe('Pen Tool Extras\' Save is all-or-nothing', { concurrency: false }, () 
     await p.locator('.dialog [data-role="settings-status"]').filter({ hasText: 'Not saved: style refused' }).waitFor()
     assert.deepEqual(await stored(COLORS_KEY), colorsBefore)
     assert.equal(await stored(THICKNESS_KEY), thicknessBefore)
+    assert.equal(await p.locator(STYLE).evaluate((el) => el.textContent), styleBefore, 'the page draws with the colors and thickness in force before Save')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 })
