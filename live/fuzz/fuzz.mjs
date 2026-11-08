@@ -1,20 +1,19 @@
 // A minimal fuzz runner: fast-check drives random click / type / undo sequences on real SudokuPad (the recorded page of
 // `live/page.mjs`, all six scripts injected after Start Puzzle), shrinks a failing sequence and replays it from the
-// numbers it prints. Not a check itself, so `live/**/*.live.mjs` skips it; `fuzz.live.mjs` is the proof and `run.mjs`
-// the replay's command line. What worked and what did not is in docs/research/ui-fuzz-tools.md.
-import { readdirSync, readFileSync } from 'node:fs'
+// numbers it prints. Not a check itself. What worked and what did not is in docs/research/ui-fuzz-tools.md.
+import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import fc from 'fast-check'
 import { captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
 import { cellCentre } from '../pen.mjs'
+import { SCRIPTS } from '../scripts.mjs'
 
 // fast-check issue #462: errors can land after the last command returns, so the property waits this long and then reads them.
 const ERRORS_LAND_MS = 200
+// A planted late error is thrown on a timer this far after the command, inside the wait above.
+const LATE_ERROR_MS = 50
 const RUNS = 25
 const MAX_COMMANDS = 20
-const ROOT = new URL('../../', import.meta.url)
-
-const scriptSources = () => readdirSync(ROOT).filter((f) => f.endsWith('.user.js')).sort().map((f) => readFileSync(new URL(f, ROOT), 'utf8'))
 
 // A page of its own for one run: SudokuPad past Start Puzzle with every script in, and the cells a digit can go in. A page
 // is never reused between runs: `restartPuzzle` empties the replay but leaves the earlier digits behind Undo (the second
@@ -22,7 +21,7 @@ const scriptSources = () => readdirSync(ROOT).filter((f) => f.endsWith('.user.js
 async function openFuzzPage (browser) {
   const { context, p, errors } = await openPage(browser, { seed: captureConsoleErrors })
   await startPuzzle(p)
-  for (const content of scriptSources()) await p.addScriptTag({ content })
+  for (const { file } of SCRIPTS) await p.addScriptTag({ content: readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8') })
   await p.locator('#control-colorbydigit').waitFor({ state: 'attached' })
   await p.locator('#control-draw').waitFor({ state: 'attached' })
   const cells = await p.evaluate(() => Framework.app.puzzle.cells.filter((c) => !c.given).map((c) => [c.row, c.col]))
@@ -61,55 +60,53 @@ const commandsFor = ({ target, cells }) => {
   ]
 }
 
-// Runs one generated sequence on a page of its own. After every command the planted rule (when there is one) is read from the page.
-async function runSequence ({ browser, plantedLimit, target }, cmds) {
+// Runs one generated sequence on a page of its own. After every command the planted rule is read from the page, and
+// a planted late error is thrown on a timer.
+async function runSequence ({ browser, plantedLimit, lateError, target }, cmds) {
   const { context, p, errors } = await openFuzzPage(browser)
   target.p = p
   try {
-    await runOn({ p, errors, plantedLimit }, cmds)
+    const plant = (command) => ({
+      check: (m) => command.check(m),
+      toString: () => command.toString(),
+      async run (model, real) {
+        await command.run(model, real)
+        if (lateError) await p.evaluate((ms) => setTimeout(() => { throw new Error('planted late error') }, ms), LATE_ERROR_MS)
+        if (plantedLimit == null) return
+        const n = await enteredCount(p)
+        if (n > plantedLimit) throw new Error(`planted rule broken: ${n} digits entered, no more than ${plantedLimit} allowed`)
+      }
+    })
+    await fc.asyncModelRun(() => ({ model: { selected: false }, real: {} }), [...cmds].map(plant))
+    await sleep(ERRORS_LAND_MS)
+    if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`)
   } finally {
     await context.close()
   }
 }
 
-async function runOn ({ p, errors, plantedLimit }, cmds) {
-  const plant = (command) => ({
-    check: (m) => command.check(m),
-    toString: () => command.toString(),
-    async run (model, real) {
-      await command.run(model, real)
-      if (plantedLimit == null) return
-      const n = await enteredCount(p)
-      if (n > plantedLimit) throw new Error(`planted rule broken: ${n} digits entered, no more than ${plantedLimit} allowed`)
-    }
-  })
-  await fc.asyncModelRun(() => ({ model: { selected: false }, real: {} }), [...cmds].map(plant))
-  await sleep(ERRORS_LAND_MS)
-  if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`)
-}
-
 const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
 
-// The report of a run: `failed`, then on a failure the shrunk `sequence` (command names), `seed`, `path`,
-// `replayPath` and the `replayCommand` that reproduces it.
-// Options: `seed`; `plantedLimit` (the planted rule, none when absent); `path` and `replayPath` to replay a failure.
-export async function fuzz ({ browser, seed, plantedLimit, path, replayPath }) {
+// Fuzzes with `seed`. `plantedLimit` plants the rule "no more than that many digits entered", `lateError` a page error
+// thrown after each command returns; `path` and `replayPath` replay a failure.
+export async function fuzz ({ browser, seed, plantedLimit, lateError, path, replayPath }) {
   const first = await openFuzzPage(browser)
   const cells = first.cells
   await first.context.close()
   const target = { p: null }
   const commands = fc.commands(commandsFor({ target, cells }), { maxCommands: MAX_COMMANDS, size: 'max', replayPath })
-  const details = await fc.check(fc.asyncProperty(commands, (cmds) => runSequence({ browser, plantedLimit, target }, cmds)), {
+  const details = await fc.check(fc.asyncProperty(commands, (cmds) => runSequence({ browser, plantedLimit, lateError, target }, cmds)), {
     seed, numRuns: RUNS, path, endOnFailure: path != null, verbose: 0
   })
   if (!details.failed) return { failed: false, seed: details.seed }
+  // fast-check prints the commands as `a,b,c /*replayPath="..."*/`, so command names hold no comma.
   const shown = String(details.counterexample[0])
   const replay = REPLAY_PATH.exec(shown)[1]
-  const flags = [plantedLimit != null ? `--planted ${plantedLimit}` : '', `--seed ${details.seed}`, `--path ${details.counterexamplePath}`, `--replay-path ${replay}`]
+  const flags = [plantedLimit != null ? `--planted ${plantedLimit}` : '', lateError ? '--late-error' : '', `--seed ${details.seed}`, `--path ${details.counterexamplePath}`, `--replay-path ${replay}`]
   return {
     failed: true,
     error: String(details.errorInstance?.message ?? details.error),
-    sequence: shown.replace(REPLAY_PATH, '').replace(/^\[|\]$/g, '').split(','),
+    sequence: shown.replace(REPLAY_PATH, '').trim().split(','),
     seed: details.seed,
     path: details.counterexamplePath,
     replayPath: replay,

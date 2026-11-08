@@ -49,9 +49,10 @@ owns it; its header comment is the full rule.
 ## The fuzz proof
 
 `live/fuzz/` proves fast-check can drive SudokuPad (#592; `docs/research/ui-fuzz-tools.md` § Tried with Playwright). `fuzz.mjs` runs random
-click / type / undo sequences, each on a page of its own, against a planted rule ("no more than 2 digits entered"); `fuzz.live.mjs` checks that it
-is found, shrunk to the shortest sequence and replayed. A failure prints `node live/fuzz/run.mjs --seed ... --path ... --replay-path ...`, which
-reproduces it. It takes about four and a half minutes, nearly all of it shrinking, so run it alone: `node --test live/fuzz/fuzz.live.mjs`.
+click / type / undo sequences, each on a page of its own, against a planted rule ("no more than 2 digits entered") and a planted page error;
+`fuzz.proof.mjs` checks that each is found, shrunk to the shortest sequence and, for the rule, replayed. A failure prints
+`node live/fuzz/run.mjs --seed ... --path ... --replay-path ...`, which reproduces it. The proof takes about five minutes, nearly all of it
+shrinking, so it is not a `*.live.mjs` and `npm run test:live` skips it: `npm run test:fuzz` runs it.
 
 ## The daily watch
 

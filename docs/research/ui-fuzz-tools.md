@@ -217,7 +217,8 @@ Book only removes whole actions; it does not simplify their parameters.
 
 Run 2026-11-08 (#592, under #590) with fast-check 4.10.2, Playwright 1.64 and headless Chromium on the recorded
 SudokuPad (`live/page.mjs`), all six scripts injected after Start Puzzle. The code is `live/fuzz/fuzz.mjs`
-(runner), `live/fuzz/run.mjs` (command line) and `live/fuzz/fuzz.live.mjs` (the proof).
+(runner), `live/fuzz/run.mjs` (command line) and `live/fuzz/fuzz.proof.mjs` (the proof, `npm run test:fuzz`; five minutes, so
+not in `npm run test:live`).
 
 Verdict: it works. `fc.commands` + `fc.asyncModelRun` + Playwright found a planted failure, shrank it to the
 shortest sequence and replayed it from the printed numbers.
@@ -235,8 +236,9 @@ the same sequence and the same failure in about 2 seconds (`node live/fuzz/run.m
 --replay-path ...`).
 
 The #462 pattern (sleep 200 ms after `asyncModelRun`, then check error signals inside the same property) is in
-`runOn`. It is wired to the page's uncaught errors and unexpected skip lines, which `captureConsoleErrors` already
-collects; nothing in this run produced one, so that it makes a late error shrink is not shown.
+`runSequence`. It reads the `errors` that `openPage` collects (uncaught page errors and unexpected skip lines, plus
+`console.error` through `captureConsoleErrors`). A page error planted on a 50 ms timer after each command, so after
+the last command returns, failed the property and shrank to two steps (`click r1c3 | type 1`; why not one was not looked into): the pattern does make a late error shrink.
 
 Quirks and costs:
 
@@ -251,8 +253,8 @@ Quirks and costs:
   hit the planted failure in 25 runs, so the proof pins seed 1: the generator is random, and a short run is luck.
 - **Command size matters.** With the default `size` and a 3-digit planted rule, 50 runs of up to 30 commands found no
   failure; `size: 'max'` with `maxCommands` found it. Not tested further why (likely that default sequences are short).
-- **`details.counterexample[0]` prints as `[name,name]/*replayPath="..."*/`.** Command names must contain no comma,
-  because the sequence is read back by splitting on it.
+- **`String(details.counterexample[0])` prints as `name,name /*replayPath="..."*/`** (no brackets, a space before the
+  comment, checked on 4.10.2). Command names must contain no comma, because the sequence is read back by splitting on it.
 - **`path` and `replayPath` are both needed** to replay: `path` selects the shrunk case, `replayPath` tells
   `fc.commands` which of the generated commands actually ran. The replay needs the same command arbitraries; a change
   to `commandsFor` makes an old pair unreplayable (fast-check discussion #6166).
