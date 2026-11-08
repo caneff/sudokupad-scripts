@@ -165,7 +165,7 @@
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).
 - **install step** — one of the parts Pen Tool Extras installs at startup, each run in its own guard (`lib/steps.js`): saved settings, line erase, arrow
-  lines, marks, pen pages, drag highlight, colors, pen panel, style, settings entry, color save. A step is **skipped** when SudokuPad lacks an internal it
+  lines, marks, pen pages, drag highlight, colors, pen panel, style, dialog overlay, settings entry, color save. A step is **skipped** when SudokuPad lacks an internal it
   needs or its own code throws: one console warning names it, the settings dialog's "Off because SudokuPad changed" line lists it,
   and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
 - **settings button** — the third button of the **controls row**, an outline gear. A click or tap opens

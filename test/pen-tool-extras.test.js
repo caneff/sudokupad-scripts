@@ -2029,10 +2029,10 @@ for (const [internal, remove, featureNames] of LACKING_ALONE) {
   })
 }
 
-test('every step but the style has a requirement, and each is lacking under some internal removed alone', () => {
+test('every step but the style and the dialog overlay has a requirement, and each is lacking under some internal removed alone', () => {
   const { app, tool, framework } = completeSudokuPad()
   const held = Object.keys(penRequirements(app, tool, framework))
-  assert.deepEqual(held.sort(), Object.keys(STEP_LABELS).filter((name) => name !== 'style').sort())
+  assert.deepEqual(held.sort(), Object.keys(STEP_LABELS).filter((name) => !['style', 'overlay'].includes(name)).sort())
   // penPanel's ToolPen.tool is the next test's.
   assert.deepEqual([...new Set(LACKING_ALONE.flatMap(([, , names]) => names))].sort(), held.sort())
 })

@@ -181,6 +181,7 @@
     penPanel: 'pen panel',
     style: 'style',
     settingsEntry: 'settings entry',
+    overlay: 'dialog overlay',
     colorSave: 'color save'
   }
 
@@ -199,7 +200,6 @@
       console.warn(`${script}: ${label} skipped: ${reason}`, ...detail)
     }
     const step = {
-      label,
       off: false,
       // Before the step was installed: nothing of it is there to undo.
       lack (member) {
@@ -258,7 +258,7 @@
     return step
   }
 
-  // `requirements` is [key, [[member, present], ...]] for each step, the key the step itself or its name; the answer maps the key of each step that lacks a member to the first it lacks.
+  // Each entry of `requirements` is [key, [[member, present], ...]]; a key whose members are not all present maps to the first missing one.
   function lackingInternals (requirements) {
     const lacking = new Map()
     requirements.forEach(([step, needs]) => {
@@ -269,8 +269,8 @@
   }
 
   // A page with no Framework is not SudokuPad, and is left alone without a word; a Framework without `getApp` is one no script can hook,
-  // which is reported. `requires(app)` and `steps(app)` are read once the app is ready, `steps` as [step, install(app)] in install order.
-  // An install that returns a promise is not waited for by the steps after it.
+  // which is reported. `requires(app)` gives [step, needs] and `steps(app)` [step, install(app)] in install order, both read once the app is
+  // ready. An install that returns a promise is not waited for by the steps after it.
   function start (script, { requires, steps }) {
     if (typeof Framework === 'undefined') return
     if (!Framework.getApp) {
@@ -291,7 +291,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:steps>
 
-  // Each step and the first member it lacks: the steps keyed as in `steps`, the members of SudokuPad's app, its pen tool and its Framework.
+  // What each step needs of SudokuPad's app, its pen tool and its Framework, as [member, present] pairs, keyed as in `steps`. The style and the dialog overlay need nothing.
   function penRequirements (app, tool, framework) {
     const renderer = app.svgRenderer
     const proto = renderer ? Object.getPrototypeOf(renderer) : undefined
@@ -321,26 +321,28 @@
   }
 
   const skipped = []
+  const guard = (name, onSkip) => createStep(SCRIPT, STEP_LABELS[name], skipped, onSkip)
   const steps = {
-    settings: createStep(SCRIPT, STEP_LABELS.settings, skipped),
-    colors: createStep(SCRIPT, STEP_LABELS.colors, skipped),
+    settings: guard('settings'),
+    colors: guard('colors'),
     // With pen pages off the pad cannot turn back from page 2 or 3, so it and the pen go back to page 1.
-    pages: createStep(SCRIPT, STEP_LABELS.pages, skipped, () => {
+    pages: guard('pages', () => {
       setPadPage(0)
       putStockPenBack()
       syncPenPanel()
     }),
-    arrowLines: createStep(SCRIPT, STEP_LABELS.arrowLines, skipped),
-    dragHint: createStep(SCRIPT, STEP_LABELS.dragHint, skipped),
-    marks: createStep(SCRIPT, STEP_LABELS.marks, skipped),
-    lineErase: createStep(SCRIPT, STEP_LABELS.lineErase, skipped),
-    penPanel: createStep(SCRIPT, STEP_LABELS.penPanel, skipped, () => {
+    arrowLines: guard('arrowLines'),
+    dragHint: guard('dragHint'),
+    marks: guard('marks'),
+    lineErase: guard('lineErase'),
+    penPanel: guard('penPanel', () => {
       applyStyle()
       syncPenPanel()
     }),
-    style: createStep(SCRIPT, STEP_LABELS.style, skipped),
-    settingsEntry: createStep(SCRIPT, STEP_LABELS.settingsEntry, skipped),
-    colorSave: createStep(SCRIPT, STEP_LABELS.colorSave, skipped)
+    style: guard('style'),
+    settingsEntry: guard('settingsEntry'),
+    overlay: guard('overlay'),
+    colorSave: guard('colorSave')
   }
   const inForce = settingDefaults()
 
@@ -2619,7 +2621,9 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
         [steps.colors, installPenPickers],
         [steps.penPanel, () => { installPenPanel(); watchControls() }],
         [steps.style, () => { effectsOf(SETTING_NAMES).forEach((effect) => effect()); applyStyle() }],
-        [steps.settingsEntry, () => { installOverlayPressSwallow(); addSettingsEntry(Framework, { name: 'pentoolextras', content: 'Pen Tool Extras', open: openDialog }) }],
+        // Not part of the settings entry: the pen panel's settings button opens the dialog too.
+        [steps.overlay, installOverlayPressSwallow],
+        [steps.settingsEntry, () => addSettingsEntry(Framework, { name: 'pentoolextras', content: 'Pen Tool Extras', open: openDialog })],
         [steps.colorSave, saveStartupColors]
       ]
     }

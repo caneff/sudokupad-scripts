@@ -30,7 +30,7 @@ const VERSIONS_BEFORE = { 'pen-tool-extras.user.js': '1.14.11', 'color-by-digit.
 test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a feature or a saved setting', () => {
   const pen = read('pen-tool-extras.user.js')
 
-  // Sections: 11 headings in the ruled order, with the exports and start() (lib/steps.js, the Framework guard and getApp()) below the last.
+  // Sections: 11 headings in the ruled order, with the exports and the start() call below the last.
   const headings = [...pen.matchAll(/^ {2}\/\/ (\d+)\. ([^:\n]+)/gm)]
   assert.deepEqual(headings.map((m) => Number(m[1])), SECTIONS.map((_, i) => i + 1))
   headings.forEach((m, i) => assert.ok(m[2].startsWith(SECTIONS[i]), `section ${i + 1} is ${m[2]}`))

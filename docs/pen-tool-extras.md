@@ -201,5 +201,6 @@ The settings dialog names the skipped steps in one line at its top, for example 
 | saved settings | Framework's `getData` | The sliders, boxes and marks start at their defaults instead of what was saved |
 | style | (nothing: it reads no SudokuPad internal; skipped only when writing the style throws) | The colors, thickness, opacity, outline and pen page styles are not applied |
 | settings entry | Framework's `addSetting` or `showDialog` | SudokuPad's settings menu has no Pen Tool Extras entry. The pen panel's settings button still opens the dialog while `showDialog` is there |
+| dialog overlay | (nothing: it reads no SudokuPad internal; skipped only when installing its listener throws) | A press on the dark area around the settings dialog closes it and also marks the grid cell under the pointer |
 | color save | Framework's `getData` or `setData` | Saved pen colors are not loaded at startup, and no install save is made |
 | line erase | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell`, `rows` or `cols` | A right click is SudokuPad's own click, and the browser's menu opens |
