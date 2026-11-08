@@ -9,7 +9,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { MODES, openPage, START, startPuzzle } from './page.mjs'
+import { captureConsoleErrors, MODES, openPage, START, startPuzzle } from './page.mjs'
 import { SCRIPTS } from './scripts.mjs'
 
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
@@ -31,7 +31,7 @@ describe('startup', { concurrency: CONCURRENCY }, () => {
 
         before(async () => {
           const injection = { mode, code: (mode === 'before-start' ? RECORD_START_SHOWN : '') + source(script.file) }
-          ;({ context, p, errors } = await openPage(browser, { injection }))
+          ;({ context, p, errors } = await openPage(browser, { injection, seed: captureConsoleErrors }))
           await startPuzzle(p, { injection })
           await script.ready(p)
         })

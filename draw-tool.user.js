@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.29.1
+// @version      0.29.2
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.29.1'
+  const VERSION = '0.29.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -494,7 +494,6 @@
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
-  const isTextSize = (value) => Number.isInteger(value) && isWidth(widthFor(value))
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
   const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
 
@@ -897,20 +896,31 @@
   // A note is a text item. `bg` is set only on a note made with the Background button on, so a note saved without it has no box.
   const textItem = ([x, y], text, color, size, background, opacity = DEFAULT_OPACITY) => ({ kind: TEXT_KIND, color, size, opacity, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
 
-  const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
+  // A saved note is checked against the stored format only, not the panel's slider ranges, so a later change to a slider cannot make a note saved before it unreadable.
+  const isStoredOpacity = (value) => value === undefined || (isNumber(value) && value > 0 && value <= 100)
+  const isStoredSize = (value) => Number.isInteger(value) && value > 0
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
   const isBox = (box) => isPoint(box) && box.every((side) => side > 0)
-  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isOpacityOrNone(item.opacity) &&
-    (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
+  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isStoredOpacity(item.opacity) &&
+    (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isStoredSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
   // A drawing saved by an earlier version holds strokes and shapes. They are kept in storage as they are and never drawn, so they are not read further.
   const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
 
-  // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
+  // A puzzle with nothing saved has an empty drawing; saved data that is not a list throws rather than read as a drawing. The list is read note by note:
+  // an entry that is not a note, stroke or shape is kept, never drawn, and saved back as it is.
   function readDrawing (saved) {
-    if (saved === null || saved === undefined) return []
-    if (!Array.isArray(saved) || !saved.every((item) => isText(item) || isHiddenItem(item))) throw new Error(`the saved drawing is not a list of texts, strokes and shapes: ${JSON.stringify(saved).slice(0, 200)}`)
-    return saved
+    if (saved === null || saved === undefined) return { items: [], kept: [] }
+    if (!Array.isArray(saved)) throw new Error(`the saved drawing is not a list of notes: ${JSON.stringify(saved).slice(0, 200)}`)
+    const read = { items: [], kept: [] }
+    for (const entry of saved) (isText(entry) || isHiddenItem(entry) ? read.items : read.kept).push(entry)
+    return read
+  }
+
+  // `unreadable` is the reason when the whole saved value could not be read, and is then copied aside by `load`.
+  function loadDrawing (store, key) {
+    const { value, unreadable } = load(store, { key: drawingKey(key), read: readDrawing })
+    return { ...(value ?? { items: [], kept: [] }), unreadable }
   }
 
   // The index lists puzzle keys oldest change first.
@@ -936,18 +946,19 @@
 
   // `store` has Framework's getData, setData and removeData. Writes `value` under `dataKey` and makes puzzle `key` the newest in `index`. The value is written
   // before the index, and the dropped puzzles' data is removed last, so a write that throws (a full localStorage) loses nothing already saved.
-  function writeIndexed (store, index, key, dataKey, value) {
+  function writeIndexed (store, index, key, dataKey, value, write = (k, v) => store.setData(k, v)) {
     const touched = touchIndex(index, key)
-    store.setData(dataKey, value)
+    write(dataKey, value)
     store.setData(INDEX_KEY, touched.index)
     for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
   }
 
   // A puzzle is in the index while it has a drawing or notes its Restart kept. An index that cannot be read throws before anything is written.
-  function saveDrawingTo (store, key, drawing) {
+  function saveDrawingTo (store, key, items, kept = []) {
+    const drawing = items.concat(kept)
     const index = readIndex(store.getData(INDEX_KEY))
     if (drawing.length > 0) {
-      writeIndexed(store, index, key, drawingKey(key), drawing)
+      writeIndexed(store, index, key, drawingKey(key), drawing, (k, v) => save(store, k, v))
       return
     }
     store.removeData(drawingKey(key))
@@ -1425,7 +1436,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2052,6 +2063,8 @@
   // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
   let drawing = []
+  // The saved entries that are not notes, strokes or shapes (a note that failed its check, say): never drawn, and saved back as they were.
+  let keptEntries = []
   // The indices of the selected notes in the drawing, in order.
   let selected = []
   // False while this puzzle's saved drawing cannot be read: no save writes over it but an explicit wipe's.
@@ -2425,26 +2438,34 @@
 
   // The solver loses work they think is kept, so each failure is shown once a page in SudokuPad's own dialog. Its
   // showDialog does nothing while another dialog is open, so the failure is shown at the next save instead.
-  function report (message) {
+  function report (message, id = message) {
     console.warn(`draw-tool: ${message}`)
-    if (reported.has(message) || document.querySelector('.dialog-overlay')) return
-    reported.add(message)
+    if (reported.has(id) || document.querySelector('.dialog-overlay')) return
+    reported.add(id)
     textTool.run(() => Framework.showDialog({
       parts: [{ tag: 'text', content: message }, { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }] }],
       centerOverBoard: true
     }))
   }
 
+  // Once a puzzle, so a second puzzle with an unreadable note is told too.
+  function reportKept () {
+    if (keptEntries.length > 0) report(`${keptEntries.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${loadedKey}`)
+  }
+
+  const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
+
   function writeDrawing () {
     if (loadedKey === null) return
+    reportKept()
     if (!savable) {
-      report('This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
+      report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
       return
     }
     // A write the browser refuses (a full localStorage) is reported, and is not a SudokuPad change that turns the saved data off.
     if (!storage.off) {
       try {
-        saveDrawingTo(Framework, loadedKey, drawing)
+        saveDrawingTo(Framework, loadedKey, drawing, keptEntries)
       } catch (err) {
         report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
       }
@@ -2779,18 +2800,17 @@
     loadedKey = currentPuzzleKey()
     forgetRestarted()
     if (!storage.off) {
-      try {
-        drawing = readDrawing(Framework.getData(drawingKey(loadedKey)))
-      } catch (err) {
-        console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's notes are not saved.`)
-        drawing = []
-        savable = false
-      }
+      const { items, kept, unreadable } = loadDrawing(Framework, loadedKey)
+      drawing = items
+      keptEntries = kept
+      savable = unreadable === undefined
+      if (unreadable !== undefined) report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
+      reportKept()
     }
     redraw()
   }
 
-  // The saved strokes and shapes of an earlier version are left as they are, but an unreadable saved drawing is written over.
+  // The saved strokes and shapes of an earlier version, and the entries that failed their check, are left as they are.
   function clearNotes () {
     drawing = drawing.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()
@@ -2830,7 +2850,7 @@
     const key = restartedKey(loadedKey)
     let notes
     try {
-      notes = readDrawing(Framework.getData(key))
+      notes = readDrawing(Framework.getData(key)).items
     } catch (err) {
       report(`Text Anywhere cannot read the notes Restart cleared, so Undo does not bring them back: ${err.message}`)
       return
