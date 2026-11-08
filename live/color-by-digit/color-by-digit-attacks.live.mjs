@@ -33,7 +33,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
   const label = () => labelOn(p)
   const coloredCount = () => coloredCountOn(p)
   const undo = () => p.click('#control-undo')
-  const redo = () => p.click('#control-redo')
   const editor = () => p.locator(EDITOR)
   const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
   const closeEditor = (text) => closeDialogWith(p, text, EDITOR)
@@ -101,7 +100,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     await undoUntilGone(0)
     assert.deepEqual((await valuesInRow()).slice(0, 2), ['', ''])
     for (let i = 0; i < 6 && (await label()) !== 'Digit'; i++) {
-      await redo()
+      await p.click('#control-redo')
       await settle(label, 'Digit', 500)
     }
     assert.equal(await label(), 'Digit', 'redo reaches the mode change again')
