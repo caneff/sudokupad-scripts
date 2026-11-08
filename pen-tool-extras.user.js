@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.29.2
+// @version      1.29.3
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.29.2'
+  const VERSION = '1.29.3'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -419,6 +419,8 @@
     // The press on the settings dialog's overlay is held back on its own, so a throw installing it costs the dialog nothing; the overlay is SudokuPad's dialog's.
     overlay: { label: 'dialog overlay', needs: { 'Framework.showDialog': 'function' } },
     colors: { label: 'colors', needs: { ...APP, 'Framework.app.tools.colour': 'object' } },
+    // The install save waits for the color tool to hold a palette; one that is not ready in time turns only this off, and the pen keeps SudokuPad's own colors.
+    colorSave: { label: 'color save', needs: { 'Framework.setData': 'function' } },
     // With pen pages off the pad cannot turn back from page 2 or 3, so it and the pen go back to page 1.
     pages: {
       label: 'pen pages',
@@ -528,11 +530,36 @@
   // 2. Pen colors: the saved set, derived colors and edit mode
   // Keys saved by the scripts this one replaced, kept so their saved data still reads.
   const COLORS_KEY = 'PenColor_colors'
+  // <lib:ready>
+  // Generated from lib/ready.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
+  // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
+  function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeoutMs
+      const poll = () => {
+        let value
+        try {
+          value = check()
+        } catch (error) {
+          reject(error)
+          return
+        }
+        if (value !== null && value !== undefined && value !== false) resolve(value)
+        else if (Date.now() >= deadline) reject(new Error(`${what} not ready after ${timeoutMs} ms`))
+        else setTimeout(poll, pollMs)
+      }
+      poll()
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:ready>
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math.
-  /* global parseColor, darkenColor, toOklab */
+  // Reads parseColor, darkenColor and toOklab from color-math, and whenReady from ready.
+  /* global parseColor, darkenColor, toOklab, whenReady */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
@@ -558,7 +585,7 @@
     'page-3': 'Darker page 3',
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
-  const COLOR_TOOL_POLL_MS = 100
+  const COLOR_TOOL_TIMEOUT_MS = 10000
 
   // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
@@ -614,16 +641,9 @@
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
   }
 
-  // No time limit: until the color tool is ready the caller shows SudokuPad's own colors.
+  // Rejects once COLOR_TOOL_TIMEOUT_MS passes with no ready color tool, naming it, so the caller can skip its step and keep SudokuPad's own colors.
   function waitForColorTool () {
-    return new Promise((resolve) => {
-      const check = () => {
-        const tool = readyColorTool()
-        if (tool) resolve(tool)
-        else setTimeout(check, COLOR_TOOL_POLL_MS)
-      }
-      check()
-    })
+    return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
   }
 
   // The pages of cell color keys of the palette in force, or none until the color tool has one.
@@ -2273,16 +2293,21 @@
   const PEN_PANEL = '.tool-pen .controls-input'
   // The panel may be up for a moment without a line mode pulldown, since SudokuPad builds it in steps.
   const PANEL_CHECK_MS = 1000
+  const PANEL_MISSES = 2
   // A click this soon after a tap on the line mode button is that tap's own.
   const TAP_CLICK_MS = 1000
   let panelCheck = null
 
-  // A panel with no pulldown, whose row the controls take, means SudokuPad renamed the element, so the row is not ours.
-  function checkPanelRow () {
+  // A panel with no pulldown, whose row the controls take, means SudokuPad renamed the element, so the row is not ours. One look is not enough: the panel is
+  // checked again after PANEL_CHECK_MS, and the step is skipped only when the pen tool is still current and the pulldown is still missing on PANEL_MISSES looks in a row.
+  const panelWithoutPulldown = () => Framework.app.tool === 'pen' && Boolean(document.querySelector(PEN_PANEL)) && !document.querySelector(LINE_MODE_BOX)
+  function checkPanelRow (misses = 0) {
     if (panelCheck !== null || !document.querySelector(PEN_PANEL)) return
     panelCheck = setTimeout(() => {
       panelCheck = null
-      if (document.querySelector(PEN_PANEL) && !document.querySelector(LINE_MODE_BOX)) steps.penPanel.skip('the pen tool panel has no .penlinemode')
+      if (!panelWithoutPulldown()) return
+      if (misses + 1 >= PANEL_MISSES) steps.penPanel.skip('the pen tool panel has no .penlinemode')
+      else checkPanelRow(misses + 1)
     }, PANEL_CHECK_MS)
   }
 
@@ -2826,8 +2851,15 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     const colorsAtStart = startupPenColors(savedData.getData(COLORS_KEY), hasColorTool)
     if (colorsAtStart.load) return adoptColors(colorsAtStart.load)
     if (colorsAtStart.save) return saveColors(colorsAtStart.save)
-    // The install save, once: page 1 darkened.
-    const tool = await waitForColorTool()
+    // The install save, once: page 1 darkened. Off at startup (no Framework.setData) there is nothing to save with, so the wait is not started.
+    if (steps.colorSave.off) return
+    let tool
+    try {
+      tool = await waitForColorTool()
+    } catch (error) {
+      steps.colorSave.skip(error)
+      return
+    }
     // A save made in the dialog while waiting outranks it.
     if (readPenColors(savedData.getData(COLORS_KEY))) return
     // Tried even with the colors step off since startup (edit mode failing to install): only a failure to read page 1 itself leaves nothing saved, reported as the step's.

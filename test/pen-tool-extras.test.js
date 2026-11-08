@@ -2088,7 +2088,9 @@ const LACKING_ALONE = [
   ['Framework.app.xyToRCExact', (s) => { delete s.Framework.app.xyToRCExact }, ['lineErase']],
   ['Framework.app.tools.colour', (s) => { delete s.Framework.app.tools.colour }, ['colors']],
   ['Framework.getApp', (s) => { delete s.Framework.getApp }, ['colors', 'pages', 'arrowLines', 'dragHint', 'marks', 'penPanel', 'lineErase']],
-  ...['getData', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['saved']]),
+  ...['getData', 'removeData'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['saved']]),
+  // The install save writes the colors with setData.
+  ['Framework.setData', (s) => { delete s.Framework.setData }, ['saved', 'colorSave']],
   ...['addSetting', 'closeDialog'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['settings']]),
   // The dialog's overlay is SudokuPad's dialog's, so it goes with showDialog.
   ['Framework.showDialog', (s) => { delete s.Framework.showDialog }, ['settings', 'overlay']]
