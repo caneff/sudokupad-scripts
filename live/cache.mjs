@@ -14,6 +14,9 @@
 //   LIVE_OFFLINE=1  never touch the network: replay what is there, and fail when there is no recording
 // A replayed request the recording lacks is aborted, and the process then exits 1 naming each such URL, so a
 // recording with gaps cannot pass; `LIVE_REFRESH=1` records again.
+// A recording must hold fabric.js (Test Markup loads it on demand, and Text Anywhere's live check needs it): a fresh
+// one without it is not written and the run fails, and an existing one without it is recorded again at once, whatever
+// its age or version.
 // Snags this works around are in docs/research/2026-10-04-offline-render-har.md of sudokupad-art, which
 // records the same app the same way.
 
@@ -45,17 +48,19 @@ export const puzzleUrl = () => readFileSync(new URL('./puzzle-url.txt', import.m
 
 export const harPath = (env, home) => join(env.XDG_CACHE_HOME || join(home, '.cache'), 'sudokupad-scripts', 'live', 'sudokupad.har')
 
+// `incomplete` is a recording that lacks a file a check needs (see `hasFabric`): it records at once, once per run,
+// whatever its age or version, since a restamp or a replay would keep the gap.
 // 'record', 'replay', 'restamp' (replay, after stamping the recording with the time now) or 'needs-check' (the
 // recording is stale and `versionCheck`, the version check's outcome, is not known yet). `versionCheck` is
 // 'same', 'changed' or 'failed'. LIVE_REFRESH=1 records once per run, so a run that has already refreshed replays.
 // LIVE_OFFLINE=1 never records and never checks, so it throws when there is nothing to replay.
-export function modeFor ({ env, exists, mtimeMs, now, refreshedThisRun, versionCheck }) {
+export function modeFor ({ env, exists, mtimeMs, now, refreshedThisRun, versionCheck, incomplete = false }) {
   if (env.LIVE_OFFLINE === '1') {
     if (env.LIVE_REFRESH === '1') throw new Error('LIVE_OFFLINE=1 and LIVE_REFRESH=1 contradict: one never touches the network, the other records from it')
     if (!exists) throw new Error('LIVE_OFFLINE=1 but there is no recording to replay: run once without it to record')
     return 'replay'
   }
-  if ((env.LIVE_REFRESH === '1' && !refreshedThisRun) || !exists) return 'record'
+  if (((env.LIVE_REFRESH === '1' || incomplete) && !refreshedThisRun) || !exists) return 'record'
   if (now - mtimeMs <= MAX_AGE_MS) return 'replay'
   if (versionCheck === undefined) return 'needs-check'
   return { same: 'restamp', changed: 'record', failed: 'replay' }[versionCheck]
@@ -113,19 +118,32 @@ export function cleanHar (har) {
   return { ...har, log: { ...har.log, entries: [...byRequest.values()] } }
 }
 
-// Files a live check needs that SudokuPad loads only on demand, so a plain visit does not fetch them and the
-// recorder must. A recording without one fails its check with the request unrecorded, long after the recording.
-const LOADED_ON_DEMAND = [
-  { name: 'fabric.js (Test Markup)', url: /^https:\/\/sudokupad\.app\/fabric[^/?]*\.js(\?|$)/ }
-]
+// fabric.js, which SudokuPad loads only when Test Markup is turned on, so a plain visit does not fetch it and
+// `record` turns Test Markup on. Text Anywhere's live check needs it, and a replay that lacks it leaves that check
+// unrun with no failing assertion.
+const FABRIC = /^https:\/\/sudokupad\.app\/fabric[^/?]*\.js(\?|$)/
+// What Test Markup builds once fabric.js has loaded.
+export const MARKUP_CANVAS = '.fabcan canvas'
 
-// The names of the on-demand files `har` lacks, empty when it holds them all.
-export const missingFromRecording = (har) =>
-  LOADED_ON_DEMAND.filter(({ url }) => !har.log.entries.some((e) => url.test(e.request.url))).map(({ name }) => name)
+export const hasFabric = (har) => har.log.entries.some((e) => FABRIC.test(e.request.url))
 
 const writeAtomic = (file, text) => {
   const tmp = `${file}.${process.pid}.tmp`
   try { writeFileSync(tmp, text); renameSync(tmp, file) } catch (e) { rmSync(tmp, { force: true }); throw e }
+}
+
+// Cleans the fresh recording at `tmp` and writes it to `file`, but only when it holds fabric.js: a recording
+// without it is refused and `file` is left as it was, so the next run records again.
+export function writeRecording (tmp, file) {
+  const har = cleanHar(JSON.parse(readFileSync(tmp, 'utf8')))
+  if (!hasFabric(har)) throw new Error('the recording lacks fabric.js, which Text Anywhere\'s live check needs; nothing was written')
+  mkdirSync(dirname(file), { recursive: true })
+  writeAtomic(file, JSON.stringify(har))
+}
+
+// Whether the recording at `file` can be replayed whole. One that cannot be read counts as not.
+const isComplete = (file) => {
+  try { return hasFabric(JSON.parse(readFileSync(file, 'utf8'))) } catch { return false }
 }
 
 const recordingState = (file) => {
@@ -191,15 +209,11 @@ async function record (file) {
     // Test Markup loads fabric.js only once it is turned on, and Text Anywhere's live check turns it on.
     await p.evaluate(() => Framework.setSetting('markup', true))
     // Idle can come before the load has started, so wait for what the loaded file builds.
-    await p.locator('.fabcan canvas').first().waitFor({ state: 'attached', timeout: LOAD_MS })
+    await p.locator(MARKUP_CANVAS).first().waitFor({ state: 'attached', timeout: LOAD_MS })
     await p.waitForLoadState('networkidle')
     await loadEveryWebFont(p, stylesheet)
     await context.close()
-    const har = cleanHar(JSON.parse(readFileSync(tmp, 'utf8')))
-    const missing = missingFromRecording(har)
-    if (missing.length > 0) throw new Error(`the recording lacks ${missing.join(', ')}, which a live check needs; nothing was written`)
-    mkdirSync(dirname(file), { recursive: true })
-    writeAtomic(file, JSON.stringify(har))
+    writeRecording(tmp, file)
   } finally {
     await browser.close()
     rmSync(tmp, { force: true })
@@ -232,8 +246,10 @@ export async function ensureRecording ({ env, home, ppid, record, checkVersion, 
   const key = runnerKey(env, ppid)
   const refreshMarker = `${file}.refresh-run`
   const failedCheckMarker = `${file}.check-failed-run`
-  const mode = (versionCheck = markedBy(failedCheckMarker, key) ? 'failed' : undefined) =>
-    modeFor({ env, ...recordingState(file), now: Date.now(), refreshedThisRun: markedBy(refreshMarker, key), versionCheck })
+  const mode = (versionCheck = markedBy(failedCheckMarker, key) ? 'failed' : undefined) => {
+    const state = recordingState(file)
+    return modeFor({ env, ...state, incomplete: state.exists && !isComplete(file), now: Date.now(), refreshedThisRun: markedBy(refreshMarker, key), versionCheck })
+  }
   if (mode() === 'replay') return file
   mkdirSync(dirname(file), { recursive: true })
   await withLock(file, async () => {
