@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, savedState, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 
@@ -36,7 +36,7 @@ const tools = (p) => {
   const cells = () => read(() => [[0, 0], [1, 0]].map(([r, c]) => [...(Framework.app.grid.getCell(r, c).colours || [])]))
   const coloredCount = () => coloredCountOn(p)
   const undoSteps = () => read(() => Framework.app.puzzle.undoStack.length)
-  const getState = () => read((key) => Framework.getData(key), PROFILES_KEY)
+  const getState = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
   const icon = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
   const shownCircles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].filter((c) => window.getComputedStyle(c.parentNode).display !== 'none').length, CIRCLES)
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])

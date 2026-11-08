@@ -121,7 +121,8 @@ for (const { page: file, script, name } of DETAIL_PAGES) {
 
 // The warning sits directly under the page title, so it is read before any install link.
 const WARNING = /<\/h1>\s*<p class="warning">([\s\S]*?)<\/p>/
-const DETAILS_WARNING = "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad."
+// Every script runs on the shared SudokuPad guard (lib/sudokupad.js), whose bar each details page names.
+const DETAILS_WARNING = "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad. When an update breaks one part, only that part turns off, and a bar at the bottom of the page names it with a link to report it."
 const WARNINGS = {
   [HOME]: "These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.",
   [DETAILS]: DETAILS_WARNING,

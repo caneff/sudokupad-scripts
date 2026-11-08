@@ -13,6 +13,7 @@ const { DIALOG, DRAWING_PREFIX, INDEX_KEY, NOT_NOTES, script, TEXTS } = draw
 // What an earlier version saved, planted as it wrote it.
 const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [[100, 100], [300, 200], [500, 100]] }
 const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 60, box: [64, 320, 256, 448] }
+const B_ID = 'puzzle-b-490'
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
 let browser
@@ -195,6 +196,116 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await saved(), null)
     assert.equal(await read((k) => Framework.getData(k), INDEX_KEY), 'not an index {')
     await read((k) => Framework.removeData(k), INDEX_KEY)
+  })
+
+  // The plant removes the size slider while the panel stays on the page, so showPanelValues throws. The SudokuPad guard holds the throw and
+  // turns the feature it ran under off, with one warning; a page error it still lets through is taken out of `errors`. Either shows the plant took.
+  const plantRedrawFailure = () => p.evaluate((slider) => document.querySelector(slider).remove(), draw.SIZE_SLIDER)
+  const planted = (first, warnedBefore) => {
+    const raised = errors.splice(first)
+    const held = warnings.slice(warnedBefore).some((w) => /skipped because SudokuPad changed/.test(w))
+    assert.ok(held || /TypeError/.test(raised.join('\n')), `the plant made the redraw throw\n${warnings.join('\n')}`)
+  }
+  const selectNote = async () => {
+    await draw.plantDrawing(p, [NOTE])
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
+    await pickDraw()
+    await p.locator(TEXTS).click()
+  }
+
+  it('a note is stored before the panel redraw, so a redraw that throws never loses it', async () => {
+    await reload()
+    await pickDraw()
+    await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+    await p.keyboard.type('15')
+    await plantRedrawFailure()
+    const first = errors.length
+    const warnedBefore = warnings.length
+    await p.keyboard.press('Escape')
+    assert.deepEqual((await saved()).map((item) => item.text), ['15'], 'stored before the redraw failed')
+    planted(first, warnedBefore)
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
+    await restartFromDialog()
+  })
+
+  it('a recolor and a delete of a selected note are stored before the panel redraw', async () => {
+    await selectNote()
+    await plantRedrawFailure()
+    let first = errors.length
+    let warnedBefore = warnings.length
+    await p.click(`${draw.KEYPAD} button[data-key="6"]`)
+    assert.deepEqual((await saved()).map((item) => item.color), [6], 'the recolor is stored')
+    planted(first, warnedBefore)
+    // The held throw turned its feature off until the page reloads, so the delete gets a fresh page and its own plant.
+    await selectNote()
+    await plantRedrawFailure()
+    first = errors.length
+    warnedBefore = warnings.length
+    await p.keyboard.press('Delete')
+    assert.equal(await saved(), null, 'the delete is stored')
+    planted(first, warnedBefore)
+    await reload()
+    await restartFromDialog()
+  })
+
+  it('a panel that is not on the page is not redrawn: typing a note raises no error', async () => {
+    await reload()
+    await pickDraw()
+    const first = errors.length
+    await p.evaluate(([tray, sliders]) => { document.querySelector(tray).remove(); document.querySelector(sliders).remove() }, [draw.TRAY, draw.SLIDERS])
+    await typeText([2.5, 2.5], '15')
+    assert.deepEqual(await texts(), ['15'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['15'])
+    assert.deepEqual(errors.slice(first), [])
+    await restartFromDialog()
+  })
+
+  // Loads the puzzle on the page again through the page's own loader, as a puzzle with `id`, in place and with no reload.
+  const openPuzzleAs = async (id) => {
+    await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
+    await read(async ([key, as]) => {
+      const { parsePuzzleData, fetchPuzzle } = window.pageLoader
+      const data = await parsePuzzleData(await fetchPuzzle(key))
+      data.id = as
+      await Framework.app.loadCTCPuzzle(data)
+    }, [new URL(await p.url()).pathname.slice(1), id])
+    await p.waitForFunction((as) => Framework.app.puzzle.puzzleId === as, id)
+  }
+
+  // The page's id for the puzzle changes before it triggers 'loaded'. A key released in that gap is made to arrive there:
+  // the nudge of A's selected note saves when its arrow key goes up, and the save must land under A.
+  it('A\'s notes are never saved under B when a save lands while B is loading', async () => {
+    await draw.forgetDrawings(p)
+    await reload()
+    const a = await puzzleKey()
+    await pickDraw()
+    await typeText([2.5, 2.5], '15')
+    await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+    await p.keyboard.down('ArrowRight')
+    // The puzzle's id is watched: the moment it becomes B's, the key goes up, before the puzzle triggers 'loaded'.
+    await read((bId) => {
+      const puzzle = Framework.app.puzzle
+      let id = puzzle.puzzleId
+      Object.defineProperty(puzzle, 'puzzleId', {
+        configurable: true,
+        get: () => id,
+        set: (value) => {
+          id = value
+          if (value === bId) {
+            window.keyupInGap = true
+            window.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'ArrowRight', code: 'ArrowRight' }))
+          }
+        }
+      })
+    }, B_ID)
+    await openPuzzleAs(B_ID)
+    await p.keyboard.up('ArrowRight')
+    assert.equal(await read(() => window.keyupInGap), true, 'the key went up between B\'s id and its load')
+    assert.deepEqual(await settle(texts, []), [], 'puzzle B shows no notes')
+    assert.equal(await read((k) => Framework.getData(k), DRAWING_PREFIX + B_ID), null, 'nothing is saved under B')
+    assert.deepEqual((await read((k) => Framework.getData(k), DRAWING_PREFIX + a)).map((item) => item.text), ['15'], 'A keeps its note')
   })
 
   it('the page raised no error', () => {
