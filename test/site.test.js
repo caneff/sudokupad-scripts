@@ -431,7 +431,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 
 // Text Anywhere's entry and details page.
 const DRAW_SUMMARY = 'Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
-const DRAW_LEAD_INS = ['Typed notes anywhere', 'Formatting', 'Long notes', 'Readable over digits', 'Colors, size and transparency', 'Select and move', 'Copy and paste', 'Erase', 'Kept per puzzle', 'Settings']
+const DRAW_LEAD_INS = ['Typed notes anywhere', 'Formatting', 'Long notes', 'Readable over digits', 'Colors, size and transparency', 'Select and move', 'Erase', 'Kept per puzzle', 'Settings']
 
 test(`${HOME} describes Text Anywhere in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Text Anywhere<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -447,7 +447,6 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Readable over digits A white outline round the letters, and an optional box behind them.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
     'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
-    'Copy and paste Ctrl+C copies the selected notes\' text, one paragraph each, top to bottom. Ctrl+V adds the clipboard\'s text as one new note at the pointer.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
     'Settings Color presets, halo, box color and border by sample; Copy and Paste to another browser.'

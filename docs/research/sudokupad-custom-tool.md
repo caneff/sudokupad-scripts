@@ -209,9 +209,10 @@ SudokuPad v0.611.0 (`script.js`, the live recording), read 2026-11-07.
   selection ending.
 - `handleKeyup` is forwarded without such a check, and `App.handleBlur` forwards `Blur` to tools after clearing its own keys.
 
-## Copy and paste of notes (#636)
+## Ctrl+C under Text Anywhere (#636)
 
-SudokuPad v0.611.0, run on the page in `live/draw-tool/draw-tool-copy-paste.live.mjs` (2026-11-08).
+SudokuPad v0.611.0 (`feature-cellpaste.js`, `script.js`), read from the live recording 2026-11-08; the live check is attack 71 in `live/attacks-input.live.mjs`.
 
-- **`feature-cellpaste.js`** listens for `keydown` on `document` in the capture phase and runs `handleCopy` on Ctrl/Cmd+C, which reads `SmartSelectToolOrder[prevTool || tool]`. That table has no `draw` (nor `pen`) entry, so the call throws while Text Anywhere is current. A window capture `keydown` listener with `stopImmediatePropagation` runs first and keeps both `handleCopy` and `handlePaste` from running.
-- **Ctrl and C switch the tool.** `App.handleKeydown` switches to Centre (its tempKey) when Ctrl or Cmd goes down, and `App.handleKeyup` does it again on the keyup of C (the same tempKey match), so the Ctrl+C that copies would have ended the note selection first. A tool's `handleKeydown` or `handleKeyup` that returns true ends the event for all of them: Text Anywhere returns true for Ctrl and Cmd (not mid-drag, where the switch still ends the gesture) and for the keyup of the C or V it took.
+- **The throw.** `feature-cellpaste.js` listens for `keydown` on `document` in the capture phase and runs `handleCopy` on Ctrl/Cmd+C, which reads `SmartSelectToolOrder[prevTool || tool]`. That table has no `draw` (nor `pen`) entry, so the call throws with Text Anywhere current, with or without a note selected. Ctrl+V's `handlePaste` does not read the table.
+- **Ctrl switches the tool first.** `App.handleKeydown` switches to Centre (its tempKey) when Ctrl or Cmd goes down, so by the C the tool is `centre` and `prevTool` is `draw`; that is why the read is `prevTool || tool`. A window capture `keydown` listener runs before the document's, so one that calls `stopImmediatePropagation` on Ctrl/Cmd+C when `prevTool || tool` is Text Anywhere keeps the copy from running and leaves the Ctrl switch alone. It leaves the key's default alone, so a copy inside an open note stays the browser's.
+- **Not done.** A Text Anywhere copy and paste of whole notes was built and dropped on Chris's ruling (2026-11-08): copy and paste work only inside an open note.
