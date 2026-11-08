@@ -1,7 +1,8 @@
 name: Watch SudokuPad
 
-# Nightly: checks SudokuPad's version with one request; a new version runs the full live suite and a red one files a
-# `bug` issue (live/watch.mjs). `workflow_dispatch` is the manual run.
+# Nightly: checks SudokuPad's version with one request; a new version, or a week since the last full run, runs the full
+# live suite and a red one files a `bug` issue; a run that cannot reach the checks files a "did not run" issue
+# (live/watch.mjs). `workflow_dispatch` is the manual run.
 on:
   schedule:
     - cron: '17 6 * * *'
@@ -37,7 +38,8 @@ jobs:
           path: ${{ env.CACHE_PATH }}
           key: ${{ env.CACHE_KEY }}
           restore-keys: sudokupad-live-
-      - run: npm run watch:live
+      - id: watch
+        run: npm run watch:live
         env:
           GH_TOKEN: ${{ github.token }}
       # A red run files its bug and remembers the version, so the save runs after a failed step too: otherwise the
@@ -47,3 +49,15 @@ jobs:
         with:
           path: ${{ env.CACHE_PATH }}
           key: ${{ env.CACHE_KEY }}
+      # A step before the watch (npm ci, the Chromium install, the cache restore) failed, so live/watch.mjs never ran and
+      # filed nothing. Same title as watch.mjs's own "did not run" issue, and filed only when none is open.
+      - name: File the did-not-run issue
+        if: ${{ failure() && steps.watch.outcome == 'skipped' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Watch did not run: the live suite could not be checked'
+        run: |
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[].title')
+          if printf '%s\n' "$open" | grep -qxF "$TITLE"; then exit 0; fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --label bug --title "$TITLE" \
+            --body "A step before \`npm run watch:live\` failed (npm ci, the Chromium install or the cache restore), so the live suite was not checked. Nothing was remembered. See $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."

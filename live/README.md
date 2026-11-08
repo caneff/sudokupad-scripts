@@ -38,10 +38,20 @@ up as a bug and not when someone installs it. Its header comment is the full rul
 with `LIVE_REFRESH=1`, red files one `bug` issue, and a version already checked is a no-op. The last version
 checked lives in `last-version`, beside the recording.
 
+Two more rules close gaps in that:
+
+- **A weekly forced run.** `?v=` may not move when SudokuPad's assets do, so a run also happens, recording again, when
+  the last full run (the time in `last-full-run`, beside the recording) is seven days old or missing. A red weekly run
+  files the same `bug` issue and says it was the weekly run.
+- **A "did not run" issue.** A run that cannot reach the checks (no Chromium, a failed recording, a version that could
+  not be read) files one issue titled "Watch did not run: the live suite could not be checked", remembers nothing, and
+  exits 1, so the next night tries again. It files no second one while one is open. It does not blame SudokuPad. A
+  workflow step before the watch that fails (`npm ci`, the Chromium install) files the same issue from the workflow.
+
 It runs nightly on GitHub Actions (`.github/workflows/watch.yml`, 06:17 UTC; `workflow_dispatch` runs it by hand).
 The recording and `last-version` persist between runs in the Actions cache, saved under a key ending in the run id and
 attempt, and restored by prefix, because a cache entry cannot be overwritten. The recording never goes in the repo or an
-artifact. A run on an unchanged version makes one request to SudokuPad and runs no suite.
+artifact. A run on an unchanged version, inside its week, makes one request to SudokuPad and runs no suite.
 
 GitHub turns off a public repository's scheduled workflows after 60 days with no repository activity. To turn it
 back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow" (or run
