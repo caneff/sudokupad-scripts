@@ -90,7 +90,7 @@ test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a 
   const html = byDigit.renderEditor({ groups: [{ key: '1', digits: ['1'] }], pages: byDigit.layoutPages([['0', '1', '2']], 0, colorOf), page: 0, brush: '1' })
   const styles = inlineStyles(html)
   assert.ok(styles.some((style) => style.startsWith(' style="background:')), 'the swatches are drawn')
-  for (const style of styles) assert.match(style, /^ style="background:#[0-9a-f]{6}"$/, 'a swatch or digit key color')
+  for (const style of styles) assert.match(style, /^ style="background:color-mix\(in srgb, #[0-9a-f]{6} 60%, transparent\)"$/, 'a swatch or digit key color')
 
   // Versions: Pen Tool Extras raised its version for the marks change; Color by Digit raised its own later, for auto mode (#234).
   assert.notEqual(versionOf(pen), VERSIONS_BEFORE['pen-tool-extras.user.js'])
