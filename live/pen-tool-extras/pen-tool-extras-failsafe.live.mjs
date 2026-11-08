@@ -2,7 +2,7 @@
 // sudokupad.app in headless Chromium.
 //
 // A case either takes away an internal a step needs before the script's startup check reads it (a snippet run on `Framework.getApp()`,
-// ahead of the script's own), makes a call the script makes fail while SudokuPad's own use of it goes on, or plants a throw in the
+// ahead of the script's own), makes a call the script makes fail while SudokuPad's own use of it goes on, changes how SudokuPad sends a click, or plants a throw in the
 // script's own code inside a wrapper. Each then checks the console warning that names the step, the dialog's line, that SudokuPad's own
 // action still works on the event that failed and after it, and that the other steps still work. A removed internal also goes from
 // SudokuPad's own code, so a case that removes one draws only with what it does not serve.
@@ -83,6 +83,23 @@ const CASES = [
     warns: [changed('marks')],
     edgeAgain: null,
     source: planted('      if (isEdgeActs(queued)) {\n', "        throw new Error('planted in the click wrapper')\n")
+  },
+  // SudokuPad's click queues its actions and never calls `actSend`: marks go off and the click lands as SudokuPad's own, the next one with `actSend` as before.
+  {
+    name: 'click queues but never sends',
+    off: 'marks',
+    warns: [changed('marks')],
+    edgeAgain: null,
+    breaks: `const click = ToolPen.tool.clickCell
+      window.dropSend = false
+      ToolPen.tool.clickCell = function () {
+        if (!window.dropSend) return click.apply(this, arguments)
+        window.dropSend = false
+        const hadOwn = Object.prototype.hasOwnProperty.call(this, 'actSend')
+        const own = this.actSend
+        this.actSend = function () {}
+        try { return click.apply(this, arguments) } finally { if (hadOwn) this.actSend = own; else delete this.actSend }
+      }`
   },
   // A throw in the render wrapper's own code, after SudokuPad's renderPen has drawn the mark.
   {
@@ -185,6 +202,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         if (kase.name === 'click wrapper throws') {
           await clickEdge()
           assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'SudokuPad\'s own X on the click that failed')
+          await undoAll()
+        }
+        if (kase.name === 'click queues but never sends') {
+          await read(() => { window.dropSend = true })
+          await clickEdge()
+          assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'SudokuPad\'s own X on the click whose acts were never sent')
           await undoAll()
         }
         if (kase.name === 'render wrapper throws') {

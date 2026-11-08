@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.28.4
+// @version      1.28.5
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.28.4'
+  const VERSION = '1.28.5'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1530,11 +1530,12 @@
     }
   }
 
-  // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back.
+  // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back. Acts queued and never sent mean SudokuPad changed how a click is sent, which throws.
   function queuedActs (tool, click) {
     let queued = null
     try {
       withOwnProperty(tool, 'actSend', function () { queued = this._actList.slice() }, click)
+      if (queued === null && tool._actList.length) throw new Error('clickCell queued its acts but never sent them')
     } finally {
       tool._actList.length = 0
     }
@@ -1573,7 +1574,8 @@
         const acts = cornerActs(corner)
         return stock.sudokupad(() => { this.actStart(); sendActs(this, acts) })
       }
-      const queued = stock.sudokupad(() => queuedActs(this, () => sudokupadClick.apply(this, args)), false)
+      // Only SudokuPad's own call is inside `stock.sudokupad`, so the unsent-acts throw of `queuedActs` is the script's and switches marks off.
+      const queued = queuedActs(this, () => stock.sudokupad(() => sudokupadClick.apply(this, args), false))
       if (queued === null) return
       let acts = queued
       if (isEdgeActs(queued)) {
