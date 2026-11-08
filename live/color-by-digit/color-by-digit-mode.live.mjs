@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVENS, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, startInjected, watch, wordOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, startInjected, watch, wordOn } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, MODES } from '../page.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
@@ -15,8 +15,6 @@ import { settle, SETTLE_MS } from '../settle.mjs'
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
 
 const { shadeOn } = shadeReaders(createRequire(import.meta.url)('../../color-by-digit.user.js'))
-
-const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 
 const HOLD_MS = 500
 // SudokuPad's color 3 is in no group of Odd/Even, whose keys are 1 and 2.

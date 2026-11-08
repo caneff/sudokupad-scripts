@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { coloredCountOn, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo } from './color-by-digit-fixtures.mjs'
+import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo, selectCell } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
 import { gridPoint } from '../pen.mjs'
@@ -159,21 +159,24 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
 describe('Redo after the Undos that took back a Restart', { concurrency: false }, () => {
   it('Restart, Undo, Undo, Redo leaves the mode on Cell with the givens colored, as a plain Restart does', async () => {
     const { context, p } = await openSession(browser, script)
+    const undo = () => p.click('#control-undo')
+    const redo = () => p.click('#control-redo')
+    const digitAt = () => p.evaluate(() => Framework.app.grid.getCell(0, 2).propGet('normal') ?? null)
     try {
-      await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
+      await selectCell(p, 0, 2)
+      await p.evaluate(() => { const a = Framework.app; a.act({ type: 'value', arg: '4' }); a.deselect() })
       await pressTo(p, 'Cell')
       await p.evaluate(() => Framework.app.restartPuzzle())
-      const givens = await settle(() => givensColoredOn(p), 30)
-      assert.equal(givens > 0, true)
-      await p.click('#control-undo')
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
+      await undo()
       assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined), true), true)
-      await p.click('#control-undo')
-      assert.equal(await settle(() => p.evaluate(() => Framework.app.grid.getCell(0, 2).propGet('normal') ?? null), '4'), '4')
-      await p.click('#control-redo')
+      await undo()
+      assert.equal(await settle(digitAt, '4'), '4')
+      await redo()
       assert.equal(await settle(() => p.evaluate(() => Framework.app.puzzle.redoStack.length), 0), 0, 'the Redo put back the last step')
-      assert.equal(await settle(() => p.evaluate(() => Framework.app.grid.getCell(0, 2).propGet('normal') ?? null), null), null, 'the Restart is back')
+      assert.equal(await settle(digitAt, null), null, 'the Restart is back')
       assert.equal(await labelOn(p), 'Cell')
-      assert.equal(await settle(() => givensColoredOn(p), givens), givens)
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
     } finally {
       await context.close()
     }
