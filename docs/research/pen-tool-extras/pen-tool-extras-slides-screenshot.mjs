@@ -57,8 +57,10 @@ sheet.save(target)
 const [TEAL_ROW, SOLID_ROW, DASHED_ROW, ARROW_ROW] = [0.5, 1, 1.5, 2]
 const DARK_ROW = 3
 const OUTLINE_ROW = DARK_ROW + 0.5
-// The row whose cells take the edge marks and the cell marks, and the grid corners that take the corner marks, which are written beside the slide.
+// The row whose cells take the edge marks, and the grid corners that take the corner marks, which are written beside the slide.
 const EDGE_MARK_ROW = 2
+// The bottom row takes the cell marks, which the dark cells and the outline line of slides 12 and 13 then share.
+const CELL_MARK_ROW = 3
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
 const [NEW_COLOR] = PICTURE_PEN_COLORS
@@ -201,10 +203,10 @@ for (const [at, clicks, what, value] of [[[3, 1], 2, 'a circle', 'x'], [[3, 2], 
 }
 await slide('8-corner')
 
-// 9. Three cell centers, clicked once to three times: the cell marks: a circle, a cross and a dot, in SudokuPad's own cell values 5 and 6 and the script's z.
+// 9. Three cell centers in the bottom row, clicked once to three times: the cell marks: a circle, a cross and a dot, in SudokuPad's own cell values 5 and 6 and the script's z.
 await pick(CENTER_PEN)
 for (const [col, clicks, what, value] of [[0, 1, 'a circle', '5'], [1, 2, 'a cross', '6'], [2, 3, 'a dot', 'z']]) {
-  const [cx, cy] = await cellCentre(p, EDGE_MARK_ROW, col)
+  const [cx, cy] = await cellCentre(p, CELL_MARK_ROW, col)
   await clickMark([cx, cy], clicks, `${what} in the cell of column ${col}`, value)
 }
 await slide('9-center')
@@ -216,6 +218,14 @@ await sliderValue(THICKNESS, 5)
 await sliderValue(OPACITY, 30)
 await slide('11-opacity')
 await sliderValue(OPACITY, 80)
+
+// The outline line runs through the bottom row's cell centers, so the cell marks are clicked on to empty first (a circle takes three more clicks, a cross two, a dot one).
+for (const [col, clicks] of [[0, 3], [1, 2], [2, 1]]) {
+  const [cx, cy] = await cellCentre(p, CELL_MARK_ROW, col)
+  for (let i = 0; i < clicks; i++) await changing(`click ${i + 1} clearing the cell mark of column ${col}`, async () => { await p.mouse.click(cx, cy); await park() })
+}
+const leftOver = (await penValuesNoColor(p)).filter((v) => ['5', '6', 'z'].includes(v))
+if (leftOver.length > 0) throw new Error(`the cell marks were not cleared: ${leftOver}`)
 
 // 12 and 13. A line across dark cells, White outlines off and then on.
 for (const col of [0, 1, 2]) await colorCell(DARK_ROW, col, DARK_CELL_KEY)
