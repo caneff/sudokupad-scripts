@@ -118,11 +118,11 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
   // The page's own save at unload, fired by hand: what is saved the moment the event returns is what that listener wrote, with no debounce to credit.
   const savedByEvent = async (fire) => {
     const key = draw.DRAWING_PREFIX + await draw.puzzleKey(p)
-    return draw.drawingOf(await p.evaluate(([dataKey, run]) => {
+    return (draw.drawingOf(await p.evaluate(([dataKey, run]) => {
       Framework.removeData(dataKey)
       new Function(run)() // eslint-disable-line no-new-func
       return Framework.getData(dataKey)
-    }, [key, fire])).map((item) => item.text)
+    }, [key, fire])) ?? []).map((item) => item.text)
   }
   const PAGEHIDE = 'window.dispatchEvent(new Event("pagehide"))'
   const HIDDEN = 'Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); delete document.visibilityState'
