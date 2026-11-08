@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.38.0
+// @version      0.38.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.38.0'
+  const VERSION = '0.38.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -3675,6 +3675,8 @@
     })
     undoRestart.run(() => {
       app.puzzle.on('act', under(undoRestart, followUndo))
+      // Another script may act after Restart in its own 'restarted' handler and then empty the stack again; the flag is read once all of them have run.
+      app.on('restarted', under(undoRestart, () => queueMicrotask(() => { undoWasEmpty = undoStackEmpty() })))
       for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, under(undoRestart, () => { undoWasEmpty = undoStackEmpty() }))
     })
   }

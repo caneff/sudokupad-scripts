@@ -147,6 +147,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
     const both = await openSession(browser, script)
     try {
       const q = both.p
+      await pressTo(q, 'Cell')
       await q.addScriptTag({ content: draw.script })
       await q.locator(draw.DRAW_BUTTON).waitFor({ state: 'visible' })
       await draw.pickDraw(q)
