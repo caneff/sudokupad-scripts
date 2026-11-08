@@ -19,7 +19,7 @@ const DATA_KEY = 'EdgeMarks_marks'
 const OPACITY_KEY = 'PenColor_opacity'
 const COLORS_KEY = 'PenColor_colors'
 const { CORNER_RADIUS, MARK_VALUES, MARKS_LAYER_ID } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
-const MARK_BOXES = ['x', 'directions', 'circle', 'cornerX', 'cornerCircle']
+const MARK_BOXES = ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot']
 const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
 const SIZE = 9
 const CELL_MARK = [5, 5]
@@ -209,6 +209,46 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clearMarks()
   })
 
+  it('a right click in a cell\'s middle removes its circle, cross or dot, and one undo brings it back', async () => {
+    const [cx, cy] = await cellCentre(p, ...CELL_MARK)
+    for (const [i, value] of ['5', '6', 'z'].entries()) {
+      for (let k = 0; k <= i; k++) await clickCellCentre(...CELL_MARK)
+      assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), [value]), [value], `${value} before the right click`)
+      const depth = await undoDepth()
+      await p.mouse.click(cx, cy, { button: 'right' })
+      assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), []), [], `${value} after a right click`)
+      assert.ok(await undoDepth() > depth, 'an undo step')
+      assert.equal(await penCount(), 0, 'the drawn mark is gone')
+      await p.click('#control-undo')
+      assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), [value]), [value], `${value} after an undo`)
+      await clearMarks()
+    }
+  })
+
+  it('a right-drag across cell middles removes their centre marks and leaves the edge marks it does not cross, as one undo step', async () => {
+    await clickCellCentre(4, 1)
+    await clickCellCentre(4, 2)
+    await clickCellCentre(4, 2)
+    await clickCellCentre(4, 2)
+    await clickEdge(2, 2, 'right')
+    assert.deepEqual(await settle(() => penValuesAt(p, 4, 2), ['z']), ['z'])
+    const depth = await undoDepth()
+    const [x1, y1] = await cellCentre(p, 4, 1)
+    const [x2, y2] = await cellCentre(p, 4, 2)
+    await p.mouse.move(x1, y1)
+    await p.mouse.down({ button: 'right' })
+    await p.mouse.move(x2, y2, { steps: 6 })
+    await p.mouse.up({ button: 'right' })
+    assert.deepEqual(await settle(() => penValuesAt(p, 4, 1), []), [])
+    assert.deepEqual(await settle(() => penValuesAt(p, 4, 2), []), [])
+    assert.deepEqual(await penValuesAt(p, 2, 2), ['3'], 'the edge X off the drag stays')
+    await p.click('#control-undo')
+    assert.deepEqual(await settle(() => penValuesAt(p, 4, 1), ['5']), ['5'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 4, 2), ['z']), ['z'])
+    assert.ok(await undoDepth() > depth, 'the erase was undone, not an earlier click')
+    await clearMarks()
+  })
+
   it('the other side of an interior edge reaches the same mark', async () => {
     await clickEdge(3, 4, 'left')
     assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['3']), ['3'])
@@ -364,7 +404,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const setThickness = (value) => setSlider(p, '#pen-tool-extras-thickness', value)
 
-  it('edge and corner marks are about 1.27x at 10 and 1.6x at 16 of their size at 5, and stay centred', async () => {
+  it('edge, corner and cell dot marks are about 1.27x at 10 and 1.6x at 16 of their size at 5, and stay centred', async () => {
     const boxOf = (selector) => read((sel) => {
       const r = document.querySelector(sel)?.getBoundingClientRect()
       return r ? { w: r.width, h: r.height, x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
@@ -372,12 +412,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // [kind of click, clicks to reach it, the mark it draws]: SudokuPad's own edge X, the circle, an arrow, the other arrow, a corner X and a corner circle.
     const marks = [
       ['edge', 1, '.cell-pen.pen-3'], ['edge', 2, '.cell-pen.pen-j'], ['edge', 3, '.cell-pen.pen-h'], ['edge', 4, '.cell-pen.pen-i'],
-      ['corner', 1, '.cell-pen.pen-u'], ['corner', 2, '.cell-pen.pen-x']
+      ['corner', 1, '.cell-pen.pen-u'], ['corner', 2, '.cell-pen.pen-x'], ['cell', 3, '.cell-pen.pen-z']
     ]
+    const clickOf = { edge: () => clickEdge(3, 3, 'right'), corner: () => clickCorner(3, 3), cell: () => clickCellCentre(3, 3) }
     for (const [kind, clicks, selector] of marks) {
       const at = {}
       await setThickness(5)
-      for (let i = 0; i < clicks; i++) await (kind === 'edge' ? clickEdge(3, 3, 'right') : clickCorner(3, 3))
+      for (let i = 0; i < clicks; i++) await clickOf[kind]()
       await settle(() => boxOf(selector).then(Boolean), true)
       // The slider's input event restyles at once, so the box is read right after it.
       for (const thickness of [5, 10, 16]) {
@@ -395,7 +436,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await setThickness(5)
   })
 
-  it('every edge mark, grid-corner mark and cell circle and cross is drawn above every line, whichever cell holds it, and stays above through undo, redo, a full redraw in cell order, a reload and a thickness change', async () => {
+  it('every edge mark, grid-corner mark and cell circle, cross and dot is drawn above every line, whichever cell holds it, and stays above through undo, redo, a full redraw in cell order, a reload and a thickness change', async () => {
     // Marks in an earlier cell than a line, in a later one, and on the line's own cell; the pen value goes through an act like a click's.
     const put = (row, col, values) => read(([r, c, vals]) => {
       const cell = Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c)
@@ -412,7 +453,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const nested = Boolean(layer) && layer.parentElement.id === 'cell-pen' && layer.parentElement.lastElementChild === layer && marks.every((m) => m.parentElement === layer)
       return { lines: lines.length, marks: marks.length, ok: nested && lines.every((l) => marks.every((m) => Boolean(l.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING))) }
     }, [MARK_VALUES, MARKS_LAYER_ID])
-    const STACKED = { lines: 3, marks: 11, ok: true }
+    const STACKED = { lines: 3, marks: 12, ok: true }
     try {
       await setThickness(16)
       await put(2, 2, ['3', '5', 'u'])
@@ -420,6 +461,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await put(2, 4, ['c', '6', 't', '4'])
       await put(4, 4, ['1'])
       await put(4, 3, ['b', 'k', '5'])
+      await put(6, 6, ['z'])
       await put(1, 1, ['x'])
       assert.deepEqual(await settle(stacking, STACKED), STACKED)
       const drawn = await penCount()
@@ -493,12 +535,93 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clearMarks()
   })
 
+  it('the cell dot is a filled disc in the pen\'s color, about a fifth of the cell across, centred on the cell\'s middle, and keeps its color through undo and redo', async () => {
+    await pickColor(4)
+    for (let i = 0; i < 3; i++) await clickCellCentre(...CELL_MARK)
+    const [cx, cy] = await cellCentre(p, ...CELL_MARK)
+    const dot = () => read(() => {
+      const e = document.querySelector('.cell-pen.pen-z')
+      if (!e) return null
+      const s = window.getComputedStyle(e)
+      const r = e.getBoundingClientRect()
+      const cell = Framework.app.puzzle.cells[0].elem.getBoundingClientRect()
+      return { cls: e.getAttribute('class'), fill: s.fill, stroke: s.stroke, across: (r.width + parseFloat(s.strokeWidth) * r.width / e.getBBox().width) / cell.width, centre: [r.x + r.width / 2, r.y + r.height / 2] }
+    })
+    const look = await settle(async () => (await dot())?.fill === PEN_4, true).then(dot)
+    assert.equal(look.cls, 'cell-pen pen-z pencolor-4')
+    assert.equal(look.fill, PEN_4, 'filled in the pen color')
+    assert.equal(look.stroke, PEN_4)
+    assert.equal(look.across > 0.17 && look.across < 0.23, true, `about a fifth of the cell across: ${look.across}`)
+    assert.equal(Math.abs(look.centre[0] - cx) < 1 && Math.abs(look.centre[1] - cy) < 1, true, `centre ${look.centre} is not the cell's middle ${[cx, cy]}`)
+    await p.click('#control-undo')
+    await p.click('#control-redo')
+    assert.equal(await settle(async () => (await dot())?.fill, PEN_4), PEN_4, 'after undo and redo')
+    await clearMarks()
+    await pickColor(1)
+  })
+
+  it('the cell boxes: an unticked cell mark is skipped, and the boxes survive a reload', async () => {
+    await openExtrasEditor(p)
+    await box('cellCross').uncheck()
+    await closeExtrasEditorWith(p, 'Save')
+    assert.deepEqual(await saved(), { ...ALL_TICKED, cellCross: false })
+    await reload()
+    for (const value of ['5', 'z', null]) {
+      await clickCellCentre(...CELL_MARK)
+      const want = value === null ? [] : [value]
+      assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), want), want, 'circle, dot, empty')
+    }
+    await openExtrasEditor(p)
+    assert.equal(await box('cellCross').isChecked(), false)
+    await box('cellCross').check()
+    await box('cellCircle').uncheck()
+    await box('cellDot').uncheck()
+    await closeExtrasEditorWith(p, 'Save')
+    await clickCellCentre(...CELL_MARK)
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['6']), ['6'], 'only the cross is ticked')
+    await clickCellCentre(...CELL_MARK)
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), []), [])
+    await openExtrasEditor(p)
+    for (const mark of MARK_BOXES) await box(mark).check()
+    await closeExtrasEditorWith(p, 'Save')
+    assert.equal(await saved(), null)
+  })
+
+  it('settings saved before the Cell row existed tick all three cell boxes', async () => {
+    await plantUnchecked(p, DATA_KEY, JSON.stringify({ x: true, directions: false, circle: true, cornerX: true, cornerCircle: true }))
+    await reload()
+    await openExtrasEditor(p)
+    for (const mark of ['cellCircle', 'cellCross', 'cellDot']) assert.equal(await box(mark).isChecked(), true, mark)
+    assert.equal(await box('directions').isChecked(), false)
+    await box('directions').check()
+    await closeExtrasEditorWith(p, 'Save')
+    assert.equal(await saved(), null)
+  })
+
+  it('a cell dot survives a replay and a reload of the page', async () => {
+    await restartPuzzle(p)
+    for (let i = 0; i < 3; i++) await clickCellCentre(...CELL_MARK)
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['z']), ['z'])
+    const replay = await read(() => Framework.app.getReplay())
+    const actions = await read((r) => Replay.decode(r).actions, replay)
+    assert.equal(actions.includes('pe:z/0'), true, JSON.stringify(actions))
+    await clearMarks()
+    await read((r) => Framework.app.loadReplay(r), replay)
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['z']), ['z'], 'after the replay')
+    await reload()
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['z']), ['z'], 'after a reload')
+    const drawn = await read(() => [...document.querySelectorAll('.cell-pen.pen-z')].map((e) => e.getAttribute('d')))
+    assert.equal(drawn.length, 1)
+    assert.notEqual(drawn[0], null, 'drawn with path data')
+    await clearMarks()
+  })
+
   it('the dialog shows one table of marks: plain boxes in its cells, the pictures in its headings, the mark\'s name as each box\'s name and hover title', async () => {
     await openExtrasEditor(p)
     const labels = editor().locator('label:has(> input[data-box^="marks."])')
-    assert.equal(await labels.count(), 5)
-    assert.equal(await editor().locator('.pen-tool-extras-mark-head svg').count(), 3, 'a picture over each column')
-    const names = { x: 'Edge X Mark', circle: 'Edge Circle', directions: 'Edge Directions', cornerX: 'Corner X Mark', cornerCircle: 'Corner Circle' }
+    assert.equal(await labels.count(), 8)
+    assert.equal(await editor().locator('.pen-tool-extras-mark-head svg').count(), 4, 'a picture over each column')
+    const names = { x: 'Edge X Mark', circle: 'Edge Circle', directions: 'Edge Directions', cornerX: 'Corner X Mark', cornerCircle: 'Corner Circle', cellCircle: 'Cell Circle', cellCross: 'Cell Cross', cellDot: 'Cell Dot' }
     for (const mark of MARK_BOXES) {
       assert.equal(await editor().locator(`label:has(> input[data-box="marks.${mark}"]) > svg`).count(), 0, mark)
       assert.equal(await box(mark).getAttribute('title'), names[mark], mark)
@@ -508,13 +631,23 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('cell marks and drawn lines still work', async () => {
+  it('a click in a cell\'s middle cycles circle, cross, dot, empty, one undo per click, and drawn lines still work', async () => {
+    for (const value of ['5', '6', 'z', null]) {
+      await clickCellCentre(...CELL_MARK)
+      const want = value === null ? [] : [value]
+      assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), want), want)
+    }
+    const depth = await undoDepth()
     await clickCellCentre(...CELL_MARK)
-    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['5']), ['5'])
     await clickCellCentre(...CELL_MARK)
-    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['6']), ['6'])
     await clickCellCentre(...CELL_MARK)
-    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), []), [])
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['z']), ['z'])
+    await p.click('#control-undo')
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['6']), ['6'], 'one undo goes back one step')
+    await p.click('#control-redo')
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['z']), ['z'], 'redo')
+    assert.ok(await undoDepth() > depth)
+    await clearMarks()
     // a drag draws a line, not an edge mark
     const before = await penCount()
     const [x, y] = await cellCentre(p, 6, 1)
@@ -539,7 +672,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clearMarks()
   })
 
-  it('The dialog has five mark boxes (three for edges, two for corners), all ticked on a fresh install', async () => {
+  it('The dialog has eight mark boxes (three for edges, two for corners, three for cells), all ticked on a fresh install', async () => {
     assert.equal(await saved(), null)
     await openExtrasEditor(p)
     for (const mark of MARK_BOXES) assert.equal(await box(mark).isChecked(), true, mark)
@@ -620,7 +753,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clearMarks()
   })
 
-  it('with nothing ticked an edge click does nothing, and cell marks and existing marks are unaffected', async () => {
+  it('with nothing ticked an edge click and a cell click do nothing, and existing marks are unaffected', async () => {
     await openExtrasEditor(p)
     await box('directions').check()
     await closeExtrasEditorWith(p, 'Save')
@@ -637,7 +770,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await penValuesAt(p, 3, 3), ['3'])
     assert.equal(await read(() => Framework.app.puzzle.undoStack.length), undoable)
     await clickCellCentre(...CELL_MARK)
-    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['5']), ['5'])
+    // "nothing happened in 500 ms" check
+    await sleep(500)
+    assert.deepEqual(await penValuesAt(p, ...CELL_MARK), [])
+    assert.equal(await read(() => Framework.app.puzzle.undoStack.length), undoable)
     await openExtrasEditor(p)
     for (const mark of MARK_BOXES) await box(mark).check()
     await closeExtrasEditorWith(p, 'Save')
@@ -647,7 +783,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('corrupt saved settings fall back to every mark ticked with no thrown error', async () => {
     const errorsBefore = errors.length
     for (const bad of ['{not json', '"red"', '[1,2]', '{"x":"no"}']) {
-      // All five ticked is the default, which saves no key; the save tests above read DATA_KEY back, so it is the live key.
+      // Every box ticked is the default, which saves no key; the save tests above read DATA_KEY back, so it is the live key.
       await plantUnchecked(p, DATA_KEY, bad)
       await reload()
       await clickEdge(3, 3, 'right')
@@ -675,11 +811,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openExtrasEditor(p)
     await box('x').uncheck()
     await closeExtrasEditorWith(p, 'Save')
-    assert.deepEqual(await saved(), { x: false, directions: true, circle: true, cornerX: true, cornerCircle: false })
+    assert.deepEqual(await saved(), { ...ALL_TICKED, x: false, cornerCircle: false })
     await openExtrasEditor(p)
     for (const mark of MARK_BOXES) await box(mark).check()
     await closeExtrasEditorWith(p, 'Save')
-    assert.equal(await saved(), null, 'all five ticked is the default, so Save removes the key')
+    assert.equal(await saved(), null, 'every box ticked is the default, so Save removes the key')
   })
 
   it('Restore defaults leaves the mark boxes as they are: Save after it keeps the saved marks, and they survive a reload', async () => {

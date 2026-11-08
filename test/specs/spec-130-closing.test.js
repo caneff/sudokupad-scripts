@@ -62,10 +62,10 @@ test('Pen Tool Extras holds spec 130 together', () => {
   // Saved mark settings under the old names load under the new ones, keeping their values.
   const marks = extras.normalizeMarkSettings({ dot: false, cornerDot: false })
   assert.deepEqual([marks.circle, marks.cornerCircle], [false, false])
-  assert.deepEqual(Object.keys(marks).sort(), ['circle', 'cornerCircle', 'cornerX', 'directions', 'x'])
+  assert.deepEqual(Object.keys(marks).sort(), ['cellCircle', 'cellCross', 'cellDot', 'circle', 'cornerCircle', 'cornerX', 'directions', 'x'])
 
   // The pen values saved inside puzzles did not change with the names.
-  assert.equal(extras.MARK_VALUES.join(''), '34bc56hijklmnopqrstwuxvy')
+  assert.equal(extras.MARK_VALUES.join('').slice(0, 24), '34bc56hijklmnopqrstwuxvy')
 
   // The glossary's words: the renames this spec lists are gone. Each old name is spelled in pieces, so this file does not
   // hold what it looks for. The circle's old names stay in the reader, which still takes them.

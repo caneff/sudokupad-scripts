@@ -11,6 +11,7 @@ const {
   copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
+  planCellClick, clickedMarks, DOT_FILL_CSS,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
@@ -204,16 +205,16 @@ test('edge marks and corner marks keep today\'s size up to the default thickness
   assert.equal(markGrowthScale(10), 1.2727)
 })
 
-test('MARK_VALUES holds exactly the values of SudokuPad\'s edge X and cell circle and cross and of every edge mark and grid-corner mark this script adds, and no line value', () => {
-  const expected = ['3', '4', 'b', 'c', '5', '6', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
+test('MARK_VALUES holds exactly the values of SudokuPad\'s edge X and cell circle and cross and of every edge, grid-corner and cell mark this script adds, and no line value', () => {
+  const expected = ['3', '4', 'b', 'c', '5', '6', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
   assert.deepEqual([...MARK_VALUES].sort(), [...expected].sort())
   assert.deepEqual(MARK_VALUES.filter((v) => LINE_VALUES.includes(v)), [])
 })
 
-test('the scale lands on every edge and corner mark and on no line, and a mark stays centred on its edge or corner while it grows', () => {
+test('the scale lands on every edge and corner mark and the cell dot and on no line, and a mark stays centred on its edge, corner or cell while it grows', () => {
   const css = buildThicknessCss(16)
   const scales = scalesOf(css)
-  const marks = ['3', '4', 'b', 'c', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
+  const marks = ['3', '4', 'b', 'c', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
   for (const v of marks) assert.equal(scales[v], 1.6, v)
   for (const v of FULL_WIDTH_VALUES) assert.equal(scales[v], 1, v)
   const rule = css.split('\n').find((r) => r.includes('.pen-3,'))
@@ -270,8 +271,8 @@ test('the panel markup has Thickness above Opacity, each with the range and valu
   assert.doesNotMatch(html, /<button/)
 })
 
-const ALL = { x: true, directions: true, circle: true, cornerX: true, cornerCircle: true }
-const NONE = { x: false, directions: false, circle: false, cornerX: false, cornerCircle: false }
+const ALL = { x: true, directions: true, circle: true, cornerX: true, cornerCircle: true, cellCircle: true, cellCross: true, cellDot: true }
+const NONE = { x: false, directions: false, circle: false, cornerX: false, cornerCircle: false, cellCircle: false, cellCross: false, cellDot: false }
 
 test('fresh install has every mark ticked', () => {
   assert.deepEqual(SETTINGS.marks.fallback, ALL)
@@ -286,7 +287,7 @@ test('corrupt saved settings fall back to every mark ticked', () => {
 })
 
 test('a saved boolean is kept and a non-boolean entry takes its default', () => {
-  assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', circle: false, cornerX: 'no', cornerCircle: false }), { x: false, directions: true, circle: false, cornerX: true, cornerCircle: false })
+  assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', circle: false, cornerX: 'no', cornerCircle: false, cellCircle: 'no', cellCross: false, cellDot: true }), { ...ALL, x: false, circle: false, cornerCircle: false, cellCross: false })
 })
 
 test('settings saved under the old names dot and cornerDot load as circle and cornerCircle with the same values', () => {
@@ -396,7 +397,7 @@ test('addedMark draws the arrow each edge character names, per edge, and nothing
   assert.deepEqual(shapes(['k', 'l', 'm']), ['^', 'v', 'o'])
   assert.deepEqual(shapes(['n', 'o', 'p']), ['>', '<', 'o'])
   assert.deepEqual(shapes(['q', 'r', 's']), ['^', 'v', 'o'])
-  for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 'z']) {
+  for (const other of ['3', '4', 'b', 'c', '0', '5', '6', 'a', 'g']) {
     assert.equal(addedMark(other, 3, 4, 9), null, other)
   }
 })
@@ -444,6 +445,67 @@ test('a direction arrow is an open head pointing the way it names', () => {
 
 test('settings saved before corner marks existed read back with both corner marks ticked', () => {
   assert.deepEqual(normalizeMarkSettings({ x: true, directions: false, circle: true }), { ...ALL, directions: false })
+})
+
+test('settings saved before the Cell row existed read back with all three cell marks ticked', () => {
+  assert.deepEqual(normalizeMarkSettings({ x: true, directions: true, circle: false, cornerX: false, cornerCircle: true }), { ...ALL, circle: false, cornerX: false })
+})
+
+// SudokuPad's own circle (5) and cross (6) keep their values; the dot is z, the value docs/research/sudokupad-pen-edge-marks.md left unused.
+test('the cell cycle is circle, cross, dot, empty, in the pen values 5, 6 and z', () => {
+  assert.deepEqual(planCellClick([], ALL), { remove: [], add: '5' })
+  assert.deepEqual(planCellClick(['5'], ALL), { remove: ['5'], add: '6' })
+  assert.deepEqual(planCellClick(['6'], ALL), { remove: ['6'], add: 'z' })
+  assert.deepEqual(planCellClick(['z'], ALL), { remove: ['z'], add: null })
+})
+
+test('an unticked cell mark is skipped, and with all three unticked a cell click does nothing', () => {
+  assert.deepEqual(planCellClick([], { ...ALL, cellCircle: false }), { remove: [], add: '6' })
+  assert.deepEqual(planCellClick(['5'], { ...ALL, cellCross: false }), { remove: ['5'], add: 'z' })
+  assert.deepEqual(planCellClick(['6'], { ...ALL, cellDot: false }), { remove: ['6'], add: null })
+  assert.deepEqual(planCellClick(['z'], { ...NONE, cellCross: true }), { remove: ['z'], add: null })
+  assert.equal(planCellClick([], { ...ALL, cellCircle: false, cellCross: false, cellDot: false }), null)
+  assert.equal(planCellClick(['z'], { ...ALL, cellCircle: false, cellCross: false, cellDot: false }), null)
+})
+
+test('a cell click sees only the cell\'s centre marks: an edge or corner mark on the cell stays', () => {
+  assert.deepEqual(planCellClick(['3', 'h', 'u', 'z'], ALL), { remove: ['z'], add: null })
+})
+
+test('the edge and corner boxes do not drive the cell cycle, nor the cell boxes the edge cycle', () => {
+  assert.deepEqual(planCellClick([], { ...NONE, cellDot: true }), { remove: [], add: 'z' })
+  assert.equal(planClick('3', [], { ...NONE, cellCircle: true, cellCross: true, cellDot: true }), null)
+})
+
+test('addedMark draws the dot filled at the cell\'s middle, and nowhere else', () => {
+  assert.deepEqual(addedMark('z', 3, 4, 9), { point: [3.5, 4.5], shape: '.' })
+})
+
+test('the dot is a closed disc about a fifth of a 64 unit cell across at the default thickness', () => {
+  const m = /^ m (-?[\d.]+),0 a ([\d.]+),([\d.]+) 0 1,0 (-?[\d.]+),0 a ([\d.]+),([\d.]+) 0 1,0 (-?[\d.]+),0$/.exec(shapePath('.', 8))
+  assert.notEqual(m, null)
+  const rx = Number(m[2])
+  // Its outer size is the path plus the default 2.5 stroke.
+  const across = 2 * rx + THICKNESS.fallback * 0.5
+  assert.equal(across > 64 / 5 - 1 && across < 64 / 5 + 1, true, String(across))
+})
+
+test('DOT_FILL_CSS fills the dot in its pen\'s color on every page, forward and reverse characters, and fills no other value', () => {
+  const rules = DOT_FILL_CSS.split('\n')
+  const chars = PEN_PAGES.flatMap((page) => page.chars.map((char, i) => [char, i]).concat((page.reverse || []).map((char, i) => [char, i])))
+  assert.equal(rules.length, chars.length)
+  for (const [char, i] of chars) assert.equal(rules.includes(`:root:root .cell-pen.pen-z.pencolor-${char} { fill: var(--puzzle-pencolor-${i + 1}); }`), true, char)
+})
+
+test('clickedMarks reads SudokuPad\'s queued click as the cell and the values of the mark spot it hit', () => {
+  const cell = { row: 2, col: 3 }
+  assert.deepEqual(clickedMarks([{ type: 'select', arg: [cell] }, { type: 'pen', arg: '3' }]), { cell, values: ['3', 'h', 'i', 'j'] })
+  // SudokuPad's cell click queues the toggles from circle to cross, cross to nothing, or nothing to circle.
+  for (const toggles of [['5', '6'], ['6'], ['5']]) {
+    assert.deepEqual(clickedMarks([{ type: 'select', arg: [cell] }, ...toggles.map((arg) => ({ type: 'pen', arg }))]), { cell, values: ['5', '6', 'z'] }, toggles.join())
+  }
+  assert.equal(clickedMarks(null), null)
+  assert.equal(clickedMarks([{ type: 'select', arg: [cell] }, { type: 'pen', arg: '1' }]), null)
 })
 
 test('cornerAt finds the grid corner within the radius, inner and outer, and nothing farther', () => {
@@ -981,7 +1043,7 @@ test('every checkbox the dialog draws names its setting path, and the path reads
   const state = editorState({ show: { thickness: false, opacity: true }, lineStyles: { dashed: true, arrows: false }, outline: false, marks: { ...ALL, circle: false } })
   const html = renderEditor(state)
   const boxes = [...html.matchAll(/<input type="checkbox"[^>]*>/g)].map((m) => m[0])
-  assert.equal(boxes.length, 11)
+  assert.equal(boxes.length, 14)
   for (const box of boxes) {
     const path = /data-box="([^"]+)"/.exec(box)
     assert.ok(path, box)
@@ -1020,27 +1082,33 @@ test('an unticked line style is drawn unticked and the stylesheet hides its slid
   assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="lineStyles\.arrows"\]:checked\)\) \[data-row="arrowSpacing"\] \{ display: none; \}/)
 })
 
-test('Marks to cycle is one 2 by 3 table: headings X, circle, an up arrow head and a down arrow head; rows Edge (three boxes) and Corner (X and circle)', () => {
+test('Marks to cycle is one 3 by 4 table: headings X, circle, an up arrow head and a down arrow head, dot; rows Edge (X, circle, directions), Corner (X and circle) and Cell (cross, circle, dot)', () => {
   const html = renderEditor(editorState())
   assert.match(html, />Marks to cycle</)
   assert.doesNotMatch(html, /Marks a click cycles through|X Mark<|>Circle<|>Directions</)
-  assert.match(html, /<div class="pen-tool-extras-mark-head">[\s\S]*<div class="pen-tool-extras-mark-head">[\s\S]*<div class="pen-tool-extras-mark-head">[\s\S]*>Edge<[\s\S]*data-box="marks.x"[\s\S]*data-box="marks.circle"[\s\S]*data-box="marks.directions"[\s\S]*>Corner<[\s\S]*data-box="marks.cornerX"[\s\S]*data-box="marks.cornerCircle"/)
+  assert.match(html, /<div class="pen-tool-extras-mark-head">[\s\S]*<div class="pen-tool-extras-mark-head">[\s\S]*<div class="pen-tool-extras-mark-head">[\s\S]*<div class="pen-tool-extras-mark-head">[\s\S]*>Edge<[\s\S]*data-box="marks.x"[\s\S]*data-box="marks.circle"[\s\S]*data-box="marks.directions"[\s\S]*>Corner<[\s\S]*data-box="marks.cornerX"[\s\S]*data-box="marks.cornerCircle"[\s\S]*>Cell<[\s\S]*data-box="marks.cellCross"[\s\S]*data-box="marks.cellCircle"[\s\S]*data-box="marks.cellDot"/)
   const boxes = [...html.matchAll(/<input type="checkbox" id="pen-tool-extras-box-marks-(\w+)" data-box="marks\.\w+" aria-label="([^"]+)" title="([^"]+)"( checked)?>/g)]
   assert.deepEqual(boxes.map((m) => [m[1], m[2], m[3]]), [
     ['x', 'Edge X Mark', 'Edge X Mark'], ['circle', 'Edge Circle', 'Edge Circle'], ['directions', 'Edge Directions', 'Edge Directions'],
-    ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerCircle', 'Corner Circle', 'Corner Circle']
+    ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerCircle', 'Corner Circle', 'Corner Circle'],
+    ['cellCross', 'Cell Cross', 'Cell Cross'], ['cellCircle', 'Cell Circle', 'Cell Circle'], ['cellDot', 'Cell Dot', 'Cell Dot']
   ])
   assert.equal(boxes.every((m) => m[4] === ' checked'), true)
-  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table \{[^}]*grid-template-columns: max-content repeat\(3, 28px\);/)
-  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table > :not\(:nth-child\(4n\+1\)\) \{ border-left: 1px solid #eee;/)
-  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table > :nth-child\(n\+5\) \{ border-top: 1px solid #eee;/)
+  // Each row is five children: the label and four cells, the Cell row's third (directions) empty.
+  const cellRow = html.slice(html.indexOf('>Cell<'))
+  assert.match(cellRow, /^>Cell<\/div><label[^>]*>.*?<\/label><label[^>]*>.*?<\/label><div><\/div><label[^>]*>.*?<\/label><\/div>/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table \{[^}]*grid-template-columns: max-content repeat\(4, 28px\);/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table > :nth-child\(5n\+1\) \{ justify-content: flex-start;/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table > :not\(:nth-child\(5n\+1\)\) \{ border-left: 1px solid #eee;/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table > :nth-child\(n\+6\) \{ border-top: 1px solid #eee;/)
 })
 
 test('the marks table shows pictures only in its headings, in #444 at stroke 2.6: Directions is an up arrow head and a down arrow head, just ^ and v, and the cells hold plain boxes', () => {
   const html = renderEditor(editorState())
   assert.doesNotMatch(html, /<label for="pen-tool-extras-box-marks-/)
   const heads = [...html.matchAll(/<div class="pen-tool-extras-mark-head">(.*?)<\/div>/g)].map((m) => m[1])
-  assert.equal(heads.length, 3)
+  assert.equal(heads.length, 4)
+  assert.match(heads[3], /<circle [^>]*fill="currentColor"/, 'the dot heading is filled')
   assert.equal(heads.every((head) => (head.match(/<svg/g) || []).length === 1 && !/>[A-Za-z]/.test(head)), true, 'one picture, no text')
   assert.match(heads[2], /<path d="M\d+ \d+ L\d+ \d+ L\d+ \d+ M\d+ \d+ L\d+ \d+ L\d+ \d+"\/>/, 'two arrow heads')
   assert.match(DIALOG_CSS, /\.pen-tool-extras-mark-head \{[^}]*color: #444;/)
@@ -1915,7 +1983,7 @@ test('the marks a save writes read back the same, and so do marks saved under th
   assert.deepEqual(readSettings(oldSave).marks, unticked)
 })
 
-test('saving one mark unticked writes the key, and saving all five ticked removes it so the next read is all ticked', () => {
+test('saving one mark unticked writes the key, and saving every box ticked removes it so the next read is all ticked', () => {
   const store = memoryStore()
   const current = settingDefaults()
   assert.deepEqual(saveChangedSettings(store, { ...current, marks: { ...ALL, directions: false } }, current), ['marks'])
