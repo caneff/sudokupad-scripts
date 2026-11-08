@@ -109,6 +109,12 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
   }))
 
   it('53 Window resized to the minimum desktop size and back, with each script\'s panel open', () => attack(browser, {}, async (p) => {
+    // Rules four times the harness's, long enough that a smaller window needs a refit to keep them from scrolling.
+    await p.evaluate(() => {
+      const rules = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits. '
+      Framework.app.showMetaInfoUI({ title: 'Rules', author: 'Tester', rules: rules.repeat(4) })
+      Framework.app.resize()
+    })
     const rulesScroll = () => p.evaluate(() => { const r = document.querySelector('.puzzle-rules'); return r.scrollHeight > r.clientHeight })
     const boxes = (selectors) => p.evaluate((list) => list.map((sel) => {
       const r = document.querySelector(sel).getBoundingClientRect()
@@ -122,13 +128,15 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       await p.click(button)
       for (const sel of selectors) await p.locator(sel).waitFor({ state: 'visible' })
       const roomy = await boxes([...selectors, '#control-colorbydigit'])
-      assert.equal(await rulesScroll(), false, `${name}: the rules fit at 1200x900`)
+      assert.equal(await settle(rulesScroll, false), false, `${name}: the rules fit at 1200x900`)
       await p.setViewportSize({ width: 1024, height: 600 })
       for (const sel of selectors) await p.locator(sel).waitFor({ state: 'visible' })
       assert.equal(await settle(rulesScroll, false), false, `${name}: the rules fit at 1024x600`)
       assert.equal(await p.locator('#control-colorbydigit').isVisible(), true, `${name}: Color by Digit's button shows at 1024x600`)
       await p.setViewportSize({ width: 1200, height: 900 })
-      assert.deepEqual(await settle(() => boxes([...selectors, '#control-colorbydigit']), roomy), roomy, `${name}: the panel is the size it was`)
+      // A box may differ by a pixel after the rules refit: layout rounds a fractional height.
+      const near = async () => (await boxes([...selectors, '#control-colorbydigit'])).every((box, i) => box.every((side, j) => Math.abs(side - roomy[i][j]) <= 1))
+      assert.equal(await settle(near, true), true, `${name}: the panel is the size it was`)
       assert.equal(await settle(rulesScroll, false), false, `${name}: the rules fit again`)
     }
   }))
