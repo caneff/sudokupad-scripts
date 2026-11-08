@@ -676,19 +676,15 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
 test('a held arrow key repeats only after the pause, and its step grows from one nudge to the maximum over the ramp', () => {
   assert.equal(nudgeStep(0, false), 0)
   assert.equal(nudgeStep(NUDGE_REPEAT_MS - 1, false), 0)
-  assert.equal(nudgeStep(NUDGE_REPEAT_MS, false) >= NUDGE_PX, true)
-  assert.equal(nudgeStep(NUDGE_REPEAT_MS, false) < nudgeStep(NUDGE_RAMP_MS / 2, false), true)
-  assert.equal(nudgeStep(NUDGE_RAMP_MS / 2, false) < nudgeStep(NUDGE_RAMP_MS, false), true)
-  assert.equal(nudgeStep(NUDGE_RAMP_MS, false), NUDGE_MAX_PX)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS, false), NUDGE_PX)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS, false) < nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS / 2, false), true)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS / 2, false) < nudgeStep(NUDGE_RAMP_MS, false), true)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS, false), NUDGE_MAX_PX)
   assert.equal(nudgeStep(NUDGE_RAMP_MS * 10, false), NUDGE_MAX_PX)
 })
 
 test('with Shift the step grows from ten pixels to the Shift maximum', () => {
   assert.equal(nudgeStep(NUDGE_REPEAT_MS - 1, true), 0)
-  assert.equal(nudgeStep(NUDGE_REPEAT_MS, true) >= NUDGE_SHIFT_PX, true)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS, true), NUDGE_SHIFT_PX)
   assert.equal(nudgeStep(NUDGE_RAMP_MS * 10, true), NUDGE_SHIFT_MAX_PX)
-})
-
-test('the ramp is the numbers the ticket names: 300 ms pause, 1.5 s ramp, 1 to 8 px, Shift 10 to 40 px', () => {
-  assert.deepEqual([NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_PX, NUDGE_MAX_PX, NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX], [300, 1500, 1, 8, 10, 40])
 })

@@ -131,6 +131,8 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     return () => p.evaluate(() => window.drawSaves)
   }
   const HELD_FAR_PX = 15
+  // How long a check waits to see that nothing more happens.
+  const QUIET_MS = 400
   // The note was nudged away from where it was typed, so the click goes to where it is now.
   const selectNote = async (text) => p.mouse.click(...draw.middleOf(await noteBox(text)))
 
@@ -148,8 +150,9 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     }
     assert.equal(await settle(saves, 1), 1, 'one save after the release')
     const x1 = (await noteBox('N')).x
-    await p.evaluate(() => new Promise((resolve) => window.setTimeout(resolve, 400)))
-    assert.equal((await noteBox('N')).x, x1, 'the note stays put after the release (nothing moved in 400 ms)')
+    await p.evaluate((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)), QUIET_MS)
+    assert.equal((await noteBox('N')).x, x1, `the note stays put after the release (nothing moved in ${QUIET_MS} ms)`)
+    assert.equal(await saves(), 1, 'no second save came after the release')
   })
 
   it('a blur while the key is held stops the movement and saves it', async () => {
@@ -162,10 +165,25 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
       await p.evaluate(() => window.dispatchEvent(new Event('blur')))
       assert.equal(await settle(saves, 1), 1, 'the blur saved the move')
       const stopped = (await noteBox('N')).x
-      await p.evaluate(() => new Promise((resolve) => window.setTimeout(resolve, 400)))
-      assert.equal((await noteBox('N')).x, stopped, 'the note stopped moving at the blur (nothing moved in 400 ms)')
+      await p.evaluate((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)), QUIET_MS)
+      assert.equal((await noteBox('N')).x, stopped, `the note stopped moving at the blur (nothing moved in ${QUIET_MS} ms)`)
     } finally {
       await p.keyboard.up('ArrowLeft')
+    }
+  })
+
+  it('Escape while the key is held ends the selection and stops the movement', async () => {
+    await selectNote('N')
+    const x0 = (await noteBox('N')).x
+    await p.keyboard.down('ArrowRight')
+    try {
+      assert.equal(await settle(async () => (await noteBox('N')).x - x0 > HELD_FAR_PX, true), true, 'the held key moved the note')
+      await p.keyboard.press('Escape')
+      const stopped = (await noteBox('N')).x
+      await p.evaluate((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)), QUIET_MS)
+      assert.equal((await noteBox('N')).x, stopped, `the note stopped moving when the selection ended (nothing moved in ${QUIET_MS} ms)`)
+    } finally {
+      await p.keyboard.up('ArrowRight')
     }
   })
 

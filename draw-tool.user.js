@@ -1067,7 +1067,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
-  // A held arrow key nudges once on press, repeats after NUDGE_REPEAT_MS, and its step grows over NUDGE_RAMP_MS from the single nudge to the maximum.
   // The script times the repeat itself: SudokuPad's App.handleKeydown drops every keydown with `event.repeat` before any tool sees it.
   const NUDGE_PX = 1
   const NUDGE_SHIFT_PX = 10
@@ -1076,11 +1075,10 @@
   const NUDGE_REPEAT_MS = 300
   const NUDGE_RAMP_MS = 1500
   const NUDGE_TICK_MS = 50
-  // The pixels one repeat tick moves after the key has been held heldMs; 0 until the pause is over.
   function nudgeStep (heldMs, shift) {
     if (heldMs < NUDGE_REPEAT_MS) return 0
     const [from, to] = shift ? [NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX] : [NUDGE_PX, NUDGE_MAX_PX]
-    return Math.round(from + (to - from) * Math.min(1, heldMs / NUDGE_RAMP_MS))
+    return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
@@ -2059,7 +2057,6 @@
 
   function select (indices) {
     selected = [...new Set(indices)].sort((a, b) => a - b)
-    if (selected.length === 0) stopHold()
     redraw()
   }
 
@@ -2338,7 +2335,6 @@
     save()
   }
 
-  // The arrows held now, when the first of them went down, whether Shift is down, and the repeat timer.
   const heldArrows = new Set()
   let holdStart = 0
   let holdShift = false
@@ -2360,7 +2356,6 @@
   }
 
   function pressArrow (key, shift) {
-    holdShift = shift
     nudgeSelected(ARROWS[key], shift ? NUDGE_SHIFT_PX : NUDGE_PX)
     if (heldArrows.size === 0) {
       holdStart = Date.now()
