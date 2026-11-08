@@ -39,6 +39,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
+  // Records each Tab keydown's repeat flag and whether it was prevented once every listener has run, in a fresh list.
+  const watchTab = () => p.evaluate(() => {
+    window.__held = []
+    if (window.__watchingTab) return
+    window.__watchingTab = true
+    window.addEventListener('keydown', (e) => { if (e.key === 'Tab') window.__held.push([e.repeat, e.defaultPrevented]) })
+  })
   const focused = () => p.evaluate(() => { const a = document.activeElement; return `${a.tagName}#${a.id}.${a.className}|${a.textContent.slice(0, 30)}` })
 
   it('Tab in play leaves the number pad on digits, saves nothing, and leaves focus where it is', async () => {
@@ -49,6 +56,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await focused(), focus, 'focus did not move')
     assert.equal(await pad(), DIGITS, 'after')
     assert.equal(await saved(), null, 'saved after')
+  })
+
+  // SudokuPad's App.handleKeydown returns early on event.repeat, so its own Tab entry never sees a held Tab.
+  it('a held Tab (repeat keydowns) is prevented too, leaves the pad on digits, and leaves focus where it is', async () => {
+    const focus = await focused()
+    await watchTab()
+    await p.keyboard.down('Tab')
+    await p.keyboard.down('Tab')
+    await p.keyboard.down('Tab')
+    await p.keyboard.up('Tab')
+    assert.deepEqual(await p.evaluate(() => window.__held), [[false, true], [true, true], [true, true]], 'repeat flag, prevented')
+    assert.equal(await focused(), focus, 'focus did not move')
+    assert.equal(await pad(), DIGITS, 'pad')
+    assert.equal(await saved(), null, 'saved')
   })
 
   it('"/" and the letter button still toggle letter mode and save it', async () => {
@@ -82,6 +103,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.notEqual(await focused(), before, 'focus moved')
     assert.equal(await pad(), DIGITS, 'pad')
     assert.equal(await saved(), false, 'saved')
+  })
+
+  it('a held Tab in a dialog is not prevented either', async () => {
+    await watchTab()
+    await p.keyboard.down('Tab')
+    await p.keyboard.down('Tab')
+    await p.keyboard.up('Tab')
+    assert.deepEqual(await p.evaluate(() => window.__held), [[false, false], [true, false]])
   })
 
   it('the page raised no error', () => {
