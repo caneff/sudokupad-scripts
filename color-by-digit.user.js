@@ -1223,6 +1223,19 @@
       `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
   }
 
+  // The rows slide aside while one is dragged and the menu fades out after a pick, only for someone who has not asked the system for less motion.
+  // A faded menu takes no clicks. Opening has no motion at all.
+  const MENU_FADE_MS = 100
+  const ROW_SLIDE_MS = 80
+  const MOTION_CSS = [
+    `${MENU}.cbd-closing { pointer-events: none; }`,
+    '@media (prefers-reduced-motion: no-preference) {',
+    // Material's standard-accelerate easing, the one for something leaving.
+    `  ${MENU}.cbd-closing { opacity: 0; transition: opacity ${MENU_FADE_MS}ms cubic-bezier(0.3, 0, 1, 1); }`,
+    `  #${EDITOR_ID} .cbd-profile { transition: transform ${ROW_SLIDE_MS}ms ease-out; }`,
+    '}'
+  ].join('\n')
+
   // One stylesheet, every rule scoped to the editor, the dialog itself (its width), or the dialog's options row.
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
@@ -1266,7 +1279,7 @@
     [`${EDITOR} [data-role="profile-name"]`, `box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px ${NAME_PAD}px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text`],
     [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
     [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px']
-  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR)
+  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR) + '\n' + MOTION_CSS
 
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
@@ -2088,12 +2101,28 @@
   }
 
   let menu = null
+  let menuTimer = null
 
   const addStyle = (id = STYLE_ID, css = STYLE_CSS) => addStyleOnce(id, css)
 
   const closeMenu = () => {
+    clearTimeout(menuTimer)
+    menuTimer = null
     if (menu) menu.remove()
     menu = null
+  }
+
+  // The picked row blinks in the active fill for one step, then the menu fades and goes; with less motion asked for it goes at once.
+  const MENU_BLINK_MS = 60
+  function fadeMenu (pickedRow) {
+    const fading = menu
+    if (!fading || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return closeMenu()
+    clearTimeout(menuTimer)
+    pickedRow.style.background = ACTIVE_FILL
+    menuTimer = setTimeout(() => {
+      fading.classList.add('cbd-closing')
+      menuTimer = setTimeout(closeMenu, MENU_FADE_MS)
+    }, MENU_BLINK_MS)
   }
 
   function openMenu () {
@@ -2116,9 +2145,9 @@
   }
 
   // A digit pick changes only the digit stylesheet: it touches no cell and is never an undo step.
-  function switchProfile (app, index, target) {
+  function switchProfile (app, index, target, pickedRow) {
     const state = loadState()
-    closeMenu()
+    fadeMenu(pickedRow)
     const digits = target === 'digits'
     if (index === (digits ? state.digitActive : state.active)) return
     const next = digits ? setDigitActive(state, index) : setActive(state, index)
@@ -2161,7 +2190,7 @@
         closeMenu()
         openEditor()
       } else {
-        switchProfile(app, Number(row.dataset.index), row.dataset.target)
+        switchProfile(app, Number(row.dataset.index), row.dataset.target, row.closest('[data-role="menu-row"]'))
       }
     }, true)
     listen('touchstart', (event) => {
@@ -2306,12 +2335,15 @@
       const rows = [...box.querySelectorAll('[data-role="profile-row"]')]
       const mids = rows.map((row) => { const r = row.getBoundingClientRect(); return r.top + r.height / 2 })
       let to = from
-      rows[from].style.opacity = '0.5'
+      // The rows between the dragged one and its drop place move one row aside; the dragged row follows the pointer, with no slide of its own.
+      const step = rows.length > 1 ? mids[1] - mids[0] : 0
+      const asideOf = (i) => (from < to && i > from && i <= to ? -step : from > to && i < from && i >= to ? step : 0)
+      Object.assign(rows[from].style, { opacity: '0.5', transition: 'none', position: 'relative', zIndex: '1' })
       handle.setPointerCapture(event.pointerId)
       trackPointer(handle, {
         move: (e) => {
           to = dropIndex(mids, from, e.clientY)
-          rows.forEach((row, i) => { row.style.outline = i === to && to !== from ? `2px solid ${PURPLE}` : '' })
+          rows.forEach((row, i) => { row.style.transform = i === from ? `translateY(${e.clientY - event.clientY}px)` : asideOf(i) ? `translateY(${asideOf(i)}px)` : '' })
         },
         end: (e) => {
           if (e.type === 'pointerup') edit({ type: 'move', from, to })
