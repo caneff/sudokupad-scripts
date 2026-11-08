@@ -9,27 +9,25 @@ const storeOf = (saved) => ({
   removeData: (key) => { delete saved[key] }
 })
 
-// Spec 268's acceptance at `npm test`, through Text Annotation's pure functions: a text and a click on it, the notes saved per puzzle and read back, the 51st puzzle dropping the oldest, a stored stroke
+// Spec 268's acceptance at `npm test`, through Text Annotation's pure functions: a text and a click that opens it, the notes saved per puzzle and read back, the 51st puzzle dropping the oldest, a stored stroke
 // kept untouched, and the panel's choices read back with bad values refused. This seam is blind to real
-// SudokuPad: the Text button, the mouse and keys, the notes on the board, the text box, the dialogs, Restart and the
+// SudokuPad: the Text button, the mouse and keys, a later click finding its note (the browser's own hit test), the notes on the board, the text box, the dialogs, Restart and the
 // reload are `npm run test:live`'s. Neither run covers a real Tampermonkey install, touch, a
 // stylus or Windows (where the browser opens its menu on the right button's release).
 test('spec 268 gives a solver a text tool whose notes are kept per puzzle', () => {
-  const { TOOL_NAME, textItem, textAt, isClick } = draw
+  const { TOOL_NAME, textItem, isClick } = draw
 
   // No tool key lands on the tool.
   const names = ['normal', 'corner', 'centre', 'colour', TOOL_NAME]
   assert.deepEqual(draw.toolNamesFor(names, { type: 'keydown', eventPhase: 1 }), names.slice(0, 4))
 
-  // A text: a click that does not move opens it, and a later click on it finds it.
+  // A text: a click that does not move opens it.
   assert.equal(isClick([[300, 300], [301, 300]]), true)
   assert.equal(isClick([[300, 300], [340, 300]]), false, 'a drag is no click')
   const sum = textItem([300, 300], '15', 1, draw.textSizeFor(draw.DEFAULT_WIDTH))
   // A stroke saved by an earlier version stays in the saved list.
   const oldStroke = { kind: 'stroke', color: 1, width: 6, points: [[0, 0], [64, 64]] }
   const drawing = [oldStroke, sum]
-  assert.equal(textAt(drawing, [302, 298]), 1)
-  assert.equal(textAt(drawing, [400, 400]), -1)
 
   // Saved under the puzzle's key and read back the same; another puzzle keeps its own.
   const key = draw.puzzleKey(undefined, 'https://sudokupad.app/scl123')

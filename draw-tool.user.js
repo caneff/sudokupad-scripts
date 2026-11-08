@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.26.2
+// @version      0.26.3
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.26.2'
+  const VERSION = '0.26.3'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -203,9 +203,10 @@
   const SCREEN_NOTES_CLASS = 'draw-tool-screen'
   // One screen pixel in the units of a note's group, so a selected note's outline is as thin on the board as off it.
   const PIXEL_VAR = '--draw-tool-px'
-  // A note whose text runs past its box, and the one such note under the pointer, which shows its scroll bar.
+  // A note whose text runs past its box, which shows its scroll bar while the pointer is over it.
   const SCROLLS_CLASS = 'draw-tool-scrolls'
-  const HOVER_CLASS = 'draw-tool-hover'
+  // On the layer while Text Annotation is current: only then do the notes take the pointer.
+  const ACTIVE_CLASS = 'draw-tool-active'
   const HANDLE_CLASS = 'draw-tool-resize'
   const HANDLE_PX = 10
   const RECTANGLE_CLASS = 'draw-tool-selection-rectangle'
@@ -365,13 +366,6 @@
 
   const inBox = ([x, y], box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
 
-  // The index of the text a click at `at` lands on, or -1 for none. Where texts overlap it is the topmost: a fixed note is drawn above every note on the
-  // board, and of the rest the one drawn last.
-  function textAt (drawing, at) {
-    const under = drawing.flatMap((item, i) => item.kind === TEXT_KIND && inBox(at, noteBox(item)) ? [i] : [])
-    return under.findLast((i) => drawing[i].fixed) ?? under.at(-1) ?? -1
-  }
-
   // The indices of the notes whose box the rectangle with opposite corners `a` and `b` touches.
   function notesTouched (drawing, [ax, ay], [bx, by]) {
     const [left, right, top, bottom] = [Math.min(ax, bx), Math.max(ax, bx), Math.min(ay, by), Math.max(ay, by)]
@@ -401,7 +395,7 @@
     return inBox(point, board.box) ? { ...rest, at: roundPoint(board.toBoard(point)) } : { ...rest, fixed: roundPoint(point) }
   }
 
-  // The note in board units, wherever it is stored, so one hit test serves notes on and off the board.
+  // The note in board units, wherever it is stored, so a selection rectangle and an erase test notes on and off the board alike.
   const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(item.fixed) } : item
 
   const screenPoint = (item, toScreen) => item.fixed ?? toScreen(item.at)
@@ -1072,7 +1066,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1315,7 +1309,11 @@
     `.${TEXT_CLASS} { position: absolute; transform: translate(-50%, -50%); box-sizing: content-box; line-height: ${LINE_HEIGHT}; white-space: pre-wrap; overflow-wrap: anywhere; width: max-content; max-width: ${BOX_WIDTH_EM}em; max-height: ${roundToTenth(BOX_LINES * LINE_HEIGHT)}em; overflow: hidden; }`,
     // A thin bar whose room is kept whether it shows or not, so the text does not wrap again as the pointer comes and goes.
     `.${TEXT_CLASS}.${SCROLLS_CLASS} { overflow-y: auto; scrollbar-width: thin; scrollbar-color: transparent transparent; }`,
-    `.${TEXT_CLASS}.${SCROLLS_CLASS}.${HOVER_CLASS} { scrollbar-color: currentColor transparent; }`,
+    `.${ACTIVE_CLASS} .${TEXT_CLASS}.${SCROLLS_CLASS}:hover { scrollbar-color: currentColor transparent; }`,
+    // Under every other tool a press or a move over a note goes to what lies under it, as if the notes were not there. A note keeps the cursor of the
+    // page around it: SudokuPad's pointer on the board, the arrow beside it.
+    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: default; }`,
+    `.${ACTIVE_CLASS} .${BOARD_NOTES_CLASS} .${TEXT_CLASS} { cursor: pointer; }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
     `.${SELECTED_CLASS} { outline: calc(2 * var(${PIXEL_VAR}, 1px)) dashed ${PANEL_COLOR}; outline-offset: calc(2 * var(${PIXEL_VAR}, 1px)); }`,
     `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
@@ -1686,8 +1684,6 @@
   let savable = true
   // The failures already shown in a dialog on this page.
   const reported = new Set()
-  // The pointer's last screen point while Text Annotation is current, so a note drawn again under a still pointer shows its scroll bar.
-  let pointer = null
   // Each drawn note's element is kept on its item under a symbol, which a spread copies and JSON leaves out, so a moved, recolored or retyped note keeps
   // its element and no save stores it. Its scroll position is kept the same way, for an element put back in the page, which starts unscrolled.
   const NOTE_ELEMENT = Symbol('note element')
@@ -1696,9 +1692,6 @@
   const shownNotes = new WeakMap()
   // The layer's two groups of notes, made at the first redraw, with the style the board group carries.
   let groups = null
-  // Each drawn note's element with its box on the screen, bottom to top, as of the last redraw and the move in progress: a hover or a wheel tests these
-  // and measures nothing.
-  let hitBoxes = []
   // The layer's font, and the board, window and controls as of the last redraw.
   let layerFont = ''
   let lastLayout = ''
@@ -1839,12 +1832,9 @@
     measureNotes(notes, map)
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
     if (!drag?.move && !resizing && keepFixedReachable(notes, map)) save()
-    const onTop = [...notes.filter(({ item }) => !item.fixed), ...notes.filter(({ item }) => item.fixed)]
-    hitBoxes = onTop.map(({ element }) => ({ element, box: noteScreenBox(shownNotes.get(element).item, map, outline) }))
     if (drag?.move) showMove(drag, map)
     if (editing) showEditing(map)
-    else showHandles(drag?.move ? null : selectedBox())
-    showHover()
+    else showHandles(drag?.move ? null : selectedBox(map))
   }
 
   // A fixed note the window or the layout has put out of reach is moved, and its new point kept, to the nearest point inside the window and clear of the
@@ -1880,10 +1870,7 @@
   const cornerPoint = (box, corner, opposite = false) => [0, 1].map((i) => (corner[i] < 0) !== opposite ? [box.left, box.top][i] : [box.right, box.bottom][i])
 
   // The screen box of the one selected note, or null when no note or several are selected.
-  function selectedBox () {
-    const element = selected.length === 1 ? drawing[selected[0]][NOTE_ELEMENT] : null
-    return hitBoxes.find((entry) => entry.element === element)?.box ?? null
-  }
+  const selectedBox = (map) => selected.length === 1 ? noteScreenBox(drawing[selected[0]], map, outline) : null
 
   // The handles on the corners of screen box `box`, made when there are none; null takes them off the page.
   function showHandles (box) {
@@ -1995,33 +1982,28 @@
     note.classList.toggle(SCROLLS_CLASS, scrollRoom(note) > 1)
   }
 
-  // The topmost note whose box holds screen point `point`, or null, also when a dialog or the menu drawer, which sit above the notes, is there. The notes'
-  // layer takes no pointer, so the page cannot say which note.
-  function noteUnder ([x, y]) {
-    if (document.elementFromPoint(x, y)?.closest(ABOVE_NOTES)) return null
-    const boxes = editing?.box ? [...hitBoxes, { element: editing.element, box: editing.box }] : hitBoxes
-    return boxes.findLast(({ box }) => inBox([x, y], box))?.element ?? null
-  }
+  // The note an event's target is in, or null; only while Text Annotation is current is a note ever the target.
+  const noteOf = (event) => event.target instanceof window.Element ? event.target.closest(`#${LAYER_ID} .${TEXT_CLASS}`) : null
 
-  function showHover () {
-    const over = pointer && noteUnder(pointer)
-    for (const note of drawingLayer().querySelectorAll(`.${HOVER_CLASS}`)) if (note !== over) note.classList.remove(HOVER_CLASS)
-    if (over) over.classList.add(HOVER_CLASS)
-  }
-
-  // Listened to only while Text Annotation is current.
-  function trackPointer (event) {
-    pointer = eventPoint(event)
-    inFrame('hover', showHover)
+  // The note the wheel is over. Under another tool the notes take no pointer, so the topmost drawn note whose box holds the point answers, unless a
+  // dialog or the menu drawer, which sit above the notes, is the wheel's target.
+  function wheelNote (event) {
+    if (drawingLayer().classList.contains(ACTIVE_CLASS)) return noteOf(event)
+    if (!(event.target instanceof window.Element) || event.target.closest(ABOVE_NOTES)) return null
+    const map = boardMap()
+    const drawn = drawing.filter((item) => item.kind === TEXT_KIND && item[NOTE_ELEMENT]?.isConnected)
+    const onTop = [...drawn.filter((item) => !item.fixed), ...drawn.filter((item) => item.fixed)]
+    return onTop.findLast((item) => inBox(eventPoint(event), noteScreenBox(item, map, outline)))?.[NOTE_ELEMENT] ?? null
   }
 
   // A wheel's lines and pages, as pixels of the note it scrolls.
   const WHEEL_UNITS = { [window.WheelEvent.DOM_DELTA_LINE]: (note) => parseFloat(window.getComputedStyle(note).fontSize) * LINE_HEIGHT, [window.WheelEvent.DOM_DELTA_PAGE]: (note) => note.clientHeight }
 
-  // The wheel over a note with text past its box scrolls it, and never reaches SudokuPad, until the note can scroll no further that way; Ctrl+wheel stays the browser's zoom.
+  // The wheel over a note with text past its box scrolls it, under any tool, and never reaches SudokuPad, until the note can scroll no further that
+  // way; Ctrl+wheel stays the browser's zoom.
   function scrollNote (event) {
     if (event.ctrlKey || event.deltaY === 0) return
-    const note = noteUnder(eventPoint(event))
+    const note = wheelNote(event)
     if (!note || !note.classList.contains(SCROLLS_CLASS)) return
     const room = event.deltaY < 0 ? note.scrollTop : scrollRoom(note) - note.scrollTop
     if (room < 1) return
@@ -2246,8 +2228,7 @@
     return [lastX - x, lastY - y]
   }
 
-  // While a move is in progress each moving note's element, and its hit box, follow the pointer by a translation, in the units of its own group, and
-  // nothing is drawn again.
+  // While a move is in progress each moving note's element follows the pointer by a translation, in the units of its own group, and nothing is drawn again.
   function showMove (d, map) {
     const [dx, dy] = dragOffset(d)
     showHandles(null)
@@ -2257,10 +2238,6 @@
       const [x, y] = screenPoint(item, map.toScreen)
       const [tx, ty] = item.fixed ? [dx, dy] : map.toBoard([x + dx, y + dy]).map((v, i) => v - item.at[i])
       element.style.translate = `${tx}px ${ty}px`
-      const hit = hitBoxes.find((entry) => entry.element === element)
-      if (!hit) continue
-      const { left, right, top, bottom } = noteScreenBox(item, map, outline)
-      hit.box = { left: left + dx, right: right + dx, top: top + dy, bottom: bottom + dy }
     }
   }
 
@@ -2290,11 +2267,12 @@
     for (const { index, item, point } of moved) drawing[index] = placedItem(item, point, map)
   }
 
-  // A note stays where a press can still reach it: its middle inside the window and clear of the controls. The notes' layer takes no pointer, so the page under it answers.
+  // A note stays where a press can still reach it: its middle inside the window and clear of the controls. The page under the notes' layer answers.
   function reachable ([x, y]) {
     if (!inBox([x, y], { left: 0, top: 0, right: window.innerWidth - 1, bottom: window.innerHeight - 1 })) return false
-    const under = document.elementFromPoint(x, y)
-    return under !== null && under.closest(CONTROLS) === null
+    const layer = drawingLayer()
+    const under = document.elementsFromPoint(x, y).find((element) => !layer.contains(element))
+    return under !== undefined && under.closest(CONTROLS) === null
   }
 
   const moveKeepsReachable = (d, [px, py], map) => movedBy(d.move, [px - d.points[0][0], py - d.points[0][1]], map).every(({ point }) => reachable(point))
@@ -2428,7 +2406,8 @@
       if (event.button !== PRIMARY_BUTTON) return false
       // A press on a note moves the selection once it drags, after selecting just that note when it was not selected; with Shift it only adds or removes the note on its release.
       // A press on empty space draws a selection rectangle once it drags.
-      const start = textAt(boardDrawing(map), map.toBoard(point))
+      const note = noteOf(event)
+      const start = note ? drawing.findIndex((item) => item[NOTE_ELEMENT] === note) : -1
       const shift = event.shiftKey
       if (start !== -1 && !shift && !selected.includes(start)) select([start])
       const move = start === -1 || shift ? null : selected.map((index) => ({ index, item: drawing[index] }))
@@ -2465,12 +2444,11 @@
     },
     handleToolEnter () {
       if (!colors) saveColors(copiedPenColors(readPenColor))
-      window.addEventListener('mousemove', trackPointer, { capture: true, passive: true })
+      drawingLayer().classList.add(ACTIVE_CLASS)
       showPanel()
     },
     handleToolExit () {
-      window.removeEventListener('mousemove', trackPointer, { capture: true })
-      pointer = null
+      drawingLayer().classList.remove(ACTIVE_CLASS)
       endGesture()
       if (editing) finishText()
       selected = []

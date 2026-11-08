@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -337,20 +337,6 @@ test('a text\'s box is centred on its point, as tall as its line and wider with 
   assert.ok(longer.right - longer.left > box.right - box.left, `'150' is ${longer.right - longer.left} wide, '15' ${box.right - box.left}`)
 })
 
-test('a click on a text lands on it, and a click beside it, or on a stroke or shape, on none', () => {
-  const drawing = [oldStroke, sum, oldShape]
-  assert.equal(textAt(drawing, [100, 50]), 1)
-  assert.equal(textAt(drawing, [textBox(sum).right - 1, textBox(sum).top + 1]), 1)
-  assert.equal(textAt(drawing, [100, 80]), -1)
-  assert.equal(textAt(drawing, [textBox(sum).right + 3, 50]), -1)
-  assert.equal(textAt(drawing, [10, 50]), -1, 'on the hidden stroke')
-  assert.equal(textAt([], [100, 50]), -1)
-})
-
-test('a click on two texts that overlap lands on the one drawn last', () => {
-  assert.equal(textAt([sum, textItem([104, 52], '7', 1, 20)], [102, 51]), 1)
-})
-
 test('a drag across a text touches it, and one that passes clear of it does not', () => {
   const box = textBox(sum)
   assert.equal(touchesText(sum, [100, 0], [100, 100]), true, 'across its middle')
@@ -386,7 +372,8 @@ test('the board view of a note gives an off-board note its board point under the
   const off = placedItem(on, [40, 700], board)
   assert.deepEqual(boardView(on, toBoard), on)
   assert.deepEqual(boardView(off, toBoard).at, [-30, 325])
-  assert.equal(textAt([on, off].map((item) => boardView(item, toBoard)), toBoard([40, 700])), 1)
+  const point = toBoard([40, 700])
+  assert.deepEqual(notesTouched([on, off].map((item) => boardView(item, toBoard)), point, point), [1])
 })
 
 test('a note\'s screen point is its fixed point off the board, and its board point taken to the screen on it', () => {
@@ -401,14 +388,14 @@ test('saved off-board notes read back, and a note with both a board point and a 
   for (const saved of [[{ ...off, at: [1, 1] }], [{ ...sum, at: undefined }], [{ ...off, fixed: [1] }]]) assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
 })
 
-test('a note with a background answers to the box drawn behind it: a click and an erase just outside its text land on it', () => {
+test('a note with a background answers to the box drawn behind it: a selection rectangle and an erase just outside its text land on it', () => {
   const plain = textItem([100, 50], '15', 3, 20)
   const boxed = textItem([100, 50], '15', 3, 20, true)
   const edge = [textBox(boxed).right + 3, 50]
-  assert.equal(textAt([plain], edge), -1)
-  assert.equal(textAt([boxed], edge), 0)
+  assert.deepEqual(notesTouched([plain], edge, edge), [])
+  assert.deepEqual(notesTouched([boxed], edge, edge), [0])
   const past = textBox(boxed).right + 20 * 0.35 + 0.1
-  assert.equal(textAt([boxed], [past, 50]), -1, 'past the box')
+  assert.deepEqual(notesTouched([boxed], [past, 50], [past, 50]), [], 'past the box')
   assert.equal(touchesText(boxed, [past + ERASE_TOLERANCE - 0.2, 0], [past + ERASE_TOLERANCE - 0.2, 100]), true, 'an erase within the tolerance of the box')
   assert.deepEqual(noteBox(plain), textBox(plain))
 })
@@ -684,14 +671,4 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map, 'medium')), { left: 156, right: 264, top: 91, bottom: 149 })
   const { at, ...rest } = pinned
   assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
-})
-
-test('a fixed note is drawn above the notes on the board, so a click where they overlap lands on it, whichever was made last', () => {
-  const { at, ...rest } = textItem([0, 0], 'off', 1, 20)
-  const fixed = { ...rest, fixed: [100, 50] }
-  const pinned = textItem([100, 50], 'on', 1, 20)
-  // The drawing gives the fixed note's place in board units, as boardView does.
-  const asDrawn = [{ ...fixed, at: [100, 50] }, pinned]
-  assert.equal(textAt(asDrawn, [100, 50]), 0)
-  assert.equal(textAt([pinned, { ...fixed, at: [100, 50] }], [100, 50]), 1)
 })

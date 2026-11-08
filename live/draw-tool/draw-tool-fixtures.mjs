@@ -111,8 +111,8 @@ export const noteInCells = (p, text) => p.evaluate(([selector, want]) => {
   return [(box.y + box.height / 2 - cell.y) / cell.height, (box.x + box.width / 2 - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
 }, [TEXTS, text])
 
-// For each note, what the page shows topmost at its middle: 'note' (itself), 'dialog' or 'other'. The layer takes no
-// pointer, so each note is made hit-testable for its one check.
+// For each note, what the page shows topmost at its middle: 'note' (itself), 'dialog' or 'other'. Under another tool the
+// notes take no pointer, so each note is made hit-testable for its one check.
 export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((note) => {
   const { x, y, width, height } = note.getBoundingClientRect()
   note.style.pointerEvents = 'auto'
