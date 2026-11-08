@@ -684,6 +684,102 @@ test('text that is not a checklist item stays text or a bullet', () => {
   assert.deepEqual(parseMarkdown('- one'), [[{ text: '•', bullet: true }, { text: 'one' }]])
 })
 
+const runsOf = (text) => parseMarkdown(text)[0]
+
+test('__text__ underlines, and an underline combines with bold and italic either way round', () => {
+  assert.deepEqual(runsOf('__a__'), [{ text: 'a', underline: true }])
+  assert.deepEqual(runsOf('__**a**__'), [{ text: 'a', underline: true, bold: true }])
+  assert.deepEqual(runsOf('__*a*__'), [{ text: 'a', underline: true, italic: true }])
+  assert.deepEqual(runsOf('__***a***__'), [{ text: 'a', underline: true, bold: true, italic: true }])
+  assert.deepEqual(runsOf('**__a__**'), [{ text: 'a', underline: true, bold: true }])
+  assert.deepEqual(runsOf('x __a__ y'), [{ text: 'x ' }, { text: 'a', underline: true }, { text: ' y' }])
+})
+
+test('a single underscore stays italic, and a double underscore with a space inside stays text', () => {
+  assert.deepEqual(runsOf('_a_'), [{ text: 'a', italic: true }])
+  assert.deepEqual(runsOf('__ a __'), [{ text: '__ a __' }])
+  assert.deepEqual(runsOf('__a'), [{ text: '__a' }])
+})
+
+test('a line starting "# ", "## " or "### " is a header of that level; the rest is read as markdown', () => {
+  assert.deepEqual(parseMarkdown('# Title\n## Sub\n### Small'), [[{ text: '', header: 1 }, { text: 'Title' }], [{ text: '', header: 2 }, { text: 'Sub' }], [{ text: '', header: 3 }, { text: 'Small' }]])
+  assert.deepEqual(runsOf('# a **b** __c__'), [{ text: '', header: 1 }, { text: 'a ' }, { text: 'b', bold: true }, { text: ' ' }, { text: 'c', underline: true }])
+})
+
+test('a hash without a space, or four of them, is no header', () => {
+  assert.deepEqual(runsOf('#title'), [{ text: '#title' }])
+  assert.deepEqual(runsOf('##title'), [{ text: '##title' }])
+  assert.deepEqual(runsOf('#### four'), [{ text: '#### four' }])
+  assert.deepEqual(runsOf('a # b'), [{ text: 'a # b' }])
+  assert.deepEqual(runsOf(' # a'), [{ text: ' # a' }])
+})
+
+test('a line starting "-# " is subtext; "-#x" is text', () => {
+  assert.deepEqual(runsOf('-# small *a*'), [{ text: '', subtext: true }, { text: 'small ' }, { text: 'a', italic: true }])
+  assert.deepEqual(runsOf('-#x'), [{ text: '-#x' }])
+  assert.deepEqual(runsOf('a -# b'), [{ text: 'a -# b' }])
+})
+
+test('each 2 spaces before a bullet or a checklist item is one more level', () => {
+  assert.deepEqual(parseMarkdown('- a\n  - b\n    * c'), [
+    [{ text: '•', bullet: true }, { text: 'a' }],
+    [{ text: '•', bullet: true, level: 1 }, { text: 'b' }],
+    [{ text: '•', bullet: true, level: 2 }, { text: 'c' }]
+  ])
+  assert.deepEqual(runsOf('  - [x] done'), [{ text: '☑', bullet: true, checked: true, level: 1 }, { text: 'done' }])
+  assert.deepEqual(runsOf('  [ ] box'), [{ text: '☐', bullet: true, checked: false, level: 1 }, { text: 'box' }])
+})
+
+test('an odd number of spaces before a dash is text', () => {
+  assert.deepEqual(runsOf('   - a'), [{ text: '   - a' }])
+  assert.deepEqual(runsOf('  *a*'), [{ text: '  ' }, { text: 'a', italic: true }])
+})
+
+test('a line starting with a number, ". " and text is a numbered item showing the number as typed', () => {
+  assert.deepEqual(runsOf('1. one'), [{ text: '1.', bullet: true, numbered: true }, { text: 'one' }])
+  assert.deepEqual(runsOf('7. seven'), [{ text: '7.', bullet: true, numbered: true }, { text: 'seven' }])
+  assert.deepEqual(runsOf('10. **ten**'), [{ text: '10.', bullet: true, numbered: true }, { text: 'ten', bold: true }])
+  assert.deepEqual(runsOf('  2. nested'), [{ text: '2.', bullet: true, numbered: true, level: 1 }, { text: 'nested' }])
+})
+
+test('a numbered item with a checklist item below it is both', () => {
+  assert.deepEqual(parseMarkdown('1. a\n- [ ] b'), [
+    [{ text: '1.', bullet: true, numbered: true }, { text: 'a' }],
+    [{ text: '☐', bullet: true, checked: false }, { text: 'b' }]
+  ])
+})
+
+test('"1.x", "1." alone and "a1. b" stay text', () => {
+  assert.deepEqual(runsOf('1.x'), [{ text: '1.x' }])
+  assert.deepEqual(runsOf('1.'), [{ text: '1.' }])
+  assert.deepEqual(runsOf('a1. b'), [{ text: 'a1. b' }])
+  assert.deepEqual(runsOf('.5 x'), [{ text: '.5 x' }])
+})
+
+test('headers, subtext, nested and numbered lines, and underline are text inside inline code and a code block', () => {
+  assert.deepEqual(runsOf('`# a`'), [{ text: '# a', code: true }])
+  assert.deepEqual(runsOf('`__a__`'), [{ text: '__a__', code: true }])
+  const FENCE_LINE = [{ text: '', fence: true }]
+  assert.deepEqual(parseMarkdown('```\n# a\n-# b\n  - c\n1. d\n__e__\n```'), [FENCE_LINE, [{ text: '# a' }], [{ text: '-# b' }], [{ text: '  - c' }], [{ text: '1. d' }], [{ text: '__e__' }], FENCE_LINE])
+})
+
+test('toggledCheck ticks an indented item', () => {
+  assert.equal(toggledCheck('a\n  - [ ] b', 1), 'a\n  - [x] b')
+  assert.equal(toggledCheck('  [x] b', 0), '  [ ] b')
+})
+
+test('a note of headers is boxed taller and wider than the same text plain', () => {
+  const plain = textBox(textItem([0, 0], 'word word', 1, 20))
+  const header = textBox(textItem([0, 0], '# word word', 1, 20))
+  assert.ok(header.bottom > plain.bottom, `header ${header.bottom} vs plain ${plain.bottom}`)
+  assert.ok(header.right > plain.right, `header ${header.right} vs plain ${plain.right}`)
+  const sub = textBox(textItem([0, 0], '-# word word', 1, 20))
+  assert.ok(sub.bottom < plain.bottom, `subtext ${sub.bottom} vs plain ${plain.bottom}`)
+  const nested = textBox(textItem([0, 0], '  - word', 1, 20))
+  const flat = textBox(textItem([0, 0], '- word', 1, 20))
+  assert.ok(nested.right > flat.right, 'a nested item is boxed further right')
+})
+
 const FENCE = { text: '', fence: true }
 const codeLine = (text) => [{ text }]
 
