@@ -20,13 +20,18 @@
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
   const VERSION = '0.2.0'
-  const TOGGLE_KEY = '/'
-  const TAB_KEY = 'Tab'
-  // The marker and the event UI Tweaks (ui-tweaks.user.js) sets and fires, so Tab is handled by one script and not two.
-  const UI_TWEAKS_ATTRIBUTE = 'data-ui-tweaks'
-  const UI_TWEAKS_EVENT = 'ui-tweaks-running'
   const UI_TWEAKS_URL = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js'
   const MOVED_KEY = 'no-tab-letters-moved-notice'
+  const MOVED_NOTICE = 'no-tab-letters-moved'
+
+  // <lib:tab-keys>
+  // Generated from lib/tab-keys.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const TOGGLE_KEY = '/'
+  const TAB_KEY = 'Tab'
+  // The marker UI Tweaks puts on the page, and the event it fires, when it starts: No Tab Letters watches for both, so Tab is handled by one script and not two.
+  const UI_TWEAKS_ATTRIBUTE = 'data-ui-tweaks'
+  const UI_TWEAKS_EVENT = 'ui-tweaks-running'
 
   // SudokuPad's toggle handler also stops Tab's default, so focus stays on the puzzle; keep that.
   function ignoreKey (event) {
@@ -48,7 +53,8 @@
   function isHeldTabToStop (event, { toolOn, dialogOpen }) {
     return event.key === TAB_KEY && event.repeat === true && toolOn && !dialogOpen
   }
-
+  /* eslint-enable no-unused-vars */
+  // </lib:tab-keys>
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -261,7 +267,7 @@
   const movedNoticeDismissed = (store) => typeof store.getData === 'function' && store.getData(MOVED_KEY) === true
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, movedNoticeDismissed, MOVED_KEY, UI_TWEAKS_URL }
+    module.exports = { VERSION, lackingInternals, FEATURES, movedNoticeDismissed, MOVED_KEY, UI_TWEAKS_URL }
   }
   if (typeof document === 'undefined') return
 
@@ -280,7 +286,7 @@
       document.body.append(host)
     }
     const bar = document.createElement('div')
-    bar.setAttribute('data-script', 'no-tab-letters-moved')
+    bar.setAttribute('data-script', MOVED_NOTICE)
     bar.style.cssText = NOTICE_BAR_CSS
     const text = document.createElement('span')
     text.textContent = 'No Tab Letters is now UI Tweaks.'
@@ -297,8 +303,14 @@
     dismiss.setAttribute('aria-label', 'Dismiss')
     dismiss.style.cssText = NOTICE_DISMISS_CSS
     dismiss.addEventListener('click', () => {
-      if (typeof Framework.setData === 'function') Framework.setData(MOVED_KEY, true)
       bar.remove()
+      // Without a save the notice shows again on the next load.
+      try {
+        if (typeof Framework.setData !== 'function') throw new Error('SudokuPad has no Framework.setData')
+        Framework.setData(MOVED_KEY, true)
+      } catch (error) {
+        console.warn('no-tab-letters: the dismissal of the notice that it is now UI Tweaks could not be saved:', error)
+      }
     })
     bar.append(text, link, dismiss)
     host.append(bar)
@@ -308,17 +320,16 @@
   // on it holds whenever the tool is on. Setting it on the object shadows the shared prototype's list.
   // Without getApp the Tab key is off, and the bar says so.
   const start = () => {
-    guard.probe({ roots: { Framework, ToolLetter: typeof ToolLetter === 'undefined' ? undefined : ToolLetter }, store: Framework })
     // UI Tweaks handles Tab, and no notice is owed to a user who has it. One that starts later asks this script to put the list back.
     let standingDown = uiTweaksRunning()
-    if (!standingDown) showMovedNotice()
+    if (!standingDown) guard.probe({ roots: { Framework, ToolLetter: typeof ToolLetter === 'undefined' ? undefined : ToolLetter }, store: Framework })
     guard.features.tab.run(() => {
       const tool = ToolLetter.tool
       const original = tool.keyHandlers
       document.addEventListener(UI_TWEAKS_EVENT, () => {
         standingDown = true
         if (tool.keyHandlers !== original) tool.keyHandlers = original
-        document.querySelector('[data-script="no-tab-letters-moved"]')?.remove()
+        document.querySelector(`[data-script="${MOVED_NOTICE}"]`)?.remove()
       })
       if (standingDown) return
       const changed = withInertTab(tool.keyHandlers, ignoreKey)
@@ -333,6 +344,14 @@
         })
       }, true)
     })
+    // The notice comes after the Tab key is in place, so a store that throws cannot stop it.
+    if (!standingDown) {
+      try {
+        showMovedNotice()
+      } catch (error) {
+        console.warn('no-tab-letters: the notice that it is now UI Tweaks could not be shown:', error)
+      }
+    }
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
   else start()

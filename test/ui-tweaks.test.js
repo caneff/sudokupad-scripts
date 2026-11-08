@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { fakeStore } = require('./fake-store.js')
-const { VERSION, OPTIONS, DEFAULT_OPTIONS, KEYS, savedOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, STYLE_ID, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES } = require('../ui-tweaks.user.js')
+const { VERSION, OPTIONS, DEFAULT_OPTIONS, KEYS, savedOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, lackingInternals, FEATURES } = require('../ui-tweaks.user.js')
 
 test('VERSION matches the @version header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'ui-tweaks.user.js'), 'utf8')))
@@ -71,50 +71,12 @@ test('buildCss: both rules together; Tab adds none', () => {
   assert.match(css, /max-width: 21\.6rem/)
 })
 
-test('STYLE_ID names the one style element the options rewrite', () => {
-  assert.equal(STYLE_ID, 'ui-tweaks-style')
-})
-
-const toggle = () => {}
-const typeLetter = () => {}
-const inert = () => {}
-const catchAll = () => true
-const letterHandlers = () => [{ key: '/', handler: toggle }, { key: 'Tab', handler: toggle }, { key: catchAll, handler: typeLetter }]
-
-test('withInertTab gives the Tab entry the inert handler and keeps "/" and the entry that types letters', () => {
-  assert.deepEqual(withInertTab(letterHandlers(), inert), [
-    { key: '/', handler: toggle },
-    { key: 'Tab', handler: inert },
-    { key: catchAll, handler: typeLetter }
-  ])
-})
-
-test('withInertTab leaves the list it was given as it was, so it can be put back', () => {
-  const given = letterHandlers()
-  withInertTab(given, inert)
-  assert.deepEqual(given, letterHandlers())
-})
-
-test('withInertTab returns null when no Tab entry is bound to the toggle, or for no list', () => {
-  assert.equal(withInertTab([{ key: '/', handler: toggle }, { key: catchAll, handler: typeLetter }], inert), null)
-  assert.equal(withInertTab([{ key: 'Tab', handler: toggle }], inert), null)
-  for (const given of [undefined, null, [], {}, 'Tab']) assert.equal(withInertTab(given, inert), null, String(given))
-})
-
-test('ignoreKey stops the key\'s default and nothing else', () => {
-  const calls = []
-  const result = ignoreKey({ preventDefault: () => calls.push('preventDefault'), stopPropagation: () => calls.push('stopPropagation') })
-  assert.deepEqual(calls, ['preventDefault'])
-  assert.equal(result, undefined)
-})
-
-test('isHeldTabToStop: a repeated Tab while the tool is on and no dialog is open', () => {
-  const held = { key: 'Tab', repeat: true }
-  assert.equal(isHeldTabToStop(held, { toolOn: true, dialogOpen: false }), true)
-  assert.equal(isHeldTabToStop(held, { toolOn: true, dialogOpen: true }), false)
-  assert.equal(isHeldTabToStop(held, { toolOn: false, dialogOpen: false }), false)
-  assert.equal(isHeldTabToStop({ key: 'Tab', repeat: false }, { toolOn: true, dialogOpen: false }), false)
-  assert.equal(isHeldTabToStop({ key: 'a', repeat: true }, { toolOn: true, dialogOpen: false }), false)
+test('pastedOptions changes only the pasted options, whatever else is ticked in the dialog', () => {
+  const saved = { tab: true, hideSelect: false, wrapButtons: false }
+  assert.deepEqual(pastedOptions(saved, { [KEYS.tab]: false }), { tab: false, hideSelect: false, wrapButtons: false })
+  assert.deepEqual(pastedOptions(saved, { [KEYS.hideSelect]: true, [KEYS.wrapButtons]: true }), { tab: true, hideSelect: true, wrapButtons: true })
+  assert.deepEqual(pastedOptions(saved, {}), saved)
+  assert.deepEqual(saved, { tab: true, hideSelect: false, wrapButtons: false }, 'the options given are left as they were')
 })
 
 test('lackingInternals names the internal a feature lacks', () => {

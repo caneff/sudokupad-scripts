@@ -34,7 +34,7 @@ describe('captureConsoleErrors and collectSkipLines together', () => {
 })
 
 describe('collectSkipLines', () => {
-  it('collects the skip line of each of each script and nothing else', () => {
+  it('collects the skip line of each script and nothing else', () => {
     const page = fakePage()
     const errors = []
     collectSkipLines(page, errors)

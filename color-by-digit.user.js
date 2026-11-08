@@ -953,15 +953,15 @@
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The bottom row of tool buttons; Color by Digit adds a button to it and UI Tweaks wraps it.
+  // SudokuPad's bottom row of tool buttons.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
   /* eslint-enable no-unused-vars */
   // </lib:bottom-row>
-  // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.
   const BOTTOM_ROW_STYLE_ID = 'color-by-digit-row'
 
+  // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.
   // SudokuPad binds button handlers only to buttons present when the controls were built, so a
   // button added later needs refreshControls. Its onClick is left empty: listenForButton takes every
   // press before SudokuPad sees it.

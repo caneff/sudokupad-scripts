@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { gotoPuzzle, openPage, startPuzzle } from '../page.mjs'
+import { numberPadText } from '../scripts.mjs'
 import { keydownDefaults } from '../pen.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
@@ -53,7 +54,7 @@ async function startPage (p, { scripts = [script] } = {}) {
 
 describe('the options dialog', { concurrency: false }, () => {
   let context, p, errors
-  const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
+  const pad = () => numberPadText(p)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
@@ -149,7 +150,7 @@ describe('the choices survive a reload', { concurrency: false }, () => {
     const buttons = await rowButtons(p)
     assert.deepEqual(buttons.map((b) => b.y > buttons[0].y), [false, false, false, false, false, true], JSON.stringify(buttons))
     await keydownDefaults(p, 'Tab')
-    assert.equal(await settle(() => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join('')), LETTERS), LETTERS, 'Tab toggled letters')
+    assert.equal(await settle(() => numberPadText(p), LETTERS), LETTERS, 'Tab toggled letters')
   })
 
   it('the dialog shows what was saved', async () => {
@@ -174,7 +175,8 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
   })
   after(async () => { await context.close() })
 
-  it('Wrap buttons leaves five on the first line and the rest on the second, Color by Digit\'s button among the five', async () => {
+  // Color by Digit caps the row itself, so this shows the two do not conflict; the option's own effect is checked above, without it.
+  it('with Wrap buttons on, five buttons are on the first line, Color by Digit\'s among them, and the rest are on the second', async () => {
     await chooseAndSave(p, { wrapButtons: true })
     const buttons = await settle(async () => {
       const found = await rowButtons(p)

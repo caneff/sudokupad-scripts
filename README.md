@@ -23,7 +23,7 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 
 ## Settings
 
-Each script adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it. UI Tweaks also adds a settings command to Tampermonkey's menu. A script's dialog shows its version beside the heading.
+Each script adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it (the retired No Tab Letters has none). UI Tweaks also adds a settings command to Tampermonkey's menu. A script's dialog shows its version beside the heading.
 
 Settings live in the browser's own storage, so another browser profile or device starts with none. Each of those dialogs has **Copy settings** and **Paste settings**, two icons at the right end of the title row: Copy puts that script's settings, as they are now, on the clipboard as one line of JSON, and Paste, in the other browser, saves what the clipboard holds and applies it at once. Paste keeps only that script's own settings, skips any value the script would not accept and says how many, and tells you when the text is not settings. It needs the browser's clipboard permission, which the browser asks for on first use.
 
@@ -60,7 +60,7 @@ Replaces No Tab Letters. Its dialog has three options, each applied at once on S
 - **Hide the Toggle Selection button** (off at first): hides SudokuPad's Select button in the bottom row, and the other buttons close up.
 - **Wrap buttons** (off at first): the bottom row of tool buttons wraps onto a second line after five. Color by Digit already caps that row at five on its own, so with it installed this option changes nothing.
 
-If a SudokuPad update changes what an option needs, that option logs a console warning and turns itself off, and a bar at the bottom of the page says so.
+If a SudokuPad update changes what the Tab option, the saved options or the settings entry needs, that part logs a console warning and turns itself off, and a bar at the bottom of the page says so. Hide the Toggle Selection button and Wrap buttons are style rules only, with nothing of SudokuPad's to break.
 
 **No Tab Letters** (`no-tab-letters.user.js`) stays installable only so copies already installed keep updating. Its last version shows a one-time notice, "No Tab Letters is now UI Tweaks", with an install link, and keeps handling Tab until UI Tweaks is installed too, when it does nothing.
 

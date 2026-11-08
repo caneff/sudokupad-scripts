@@ -9,6 +9,8 @@ import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 const BLACK = 'rgb(0, 0, 0)'
 const DIGITS = '1234567890'
 export const LETTER_MODE_KEY = 'ToolLetter_letterMode'
+// What the number pad's keys read: digits, or letters in letter mode.
+export const numberPadText = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
 const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
 const DRAW_BUTTON = '#control-draw'
@@ -75,11 +77,11 @@ export const SCRIPTS = [
     },
     control: (p) => p.locator(LETTER_TOGGLE).waitFor({ state: 'visible' }),
     // Tab is swallowed: it leaves the number pad on digits and saves no letter mode. The keydown default is prevented
-    // either way, since SudokuPad's own Tab toggle prevents it too, so that alone would pass without the script.
+    // either way, since SudokuPad's own Tab toggle prevents it too, so that alone would pass without the script. With UI Tweaks
+    // installed too, as the Tampermonkey test has it, this script leaves Tab to that one, so this check passes on UI Tweaks' Tab.
     act: async (p) => {
       assert.deepEqual(await keydownDefaults(p, 'Tab'), [true])
-      const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
-      assert.equal(await settle(pad, DIGITS), DIGITS, 'the number pad stayed on digits')
+      assert.equal(await settle(() => numberPadText(p), DIGITS), DIGITS, 'the number pad stayed on digits')
       assert.equal(await p.evaluate((key) => Framework.getData(key), LETTER_MODE_KEY), null, 'no letter mode was saved')
     }
   },

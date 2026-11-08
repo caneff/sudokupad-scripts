@@ -22,12 +22,6 @@
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
   const VERSION = '0.1.0'
   const STYLE_ID = 'ui-tweaks-style'
-  const TOGGLE_KEY = '/'
-  const TAB_KEY = 'Tab'
-  // The marker and the event No Tab Letters (no-tab-letters.user.js) waits for, so that script leaves Tab to this one.
-  const RUNNING_ATTRIBUTE = 'data-ui-tweaks'
-  const RUNNING_EVENT = 'ui-tweaks-running'
-
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
     { id: 'tab', key: 'UiTweaks_tab', label: 'Tab never switches to letters', hint: 'The letter button and the / key still switch.', default: true },
@@ -50,21 +44,26 @@
 
   const copiedSettings = (store) => JSON.stringify(Object.fromEntries(OPTIONS.map((option) => [option.key, savedOptions(store)[option.id]])))
 
+  // What a paste leaves in force: the options now saved, with only the pasted ones changed, so a box ticked in the dialog and not saved is not saved by it.
+  const pastedOptions = (current, values) => ({ ...current, ...Object.fromEntries(OPTIONS.filter((option) => option.key in values).map((option) => [option.id, values[option.key]])) })
+
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The bottom row of tool buttons; Color by Digit adds a button to it and UI Tweaks wraps it.
+  // SudokuPad's bottom row of tool buttons.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
   /* eslint-enable no-unused-vars */
   // </lib:bottom-row>
-  const HIDE_SELECT_CSS = `${BOTTOM_ROW} [data-control="select"] { display: none !important; }`
-
-  // Tab adds no rule: it works on the letter tool's key list.
-  function buildCss (options) {
-    return [options.hideSelect && HIDE_SELECT_CSS, options.wrapButtons && BOTTOM_ROW_CSS].filter(Boolean).join('\n')
-  }
+  // <lib:tab-keys>
+  // Generated from lib/tab-keys.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const TOGGLE_KEY = '/'
+  const TAB_KEY = 'Tab'
+  // The marker UI Tweaks puts on the page, and the event it fires, when it starts: No Tab Letters watches for both, so Tab is handled by one script and not two.
+  const UI_TWEAKS_ATTRIBUTE = 'data-ui-tweaks'
+  const UI_TWEAKS_EVENT = 'ui-tweaks-running'
 
   // SudokuPad's toggle handler also stops Tab's default, so focus stays on the puzzle; keep that.
   function ignoreKey (event) {
@@ -85,6 +84,14 @@
   // here instead, so a dialog keeps its normal Tab.
   function isHeldTabToStop (event, { toolOn, dialogOpen }) {
     return event.key === TAB_KEY && event.repeat === true && toolOn && !dialogOpen
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:tab-keys>
+  const HIDE_SELECT_CSS = `${BOTTOM_ROW} [data-control="select"] { display: none !important; }`
+
+  // Tab adds no rule: it works on the letter tool's key list.
+  function buildCss (options) {
+    return [options.hideSelect && HIDE_SELECT_CSS, options.wrapButtons && BOTTOM_ROW_CSS].filter(Boolean).join('\n')
   }
 
   // <lib:settings-dialog>
@@ -535,7 +542,7 @@
   const { saved, tab, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, OPTIONS, DEFAULT_OPTIONS, KEYS, savedOptions, saveOptions, READERS, copiedSettings, pastedSettings, pasteReport, buildCss, STYLE_ID, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
+    module.exports = { VERSION, OPTIONS, DEFAULT_OPTIONS, KEYS, savedOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -543,7 +550,7 @@
   if (typeof Framework === 'undefined') return
 
   // Set before anything waits, so No Tab Letters sees it whichever script loads first.
-  document.documentElement.setAttribute(RUNNING_ATTRIBUTE, VERSION)
+  document.documentElement.setAttribute(UI_TWEAKS_ATTRIBUTE, VERSION)
 
   const style = document.createElement('style')
   style.id = STYLE_ID
@@ -621,12 +628,13 @@
     })
     const copied = () => saved.run(() => copiedSettings(Framework), offNow('saved'))
     wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS }, (values) => settingsEntry.run(() => {
+      const next = pastedOptions(options, values)
+      saveOptions(Framework, next)
+      applyOptions(next)
       OPTIONS.filter((option) => option.key in values).forEach((option) => {
-        draft[option.id] = values[option.key]
-        box(option.id).checked = draft[option.id]
+        draft[option.id] = next[option.id]
+        box(option.id).checked = next[option.id]
       })
-      saveOptions(Framework, draft)
-      applyOptions({ ...draft })
     }, offNow('settings')))
   }
 
@@ -643,11 +651,9 @@
 
   const start = () => {
     guard.probe({ roots: { Framework, ToolLetter: typeof ToolLetter === 'undefined' ? undefined : ToolLetter }, store: Framework })
-    options = saved.run(() => savedOptions(Framework), () => DEFAULT_OPTIONS)
     // No Tab Letters puts SudokuPad's list back before the Tab option reads it.
-    document.dispatchEvent(new Event(RUNNING_EVENT))
-    style.textContent = buildCss(options)
-    applyTab(options.tab)
+    document.dispatchEvent(new Event(UI_TWEAKS_EVENT))
+    applyOptions(saved.run(() => savedOptions(Framework), () => DEFAULT_OPTIONS))
     listenForHeldTab()
     settingsEntry.run(() => addSettingsEntry(dialogs, { name: 'uitweaks', content: 'UI Tweaks', open: () => settingsEntry.run(openDialog) }))
     // Absent without Tampermonkey, where the settings entry is the way in.

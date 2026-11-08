@@ -9,6 +9,7 @@ import { gotoPuzzle, openPage, startPuzzle } from '../page.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { keydownDefaults } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { numberPadText } from '../scripts.mjs'
 
 const source = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
 const oldScript = source('no-tab-letters.user.js')
@@ -25,7 +26,6 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-const pad = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
 async function startPage (p, scripts) {
   await startPuzzle(p)
   for (const content of scripts) await p.addScriptTag({ content })
@@ -52,7 +52,7 @@ describe('No Tab Letters alone', { concurrency: false }, () => {
 
   it('still keeps Tab from switching the number pad to letters', async () => {
     assert.deepEqual(await keydownDefaults(p, 'Tab'), [true])
-    assert.equal(await pad(p), DIGITS)
+    assert.equal(await numberPadText(p), DIGITS)
   })
 
   it('a dismissed notice goes, and stays gone after a reload', async () => {
@@ -88,12 +88,12 @@ for (const order of [['no-tab-letters first', [oldScript, uiTweaks]], ['UI Tweak
 
     it('Tab is handled once, by UI Tweaks: with its option on Tab does nothing, and with it off Tab switches to letters', async () => {
       assert.deepEqual(await keydownDefaults(p, 'Tab'), [true])
-      assert.equal(await pad(p), DIGITS)
+      assert.equal(await numberPadText(p), DIGITS)
       await openScriptDialog(p, 'UI Tweaks', DIALOG)
       await p.locator(`${DIALOG} input[data-option="tab"]`).uncheck()
       await closeDialogWith(p, 'Save', DIALOG)
       await keydownDefaults(p, 'Tab')
-      assert.equal(await settle(() => pad(p), LETTERS), LETTERS, 'the old script left Tab to UI Tweaks, whose option is off')
+      assert.equal(await settle(() => numberPadText(p), LETTERS), LETTERS, 'the old script left Tab to UI Tweaks, whose option is off')
     })
 
     it('the page raised no error', () => {

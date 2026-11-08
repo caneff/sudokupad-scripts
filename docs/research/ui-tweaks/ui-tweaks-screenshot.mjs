@@ -1,6 +1,6 @@
 // Takes docs/research/ui-tweaks/ui-tweaks.png, the homepage's picture of UI Tweaks: its dialog beside the bottom row of
-// buttons wrapped after five (Color by Digit, Pen Tool Extras and Text Anywhere in the row, with two more buttons
-// standing in for others). 1200x900 viewport, mascot hidden. Run from the repo root:
+// buttons wrapped after five by the Wrap buttons option alone (Color by Digit caps the row itself, so it is left out; three buttons
+// stand in for the ones other scripts add). 1200x900 viewport, mascot hidden. Run from the repo root:
 // node docs/research/ui-tweaks/ui-tweaks-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
@@ -17,13 +17,13 @@ await page.waitForFunction(() => Framework.app && Framework.app.puzzle && Framew
 await page.getByRole('button', { name: /Start Puzzle|Continue|Resume/i }).first().click()
 await page.locator('#control-undo').waitFor()
 await page.addStyleTag({ content: '#svenpeek { display: none !important }' })
-for (const file of ['color-by-digit', 'pen-tool-extras', 'draw-tool', 'ui-tweaks']) await page.addScriptTag({ content: read(`${file}.user.js`) })
+for (const file of ['pen-tool-extras', 'draw-tool', 'ui-tweaks']) await page.addScriptTag({ content: read(`${file}.user.js`) })
 await page.evaluate(() => {
   Framework.setSetting('toolpen', true)
-  for (const name of ['more1', 'more2']) Framework.addControlButton({ parent: '.controls-aux', name, title: name, content: '<div class="icon">+</div>', onClick () {} })
+  for (const name of ['more1', 'more2', 'more3']) Framework.addControlButton({ parent: '.controls-aux', name, title: name, content: '<div class="icon">+</div>', onClick () {} })
   Framework.app.refreshControls()
 })
-await page.locator('#control-more2').waitFor({ state: 'visible' })
+await page.locator('#control-more3').waitFor({ state: 'visible' })
 
 // The dialog, with the Wrap buttons choice made, cropped to itself.
 await page.click('#control-settings')
@@ -39,9 +39,14 @@ const dialogShot = await page.locator('.dialog').screenshot()
 await page.locator('.dialog button').filter({ hasText: /^\s*Save\s*$/ }).click()
 await body.waitFor({ state: 'detached' })
 
-// The controls with the row wrapped.
-await page.waitForTimeout(500)
-const controlsShot = await page.screenshot({ clip: { x: 712, y: 330, width: 400, height: 460 } })
+// The controls with the row wrapped: from the settings button down to the last row, with a margin.
+await page.waitForFunction(() => document.querySelector('#control-more3').getBoundingClientRect().y > document.querySelector('#control-undo').getBoundingClientRect().y)
+const clip = await page.evaluate(() => {
+  const [top, bottom] = ['#control-settings', '#control-more3'].map((s) => document.querySelector(s).getBoundingClientRect())
+  const controls = document.querySelector('.controls-buttons').getBoundingClientRect()
+  return { x: controls.x - 12, y: top.y - 12, width: controls.width + 24, height: bottom.bottom - top.y + 24 }
+})
+const controlsShot = await page.screenshot({ clip })
 
 // Side by side in one picture.
 const compose = await (await browser.newContext({ viewport: { width: 1000, height: 520 } })).newPage()
