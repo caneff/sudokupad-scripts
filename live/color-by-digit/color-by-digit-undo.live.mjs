@@ -8,6 +8,8 @@ import { coloredCountOn, givensColoredOn, labelOn, MODE_KEY, openSession, pressT
 import { settle } from '../settle.mjs'
 import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
 import { gridPoint } from '../pen.mjs'
+import { flushSave } from '../attacks.mjs'
+import { startPuzzle } from '../page.mjs'
 
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
 
@@ -119,7 +121,7 @@ describe('Undo after a Restart', { concurrency: false }, () => {
 })
 
 describe('The first Undo after a Restart', { concurrency: false }, () => {
-  let context, p
+  let context, p, givens
 
   const undo = () => p.click('#control-undo')
   const coloredCount = () => coloredCountOn(p)
@@ -134,7 +136,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
     await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
     await pressTo(p, 'Cell')
     assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
-    const givens = await givensColoredOn(p)
+    givens = await givensColoredOn(p)
     assert.equal(givens > 0, true)
     await p.evaluate(() => Framework.app.restartPuzzle())
     assert.equal(await settle(() => givensColoredOn(p), givens), givens)
@@ -144,6 +146,34 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
     assert.equal(await settle(label, 'Cell'), 'Cell')
     assert.equal(await settle(() => givensColoredOn(p), givens), givens)
     assert.equal(await p.evaluate((key) => Framework.getData(key), MODE_KEY), 'cell')
+  })
+
+  it('the second Undo takes back the Restart and the mode stays Cell with the board colored', async () => {
+    await undo()
+    assert.equal(await settle(() => p.evaluate(() => Framework.app.grid.getCell(0, 2).propGet('normal') ?? null), '4'), '4', 'the digit is back')
+    assert.equal(await label(), 'Cell')
+    assert.equal(await settle(async () => (await coloredCount()) > givens, true), true, 'the digit cell is colored again')
+  })
+})
+
+describe('The first Undo after a Restart, saved', { concurrency: false }, () => {
+  // Color by Digit colors again when the page loads, so the saved actions are read by a page without the script: SudokuPad's color tool toggles, and a coloring saved twice reads as none.
+  it('saves the givens colored once: a reload without the script shows them colored', async () => {
+    const { context, p } = await openSession(browser, script)
+    try {
+      await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
+      await pressTo(p, 'Cell')
+      await p.evaluate(() => Framework.app.restartPuzzle())
+      const givens = await settle(() => givensColoredOn(p), 30)
+      await p.click('#control-undo')
+      assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined), true), true)
+      await flushSave(p)
+      await p.reload({ waitUntil: 'load' })
+      await startPuzzle(p)
+      assert.equal(await settle(() => givensColoredOn(p), givens), givens)
+    } finally {
+      await context.close()
+    }
   })
 })
 
