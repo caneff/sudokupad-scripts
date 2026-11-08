@@ -467,7 +467,7 @@
 
   // The note with the box corner `corner` of CORNERS dragged to screen point `point`, the opposite corner kept at screen point `anchor`. The box is in board
   // units on the board and off it, since a note off the board is drawn at the board's scale too; the note's point moves to the box's new middle, pinned or fixed as it was.
-  // The box stops at MIN_BOX_EM or at the note's `autoSize` in board units, whichever is smaller, so a short note can shrink back to the size it had unresized.
+  // A short note can shrink back to its `autoSize` in board units, which is why the floor is not MIN_BOX_EM alone.
   function resizedItem (item, anchor, point, board, corner, autoSize) {
     const box = [0, 1].map((i) => roundToTenth(Math.max(GRABBABLE_EM * item.size, Math.min(MIN_BOX_EM[i] * item.size, autoSize[i]), corner[i] * (point[i] - anchor[i]) / board.scale)))
     const middle = [0, 1].map((i) => anchor[i] + corner[i] * box[i] * board.scale / 2)
@@ -2356,21 +2356,25 @@
     if (event.button !== PRIMARY_BUTTON || index === null) return
     const item = editing ? editing.item : drawing[index]
     const element = editing ? editing.element : item[NOTE_ELEMENT]
-    const box = contentBox(element, editing || item.fixed ? 1 : boardMap().scale)
+    const unit = editing || item.fixed ? 1 : boardMap().scale
+    const box = contentBox(element, unit)
     const [x, y] = eventPoint(event)
     const grabbed = cornerPoint(box, corner)
     const anchor = cornerPoint(box, corner, true)
-    const autoSize = item.box ? unresizedSize(element, editing || item.fixed ? 1 : boardMap().scale) : noteSize(item)
+    const autoSize = unresizedSize(element, unit)
     resizing = { index, item, corner, anchor, offset: [grabbed[0] - x, grabbed[1] - y], autoSize, to: null }
   }
 
-  // A resized note's size in board units had it no box, read by clearing the box styles from its element for one synchronous measure, with nothing painted between.
+  // The size in board units the note has with no box, measured live because a typed or resized note's stored size is stale. Clearing the box styles for one synchronous
+  // read paints nothing between, but resets the scroll, so it is put back.
   function unresizedSize (element, unit) {
     const { style } = element
     const kept = ['width', 'height', 'maxWidth', 'maxHeight'].map((name) => [name, style[name]])
+    const { scrollTop } = element
     kept.forEach(([name]) => { style[name] = '' })
     const box = contentBox(element, unit)
     kept.forEach(([name, value]) => { style[name] = value })
+    element.scrollTop = scrollTop
     return [box.right - box.left, box.bottom - box.top].map((side) => side / boardMap().scale)
   }
 

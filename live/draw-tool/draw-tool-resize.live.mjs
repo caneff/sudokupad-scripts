@@ -298,6 +298,33 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     await p.keyboard.press('Delete')
   })
 
+  it('a new note still open, shrunk by its handle, stops at the minimum box and not at one character', async () => {
+    await p.mouse.click(...await gridPoint(p, SHORT_AT))
+    await p.keyboard.type(NOTE_TEXT)
+    await dragHandle(-1000, -1000)
+    const smallest = await box(TEXT_BOX)
+    assert.ok(near(smallest.right - smallest.left, MIN_EM[0] * smallest.em), `${smallest.right - smallest.left} wide, em ${smallest.em}`)
+    await p.keyboard.press('Escape')
+    await p.mouse.click(...await gridPoint(p, SHORT_AT))
+    await p.keyboard.press('Delete')
+  })
+
+  it('pressing a handle of a scrolled note leaves its scroll where it was', async () => {
+    await p.keyboard.press('Escape')
+    await p.mouse.click(...await middleOfNote())
+    const scrolled = await read((s) => {
+      const note = document.querySelector(s)
+      note.scrollTop = 10
+      return note.scrollTop
+    }, TEXTS)
+    assert.ok(scrolled > 0, 'the note scrolls')
+    const [x, y] = await handleMiddle()
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.up()
+    assert.equal(await read((s) => document.querySelector(s).scrollTop, TEXTS), scrolled)
+  })
+
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
   })

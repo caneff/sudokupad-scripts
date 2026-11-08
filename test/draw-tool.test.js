@@ -658,7 +658,7 @@ test('a saved size reads back, and a note without one has none', () => {
   for (const box of [[1], 'big', [0, 10], [10, -1], [10, 'a'], null]) assert.deepEqual(readDrawing([{ ...sum, box }]).kept, [{ ...sum, box }], JSON.stringify(box))
 })
 
-// The auto size, in board units, of a note of a dozen characters at a text size of 20: wider than the minimum box.
+// An auto size, in board units, wider than the minimum box, passed for whatever text the test's note holds.
 const AUTO = [132, 23]
 
 // A resize keeps the corner opposite the dragged one still: on the board the stub's scale is 2 screen pixels a board unit.
@@ -705,8 +705,8 @@ test('a note narrower than three characters can be resized back down to its own 
 })
 
 test('a resize never leaves a note without a box to grab, even from an auto size of nothing', () => {
-  const empty = textItem([50, 60], 'x', 3, 20)
-  assert.deepEqual(resizedItem(empty, [200, 170], [190, 160], { ...board, scale: 2 }, CORNERS.bottomRight, [0, 0]).box, [5, 5])
+  const note = textItem([50, 60], 'x', 3, 20)
+  assert.deepEqual(resizedItem(note, [200, 170], [190, 160], { ...board, scale: 2 }, CORNERS.bottomRight, [0, 0]).box, [5, 5])
 })
 
 test('a note sent back to auto size loses its box and keeps its point', () => {
