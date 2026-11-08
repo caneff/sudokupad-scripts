@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 
@@ -48,7 +48,7 @@ const tools = (p) => {
   const coloursOf = async () => JSON.stringify((await cellsState()).map((x) => x.colours))
   const digitOf = (x) => String(x.given || x.value || '')
   const wrongCount = async (groups) => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(digitOf(x) === '' ? [] : [keyOf(groups, digitOf(x))])).length
-  const getState = () => read((key) => Framework.getData(key), PROFILES_KEY)
+  const getState = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
   const names = async () => (await getState()).profiles.map((x) => x.name)
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
   const valueAt = (r, c) => read(([r, c]) => String(Framework.app.grid.getCell(r, c).value || ''), [r, c])
@@ -206,6 +206,38 @@ describe('the one-time adds of Entropic and Modular, then Each digit, to an inst
     await open({ [PROFILES_STORAGE_KEY]: mine, [ADDED_PRELOADS_STORAGE_KEY]: true }, async (p, t) => {
       assert.deepEqual(await watch(t.names), [['Low/5/High', 'Odd/Even', 'Mine']])
     })
+  })
+})
+
+describe('saved profiles that cannot be read, injected after Start Puzzle', { concurrency: false }, () => {
+  // A shape this version cannot read, as a later version's profiles would be after a downgrade.
+  const UNREADABLE = { profiles: 'saved by a later version', active: 0 }
+  let context, p, errors, t
+
+  before(async () => {
+    ({ context, p, errors } = await openProfiles(savedProfiles(UNREADABLE)))
+    t = tools(p)
+  })
+  after(async () => { await context.close() })
+
+  it('the dialog shows the preloads under one line saying the saved profiles could not be read and were kept', async () => {
+    await t.openEditor()
+    assert.match(await p.locator(`${EDITOR} [data-role=unreadable]`).textContent(), /could not be read; they were kept/)
+    await closeDialogWith(p, 'Cancel', EDITOR)
+  })
+
+  it('a save of another pick leaves the unreadable value under _unreadable, and the line goes', async () => {
+    await t.openMenuByArrow()
+    await t.pick('Odd/Even')
+    assert.equal(await settle(async () => (await t.getState()).active, 1), 1)
+    assert.deepEqual(await p.evaluate((key) => Framework.getData(`${key}_unreadable`), PROFILES_KEY), UNREADABLE)
+    await t.openEditor()
+    assert.equal(await p.locator(`${EDITOR} [data-role=unreadable]`).count(), 0)
+    await closeDialogWith(p, 'Cancel', EDITOR)
+  })
+
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
   })
 })
 
@@ -710,7 +742,7 @@ describe('opening the editor and saving with no edit, injected after Start Puzzl
   it('every preload comes back unchanged, in its order, with the active profile kept', async () => {
     await openScriptDialog(p, 'Color by Digit', EDITOR)
     await closeDialogWith(p, 'Save', EDITOR)
-    assert.deepEqual(await settle(() => p.evaluate((key) => Framework.getData(key), PROFILES_KEY), PRELOAD_PROFILES), PRELOAD_PROFILES)
+    assert.deepEqual(await settle(async () => savedState(await p.evaluate((key) => Framework.getData(key), PROFILES_KEY)), PRELOAD_PROFILES), PRELOAD_PROFILES)
   })
 
   it('no uncaught page errors', () => {

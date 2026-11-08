@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.6
+// @version      0.22.7
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.6'
+  const VERSION = '0.22.7'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -228,28 +228,24 @@
     return groups && { name: cleanName(data.name), groups }
   }
 
-  function normalizeState (data) {
-    if (!data || !Array.isArray(data.profiles)) return null
-    const kept = data.profiles.slice(0, MAX_PROFILES).map((profile, index) => ({ profile: normalizeProfile(profile), index })).filter((entry) => entry.profile)
-    if (kept.length === 0) return null
-    const keptIndex = (index) => kept.findIndex((entry) => entry.index === index)
-    const digitActive = keptIndex(data.digitActive)
-    return makeState(kept.map((entry) => entry.profile), Math.max(keptIndex(data.active), 0), digitActive >= 0 ? digitActive : undefined, data.useDigitColors !== false)
+  // The one reader of the profiles, saved or pasted: a state that would lose a profile, or holds more than MAX_PROFILES, is refused whole,
+  // so nothing saved over it drops a profile unseen. An active or digit pick that is no profile falls back.
+  function readProfiles (data) {
+    if (!data || !Array.isArray(data.profiles) || data.profiles.length === 0 || data.profiles.length > MAX_PROFILES) return undefined
+    const profiles = data.profiles.map(normalizeProfile)
+    if (profiles.includes(null)) return undefined
+    const isIndex = (index) => Number.isInteger(index) && index >= 0 && index < profiles.length
+    return makeState(profiles, isIndex(data.active) ? data.active : 0, isIndex(data.digitActive) ? data.digitActive : undefined, data.useDigitColors !== false)
   }
 
   const readPastedFlag = (data) => (typeof data === 'boolean' ? data : undefined)
-  // `normalizeState` drops a malformed profile, so a state passes only when it kept every profile it held.
-  const readPastedProfiles = (data) => {
-    const state = normalizeState(data)
-    return state && state.profiles.length === data.profiles.length ? state : undefined
-  }
   const readPastedMode = (data) => (MODES.includes(data) ? data : undefined)
-  const READERS = { [PROFILES_KEY]: readPastedProfiles, [MODE_KEY]: readPastedMode, ...Object.fromEntries(ADDED_PRELOADS.map(({ key }) => [key, readPastedFlag])) }
+  const READERS = { [PROFILES_KEY]: readProfiles, [MODE_KEY]: readPastedMode, ...Object.fromEntries(ADDED_PRELOADS.map(({ key }) => [key, readPastedFlag])) }
   // Settings copied before the mode existed carry auto mode's on/off in its place.
   const withModeFromAuto = (data) => (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY) ? { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) } : data)
   // The profiles in force, which carry groups saved before profiles existed, and the mode in force, so a paste can switch either.
   function copiedSettings (store) {
-    const copied = { [PROFILES_KEY]: stateFromStored(store.getData(PROFILES_KEY), store.getData(LEGACY_GROUPS_KEY)), [MODE_KEY]: startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) }
+    const copied = { [PROFILES_KEY]: stateFromStored(store).state, [MODE_KEY]: startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) }
     ADDED_PRELOADS.forEach(({ key }) => { if (store.getData(key) === true) copied[key] = true })
     return JSON.stringify(copied)
   }
@@ -272,10 +268,18 @@
 
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
 
+  // The profiles in force, and `unreadable` when the saved ones could not be read: they are then kept under `<key>_unreadable`, and the
+  // preloads, or groups saved before profiles existed, stand in.
+  function stateFromStored (store) {
+    const { value, unreadable } = load(store, { key: PROFILES_KEY, read: readProfiles })
+    const state = value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
+    return unreadable === undefined ? { state } : { state, unreadable }
+  }
+
+  const saveProfiles = (store, state) => save(store, PROFILES_KEY, state)
+
   // Groups saved before profiles existed become the active profile.
-  function stateFromStored (data, legacyGroups) {
-    const saved = normalizeState(data)
-    if (saved) return saved
+  function stateFromLegacy (legacyGroups) {
     const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
     if (!legacy) return { profiles: preloads, active: 0 }
@@ -1114,14 +1118,15 @@
   // Matched as text, not by a selector, since a custom palette's key may hold a quote.
   const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
 
-  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '' }) {
+  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadable = false }) {
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
     const paint = colors.length === 0
       ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
       : renderPaint(groups, pages, shown, brush, colors)
-    return `${pulldownsHtml}` +
+    const kept = unreadable ? `<div class="cbd-note" data-role="unreadable">Your saved profiles could not be read; they were kept, under ${PROFILES_KEY}${UNREADABLE_SUFFIX}.</div>` : ''
+    return `${kept}${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
       `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
   }
@@ -1345,8 +1350,51 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
+  /* eslint-enable no-unused-vars */
+  // </lib:plain>
+  // <lib:store>
+  // Generated from lib/store.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain.
+  /* global isPlainObject */
+  // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
+  // version 0, and so is every shape saved so far.
+  const STORE_VERSION = 0
+  const UNREADABLE_SUFFIX = '_unreadable'
+
+  const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
+
+  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A refused or throwing read copies the raw value to
+  // `<key>_unreadable` before anything can save over it; the first copy is kept, since it holds what was there before things went wrong.
+  function load (store, { key, read }) {
+    const raw = store.getData(key)
+    if (raw === null) return { value: undefined }
+    let unreadable
+    try {
+      const value = read(isEnvelope(raw) ? raw.data : raw)
+      if (value !== undefined) return { value }
+      unreadable = 'its reader refused it'
+    } catch (error) {
+      unreadable = error.message
+    }
+    const kept = key + UNREADABLE_SUFFIX
+    if (store.getData(kept) === null) store.setData(kept, raw)
+    console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${kept}`)
+    return { value: undefined, unreadable }
+  }
+
+  function save (store, key, data) {
+    store.setData(key, { v: STORE_VERSION, data })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:store>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1360,8 +1408,8 @@
     return tool ? layoutPages(tool.palette.pages, tool.currentPage, readColor) : []
   }
 
-  const saveState = (state) => Framework.setData(PROFILES_KEY, state)
-  const loadState = () => stateFromStored(Framework.getData(PROFILES_KEY), Framework.getData(LEGACY_GROUPS_KEY))
+  const saveState = (state) => saveProfiles(Framework, state)
+  const loadState = () => stateFromStored(Framework).state
 
   function addPreloadsOnce () {
     for (const { key, names } of ADDED_PRELOADS) {
@@ -1735,7 +1783,9 @@
 
   function openDialog (app) {
     const pages = readPages()
-    let savedState = loadState()
+    const loaded = stateFromStored(Framework)
+    let savedState = loaded.state
+    let unreadable = 'unreadable' in loaded
     let draft = savedState
     let draftMode = mode
     let selected = draft.active
@@ -1756,7 +1806,7 @@
     let page
     const groupsShown = () => draft.profiles[selected].groups
     const draw = () => {
-      box.innerHTML = renderEditor({ groups: groupsShown(), pages, page, brush, pulldownsHtml: renderPulldowns(draft, draftMode), profilesHtml: renderProfiles(draft, readColor, selected) })
+      box.innerHTML = renderEditor({ groups: groupsShown(), pages, page, brush, pulldownsHtml: renderPulldowns(draft, draftMode), profilesHtml: renderProfiles(draft, readColor, selected), unreadable })
     }
     const reshow = (next, nextSelected = selected) => {
       draft = next
@@ -1780,6 +1830,7 @@
       ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
+      unreadable = false
       reshow(savedState, savedState.active)
       draftMode = mode
       draw()

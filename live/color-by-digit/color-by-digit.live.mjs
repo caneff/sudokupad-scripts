@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { startPuzzle } from '../page.mjs'
-import { BUTTON, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, SEED, watch } from './color-by-digit-fixtures.mjs'
+import { BUTTON, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, savedState, SEED, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 
@@ -37,8 +37,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const coloredCount = () => coloredCountOn(p)
   const colorsAt = async (r, c) => at(await cellsState(), r, c).colours
   const digitsOnBoard = async () => (await cellsState()).map((x) => [x.given, x.value])
-  const getData = () => read((key) => Framework.getData(key), PROFILES_KEY)
-  const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
+  const getData = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
+  const getGroups = async () => { const d = await getData(); return d.profiles[d.active].groups }
   const getSetting = () => read(() => Framework.getSetting('multicolour'))
   const editor = () => p.locator(EDITOR)
 

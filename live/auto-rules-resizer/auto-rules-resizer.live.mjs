@@ -324,7 +324,8 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
     after(async () => { await context.close() })
 
-    const data = (key) => p.evaluate((k) => Framework.getData(k), key)
+    // A saved limit is the data of its `{ v, data }` envelope; a limit saved bare would read undefined here.
+    const data = (key) => p.evaluate((k) => { const saved = Framework.getData(k); return saved === null ? null : saved.data }, key)
 
     it('opens from the settings entry with both boxes empty, and typing in a box enters no digit on the board', async () => {
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
