@@ -115,26 +115,71 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.ok((await shown()).includes('again'))
   })
 
-  it('attack 21b: typing and reloading at once keeps the text through the pagehide save', async () => {
+  // The page's own save at unload, fired by hand: what is saved the moment the event returns is what that listener wrote, with no debounce to credit.
+  const savedByEvent = async (fire) => {
+    const key = draw.DRAWING_PREFIX + await draw.puzzleKey(p)
+    return draw.drawingOf(await p.evaluate(([dataKey, run]) => {
+      Framework.removeData(dataKey)
+      new Function(run)() // eslint-disable-line no-new-func
+      return Framework.getData(dataKey)
+    }, [key, fire])).map((item) => item.text)
+  }
+  const PAGEHIDE = 'window.dispatchEvent(new Event("pagehide"))'
+  const HIDDEN = 'Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); delete document.visibilityState'
+
+  it('attack 21b: typing and reloading at once keeps the text, and the pagehide and the hidden-page saves each write it alone', async () => {
     await clickAt(SPOT)
     await p.keyboard.type('quick')
+    assert.deepEqual(await savedByEvent(PAGEHIDE), ['quick'], 'pagehide')
+    assert.deepEqual(await savedByEvent(HIDDEN), ['quick'], 'visibilitychange to hidden')
     await reload()
     await noOpenBox()
     assert.deepEqual(await shown(), ['quick'])
     assert.deepEqual(await savedTexts(), ['quick'])
   })
 
-  it('attack 21c: an empty open note is not saved, and the saves while typing add no SudokuPad undo step and leave the note\'s own Undo whole', async () => {
+  it('attack 21c: the saves while typing add no SudokuPad undo step and leave the note\'s own Undo whole', async () => {
     const undoSteps = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
     const before = await undoSteps()
     await clickAt(SPOT)
     await p.keyboard.type('abcdef')
-    await settle(savedTexts, ['abcdef'], SETTLE_MS, SAVE_QUIET_MS)
+    assert.deepEqual(await settle(savedTexts, ['abcdef'], SETTLE_MS, SAVE_QUIET_MS), ['abcdef'], 'the save while typing ran')
     assert.equal(await undoSteps(), before, 'the saves added no undo step')
     await p.keyboard.press('Control+z')
     assert.equal(await boxText(), '', 'one Undo in the note removes everything typed')
     await draw.finishNote(p)
-    assert.deepEqual(await savedTexts(), [], 'an empty note leaves nothing saved')
+  })
+
+  it('attack 21d: a note saved while typing and then emptied is not brought back by a reload, by the pause save or by the pagehide save', async () => {
+    for (const waitForSave of [true, false]) {
+      await clickAt(SPOT)
+      await p.keyboard.type('abc')
+      assert.deepEqual(await settle(savedTexts, ['abc'], SETTLE_MS, SAVE_QUIET_MS), ['abc'])
+      await p.keyboard.press('Control+a')
+      await p.keyboard.press('Backspace')
+      if (waitForSave) assert.deepEqual(await settle(savedTexts, [], SETTLE_MS, SAVE_QUIET_MS), [], 'the pause save took the emptied note out')
+      await reload()
+      await noOpenBox()
+      assert.deepEqual(await shown(), [], `nothing drawn (waited for the save: ${waitForSave})`)
+      assert.deepEqual(await savedTexts(), [], `nothing saved (waited for the save: ${waitForSave})`)
+    }
+  })
+
+  it('attack 21e: a reopened note typed in is saved while typing, and a note emptied then Escaped after a Restart leaves Undo bringing the cleared notes back', async () => {
+    await typeAt(OTHER, 'old')
+    await draw.reopen(p, await gridPoint(p, OTHER))
+    await p.keyboard.type('+new')
+    assert.deepEqual(await settle(savedTexts, ['old+new'], SETTLE_MS, SAVE_QUIET_MS), ['old+new'])
+    await reload()
+    assert.deepEqual(await shown(), ['old+new'])
+    await restartFromDialog()
+    await clickAt(SPOT)
+    await p.keyboard.type('x')
+    assert.deepEqual(await settle(savedTexts, ['x'], SETTLE_MS, SAVE_QUIET_MS), ['x'])
+    await p.keyboard.press('Backspace')
+    await draw.finishNote(p)
+    await undoButton()
+    assert.deepEqual(await settle(shown, ['old+new']), ['old+new'], 'Undo brought the Restart\'s notes back')
   })
 
   it('attack 22: Undo and Redo pressed over and over inside a note, and Undo from the toolbar, keep the note\'s text and SudokuPad\'s state sound', async () => {

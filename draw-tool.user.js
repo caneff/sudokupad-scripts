@@ -2932,7 +2932,7 @@
       if (event.inputType === 'insertText') replaceTypedSymbol()
       showEditing(boardMap())
       clearTimeout(openNoteSaveTimer)
-      openNoteSaveTimer = setTimeout(saveOpenNote, OPEN_NOTE_SAVE_MS)
+      openNoteSaveTimer = setTimeout(under(textTool, saveOpenNote), OPEN_NOTE_SAVE_MS)
     }))
     editing = { index, item, element }
     drawingLayer().append(element)
@@ -2979,18 +2979,26 @@
   const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
 
   // The open note is saved with the rest of the notes, as typed so far, once typing pauses and when the page is hidden or unloaded, so a reload or a crashed tab
-  // keeps it. The notes in memory are not changed: finishing the note decides them. An empty note is not saved.
+  // keeps it. The notes in memory are not changed: finishing the note decides them.
   const OPEN_NOTE_SAVE_MS = 500
   let openNoteSaveTimer
+
+  // What the open note's text becomes when it closes. A last word `sum` becomes a sigma before the trailing spaces go, so a sigma the typist undid stays the word.
+  function closingText ({ index, element }) {
+    const typed = typedText(element)
+    return typed === (index === -1 ? '' : drawing[index].text) ? typed : closedText(closedSymbols(typed))
+  }
+
+  // An empty note is saved as no note, which is what closing it does; one never saved leaves the saved notes as they are.
   function saveOpenNote () {
     clearTimeout(openNoteSaveTimer)
     if (!editing) return
-    const { index, item, element } = editing
-    const text = closedText(typedText(element))
-    if (text === '') return
-    const typed = { ...item, text }
+    const text = closingText(editing)
+    if (text === '' && !editing.saved) return
+    const { index, item } = editing
     editing.saved = true
-    writeDrawing(index === -1 ? [...drawing, typed] : drawing.map((note, i) => i === index ? typed : note))
+    if (text === '') writeDrawing(drawing.filter((_, i) => i !== index))
+    else writeDrawing(index === -1 ? [...drawing, { ...item, text }] : drawing.map((note, i) => i === index ? { ...item, text } : note))
   }
 
   // An empty box removes its text.
@@ -3008,11 +3016,10 @@
 
   // Closes the open note. The index of the note it leaves, or -1 when there is none (it was empty).
   function finishText () {
-    const { index, item, element, saved } = closeEditing()
+    const open = closeEditing()
+    const { index, item, saved } = open
     const before = index === -1 ? '' : drawing[index].text
-    const typed = typedText(element)
-    // A last word `sum` becomes a sigma before the trailing spaces go, so a sigma the typist undid stays the word.
-    const text = typed === before ? typed : closedText(closedSymbols(typed))
+    const text = closingText(open)
     const resized = index !== -1 && String(item.box) !== String(drawing[index].box)
     let left = index
     const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || itemOpacity(item) !== itemOpacity(drawing[index]) || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
@@ -3025,8 +3032,9 @@
     }
     renderDrawing()
     if (changed && resized && text !== '') snapToPixels([index])
-    // A save made while typing is written over, even when the note ended as it began.
-    if (changed || saved) saveNotes()
+    // A save made while typing is written over, even when the note ended as it began; that is no edit, so it leaves what Undo can bring back after a Restart.
+    if (changed) saveNotes()
+    else if (saved) writeDrawing()
     showPanelValues()
     return left
   }
