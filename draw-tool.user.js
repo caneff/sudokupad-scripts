@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.38.0
+// @version      0.39.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.38.0'
+  const VERSION = '0.39.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -222,6 +222,8 @@
   const SELECTED_CLASS = 'draw-tool-selected'
   const CHECK_CLASS = 'draw-tool-check'
   const CHECK_DONE_CLASS = 'draw-tool-check-done'
+  const CODE_CLASS = 'draw-tool-code'
+  const CODE_BLOCK_CLASS = 'draw-tool-code-block'
   // A ticked item's line fades to this share of the note's own look.
   const DONE_OPACITY = 0.6
   // A note being moved is drawn at this share of its own opacity, so the board shows through.
@@ -322,15 +324,32 @@
   const segmentsCross = (a, b, c, d) => cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0
 
   // Markers in the order they are tried, each with the flag it sets. `**` comes before `*` so a bold marker is never read as two italic ones.
-  const FLAGS = ['bold', 'italic', 'strike']
+  const FLAGS = ['bold', 'italic', 'strike', 'code']
   const MARKERS = [['**', 'bold'], ['~~', 'strike'], ['*', 'italic'], ['_', 'italic']]
   const isWordChar = (char) => char !== undefined && /\w/.test(char)
   const isSpace = (char) => char === undefined || /\s/.test(char)
 
-  // One line of a note as runs of text, each `{ text }` with its `bold`, `italic` or `strike` flag set where it applies. A marker opens only before a
-  // non-space and closes only after one, `_` only at a word's edge, and a marker with no partner shows as typed.
+  // The inline code in a line: each span as [start, end) with both backticks inside it, and `open`, the index of a last backtick with no partner (-1 when none).
+  // A pair with nothing between it is no span.
+  function codeSpans (line) {
+    const spans = []
+    let at = line.indexOf('`')
+    while (at !== -1) {
+      const end = line.indexOf('`', at + 1)
+      if (end === -1) return { spans, open: at }
+      if (end > at + 1) {
+        spans.push([at, end + 1])
+        at = line.indexOf('`', end + 1)
+      } else at = end
+    }
+    return { spans, open: -1 }
+  }
+
+  // One line of a note as runs of text, each `{ text }` with its `bold`, `italic`, `strike` or `code` flag set where it applies. Inside inline code nothing else is read.
+  // A marker opens only before a non-space and closes only after one, `_` only at a word's edge, and a marker with no partner shows as typed.
   function parseLine (line) {
     const memo = new Map()
+    const codeEnds = new Map(codeSpans(line).spans)
     const add = (runs, run) => {
       const last = runs[runs.length - 1]
       if (last && FLAGS.every((flag) => Boolean(last[flag]) === Boolean(run[flag]))) last.text += run.text
@@ -344,9 +363,13 @@
       let i = at
       let result = null
       while (i < line.length && !result) {
-        const opener = MARKERS.find(([mark]) => line.startsWith(mark, i) && !isSpace(line[i + mark.length]) && !(mark === '_' && isWordChar(line[i - 1])))
+        const codeEnd = codeEnds.get(i)
+        const opener = !codeEnd && MARKERS.find(([mark]) => line.startsWith(mark, i) && !isSpace(line[i + mark.length]) && !(mark === '_' && isWordChar(line[i - 1])))
         const inner = opener && read(i + opener[0].length, opener[0])
-        if (inner && inner.closed) {
+        if (codeEnd) {
+          add(runs, { text: line.slice(i + 1, codeEnd - 1), code: true })
+          i = codeEnd
+        } else if (inner && inner.closed) {
           for (const run of inner.runs) add(runs, { ...run, [opener[1]]: true })
           i = inner.end
         } else if (stop && line.startsWith(stop, i) && i > at && !isSpace(line[i - 1]) && !(stop === '_' && isWordChar(line[i + 1]))) {
@@ -376,6 +399,32 @@
     return BULLET_MARK.test(line) ? [{ text: '•', bullet: true }, ...parseLine(line.slice(2))] : parseLine(line)
   }
 
+  // A line of three backticks and an optional language word opens a code block, and a line of three backticks closes it.
+  const FENCE_OPEN = /^```[^\s`]*[ \t]*$/
+  const FENCE_CLOSE = /^```[ \t]*$/
+  // What each line is: 'fence' (an opening or closing line), 'code' (between them; an unclosed block runs to the end of the note) or 'text'.
+  function lineKinds (lines) {
+    let fenced = false
+    return lines.map((line) => {
+      if ((fenced ? FENCE_CLOSE : FENCE_OPEN).test(line)) {
+        fenced = !fenced
+        return 'fence'
+      }
+      return fenced ? 'code' : 'text'
+    })
+  }
+
+  // Whether the character at `caret` in the typed `text` is code: in a block, or in inline code or after a backtick that has no partner yet, since the typist is mid-span.
+  function inCode (text, caret) {
+    const lineStart = caret === 0 ? 0 : text.lastIndexOf('\n', caret - 1) + 1
+    const kinds = lineKinds(text.slice(0, lineStart).split('\n'))
+    if (kinds.filter((kind) => kind === 'fence').length % 2 === 1) return true
+    const lineEnd = text.indexOf('\n', lineStart)
+    const { spans, open } = codeSpans(text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd))
+    const at = caret - lineStart
+    return (open !== -1 && at > open) || spans.some(([start, end]) => at > start && at < end)
+  }
+
   function toggledCheck (text, index) {
     return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, state) => `- [${state === ' ' ? 'x' : ' '}] `) : line).join('\n')
   }
@@ -384,7 +433,7 @@
   const SYMBOLS = { '->': '→', '<-': '←', '!=': '≠', '<=': '≤', '>=': '≥', sum: 'Σ' }
   const SYMBOL_PATTERN = /->|<-|!=|<=|>=|\bsum\b/g
   // A note that ends in the word `sum` has no character typed after it to complete it, so closing the note does.
-  const closedSymbols = (text) => text.replace(/\bsum$/, SYMBOLS.sum)
+  const closedSymbols = (text) => inCode(text, text.length) ? text : text.replace(/\bsum$/, SYMBOLS.sum)
 
   // What a closed note keeps of its typed text: trailing spaces and tabs go from every line, and blank lines before and after the text go, so a note of
   // only spaces is empty. Line breaks inside the text stay.
@@ -392,6 +441,7 @@
 
   // The symbol the character just typed before `caret` completed, or null. A pair is complete at the caret; `sum` only once a character that is not part of a word follows it.
   function symbolJustTyped (text, caret) {
+    if (inCode(text, caret)) return null
     for (const found of text.slice(0, caret).matchAll(SYMBOL_PATTERN)) {
       const end = found.index + found[0].length
       if (end === caret && found[0] !== 'sum') return { start: found.index, end, symbol: SYMBOLS[found[0]] }
@@ -403,8 +453,13 @@
   const isBullet = (runs) => Boolean(runs[0]?.bullet)
   const BULLET_INDENT_EM = 1.2
 
-  // A note's text as one list of runs per line; a marker does not reach across a line break.
-  const parseMarkdown = (text) => text.split('\n').map(parseBlock)
+  // A note's text as one list of runs per line; a marker does not reach across a line break. A fence line is `[{ text: '', fence: true }]`, and a line
+  // between fences is `[{ text, code: true, block: true }]`, exactly as typed.
+  function parseMarkdown (text) {
+    const lines = text.split('\n')
+    const kinds = lineKinds(lines)
+    return lines.map((line, i) => kinds[i] === 'fence' ? [{ text: '', fence: true }] : kinds[i] === 'code' ? [{ text: line, code: true, block: true }] : parseBlock(line))
+  }
 
   // Each text parsed once: a redraw, a move or a recolor reads a note's runs again without parsing it again.
   const parsedTexts = new Map()
@@ -1760,6 +1815,7 @@
     if (!FLAGS.some((flag) => run[flag])) return run.text
     const element = document.createElement('span')
     element.textContent = run.text
+    if (run.code) element.className = CODE_CLASS
     Object.assign(element.style, FLAG_STYLES(run))
     return element
   }
@@ -1786,13 +1842,38 @@
     return line
   }
 
-  // A bullet block ends its own line, so a line break goes only between two plain lines, and before a bullet that follows an empty line.
-  const breaksBefore = (runs, previous) => isBullet(runs) ? previous.length === 0 : !isBullet(previous)
+  // A code block's lines as typed, in one box. A trailing empty line needs a second line feed to show, since a single one at the end of a block is dropped.
+  function codeBlockElement (lines) {
+    const block = document.createElement('div')
+    block.className = `${CODE_CLASS} ${CODE_BLOCK_CLASS}`
+    block.textContent = lines.join('\n') + (lines[lines.length - 1] === '' ? '\n' : '')
+    return block
+  }
+
+  const isFence = (runs) => Boolean(runs[0]?.fence)
+
+  // The lines of a note as pieces of the page: a bullet line and a code block (all its lines, the fences hidden) are blocks, a plain line is its runs. An empty code block shows nothing.
+  function notePieces (lines) {
+    const pieces = []
+    for (let i = 0; i < lines.length; i++) {
+      const runs = lines[i]
+      if (isFence(runs)) {
+        const body = []
+        for (i++; i < lines.length && !isFence(lines[i]); i++) body.push(lines[i][0].text)
+        if (body.length) pieces.push({ block: true, empty: false, content: [codeBlockElement(body)] })
+      } else if (isBullet(runs)) pieces.push({ block: true, empty: false, content: [bulletElement(runs, i)] })
+      else pieces.push({ block: false, empty: runs.length === 0, content: runs.map(runElement) })
+    }
+    return pieces
+  }
+
+  // A block ends its own line, so a line break goes only between two plain lines, and before a block that follows an empty line.
+  const breaksBefore = (piece, previous) => piece.block ? previous.empty : !previous.block
 
   // A finished note shows the styled runs, lines joined by line breaks.
   function noteContent (text) {
-    const lines = parsedText(text)
-    return lines.flatMap((runs, i) => [...(i && breaksBefore(runs, lines[i - 1]) ? ['\n'] : []), ...(isBullet(runs) ? [bulletElement(runs, i)] : runs.map(runElement))])
+    const pieces = notePieces(parsedText(text))
+    return pieces.flatMap((piece, i) => [...(i && breaksBefore(piece, pieces[i - 1]) ? ['\n'] : []), ...piece.content])
   }
 
   // The note open for typing shows its text as typed, markers and all.
@@ -1951,6 +2032,8 @@
     '}',
     `.${HANDLE_CLASS}.${ENTERING_CLASS} { opacity: 0; }`,
     `.${CHECK_CLASS} { display: inline-block; box-sizing: border-box; width: 0.8em; height: 0.8em; border: 2px solid currentColor; border-radius: 3px; vertical-align: -0.05em; position: relative; }`,
+    `.${CODE_CLASS} { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 0.9em; background: color-mix(in srgb, currentColor 15%, transparent); border-radius: 0.25em; padding: 0.05em 0.25em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }`,
+    `.${CODE_BLOCK_CLASS} { display: block; padding: 0.15em 0.35em; border-radius: 0.3em; }`,
     `.${CHECK_DONE_CLASS}::after { content: ''; position: absolute; left: 0.2em; top: -0.1em; width: 0.25em; height: 0.5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) .${CHECK_CLASS} { cursor: pointer; }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
@@ -2945,11 +3028,16 @@
     const selection = window.getSelection()
     const { anchorNode, anchorOffset } = selection
     if (!selection.isCollapsed || anchorNode?.nodeType !== window.Node.TEXT_NODE || !editing.element.contains(anchorNode)) return
-    const found = symbolJustTyped(anchorNode.data, anchorOffset)
-    if (!found) return
+    // A line break is a text node of its own, so the whole note is read, for whether the caret is in code, and the pair is then found in the caret's node.
+    const toCaret = document.createRange()
+    toCaret.setStart(editing.element, 0)
+    toCaret.setEnd(anchorNode, anchorOffset)
+    const nodeStart = toCaret.toString().length - anchorOffset
+    const found = symbolJustTyped(editing.element.textContent, nodeStart + anchorOffset)
+    if (!found || found.start < nodeStart) return
     const range = document.createRange()
-    range.setStart(anchorNode, found.start)
-    range.setEnd(anchorNode, found.end)
+    range.setStart(anchorNode, found.start - nodeStart)
+    range.setEnd(anchorNode, found.end - nodeStart)
     selection.removeAllRanges()
     selection.addRange(range)
     document.execCommand('insertText', false, found.symbol)

@@ -657,6 +657,57 @@ test('a "- [" line without the box shape, or a plain "- " line, stays a bullet',
   assert.deepEqual(parseMarkdown('- one'), [[{ text: '•', bullet: true }, { text: 'one' }]])
 })
 
+const FENCE = { text: '', fence: true }
+const codeLine = (text) => [{ text, code: true, block: true }]
+
+test('inline code is one run of its own with the backticks left out, and no markup is read inside it', () => {
+  assert.deepEqual(parseMarkdown('a `b` c'), [[{ text: 'a ' }, { text: 'b', code: true }, { text: ' c' }]])
+  assert.deepEqual(parseMarkdown('`a` and `b`'), [[{ text: 'a', code: true }, { text: ' and ' }, { text: 'b', code: true }]])
+  assert.deepEqual(parseMarkdown('`**a** -> _b_`'), [[{ text: '**a** -> _b_', code: true }]])
+  assert.deepEqual(parseMarkdown('- `a` b'), [[{ text: '•', bullet: true }, { text: 'a', code: true }, { text: ' b' }]])
+  assert.deepEqual(parseMarkdown('**x `y` z**'), [[{ text: 'x ', bold: true }, { text: 'y', bold: true, code: true }, { text: ' z', bold: true }]])
+})
+
+test('inline code does not reach across a line break, and a backtick with no partner shows as typed', () => {
+  assert.deepEqual(parseMarkdown('a `b'), [[{ text: 'a `b' }]])
+  assert.deepEqual(parseMarkdown('`a\nb`'), [[{ text: '`a' }], [{ text: 'b`' }]])
+  assert.deepEqual(parseMarkdown('a `` b'), [[{ text: 'a `` b' }]])
+  assert.deepEqual(parseMarkdown('`a` `b'), [[{ text: 'a', code: true }, { text: ' `b' }]])
+})
+
+test('a fence line opens a code block, whose lines show as typed, and the next fence line closes it', () => {
+  const body = ['- [ ] a', '**b**', '  -> c', '', '_d_']
+  assert.deepEqual(parseMarkdown('```\n' + body.join('\n') + '\n```'), [[FENCE], ...body.map(codeLine), [FENCE]])
+  assert.deepEqual(parseMarkdown('```js\nx `y`\n```'), [[FENCE], codeLine('x `y`'), [FENCE]])
+})
+
+test('lines after a code block parse normally, and an unclosed block runs to the end of the note', () => {
+  assert.deepEqual(parseMarkdown('```\na\n```\n- **b**'), [[FENCE], codeLine('a'), [FENCE], [{ text: '•', bullet: true }, { text: 'b', bold: true }]])
+  assert.deepEqual(parseMarkdown('x\n```\n**a**\n- b'), [[{ text: 'x' }], [FENCE], codeLine('**a**'), codeLine('- b')])
+})
+
+test('only a line of exactly three backticks and a language word is a fence', () => {
+  assert.deepEqual(parseMarkdown('``` js\na'), [[{ text: '``` js' }], [{ text: 'a' }]])
+  assert.deepEqual(parseMarkdown('x ```\na'), [[{ text: 'x ```' }], [{ text: 'a' }]])
+  assert.deepEqual(parseMarkdown('```\n```js\n```'), [[FENCE], codeLine('```js'), [FENCE]])
+})
+
+test('symbolJustTyped leaves a pair alone inside inline code, inside an unclosed backtick span, and inside a code block', () => {
+  assert.deepEqual(symbolJustTyped('`a->', 4), null)
+  assert.deepEqual(symbolJustTyped('`a` ->', 6), { start: 4, end: 6, symbol: '→' })
+  assert.deepEqual(symbolJustTyped('x ->', 4), { start: 2, end: 4, symbol: '→' })
+  assert.equal(symbolJustTyped('```\na ->', 8), null)
+  assert.equal(symbolJustTyped('```js\n\n  b <=', 13), null)
+  assert.deepEqual(symbolJustTyped('```\na\n```\nb ->', 14), { start: 12, end: 14, symbol: '→' })
+  assert.equal(symbolJustTyped('`x sum ', 7), null)
+})
+
+test('closedSymbols leaves a closing "sum" alone inside a code block', () => {
+  assert.equal(closedSymbols('```\nr5 sum'), '```\nr5 sum')
+  assert.equal(closedSymbols('`a sum'), '`a sum')
+  assert.equal(closedSymbols('`a` sum'), '`a` Σ')
+})
+
 test('toggledCheck flips one line\'s box and leaves the other lines alone', () => {
   assert.equal(toggledCheck('a\n- [ ] b\n- [ ] c', 1), 'a\n- [x] b\n- [ ] c')
   assert.equal(toggledCheck('- [x] b', 0), '- [ ] b')
