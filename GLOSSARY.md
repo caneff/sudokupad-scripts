@@ -164,10 +164,15 @@
 - **page button** — the second button of the **controls row**, also called the line type button. It shows the line the next enabled page draws,
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).
-- **install step** — one of the parts Pen Tool Extras installs at startup, each run in its own guard: colors, pen pages, arrow
+- **install step** — one of the parts Pen Tool Extras installs at startup, each a **feature** of the **SudokuPad guard**: colors, pen pages, arrow
   lines, drag highlight, marks, line erase, pen panel. A step is **skipped** when SudokuPad lacks an internal it
-  needs or its own code throws: one console warning names it, the settings dialog's "Off because SudokuPad changed" line lists it,
+  needs or its own code throws: one console warning names it, the **notice bar** and the settings dialog's "Off because SudokuPad changed" line list it,
   and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
+- **SudokuPad guard** — `lib/sudokupad.js`: a script declares its **features**, each with a label and the SudokuPad internals it needs, and a
+  feature that lacks one at startup, or whose own code throws, turns off alone while the rest of the script keeps working.
+- **notice bar** — the guard's bar at the bottom of the page, in purple: "<script>: <features> is/are off — SudokuPad changed.", a Report
+  link to a new issue filled in with the script, each feature, its missing internal or error, and SudokuPad's version, and a × that
+  dismisses it. A dismissal is saved per SudokuPad version, so a new version shows the bar again.
 - **settings button** — the third button of the **controls row**, an outline gear. A click or tap opens
   Pen Tool Extras' settings dialog and leaves the selected tool and pen color alone.
 - **line mode** — SudokuPad's pen setting for where a dragged line snaps: center and edge, center only, or edge only. It is
