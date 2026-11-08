@@ -45,7 +45,7 @@ const dialog = async (p, work, close = 'Save') => {
 }
 const choose = (p, value) => p.locator(CHOICE).selectOption(value)
 
-describe('Text Annotation\'s background box color and frame', { concurrency: false }, () => {
+describe('Text Anywhere\'s background box color and frame', { concurrency: false }, () => {
   let context, p, errors
   before(async () => {
     ;({ context, p, errors } = await open())

@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         SudokuPad Text Annotation
+// @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.26.6
-// @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
+// @version      0.27.1
+// @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.26.6'
+  const VERSION = '0.27.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -205,7 +205,7 @@
   const PIXEL_VAR = '--draw-tool-px'
   // A note whose text runs past its box, which shows its scroll bar while the pointer is over it.
   const SCROLLS_CLASS = 'draw-tool-scrolls'
-  // On the layer while Text Annotation is current: only then do the notes take the pointer.
+  // On the layer while Text Anywhere is current: only then do the notes take the pointer.
   const ACTIVE_CLASS = 'draw-tool-active'
   const HANDLE_CLASS = 'draw-tool-resize'
   const SELECTION_CLASS = 'draw-tool-selection'
@@ -887,7 +887,7 @@
     for (const dropped of touched.dropped) store.removeData(drawingKey(dropped))
   }
 
-  // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Text Annotation out of the
+  // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Text Anywhere out of the
   // list while a keydown is dispatched gives it no key, and keeps every other tool's key where it is without it.
   const toolNamesFor = (names, event) => event && event.type === 'keydown' && event.eventPhase !== 0
     ? names.filter((name) => name !== TOOL_NAME)
@@ -1359,7 +1359,7 @@
     return { box: { left, top, right, bottom }, toBoard: through(ctm.inverse()), toScreen: through(ctm), scale: ctm.a, matrix: [ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f] }
   }
 
-  // Until Text Annotation is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
+  // Until Text Anywhere is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
   const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
 
   // A note's style, centred on `point` and drawn at `scale` pixels of its box per board unit; a background is a rounded box around the text, in the box color and framed when the frame is on.
@@ -1525,7 +1525,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   // Made here, after the panel module's PANEL_COLOR: the features run only from startup on.
-  const guard = createGuard({ script: 'draw-tool', name: 'Text Annotation', version: VERSION, color: PANEL_COLOR, features: FEATURES })
+  const guard = createGuard({ script: 'draw-tool', name: 'Text Anywhere', version: VERSION, color: PANEL_COLOR, features: FEATURES })
   const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets } = guard.features
   const COLOR_LABEL_REM = 1.7
   // The column of each control in its row: Clear all, the Background button and the settings gear.
@@ -1566,13 +1566,13 @@
     `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
     `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; pointer-events: auto; }`,
     `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; cursor: text; }`,
-    // The tool bar is a grid and stock buttons have order 0, so Text Annotation's stays last whenever another is added.
+    // The tool bar is a grid and stock buttons have order 0, so Text Anywhere's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
   // Pen Tool Extras' gear, at its viewBox.
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
-  const SETTINGS_LABEL = 'Text Annotation settings'
+  const SETTINGS_LABEL = 'Text Anywhere settings'
   // The panel's three control buttons draw their icon with these strokes.
   const controlIcon = (paths, viewBox = '0 0 24 24') => `<svg viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
   // Clear all is a trash can.
@@ -1589,9 +1589,9 @@
   let outline = DEFAULT_OUTLINE
   let boxColor = DEFAULT_BOX
   let frame = false
-  // Text Annotation's nine colors, or null until they are first copied from the pen colors.
+  // Text Anywhere's nine colors, or null until they are first copied from the pen colors.
   let colors = null
-  // The elements the panel adds to SudokuPad's keypad while Text Annotation is current.
+  // The elements the panel adds to SudokuPad's keypad while Text Anywhere is current.
   let panelParts = []
 
   const keypad = () => document.querySelector('.controls-input')
@@ -1688,7 +1688,7 @@
     colorBlockCss(CLASS_PREFIX, `#${DIALOG_ID}`)
   ].join('\n')
 
-  // A pasted value is saved and shown at once, whether or not Text Annotation is current.
+  // A pasted value is saved and shown at once, whether or not Text Anywhere is current.
   function applyPasted (values) {
     if (WIDTH_KEY in values) setSize(values[WIDTH_KEY])
     if (OPACITY_KEY in values) setOpacity(values[OPACITY_KEY])
@@ -1722,7 +1722,7 @@
     const edits = () => ({ colors: colorsEdited, outline: draftOutline !== outline, box: draftBox !== boxColor, frame: draftFrame !== frame })
     const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'Text Annotation',
+      name: 'Text Anywhere',
       version: VERSION,
       bodyId: DIALOG_ID,
       styleId: DIALOG_STYLE_ID,
@@ -2254,7 +2254,7 @@
     note.classList.toggle(SCROLLS_CLASS, scrollRoom(note) > 1)
   }
 
-  // The note an event's target is in, or null; only while Text Annotation is current is a note ever the target.
+  // The note an event's target is in, or null; only while Text Anywhere is current is a note ever the target.
   const noteOf = (event) => event.target instanceof window.Element ? event.target.closest(`#${LAYER_ID} .${TEXT_CLASS}`) : null
 
   // The note the wheel is over. Under another tool the notes take no pointer, so the topmost drawn note whose box holds the point answers, unless a
@@ -2310,7 +2310,7 @@
 
   function save () {
     if (!savable) {
-      report('This puzzle\'s saved notes cannot be read, so Text Annotation leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
+      report('This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
       return
     }
     // A write the browser refuses (a full localStorage) is reported, and is not a SudokuPad change that turns the saved data off.
@@ -2318,7 +2318,7 @@
       try {
         saveDrawingTo(Framework, currentPuzzleKey(), drawing)
       } catch (err) {
-        report(`Text Annotation could not save this puzzle's notes: ${err.message}`)
+        report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
       }
     })
   }
@@ -2646,7 +2646,7 @@
   }
 
   // SudokuPad gives a tool every button's mousedown; the browser opens its menu on the press on Linux and on the
-  // release on Windows, so it is suppressed everywhere but over the controls for as long as Text Annotation is current.
+  // release on Windows, so it is suppressed everywhere but over the controls for as long as Text Anywhere is current.
   // On Windows a right-drag that ends over a control still opens the menu there.
   function suppressMenu (event) {
     if (Framework.app.tool === TOOL_NAME && !overControl(event)) event.preventDefault()
@@ -2718,7 +2718,7 @@
         return true
       }
       if (!drag) return false
-      // A click acts only on the release of Text Annotation's own press, never on a release or click alone.
+      // A click acts only on the release of Text Anywhere's own press, never on a release or click alone.
       endDrag(clickNote)
       return true
     },
@@ -2736,7 +2736,7 @@
       hidePanel()
       unmarkColor()
     },
-    // A digit key or keypad button gets the button's data-value. With Text Annotation current it picks a color, and no key
+    // A digit key or keypad button gets the button's data-value. With Text Anywhere current it picks a color, and no key
     // or button enters anything in a cell.
     handleToolButton (value) {
       const picked = drawColor(value)
@@ -2744,7 +2744,7 @@
       return true
     },
     // SudokuPad calls every tool's handleKeydown first, and true ends the keydown there. Shift would otherwise switch
-    // to Corner for as long as it is held (that tool's tempKey), and a drag with it held would never reach Text Annotation.
+    // to Corner for as long as it is held (that tool's tempKey), and a drag with it held would never reach Text Anywhere.
     // With notes selected, Escape ends the selection, Delete or Backspace (a Mac's delete key) deletes them and an arrow key nudges them, and none reaches the cells.
     handleKeydown (event) {
       if (Framework.app.tool !== TOOL_NAME) return false
@@ -2785,7 +2785,7 @@
       document.head.appendChild(style)
       textTool.wrap(app, 'getToolNames', function (stock) { return toolNamesFor(stock(), this.currentEvent) })
       Framework.addTool({
-        button: { name: TOOL_NAME, title: 'Text Annotation', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
+        button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
         tool
       })
       onWindow(textTool, 'contextmenu', suppressMenu)
@@ -2803,7 +2803,7 @@
       for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
       onWindow(textTool, 'keyup', saveNudge, { capture: true })
     })
-    settingsUi.run(() => addSettingsEntry(dialogs, { name: 'drawtool', content: 'Text Annotation', open: under(settingsUi, openDialog) }))
+    settingsUi.run(() => addSettingsEntry(dialogs, { name: 'drawtool', content: 'Text Anywhere', open: under(settingsUi, openDialog) }))
     boardNotes.run(() => {
       app.puzzle.on('loaded', under(boardNotes, showSavedDrawing))
       app.on('restarted', under(boardNotes, emptyDrawing))

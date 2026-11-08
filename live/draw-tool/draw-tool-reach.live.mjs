@@ -19,7 +19,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s fixed note after the window changes', { concurrency: false }, () => {
+describe('Text Anywhere\'s fixed note after the window changes', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)

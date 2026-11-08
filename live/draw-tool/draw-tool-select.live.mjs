@@ -29,7 +29,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s selection', { concurrency: false }, () => {
+describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   let context, p, errors
 
   const saved = () => draw.saved(p)

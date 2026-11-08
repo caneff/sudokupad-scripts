@@ -131,11 +131,11 @@ const SCRIPTS = [
     }
   },
   {
-    name: 'Text Annotation',
+    name: 'Text Anywhere',
     file: 'draw-tool.user.js',
     ready: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' }),
-    // With Text Annotation picked, a left click on r3c3 and 15 typed leave one note.
+    // With Text Anywhere picked, a left click on r3c3 and 15 typed leave one note.
     act: async (p) => {
       const tool = () => p.evaluate(() => Framework.app.tool)
       assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS), 'draw')

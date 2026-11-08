@@ -1,4 +1,4 @@
-// Live check that a SudokuPad internal missing before Text Annotation loads turns off the feature that needs it and nothing else: the console
+// Live check that a SudokuPad internal missing before Text Anywhere loads turns off the feature that needs it and nothing else: the console
 // names it once, the bar at the bottom of the page names it with a Report link, and the other features work.
 // The snippet runs ahead of the script's own startup check and puts the internal back after it, so SudokuPad's own code still runs.
 import { after, before, describe, it } from 'node:test'
@@ -36,7 +36,7 @@ const CASES = [
     works: async (p) => {
       assert.equal(await p.locator(DRAW_BUTTON).count(), 0, 'no tool button')
       assert.deepEqual(await settle(() => texts(p), ['15']), ['15'], 'the saved note is drawn')
-      await openScriptDialog(p, 'Text Annotation', EDITOR)
+      await openScriptDialog(p, 'Text Anywhere', EDITOR)
       assert.equal(await p.locator(EDITOR).isVisible(), true)
     }
   },
@@ -78,7 +78,7 @@ for (const kase of CASES) {
     it('the bar names the feature with a Report link, and goes when dismissed', async () => {
       const bar = p.locator(BAR)
       await bar.waitFor({ state: 'attached' })
-      assert.match(await bar.textContent(), new RegExp(`^Text Annotation: ${kase.off} is off — SudokuPad changed\\.Report`))
+      assert.match(await bar.textContent(), new RegExp(`^Text Anywhere: ${kase.off} is off — SudokuPad changed\\.Report`))
       assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
       await bar.locator('button[aria-label="Dismiss"]').click()
       assert.equal(await bar.count(), 0)

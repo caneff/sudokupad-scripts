@@ -11,11 +11,11 @@ const readPaste = (text) => pastedSettings(text, READERS)
 const keydown = (eventPhase) => ({ type: 'keydown', eventPhase })
 const NAMES = ['normal', 'corner', 'centre', 'colour', TOOL_NAME, 'pen']
 
-test('toolNamesFor leaves Text Annotation out while a keydown is being dispatched, so no tool key lands on it', () => {
+test('toolNamesFor leaves Text Anywhere out while a keydown is being dispatched, so no tool key lands on it', () => {
   assert.deepEqual(toolNamesFor(NAMES, keydown(1)), ['normal', 'corner', 'centre', 'colour', 'pen'])
 })
 
-test('toolNamesFor keeps Text Annotation for anything else: a keydown already dispatched, a mouse event, or none', () => {
+test('toolNamesFor keeps Text Anywhere for anything else: a keydown already dispatched, a mouse event, or none', () => {
   assert.deepEqual(toolNamesFor(NAMES, keydown(0)), NAMES)
   assert.deepEqual(toolNamesFor(NAMES, { type: 'mousedown', eventPhase: 3 }), NAMES)
   assert.deepEqual(toolNamesFor(NAMES, undefined), NAMES)
@@ -686,7 +686,7 @@ const withoutPath = (roots, internal) => {
   return roots
 }
 
-test('Text Annotation declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+test('Text Anywhere declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
   assert.deepEqual(lackingInternals(FEATURES, completeRoots()), new Map())
 })
 
@@ -706,11 +706,11 @@ test('without one internal, only the features that need it are lacking', () => {
   }
 })
 
-test('Text Annotation declares its features through the shared guard, with no guard code of its own', () => {
+test('Text Anywhere declares its features through the shared guard, with no guard code of its own', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'draw-tool.user.js'), 'utf8')
   const own = source.replace(/\/\/ <lib:[a-z-]+>[\s\S]*?\/\/ <\/lib:[a-z-]+>/g, '')
   assert.match(own, /createGuard\(\{ script: 'draw-tool'[^\n]*features: FEATURES \}\)/)
-  for (const text of ['has no getApp or addTool', 'no Text Annotation tool was added']) assert.equal(own.includes(text), false, text)
+  for (const text of ['has no getApp or addTool', 'no Text Anywhere tool was added']) assert.equal(own.includes(text), false, text)
 })
 
 // Every call into SudokuPad in the script's own code, by its line: the declarations aside, each one is inside a feature's `run` or `wrap`, or in a function only
