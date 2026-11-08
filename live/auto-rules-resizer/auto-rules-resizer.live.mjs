@@ -16,8 +16,14 @@ const script = readFileSync(new URL('../../auto-rules-resizer.user.js', import.m
 const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.'
 const LANDSCAPE = { width: 1920, height: 1080 }
 const SMALLER = { width: 1600, height: 900 }
-// Four times as long: too long for SudokuPad's own size at its own width, so the fit widens the pane.
-const LONG_RULES = Array(4).fill(RULES).join(' ')
+// Eight times as long: too long for SudokuPad's own size at its own width, and for the page's spare height at that width, so the fit widens the pane.
+const LONG_RULES = Array(8).fill(RULES).join(' ')
+// About 5,600 characters: no width the window allows stops the scroll.
+const VERY_LONG_RULES = Array(40).fill(RULES).join(' ')
+// Twelve times: needs more than 500 css px of width at SudokuPad's own size.
+const WIDE_RULES = Array(12).fill(RULES).join(' ')
+// Five times: at SudokuPad's own width the fit takes the pane's spare height with a font between SudokuPad's and the 150% cap.
+const FILLING_RULES = Array(5).fill(RULES).join(' ')
 const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
 const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
 const MAX_WIDTH_INPUT = '#auto-rules-resizer-max-width'
@@ -65,6 +71,7 @@ const pane = (p) => p.evaluate(() => {
     right: Math.round(r.right),
     top: Math.round(r.top),
     bottom: Math.round(r.bottom),
+    height: Math.round(r.height),
     width: Math.round(r.width),
     cssWidth: rules.offsetWidth,
     cssHeight: rules.offsetHeight,
@@ -156,9 +163,11 @@ describe('a sideways corner drag keeps the pane\'s height and never raises its f
       await context.close()
     }
   })
+  // A max auto height of 200 px holds the fitted pane under what the page has room for, so a drag has height to add.
+  const cappedAt200 = (page) => page.evaluate((key) => Framework.setData(key, { v: 0, data: 200 }), MAX_HEIGHT_KEY)
   for (const { corner, dy } of [{ corner: 'ur', dy: -80 }, { corner: 'dl', dy: 80 }]) {
     it(`${corner} dragged ${dy} px vertically still grows the pane`, async () => {
-      const { context, p, errors } = await rulesPage(LANDSCAPE)
+      const { context, p, errors } = await rulesPage(LANDSCAPE, cappedAt200, FILLING_RULES)
       try {
         await inject(p)
         await settle(async () => (await fontPx(p)) > 0, true)
@@ -174,11 +183,11 @@ describe('a sideways corner drag keeps the pane\'s height and never raises its f
   }
 })
 
-describe('a landscape window, short rules', { concurrency: false }, () => {
+describe('a landscape window, rules that fill the pane at SudokuPad\'s width', { concurrency: false }, () => {
   let context, p, errors, own
 
   before(async () => {
-    ;({ context, p, errors } = await rulesPage(LANDSCAPE))
+    ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, FILLING_RULES))
     own = await pane(p)
     await inject(p)
   })
@@ -250,8 +259,10 @@ describe('a landscape window, short rules', { concurrency: false }, () => {
 
   it('the top-right corner grows the pane up and moves the controls up with it', async () => {
     const start = await pane(p)
+    // The fit lifts the column so the grown pane stays on the page; the drag adds to the lift.
+    const lift = parseFloat((await controlsMoved(p)).split(' ')[1]) || 0
     await dragCorner(p, 'ur', 0, -60)
-    assert.equal(await settle(() => controlsMoved(p), '0px -60px'), '0px -60px')
+    assert.equal(await settle(() => controlsMoved(p), `0px ${lift - 60}px`), `0px ${lift - 60}px`)
     const now = await pane(p)
     assert.equal(now.top, start.top - 60)
     assert.equal(now.right, start.right, 'a top-right drag straight up grows no wider')
@@ -356,7 +367,7 @@ describe('rules too long for SudokuPad\'s size', { concurrency: false }, () => {
 })
 
 // Too long for SudokuPad's size even at the widest pane, short enough for 70% of it.
-const MID_RULES = Array(10).fill(RULES).join(' ')
+const MID_RULES = Array(24).fill(RULES).join(' ')
 
 describe('rules that need the smaller text', { concurrency: false }, () => {
   let context, p, errors, own
@@ -395,7 +406,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
 
     // Saved as the script saves it, so a start that skipped the envelope would read no limit.
     before(async () => {
-      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved({ v: 0, data: 500 }, null), LONG_RULES))
+      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved({ v: 0, data: 500 }, null), WIDE_RULES))
       await inject(p)
     })
     after(async () => { await context.close() })
@@ -443,7 +454,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     let context, p, errors
 
     before(async () => {
-      ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, LONG_RULES))
+      ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, WIDE_RULES))
       await inject(p)
     })
     after(async () => { await context.close() })
@@ -510,8 +521,6 @@ describe('the max auto width and height', { concurrency: false }, () => {
   })
 })
 
-// About 5,600 characters: no width the window allows stops the scroll.
-const VERY_LONG_RULES = Array(40).fill(RULES).join(' ')
 const READABLE_CHARS = 90
 const COPY_ICON = '.rules-copy'
 
@@ -564,12 +573,13 @@ describe('the text of the fitted pane', { concurrency: false }, () => {
   })
 
   it('refits when the rules change with no resize, as a support link or emoji images do', async () => {
-    const before = (await pane(p)).cssWidth
+    const before = await pane(p)
     await p.evaluate((extra) => {
       document.querySelector('.puzzle-rules').insertAdjacentHTML('afterbegin', `<a href="#">Support</a> ${extra} `)
     }, RULES.repeat(3))
-    const wider = await settle(async () => (await pane(p)).cssWidth > before, true)
-    assert.equal(wider, true, `width ${(await pane(p)).cssWidth}, was ${before}`)
+    // The refit shrinks the font to hold the longer rules; the pane alone grows at once, scrolling, before it.
+    const refitted = await settle(async () => (await pane(p)).font < before.font, true)
+    assert.equal(refitted, true, `font ${(await pane(p)).font}, was ${before.font}`)
     assert.equal((await pane(p)).scrolls, false)
   })
 
@@ -817,9 +827,9 @@ describe('beside twitch-rules-scroller\'s sync script', { concurrency: false }, 
 
 // A SudokuPad internal missing before the script loads turns off that feature alone: the console names it once, the bar at the bottom of
 // the page names it with a Report link, and the rest of the script works. The snippet runs ahead of the script's own startup check and
-// puts the internal back after it, so SudokuPad's own layout, which calls resizeBoard, still runs.
+// puts the internal back after it, so SudokuPad's own layout, which calls resize, still runs.
 const MISSING = [
-  { name: 'resizeBoard', internal: 'Framework.app.resizeBoard', off: 'rules refit', entry: true },
+  { name: 'resize', internal: 'Framework.app.resize', off: 'rules refit', entry: true },
   { name: 'addSetting', internal: 'Framework.addSetting', off: 'max size settings', entry: false }
 ]
 for (const kase of MISSING) {
@@ -867,3 +877,111 @@ for (const kase of MISSING) {
     })
   })
 }
+
+// The controls column's scale: SudokuPad fits the column to the page, so a taller pane that SudokuPad measured would shrink it.
+const columnScale = (p) => p.evaluate(() => {
+  const controls = document.getElementById('controls')
+  return controls.getBoundingClientRect().width / controls.offsetWidth
+})
+// Reads the column's scale, the column's bottom, the pane's height and the window's size on every frame from now on, into window.__frames.
+const logFrames = (p) => p.evaluate(() => {
+  window.__frames = []
+  const sample = () => {
+    const controls = document.getElementById('controls')
+    const rules = document.querySelector('.puzzle-rules')
+    window.__frames.push({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scale: controls.getBoundingClientRect().width / controls.offsetWidth,
+      bottom: controls.getBoundingClientRect().bottom,
+      pane: rules.getBoundingClientRect().height
+    })
+    window.requestAnimationFrame(sample)
+  }
+  window.requestAnimationFrame(sample)
+})
+const frames = (p) => p.evaluate(() => window.__frames)
+const near = (a, b, within) => Math.abs(a - b) <= within
+
+describe('the pane takes the page\'s spare height without SudokuPad shrinking the controls', { concurrency: false }, () => {
+  let context, p, errors, own, off
+  const WINDOWS = [LANDSCAPE, SMALLER]
+
+  before(async () => {
+    // The same page with the script off, for the scale and the pane SudokuPad lays out by itself at each window size.
+    const bare = await rulesPage(LANDSCAPE, null, VERY_LONG_RULES)
+    off = {}
+    for (const size of WINDOWS) {
+      await bare.p.setViewportSize(size)
+      off[size.width] = await stable(async () => ({ scale: await columnScale(bare.p), pane: (await pane(bare.p)).cssHeight }))
+    }
+    await bare.context.close()
+    ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, VERY_LONG_RULES))
+    own = await pane(p)
+    await inject(p)
+    await stable(() => pane(p))
+  })
+  after(async () => { await context.close() })
+
+  it('the pane grows past SudokuPad\'s 14rem and the column ends at the window\'s bottom', async () => {
+    const now = await stable(() => pane(p))
+    assert.equal(now.cssHeight > 1.5 * own.cssHeight, true, `pane ${own.cssHeight} -> ${now.cssHeight} css px`)
+    const { bottom } = await column(p)
+    assert.equal(near(bottom, LANDSCAPE.height, 3), true, `column bottom ${bottom} in a ${LANDSCAPE.height} px window`)
+  })
+
+  it('the column keeps the scale it has with the script off', async () => {
+    const scale = await columnScale(p)
+    assert.equal(near(scale, off[LANDSCAPE.width].scale, 0.01), true, `scale ${scale}, script off ${off[LANDSCAPE.width].scale}`)
+  })
+
+  it('a window resize and a SudokuPad resize leave the same scale and pane height, and no frame between has the column rescaled', async () => {
+    const heights = { [LANDSCAPE.width]: (await stable(() => pane(p))).height }
+    await logFrames(p)
+    for (const size of [SMALLER, LANDSCAPE]) {
+      await p.setViewportSize(size)
+      const want = off[size.width]
+      const now = await settle(async () => {
+        const { cssHeight } = await pane(p)
+        return near(await columnScale(p), want.scale, 0.01) && cssHeight > want.pane
+      }, true)
+      assert.equal(now, true, `at ${size.width} px: scale ${await columnScale(p)}, script off ${want.scale}`)
+      const settled = await stable(() => pane(p))
+      if (size.width in heights) assert.equal(near(settled.height, heights[size.width], 1), true, `back at ${size.width} px the pane is ${settled.height} px tall, was ${heights[size.width]}`)
+      heights[size.width] = settled.height
+    }
+    await p.evaluate(() => Framework.app.resize())
+    await stable(() => pane(p))
+    const seen = await frames(p)
+    assert.equal(seen.length > 10, true, `${seen.length} frames sampled`)
+    for (const f of seen) {
+      assert.equal(near(f.scale, off[f.width].scale, 0.01), true, `a frame at ${f.width} px had the column at scale ${f.scale}, script off ${off[f.width].scale}`)
+      assert.equal(f.bottom <= f.height + 1, true, `a frame at ${f.width} px had the column's bottom at ${f.bottom} in a ${f.height} px window`)
+      assert.equal(near(f.pane, heights[f.width], 1), true, `a frame at ${f.width} px had the pane ${f.pane} px tall, settled at ${heights[f.width]}`)
+    }
+    assert.equal(near(await columnScale(p), off[LANDSCAPE.width].scale, 0.01), true)
+  })
+
+  it('a reload fits to the same pane height and scale, with no frame between the page\'s own layout and the fit', async () => {
+    const first = await stable(() => pane(p))
+    const again = await rulesPage(LANDSCAPE, null, VERY_LONG_RULES)
+    try {
+      await logFrames(again.p)
+      await inject(again.p)
+      const now = await stable(() => pane(again.p))
+      assert.equal(near(now.cssHeight, first.cssHeight, 1), true, `pane ${first.cssHeight} -> ${now.cssHeight} css px`)
+      assert.equal(near(await columnScale(again.p), off[LANDSCAPE.width].scale, 0.01), true)
+      for (const f of await frames(again.p)) {
+        assert.equal(near(f.scale, off[LANDSCAPE.width].scale, 0.01), true, `a frame had the column at scale ${f.scale}`)
+        assert.equal(near(f.pane, now.height, 1) || near(f.pane, own.height, 1), true, `a frame had the pane ${f.pane} px tall: neither SudokuPad's ${own.height} nor the fit's ${now.height}`)
+      }
+      assert.deepEqual(again.errors, [])
+    } finally {
+      await again.context.close()
+    }
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
