@@ -396,11 +396,11 @@ test("the slides' five pen colors are far from SudokuPad's nine", () => {
 test(`${CBD} lists what the script adds, one item per feature`, () => {
   const lines = section(CBD, 'What it adds')
   assert.deepEqual(lines, [
-    'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The word above the chips names the mode, and the chips are drawn the way that mode colors the board, in the same softer strength.',
+    'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The word above the chips names the mode.',
     'Updates as you solve A cell takes its group\'s color when its digit, or every one of its center marks, is in that group. The color goes when that stops being true.',
     'Colored digits In Digit and Both, digits and marks take a darker shade of their group\'s color. A mark that conflicts gets a red circle.',
     'Profiles A profile splits the digits into groups and gives each a color. Five come built in (Low/5/High, Odd/Even, Entropic, Modular and Each digit), and you can keep up to six.',
-    'Quick switching Click the arrow on the button, or right-click or hold the button, to open the profile list. A pick applies at once, and the list fades away after it.',
+    'Quick switching Click the arrow on the button, or right-click or hold the button, to open the profile list. A pick applies at once.',
     'A separate digit profile Digits can follow the cell profile, use another profile, or go uncolored.'
   ])
   const grid = read(CBD).match(/<ul class="features">([\s\S]*?)<\/ul>/)
@@ -418,7 +418,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. From the keyboard, Tab shows a purple ring on the control it reaches. The arrow keys then move around the colors and around the digit keys, and typing 0 to 9 on either paints that digit.')
+  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. From the keyboard, Tab and the arrow keys move around the colors and the digit keys, and typing 0 to 9 paints that digit.')
 })
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
@@ -441,12 +441,12 @@ test(`${HOME} describes Text Anywhere in a short summary ending in a Details lin
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes anywhere Starts at your click; Esc finishes; double-click a letter to edit.',
+    'Typed notes anywhere Click to type; Esc finishes; double-click a note to edit.',
     'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets or - [ ] checklist items. Typing ->, != or sum gives → ≠ Σ.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
-    'Select and move Click a note or drag a box round several; drag to move (snaps to grid and notes), arrow keys nudge.',
+    'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
     'Settings Color presets, halo, box color and border by sample; Copy and Paste to another browser.'
