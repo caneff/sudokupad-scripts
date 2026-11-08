@@ -1532,10 +1532,10 @@
     return element
   }
 
-  // Exactly `elements` carry `className`.
-  function fadeClass (className, elements) {
-    document.querySelectorAll(`.${className}`).forEach((el) => { if (!elements.includes(el)) el.classList.remove(className) })
-    elements.forEach((el) => el.classList.add(className))
+  // Exactly `elements` carry the faded class.
+  function fadeStrokes (elements) {
+    document.querySelectorAll(`.${FADED_CLASS}`).forEach((el) => { if (!elements.includes(el)) el.classList.remove(FADED_CLASS) })
+    elements.forEach((el) => el.classList.add(FADED_CLASS))
   }
 
   // Whether `event` is over the grid in the pen tool.
@@ -1818,19 +1818,10 @@
     return { kind, cell: Framework.app.grid.getCell(row, col) }
   }
 
-  // The cell a click on `corner` or on what SudokuPad's own click hit (`clickedMarks`) steps, and the plan of that step.
-  function cornerPlan (corner) {
-    const { kind, cell } = cornerCellOf(corner)
-    return { cell, plan: planCornerClick(kind, penValuesOf(cell), inForce.marks) }
-  }
-
-  function clickedPlan (clicked) {
-    return { cell: clicked.cell, plan: clicked.plan(penValuesOf(clicked.cell), inForce.marks) }
-  }
-
+  // The cell a click on `corner` steps, and the plan of that step, as actions.
   function cornerActs (corner) {
-    const { cell, plan } = cornerPlan(corner)
-    return planActs(cell, plan)
+    const { kind, cell } = cornerCellOf(corner)
+    return planActs(cell, planCornerClick(kind, penValuesOf(cell), inForce.marks))
   }
 
   // A click within the corner radius (CORNER_RADIUS, floored for small cells) of a grid corner is a corner click, checked first. Otherwise the original `clickCell` runs unchanged, so its edge-versus-cell hit test decides what
@@ -1851,7 +1842,8 @@
       let acts = queued
       const clicked = clickedMarks(queued)
       if (clicked !== null) {
-        const { cell, plan } = clickedPlan(clicked)
+        const { cell } = clicked
+        const plan = clicked.plan(penValuesOf(cell), inForce.marks)
         if (plan === null) return
         acts = planActs(cell, plan)
       }
@@ -2049,7 +2041,7 @@
     steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => lastButton === RIGHT_BUTTON && inForce.eraseClicks ? undefined : stock(...args))
     const erasePress = (event) => inForce.eraseClicks && event.button === RIGHT_BUTTON && overGridInPenTool(app, event)
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
-    const showErasing = () => fadeClass(FADED_CLASS, erase === null ? [] : erasedElements(erase))
+    const showErasing = () => fadeStrokes(erase === null ? [] : erasedElements(erase))
     const guarded = guardedBy(steps.lineErase, () => { erase = null; menuOwed = false; showErasing() })
     window.addEventListener('pointerdown', guarded((event) => {
       erase = null

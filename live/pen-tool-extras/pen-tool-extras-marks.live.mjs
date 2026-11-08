@@ -82,18 +82,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const e = Framework.app.puzzle.cells.find((x) => x.row === Math.min(r, rows - 1) && x.col === Math.min(c, cols - 1)).elem.getBoundingClientRect()
     return [e.x + (c >= cols ? e.width : 0) + ox * e.width, e.y + (r >= rows ? e.height : 0) + oy * e.height]
   }, [row, col, dx, dy])
-  // Every click leaves the pointer off the grid, so the faint next mark (or the fade of a mark the next click clears) that the preview shows under a resting pointer is not in what a check reads.
-  const clickAndLeave = async (x, y, button = 'left') => {
-    await p.mouse.click(x, y, { button })
-    await p.mouse.move(5, 5)
-  }
+  const clickAt = (x, y, button = 'left') => p.mouse.click(x, y, { button })
   const clickCorner = async (row, col, button = 'left', dx = 0, dy = 0) => {
     const [x, y] = await cornerPoint(row, col, dx, dy)
-    await clickAndLeave(x, y, button)
+    await clickAt(x, y, button)
   }
   const clickEdge = async (row, col, side, button = 'left') => {
     const [x, y] = await edgePoint(row, col, side)
-    await clickAndLeave(x, y, button)
+    await clickAt(x, y, button)
   }
   // Whether the page's own `contextmenu` listeners left each right click's menu alone
   // (false) or prevented it (true), in order. The listener sits on `window`, in the bubble
@@ -105,7 +101,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   const clickCellCentre = async (row, col) => {
     const [x, y] = await cellCentre(p, row, col)
-    await clickAndLeave(x, y)
+    await clickAt(x, y)
   }
   const pickColor = async (n) => p.locator(`.tool-pen button[data-key="${n}"]`).click()
   // Clears every cell that holds a pen mark. Pen value 0 clears a cell, through an act so that the
