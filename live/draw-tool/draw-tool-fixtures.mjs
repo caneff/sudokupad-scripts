@@ -44,12 +44,16 @@ export const WIDTH_KEY = 'DrawTool_width'
 export const COLORS_KEY = 'DrawTool_colors'
 export const BACKGROUND_KEY = 'DrawTool_background'
 export const OUTLINE_KEY = 'DrawTool_outline'
+export const BOX_KEY = 'DrawTool_box'
+export const FRAME_KEY = 'DrawTool_frame'
 
 // The pickers appear only when the hold timer fires.
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 export const NEAR_PX = 0.5
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
+export const SETTINGS_EDITOR = '#draw-tool-dialog'
+export const SETTINGS_STATUS = '.dialog [data-role="settings-status"]'
 export const PICKER_BOX = '.draw-tool-picker'
 
 // A press held on the middle of `selector` with `button`, until the pickers reach `state`.

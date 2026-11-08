@@ -461,11 +461,11 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Readable over digits Each note has a halo, a round outline of its letters in the page color, so it reads over digits, pencil marks and colored cells. The Outline menu makes it Off, Thinner or Thicker, which is the default.',
     "Colors of its own Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
     'Text size The Size button opens a menu of six sizes, from 10 to 40. A note keeps the size it was typed with until you select it and pick another.',
-    'Background Turn it on and the next note gets a page-colored box behind it, so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.',
+    'Background Turn it on and the next note gets a box behind it (page-colored unless the settings choose another color), so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.',
     'Select Click a note to select it, Shift+click to add or remove one, or drag a box round several from empty space. The colors, the Size and Outline menus and Background then change the selected notes, and Escape or a click on empty space ends the selection.',
     'Move Drag a note to move it, on the board or off it. Drag one of the selected notes and they all move.',
     'Erasing Right-click a note to erase it. Delete or Backspace, or the trash button in the panel, deletes the selected notes; with none selected the trash button erases every note.',
-    'Settings Color presets, a color picker for each of the nine colors, and Copy and Paste to move them to another browser.',
+    "Settings Color presets, a color picker for each of the nine colors, the color of the box behind notes (Page, White, Sticky yellow, Tint of each note's own color, or a Custom color) for every note that has one, a Frame checkbox that draws a thin light gray line round each box, and Copy and Paste to move them all to another browser.",
     'Stays on the cells A note on the board stays on its cells when the board resizes, and one beside it stays where you put it on the screen, unless the window or the controls would cover it or push it past the window\'s edge, when it moves to the nearest free spot and stays there. Both stay visible when you switch back to entering digits.',
     'Kept for each puzzle A reload keeps the notes, for the last 50 puzzles you made notes on.'
   ])
