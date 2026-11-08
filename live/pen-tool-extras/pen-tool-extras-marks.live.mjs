@@ -1045,7 +1045,7 @@ describe('without the script', { concurrency: false }, () => {
 
 describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   // Each is read by the corner click or its hit test; with one gone the click wrap would throw on every pen click, so the script skips the marks step and warns once.
-  const TURNED_OFF = /^pen-tool-extras: marks skipped: SudokuPad /
+  const TURNED_OFF = /^pen-tool-extras: .*marks.* skipped because SudokuPad /
   const REMOVALS = {
     'ToolPen.tool.actStart': () => { ToolPen.tool.actStart = undefined },
     'ToolPen.tool.getInputRc': () => { ToolPen.tool.getInputRc = undefined },

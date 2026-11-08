@@ -777,7 +777,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 })
 
 describe('the color tool is not ready yet', { concurrency: false }, () => {
-  it('the pens show SudokuPad\'s own colors and nothing is saved while it waits, with no time limit; the dialog offers only SudokuPad colors; once page 1 is readable it saves darker page 1', async () => {
+  it('the pens show SudokuPad\'s own colors and nothing is saved while it waits; after 10 s the color save is skipped with a named warning; the dialog offers only SudokuPad colors; a palette that comes later is not saved over them', async () => {
     const { context, p, errors } = await openPage(browser)
     const warned = []
     p.on('console', (m) => { if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text()) })
@@ -786,12 +786,13 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       await removePalette(p)
       await p.addScriptTag({ content: script })
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-      // Well past any short limit a wait might have. The check is that nothing was saved or warned meanwhile, so this one is a sleep.
+      // The wait ends at 10 s: a sleep past it, since the check is that nothing was saved meanwhile and the one warning names the wait.
       await sleep(12000)
       const pens = () => p.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()))
       assert.deepEqual(await pens(), OWN_PEN_HEX)
       assert.equal(await p.evaluate((k) => Framework.getData(k), DATA_KEY), null)
-      assert.deepEqual(warned, [])
+      assert.equal(warned.length, 1, warned.join('\n'))
+      assert.match(warned[0], /^pen-tool-extras: color save skipped because SudokuPad changed: .*the color tool not ready after 10000 ms/)
       await openExtrasEditor(p)
       const editor = p.locator('#pen-tool-extras-editor')
       assert.deepEqual(await editor.locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value)), OWN_PEN_HEX)
@@ -803,8 +804,10 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       assert.equal(await editor.locator('select[data-role="color-choice"]').evaluate((el) => el.value), 'sudokupad')
       await closeExtrasEditorWith(p, 'Cancel')
       await putBackRemovedPalette(p)
-      assert.deepEqual(await settle(() => p.evaluate((k) => Framework.getData(k), DATA_KEY), INSTALLED), INSTALLED)
-      assert.deepEqual(await settle(pens, PAGE_PENS[0]), PAGE_PENS[0])
+      // The save gave up, so a palette that comes late saves nothing until the next page load.
+      await sleep(1500)
+      assert.equal(await p.evaluate((k) => Framework.getData(k), DATA_KEY), null)
+      assert.deepEqual(await pens(), OWN_PEN_HEX)
       assert.deepEqual(errors, [])
     } finally {
       await context.close()

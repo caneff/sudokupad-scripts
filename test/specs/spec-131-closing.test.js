@@ -3,12 +3,12 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const colorByDigit = require('../../color-by-digit.user.js')
 
-// The warning each script prints starting on a page whose Framework has no getApp.
+// The warnings each script prints starting on a page whose Framework has no getApp.
 function warningWithoutGetApp (name) {
   const file = require.resolve(`../../${name}.user.js`)
-  const element = () => ({ style: { setProperty () {} } })
+  const element = () => ({ style: { setProperty () {} }, setAttribute () {}, append () {}, addEventListener () {}, remove () {} })
   const saved = { document: global.document, window: global.window }
-  global.document = { createElement: element, head: { appendChild () {} }, body: { appendChild () {} }, querySelector: () => null, querySelectorAll: () => [], fonts: null }
+  global.document = { createElement: element, head: { appendChild () {} }, body: { appendChild () {}, append () {} }, documentElement: { outerHTML: '' }, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], fonts: null }
   global.window = { MutationObserver: class { observe () {} }, addEventListener () {} }
   global.Framework = {}
   const warnings = []
@@ -49,7 +49,9 @@ test('Color by Digit and Dark Page hold spec 131 together', () => {
 
   for (const name of ['color-by-digit', 'dark-page']) {
     const warnings = warningWithoutGetApp(name)
-    assert.equal(warnings.length, 1, name)
-    assert.ok(warnings[0].startsWith(`${name}: `) && warnings[0].includes('getApp'), warnings[0])
+    // Each script's other features lack Framework's data calls too, in warnings of their own; the one naming getApp is spec 131's.
+    const named = warnings.filter((warning) => warning.includes('getApp'))
+    assert.equal(named.length, 1, name)
+    for (const warning of warnings) assert.ok(warning.startsWith(`${name}: `), warning)
   }
 })
