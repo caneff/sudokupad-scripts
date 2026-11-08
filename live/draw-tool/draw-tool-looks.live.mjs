@@ -50,6 +50,8 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
+    // The fade in has its own live check; here the outline is read as soon as the pointer is over the note.
+    await p.emulateMedia({ reducedMotion: 'reduce' })
     await draw.boot(p)
     await draw.forgetDrawings(p)
     await draw.plantDrawing(p, ITEMS)
@@ -60,7 +62,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
 
   it('a note under the pointer gets a faint purple outline and fill, and the note beside it and empty space get none', async () => {
     await moveTo(EMPTY)
-    assert.equal((await noteStyle('A', ['outlineStyle'])).outlineStyle, 'none')
+    assert.equal(alphaOf((await noteStyle('A', ['outlineColor'])).outlineColor), 0, 'a note the pointer is not over has a clear outline')
     await moveTo(A)
     const hovered = await noteStyle('A', ['outlineStyle', 'outlineWidth', 'outlineOffset', 'outlineColor'])
     assert.deepEqual({ style: hovered.outlineStyle, width: hovered.outlineWidth, offset: hovered.outlineOffset }, { style: 'solid', width: '1px', offset: '2px' })
@@ -70,7 +72,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     assert.match(fill.backgroundImage, /^linear-gradient\(/, 'a faint fill shows although the note\'s own background is transparent')
     const [fillColor] = fill.backgroundImage.match(/(?:rgba|color)\([^)]+\)/)
     assert.ok(alphaOf(fillColor) > 0 && alphaOf(fillColor) <= 0.1, `a very faint fill, was ${fillColor}`)
-    assert.equal((await noteStyle('B', ['outlineStyle'])).outlineStyle, 'none', 'the other note shows none')
+    assert.equal(alphaOf((await noteStyle('B', ['outlineColor'])).outlineColor), 0, 'the other note shows none')
   })
 
   it('a faded note keeps a hover outline about as visible as the note, and its box stays', async () => {
