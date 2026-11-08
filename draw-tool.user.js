@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.39.1
+// @version      0.39.2
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.39.1'
+  const VERSION = '0.39.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -1790,7 +1790,7 @@
   const isLayoutOnly = (element) => {
     if (element.tagName !== 'DIV') return false
     const style = window.getComputedStyle(element)
-    const ownText = [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '')
+    const ownText = [...element.childNodes].some((node) => node.nodeType === window.Node.TEXT_NODE && node.textContent.trim() !== '')
     return !ownText && style.backgroundColor === 'rgba(0, 0, 0, 0)' && style.backgroundImage === 'none'
   }
   // Inside the controls box, a press is on a control when anything drawn under the pointer there is not layout only (a panel's fill sits under its empty divs).

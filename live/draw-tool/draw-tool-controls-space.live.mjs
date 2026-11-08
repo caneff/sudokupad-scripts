@@ -6,7 +6,7 @@ import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openWithAllScripts, rulesWidth, setLongRules } from '../attacks.mjs'
 
-const { TEXT_BOX, TRAY, pickDraw } = draw
+const { SLIDERS, TEXT_BOX, pickDraw } = draw
 const WINDOW = { width: 1920, height: 1080 }
 // SudokuPad's own rules pane is 14rem wide (224px at the default font): wider is the resizer's doing.
 const SUDOKUPAD_RULES_PX = 224
@@ -33,7 +33,7 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
         const stack = document.elementsFromPoint(x, y).filter((e) => e.closest('#controls'))
         const plain = (e) => {
           const s = window.getComputedStyle(e)
-          const ownText = [...e.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim())
+          const ownText = [...e.childNodes].some((n) => n.nodeType === window.Node.TEXT_NODE && n.textContent.trim())
           return e.tagName === 'DIV' && !ownText && s.backgroundColor === 'rgba(0, 0, 0, 0)' && s.backgroundImage === 'none'
         }
         if (stack.length && stack.every(plain)) spots.push({ at: [x, y], target: `${stack[0].tagName}.${stack[0].className}` })
@@ -68,17 +68,25 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     assert.deepEqual(failed, [], 'presses on these empty targets started no note')
   })
 
-  it('a press on a tool button, the rules text or the timer does not open a note', async () => {
+  it('a press on empty space in Text Anywhere\'s own panel, over its fill, does not open a note', async () => {
+    // A point where the sliders' own transparent div is the target, with the tray's fill drawn under it.
+    const at = await p.locator(SLIDERS).evaluate((sliders) => {
+      const b = sliders.getBoundingClientRect()
+      for (let y = b.y + 1; y < b.bottom; y += 2) {
+        for (let x = b.x + 1; x < b.right; x += 2) if (document.elementFromPoint(x, y) === sliders) return [x, y]
+      }
+      return null
+    })
+    assert.notEqual(at, null, 'the sliders have a spot of their own')
+    await p.mouse.click(...at)
+    assert.equal(await boxOpen(), false, 'the panel opened a note')
+  })
+
+  it('a press on a tool button, the rules text or the timer (which pauses with its own dialog) does not open a note', async () => {
     for (const selector of ['#control-draw', '.puzzle-rules', '.timer']) {
       await p.mouse.click(...await centerOf(selector))
       assert.equal(await boxOpen(), false, `${selector} opened a note`)
     }
-  })
-
-  it('a press on the empty fill of Text Anywhere\'s own panel does not open a note', async () => {
-    const [x, y] = await p.locator(TRAY).evaluate((e) => { const b = e.getBoundingClientRect(); return [b.x + b.width / 2, b.y + 2] })
-    await p.mouse.click(x, y)
-    assert.equal(await boxOpen(), false, 'the tray opened a note')
   })
 
   it('no page error', async () => {
