@@ -42,7 +42,8 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     assert.equal(await settle(() => pageColor(p), BLACK), BLACK, 'the page starts dark')
     for (const [name, open, surface, close = async () => {}] of SURFACES) {
       await open()
-      const box = await p.locator(surface).first().boundingBox()
+      // Read once the layout holds, since the strict comparison below is against this box.
+      const box = await stable(() => p.locator(surface).first().boundingBox())
       assert.equal(box.width > 0, true, `${name} shows`)
       await darkPage(p, false)
       assert.equal(await settle(() => pageColor(p), WHITE), WHITE, `${name}: Dark Page off lightens the page`)

@@ -9,7 +9,7 @@ import { BUTTON as CBD_BUTTON, labelOn } from './color-by-digit/color-by-digit-f
 import { captureConsoleErrors, gotoPuzzle, newPage, startPuzzle } from './page.mjs'
 import { BLACK } from './scripts.mjs'
 import { draw, gridPoint, openPenTool, penEntries, setInputValue } from './pen.mjs'
-import { settle } from './settle.mjs'
+import { settle, stable } from './settle.mjs'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -133,9 +133,10 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     for (const [name, button, selectors] of PANELS) {
       await p.click(button)
       for (const sel of selectors) await p.locator(sel).waitFor({ state: 'visible' })
-      const roomy = await boxes([...selectors, CBD_BUTTON])
+      // The reference sizes are read once the layout holds: the rules refit lands a moment after the panel opens, and a size read before it is not the one to come back to.
+      const roomy = await stable(() => boxes([...selectors, CBD_BUTTON]))
       assert.equal(await settle(() => rulesScroll(p), false), false, `${name}: the rules do not scroll at 1200x900`)
-      const roomyWidth = await rulesWidth(p)
+      const roomyWidth = await stable(() => rulesWidth(p))
       await p.setViewportSize({ width: 1024, height: 600 })
       for (const sel of selectors) await p.locator(sel).waitFor({ state: 'visible' })
       assert.equal(await settle(() => rulesScroll(p), false), false, `${name}: the rules do not scroll at 1024x600`)
