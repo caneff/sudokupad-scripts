@@ -1430,11 +1430,11 @@ test('renderEditor puts 0 on a fourth row under 7 when the page has no 0 swatch'
   assert.deepEqual(pad.slice(9), ['0', 'pad', 'pad'])
 })
 
-test('renderEditor draws a digit key as a cell filled with its group\'s color, and a digit in no group blank', () => {
+test('renderEditor draws a digit key as a cell filled with its group\'s color at 60%, and a digit in no group blank', () => {
   const html = editor([g('a2', ['1', '3']), g('b2', ['0'])], twoPages(), 0, 'a2')
   const key = (d) => html.match(new RegExp(`<button[^>]*data-digit="${d}"[^>]*>`))[0]
-  assert.match(key('1'), /data-key="a2" style="background:#a2"/)
-  assert.match(key('0'), /data-key="b2" style="background:#b2"/)
+  assert.match(key('1'), /data-key="a2" style="background:color-mix\(in srgb, #a2 60%, transparent\)"/)
+  assert.match(key('0'), /data-key="b2" style="background:color-mix\(in srgb, #b2 60%, transparent\)"/)
   assert.match(key('2'), /data-key=""/)
   assert.doesNotMatch(key('2'), /style=/)
 })
@@ -1649,8 +1649,8 @@ test('digitOfText reads a single digit and nothing else', () => {
 })
 
 // Each cell of a run of chips, in order: its key, place, fill, digit color and digit.
-const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*)"><rect x="([\d.]+)" y="0" width="([\d.]+)" height="[\d.]+" fill="([^"]*)"\/><text[^>]*fill="([^"]*)"[^>]*>([^<]*)<\/text><\/g>/g)]
-  .map((m) => ({ key: m[1], x: Number(m[2]), width: Number(m[3]), fill: m[4], ink: m[5], digit: m[6] }))
+const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*)"><rect x="([\d.]+)" y="0" width="([\d.]+)" height="[\d.]+" fill="([^"]*)"(?: fill-opacity="([\d.]+)")?\/><text[^>]*fill="([^"]*)"[^>]*>([^<]*)<\/text><\/g>/g)]
+  .map((m) => ({ key: m[1], x: Number(m[2]), width: Number(m[3]), fill: m[4], opacity: m[5], ink: m[6], digit: m[7] }))
 
 test('renderChips draws a joined run of square cells: one outer outline, n-1 single dividers, no rounded corners and no gaps', () => {
   for (const n of [1, 2, 3]) {
@@ -1694,6 +1694,36 @@ test('renderChips gives a group whose palette color is unreadable a grey cell, a
   assert.deepEqual(look('cell'), [['#ccc', 'rgb(29, 106, 229)']])
   assert.deepEqual(look('digit'), [['#fff', 'rgb(29, 106, 229)']])
   assert.deepEqual(look('both'), [['#ccc', 'rgb(29, 106, 229)']])
+})
+
+test('renderChips draws a group color at SudokuPad\'s 60% cell opacity, and a white cell whole', () => {
+  const groups = [{ key: 'a', digits: ['3'] }]
+  const opacities = (style) => runCells(renderChips(groups, colorFor, { size: 16, style })).map((c) => c.opacity)
+  assert.deepEqual(opacities('cell'), ['0.6'])
+  assert.deepEqual(opacities('both'), ['0.6'])
+  assert.deepEqual(opacities('digit'), [undefined])
+  assert.deepEqual(opacities('off'), [undefined])
+})
+
+test('renderChips draws three blank dashed cells for a profile with no groups, in a run as wide as three chips', () => {
+  const svg = renderChips([], colorFor, { size: 16 })
+  assert.match(svg, /^<svg data-role="chips" width="48" height="16" /)
+  assert.equal(count(svg, /<rect data-role="blank-chip"[^>]*fill="#fff"/g), 3)
+  assert.equal(count(svg, /<line [^>]*stroke-dasharray=/g), 2)
+  assert.match(svg, /<rect [^>]*fill="none" stroke="#aaa" [^>]*stroke-dasharray=/)
+  assert.deepEqual(runCells(svg), [])
+})
+
+test('iconHtml centres the three blank cells of a profile with no groups', () => {
+  const svg = /<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml('cell', [], colorFor))[0]
+  assert.match(svg, /width="114" height="38" x="-7" y="31"/)
+  assert.equal(count(svg, /data-role="blank-chip"/g), 3)
+})
+
+test('a painted digit key and a palette swatch are drawn at 60%, an unpainted key white', () => {
+  const html = editor([{ key: 'a1', digits: ['1'] }], [{ page: 0, rows: [[{ key: 'a1', value: '#a1' }]], zero: null }], 0, 'a1')
+  assert.match(html, /data-act="digit" data-digit="1" data-key="a1" style="background:color-mix\(in srgb, #a1 60%, transparent\)"/)
+  assert.match(html, /data-key="a1" aria-pressed="true"[^>]*style="background:color-mix\(in srgb, #a1 60%, transparent\)"/)
 })
 
 test('iconHtml draws the run of cells in the mode\'s look with the mode word, and keeps the menu arrow box', () => {
