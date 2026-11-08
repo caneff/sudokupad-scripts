@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.4
+// @version      0.4.5
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.4.4'
+  const VERSION = '0.4.5'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -260,14 +260,24 @@
       boardRight,
       viewport
     })
-    // A drag that changes the height starts from the pane's own height, not the room under it, so the pane
-    // grows by what the corner moved.
-    const fitted = draggedPane({ width, room: applied.h ? home.height / scale : autoRoom, box: applied, scale })
-    if (applied.h) rules.style.maxHeight = `${fitted.room}px`
+    // A drag starts from a pane height, not the room under it, so the pane grows by what the corner moved. A height
+    // drag starts from SudokuPad's own; a sideways one from the fitted pane's, and its text only shrinks to fit.
+    const sideways = Boolean(applied.w && !applied.h)
+    let startRoom = autoRoom
+    if (applied.h) startRoom = home.height / scale
+    else if (sideways) {
+      setPaneWidth(rules, width, natural)
+      rules.style.fontSize = `${fontPx}px`
+      startRoom = rules.offsetHeight
+    }
+    const dragging = Boolean(applied.w || applied.h)
+    const fitted = draggedPane({ width, room: startRoom, box: applied, scale })
+    if (dragging) rules.style.maxHeight = `${fitted.room}px`
     if (applied.x || applied.y) controls.style.translate = `${applied.x}px ${applied.y}px`
     setPaneWidth(rules, fitted.width, natural)
-    if (applied.w || applied.h) fitRulesFont(rules, fitted.room, ownPx, nudgePx)
+    if (dragging) fitRulesFont(rules, fitted.room, ownPx, nudgePx)
     else rules.style.fontSize = `${fontPx}px`
+    if (sideways && parseFloat(rules.style.fontSize) > fontPx) rules.style.fontSize = `${fontPx}px`
     // SudokuPad sets `overflow-y: scroll`, which draws an empty track beside rules that fit.
     if (rules.scrollHeight <= rules.clientHeight) rules.style.overflowY = 'auto'
     return applied
@@ -284,18 +294,24 @@
     }
   }
 
-  // Move and release are heard on the window, so a fast drag that outruns the corner holds.
+  // A hand dragging sideways drifts a few px up or down, and the drift would grow or shrink the pane's height.
+  const VERTICAL_DEAD_PX = 4
+
+  // Move and release are heard on the window, so a fast drag that outruns the corner holds. Vertical movement
+  // counts only once the pointer is VERTICAL_DEAD_PX from where it went down, and then all of it does.
   function watchCornerDrag (corner, win, onMove, onActive) {
     corner.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       let x = e.clientX
       let y = e.clientY
+      let inDeadZone = true
       trackPointer(win, {
         move: (m) => {
           const dx = m.clientX - x
-          const dy = m.clientY - y
           x = m.clientX
-          y = m.clientY
+          if (Math.abs(m.clientY - e.clientY) >= VERTICAL_DEAD_PX) inDeadZone = false
+          const dy = inDeadZone ? 0 : m.clientY - y
+          if (!inDeadZone) y = m.clientY
           if (dx || dy) onMove(dx, dy)
         },
         end: () => onActive(false)

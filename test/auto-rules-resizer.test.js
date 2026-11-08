@@ -455,6 +455,20 @@ test('watchCornerDrag: follows move and release on the window, so a fast drag pa
   assert.deepEqual(active, [true, false])
 })
 
+test('watchCornerDrag: vertical drift under 4 px from the press is ignored, and past it all of the vertical movement counts', () => {
+  const corner = fakeTarget()
+  const win = fakeTarget()
+  const moves = []
+  watchCornerDrag(corner, win, (dx, dy) => moves.push([dx, dy]), () => {})
+  corner.fire('pointerdown', 100, 100)
+  win.fire('pointermove', 110, 102)
+  win.fire('pointermove', 120, 103)
+  assert.deepEqual(moves, [[10, 0], [10, 0]], 'drift of 3 px')
+  win.fire('pointermove', 130, 104)
+  win.fire('pointermove', 130, 110)
+  assert.deepEqual(moves.slice(2), [[10, 4], [0, 6]], 'at 4 px the whole 4 px counts, then each move')
+})
+
 test('copiedSettings: both limits in force, null for no limit', () => {
   assert.deepEqual(JSON.parse(copiedSettings(fakeStore())), { [MAX_WIDTH_KEY]: null, [MAX_HEIGHT_KEY]: null })
   assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: 500, Other_key: 1 }))), { [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: 500 })
