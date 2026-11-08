@@ -16,6 +16,7 @@ const TEXT_AT = [7.5, 5.5]
 const OTHER_AT = [2.5, 2.5]
 const COLUMN_LINE = 5
 const NEAR_PX = 0.6
+const OUTLINE_ON_GUIDE_PX = 0.25
 // What an earlier version saved, planted as it wrote it, and a note.
 const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [[100, 100], [300, 200], [500, 100]] }
 const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 60, box: [64, 320, 256, 448] }
@@ -48,6 +49,13 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     await p.mouse.up()
     return { ...during, guideBox }
   }
+  // The outline's line lies on its guide, during the drag (`during`) and after the release, to a quarter pixel: the note lands on whole device pixels and the guide moves with it.
+  const assertOnGuide = async (during, guideBox) => {
+    const guide = guideBox.x + guideBox.width / 2
+    assert.equal(Math.abs(during - guide) < OUTLINE_ON_GUIDE_PX, true, `the outline's line ${during} is off its guide ${guide} during the drag`)
+    const after = await outlineLeft()
+    assert.equal(Math.abs(after - guide) < OUTLINE_ON_GUIDE_PX, true, `the outline's line ${after} is off the guide ${guide} it was snapped to, after the release`)
+  }
   // Drags the note so its outline's left line lies `gap` px right of column line `COLUMN_LINE`.
   const dragToGap = async (gap) => dragBy(await lineX(COLUMN_LINE) + gap - ((await noteBox('15')).x - OUTLINE_MIDDLE_PX))
 
@@ -75,6 +83,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(left - line) < NEAR_PX, true, `the outline's line ${left} is on the cell line ${line} during the drag`)
     assert.equal(Math.abs(guideBox.x + guideBox.width / 2 - line) < NEAR_PX, true, `the guide is at ${guideBox.x}, the line at ${line}`)
     assert.equal(Math.abs(await outlineLeft() - line) < NEAR_PX, true, 'the note stays on the line after the release')
+    await assertOnGuide(left, guideBox)
     assert.equal(await p.locator(GUIDE_X).count(), 0, 'the guide goes with the release')
   })
 
@@ -112,6 +121,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(left - (other.x - OUTLINE_MIDDLE_PX)) < NEAR_PX, true, `the outline's line ${left} is ${OUTLINE_MIDDLE_PX} px left of the other note's left edge ${other.x}`)
     assert.equal(Math.abs(guideBox.x + guideBox.width / 2 - left) < NEAR_PX, true, `the guide ${guideBox.x} is on the outline's line ${left}`)
     assert.equal(Math.abs((await noteBox('15')).x - other.x) < NEAR_PX, true, 'the two left edges are equal after the release')
+    await assertOnGuide(left, guideBox)
   })
 
   it('a note still drags beside an older version\'s stroke and shape, which are no targets', async () => {

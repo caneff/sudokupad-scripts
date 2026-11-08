@@ -2968,7 +2968,10 @@
     const offset = raw.map((v, axis) => v + (snaps[axis]?.shift ?? 0))
     // The pull may carry a note past what the pointer left reachable, so then the note stays where the pointer put it.
     if (!movedBy(d.move, offset, map).every(({ point }) => reachable(point))) return { offset: raw, guides: [] }
-    return { offset, guides: snaps.map((snap) => snap?.guide ?? null) }
+    // The pressed note then lands on whole device pixels, as it will once let go, and a guide moves with it so the outline lies on its guide.
+    const ratio = window.devicePixelRatio
+    const crisp = d.origin.map((side, axis) => Math.round((side + offset[axis]) * ratio) / ratio - side - offset[axis])
+    return { offset: offset.map((v, axis) => v + crisp[axis]), guides: snaps.map((snap, axis) => snap ? snap.guide + crisp[axis] : null) }
   }
 
   // The faint guide lines across the page at `[x, y]` (null for an axis that is not snapped); none for null.
@@ -3280,7 +3283,8 @@
       const shift = event.shiftKey
       if (start !== -1 && !shift && !selected.includes(start)) select([start])
       const move = start === -1 || shift ? null : selected.map((index) => ({ index, item: drawing[index] }))
-      drag = { start, move, points: [point], pending: [], shift, detail: event.detail, rectangle: null }
+      const { left, top } = move ? note.getBoundingClientRect() : {}
+      drag = { start, move, origin: move ? [left, top] : null, points: [point], pending: [], shift, detail: event.detail, rectangle: null }
       return true
     },
     // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
