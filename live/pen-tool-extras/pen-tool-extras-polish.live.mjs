@@ -1,12 +1,11 @@
-// Live check of Pen Tool Extras' small touches (#547) on sudokupad.app in headless Chromium: a press state on the panel buttons, a crosshair over the grid in the pen tool, a fade on an erased
-// line, a fade-in on edit mode's pickers, all of that off under reduced motion, and a pixel floor on the corner and the right-click line hit.
+// Live check of Pen Tool Extras' small touches (#547) on sudokupad.app in headless Chromium: a press state on the panel buttons, a crosshair over the grid in the pen tool, an erased line that
+// leaves no copy, a fade-in on edit mode's pickers, all of that off under reduced motion, and a pixel floor on the corner and the right-click line hit.
 // Every press, click and drag is real mouse input. The floor is checked on a grid scaled to half size (a 35 px cell at 1200 x 900), which is what a big grid does to its cells.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { assertPressState, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { cellCentre, drag, gridPoint, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../pen.mjs'
@@ -15,8 +14,6 @@ import { settle } from '../settle.mjs'
 const { HOLD_TO_EDIT_MS, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
-// How long the copies of an erased line get to appear after the right click: the fade itself is 120 ms.
-const FADE_WAIT_MS = 3000
 const MARKS_KEY = 'EdgeMarks_marks'
 const ERASING = '.pen-tool-extras-erasing'
 const PICKERS = '.tool-pen .pen-tool-extras-picker'
@@ -38,25 +35,10 @@ const boot = async (p) => {
   await p.locator('.tool-pen button[data-key="1"]').click()
 }
 
-// From the moment the erased line's copies join the highlight layer: how many there were, how many pen entries the puzzle held then, and the opacity of the copies on each frame until they are gone.
-const watchFade = (p) => p.evaluate((selector) => {
-  window.__fade = new Promise((resolve) => {
-    const observer = new window.MutationObserver(() => {
-      const first = document.querySelector(selector)
-      if (!first) return
-      observer.disconnect()
-      const born = performance.now()
-      const result = { copies: first.children.length, penAtStart: Framework.app.puzzle.cells.reduce((n, c) => n + c.pen.length, 0), pointerEvents: window.getComputedStyle(first).pointerEvents, opacities: [] }
-      const frame = () => {
-        const group = document.querySelector(selector)
-        if (!group) return resolve({ ...result, ms: performance.now() - born })
-        result.opacities.push(Number(window.getComputedStyle(group).opacity))
-        window.requestAnimationFrame(frame)
-      }
-      frame()
-    })
-    observer.observe(document.documentElement, { childList: true, subtree: true })
-  })
+// Whether a node of class ERASING has ever joined the page since this ran; an erase leaves no copy of the line behind.
+const watchCopies = (p) => p.evaluate((selector) => {
+  window.__copyAppeared = false
+  new window.MutationObserver(() => { if (document.querySelector(selector)) window.__copyAppeared = true }).observe(document.documentElement, { childList: true, subtree: true })
 }, ERASING)
 
 for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced motion', { reducedMotion: 'reduce' }, true]]) {
@@ -81,30 +63,16 @@ for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced
       })
     }
 
-    it(`an erased line ${reduced ? 'goes at once, with no copy left to fade' : 'is gone from the puzzle at once while copies of it fade out over about 120 ms and are then removed'}`, async () => {
+    it('an erased line is gone from the puzzle at once and leaves no copy of itself behind', async () => {
       await restartPuzzle(p)
       await drag(p, [[0.5, 1.5], [0.5, 4.5]])
       assert.equal((await penEntries(p)).length, 3)
-      await watchFade(p)
+      await watchCopies(p)
       const depth = await undoDepth()
       await rightClickAt([0.5, 3])
       assert.deepEqual(await settle(() => penEntries(p), []), [], 'the whole line is erased')
       assert.equal(await undoDepth() > depth, true, 'an undo step')
-      if (reduced) {
-        // "nothing appeared in 600 ms": there is no event to wait on.
-        const appeared = await Promise.race([p.evaluate(() => window.__fade).then(() => true), sleep(600).then(() => false)])
-        assert.equal(appeared, false, 'a copy faded although motion is reduced')
-        return
-      }
-      const fade = await p.evaluate((ms) => Promise.race([window.__fade, new Promise((resolve) => setTimeout(() => resolve(null), ms))]), FADE_WAIT_MS)
-      assert.notEqual(fade, null, `no copy of the erased line appeared in ${FADE_WAIT_MS} ms`)
-      assert.equal(fade.copies, 3, 'one copy for each of the three segments')
-      assert.equal(fade.penAtStart, 0, 'the puzzle had already lost the line when the copies appeared')
-      assert.equal(fade.pointerEvents, 'none')
-      assert.equal(fade.opacities.length >= 2, true, `${fade.opacities.length} frames`)
-      assert.deepEqual([...fade.opacities].sort((a, b) => b - a), fade.opacities, 'never brighter than the frame before')
-      assert.equal(fade.opacities.at(-1) < fade.opacities[0], true, 'it dimmed')
-      assert.equal(fade.ms >= 100 && fade.ms < 1000, true, `${fade.ms} ms`)
+      assert.equal(await p.evaluate(() => window.__copyAppeared), false, 'a copy of the erased line was drawn')
       assert.equal(await p.locator(ERASING).count(), 0)
       await p.click('#control-undo')
       assert.equal((await settle(() => penEntries(p), (await penEntries(p)).length === 3 ? [] : null)).length, 3, 'one undo brings the line back')
