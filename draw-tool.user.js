@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.27.5
+// @version      0.27.6
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.27.5'
+  const VERSION = '0.27.6'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -492,7 +492,6 @@
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
-  const isTextSize = (value) => Number.isInteger(value) && isWidth(widthFor(value))
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
   const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
 
@@ -510,6 +509,60 @@
   const rem = (value) => Math.round(value * 100) / 100
   /* eslint-enable no-unused-vars */
   // </lib:plain>
+  // <lib:store>
+  // Generated from lib/store.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain.
+  /* global isPlainObject */
+  // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
+  // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
+  const STORE_VERSION = 0
+  const UNREADABLE_SUFFIX = '_unreadable'
+
+  const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
+
+  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
+  function keptSlot (store, key, raw) {
+    const same = JSON.stringify(raw)
+    for (let n = 1; ; n++) {
+      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const held = store.getData(slot)
+      if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
+    }
+  }
+
+  function readSaved (raw, read) {
+    if (isEnvelope(raw) && raw.v > STORE_VERSION) throw new Error(`it was saved by a later version (version ${raw.v})`)
+    const value = read(isEnvelope(raw) ? raw.data : raw)
+    if (value === undefined) throw new Error('its reader refused it')
+    return value
+  }
+
+  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
+  // anything can save over it.
+  function load (store, { key, read }) {
+    const raw = store.getData(key)
+    if (raw === null) return { value: undefined }
+    try {
+      return { value: readSaved(raw, read) }
+    } catch (error) {
+      const unreadable = error.message || String(error) || 'its reader threw'
+      const { slot, copied } = keptSlot(store, key, raw)
+      if (copied) {
+        store.setData(slot, raw)
+        console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
+      }
+      return { value: undefined, unreadable }
+    }
+  }
+
+  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
+
+  function save (store, key, data) {
+    store.setData(key, { v: STORE_VERSION, data })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:store>
 
   // <lib:color-math>
   // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
@@ -838,20 +891,30 @@
   // A note is a text item. `bg` is set only on a note made with the Background button on, so a note saved without it has no box.
   const textItem = ([x, y], text, color, size, background, opacity = DEFAULT_OPACITY) => ({ kind: TEXT_KIND, color, size, opacity, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
 
-  const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
+  // A saved note is checked against the stored format only, not the panel's slider ranges, so a later change to a slider cannot make a note saved before it unreadable.
+  const isStoredOpacity = (value) => value === undefined || (isNumber(value) && value > 0 && value <= 100)
+  const isStoredSize = (value) => Number.isInteger(value) && value > 0
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
   const isBox = (box) => isPoint(box) && box.every((side) => side > 0)
-  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isOpacityOrNone(item.opacity) &&
-    (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
+  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isStoredOpacity(item.opacity) &&
+    (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isStoredSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
   // A drawing saved by an earlier version holds strokes and shapes. They are kept in storage as they are and never drawn, so they are not read further.
   const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
 
-  // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
+  // A puzzle with nothing saved has an empty drawing; saved data that is not a list throws rather than read as a drawing. The list is read note by note:
+  // `items` holds the notes and the strokes and shapes of an earlier version, `kept` every entry that is neither, which is never drawn and is saved back as it is.
   function readDrawing (saved) {
-    if (saved === null || saved === undefined) return []
-    if (!Array.isArray(saved) || !saved.every((item) => isText(item) || isHiddenItem(item))) throw new Error(`the saved drawing is not a list of texts, strokes and shapes: ${JSON.stringify(saved).slice(0, 200)}`)
-    return saved
+    if (saved === null || saved === undefined) return { items: [], kept: [] }
+    if (!Array.isArray(saved)) throw new Error(`the saved drawing is not a list of notes: ${JSON.stringify(saved).slice(0, 200)}`)
+    const items = saved.filter((item) => isText(item) || isHiddenItem(item))
+    return { items, kept: saved.filter((item) => !items.includes(item)) }
+  }
+
+  // The drawing as `load` reads it from the store: the notes and the entries kept, whether the whole value was unreadable, and the reason.
+  function loadDrawing (store, key) {
+    const { value, unreadable } = load(store, { key: drawingKey(key), read: readDrawing })
+    return { ...(value ?? { items: [], kept: [] }), unreadable }
   }
 
   // As Auto Rules Resizer keys its saved data: a puzzle with no id falls back to the page URL.
@@ -874,7 +937,8 @@
   // `store` has Framework's getData, setData and removeData. The drawing is written before the index, and the dropped
   // puzzles' drawings are removed last, so a write that throws (a full localStorage) loses no drawing already saved.
   // An index that cannot be read throws before anything is written.
-  function saveDrawingTo (store, key, drawing) {
+  function saveDrawingTo (store, key, items, kept = []) {
+    const drawing = items.concat(kept)
     const index = readIndex(store.getData(INDEX_KEY))
     if (drawing.length === 0) {
       store.removeData(drawingKey(key))
@@ -882,7 +946,7 @@
       return
     }
     const touched = touchIndex(index, key)
-    store.setData(drawingKey(key), drawing)
+    save(store, drawingKey(key), drawing)
     store.setData(INDEX_KEY, touched.index)
     for (const dropped of touched.dropped) store.removeData(drawingKey(dropped))
   }
@@ -1092,7 +1156,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1704,6 +1768,8 @@
   // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
   let drawing = []
+  // The saved entries that are not notes, strokes or shapes (a note that failed its check, say): never drawn, and saved back as they were.
+  let keptEntries = []
   // The indices of the selected notes in the drawing, in order.
   let selected = []
   // False while this puzzle's saved drawing cannot be read: no save writes over it but an explicit wipe's.
@@ -1859,7 +1925,7 @@
     for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
     measureNotes(notes, map)
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
-    if (!drag?.move && !resizing && keepFixedReachable(notes, map)) save()
+    if (!drag?.move && !resizing && keepFixedReachable(notes, map)) saveNotes()
     if (drag?.move) showMove(drag, map)
     if (editing) showEditing(map)
     else showHandles(drag?.move ? null : selectedBox(map))
@@ -2008,7 +2074,7 @@
     resizing = null
     if (editing || String(drawing[index]?.box) === String(item.box)) return
     renderDrawing()
-    save()
+    saveNotes()
   }
 
   // A double-click on a handle sends the note back to auto size.
@@ -2021,7 +2087,7 @@
     } else if (drawing[index].box) {
       drawing[index] = autoSized(drawing[index])
       renderDrawing()
-      save()
+      saveNotes()
     }
   }
 
@@ -2085,14 +2151,20 @@
     })
   }
 
-  function save () {
+  // The solver is told at load, and again at a save if a dialog was open then, that some saved notes are not shown.
+  function reportKept () {
+    if (keptEntries.length > 0) report(`${keptEntries.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`)
+  }
+
+  function saveNotes () {
     if (loadedKey === null) return
+    reportKept()
     if (!savable) {
       report('This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
       return
     }
     try {
-      saveDrawingTo(Framework, loadedKey, drawing)
+      saveDrawingTo(Framework, loadedKey, drawing, keptEntries)
     } catch (err) {
       report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
     }
@@ -2101,7 +2173,7 @@
   function changeSelected (change) {
     for (const i of selected) drawing[i] = change(drawing[i])
     redraw()
-    save()
+    saveNotes()
   }
 
   // Keeps the items `keep` passes, and those of them that were selected stay selected. Whether any item went.
@@ -2123,7 +2195,7 @@
     const gone = selected
     keepItems((_, i) => !gone.includes(i))
     redraw()
-    save()
+    saveNotes()
   }
 
   // The note is typed in place: `index` names the text to reopen, or -1 for a new one at screen point `point`. Opening a note ends the selection.
@@ -2192,7 +2264,7 @@
     }
     renderDrawing()
     showPanelValues()
-    if (changed) save()
+    if (changed) saveNotes()
   }
 
   // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
@@ -2347,7 +2419,7 @@
   function saveNudge () {
     if (!nudged) return
     nudged = false
-    save()
+    saveNotes()
   }
 
   function endMove (d) {
@@ -2355,13 +2427,13 @@
     place(movedBy(d.move, dragOffset(d), map), map)
     clearMove(d)
     renderDrawing()
-    save()
+    saveNotes()
   }
 
   function endErase () {
     const { erased } = erasing
     erasing = null
-    if (erased) save()
+    if (erased) saveNotes()
   }
 
   function cancelInput () {
@@ -2377,14 +2449,12 @@
   function showSavedDrawing () {
     cancelInput()
     loadedKey = currentPuzzleKey()
-    try {
-      drawing = readDrawing(Framework.getData(drawingKey(loadedKey)))
-      savable = true
-    } catch (err) {
-      console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's notes are not saved.`)
-      drawing = []
-      savable = false
-    }
+    const { items, kept, unreadable } = loadDrawing(Framework, loadedKey)
+    drawing = items
+    keptEntries = kept
+    savable = unreadable === undefined
+    if (unreadable !== undefined) console.warn(`draw-tool: ${unreadable}. It is left as it is, and this puzzle's notes are not saved.`)
+    reportKept()
     redraw()
   }
 
@@ -2394,7 +2464,7 @@
     cancelInput()
     redraw()
     savable = true
-    save()
+    saveNotes()
   }
 
   // Deletes, whole, every note the drag from `from` to `to`, in board units, passes near. Whether any went.
