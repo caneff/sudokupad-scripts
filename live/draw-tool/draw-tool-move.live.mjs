@@ -142,6 +142,26 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
     }
   })
 
+  it('Delete pressed in the middle of a move drag deletes the note, and the release neither draws it again nor saves it', async () => {
+    await draw.forgetDrawings(p)
+    await reload()
+    const kept = []
+    await typeText(EMPTY, '42')
+    await p.mouse.move(...await gridPoint(p, EMPTY))
+    await p.mouse.down()
+    await p.mouse.move(...await gridPoint(p, [EMPTY[0] + BY[0], EMPTY[1] + BY[1]]), { steps: 8 })
+    await draw.frames(p)
+    await p.keyboard.press('Delete')
+    await draw.frames(p)
+    assert.deepEqual(await texts(), kept, 'Delete removed the note mid-drag')
+    await p.mouse.move(...await gridPoint(p, [EMPTY[0] + BY[0] + 1, EMPTY[1] + BY[1]]), { steps: 4 })
+    await p.mouse.up()
+    assert.deepEqual(await settle(texts, kept), kept, 'the deleted note is not drawn again at the drop point')
+    assert.deepEqual(await saved() ?? [], [], 'the deleted note is not saved again')
+    await reload()
+    assert.deepEqual(await texts(), kept, 'a reload shows no deleted note')
+  })
+
   it('the page shows no error', () => {
     assert.deepEqual(errors, [])
   })

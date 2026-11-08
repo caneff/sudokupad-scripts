@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.38.0
+// @version      0.38.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.38.0'
+  const VERSION = '0.38.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -3604,8 +3604,11 @@
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
       else if (ARROWS[event.key]) pressArrow(event.key, event.shiftKey)
-      else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
-      else return false
+      else if (event.key === 'Delete' || event.key === 'Backspace') {
+        // A move in progress holds the note; cancelling it first leaves its release nothing to place.
+        if (drag?.move) cancelDrag()
+        deleteSelected()
+      } else return false
       return true
     },
     // SudokuPad calls every tool's handleKeyup too. An arrow released with Shift still held would otherwise switch to Corner (its tempKey), which leaves this tool and ends the selection.
