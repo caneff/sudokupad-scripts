@@ -197,6 +197,33 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await read((k) => Framework.removeData(k), INDEX_KEY)
   })
 
+  // The plants make showPanelValues fail, as SudokuPad rebuilding its keypad would; the page errors they cause are taken out of `errors` and checked here.
+  it('a note is stored before the panel redraw, so a redraw that throws never loses it', async () => {
+    await reload()
+    await pickDraw()
+    await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+    await p.keyboard.type('15')
+    await p.evaluate((slider) => document.querySelector(slider).remove(), draw.SIZE_SLIDER)
+    const first = errors.length
+    await p.keyboard.press('Escape')
+    assert.deepEqual((await saved()).map((item) => item.text), ['15'], 'stored before the redraw failed')
+    const planted = errors.splice(first)
+    assert.equal(planted.length > 0, true, 'the plant made the redraw throw')
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
+    await restartFromDialog()
+  })
+
+  it('a panel that is not on the page is not redrawn: typing a note raises no error', async () => {
+    await reload()
+    await pickDraw()
+    await p.evaluate(([tray, sliders]) => { document.querySelector(tray).remove(); document.querySelector(sliders).remove() }, ['.draw-tool-tray', draw.SLIDERS])
+    await typeText([2.5, 2.5], '15')
+    assert.deepEqual(await texts(), ['15'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['15'])
+    await restartFromDialog()
+  })
+
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
   })

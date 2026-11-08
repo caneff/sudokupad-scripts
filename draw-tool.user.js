@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.27.1
+// @version      0.27.2
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.27.1'
+  const VERSION = '0.27.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -1640,7 +1640,7 @@
   }
 
   function showPanelValues () {
-    if (panelParts.length === 0) return
+    if (!panelParts[0]?.isConnected) return
     const looks = panelValues()
     unmarkColor()
     if (looks.color !== null) keypad().querySelector(`button[data-key="${looks.color}"]`).classList.add('current')
@@ -1981,8 +1981,8 @@
     const { index, item } = resizing
     resizing = null
     if (editing || String(drawing[index]?.box) === String(item.box)) return
-    renderDrawing()
     save()
+    renderDrawing()
   }
 
   // A double-click on a handle sends the note back to auto size.
@@ -1994,8 +1994,8 @@
       showEditing(boardMap())
     } else if (drawing[index].box) {
       drawing[index] = autoSized(drawing[index])
-      renderDrawing()
       save()
+      renderDrawing()
     }
   }
 
@@ -2073,8 +2073,8 @@
 
   function changeSelected (change) {
     for (const i of selected) drawing[i] = change(drawing[i])
-    redraw()
     save()
+    redraw()
   }
 
   // Keeps the items `keep` passes, and those of them that were selected stay selected. Whether any item went.
@@ -2095,8 +2095,8 @@
   function deleteSelected () {
     const gone = selected
     keepItems((_, i) => !gone.includes(i))
-    redraw()
     save()
+    redraw()
   }
 
   // The note is typed in place: `index` names the text to reopen, or -1 for a new one at screen point `point`. Opening a note ends the selection.
@@ -2163,9 +2163,9 @@
       else if (index === -1) drawing.push({ ...item, text })
       else drawing[index] = { ...item, text }
     }
+    if (changed) save()
     renderDrawing()
     showPanelValues()
-    if (changed) save()
   }
 
   // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
@@ -2327,8 +2327,8 @@
     const map = boardMap()
     place(movedBy(d.move, dragOffset(d), map), map)
     clearMove(d)
-    renderDrawing()
     save()
+    renderDrawing()
   }
 
   function endErase () {
@@ -2364,9 +2364,9 @@
   function emptyDrawing () {
     drawing = drawing.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()
-    redraw()
     savable = true
     save()
+    redraw()
   }
 
   // Deletes, whole, every note the drag from `from` to `to`, in board units, passes near. Whether any went.
