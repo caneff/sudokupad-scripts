@@ -69,6 +69,14 @@ and SudokuPad then saves its progress under `progress_undefined`, shared by ever
 Manager with empty files. A history move (Back, Forward) or a second puzzle leaves the pen and replay tools off again, which `startWithTools` and
 `resumeAfterHistory` turn on.
 
+## The fuzz proof
+
+`live/fuzz/` proves fast-check can drive SudokuPad (#592; `docs/research/ui-fuzz-tools.md` § Tried with Playwright). `fuzz.mjs` runs random
+click / type / undo sequences, each on a page of its own, against a planted rule ("no more than 2 digits entered") and a planted page error;
+`fuzz.proof.mjs` checks that each is found, shrunk to the shortest sequence and, for the rule, replayed. A failure prints
+`node live/fuzz/run.mjs --seed ... --path ... --replay-path ...`, which reproduces it. The proof takes about five minutes, nearly all of it
+shrinking, so it is not a `*.live.mjs` and `npm run test:live` skips it: `npm run test:fuzz` runs it.
+
 ## The daily watch
 
 `npm run watch:live` (`live/watch.mjs`) is for a daily schedule, so a SudokuPad update that breaks a script shows
