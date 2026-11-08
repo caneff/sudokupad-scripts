@@ -1,13 +1,39 @@
 // `captureConsoleErrors` and `collectSkipLines` of the live checks, run against a fake page so no browser is needed.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { captureConsoleErrors, collectSkipLines } from './page.mjs'
+import { captureConsoleErrors, collectPageErrors, collectSkipLines } from './page.mjs'
 
 // A page whose `console` listener is fed messages by the test.
 const fakePage = () => {
   let listener
   return { on: (event, fn) => { if (event === 'console') listener = fn }, say: (type, text) => listener({ type: () => type, text: () => text }) }
 }
+
+describe('collectPageErrors', () => {
+  const pageWith = () => {
+    let listener
+    return { on: (event, fn) => { if (event === 'pageerror') listener = fn }, raise: (e) => listener(e) }
+  }
+
+  it('collects an uncaught error with its message and stack, so a failing assertion shows where it came from', () => {
+    const page = pageWith()
+    const errors = []
+    collectPageErrors(page, errors)
+    const e = new TypeError('boom')
+    page.raise(e)
+    assert.equal(errors.length, 1)
+    assert.match(errors[0], /^TypeError: boom\n\s+at /)
+    assert.equal(errors[0], e.stack)
+  })
+
+  it('falls back to the text of a thrown value that has no stack', () => {
+    const page = pageWith()
+    const errors = []
+    collectPageErrors(page, errors)
+    page.raise('plain string')
+    assert.deepEqual(errors, ['plain string'])
+  })
+})
 
 describe('captureConsoleErrors', () => {
   it('collects a console.error line, leaves out a failed resource, and leaves a skip line to collectSkipLines', () => {
