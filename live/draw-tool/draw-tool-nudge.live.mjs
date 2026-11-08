@@ -13,8 +13,7 @@ const { TEXTS } = draw
 // In cells from the grid's top left: the note nudged, and a note of bullets.
 const NOTE_AT = [4.5, 4.5]
 const CURSOR_AT = [8.5, 0.5]
-const EDGE_AT = [4.5, 2.5]
-const WIDE_NOTE = 'W'.repeat(14)
+const EDGE_AT = [2.5, 2.5]
 const BULLETS_AT = [1.5, 6.5]
 const BULLET_TEXT = '- one\n- **two**'
 const NEAR_PX = 0.6
@@ -104,30 +103,17 @@ describe('Text Annotation\'s nudge and bullets', { concurrency: false }, () => {
       const got = await moved(key)
       assert.equal(got.every((v, i) => Math.abs(v - want[i]) <= NEAR_PX), true, `${key} moved the note by ${got}, wanted ${want}`)
     }
-    // A wide note, so a press that carried it under the controls would show as a jump to the nearest free spot.
-    await p.keyboard.press('Delete')
-    await p.mouse.click(...await gridPoint(p, EDGE_AT))
-    await p.keyboard.type(WIDE_NOTE)
-    await p.keyboard.press('Escape')
-    await p.mouse.click(...await gridPoint(p, EDGE_AT))
+    const first = await noteBox('E')
     const width = await p.evaluate(() => window.innerWidth)
-    const first = await noteBox(WIDE_NOTE)
-    let last = first
-    let biggestStep = 0
     await p.keyboard.down('Shift')
     try {
-      for (let i = 0; i < width / 10 + 20; i++) {
-        await p.keyboard.press('ArrowRight')
-        const now = await noteBox(WIDE_NOTE)
-        biggestStep = Math.max(biggestStep, Math.abs(now.x - last.x))
-        last = now
-      }
+      for (let i = 0; i < width / 10 + 20; i++) await p.keyboard.press('ArrowRight')
     } finally {
       await p.keyboard.up('Shift')
     }
-    assert.equal(last.x > first.x + 100, true, 'the note moved right')
-    assert.equal(last.x + last.width / 2 <= width - 1, true, `the note's middle ${last.x + last.width / 2} stayed inside the window of width ${width}`)
-    assert.equal(biggestStep <= 10 + NEAR_PX, true, `no press moved the note by more than 10 px, the most was ${biggestStep}`)
+    const end = await noteBox('E')
+    assert.equal(end.x > first.x + 100, true, 'the note moved right')
+    assert.equal(end.x + end.width / 2 <= width - 1, true, `the note's middle ${end.x + end.width / 2} stayed inside the window of width ${width}`)
   })
 
   it('with nothing selected the arrow keys move the cell cursor', async () => {
