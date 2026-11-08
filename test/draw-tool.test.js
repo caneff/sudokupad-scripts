@@ -651,9 +651,35 @@ test('a line starting "- [ ] " or "- [x] " is a checklist item, a box run with i
   assert.deepEqual(parseMarkdown('- [X] caps')[0][0].checked, true)
 })
 
-test('a "- [" line without the box shape, or a plain "- " line, stays a bullet', () => {
-  assert.deepEqual(parseMarkdown('- [] x'), [[{ text: '•', bullet: true }, { text: '[] x' }]])
+test('a checklist item may drop the dash, drop the space inside the brackets, or be empty', () => {
+  const box = (checked, ...rest) => [{ text: checked ? '☑' : '☐', bullet: true, checked }, ...rest]
+  assert.deepEqual(parseMarkdown('[ ] milk'), [box(false, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('[] milk'), [box(false, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('[x] milk'), [box(true, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('[X] milk'), [box(true, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('- [] milk'), [box(false, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('* [ ] milk'), [box(false, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('* [x] milk'), [box(true, { text: 'milk' })])
+})
+
+test('an empty checklist item is a box, and keeps it once the note is closed', () => {
+  for (const typed of ['- [ ]', '- [ ] ', '[]', '[ ]', '* [] ', '- [x]']) {
+    const [line] = parseMarkdown(closedText(typed))
+    assert.equal(line.length, 1, `${JSON.stringify(typed)} is one box run`)
+    assert.equal(line[0].bullet, true, `${JSON.stringify(typed)} is a box`)
+    assert.equal(typeof line[0].checked, 'boolean')
+  }
+  assert.equal(closedText('- [ ] '), '- [ ]')
+  assert.equal(parseMarkdown('a\n- [ ]\nb')[1][0].text, '☐', 'an empty item among other lines')
+})
+
+test('text that is not a checklist item stays text or a bullet', () => {
+  assert.deepEqual(parseMarkdown('-[ ] milk'), [[{ text: '-[ ] milk' }]], 'no space after the dash is no bullet')
+  assert.deepEqual(parseMarkdown('milk [ ]'), [[{ text: 'milk [ ]' }]], 'a box mid-line')
+  assert.deepEqual(parseMarkdown('[ ]milk'), [[{ text: '[ ]milk' }]], 'no space after the box')
+  assert.deepEqual(parseMarkdown('[  ] milk'), [[{ text: '[  ] milk' }]], 'two spaces inside')
   assert.deepEqual(parseMarkdown('- [ ]x'), [[{ text: '•', bullet: true }, { text: '[ ]x' }]])
+  assert.deepEqual(parseMarkdown(' [ ] milk'), [[{ text: ' [ ] milk' }]], 'an indented box')
   assert.deepEqual(parseMarkdown('- one'), [[{ text: '•', bullet: true }, { text: 'one' }]])
 })
 
@@ -662,6 +688,17 @@ test('toggledCheck flips one line\'s box and leaves the other lines alone', () =
   assert.equal(toggledCheck('- [x] b', 0), '- [ ] b')
   assert.equal(toggledCheck('- [X] b', 0), '- [ ] b')
   assert.equal(toggledCheck('plain', 0), 'plain')
+})
+
+test('toggledCheck keeps the form the user typed', () => {
+  assert.equal(toggledCheck('[] milk', 0), '[x] milk')
+  assert.equal(toggledCheck('[ ] milk', 0), '[x] milk')
+  assert.equal(toggledCheck('* [ ] milk', 0), '* [x] milk')
+  assert.equal(toggledCheck('- []', 0), '- [x]')
+  assert.equal(toggledCheck('- [ ]', 0), '- [x]')
+  assert.equal(toggledCheck('[x]', 0), '[ ]')
+  assert.equal(toggledCheck('* [X] milk', 0), '* [ ] milk')
+  assert.equal(toggledCheck('milk [ ]', 0), 'milk [ ]')
 })
 
 test('closedSymbols turns a note\'s last word "sum" into a sigma, since nothing is typed after it', () => {
