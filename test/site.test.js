@@ -447,15 +447,15 @@ test(`${HOME} describes Text Anywhere in a short summary ending in a Details lin
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes anywhere Click the board, or beside it, to type. Enter starts a new line; a double-click edits a note.',
-    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets.',
-    'Long notes A long note wraps and scrolls; drag a corner to resize it.',
-    'Readable over digits A white outline round the letters, and an optional box behind the note.',
+    'Typed notes anywhere Click the board or beside it to type; double-click to edit.',
+    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets or - [ ] checkboxes. Typing ->, != or sum gives → ≠ Σ.',
+    'Long notes Wraps and scrolls; drag a corner to resize.',
+    'Readable over digits A white outline round the letters, and an optional box behind them.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
     'Select and move Click a note or drag a box round several; drag to move (snaps to grid and notes), arrow keys nudge.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
-    'Settings Color presets, halo, box color and box border picked from samples, and Copy and Paste to another browser.'
+    'Settings Color presets, halo, box color and border by sample; Copy and Paste to another browser.'
   ])
   const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
   assert.ok(grid, `site/${DRAW} has no <ul class="features">`)
