@@ -326,7 +326,8 @@
   // Markers in the order they are tried, each with the flag it sets. `**` comes before `*` and `__` before `_`, so a double marker is never read as two single ones.
   const FLAGS = ['bold', 'italic', 'strike', 'underline', 'code']
   const MARKERS = [['**', 'bold'], ['__', 'underline'], ['~~', 'strike'], ['*', 'italic'], ['_', 'italic']]
-  const isWordChar = (char) => char !== undefined && /\w/.test(char)
+  // An underscore is not a word character here, so `___a___` opens `_` after the `__`.
+  const isWordChar = (char) => char !== undefined && /[^\W_]/.test(char)
   const isSpace = (char) => char === undefined || /\s/.test(char)
 
   // A pair of backticks with nothing between is no span; `open` is the last backtick left without a partner.
@@ -386,8 +387,9 @@
     return read(0, '').runs
   }
 
-  // Each 2 spaces before a list marker is one more level.
-  const INDENT = '((?:  )*)'
+  // Each INDENT_SPACES spaces before a list marker is one more level.
+  const INDENT_SPACES = 2
+  const INDENT = `((?:${' '.repeat(INDENT_SPACES)})*)`
   const BULLET_MARK = new RegExp(`^${INDENT}[-*] `)
   const NUMBER_MARK = new RegExp(`^${INDENT}(\\d+\\.) `)
   // The end of the line ends the match too, so an empty item still matches once `closedText` has dropped its trailing space.
@@ -395,7 +397,7 @@
   const HEADER_MARK = /^(#{1,3}) /
   const SUBTEXT_MARK = '-# '
   const isTicked = (state) => /x/i.test(state)
-  const listMark = (indent, mark) => ({ ...mark, bullet: true, ...(indent && { level: indent.length / 2 }) })
+  const listMark = (indent, mark) => ({ ...mark, bullet: true, ...(indent && { level: indent.length / INDENT_SPACES }) })
   // A list line's first run is its marker, `{ text: '•', bullet: true }`, with `level` when nested. A numbered item's marker is its number as typed, with `numbered: true`.
   // A checklist line takes the bullet's place with `{ text: '☐' | '☑', bullet: true, checked }`. A header line's first run is `{ text: '', header: 1 | 2 | 3 }`, a subtext line's `{ text: '', subtext: true }`.
   function parseBlock (line) {
@@ -471,8 +473,10 @@
   const HEADER_SCALES = [1.5, 1.25, 1.1]
   const SUBTEXT_SCALE = 0.8
   const SUBTEXT_OPACITY = 0.6
+  const levelIndentEm = (mark) => (mark.level ?? 0) * BULLET_INDENT_EM
   const markerIndentEm = (mark) => BULLET_INDENT_EM + (mark.numbered ? Math.max(0, mark.text.length - 2) * NUMBER_DIGIT_EM : 0)
-  // How much larger a line is drawn than the note's text size: a header's and a subtext line's own scale.
+  const isSizedLine = (runs) => Boolean(runs[0]?.header || runs[0]?.subtext)
+  // A line's text size as a share of the note's.
   const lineScale = (runs) => runs[0]?.header ? HEADER_SCALES[runs[0].header - 1] : runs[0]?.subtext ? SUBTEXT_SCALE : 1
 
   // A note's text as one list of runs per line; a marker does not reach across a line break. A fence line is `[{ text: '', fence: true }]`; a line between fences is one run of its text as typed.
@@ -492,7 +496,10 @@
   const shownLength = (runs) => runs.reduce((sum, run) => sum + run.text.length, 0)
 
   // A line's width in characters of the note's size: a list marker's indent is wider than the text its run holds, and a header's characters are larger.
-  const lineChars = (runs) => (shownLength(runs) + (isBullet(runs) ? ((runs[0].level ?? 0) * BULLET_INDENT_EM + markerIndentEm(runs[0])) / CHAR_WIDTH - runs[0].text.length : 0)) * lineScale(runs)
+  function lineChars (runs) {
+    const markerChars = isBullet(runs) ? (levelIndentEm(runs[0]) + markerIndentEm(runs[0])) / CHAR_WIDTH - runs[0].text.length : 0
+    return (shownLength(runs) + markerChars) * lineScale(runs)
+  }
 
   // The size a note was last drawn at, in board units, kept on its item under a symbol, which a spread copies and JSON leaves out, so no save stores it.
   const DRAWN_SIZE = Symbol('drawn size')
@@ -1976,7 +1983,7 @@
   function bulletElement ([mark, ...runs], lineIndex) {
     const line = document.createElement('div')
     const indent = markerIndentEm(mark)
-    Object.assign(line.style, { marginLeft: `${(mark.level ?? 0) * BULLET_INDENT_EM}em`, paddingLeft: `${indent}em`, textIndent: `-${indent}em` })
+    Object.assign(line.style, { marginLeft: `${levelIndentEm(mark)}em`, paddingLeft: `${indent}em`, textIndent: `-${indent}em` })
     const bullet = document.createElement('span')
     if (mark.checked === undefined) bullet.textContent = mark.text
     else {
@@ -2016,7 +2023,7 @@
         for (i++; i < lines.length && !isFence(lines[i]); i++) body.push(lines[i][0].text)
         if (body.length) pieces.push({ block: true, empty: false, content: [codeBlockElement(body)] })
       } else if (isBullet(runs)) pieces.push({ block: true, empty: false, content: [bulletElement(runs, i)] })
-      else if (lineScale(runs) !== 1) pieces.push({ block: true, empty: false, content: [sizedLineElement(runs)] })
+      else if (isSizedLine(runs)) pieces.push({ block: true, empty: false, content: [sizedLineElement(runs)] })
       else pieces.push({ block: false, empty: runs.length === 0, content: runs.map(runElement) })
     }
     return pieces
