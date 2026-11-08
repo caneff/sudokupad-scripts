@@ -15,6 +15,8 @@ import { settle } from '../settle.mjs'
 const { HOLD_TO_EDIT_MS, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
+// How long the copies of an erased line get to appear after the right click: the fade itself is 120 ms.
+const FADE_WAIT_MS = 3000
 const MARKS_KEY = 'EdgeMarks_marks'
 const ERASING = '.pen-tool-extras-erasing'
 const PICKERS = '.tool-pen .pen-tool-extras-picker'
@@ -95,7 +97,8 @@ for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced
         assert.equal(appeared, false, 'a copy faded although motion is reduced')
         return
       }
-      const fade = await p.evaluate(() => window.__fade)
+      const fade = await p.evaluate((ms) => Promise.race([window.__fade, new Promise((resolve) => setTimeout(() => resolve(null), ms))]), FADE_WAIT_MS)
+      assert.notEqual(fade, null, `no copy of the erased line appeared in ${FADE_WAIT_MS} ms`)
       assert.equal(fade.copies, 3, 'one copy for each of the three segments')
       assert.equal(fade.penAtStart, 0, 'the puzzle had already lost the line when the copies appeared')
       assert.equal(fade.pointerEvents, 'none')
@@ -125,7 +128,8 @@ for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
       await p.mouse.down()
       try {
-        const animations = await p.evaluate(() => window.__pickerAnimations)
+        const animations = await p.evaluate((ms) => Promise.race([window.__pickerAnimations, new Promise((resolve) => setTimeout(() => resolve(null), ms))]), HOLD_TO_EDIT_MS + 5000)
+        assert.notEqual(animations, null, 'no picker appeared')
         if (reduced) {
           assert.deepEqual(animations, [])
         } else {
