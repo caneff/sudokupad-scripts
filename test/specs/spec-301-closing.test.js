@@ -45,7 +45,7 @@ test('spec 301: Text Annotation has its own colors, one Size slider and a settin
   assert.deepEqual(draw.presetColors('sudokupad', [], null, readPen), SUDOKUPAD)
   assert.deepEqual(draw.presetColors('pen', [], null, readPen), PEN)
 
-  // Copy carries the colors, the size and the box color and frame (defaults here) and no notes; Paste keeps its own values, skips bad ones and counts them.
+  // Copy carries the colors, the size and the box color and frame (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad box color or frame reads as its default).
   const copied = JSON.parse(draw.copiedSettings(storeOf({ DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_drawing_x: [text] })))
   assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_box: 'page', DrawTool_frame: false })
   const pasted = draw.pastedSettings(JSON.stringify({ ...copied, DrawTool_width: 99, PenToolExtras_x: 1 }), draw.READERS)

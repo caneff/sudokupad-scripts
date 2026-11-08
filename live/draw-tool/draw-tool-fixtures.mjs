@@ -52,6 +52,8 @@ export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 export const NEAR_PX = 0.5
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
+export const SETTINGS_EDITOR = '#draw-tool-dialog'
+export const SETTINGS_STATUS = '.dialog [data-role="settings-status"]'
 export const PICKER_BOX = '.draw-tool-picker'
 
 // A press held on the middle of `selector` with `button`, until the pickers reach `state`.

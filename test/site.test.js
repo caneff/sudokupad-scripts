@@ -461,7 +461,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Readable over digits Each note has a halo, a round outline of its letters in the page color, so it reads over digits, pencil marks and colored cells. The Outline menu makes it Off, Thinner or Thicker, which is the default.',
     "Colors of its own Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
     'Text size The Size button opens a menu of six sizes, from 10 to 40. A note keeps the size it was typed with until you select it and pick another.',
-    'Background Turn it on and the next note gets a page-colored box behind it, so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.',
+    'Background Turn it on and the next note gets a box behind it (page-colored unless the settings choose another color), so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.',
     'Select Click a note to select it, Shift+click to add or remove one, or drag a box round several from empty space. The colors, the Size and Outline menus and Background then change the selected notes, and Escape or a click on empty space ends the selection.',
     'Move Drag a note to move it, on the board or off it. Drag one of the selected notes and they all move.',
     'Erasing Right-click a note to erase it. Delete or Backspace, or the trash button in the panel, deletes the selected notes; with none selected the trash button erases every note.',

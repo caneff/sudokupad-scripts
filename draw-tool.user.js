@@ -462,25 +462,27 @@
   const isWidth = (value) => onSlider(value, MIN_WIDTH, MAX_WIDTH, WIDTH_STEP)
   const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
-  const readBackground = (saved) => saved === true
+  const readFlag = (saved) => saved === true
+  const readBackground = readFlag
   // The color behind every note with a box: a preset, or a #rrggbb color the dialog's Custom picks. The page's own color is the default.
   const BOX_PRESETS = { page: 'Page', white: 'White', yellow: 'Sticky yellow', tint: 'Tint' }
+  const BOX_CUSTOM = 'custom'
+  const BOX_WHITE = '#ffffff'
   const DEFAULT_BOX = 'page'
   const BOX_YELLOW = '#fff4b0'
   const BOX_TINT_PERCENT = 15
   const readBox = (saved) => Object.hasOwn(BOX_PRESETS, saved) ? saved : savedHex(saved) ?? DEFAULT_BOX
-  const boxChoice = (setting) => Object.hasOwn(BOX_PRESETS, setting) ? setting : 'custom'
-  // `noteColor` is the note's own color as CSS, which only Tint uses.
-  function boxFill (setting, noteColor) {
-    if (setting === 'page') return PAGE_COLOR
-    if (setting === 'white') return '#ffffff'
-    if (setting === 'yellow') return BOX_YELLOW
-    if (setting === 'tint') return `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${PAGE_COLOR})`
-    return setting
+  const boxChoice = (setting) => Object.hasOwn(BOX_PRESETS, setting) ? setting : BOX_CUSTOM
+  const BOX_FILLS = {
+    page: () => PAGE_COLOR,
+    white: () => BOX_WHITE,
+    yellow: () => BOX_YELLOW,
+    tint: (noteColor) => `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${PAGE_COLOR})`
   }
+  const boxFill = (setting, noteColor) => BOX_FILLS[setting]?.(noteColor) ?? setting
   // The frame is one screen pixel: PIXEL_VAR is that in the units of a note's group, and a fixed note's group, in screen pixels, sets none.
   const FRAME_COLOR = '#c4c4c4'
-  const readFrame = (saved) => saved === true
+  const readFrame = readFlag
   const frameShadow = (on) => on ? `0 0 0 var(${PIXEL_VAR}, 1px) ${FRAME_COLOR}` : 'none'
   // Board units, as a text's height.
   const TEXT_SIZE_PER_WIDTH = 2
@@ -820,7 +822,7 @@
   const READERS = {
     [COLORS_KEY]: readPastedColors,
     [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
-    // A box color or frame that does not check out is pasted as the default, not skipped.
+    // The ticket reads an invalid pasted box color as Page and an invalid frame as off, so neither is counted as skipped.
     [BOX_KEY]: readBox,
     [FRAME_KEY]: readFrame
   }
@@ -1348,7 +1350,6 @@
     Framework.setData(OUTLINE_KEY, next)
   }
 
-  // The notes with a box are drawn again, now in the box color and frame in force.
   function showBoxes () {
     if (Framework.app.puzzle.currentPuzzle) redraw()
   }
@@ -1401,7 +1402,7 @@
     let chosen = null
     let changed = false
     let draftBox = boxColor
-    let draftCustom = savedHex(boxColor) ?? '#ffffff'
+    let draftCustom = savedHex(boxColor) ?? BOX_WHITE
     let draftFrame = frame
     let pages = []
     let paletteNote = ''
@@ -1429,12 +1430,12 @@
     if (!box) return
     const draw = () => {
       const options = [{ value: '', label: CUSTOM_LABEL, selected: !chosen }, ...presetOptions(pages.length).map((id) => ({ value: id, label: PRESET_LABELS[id], selected: id === chosen }))]
-      const boxOptions = [...Object.entries(BOX_PRESETS), ['custom', CUSTOM_LABEL]].map(([id, label]) => `<option value="${id}"${boxChoice(draftBox) === id ? ' selected' : ''}>${label}</option>`).join('')
+      const boxOptions = [...Object.entries(BOX_PRESETS), [BOX_CUSTOM, CUSTOM_LABEL]].map(([id, label]) => `<option value="${id}"${boxChoice(draftBox) === id ? ' selected' : ''}>${label}</option>`).join('')
       box.innerHTML = '<div class="draw-tool-section-title">Colors</div>' +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
-        '<div class="draw-tool-section-title">Notes with a background</div>' +
-        `<div class="draw-tool-box-row"><select class="draw-tool-color-choice" data-role="box-choice" aria-label="Background box color">${boxOptions}</select>${boxChoice(draftBox) === 'custom' ? `<input type="color" class="draw-tool-swatch" data-role="box-custom" value="${draftCustom}" aria-label="Custom background box color" title="Custom background box color">` : ''}</div>` +
+        '<div class="draw-tool-section-title">Background box</div>' +
+        `<div class="draw-tool-box-row"><select class="draw-tool-color-choice" data-role="box-choice" aria-label="Background box color">${boxOptions}</select>${boxChoice(draftBox) === BOX_CUSTOM ? `<input type="color" class="draw-tool-swatch" data-role="box-custom" value="${draftCustom}" aria-label="Custom background box color" title="Custom background box color">` : ''}</div>` +
         `<label class="draw-tool-frame-row"><input type="checkbox" data-role="frame"${draftFrame ? ' checked' : ''}> Frame</label>`
     }
     draw()
@@ -1448,7 +1449,7 @@
         }
         draw()
       } else if (target.matches('[data-role="box-choice"]')) {
-        draftBox = target.value === 'custom' ? draftCustom : target.value
+        draftBox = target.value === BOX_CUSTOM ? draftCustom : target.value
         draw()
       } else if (target.matches('[data-role="box-custom"]')) {
         draftCustom = draftBox = hexColor(target.value)

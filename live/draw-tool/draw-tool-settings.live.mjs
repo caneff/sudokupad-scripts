@@ -8,10 +8,8 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '../settings.mjs'
 
-const { BOX_KEY, COLORS_KEY, FRAME_KEY, SETTINGS_BUTTON, WIDTH_KEY, pickDraw, script } = draw
-const EDITOR = '#draw-tool-dialog'
+const { BOX_KEY, COLORS_KEY, FRAME_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, WIDTH_KEY, pickDraw, script } = draw
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
-const STATUS = '.dialog [data-role="settings-status"]'
 const SUDOKUPAD_COLORS = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000' }
 
 let browser

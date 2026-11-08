@@ -8,12 +8,10 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { closeDialogWith } from '../settings.mjs'
 
-const { BOX_KEY, FRAME_KEY, SETTINGS_BUTTON, TEXTS, pickDraw } = draw
-const EDITOR = '#draw-tool-dialog'
+const { BOX_KEY, FRAME_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXTS, pickDraw } = draw
 const CHOICE = `${EDITOR} select[data-role="box-choice"]`
 const CUSTOM = `${EDITOR} input[data-role="box-custom"]`
 const FRAME = `${EDITOR} input[data-role="frame"]`
-const STATUS = '.dialog [data-role="settings-status"]'
 const ITEMS = [
   { kind: 'text', color: 1, size: 20, opacity: 100, bg: true, text: 'one', at: [30, 30] },
   { kind: 'text', color: 6, size: 20, opacity: 100, bg: true, text: 'six', at: [90, 30] },
@@ -71,6 +69,21 @@ describe('Text Annotation\'s background box color and frame', { concurrency: fal
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
+  it('Page follows the page\'s own color and White does not, and picking Page again restores it', async () => {
+    await p.evaluate(() => document.body.style.setProperty('--body-bg', 'rgb(221, 238, 255)'))
+    try {
+      await dialog(p, () => choose(p, 'page'))
+      assert.equal((await looks(p)).one.fill, 'rgb(221, 238, 255)')
+      await dialog(p, () => choose(p, 'white'))
+      assert.equal((await looks(p)).one.fill, 'rgb(255, 255, 255)')
+      await dialog(p, () => choose(p, 'page'))
+      assert.equal((await looks(p)).six.fill, 'rgb(221, 238, 255)')
+      assert.equal(await stored(p, BOX_KEY), 'page')
+    } finally {
+      await p.evaluate(() => document.body.style.removeProperty('--body-bg'))
+    }
+  })
+
   it('White and Sticky yellow recolor every boxed note at Save and survive a reload', async () => {
     for (const [preset, fill] of [['white', 'rgb(255, 255, 255)'], ['yellow', 'rgb(255, 244, 176)']]) {
       await dialog(p, () => choose(p, preset))
@@ -90,6 +103,7 @@ describe('Text Annotation\'s background box color and frame', { concurrency: fal
     // Color 1 is green and 6 blue, so the green note's box is greener than blue and the blue note's the other way; a mix computes as color(srgb r g b).
     const [r1, g1, b1] = one.fill.match(/[\d.]+/g).slice(-3).map(Number)
     const [r6, g6, b6] = six.fill.match(/[\d.]+/g).slice(-3).map(Number)
+    for (const channel of [r1, g1, b1, r6, g6, b6]) assert.equal(channel > 0.8, true, `a light tint, not the note's own color: ${one.fill}, ${six.fill}`)
     assert.equal(g1 > b1 && g1 > r1, true, one.fill)
     assert.equal(b6 > g6 && b6 > r6, true, six.fill)
   })
@@ -178,7 +192,7 @@ describe('Text Annotation\'s background box color and frame', { concurrency: fal
         assert.equal(await stored(other.p, FRAME_KEY), frame)
         assert.equal(await other.p.locator(CHOICE).inputValue(), box)
         assert.equal(await other.p.locator(FRAME).isChecked(), frame)
-        assert.equal((await looks(other.p)).one.shadow === 'none', !frame)
+        assert.equal((await looks(other.p)).one.shadow === 'none', !frame, `the shadow is ${(await looks(other.p)).one.shadow}`)
         await closeDialogWith(other.p, 'Cancel', EDITOR)
       }
       assert.deepEqual(other.errors, [])
