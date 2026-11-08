@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
+const { fakeStore, quietly } = require('./fake-store.js')
 const {
   VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
@@ -212,26 +213,32 @@ test('normalizeLimit: a positive whole number of css px, else no limit', () => {
   for (const empty of [null, undefined, '', '  ', 0, -5, 'abc', NaN, Infinity, 0.2]) assert.equal(normalizeLimit(empty), null, String(empty))
 })
 
-function fakeStore (saved = {}) {
-  const data = { ...saved }
-  return {
-    data,
-    getData: (key) => (key in data ? data[key] : null),
-    setData: (key, value) => { data[key] = value },
-    removeData: (key) => { delete data[key] }
-  }
-}
-
-test('readLimits: what is saved, and no limit for what is not or is unusable', () => {
+test('readLimits: what is saved, in its envelope or from before it, and no limit for what is not', () => {
   assert.deepEqual(readLimits(fakeStore()), noLimits())
-  assert.deepEqual(readLimits(fakeStore({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: '500' })), { maxWidth: 700, maxHeight: 500 })
-  assert.deepEqual(readLimits(fakeStore({ [MAX_WIDTH_KEY]: 'wide' })), noLimits())
+  assert.deepEqual(readLimits(fakeStore({ [MAX_WIDTH_KEY]: { v: 0, data: 700 }, [MAX_HEIGHT_KEY]: 500 })), { maxWidth: 700, maxHeight: 500 })
 })
 
-test('saveLimits: saves a limit and removes the key of an empty one, so a fresh install saves nothing', () => {
+test('readLimits: a saved limit that cannot be read is no limit, and is kept under _unreadable through a later save', () => {
+  const store = fakeStore({ [MAX_WIDTH_KEY]: 'wide' })
+  const { result, warnings } = quietly(() => readLimits(store))
+  assert.deepEqual(result, noLimits())
+  assert.equal(warnings.length, 1)
+  saveLimits(store, { maxWidth: 640, maxHeight: null })
+  assert.equal(store.data[`${MAX_WIDTH_KEY}_unreadable`], 'wide')
+})
+
+test('one reader per key: a saved limit loads exactly when the same value pastes', () => {
+  for (const value of [700, 1, '500', 'wide', 0, -5, 640.5, true, [700], { px: 700 }]) {
+    const loaded = quietly(() => readLimits(fakeStore({ [MAX_WIDTH_KEY]: value }))).result.maxWidth
+    const pasted = readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: value })).values[MAX_WIDTH_KEY]
+    assert.deepEqual(loaded, pasted ?? null, JSON.stringify(value))
+  }
+})
+
+test('saveLimits: saves a limit in its envelope and removes the key of an empty one, so a fresh install saves nothing', () => {
   const store = fakeStore({ [MAX_HEIGHT_KEY]: 500 })
   saveLimits(store, { maxWidth: 700, maxHeight: null })
-  assert.deepEqual(store.data, { [MAX_WIDTH_KEY]: 700 })
+  assert.deepEqual(store.data, { [MAX_WIDTH_KEY]: { v: 0, data: 700 } })
   saveLimits(store, noLimits())
   assert.deepEqual(store.data, {})
 })

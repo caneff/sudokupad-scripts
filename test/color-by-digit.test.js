@@ -5,7 +5,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
-const { lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { fakeStore, quietly } = require('./fake-store.js')
+const { lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -156,70 +157,84 @@ const EACH_DIGIT = PRELOADS['Each digit']
 const ALL_PRELOAD_NAMES = ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit']
 const names = (state) => state.profiles.map((p) => p.name)
 
+const PROFILES = 'ColorByDigit_profiles'
+const LEGACY = 'ColorByDigit_groups'
+// The state in force with `profiles` and `legacy` saved; null or undefined is a key not saved.
+const fromStored = (profiles, legacy) => quietly(() => stateFromStored(fakeStore({ ...(profiles != null && { [PROFILES]: profiles }), ...(legacy != null && { [LEGACY]: legacy }) }))).result
+
+test('garbage under the profiles key gives the preloads, and is still in _unreadable after the preloads are saved', () => {
+  const store = fakeStore({ [PROFILES]: 'garbage from a newer version' })
+  const { result: state } = quietly(() => stateFromStored(store))
+  assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
+  saveProfiles(store, state)
+  assert.equal(store.data[`${PROFILES}_unreadable`], 'garbage from a newer version')
+  assert.deepEqual(stateFromStored(store), state)
+})
+
 test('a fresh install has the five preloads, with Low/5/High active', () => {
-  const state = stateFromStored(null, null)
+  const state = fromStored(null, null)
   assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
   assert.equal(state.active, 0)
   assert.deepEqual(activeGroups(state), LOW)
 })
 
 test('a fresh install returns copies, so editing one never edits the preloads', () => {
-  const state = stateFromStored(null, null)
+  const state = fromStored(null, null)
   state.profiles[0].groups[0].digits.push('x')
   assert.deepEqual(PRELOADS['Low/5/High'][0].digits, ['0', '1', '2', '3', '4'])
-  assert.deepEqual(stateFromStored(null, null).profiles[0].groups, LOW)
+  assert.deepEqual(fromStored(null, null).profiles[0].groups, LOW)
 })
 
 test('saved groups equal to a preload make that preload the active profile, beside the other preloads', () => {
-  const state = stateFromStored(null, cloneOf(ODD))
+  const state = fromStored(null, cloneOf(ODD))
   assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
   assert.equal(state.active, 1)
-  assert.deepEqual(activeGroups(stateFromStored(undefined, cloneOf(LOW))), LOW)
-  assert.equal(stateFromStored(undefined, cloneOf(LOW)).active, 0)
+  assert.deepEqual(activeGroups(fromStored(undefined, cloneOf(LOW))), LOW)
+  assert.equal(fromStored(undefined, cloneOf(LOW)).active, 0)
 })
 
 test('saved groups that equal no preload become the active profile named Custom, first, beside the five preloads, even when empty', () => {
   const mine = [{ key: '3', digits: ['1', '2'] }]
-  assert.deepEqual(stateFromStored(null, mine), { profiles: [{ name: 'Custom', groups: mine }, { name: 'Low/5/High', groups: LOW }, { name: 'Odd/Even', groups: ODD }, { name: 'Entropic', groups: ENTROPIC }, { name: 'Modular', groups: MODULAR }, { name: 'Each digit', groups: EACH_DIGIT }], active: 0 })
-  assert.deepEqual(stateFromStored(null, []).profiles[0], { name: 'Custom', groups: [] })
+  assert.deepEqual(fromStored(null, mine), { profiles: [{ name: 'Custom', groups: mine }, { name: 'Low/5/High', groups: LOW }, { name: 'Odd/Even', groups: ODD }, { name: 'Entropic', groups: ENTROPIC }, { name: 'Modular', groups: MODULAR }, { name: 'Each digit', groups: EACH_DIGIT }], active: 0 })
+  assert.deepEqual(fromStored(null, []).profiles[0], { name: 'Custom', groups: [] })
 })
 
 test('saved groups are cleaned on the way in: a digit in two groups stays in the first, a stray digit drops, and an unequal result is Custom', () => {
   const messy = [{ key: '1', digits: ['1', '2', 'x'] }, { key: '2', digits: ['2', '3'] }]
-  assert.deepEqual(stateFromStored(null, messy).profiles[0], { name: 'Custom', groups: [{ key: '1', digits: ['1', '2'] }, { key: '2', digits: ['3'] }] })
-  assert.deepEqual(stateFromStored(null, [{ key: '1', digits: ['1', '3', '5', '7', '9', 'x'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]).active, 1)
+  assert.deepEqual(fromStored(null, messy).profiles[0], { name: 'Custom', groups: [{ key: '1', digits: ['1', '2'] }, { key: '2', digits: ['3'] }] })
+  assert.deepEqual(fromStored(null, [{ key: '1', digits: ['1', '3', '5', '7', '9', 'x'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]).active, 1)
 })
 
 test('saved groups that are not a list of groups, and no profiles, fall back to a fresh install', () => {
-  assert.deepEqual(stateFromStored(null, { key: 'a' }), stateFromStored(null, null))
+  assert.deepEqual(fromStored(null, { key: 'a' }), fromStored(null, null))
 })
 
 test('saved profiles win over saved groups, keeping their order and active one', () => {
   const saved = { profiles: [{ name: 'A', groups: [] }, { name: 'B', groups: LOW }], active: 1 }
-  assert.deepEqual(stateFromStored(saved, cloneOf(ODD)), saved)
+  assert.deepEqual(fromStored(saved, cloneOf(ODD)), saved)
 })
 
-test('saved profiles are untrusted: with none usable they fall back, and an extra past six drops', () => {
-  const fresh = stateFromStored(null, null)
-  for (const bad of [{}, { profiles: [] }, { profiles: 'x', active: 0 }, { profiles: [{ name: 3, groups: [] }], active: 0 }, { profiles: [{ name: 'A', groups: 'x' }], active: 0 }, { profiles: [{ name: '  ', groups: [] }], active: 0 }]) {
-    assert.deepEqual(stateFromStored(bad, null), fresh)
-  }
+test('saved profiles are untrusted: any unusable profile, or more than six, falls back to a fresh install', () => {
+  const fresh = fromStored(null, null)
   const seven = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((name) => ({ name, groups: [] }))
-  assert.deepEqual(names(stateFromStored({ profiles: seven, active: 3 }, null)), ['a', 'b', 'c', 'd', 'e', 'f'])
+  for (const bad of [{}, { profiles: [] }, { profiles: 'x', active: 0 }, { profiles: [{ name: 3, groups: [] }], active: 0 }, { profiles: [{ name: 'A', groups: 'x' }], active: 0 }, { profiles: [{ name: '  ', groups: [] }], active: 0 }, { profiles: seven, active: 3 }]) {
+    assert.deepEqual(fromStored(bad, null), fresh)
+  }
 })
 
-test('one unusable saved profile drops out and the others are kept, the active one staying the same profile', () => {
-  const saved = { profiles: [{ name: 'A', groups: [] }, { name: '', groups: [] }, { name: 'C', groups: LOW }, { name: 'D', groups: 'x' }], active: 2 }
-  const state = stateFromStored(saved, cloneOf(ODD))
-  assert.deepEqual(names(state), ['A', 'C'])
-  assert.equal(state.active, 1)
-  assert.equal(stateFromStored({ ...saved, active: 1 }, null).active, 0)
+test('one unusable saved profile refuses the whole state, as a paste of it is refused: the groups saved before profiles stand in, and the state is kept under _unreadable', () => {
+  const saved = { profiles: [{ name: 'A', groups: [] }, { name: '', groups: [] }, { name: 'C', groups: LOW }], active: 2 }
+  const store = fakeStore({ [PROFILES]: saved, [LEGACY]: cloneOf(ODD) })
+  const { result } = quietly(() => stateFromStored(store))
+  assert.deepEqual(result, fromStored(null, cloneOf(ODD)))
+  assert.deepEqual(store.data[`${PROFILES}_unreadable`], saved)
+  assert.deepEqual(readPaste(JSON.stringify({ [PROFILES]: saved })), { values: {}, skipped: 1 })
 })
 
 test('an active index that is no profile becomes the first: out of range, negative, fractional or missing', () => {
   const two = [{ name: 'A', groups: [] }, { name: 'B', groups: [] }]
-  for (const active of [9, -1, 1.5, undefined, '1']) assert.equal(stateFromStored({ profiles: two, active }, null).active, 0, String(active))
-  assert.equal(stateFromStored({ profiles: two, active: 1 }, null).active, 1)
+  for (const active of [9, -1, 1.5, undefined, '1']) assert.equal(fromStored({ profiles: two, active }, null).active, 0, String(active))
+  assert.equal(fromStored({ profiles: two, active: 1 }, null).active, 1)
 })
 
 test('withAddedPreloads appends the named preloads after the saved profiles and leaves the active profile alone', () => {
@@ -279,7 +294,7 @@ test('a profile name is cut to the longest name allowed, copied, renamed or save
   const cut = 'x'.repeat(MAX_NAME_LENGTH)
   assert.equal(copyProfile(renameProfile(three, 0, 'y'.repeat(MAX_NAME_LENGTH)), 0).profiles[3].name, 'y'.repeat(MAX_NAME_LENGTH))
   assert.equal(renameProfile(three, 0, long).profiles[0].name, cut)
-  assert.equal(stateFromStored({ profiles: [{ name: long, groups: [] }], active: 0 }).profiles[0].name, cut)
+  assert.equal(fromStored({ profiles: [{ name: long, groups: [] }], active: 0 }).profiles[0].name, cut)
 })
 
 test('renameProfile trims the new name, and a blank one keeps the old name', () => {
@@ -348,13 +363,13 @@ const synced = { profiles: [{ name: 'A', groups: LOW }, { name: 'B', groups: ODD
 const apart = setDigitActive(setSync(synced, false), 2)
 
 test('sync: a state saved before the digit profile is synced and uses digit colors, and digits take the cell profile', () => {
-  const state = stateFromStored(synced, null)
+  const state = fromStored(synced, null)
   assert.deepEqual(state, synced)
   assert.equal(isSynced(state), true)
   assert.equal(usesDigitColors(state), true)
   assert.deepEqual(digitGroups(state), ODD)
-  assert.equal(isSynced(stateFromStored(null, null)), true)
-  assert.equal(usesDigitColors(stateFromStored(null, null)), true)
+  assert.equal(isSynced(fromStored(null, null)), true)
+  assert.equal(usesDigitColors(fromStored(null, null)), true)
 })
 
 test('sync: unticking starts the digit pick at the cell profile, so the digits keep their groups', () => {
@@ -411,8 +426,8 @@ test('sync: the digit pick follows its own profile through a move, an add, a gro
 
 test('sync: a saved digit pick is read like the active one, and a pick that is no profile reads as synced', () => {
   const saved = { profiles: [{ name: 'A', groups: [] }, { name: '', groups: [] }, { name: 'C', groups: LOW }], active: 0, digitActive: 2 }
-  assert.deepEqual(digitGroups(stateFromStored(saved, null)), LOW)
-  for (const digitActive of [1, 9, -1, 1.5, '2', null]) assert.equal(isSynced(stateFromStored({ ...saved, digitActive }, null)), true, String(digitActive))
+  assert.deepEqual(digitGroups(fromStored(saved, null)), LOW)
+  for (const digitActive of [1, 9, -1, 1.5, '2', null]) assert.equal(isSynced(fromStored({ ...saved, digitActive }, null)), true, String(digitActive))
 })
 
 test('use digit colors: off is saved as false and kept through every edit; anything but false reads as on', () => {
@@ -422,8 +437,8 @@ test('use digit colors: off is saved as false and kept through every edit; anyth
   for (const next of [setActive(off, 0), setSync(off, true), deleteProfile(off, 0), moveProfile(off, 0, 1), copyProfile(off, 0), renameProfile(off, 0, 'Z'), setProfileGroups(off, 0, []), setDigitActive(off, 0), withAddedPreloads(off, ['Modular'])]) {
     assert.equal(usesDigitColors(next), false)
   }
-  assert.equal(usesDigitColors(stateFromStored(off, null)), false)
-  assert.equal(usesDigitColors(stateFromStored({ ...synced, useDigitColors: 'no' }, null)), true)
+  assert.equal(usesDigitColors(fromStored(off, null)), false)
+  assert.equal(usesDigitColors(fromStored({ ...synced, useDigitColors: 'no' }, null)), true)
   const on = setUseDigitColors(off, true)
   assert.equal('useDigitColors' in on, false)
   assert.deepEqual(on, apart)
@@ -440,6 +455,12 @@ test('the right column has no name box: the digit keys come straight after the D
   const html = renderEditor({ groups: [], pages: [], page: 0, brush: null })
   assert.doesNotMatch(html, /profile-name/)
   assert.match(html, /<div class="cbd-column"><div class="cbd-heading">Digits/)
+})
+
+test('renderEditor shows one line, first, saying saved profiles could not be read and are kept, only while a copy is kept', () => {
+  const editor = (unreadable) => renderEditor({ groups: [], pages: [], page: 0, brush: null, unreadable })
+  assert.match(editor(true), /^<div class="cbd-note" data-role="unreadable">[^<]*could not be read[^<]*kept under ColorByDigit_profiles_unreadable[^<]*<\/div>/)
+  assert.doesNotMatch(editor(false), /data-role="unreadable"/)
 })
 
 // `synced` with a first name that needs escaping, and the same with the digits on that first profile.
@@ -1160,7 +1181,7 @@ test('sync: unsynced in Both, a Digits pick saves the digit profile and leaves e
     app.puzzle.cells[1].colours = []
     app.calls.length = 0
     pickRow('digits', 1)
-    assert.equal(app.stored.ColorByDigit_profiles.digitActive, 1)
+    assert.equal(app.stored.ColorByDigit_profiles.data.digitActive, 1)
     assert.deepEqual(app.calls, [])
     assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], []])
   }, UNSYNCED_BOTH)
@@ -1170,7 +1191,7 @@ test('sync: unsynced in Both, a Cells pick recolors the cells: a 6 goes from Odd
   await withScript(mockApp([{ value: '6' }]), async (app) => {
     assert.deepEqual(app.puzzle.cells[0].colours, ['2'])
     pickRow('cells', 1)
-    assert.equal(app.stored.ColorByDigit_profiles.active, 1)
+    assert.equal(app.stored.ColorByDigit_profiles.data.active, 1)
     assert.deepEqual(app.puzzle.cells[0].colours, ['9'])
   }, UNSYNCED_BOTH)
 })
@@ -1488,7 +1509,7 @@ test('copiedSettings: the profiles and the mode in force, groups saved before pr
   assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => saved[key] ?? null })), JSON.parse(JSON.stringify(ours)))
   const legacyOnly = { ColorByDigit_groups: [{ key: '3', digits: ['1', '2'] }] }
   const copied = JSON.parse(copiedSettings({ getData: (key) => legacyOnly[key] ?? null }))
-  assert.deepEqual(copied.ColorByDigit_profiles, JSON.parse(JSON.stringify(stateFromStored(null, legacyOnly.ColorByDigit_groups))))
+  assert.deepEqual(copied.ColorByDigit_profiles, JSON.parse(JSON.stringify(fromStored(null, legacyOnly.ColorByDigit_groups))))
   assert.equal(copied.ColorByDigit_profiles.profiles[copied.ColorByDigit_profiles.active].groups[0].key, '3')
   assert.equal(copied.ColorByDigit_mode, 'cell')
   assert.equal('ColorByDigit_auto' in copied, false)
@@ -1500,7 +1521,7 @@ test('copiedSettings: the profiles and the mode in force, groups saved before pr
 test('pastedSettings: a state that keeps every profile is kept, one that loses a profile is skipped and counted, other keys are ignored', () => {
   const profiles = { profiles: [{ name: ' Odd/Even ', groups }], active: 0 }
   const pasted = readPaste(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_mode: 'sideways', ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, DarkPage_color: '#ffffff' }))
-  assert.deepEqual(pasted.values, { ColorByDigit_profiles: stateFromStored(profiles), ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true })
+  assert.deepEqual(pasted.values, { ColorByDigit_profiles: fromStored(profiles), ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true })
   assert.equal(pasted.skipped, 1)
   const oneBad = { profiles: [{ name: 'Odd/Even', groups }, { name: 'bad' }], active: 0 }
   assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_mode: 'both' })), { values: { ColorByDigit_mode: 'both' }, skipped: 1 })

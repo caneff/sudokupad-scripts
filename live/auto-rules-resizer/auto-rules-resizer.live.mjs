@@ -272,8 +272,9 @@ describe('the max auto width and height', { concurrency: false }, () => {
   describe('saved before the script starts, as after a reload', { concurrency: false }, () => {
     let context, p, errors
 
+    // Saved as the script saves it, so a start that skipped the envelope would read no limit.
     before(async () => {
-      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved(600, null), LONG_RULES))
+      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved({ v: 0, data: 600 }, null), LONG_RULES))
       await inject(p)
     })
     after(async () => { await context.close() })
@@ -324,7 +325,8 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
     after(async () => { await context.close() })
 
-    const data = (key) => p.evaluate((k) => Framework.getData(k), key)
+    // A saved limit is the data of its `{ v, data }` envelope; a limit saved bare would read undefined here.
+    const data = (key) => p.evaluate((k) => { const saved = Framework.getData(k); return saved === null ? null : saved.data }, key)
 
     it('opens from the settings entry with both boxes empty, and typing in a box enters no digit on the board', async () => {
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
