@@ -291,6 +291,37 @@ function group (title, extra = []) {
       assert.equal(await saved('ToolPen_color'), 3)
     })
 
+    it('a digit key 1 to 9 picks that pen on the page showing, also with Keypad Flipped; key 0 does nothing', async () => {
+      assert.equal(await selected(), 'c')
+      await p.keyboard.press('5')
+      assert.equal(await settle(selected, 'e'), 'e', 'key 5 on page 2 is pen e')
+      assert.equal(await currentButtonKey(), '5')
+      await p.keyboard.press('0')
+      assert.equal(await selected(), 'e', 'key 0 changes nothing')
+      assert.equal(await saved('ToolPen_color'), 5)
+      await read(() => Framework.setSetting('flipkeypad', true))
+      try {
+        await p.keyboard.press('7')
+        assert.equal(await settle(selected, 'g'), 'g', 'key 7 is pen g with Keypad Flipped')
+        assert.equal(await currentButtonKey(), '7')
+      } finally {
+        await read(() => Framework.setSetting('flipkeypad', false))
+      }
+      await p.keyboard.press('3')
+      assert.equal(await settle(selected, 'c'), 'c')
+    })
+
+    it('a digit key does not pick a pen while another tool is current', async () => {
+      assert.equal(await selected(), 'c')
+      try {
+        await read(() => Framework.app.changeTool('normal'))
+        await p.keyboard.press('5')
+        assert.equal(await selected(), 'c', 'key 5 left the pen alone')
+      } finally {
+        await openPenTool(p)
+      }
+    })
+
     it('the mouse wheel over the page button turns the page: down forward, up back; over a slider or elsewhere in the panel it does not', async () => {
       await turnPageWithWheel(100)
       assert.equal(await settle(selected, 'n'), 'n')

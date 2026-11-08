@@ -159,12 +159,13 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
+const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
 
 test(`${DETAILS} lists what the script adds as a grid of short items, one per feature, and never mentions the middle button`, () => {
   assert.deepEqual(section(DETAILS, 'What it adds'), [
     'Customizable pen colors Hold a pen color button, or pick a preset in the settings.',
     'Dashed and arrow lines Two more pages of pens.',
+    'Digit keys pick the pen Press 1 to 9 to pick that pen color, on whichever page of pens is showing.',
     'Marks on cell edges Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners Click near a corner for an X or a circle.',
     'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
@@ -241,7 +242,7 @@ const PEN_SLIDES = [
 ]
 const DRAW_SLIDES = [
   ['1-type', 'Left click to type a note'], ['3-background', 'Background: a box behind the next note'],
-  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes wrap and scroll; drag any corner to resize'], ['7-erase', 'Erase: right-click a note']
+  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes scroll; drag any corner to resize'], ['7-erase', 'Erase: right-click a note']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },

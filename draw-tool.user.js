@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.27.0
+// @version      0.27.4
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.27.0'
+  const VERSION = '0.27.4'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -234,7 +234,7 @@
   const TEXT_KIND = 'text'
   // Kinds an earlier version saved; they stay in storage and are never drawn.
   const HIDDEN_KINDS = ['stroke', 'shape']
-  const TEXT_GLYPH = '<path d="M8 15l4-8 4 8M9.5 12.5h5"/>'
+  const TEXT_GLYPH = '<path d="M8 16.5l4-8 4 8M9.5 14h5"/>'
   // The tool button is a sticky note; the Background button keeps the letter.
   const STICKY_NOTE = '<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h5"/>'
   const BUTTON_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${STICKY_NOTE}</svg>`
@@ -901,6 +901,14 @@
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
+  const STATUS_ATTRIBUTE = 'data-role="settings-status"'
+  const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
+
+  function setDialogStatus (dialog, message) {
+    dialog.querySelector(STATUS_SELECTOR).textContent = message
+  }
+  // A thrown value that is not an Error has no message, so it is shown as itself.
+  const errorText = (error) => error?.message ?? String(error)
 
   // The next press ends the swallowing even when no release came (a close from the keyboard).
   function swallowRelease (win = window) {
@@ -920,7 +928,7 @@
   }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }) {
+  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
     framework.addSetting({
       tag: 'button',
       name,
@@ -928,7 +936,9 @@
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(open, 0)
+        setTimeout(() => {
+          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
+        }, 0)
       }
     })
   }
@@ -945,7 +955,7 @@
   function renderDialogTitle ({ prefix, name, version }) {
     return `<style>${dialogTitleCss(prefix)}</style>` +
       `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
-      '<span data-role="settings-status"></span>' +
+      `<span ${STATUS_ATTRIBUTE}></span>` +
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
@@ -961,7 +971,7 @@
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-      `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
   }
 
@@ -992,8 +1002,21 @@
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
+    // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
+    let failed = false
+    const saveAndClose = () => {
+      try {
+        if (failed || changed()) save()
+      } catch (error) {
+        failed = true
+        // The dialog stays open so the failure is read and the choices are kept.
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        return
+      }
+      close()
+    }
     const buttons = [
-      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
       ...extraButtons
     ]
@@ -1017,6 +1040,7 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global setDialogStatus, errorText */ // from settings-dialog.js, which every script carries beside this one
   // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
@@ -1045,7 +1069,7 @@
 
   // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
   function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-settings' && act !== 'paste-settings') return
@@ -1061,7 +1085,7 @@
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`)
       }
     })
   }

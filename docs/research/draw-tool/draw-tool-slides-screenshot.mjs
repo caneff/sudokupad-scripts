@@ -1,10 +1,10 @@
 // Takes the five slides of Text Annotation's slideshow on site/index.html, each the board patch beside the Text Annotation panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in.
-// The notes are what a solver writes: short remarks beside the grid, in the margin above it, or small on a cell's corner or edge, never one digit and never centered in a cell (the script checks both).
-//   draw-tool-slide-1-type.png        a remark typed beside row 2, with markdown
-//   draw-tool-slide-3-background.png  the Background button on: a note in a page-colored box over the digits, beside one made with it off
-//   draw-tool-slide-6-select.png      three notes selected by a drag on empty space, the dragged box dashed, and recolored together from the panel
+// The notes are what a solver writes: formulas (A=B+5, X+Y=2Z) and short deductions, mostly in the margin beside the grid or above it, as solvers do, and on the board only where the slide needs it (a note on a cell's edge, in a box), never one digit and never centered in a cell (the script checks both).
+//   draw-tool-slide-1-type.png        a three-line note typed with Enter in the margin beside rows 1 and 2
+//   draw-tool-slide-3-background.png  the Background button on: a formula in a page-colored box over the grid lines, beside one made with it off
+//   draw-tool-slide-6-select.png      three margin notes selected by a drag on empty space, the dragged box dashed, and recolored together from the panel
 //   draw-tool-slide-7-erase.png       the pointer on a note with a red ring round it, where a right click erases it (the click follows the shot and must erase the note)
-//   draw-tool-slide-9-long.png        a two-line note open for typing, made smaller with its bottom right handle of four, its text wrapped and scrolled, the scroll bar under the pointer
+//   draw-tool-slide-9-long.png        a four-line note open for typing, made two lines tall with its bottom right handle of four, so it scrolls to its last two lines, its scroll bar visible
 // Every note is typed with real clicks and keys. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
 // Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/draw-tool/draw-tool-slides-screenshot.mjs
@@ -15,9 +15,11 @@ import { slideTo, valueOf } from '../../../live/draw-tool/draw-tool-fixtures.mjs
 
 const out = (name) => new URL(`./draw-tool-slide-${name}.png`, import.meta.url).pathname
 const DRAG_STEPS = 10
-// The picture's size, and its top left in cells from the grid's top left: it takes in the margin above the grid and the room beside it, down to the panel's bottom.
-const CLIP_SIZE = [1000, 625]
-const CLIP_CORNER = [2.3, -0.95]
+// The picture's size in page pixels, and its top in cells from the grid's top: it starts at the page's left edge and takes in the whole grid, the margins round it and the panel.
+const CLIP_SIZE = [1176, 735]
+const CLIP_TOP = -0.95
+// The picture is 1000 x 625: the page is shot at this scale, so the whole grid fits and a note looks as large as it does in SudokuPad.
+const SCALE = 0.85
 const GREEN = 1
 const ORANGE = 3
 const RED = 4
@@ -47,13 +49,13 @@ const browser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars']
 
 // A fresh page with Draw on and helpers working in cell units from the grid's top left.
 async function scene () {
-  const p = await openDrawPage(browser, 1)
+  const p = await openDrawPage(browser, SCALE)
   const [x0, y0, cell] = await p.evaluate(() => {
     const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
     return [box.x, box.y, box.width]
   })
   const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
-  const clipRect = () => ({ x: x0 + CLIP_CORNER[0] * cell, y: y0 + CLIP_CORNER[1] * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] })
+  const clipRect = () => ({ x: 0, y: y0 + CLIP_TOP * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] })
   const items = () => p.locator(NOTES).count()
   // Sets the Size slider to the text size `size` (2 x width + 8), then checks it landed.
   const pickSize = async (size) => {
@@ -63,10 +65,16 @@ async function scene () {
     if (set !== width) throw new Error(`the Size slider is at ${set}, not ${width}`)
   }
   const pick = (color, size) => p.click(`.controls-input button[data-key="${color}"]`).then(() => pickSize(size))
+  const typeLines = async (lines) => {
+    for (const [i, line] of lines.entries()) {
+      if (i) await p.keyboard.press('Enter')
+      await p.keyboard.type(line)
+    }
+  }
   const note = async (cell, text) => {
     const before = await items()
     await p.mouse.click(...at(cell))
-    await p.keyboard.type(text)
+    await typeLines(text.split('\n'))
     await p.keyboard.press('Escape')
     if ((await items()) !== before + 1) throw new Error(`the note ${text} did not land`)
   }
@@ -106,43 +114,46 @@ async function scene () {
     console.log(`wrote ${out(name)}`)
     if (!keepOpen) await p.close()
   }
-  return { p, at, items, pick, pickSize, note, background, shoot }
+  return { p, at, items, pick, pickSize, note, typeLines, background, shoot }
 }
 
-// Beside the grid, next to row 2, in the free space above the panel.
-const BESIDE_ROW_2 = [1.3, 11.2]
+// The margin beside the grid, above the panel, next to rows 1 and 2.
+const BESIDE_ROWS_1_2 = [0.1, 10.9]
+// The margin above the grid, over a column.
+const ABOVE_COL_5 = [-0.55, 4.4]
+const ABOVE_COL_8 = [-0.55, 7.3]
 
-// 1: a remark typed beside the grid, next to the row it talks about.
+// 1: a three-line note typed with Enter in the margin beside the first two rows.
 {
   const s = await scene()
   await s.pick(ORANGE, 26)
-  await s.note(BESIDE_ROW_2, 'r2: 3 must be in c7-9')
+  await s.note(BESIDE_ROWS_1_2, 'A=B+5\nA+B=11\nB=3, A=8')
   await s.p.mouse.move(0, 0)
   await s.shoot('1-type')
 }
 
-// 3: one note made with Background off, one with it on, both over digits and on cell edges.
+// 3: one formula made with Background off, one with it on, both on the board over grid lines, where the box is what the slide shows.
 {
   const s = await scene()
   await s.pick(RED, 26)
   await s.background(false)
-  await s.note([3.3, 6.2], '**not** 5 (box 5)')
+  await s.note([3.3, 6.2], '**A+B=11**')
   await s.background(true)
-  await s.note([5.2, 6.4], 'cage = 17')
+  await s.note([5.2, 6.4], 'X+Y=2Z')
   if ((await s.p.locator('#draw-tool-layer .draw-tool-text-bg').count()) !== 1) throw new Error('only the second note should have a box')
   await s.p.mouse.move(0, 0)
   await s.shoot('3-background')
 }
 
-// 6: three orange notes selected by a drag that starts on empty space, then recolored blue with one click on a color button; the dragged box is drawn dashed gray where it was.
+// 6: three orange margin notes selected by a drag that starts on empty space, then recolored blue with one click on a color button; the dragged box is drawn dashed gray where it was.
 {
   const s = await scene()
   await s.pick(ORANGE, 26)
-  await s.note([3.5, 6.1], '**not** 5')
-  await s.note([5.2, 6.4], 'cage = 17')
-  await s.note([6.3, 4.2], '*X-wing* on 6')
-  const FROM = [2.9, 2.9]
-  const TO = [7.0, 7.25]
+  await s.note(ABOVE_COL_5, 'A=B+5')
+  await s.note(ABOVE_COL_8, 'X+Y=2Z')
+  await s.note(BESIDE_ROWS_1_2, 'r1: 4,6 in c7-9')
+  const FROM = [-0.9, 2.9]
+  const TO = [1.7, 14.6]
   await s.p.mouse.move(...s.at(FROM))
   await s.p.mouse.down()
   await s.p.mouse.move(...s.at(TO), { steps: DRAG_STEPS })
@@ -161,7 +172,7 @@ const BESIDE_ROW_2 = [1.3, 11.2]
 {
   const s = await scene()
   await s.pick(GREEN, 32)
-  await s.note([5.2, 6.4], 'cage = 17')
+  await s.note(ABOVE_COL_5, 'A=B+5')
   const box = await s.p.locator(NOTES).boundingBox()
   const x = box.x + box.width / 2
   const y = box.y + box.height / 2
@@ -178,42 +189,34 @@ const BESIDE_ROW_2 = [1.3, 11.2]
   await s.p.close()
 }
 
-// 9: a two-line note with a background box, open for typing, dragged smaller by its bottom right corner handle, with a handle on each of its four corners, so its text wraps and scrolls; a ring marks the dragged handle and the pointer rests on the note.
+// 9: a four-line note with a background box, open for typing, dragged by its bottom right corner handle to two lines tall, so its text scrolls; a ring marks the dragged handle and the pointer rests on the note, which shows its scroll bar.
 {
   const s = await scene()
   await s.pick(BLUE, 26)
   await s.background(true)
-  const LINES = ['r1: 1 and 2 only fit in c8 and c9', 'so r1c9 is not 4, and r2c9 is 5']
-  await s.p.mouse.click(...s.at([0.6, 10.8]))
-  for (const [i, line] of LINES.entries()) {
-    if (i) await s.p.keyboard.press('Enter')
-    await s.p.keyboard.type(line)
-  }
+  await s.p.mouse.click(...s.at([0.35, 10.9]))
+  await s.typeLines(['A=B+5', 'A+B=11', '2B+5=11', 'B=3, A=8'])
   const handle = s.p.locator('#draw-tool-layer .draw-tool-resize').last()
-  const { x, y, width, height } = await handle.boundingBox()
-  const [hx, hy] = [x + width / 2, y + height / 2]
-  const BY = [-80, -20]
-  await s.p.mouse.move(hx, hy)
-  await s.p.mouse.down()
-  await s.p.mouse.move(hx + BY[0], hy + BY[1], { steps: DRAG_STEPS })
-  await s.p.mouse.up()
   const open = s.p.locator('#draw-tool-layer .draw-tool-textbox')
   // Make the box exactly two lines tall, so the scrolled text ends on a whole line and not in the middle of one.
   const { lineHeight, padding, clientHeight } = await open.evaluate((el) => {
     const css = window.getComputedStyle(el)
     return { lineHeight: parseFloat(css.lineHeight), padding: parseFloat(css.paddingTop) + parseFloat(css.paddingBottom), clientHeight: el.clientHeight }
   })
+  // A little wider too, so the scroll bar leaves the longest line whole.
+  const WIDEN = 40
   const grow = 2 * lineHeight + padding - clientHeight
   const grip = await handle.boundingBox()
   await s.p.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
   await s.p.mouse.down()
-  await s.p.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 + grow, { steps: DRAG_STEPS })
+  await s.p.mouse.move(grip.x + grip.width / 2 + WIDEN, grip.y + grip.height / 2 + grow, { steps: DRAG_STEPS })
   await s.p.mouse.up()
   const scrolls = await open.evaluate((el) => el.classList.contains('draw-tool-scrolls'))
   if (!scrolls) throw new Error('the resized note does not scroll')
   const box = await open.boundingBox()
   await s.p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await s.p.mouse.wheel(0, -30)
+  // Scroll to the end, so the text has moved, the scroll bar's thumb is off the top and no part of a further line shows under the box.
+  await s.p.mouse.wheel(0, 10 * lineHeight)
   const end = await handle.boundingBox()
   await addRing(s.p, [end.x + end.width / 2, end.y + end.height / 2], 30)
   await s.shoot('9-long')
