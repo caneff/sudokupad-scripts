@@ -203,6 +203,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         warns.forEach((pattern, i) => assert.match(warned[i], pattern))
       })
 
+      // The dialog opened from the panel is still this script's: a press on its overlay closes it, and the release never reaches the page.
+      if (kase.noEntry) {
+        it('a press on the dialog\'s overlay closes it and no release reaches the page', async () => {
+          await p.locator('.pen-tool-extras-settings').click()
+          await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
+          await read(() => { window.releases = 0; window.addEventListener('mouseup', () => { window.releases++ }) })
+          await p.mouse.click(2, 2)
+          await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
+          assert.equal(await read(() => window.releases), 0)
+        })
+      }
+
       it('the dialog names the skipped step in one line, or says nothing when none is', async () => {
         assert.equal(await dialogLine(), kase.off)
       })
@@ -235,18 +247,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         })
         assert.equal(pulldown, kase.pulldown || 'hidden', 'SudokuPad\'s line mode pulldown')
       })
-
-      // The dialog opened from the panel is still this script's: a press on its overlay closes it, and the release never reaches the page.
-      if (kase.noEntry) {
-        it('a press on the dialog\'s overlay closes it and no release reaches the page', async () => {
-          await p.locator('.pen-tool-extras-settings').click()
-          await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
-          await read(() => { window.releases = 0; window.addEventListener('mouseup', () => { window.releases++ }) })
-          await p.mouse.click(2, 2)
-          await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
-          assert.equal(await read(() => window.releases), 0)
-        })
-      }
 
       // A dragged line is SudokuPad's own drawing; it needs the drag highlight, which one case removes.
       if (!kase.noDrag) {
