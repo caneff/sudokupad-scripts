@@ -658,7 +658,7 @@ test('a "- [" line without the box shape, or a plain "- " line, stays a bullet',
 })
 
 const FENCE = { text: '', fence: true }
-const codeLine = (text) => [{ text, code: true, block: true }]
+const codeLine = (text) => [{ text }]
 
 test('inline code is one run of its own with the backticks left out, and no markup is read inside it', () => {
   assert.deepEqual(parseMarkdown('a `b` c'), [[{ text: 'a ' }, { text: 'b', code: true }, { text: ' c' }]])
@@ -702,10 +702,17 @@ test('symbolJustTyped leaves a pair alone inside inline code, inside an unclosed
   assert.equal(symbolJustTyped('`x sum ', 7), null)
 })
 
+test('symbolJustTyped leaves a pair or a word alone inside a closed inline span, including when the closing backtick is what completes "sum"', () => {
+  assert.equal(symbolJustTyped('`a->b`', 4), null)
+  assert.equal(symbolJustTyped('`a ->`', 5), null)
+  assert.equal(symbolJustTyped('`sum`', 5), null)
+  assert.deepEqual(symbolJustTyped('`a` sum ', 8), { start: 4, end: 7, symbol: 'Σ' })
+})
+
 test('closedSymbols leaves a closing "sum" alone inside a code block', () => {
   assert.equal(closedSymbols('```\nr5 sum'), '```\nr5 sum')
-  assert.equal(closedSymbols('`a sum'), '`a sum')
   assert.equal(closedSymbols('`a` sum'), '`a` Σ')
+  assert.equal(closedSymbols('it`s a sum'), 'it`s a Σ', 'a backtick with no partner is plain text in a finished note')
 })
 
 test('toggledCheck flips one line\'s box and leaves the other lines alone', () => {

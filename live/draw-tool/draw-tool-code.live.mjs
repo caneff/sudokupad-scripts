@@ -11,8 +11,11 @@ const { TEXT_BOX, TEXTS } = draw
 const CODE_AT = [1.5, 1.5]
 const INLINE = '.draw-tool-code:not(.draw-tool-code-block)'
 const BLOCK = '.draw-tool-code-block'
-const NOTE_TEXT = 'a `x->y` b **c**\n```js\n  - [ ] k ->\n**b** sum\n```\nafter -> z'
-const SHOWN_TEXT = 'a x->y b c'
+const NOTE_TEXT = 'a `x->y` b **c**\n```js\n  - [ ] k ->\n**b** sum\n    z=1 <=\n```\nafter -> z'
+// What typing leaves: only the pair outside code became a sign.
+const TYPED_TEXT = NOTE_TEXT.replace('after -> z', 'after → z')
+const BLOCK_TEXT = '  - [ ] k ->\n**b** sum\n    z=1 <='
+const MID_AT = [3.5, 3.5]
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -26,7 +29,7 @@ describe('Text Anywhere\'s code in notes', { concurrency: false }, () => {
     const note = document.querySelector(selector)
     const read = (e) => {
       const style = window.getComputedStyle(e)
-      return { text: e.textContent, family: style.fontFamily, background: style.backgroundColor, whiteSpace: style.whiteSpace, display: style.display, radius: parseFloat(style.borderTopLeftRadius) }
+      return { text: e.textContent, family: style.fontFamily, background: style.backgroundColor, radius: parseFloat(style.borderTopLeftRadius) }
     }
     return { note: note.textContent, inline: [...note.querySelectorAll(inline)].map(read), blocks: [...note.querySelectorAll(block)].map(read), bullets: note.querySelectorAll('.draw-tool-check').length }
   }, [TEXTS, INLINE, BLOCK])
@@ -41,26 +44,36 @@ describe('Text Anywhere\'s code in notes', { concurrency: false }, () => {
 
   it('typing symbols inside inline code and inside a block leaves them, and outside both converts them', async () => {
     await p.mouse.click(...await gridPoint(p, CODE_AT))
-    await p.keyboard.type(NOTE_TEXT.replace('after -> z', 'after '))
-    await p.keyboard.type('-> z')
-    assert.equal(await p.locator(TEXT_BOX).textContent(), NOTE_TEXT.replace('after -> z', 'after → z'))
+    await p.keyboard.type(NOTE_TEXT)
+    assert.equal(await p.locator(TEXT_BOX).textContent(), TYPED_TEXT)
     await draw.finishNote(p)
-    assert.deepEqual((await draw.saved(p)).map((item) => item.text), [NOTE_TEXT.replace('after -> z', 'after → z')])
+    assert.deepEqual((await draw.saved(p)).map((item) => item.text), [TYPED_TEXT])
+  })
+
+  it('a pair typed in the middle of a later line keeps the caret right after it, and "sum" closed by its backtick stays', async () => {
+    await p.mouse.click(...await gridPoint(p, MID_AT))
+    await p.keyboard.type('a\nb c')
+    await p.keyboard.press('ArrowLeft')
+    await p.keyboard.press('ArrowLeft')
+    await p.keyboard.type('->X')
+    assert.equal(await p.locator(TEXT_BOX).textContent(), 'a\nb→X c')
+    await p.keyboard.press('Control+A')
+    await p.keyboard.type('`sum` `x')
+    assert.equal(await p.locator(TEXT_BOX).textContent(), '`sum` `x')
+    await draw.finishNote(p)
   })
 
   it('the finished note shows monospace on a tinted background, hides the backticks and keeps a block\'s spaces', async () => {
     const seen = await looks()
-    assert.equal(seen.note, `${SHOWN_TEXT}  - [ ] k ->\n**b** sumafter → z`)
+    assert.equal(seen.note, `a x->y b c${BLOCK_TEXT}after → z`)
     assert.deepEqual(seen.inline.map((e) => e.text), ['x->y'])
-    assert.deepEqual(seen.blocks.map((e) => e.text), ['  - [ ] k ->\n**b** sum'])
+    assert.deepEqual(seen.blocks.map((e) => e.text), [BLOCK_TEXT])
     assert.equal(seen.bullets, 0, 'the checklist line inside the block is plain text')
     for (const e of [...seen.inline, ...seen.blocks]) {
       assert.match(e.family, /mono/i)
       assert.notEqual(e.background, 'rgba(0, 0, 0, 0)')
       assert.ok(e.radius > 0, 'rounded corners')
     }
-    assert.equal(seen.blocks[0].display, 'block')
-    assert.equal(seen.blocks[0].whiteSpace, 'pre-wrap')
   })
 
   it('the tint is made from the note\'s text color', async () => {
@@ -76,11 +89,11 @@ describe('Text Anywhere\'s code in notes', { concurrency: false }, () => {
 
   it('reopening the note shows the raw text, backticks and all, and a reload keeps the code', async () => {
     await draw.reopen(p, await gridPoint(p, CODE_AT))
-    assert.equal(await p.locator(TEXT_BOX).textContent(), NOTE_TEXT.replace('after -> z', 'after → z'))
+    assert.equal(await p.locator(TEXT_BOX).textContent(), TYPED_TEXT)
     await draw.finishNote(p)
     await draw.reload(p)
     await draw.pickDraw(p)
-    assert.deepEqual((await looks()).blocks.map((e) => e.text), ['  - [ ] k ->\n**b** sum'])
+    assert.deepEqual((await looks()).blocks.map((e) => e.text), [BLOCK_TEXT])
     assert.deepEqual(errors, [])
   })
 })

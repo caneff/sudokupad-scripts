@@ -329,8 +329,7 @@
   const isWordChar = (char) => char !== undefined && /\w/.test(char)
   const isSpace = (char) => char === undefined || /\s/.test(char)
 
-  // The inline code in a line: each span as [start, end) with both backticks inside it, and `open`, the index of a last backtick with no partner (-1 when none).
-  // A pair with nothing between it is no span.
+  // A pair of backticks with nothing between is no span; `open` is the last backtick left without a partner.
   function codeSpans (line) {
     const spans = []
     let at = line.indexOf('`')
@@ -414,15 +413,15 @@
     })
   }
 
-  // Whether the character at `caret` in the typed `text` is code: in a block, or in inline code or after a backtick that has no partner yet, since the typist is mid-span.
-  function inCode (text, caret) {
-    const lineStart = caret === 0 ? 0 : text.lastIndexOf('\n', caret - 1) + 1
-    const kinds = lineKinds(text.slice(0, lineStart).split('\n'))
-    if (kinds.filter((kind) => kind === 'fence').length % 2 === 1) return true
+  // Whether the character at index `at` of `text` is code: in a block or in inline code. While `typing`, text after a backtick with no partner yet counts too, since the typist is mid-span.
+  function inCode (text, at, typing) {
+    const lineStart = at === 0 ? 0 : text.lastIndexOf('\n', at - 1) + 1
+    const lines = text.slice(0, at).split('\n')
+    if (lineKinds(lines).pop() === 'code') return true
     const lineEnd = text.indexOf('\n', lineStart)
     const { spans, open } = codeSpans(text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd))
-    const at = caret - lineStart
-    return (open !== -1 && at > open) || spans.some(([start, end]) => at > start && at < end)
+    const index = at - lineStart
+    return (typing && open !== -1 && index > open) || spans.some(([start, end]) => index > start && index < end)
   }
 
   function toggledCheck (text, index) {
@@ -433,7 +432,7 @@
   const SYMBOLS = { '->': '→', '<-': '←', '!=': '≠', '<=': '≤', '>=': '≥', sum: 'Σ' }
   const SYMBOL_PATTERN = /->|<-|!=|<=|>=|\bsum\b/g
   // A note that ends in the word `sum` has no character typed after it to complete it, so closing the note does.
-  const closedSymbols = (text) => inCode(text, text.length) ? text : text.replace(/\bsum$/, SYMBOLS.sum)
+  const closedSymbols = (text) => inCode(text, text.length - 1, false) ? text : text.replace(/\bsum$/, SYMBOLS.sum)
 
   // What a closed note keeps of its typed text: trailing spaces and tabs go from every line, and blank lines before and after the text go, so a note of
   // only spaces is empty. Line breaks inside the text stay.
@@ -441,9 +440,9 @@
 
   // The symbol the character just typed before `caret` completed, or null. A pair is complete at the caret; `sum` only once a character that is not part of a word follows it.
   function symbolJustTyped (text, caret) {
-    if (inCode(text, caret)) return null
     for (const found of text.slice(0, caret).matchAll(SYMBOL_PATTERN)) {
       const end = found.index + found[0].length
+      if (inCode(text, end - 1, true)) continue
       if (end === caret && found[0] !== 'sum') return { start: found.index, end, symbol: SYMBOLS[found[0]] }
       if (end === caret - 1 && found[0] === 'sum') return { start: found.index, end, symbol: SYMBOLS.sum }
     }
@@ -453,12 +452,11 @@
   const isBullet = (runs) => Boolean(runs[0]?.bullet)
   const BULLET_INDENT_EM = 1.2
 
-  // A note's text as one list of runs per line; a marker does not reach across a line break. A fence line is `[{ text: '', fence: true }]`, and a line
-  // between fences is `[{ text, code: true, block: true }]`, exactly as typed.
+  // A note's text as one list of runs per line; a marker does not reach across a line break. A fence line is `[{ text: '', fence: true }]`; a line between fences is one run of its text as typed.
   function parseMarkdown (text) {
     const lines = text.split('\n')
     const kinds = lineKinds(lines)
-    return lines.map((line, i) => kinds[i] === 'fence' ? [{ text: '', fence: true }] : kinds[i] === 'code' ? [{ text: line, code: true, block: true }] : parseBlock(line))
+    return lines.map((line, i) => kinds[i] === 'fence' ? [{ text: '', fence: true }] : kinds[i] === 'code' ? [{ text: line }] : parseBlock(line))
   }
 
   // Each text parsed once: a redraw, a move or a recolor reads a note's runs again without parsing it again.
@@ -3042,7 +3040,7 @@
     selection.addRange(range)
     document.execCommand('insertText', false, found.symbol)
     // `sum` ends before the character typed after it, which the insertion carried the caret behind.
-    if (found.end !== anchorOffset) selection.modify('move', 'forward', 'character')
+    if (found.end - nodeStart !== anchorOffset) selection.modify('move', 'forward', 'character')
   }
 
   // The focus went to a panel button (`caret` was saved then, null with no caret); the note takes it back, once.
