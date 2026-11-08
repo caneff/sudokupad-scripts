@@ -203,8 +203,10 @@
   // A note never resized wraps at this many em and stops growing at this many lines, then scrolls.
   const BOX_WIDTH_EM = 16
   const BOX_LINES = 8
-  // The smallest box a resize handle leaves: about three characters wide and one line high, in em.
+  // The smallest box a resize handle leaves: about three characters wide and one line high, in em, unless the note's auto size is smaller.
   const MIN_BOX_EM = [3, LINE_HEIGHT]
+  // The least a resize leaves of any note, in em, so a box stays a target for its handles even when the note is empty.
+  const GRABBABLE_EM = 0.25
   // How far, in screen pixels, the mouse may move between press and release and the press still be a click.
   const CLICK_SLOP = 2
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
@@ -467,8 +469,9 @@
 
   // The note with the box corner `corner` of CORNERS dragged to screen point `point`, the opposite corner kept at screen point `anchor`. The box is in board
   // units on the board and off it, since a note off the board is drawn at the board's scale too; the note's point moves to the box's new middle, pinned or fixed as it was.
-  function resizedItem (item, anchor, point, board, corner) {
-    const box = [0, 1].map((i) => roundToTenth(Math.max(MIN_BOX_EM[i] * item.size, corner[i] * (point[i] - anchor[i]) / board.scale)))
+  // A short note can shrink back to its `autoSize` in board units, which is why the floor is not MIN_BOX_EM alone.
+  function resizedItem (item, anchor, point, board, corner, autoSize) {
+    const box = [0, 1].map((i) => roundToTenth(Math.max(GRABBABLE_EM * item.size, Math.min(MIN_BOX_EM[i] * item.size, autoSize[i]), corner[i] * (point[i] - anchor[i]) / board.scale)))
     const middle = [0, 1].map((i) => anchor[i] + corner[i] * box[i] * board.scale / 2)
     const { at, fixed, ...rest } = item
     return item.fixed ? { ...rest, box, fixed: roundPoint(middle) } : { ...rest, box, at: roundPoint(board.toBoard(middle)) }
@@ -2391,11 +2394,26 @@
     if (event.button !== PRIMARY_BUTTON || index === null) return
     const item = editing ? editing.item : drawing[index]
     const element = editing ? editing.element : item[NOTE_ELEMENT]
-    const box = contentBox(element, editing || item.fixed ? 1 : boardMap().scale)
+    const unit = editing || item.fixed ? 1 : boardMap().scale
+    const box = contentBox(element, unit)
     const [x, y] = eventPoint(event)
     const grabbed = cornerPoint(box, corner)
     const anchor = cornerPoint(box, corner, true)
-    resizing = { index, item, corner, anchor, offset: [grabbed[0] - x, grabbed[1] - y], to: null }
+    const autoSize = unresizedSize(element, unit)
+    resizing = { index, item, corner, anchor, offset: [grabbed[0] - x, grabbed[1] - y], autoSize, to: null }
+  }
+
+  // The size in board units the note has with no box, measured live because a typed or resized note's stored size is stale. Clearing the box styles for one synchronous
+  // read paints nothing between, but resets the scroll, so it is put back.
+  function unresizedSize (element, unit) {
+    const { style } = element
+    const kept = ['width', 'height', 'maxWidth', 'maxHeight'].map((name) => [name, style[name]])
+    const { scrollTop } = element
+    kept.forEach(([name]) => { style[name] = '' })
+    const box = contentBox(element, unit)
+    kept.forEach(([name, value]) => { style[name] = value })
+    element.scrollTop = scrollTop
+    return [box.right - box.left, box.bottom - box.top].map((side) => side / boardMap().scale)
   }
 
   // A release the page never saw leaves the button up on the next move, which ends the resize.
@@ -2413,9 +2431,9 @@
   // The open note is restyled in place; a selected one is drawn again, and saved when the drag ends.
   function showResize () {
     if (!resizing?.to) return
-    const { index, item, corner, anchor, offset, to } = resizing
+    const { index, item, corner, anchor, offset, autoSize, to } = resizing
     const map = boardMap()
-    const resized = resizedItem(item, anchor, [to[0] + offset[0], to[1] + offset[1]], map, corner)
+    const resized = resizedItem(item, anchor, [to[0] + offset[0], to[1] + offset[1]], map, corner, autoSize)
     if (editing) {
       editing.item = resized
       showEditing(map)
