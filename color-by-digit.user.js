@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.10
+// @version      0.22.11
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.10'
+  const VERSION = '0.22.11'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -530,11 +530,36 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
+  // <lib:ready>
+  // Generated from lib/ready.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
+  // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
+  function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeoutMs
+      const poll = () => {
+        let value
+        try {
+          value = check()
+        } catch (error) {
+          reject(error)
+          return
+        }
+        if (value !== null && value !== undefined && value !== false) resolve(value)
+        else if (Date.now() >= deadline) reject(new Error(`${what} not ready after ${timeoutMs} ms`))
+        else setTimeout(poll, pollMs)
+      }
+      poll()
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:ready>
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math.
-  /* global parseColor, darkenColor, toOklab */
+  // Reads parseColor, darkenColor and toOklab from color-math, and whenReady from ready.
+  /* global parseColor, darkenColor, toOklab, whenReady */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
@@ -561,6 +586,7 @@
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
   const COLOR_TOOL_POLL_MS = 100
+  const COLOR_TOOL_TIMEOUT_MS = 10000
 
   // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
@@ -616,16 +642,9 @@
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
   }
 
-  // No time limit: until the color tool is ready the caller shows SudokuPad's own colors.
+  // Rejects once COLOR_TOOL_TIMEOUT_MS passes with no ready color tool, naming it, so the caller can skip its step and keep SudokuPad's own colors.
   function waitForColorTool () {
-    return new Promise((resolve) => {
-      const check = () => {
-        const tool = readyColorTool()
-        if (tool) resolve(tool)
-        else setTimeout(check, COLOR_TOOL_POLL_MS)
-      }
-      check()
-    })
+    return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool', pollMs: COLOR_TOOL_POLL_MS })
   }
 
   // The pages of cell color keys of the palette in force, or none until the color tool has one.
