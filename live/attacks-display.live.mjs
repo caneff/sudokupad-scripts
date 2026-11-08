@@ -5,7 +5,8 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { assertClean, installScripts, makeNote, openAttackPage, pickTool } from './attack-fixtures.mjs'
+import { makeNote, pickTool } from './attack-fixtures.mjs'
+import { assertNoCrash, openWithAllScripts, reloadWithScripts } from './attacks.mjs'
 import { cellCentre, gridPoint, mouseDrag, penDrawnCount, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
@@ -28,7 +29,7 @@ after(async () => { await browser?.close() })
 describe('attacks on the display and scale', { concurrency: false }, () => {
   let context, p, errors
   beforeEach(async () => {
-    ;({ context, p, errors } = await openAttackPage(browser))
+    ;({ context, p, errors } = await openWithAllScripts(browser))
   })
   afterEach(async () => { await context?.close() })
 
@@ -79,7 +80,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
       }
       await draw.finishNote(p)
     }
-    assertClean(errors, 'the ratio changes')
+    await assertNoCrash(p, errors)
   })
 
   it('attack 77: SudokuPad\'s fullscreen on and off leaves the notes, the pen lines and the tools where they were and working', async () => {
@@ -114,14 +115,13 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
       await pickTool(p, 'pen')
     }
     assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, 'no text box is left open')
-    assertClean(errors, 'fullscreen')
+    await assertNoCrash(p, errors)
   })
 
   it('attack 78: 200 notes and a grid full of pen lines: drawing, moving and undoing each stay inside the time budget', async (t) => {
     // 200 notes in a grid of 20 across and 10 down, in board units, planted as a saved drawing and shown by a reload.
     await draw.plantDrawing(p, Array.from({ length: NOTE_COUNT }, (_, i) => ({ kind: 'text', color: 1 + (i % 9), size: 14, opacity: 100, text: `n${i}`, at: [10 + (i % 20) * 27, 10 + Math.floor(i / 20) * 54] })))
-    await p.reload({ waitUntil: 'load' })
-    await installScripts(p)
+    await reloadWithScripts(p)
     await pickTool(p, 'draw')
     assert.equal((await draw.texts(p)).length, NOTE_COUNT, `${NOTE_COUNT} notes are drawn`)
 
@@ -167,6 +167,6 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
     }, async () => (await moved()) !== placed)
 
     t.diagnostic(`budget ${ACTION_BUDGET_MS} ms per action; measured ${JSON.stringify(times)} ms with ${NOTE_COUNT} notes and ${lines} pen lines`)
-    assertClean(errors, 'the full board')
+    await assertNoCrash(p, errors)
   })
 })

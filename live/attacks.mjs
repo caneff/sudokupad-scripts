@@ -30,10 +30,11 @@ export async function loadScripts (p) {
 }
 
 // Opens the puzzle, gets past Start Puzzle and injects all six scripts, as a user with all of them installed has;
-// `errors` holds the page errors, console errors and skip lines; `expectedSkips` and `seed` go to `openPage` and `afterStart(p)` runs before the scripts go in.
-export async function openWithAllScripts (browser, { expectedSkips, seed, afterStart } = {}) {
+// `errors` holds the page errors, console errors and skip lines; `expectedSkips`, `seed` and `contextOptions` go to `openPage` and `afterStart(p)` runs before the scripts go in.
+export async function openWithAllScripts (browser, { expectedSkips, seed, afterStart, contextOptions } = {}) {
   const opened = await openPage(browser, {
     expectedSkips,
+    contextOptions,
     seed: async (p, errors) => { captureConsoleErrors(p, errors); if (seed) await seed(p, errors) }
   })
   await startPuzzle(opened.p)

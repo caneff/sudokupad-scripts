@@ -5,7 +5,8 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { assertClean, boardState, cellState, emptyCell, makeNote, openAttackPage, pickTool } from './attack-fixtures.mjs'
+import { boardState, cellState, emptyCell, makeNote, pickTool } from './attack-fixtures.mjs'
+import { assertNoCrash, openWithAllScripts } from './attacks.mjs'
 import { cellCentre, gridPoint, mouseDrag, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
@@ -21,7 +22,7 @@ describe('attacks on input', { concurrency: false }, () => {
   let context, p, errors
 
   beforeEach(async () => {
-    ;({ context, p, errors } = await openAttackPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+    ;({ context, p, errors } = await openWithAllScripts(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
   })
   afterEach(async () => { await context?.close() })
 
@@ -58,7 +59,7 @@ describe('attacks on input', { concurrency: false }, () => {
     }
     assert.deepEqual(await lineOnRow(9 - 1), whole, 'an ordinary drag still draws the whole line afterward')
     assert.equal(await draw.tool(p), 'pen', 'the pen is still the tool')
-    assertClean(errors, 'the pen line')
+    await assertNoCrash(p, errors)
 
     // The note move: a drag from a note's middle by two cells with the interruption at one cell.
     await pickTool(p, 'draw')
@@ -94,7 +95,7 @@ describe('attacks on input', { concurrency: false }, () => {
     assert.deepEqual((await draw.texts(p)).sort(), notes.map(([text]) => text).sort(), 'every note is still there once')
     assert.equal((await draw.saved(p)).length, notes.length, 'every note is saved once')
     assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, 'no text box is left open')
-    assertClean(errors, 'the note move')
+    await assertNoCrash(p, errors)
   })
 
   it('attack 70: double- and triple-clicks at speed on cells, notes and the hold-to-edit buttons open nothing half done', async () => {
@@ -104,7 +105,7 @@ describe('attacks on input', { concurrency: false }, () => {
     await p.mouse.click(...await gridPoint(p, [4.5, 4.5]), { clickCount: 3, delay: 0 })
     await p.mouse.click(...await gridPoint(p, [6.5, 6.5]))
     assert.deepEqual(await selectedCells(), ['6,6'], 'an ordinary click afterward selects just its cell')
-    assertClean(errors, 'the cells')
+    await assertNoCrash(p, errors)
 
     // Notes: a double-click on a note opens it once, a triple-click inside keeps it one box, and Escape keeps the text; the same on empty space leaves no note.
     await pickTool(p, 'draw')
@@ -123,7 +124,7 @@ describe('attacks on input', { concurrency: false }, () => {
       assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, `${clickCount} clicks on empty space leave no text box`)
     }
     assert.equal((await draw.saved(p)).length, 1, 'one note is saved')
-    assertClean(errors, 'the notes')
+    await assertNoCrash(p, errors)
 
     // Hold-to-edit buttons: fast clicks pick the color and open no picker (a hold of a second does).
     const colorOf = () => p.evaluate((key) => Framework.getData(key), draw.COLOR_KEY)
@@ -137,7 +138,7 @@ describe('attacks on input', { concurrency: false }, () => {
     assert.equal(await p.locator('.pen-tool-extras-picker').count(), 0, 'no color picker opens on the pen\'s button')
     await mouseDrag(p, [[7.5, 1.5], [7.5, 3.5]])
     assert.deepEqual([...new Set((await penEntries(p)).map((entry) => entry.split(':')[1][1]))], ['4'], 'the pen draws in the color the fast clicks picked')
-    assertClean(errors, 'the buttons')
+    await assertNoCrash(p, errors)
   })
 
   it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V in a note being edited work on its text and leave SudokuPad\'s cells alone', async () => {
@@ -170,7 +171,7 @@ describe('attacks on input', { concurrency: false }, () => {
     assert.deepEqual([await cellState(p, [row, col]), await cellState(p, [pasteRow, pasteCol])], cellsBefore, 'the copied cell and the cell selected for the paste are as they were')
     assert.deepEqual(await selectedCells(), selectedBefore, 'the selection is as it was')
     assert.equal(await undoDepth(), depthBefore, 'SudokuPad\'s undo stack took nothing')
-    assertClean(errors, 'the open note')
+    await assertNoCrash(p, errors)
   })
 
   it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V with notes selected, or none, change no note and no cell', { todo: `${COPY_BUG}: SudokuPad's Ctrl+C throws while Text Anywhere is the tool` }, async () => {
@@ -186,7 +187,7 @@ describe('attacks on input', { concurrency: false }, () => {
       await draw.finishNote(p)
     }
     assert.equal(await boardState(p), cellsBefore, 'no cell changed')
-    assertClean(errors, 'Ctrl+A, Ctrl+C and Ctrl+V')
+    await assertNoCrash(p, errors)
   })
 
   it('attack 72: number-pad digits act as the digit row does, and the keys Caps Lock types change nothing, with each tool current', async () => {
@@ -229,7 +230,7 @@ describe('attacks on input', { concurrency: false }, () => {
       // The browser here cannot turn the lock on, so the key is pressed and the capital letter the lock types is sent: a tool hotkey in capitals does what the lowercase one does.
       assert.equal(await trial(tool, ['CapsLock', 'Numpad4', 'CapsLock']), numpad, `${tool}: the Caps Lock key changes nothing`)
       assert.equal(await toolAfter(tool, 'X'), await toolAfter(tool, 'x'), `${tool}: a capital hotkey does what the lowercase one does`)
-      assertClean(errors, tool)
+      await assertNoCrash(p, errors)
     }
   })
 })

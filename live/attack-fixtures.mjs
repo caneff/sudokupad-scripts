@@ -1,38 +1,10 @@
-// Shared by the attacks that cross scripts (`live/attacks-*.live.mjs`): a page with Text Anywhere, Pen Tool Extras and Color by Digit
-// installed together, since an attack on input, storage or the display hits whichever script is listening. Not a check itself,
-// so `live/**/*.live.mjs` skips it.
+// Shared by `live/attacks-*.live.mjs` on top of `attacks.mjs`: making a tool current, finding an empty cell, reading it, typing a note. Not a
+// check itself, so `live/**/*.live.mjs` skips it.
 /* global Framework */
-import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
-import { captureConsoleErrors, openPage, startPuzzle } from './page.mjs'
 import { gridPoint, openPenTool } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
-
-const read = (file) => readFileSync(new URL(`../${file}.user.js`, import.meta.url), 'utf8')
-// The three scripts an attack installs, by name.
-const SOURCES = { text: read('draw-tool'), pen: read('pen-tool-extras'), color: read('color-by-digit') }
-// The button each script adds, which shows once the script has started.
-const BUTTONS = { text: '#control-draw', pen: '#control-pen', color: '#control-colorbydigit' }
-
-// Starts the puzzle on `p` and installs the three scripts after Start Puzzle, returning once each one's button shows.
-export async function installScripts (p) {
-  const names = Object.keys(SOURCES)
-  await startPuzzle(p)
-  for (const name of names) await p.addScriptTag({ content: SOURCES[name] })
-  await p.evaluate(() => Framework.setSetting('toolpen', true))
-  for (const name of names) await p.locator(BUTTONS[name]).waitFor({ state: 'visible' })
-}
-
-// A fresh context and page with the scripts installed, the page's console errors collected beside its uncaught errors and skip lines.
-export async function openAttackPage (browser, { contextOptions } = {}) {
-  const opened = await openPage(browser, { contextOptions, seed: captureConsoleErrors })
-  await installScripts(opened.p)
-  return opened
-}
-
-// The crash signals: no uncaught error, console error or skip line, with `why` naming the step.
-export const assertClean = (errors, why) => assert.deepEqual(errors, [], `${why} shows no uncaught error, console error or skip line`)
 
 // SudokuPad's tool `name` made current with its own button.
 export const pickTool = async (p, name) => {
@@ -63,5 +35,5 @@ export async function makeNote (p, at, text) {
   await draw.finishNote(p)
 }
 
-// The cells' values, marks and colours as one string: a change anywhere on the board shows.
+// The cells' values, marks and colours as one string, without the selection that `cellsState` carries: a Ctrl+A changes the selection and nothing else.
 export const boardState = (p) => p.evaluate(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.value ?? null, c.pencilmarks, c.colours])))

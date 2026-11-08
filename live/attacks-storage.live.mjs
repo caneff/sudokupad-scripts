@@ -5,7 +5,8 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { assertClean, installScripts, makeNote, openAttackPage, pickTool } from './attack-fixtures.mjs'
+import { makeNote, pickTool } from './attack-fixtures.mjs'
+import { assertNoCrash, loadScripts, reloadWithScripts, openWithAllScripts } from './attacks.mjs'
 import { captureConsoleErrors, gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
 import { mouseDrag, openPenTool, penEntries, setSlider } from './pen.mjs'
 import { closeDialogWith, code, openScriptDialog, paste, SETTINGS_SCRIPTS } from './settings.mjs'
@@ -37,7 +38,7 @@ describe('attacks on storage', { concurrency: false }, () => {
 
   describe('with the three scripts installed', () => {
     beforeEach(async () => {
-      ;({ context, p, errors } = await openAttackPage(browser))
+      ;({ context, p, errors } = await openWithAllScripts(browser))
     })
 
     it('attack 73: a full store (setItem throws QuotaExceededError) on the scripts\' own keys leaves every feature working in the session, with no uncaught error or skip line', { todo: `${FULL_STORE_BUG}: a refused write is read as SudokuPad having changed, and the script's saved data goes off` }, async () => {
@@ -69,7 +70,7 @@ describe('attacks on storage', { concurrency: false }, () => {
       await p.click('#control-colorbydigit')
       assert.notEqual(await readUntil(() => labelOn(p), (label) => label !== before), before, 'Color by Digit changes its mode')
 
-      assertClean(errors, 'a full store')
+      await assertNoCrash(p, errors)
     })
   })
 
@@ -110,17 +111,18 @@ describe('attacks on storage', { concurrency: false }, () => {
       assert.equal(await p.evaluate(() => Framework.getData('Foreign_key')), null, `${script.file}: the foreign key is not saved`)
 
       await closeDialogWith(p, 'Cancel', script.editor)
-      assertClean(errors, script.file)
+      await assertNoCrash(p, errors)
       await context.close()
     }
   })
 
   it('attack 75: settings changed in one tab while another tab has the puzzle open leave that tab working, keep the other settings, and show up on its reload', async () => {
-    ;({ context, p, errors } = await openAttackPage(browser))
+    ;({ context, p, errors } = await openWithAllScripts(browser))
     const other = await newPage(context)
     captureConsoleErrors(other.p, other.errors)
     await gotoPuzzle(other.p)
-    await installScripts(other.p)
+    await startPuzzle(other.p)
+    await loadScripts(other.p)
     const stored = (page, key) => page.evaluate((k) => Framework.getData(k), key)
 
     // The other tab changes three settings, one of each script, the way a user does.
@@ -146,15 +148,14 @@ describe('attacks on storage', { concurrency: false }, () => {
     assert.equal(await draw.valueOf(other.p, draw.SIZE_SLIDER), widthThere, 'the first tab\'s note does not change the other tab\'s width')
 
     // A reload shows the other tab's settings and this tab's own.
-    await p.reload({ waitUntil: 'load' })
-    await installScripts(p)
+    await reloadWithScripts(p)
     await openPenTool(p)
     assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), THICKNESS), OTHER_TAB_THICKNESS, 'the reload shows the thickness the other tab saved')
     assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), OPACITY), THIS_TAB_OPACITY, 'the reload shows the opacity this tab saved')
     assert.equal(await labelOn(p), modeThere, 'the reload shows the mode the other tab saved')
     await pickTool(p, 'draw')
     assert.equal(await draw.valueOf(p, draw.SIZE_SLIDER), widthThere, 'the reload shows the width the other tab saved')
-    assertClean(errors, 'the first tab')
-    assertClean(other.errors, 'the other tab')
+    await assertNoCrash(p, errors)
+    await assertNoCrash(other.p, other.errors)
   })
 })
