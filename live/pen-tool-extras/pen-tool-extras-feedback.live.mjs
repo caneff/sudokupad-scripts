@@ -190,11 +190,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await hover([3.5, 4.0])
       const ghost = await settle(async () => (await ghostOf()) !== null, true).then(ghostOf)
       assert.equal(ghost.pen, '6', 'pen color 6')
-      // a press, right on the heels of a move whose preview is still waiting for its turn
-      await moveTo([3.5, 3.0])
-      await p.mouse.down()
+      // a press in the same task as a move whose preview is still waiting for its turn: the pointer events are dispatched together, so no timer can run between them
+      const [x, y] = await gridPoint(p, [3.5, 3.0])
+      await read(([px, py]) => {
+        const grid = document.querySelector('#svgrenderer')
+        const init = { clientX: px, clientY: py, bubbles: true, cancelable: true }
+        grid.dispatchEvent(new PointerEvent('pointermove', { ...init, buttons: 0 }))
+        grid.dispatchEvent(new PointerEvent('pointerdown', { ...init, buttons: 1, button: 0 }))
+      }, [x, y])
       await sleep(150) // "nothing happened in 150 ms" check: the waiting preview must not show under the press
-      assert.equal(await ghostOf(), null, 'a press hides it, and a move just before it does not bring it back')
+      assert.equal(await ghostOf(), null, 'a press hides it, and the move just before it does not bring it back')
       await p.mouse.up()
       await undoAll()
       await hover([3.5, 4.0])
