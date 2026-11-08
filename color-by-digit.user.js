@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.9
+// @version      0.25.11
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.9'
+  const VERSION = '0.25.11'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -100,8 +100,8 @@
 
   const everyIndex = (cells) => cells.map((_, i) => i)
 
-  // A cell with no digit and no centre marks is left alone, so a group color painted on it by hand stays.
-  const enteredIndices = (cells) => cells.flatMap((cell, index) => (String(cell.given || cell.value || '') === '' && cell.centre.length === 0 ? [] : [index]))
+  // A cell with no digit and no centre marks is left alone, so a group color painted on it by hand stays. A fogged given is not left alone: a color put on it before the fog was honored comes off.
+  const enteredIndices = (cells) => cells.flatMap((cell, index) => (!cell.fogged && String(cell.given || cell.value || '') === '' && cell.centre.length === 0 ? [] : [index]))
 
   const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
 
@@ -170,8 +170,11 @@
     return cell.propVisible('centre') ? cell.propGet('centre') : []
   }
 
+  const isFogged = (cell) => cell.hideclue === true
+
+  // A given the fog hides is not a digit the solver can see, so it has none here and takes no color.
   function toPlanCell (cell) {
-    return { given: cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
+    return { fogged: isFogged(cell), given: isFogged(cell) ? '' : cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
 
   // A group is the digits that share a color. 0 counts after 9 in the order of groups; a group's own digits are listed 0 first, as the preloads save them.
@@ -2024,7 +2027,7 @@
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2349,9 +2352,12 @@
         const all = allCells(app)
         const indices = touched.map((cell) => all.indexOf(cell))
         const before = touched.map((cell) => entrySignature(toPlanCell(cell)))
+        const foggedBefore = all.map(isFogged)
         const enter = () => {
           const result = stock(action)
-          const changed = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
+          const entryChanged = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
+          const fogChanged = changedIndices(foggedBefore, allCells(app).map(isFogged))
+          const changed = [...new Set([...entryChanged, ...fogChanged])]
           recolor(app, (plans) => planCellColors(plans, loadGroups(), changed))
           return result
         }
