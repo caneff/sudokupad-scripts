@@ -260,14 +260,13 @@
       boardRight,
       viewport
     })
-    // A drag starts from a pane height, not the room under it, so the pane grows by what the corner moved. A height
-    // drag starts from SudokuPad's own; a sideways one from the fitted pane's, and its text only shrinks to fit.
+    // A height drag starts from SudokuPad's own pane height so the pane grows by what the corner moved. A sideways
+    // drag has no height of its own to add, so it holds the fitted pane's, which the room under the pane would outgrow.
     const sideways = Boolean(applied.w && !applied.h)
     let startRoom = autoRoom
     if (applied.h) startRoom = home.height / scale
     else if (sideways) {
-      setPaneWidth(rules, width, natural)
-      rules.style.fontSize = `${fontPx}px`
+      fitsAt(width, fontPx)
       startRoom = rules.offsetHeight
     }
     const dragging = Boolean(applied.w || applied.h)
@@ -277,6 +276,7 @@
     setPaneWidth(rules, fitted.width, natural)
     if (dragging) fitRulesFont(rules, fitted.room, ownPx, nudgePx)
     else rules.style.fontSize = `${fontPx}px`
+    // The text may shrink to the held height, never grow into it.
     if (sideways && parseFloat(rules.style.fontSize) > fontPx) rules.style.fontSize = `${fontPx}px`
     // SudokuPad sets `overflow-y: scroll`, which draws an empty track beside rules that fit.
     if (rules.scrollHeight <= rules.clientHeight) rules.style.overflowY = 'auto'
@@ -294,11 +294,10 @@
     }
   }
 
-  // A hand dragging sideways drifts a few px up or down, and the drift would grow or shrink the pane's height.
+  // A hand dragging sideways drifts a few px up or down.
   const VERTICAL_DEAD_PX = 4
 
-  // Move and release are heard on the window, so a fast drag that outruns the corner holds. Vertical movement
-  // counts only once the pointer is VERTICAL_DEAD_PX from where it went down, and then all of it does.
+  // Move and release are heard on the window, so a fast drag that outruns the corner holds.
   function watchCornerDrag (corner, win, onMove, onActive) {
     corner.addEventListener('pointerdown', (e) => {
       e.preventDefault()

@@ -104,15 +104,15 @@ async function dragCorner (p, corner, dx, dy, midDrag) {
   await p.mouse.up()
 }
 
-// A sideways drag changes the pane's width only: its height and font stay where the fit had them.
-describe('a sideways corner drag leaves the pane\'s height and font alone', { concurrency: false }, () => {
+// A sideways drag changes the pane's width only: its height and font never rise above where the fit had them.
+describe('a sideways corner drag never raises the pane\'s height or font', { concurrency: false }, () => {
   const SIDEWAYS = [
     { corner: 'ur', name: 'wider', dx: 120 },
     { corner: 'ur', name: 'narrower', dx: -120 },
     { corner: 'dl', name: 'wider', dx: -200 },
     { corner: 'dl', name: 'narrower', dx: 120 }
   ]
-  // The pointer's vertical drift on the way: none, then 3 px, which a hand cannot help.
+  // The pointer's vertical drift on the way: none, then 3 px, under the script's 4 px dead zone.
   const DRIFTS = [0, 3, -3]
   const ROOMS = [['spare room below', RULES], ['no spare room below', LONG_RULES]]
   for (const [roomName, rules] of ROOMS) {
@@ -138,9 +138,26 @@ describe('a sideways corner drag leaves the pane\'s height and font alone', { co
       }
     }
   }
+  it('dl wider after an f- press still holds the nudged pane\'s height and font', async () => {
+    const { context, p, errors } = await rulesPage(LANDSCAPE)
+    try {
+      await inject(p)
+      await settle(async () => (await fontPx(p)) > 0, true)
+      await clickFont(p, 'f-')
+      const start = await stable(() => pane(p))
+      await dragCorner(p, 'dl', -200, 0)
+      const now = await stable(() => pane(p))
+      assert.equal(now.width > start.width, true, `width ${start.width} -> ${now.width}`)
+      assert.equal(now.cssHeight <= start.cssHeight + 1, true, `height ${start.cssHeight} -> ${now.cssHeight} px`)
+      assert.equal(now.font <= start.font, true, `font ${start.font} -> ${now.font} px`)
+      assert.deepEqual(errors, [])
+    } finally {
+      await context.close()
+    }
+  })
   for (const { corner, dy } of [{ corner: 'ur', dy: -80 }, { corner: 'dl', dy: 80 }]) {
     it(`${corner} dragged ${dy} px vertically still grows the pane`, async () => {
-      const { context, p } = await rulesPage(LANDSCAPE)
+      const { context, p, errors } = await rulesPage(LANDSCAPE)
       try {
         await inject(p)
         await settle(async () => (await fontPx(p)) > 0, true)
@@ -148,6 +165,7 @@ describe('a sideways corner drag leaves the pane\'s height and font alone', { co
         await dragCorner(p, corner, 0, dy)
         const now = await stable(() => pane(p))
         assert.equal(now.cssHeight > start.cssHeight + 1, true, `height ${start.cssHeight} -> ${now.cssHeight} px`)
+        assert.deepEqual(errors, [])
       } finally {
         await context.close()
       }
