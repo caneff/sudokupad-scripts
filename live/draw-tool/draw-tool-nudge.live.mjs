@@ -172,13 +172,15 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     }
   })
 
-  it('Escape while the key is held ends the selection and stops the movement', async () => {
+  it('Escape while the key is held ends the selection and stops the movement, which a new selection does not resume', async () => {
     await selectNote('N')
     const x0 = (await noteBox('N')).x
     await p.keyboard.down('ArrowRight')
     try {
       assert.equal(await settle(async () => (await noteBox('N')).x - x0 > HELD_FAR_PX, true), true, 'the held key moved the note')
       await p.keyboard.press('Escape')
+      // A timer left running would move the note again as soon as it is selected.
+      await selectNote('N')
       const stopped = (await noteBox('N')).x
       await p.evaluate((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)), QUIET_MS)
       assert.equal((await noteBox('N')).x, stopped, `the note stopped moving when the selection ended (nothing moved in ${QUIET_MS} ms)`)
