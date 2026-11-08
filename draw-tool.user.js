@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.38.4
+// @version      0.38.5
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.38.4'
+  const VERSION = '0.38.5'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -3570,7 +3570,8 @@
 
   // SudokuPad's Undo brings back what Restart cleared when the undo stack is empty: the first Undo after a Restart, past any selection made since. Its puzzle
   // triggers `act` after each action, so whether the stack was empty before an Undo is read off the last action, a reset or a load.
-  const undoStackEmpty = () => Framework.app.puzzle.undoStack.length === 0
+  let emptyStackLength = 0
+  const undoStackEmpty = () => Framework.app.puzzle.undoStack.length <= emptyStackLength
   let undoWasEmpty = false
 
   function followUndo (_, action) {
@@ -3831,7 +3832,11 @@
     })
     undoRestart.run(() => {
       app.puzzle.on('act', under(undoRestart, followUndo))
-      for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, under(undoRestart, () => { undoWasEmpty = undoStackEmpty() }))
+      // Another script may act after Restart in its own 'restarted' handler; the stack it leaves, read once all of them have run, is the empty one.
+      app.on('restarted', under(undoRestart, () => queueMicrotask(() => { emptyStackLength = Framework.app.puzzle.undoStack.length; undoWasEmpty = undoStackEmpty() })))
+      for (const event of ['reset', 'progressloaded']) {
+        app.puzzle.on(event, under(undoRestart, () => { emptyStackLength = 0; undoWasEmpty = undoStackEmpty() }))
+      }
     })
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
