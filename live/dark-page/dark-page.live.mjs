@@ -703,6 +703,7 @@ describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => 
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
+      expectedSkips: [/^dark-page: /],
       seed: (page) => {
         page.on('console', (m) => { if (m.type() === 'warning' && /^dark-page: /.test(m.text())) warned.push(m.text()) })
       }

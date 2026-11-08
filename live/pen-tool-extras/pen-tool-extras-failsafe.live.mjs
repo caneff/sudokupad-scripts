@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { captureConsoleErrors, openPage, SKIP_LINE, startPuzzle } from '../page.mjs'
+import { captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
 import { drag, gridPoint, openPenTool, padValues, penEntries } from '../pen.mjs'
 import { settle } from '../settle.mjs'
@@ -164,12 +164,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       before(async () => {
         warned = []
         ;({ context, p, errors } = await openPage(browser, {
+          // The case plants its own breakage, so its skip lines are expected: `warned` holds them and is checked.
+          expectedSkips: [/^pen-tool-extras: /],
           seed: (page, errs) => {
             page.on('console', (m) => {
               if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
             })
-            // The case plants its own breakage, so its skip lines are expected: `warned` holds them and is checked.
-            captureConsoleErrors(page, errs, (text) => SKIP_LINE.test(text))
+            captureConsoleErrors(page, errs)
           }
         }))
         await startPuzzle(p)

@@ -60,6 +60,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
+      expectedSkips: [/^draw-tool: /],
       seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /draw-tool|DrawTool_/.test(m.text())) warnings.push(m.text()) })
     }))
     await draw.boot(p)
