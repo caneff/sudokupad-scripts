@@ -23,17 +23,15 @@ describe('captureConsoleErrors', () => {
     assert.deepEqual(errors, ['console.error: boom'])
   })
 
-  it('collects the skip line of each of the six scripts and not an unrelated console.warn', () => {
+  it('collects the skip line of each of the six scripts and nothing else', () => {
     const { page, errors } = collect()
     const scripts = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'draw-tool', 'no-tab-letters', 'pen-tool-extras']
-    for (const s of scripts) page.say('warning', `${s}: marks skipped because SudokuPad has no grid.rows`)
-    page.say('warning', 'pen-tool-extras: marks skipped because SudokuPad changed: TypeError: boom')
-    page.say('warning', 'deprecated API in use')
-    page.say('warning', 'pen-tool-extras: marks, line erase skipped because SudokuPad has no grid.rows')
-    page.say('warning', 'pen-tool-extras: pasted 3 settings, skipped 1')
-    page.say('warning', 'draw-tool: could not undo marks')
-    assert.equal(errors.length, scripts.length + 2)
-    assert.deepEqual(errors.slice(0, 1), ['console.warn: auto-rules-resizer: marks skipped because SudokuPad has no grid.rows'])
+    const skips = scripts.map((s) => `${s}: marks skipped because SudokuPad has no grid.rows`)
+    skips.push('pen-tool-extras: marks, line erase skipped because SudokuPad changed: TypeError: boom')
+    for (const line of skips) page.say('warning', line)
+    for (const line of ['deprecated API in use', 'pen-tool-extras: pasted 3 settings, skipped 1', 'draw-tool: could not undo marks',
+      'other-script: marks skipped because SudokuPad has no grid.rows', 'pen-tool-extras: marks skipped: SudokuPad has no grid.rows']) page.say('warning', line)
+    assert.deepEqual(errors, skips.map((line) => `console.warn: ${line}`))
   })
 
   it('leaves out a skip line the caller takes', () => {

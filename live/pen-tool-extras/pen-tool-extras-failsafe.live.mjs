@@ -163,7 +163,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
             page.on('console', (m) => {
               if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
             })
-            // The case plants its own breakage, so its skip lines are expected (`warned` holds them); any other console line is an error.
+            // The case plants its own breakage, so its skip lines are expected: `warned` holds them and is checked.
             captureConsoleErrors(page, errs, (text) => SKIP_LINE.test(text))
           }
         }))
