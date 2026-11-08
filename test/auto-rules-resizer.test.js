@@ -63,6 +63,13 @@ test('rulesWidth: never narrower than the natural width, and no widening without
   assert.equal(rulesWidth({ natural: 480, rulesLeft: 1000, scale: NaN, viewportWidth: 2048 }), 480)
 })
 
+// The font bounds as the fit states them: 70% and 150% of SudokuPad's size.
+const FLOOR_17_6 = 17.6 * 0.7
+const fitOf = (options) => {
+  const { width, fontPx } = autoPaneFit(options)
+  return { width, fontPx }
+}
+
 test('autoFontPx: grows to at most 150% of SudokuPad\'s size, shrinks to at most 70% of it', () => {
   assert.equal(autoFontPx((n) => n <= 31, 17.6), 26, 'spare room: capped at 150%')
   assert.equal(autoFontPx((n) => n <= 20, 17.6), 20)
@@ -164,7 +171,7 @@ test('fitRulesPane: a max auto height no rules can fit in still holds the pane t
   const { rules, fit } = fakePane(26)
   fit({ limits: { maxWidth: null, maxHeight: 40 } })
   assert.equal(rules.style.maxHeight, '40px')
-  assert.equal(rules.style.fontSize, `${17.6 * 0.7}px`)
+  assert.equal(rules.style.fontSize, `${FLOOR_17_6}px`)
 })
 
 test('fitRulesPane: with room below the pane\'s own max-height the pane takes it, and the font fills it', () => {
@@ -201,32 +208,40 @@ test('fitRulesPane: f- leaves the width where the fit put it', () => {
 
 test('autoPaneFit: rules that fit at SudokuPad\'s width keep it; the font grows to 150% at most', () => {
   const fits = (width, font) => font <= 30
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 900, ownPx: 20, nudgePx: 0, fits }), { width: 480, fontPx: 30 })
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits }), { width: 480, fontPx: 26 }, 'capped at 150%')
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 900, ownPx: 20, nudgePx: 0, fits }), { width: 480, fontPx: 30 })
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits }), { width: 480, fontPx: 26 }, 'capped at 150%')
 })
 
 test('autoPaneFit: rules that need width get the narrowest fitting width at SudokuPad\'s font', () => {
   const fits = (width, font) => width >= 700 && font <= 17.6
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits }), { width: 700, fontPx: 17.6 })
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits }), { width: 700, fontPx: 17.6 })
   const readable = (px) => Math.round(600 + (px - 17.6) * 50)
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits, readable }), { width: 700, fontPx: 17.6 }, 'a width fits: widened past the readable width')
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits, readable }), { width: 700, fontPx: 17.6 }, 'a width fits: widened past the readable width')
 })
 
 test('autoPaneFit: the text shrinks only at the full width, and never under 70%', () => {
   const fits = (width, font) => width >= 650 && font <= 14
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits }), { width: 650, fontPx: 14 }, 'at the limit and 70%')
-  const half = (width, font) => width >= 650 && font <= 16
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits: half, readable: () => 500 }), { width: 650, fontPx: 16 }, 'smaller text at the widest pane, not the readable width')
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits }), { width: 650, fontPx: 14 }, 'at the limit and 70%')
+  const half = (width, font) => width >= 500 && font <= 16 // fits narrower than the limit too, so the full width is the rule's doing
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits: half, readable: () => 500 }), { width: 650, fontPx: 16 }, 'smaller text at the widest pane, not the readable width')
   const never = (width, font) => font <= 10
   const readable = (px) => Math.round(px * 40)
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits: never, readable }), { width: 560, fontPx: 14 }, 'too long at 70%: the readable width, and it scrolls')
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits: never, readable: () => 300 }), { width: 480, fontPx: 14 }, 'never under SudokuPad\'s width')
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits: never, readable }), { width: 560, fontPx: 14 }, 'too long at 70%: the readable width, and it scrolls')
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits: never, readable: () => 300 }), { width: 480, fontPx: 14 }, 'never under SudokuPad\'s width')
 })
 
 test('autoPaneFit: the nudge applies on top, inside the floor and cap', () => {
   const fits = (width, font) => width >= 650 && font <= 16
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: -1, fits }), { width: 650, fontPx: 15 })
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: -9, fits }), { width: 650, fontPx: 14 })
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: -1, fits }), { width: 650, fontPx: 15 })
+  assert.deepEqual(fitOf({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: -9, fits }), { width: 650, fontPx: 14 })
+})
+
+test('autoPaneFit: the nudge that took effect comes back, so a press the floor or cap cancelled is not kept', () => {
+  const fits = (width, font) => width >= 650 && font <= 16
+  assert.equal(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: -1, fits }).nudgePx, -1)
+  assert.equal(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: -9, fits }).nudgePx, -2, '16 - 2 = 14, the floor')
+  const short = (width, font) => font <= 30
+  assert.equal(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 5, fits: short }).nudgePx, 0, 'the cap is 30')
 })
 
 test('normalizeLimit: a positive whole number of css px, else no limit', () => {
@@ -281,7 +296,24 @@ test('VERSION is the @version in the script header', () => {
 test('fitRulesPane: rules that scroll even when widened and shrunk end at 70% of SudokuPad\'s font', () => {
   const { rules, fit } = fakePane(8000)
   fit()
-  assert.equal(rules.style.fontSize, `${17.6 * 0.7}px`)
+  assert.equal(rules.style.fontSize, `${FLOOR_17_6}px`)
+})
+
+test('fitRulesPane: reports the nudge that took effect, which f- cannot take under 70% of SudokuPad\'s font', () => {
+  const reported = []
+  const { rules, fit } = fakePane(8000)
+  fit({ nudgePx: -5, onNudge: (px) => reported.push(px) })
+  assert.equal(rules.style.fontSize, `${FLOOR_17_6}px`)
+  assert.deepEqual(reported, [0], 'the rules already sit at the floor, so five presses down changed nothing')
+})
+
+test('fitRulesPane: a dragged pane\'s font stays between 70% and 150% of SudokuPad\'s', () => {
+  const short = fakePane(26)
+  short.fit({ box: { w: 0, h: 300, x: 0, y: -300 } })
+  assert.equal(parseFloat(short.rules.style.fontSize) <= 17.6 * 1.5, true, short.rules.style.fontSize)
+  const long = fakePane(8000)
+  long.fit({ box: { w: 0, h: 20, x: 0, y: -20 } })
+  assert.equal(long.rules.style.fontSize, `${FLOOR_17_6}px`)
 })
 
 test('fitRulesPane: the room is read in the pane\'s own css px, so a scaled pane does not outgrow it', () => {

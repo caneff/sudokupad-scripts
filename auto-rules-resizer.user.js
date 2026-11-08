@@ -134,15 +134,20 @@
   // because a wider pane would shorten the scroll and lengthen every line.
   function autoPaneFit ({ natural, widthLimit: limit, ownPx, nudgePx, fits, readable = () => Infinity }) {
     const narrowest = (from, fitsAt) => limit - largestSize((slack) => fitsAt(limit - slack), 0, limit - from)
+    // `nudgePx` comes back as the nudge that took effect, so a press the floor or cap cancelled is not kept.
+    const nudged = (autoPx) => {
+      const fontPx = nudgedFontPx(autoPx, nudgePx, ownPx)
+      return { fontPx, nudgePx: fontPx - autoPx }
+    }
     if (!fits(limit, ownPx)) {
       const autoPx = autoFontPx((n) => fits(limit, n), ownPx)
-      const fontPx = nudgedFontPx(autoPx, nudgePx, ownPx)
-      return { width: fits(limit, autoPx) ? limit : Math.max(natural, Math.min(limit, readable(fontPx))), fontPx }
+      const font = nudged(autoPx)
+      return { width: fits(limit, autoPx) ? limit : Math.max(natural, Math.min(limit, readable(font.fontPx))), ...font }
     }
     let width = fits(natural, ownPx) ? natural : narrowest(natural, (w) => fits(w, ownPx))
-    const fontPx = nudgedAutoFontPx((n) => fits(width, n), ownPx, nudgePx)
-    if (nudgePx > 0 && !fits(width, fontPx)) width = narrowest(width, (w) => fits(w, fontPx))
-    return { width, fontPx }
+    const font = nudged(autoFontPx((n) => fits(width, n), ownPx))
+    if (font.nudgePx > 0 && !fits(width, font.fontPx)) width = narrowest(width, (w) => fits(w, font.fontPx))
+    return { width, ...font }
   }
 
   function setPaneWidth (rules, width, natural) {
@@ -215,7 +220,7 @@
   // Fits the pane to the room below it at SudokuPad's width, widening only as the rules need, and returns the
   // drag it applied. `limits` cap the automatic fit, never a drag. Returns null when the pane is not shown, with
   // the fit taken off, or has no room yet, with the last fit put back.
-  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, box, limits = noLimits(), readable }) {
+  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, onNudge = () => {}, box, limits = noLimits(), readable }) {
     const before = FIT_STYLES.map((k) => rules.style[k])
     const movedBefore = controls.style.translate
     // Measure the pane as SudokuPad laid it out: the container wraps the pane, so a room read under the last
@@ -252,7 +257,7 @@
       rules.style.fontSize = `${font}px`
       return fitsRoom(rules, autoRoom)
     }
-    const { width, fontPx } = autoPaneFit({
+    const { width, fontPx, nudgePx: appliedNudge } = autoPaneFit({
       natural,
       widthLimit: rulesWidth({ natural, rulesLeft: home.left, scale, viewportWidth: viewport.width, maxWidth: limits.maxWidth }),
       ownPx,
@@ -260,6 +265,7 @@
       fits: fitsAt,
       readable
     })
+    onNudge(appliedNudge)
     const column = controls.getBoundingClientRect()
     const applied = clampDrag(box, {
       pane: { left: home.left, right: home.left + width * scale },
@@ -1098,6 +1104,7 @@
         viewport: { width: window.innerWidth, height: window.innerHeight },
         boardRight: board ? board.getBoundingClientRect().right : 0,
         nudgePx,
+        onNudge: (px) => { nudgePx = px },
         box,
         limits,
         readable: (fontPx) => readableWidth(rules, fontPx)

@@ -24,8 +24,8 @@ const MAX_WIDTH_INPUT = '#auto-rules-resizer-max-width'
 const MAX_HEIGHT_INPUT = '#auto-rules-resizer-max-height'
 // SudokuPad's own rules font (1.1rem), and the gap the script keeps to the window's right edge.
 const SUDOKUPAD_FONT_PX = 17.6
-const MIN_FONT_PX = 12.32 // 70% of it, the smallest the fit goes
-const MAX_FONT_PX = 26.4 // 150% of it, the largest
+const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7 // the smallest the fit goes
+const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5 // the largest
 const EDGE_PX = 8
 const PORTRAIT = { width: 800, height: 1100 }
 const STYLE = '#auto-rules-resizer-style'
@@ -270,7 +270,7 @@ describe('rules too long for SudokuPad\'s size', { concurrency: false }, () => {
     const fitted = await settle(async () => (await pane(p)).scrolls, false)
     assert.equal(fitted, false, 'stopped scrolling')
     const now = await pane(p)
-    assert.equal(now.font >= SUDOKUPAD_FONT_PX, true, `font ${now.font}, never under SudokuPad's own`)
+    assert.equal(now.font >= SUDOKUPAD_FONT_PX, true, `font ${now.font}, not under SudokuPad's own: widened before it shrank`)
     assert.equal(now.width > own.width, true, `width ${own.width} -> ${now.width}`)
     assert.equal(now.right < LANDSCAPE.width - EDGE_PX - 10, true, `right ${now.right}, short of the window's edge`)
     // Two css px narrower scrolls again.
@@ -308,8 +308,7 @@ describe('rules that need the smaller text', { concurrency: false }, () => {
     assert.equal(now.font >= MIN_FONT_PX, true, `font ${now.font}, not under 70%`)
     assert.equal(now.width > own.width, true, `width ${own.width} -> ${now.width}`)
     assert.equal(now.right >= LANDSCAPE.width - EDGE_PX - 10, true, `right ${now.right}: as wide as the window allows`)
-    const maxHeight = await p.evaluate(() => parseFloat(document.querySelector('.puzzle-rules').style.maxHeight))
-    assert.equal(maxHeight >= own.cssHeight, true, `max height ${maxHeight} css px: the fit may use all of the ${own.cssHeight} SudokuPad gave the pane`)
+    assert.equal(now.cssHeight >= 0.85 * own.cssHeight, true, `pane ${now.cssHeight} css px tall, SudokuPad's own ${own.cssHeight}: the room is used, not given up for width`)
   })
 
   it('the page raised no error', () => {
@@ -333,7 +332,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
     after(async () => { await context.close() })
 
-    it('the automatic width stops at the max, with the rules still scrolling', async () => {
+    it('the automatic width stops at the max, and the text shrinks to stop the scroll', async () => {
       assert.equal(await settle(async () => (await pane(p)).cssWidth, 500), 500)
       const capped = await settle(async () => (await pane(p)).font < SUDOKUPAD_FONT_PX, true)
       assert.equal(capped, true, `font ${(await pane(p)).font}: shrunk at the capped width`)
@@ -561,10 +560,11 @@ describe('the scrollbar track (a classic scrollbar, as Windows Chrome draws)', {
 })
 
 describe('very long rules (about 5,600 characters)', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, own
 
   before(async () => {
     ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, VERY_LONG_RULES))
+    own = await pane(p)
     await inject(p)
     await stable(() => pane(p))
   })
@@ -574,12 +574,14 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
     const now = await pane(p)
     assert.equal(now.scrolls, true)
     assert.equal(now.font, MIN_FONT_PX, '70% of SudokuPad\'s size and it still scrolls')
+    assert.equal(now.cssHeight >= own.cssHeight, true, `pane ${now.cssHeight} css px tall, SudokuPad's own ${own.cssHeight}: all the room`)
     const { charsPerLine } = await lineStats(p)
     assert.equal(charsPerLine <= READABLE_CHARS, true, `${charsPerLine} characters a line`)
     assert.equal(charsPerLine > READABLE_CHARS - 20, true, `${charsPerLine} characters a line: widened to the measure, not left narrow`)
   })
 
-  it('f+ keeps them at 90 characters a line or fewer: the width follows the larger font', async () => {
+  it('f- goes no lower and f+ keeps them at 90 characters a line or fewer: the width follows the larger font', async () => {
+    for (let i = 0; i < 3; i++) await clickFont(p, 'f-') // at the floor already: these presses are not kept
     for (let i = 0; i < 3; i++) await clickFont(p, 'f+')
     assert.equal(await settle(() => fontPx(p), MIN_FONT_PX + 3), MIN_FONT_PX + 3, 'f+ three times')
     const { charsPerLine } = await lineStats(p)
