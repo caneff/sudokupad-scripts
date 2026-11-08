@@ -29,9 +29,11 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   // A saved text keeps its own opacity; an old item with none reads as solid.
   const text = { ...draw.textItem([32, 32], '15', 4, draw.textSizeFor(2.5)), opacity: 40 }
   const oldText = { kind: 'text', color: 1, size: 20, text: '7', at: [64, 64] }
-  assert.deepEqual(draw.readDrawing([text]), [text])
+  assert.deepEqual(draw.readDrawing([text]).items, [text])
   assert.deepEqual([text, oldText].map(draw.itemOpacity), [40, 100])
-  assert.throws(() => draw.readDrawing([{ ...text, opacity: 10 }]))
+  // Read against the stored format only (#488), so an opacity off today's slider still reads, and one that is not a percentage is kept, not drawn.
+  assert.deepEqual(draw.readDrawing([{ ...text, opacity: 10 }]).items, [{ ...text, opacity: 10 }])
+  assert.deepEqual(draw.readDrawing([{ ...text, opacity: 0 }]), { items: [], kept: [{ ...text, opacity: 0 }] })
 
   // Its own colors: nothing saved means the pen colors are still to be copied; once saved they are its own, and a
   // saved value that cannot be read is kept, never overwritten by the copy.

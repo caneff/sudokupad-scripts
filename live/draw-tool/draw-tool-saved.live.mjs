@@ -60,7 +60,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
-      seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /draw-tool/.test(m.text())) warnings.push(m.text()) })
+      seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /draw-tool|DrawTool_/.test(m.text())) warnings.push(m.text()) })
     }))
     await draw.boot(p)
     await draw.forgetDrawings(p)
@@ -279,11 +279,11 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await reload()
     assert.deepEqual(await texts(), [])
     assert.equal(warnings.some((w) => /saved drawing/.test(w)), true, warnings.join('\n'))
+    assert.match(await dialogText(), /saved notes cannot be read/, 'the solver is told at load that the notes are not saved')
+    await closeDialog()
     await pickDraw()
     await typeText([2.5, 2.5], '15')
     assert.deepEqual(await texts(), ['15'])
-    assert.match(await dialogText(), /saved notes cannot be read/, 'the solver is told the notes are not saved')
-    await closeDialog()
     assert.equal(await planted(), 'not a drawing {', 'after a note')
     await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])
     assert.equal(await planted(), 'not a drawing {', 'after a move')
@@ -292,6 +292,23 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await planted(), 'not a drawing {', 'after an erase')
     assert.equal(await p.locator(DIALOG).count(), 0, 'the dialog is shown once a page')
     await read((k) => Framework.removeData(k), key)
+  })
+
+  it('a note that cannot be read is not drawn, the solver is told at load, and a save keeps it in storage beside the good notes', async () => {
+    const BAD = { ...NOTE, text: 15, at: [300, 300] }
+    await draw.plantDrawing(p, [NOTE, BAD])
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'], 'the good note is drawn')
+    assert.match(await dialogText(), /1 of this puzzle's saved notes could not be read/, 'told at load, before any save')
+    await closeDialog()
+    await pickDraw()
+    await typeText([6.5, 6.5], '20')
+    assert.deepEqual(await texts(), ['15', '20'])
+    assert.equal(await p.locator(DIALOG).count(), 0, 'told once a page')
+    const after = await saved()
+    assert.deepEqual([after.length, after[0], after[2]], [3, NOTE, BAD], 'the bad note is still stored, after the notes')
+    await read((k) => Framework.removeData(k), DRAWING_PREFIX + await puzzleKey())
+    await read((k) => Framework.removeData(k), INDEX_KEY)
   })
 
   it('an index that cannot be read leaves every saved drawing as it is, and the solver is told these notes were not saved', async () => {
@@ -414,7 +431,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await read(() => window.keyupInGap), true, 'the key went up between B\'s id and its load')
     assert.deepEqual(await settle(texts, []), [], 'puzzle B shows no notes')
     assert.equal(await read((k) => Framework.getData(k), DRAWING_PREFIX + B_ID), null, 'nothing is saved under B')
-    assert.deepEqual((await read((k) => Framework.getData(k), DRAWING_PREFIX + a)).map((item) => item.text), ['15'], 'A keeps its note')
+    assert.deepEqual(draw.drawingOf(await read((k) => Framework.getData(k), DRAWING_PREFIX + a)).map((item) => item.text), ['15'], 'A keeps its note')
   })
 
   it('the page raised no error', () => {
