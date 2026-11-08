@@ -46,6 +46,13 @@ owns it; its header comment is the full rule.
 - A replayed request the recording lacks is aborted, and the process then exits 1 naming each such
   URL, with or without `LIVE_OFFLINE=1`. `LIVE_REFRESH=1` records again.
 
+## The fuzz proof
+
+`live/fuzz/` proves fast-check can drive SudokuPad (#592; `docs/research/ui-fuzz-tools.md` § Tried with Playwright). `fuzz.mjs` runs random
+click / type / undo sequences, each on a page of its own, against a planted rule ("no more than 2 digits entered"); `fuzz.live.mjs` checks that it
+is found, shrunk to the shortest sequence and replayed. A failure prints `node live/fuzz/run.mjs --seed ... --path ... --replay-path ...`, which
+reproduces it. It takes about four and a half minutes, nearly all of it shrinking, so run it alone: `node --test live/fuzz/fuzz.live.mjs`.
+
 ## The daily watch
 
 `npm run watch:live` (`live/watch.mjs`) is for a daily schedule, so a SudokuPad update that breaks a script shows
