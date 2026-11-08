@@ -8,3 +8,10 @@ Asked because Chris disliked a "lift" (shadow and 6% grow) on a dragged note in 
 - **FigJam stickies**: the help pages describe placing, resizing and Alt-drag duplicating stickies; they cannot be rotated, and no drag lift is described. ([FigJam stickies](https://help.figma.com/hc/en-us/articles/1500004414322-Sticky-notes-in-FigJam))
 
 Takeaway: the editors' drag cue is the alignment guide, not a change to the dragged object. Text Anywhere's snap guide (#531) already follows that pattern. Not read: any app's behaviour seen first-hand; these are the vendors' and tutorial writers' descriptions.
+
+## Does the dragged object itself change look? (follow-up, same day)
+
+- **PowerPoint 2010** showed a semi-transparent copy of the shape while it was dragged; **2013 and later** move the shape itself with no transparency, and users asked for the old look back. ([Microsoft Q&A, 2015](https://learn.microsoft.com/en-us/answers/questions/4866929/outline-while-moving-objects-in-powerpoint-2013))
+- **Trello** tilts a dragged card by a fixed 3 degrees (`transform: rotate(3deg)` on the drag helper) and gives it a shadow; it does not scale it. ([Stack Overflow](https://stackoverflow.com/questions/11300735/trello-drag-and-drop-effect), [Patrick Desjardins](https://patrickdesjardins.com/blog/dragging-a-dom-element-visually-properly))
+- A drag-and-drop pattern guide lists the usual cues for a lifted item: a shadow, an outline, a slight tilt, and a "ghost" left where it was; and a short (100 ms) drop animation. These are list and card patterns, where a dragged item leaves a gap. ([Smart Interface Design Patterns](https://smart-interface-design-patterns.com/articles/drag-and-drop-ux/), [commadot](https://commadot.com/drag-and-drop-order-ux-pattern/))
+- The commadot write-up splits drags in two: ordering rows in a table or tree (no 3D, the original stays put and highlighted) and moving content cards (lifted towards the user).
