@@ -912,6 +912,8 @@
       })
       bar.appendChild(button)
     }
+    // SudokuPad stops `mousedown` on the buttons it knew at startup; this bar comes later and sits within a cell of the grid, so a press would reach its board.
+    bar.addEventListener('mousedown', (event) => event.stopPropagation())
     document.body.appendChild(bar)
   }
 

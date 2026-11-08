@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.29.1
+// @version      1.29.2
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.29.1'
+  const VERSION = '1.29.2'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -2319,6 +2319,10 @@
     // browser may still send after that tap must not act a second time.
     let tappedAt = -Infinity
     const actions = [[MODE_BUTTON, () => steps.penPanel.run(() => applyLineMode(nextLineMode(currentLineMode())))], [SETTINGS_BUTTON, openSettings]]
+    // SudokuPad stops `mousedown` on the buttons it knew at startup, so a press on them never reaches its board; the panel's own buttons come later and need the same stop.
+    document.addEventListener('mousedown', (event) => {
+      if (event.target.closest(controlButtons)) event.stopPropagation()
+    })
     window.addEventListener('touchstart', (event) => {
       const action = actions.find(([name]) => event.target.closest(`.${name}`))
       if (!action) return

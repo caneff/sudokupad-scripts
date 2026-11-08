@@ -122,3 +122,23 @@ export async function goToPenPage (page, values) {
   }
   assert.equal(await settle(() => padValues(page), values), values)
 }
+
+// A real click this many px inside a button's left edge: the part nearest the grid, where a press that leaks to the board marks it (#521).
+const LEFT_EDGE_PX = 3
+// How long the board gets to show what a click drew; only a "nothing happened in N ms" check.
+const NO_MARK_MS = 300
+
+// Clicks the left edge of `selector`'s button and returns the pen entries the click added and how many `mousedown`s reached `window` from it.
+// A button that stops its `mousedown` reaches neither; a press that reached `window` is what SudokuPad's board turns into a mark.
+export async function clickLeftEdge (page, selector) {
+  await page.evaluate(() => {
+    if (window.__leakedMousedowns === undefined) window.addEventListener('mousedown', () => { window.__leakedMousedowns++ })
+    window.__leakedMousedowns = 0
+  })
+  const before = await penEntries(page)
+  const box = await page.locator(selector).boundingBox()
+  await page.mouse.click(box.x + LEFT_EDGE_PX, box.y + box.height / 2)
+  await page.waitForTimeout(NO_MARK_MS)
+  const after = await penEntries(page)
+  return { added: after.filter((e) => !before.includes(e)), leaked: await page.evaluate(() => window.__leakedMousedowns) }
+}
