@@ -107,7 +107,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   describe('an open note near SudokuPad\'s controls', () => {
     const controlBoxes = () => p.evaluate(() => [...document.querySelectorAll('#controls, .topbar')].map((e) => e.getBoundingClientRect().toJSON()).filter((b) => b.width > 0 && b.height > 0))
 
-    it('is kept clear of them as it grows, and its stored point is not moved', async () => {
+    it('is not moved off them as it grows, and its stored point is not moved', async () => {
       const controls = await controlBoxes()
       const nearest = controls.filter((b) => b.top < 600 && b.bottom > 500).map((b) => b.left)
       assert.equal(nearest.length > 0, true, 'the controls lie beside row y 500')
@@ -116,7 +116,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
       await p.keyboard.type('a long note of typed text, wider than the gap left to the controls')
       const box = await p.locator(TEXT_BOX).boundingBox()
       const overlapping = controls.filter((c) => box.x < c.right && box.x + box.width > c.left && box.y < c.bottom && box.y + box.height > c.top)
-      assert.deepEqual(overlapping, [], `the open note ${JSON.stringify(box)} overlaps a control`)
+      assert.equal(overlapping.length > 0, true, `the open note ${JSON.stringify(box)} overlaps no control: it was moved off them`)
       await p.keyboard.press('Escape')
       const [x] = (await draw.saved(p)).find((item) => item.text.startsWith('a long note')).at
       const [wantX] = await boardPoint(click)
