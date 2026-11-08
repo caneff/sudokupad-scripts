@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE: Text Anywhere polish (hover, cursor, handles, selection, snap)</title>
+<style>
+  :root { --purple: #7b2fbe; --cell: 54px; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Roboto, Arial, sans-serif; background: #fff; color: #222; user-select: none; }
+  header { padding: 10px 18px; background: #f4f0fa; border-bottom: 1px solid #ddd5ea; font-size: 14px; }
+  header b { color: var(--purple); }
+  #stage { position: relative; height: 640px; margin: 0 18px; overflow: hidden; }
+  #board { position: absolute; left: 330px; top: 70px; width: calc(var(--cell) * 9); height: calc(var(--cell) * 9);
+    display: grid; grid-template-columns: repeat(9, var(--cell)); grid-template-rows: repeat(9, var(--cell)); border: 3px solid #000; }
+  #board div { border: 1px solid #999; display: flex; align-items: center; justify-content: center; font-size: 34px; }
+  #board div:nth-child(9n+3), #board div:nth-child(9n+6) { border-right: 2px solid #000; }
+  #board div:nth-child(n+19):nth-child(-n+27), #board div:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid #000; }
+  .note { position: absolute; transform: translate(-50%, -50%); color: #2f8ae0; font-size: 22px; line-height: 1.15; white-space: pre-wrap;
+    padding: 0 3px; text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; cursor: text; outline: none; }
+  .note.sized { overflow: hidden; }
+  .note.editing { cursor: text !important; background: rgba(255,255,255,.6); outline: 1.5px solid var(--purple); }
+  /* OLD looks */
+  .note.sel { outline: 2px dashed #8a4fd0; outline-offset: 2px; }
+  .handle { position: absolute; width: 5px; height: 5px; background: var(--purple); transform: translate(-50%, -50%); z-index: 5; }
+  #band { position: absolute; border: 1px dashed #888; display: none; pointer-events: none; z-index: 6; }
+  /* NEW looks, each behind its own switch */
+  .f-hover .note:not(.sel):not(.editing):hover { outline: 1px solid rgba(123,47,190,.35); outline-offset: 2px; background: rgba(123,47,190,.04); }
+  .f-cursor .note:not(.editing) { cursor: move; }
+  .f-handles .handle { width: 11px; height: 11px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--purple), 0 1px 3px rgba(0,0,0,.3); border-radius: 2px; }
+  .f-select .note.sel { outline: 2px solid var(--purple); outline-offset: 2px; }
+  .f-select #band { border: 1px solid var(--purple); background: rgba(123,47,190,.07); }
+  .guide { position: absolute; background: rgba(123,47,190,.35); pointer-events: none; z-index: 4; display: none; }
+  #gx { width: 1px; top: 0; bottom: 0; } #gy { height: 1px; left: 0; right: 0; }
+  #bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); background: #2b2236; color: #fff; border-radius: 10px;
+    padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.3); max-width: 96vw; }
+  #bar label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+  #bar button { background: #4a3b5e; color: #fff; border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 13px; }
+  #bar select { font-size: 13px; }
+  #state { position: fixed; left: 14px; top: 130px; width: 270px; white-space: pre-wrap !important; font: 12px/1.4 monospace; background: #faf8fd; border: 1px solid #e3dcef; border-radius: 6px; padding: 8px 10px; white-space: pre; }
+</style>
+</head>
+<body>
+<header><b>Prototype, throwaway.</b> Text Anywhere polish ideas 1–4 and 6. Snap: 3 px pull to cell middles and to cell edges (a note's top, bottom, left or right meeting a cell line), with a guide line. Each switch in the bar turns one idea on; off is today's look.
+Click a note to select it, drag to move it, drag on empty space to select several, double-click to edit, drag a corner to resize.</header>
+<div id="stage">
+  <div id="board"></div>
+  <div id="gx" class="guide"></div><div id="gy" class="guide"></div>
+  <div id="band"></div>
+</div>
+<div id="state"></div>
+<div id="bar">
+  <button id="allOld">All today's</button><button id="allNew">All new</button>
+  <label><input type="checkbox" data-f="hover" checked> 1 Hover outline</label>
+  <label><input type="checkbox" data-f="cursor" checked> 2 Move cursor</label>
+  <label><input type="checkbox" data-f="handles" checked> 3 Big handles</label>
+  <label><input type="checkbox" data-f="select" checked> 4 Solid selection</label>
+  <label><input type="checkbox" data-f="snap" checked> 6 Snap</label>
+  <label>pull <select id="snapPx"><option value="3" selected>3 px</option><option value="5">5 px</option><option value="8">8 px</option></select></label>
+  <label><input type="checkbox" id="guideOn" checked> show guide line</label>
+</div>
+<script>
+const stage = document.getElementById('stage'), boardEl = document.getElementById('board'), band = document.getElementById('band')
+const gx = document.getElementById('gx'), gy = document.getElementById('gy'), stateEl = document.getElementById('state')
+const givens = '53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79'
+for (const ch of givens) { const d = document.createElement('div'); d.textContent = ch === '.' ? '' : ch; boardEl.append(d) }
+const CELL = 54
+const B = () => ({ left: boardEl.offsetLeft + 3, top: boardEl.offsetTop + 3, size: CELL * 9 })
+const flags = {}
+let notes = [
+  { text: 'A=B+5', x: 440, y: 40 }, { text: 'X+Y=2Z', x: 610, y: 40 },
+  { text: 'r1: 4,6 in c7-9', x: 970, y: 98 }, { text: '15', x: 1075, y: 314 }, { text: 'odd', x: 520, y: 260 }
+].map((n, i) => ({ id: i, ...n }))
+let selected = [], editing = null, drag = null, lastSnap = { x: null, y: null }
+
+function render () {
+  for (const el of stage.querySelectorAll('.note, .handle')) el.remove()
+  for (const n of notes) {
+    const el = document.createElement('div')
+    el.className = 'note' + (selected.includes(n.id) ? ' sel' : '') + (editing === n.id ? ' editing' : '') + (n.w ? ' sized' : '')
+    el.style.left = n.x + 'px'; el.style.top = n.y + 'px'
+    if (n.w) { el.style.width = n.w + 'px'; el.style.height = n.h + 'px' }
+    el.textContent = n.text; el.dataset.id = n.id
+    if (editing === n.id) { el.contentEditable = 'true'; el.addEventListener('input', () => { n.text = el.textContent }) }
+    stage.append(el)
+    if (editing === n.id) { el.focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r) }
+  }
+  const one = editing ?? (selected.length === 1 ? selected[0] : null)
+  if (one !== null) {
+    const el = stage.querySelector(`.note[data-id="${one}"]`), r = el.getBoundingClientRect(), s = stage.getBoundingClientRect()
+    for (const [cx, cy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const h = document.createElement('div'); h.className = 'handle'
+      h.style.left = (cx < 0 ? r.left : r.right) - s.left + 'px'; h.style.top = (cy < 0 ? r.top : r.bottom) - s.top + 'px'
+      h.style.cursor = cx * cy > 0 ? 'nwse-resize' : 'nesw-resize'
+      h.dataset.corner = cx + ',' + cy; h.dataset.id = one
+      stage.append(h)
+    }
+  }
+  showState()
+}
+
+function showState () {
+  const on = Object.entries(flags).filter(([, v]) => v).map(([k]) => k).join(', ') || 'none (today)'
+  stateEl.textContent = `new looks on: ${on}\nsnap pull: ${flags.snap ? document.getElementById('snapPx').value + ' px' : 'off'}\n` +
+    `selected: ${selected.length ? selected.map(i => notes[i].text).join(' | ') : '-'}\nediting: ${editing === null ? '-' : notes[editing].text}\n` +
+    `last snap: x ${lastSnap.x ?? '-'}  y ${lastSnap.y ?? '-'}`
+}
+
+// Snap: on each axis, a note is pulled so its middle meets a cell's middle, or its near or far edge meets a cell's edge, along the rows or
+// columns it overlaps (a note beside the board still lines up with the rows it sits next to). The pull reaches only `px` screen pixels, so
+// pushing a little further frees the note with no key. The guide line marks the cell line or middle it met.
+function axisSnap (c, half, start, px, label) {
+  if (c + half < start || c - half > start + CELL * 9) return null
+  let best = null
+  for (let k = 0; k <= 9; k++) {
+    const line = start + k * CELL, targets = [[line + half, line, 'edge ' + k], [line - half, line, 'edge ' + k]]
+    if (k < 9) targets.push([line + CELL / 2, line + CELL / 2, 'middle ' + label + (k + 1)])
+    for (const [to, guideAt, name] of targets) {
+      const d = Math.abs(c - to)
+      if (d <= px && (!best || d < best.d)) best = { d, to, guideAt, name }
+    }
+  }
+  return best
+}
+function snapped (x, y, w, h) {
+  lastSnap = { x: null, y: null }; gx.style.display = gy.style.display = 'none'
+  if (!flags.snap) return [x, y]
+  const px = Number(document.getElementById('snapPx').value), b = B(), guide = document.getElementById('guideOn').checked
+  const sx = axisSnap(x, w / 2, b.left, px, 'c'), sy = axisSnap(y, h / 2, b.top, px, 'r')
+  if (sx) { x = sx.to; lastSnap.x = sx.name; if (guide) { gx.style.left = sx.guideAt + 'px'; gx.style.display = 'block' } }
+  if (sy) { y = sy.to; lastSnap.y = sy.name; if (guide) { gy.style.top = sy.guideAt + 'px'; gy.style.display = 'block' } }
+  return [x, y]
+}
+
+const local = (e) => { const s = stage.getBoundingClientRect(); return [e.clientX - s.left, e.clientY - s.top] }
+
+stage.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return
+  const [px, py] = local(e)
+  const handle = e.target.closest('.handle'), noteEl = e.target.closest('.note')
+  if (handle) {
+    e.preventDefault()
+    const n = notes[Number(handle.dataset.id)], el = stage.querySelector(`.note[data-id="${n.id}"]`)
+    const [cx, cy] = handle.dataset.corner.split(',').map(Number)
+    const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect()
+    drag = { kind: 'resize', n, cx, cy, anchor: [(cx < 0 ? r.right : r.left) - s.left, (cy < 0 ? r.bottom : r.top) - s.top] }
+    return
+  }
+  if (noteEl && editing === Number(noteEl.dataset.id)) return
+  if (editing !== null) { editing = null }
+  if (noteEl) {
+    e.preventDefault()
+    const id = Number(noteEl.dataset.id)
+    if (!selected.includes(id)) selected = [id]
+    const lr = noteEl.getBoundingClientRect()
+    drag = { kind: 'move', lead: id, size: [lr.width, lr.height], start: [px, py], from: selected.map(i => [i, notes[i].x, notes[i].y]) }
+  } else {
+    selected = []
+    drag = { kind: 'band', start: [px, py] }
+  }
+  render()
+})
+
+window.addEventListener('mousemove', (e) => {
+  if (!drag) return
+  const [px, py] = local(e)
+  if (drag.kind === 'move') {
+    const [dx, dy] = [px - drag.start[0], py - drag.start[1]]
+    const lead = drag.from.find(([i]) => i === drag.lead)
+    const [sx, sy] = snapped(lead[1] + dx, lead[2] + dy, ...drag.size)
+    const [ax, ay] = [sx - lead[1], sy - lead[2]]
+    for (const [i, x, y] of drag.from) { notes[i].x = x + ax; notes[i].y = y + ay }
+    render()
+  } else if (drag.kind === 'band') {
+    const [x0, y0] = drag.start
+    Object.assign(band.style, { display: 'block', left: Math.min(x0, px) + 'px', top: Math.min(y0, py) + 'px', width: Math.abs(px - x0) + 'px', height: Math.abs(py - y0) + 'px' })
+    const s = stage.getBoundingClientRect(), br = band.getBoundingClientRect()
+    selected = [...stage.querySelectorAll('.note')].filter(el => { const r = el.getBoundingClientRect(); return r.left < br.right && r.right > br.left && r.top < br.bottom && r.bottom > br.top }).map(el => Number(el.dataset.id))
+    for (const el of stage.querySelectorAll('.note')) el.classList.toggle('sel', selected.includes(Number(el.dataset.id)))
+    showState()
+  } else if (drag.kind === 'resize') {
+    const { n, cx, cy, anchor } = drag
+    const w = Math.max(20, cx * (px - anchor[0])), h = Math.max(26, cy * (py - anchor[1]))
+    n.w = w; n.h = h; n.x = anchor[0] + cx * w / 2; n.y = anchor[1] + cy * h / 2
+    render()
+  }
+})
+
+window.addEventListener('mouseup', () => {
+  if (drag && drag.kind === 'band') band.style.display = 'none'
+  drag = null; gx.style.display = gy.style.display = 'none'; render()
+})
+
+stage.addEventListener('dblclick', (e) => {
+  const noteEl = e.target.closest('.note'); if (!noteEl) return
+  editing = Number(noteEl.dataset.id); selected = []; render()
+})
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { editing = null; selected = []; render() } })
+
+function setFlag (f, v) { flags[f] = v; document.body.classList.toggle('f-' + f, v); document.querySelector(`[data-f="${f}"]`).checked = v }
+for (const box of document.querySelectorAll('[data-f]')) { setFlag(box.dataset.f, box.checked); box.addEventListener('change', () => { setFlag(box.dataset.f, box.checked); render() }) }
+document.getElementById('allOld').onclick = () => { for (const b of document.querySelectorAll('[data-f]')) setFlag(b.dataset.f, false); render() }
+document.getElementById('allNew').onclick = () => { for (const b of document.querySelectorAll('[data-f]')) setFlag(b.dataset.f, true); render() }
+document.getElementById('snapPx').onchange = showState
+render()
+</script>
+</body>
+</html>
