@@ -5,7 +5,7 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { assertClean, cellState, emptyCell, openAttackPage, pickTool } from './attack-fixtures.mjs'
+import { assertClean, boardState, cellState, emptyCell, makeNote, openAttackPage, pickTool } from './attack-fixtures.mjs'
 import { cellCentre, gridPoint, mouseDrag, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
@@ -25,11 +25,6 @@ describe('attacks on input', { concurrency: false }, () => {
   })
   afterEach(async () => { await context?.close() })
 
-  const makeNote = async (at, text) => {
-    await p.mouse.click(...await gridPoint(p, at))
-    await p.keyboard.type(text)
-    await draw.finishNote(p)
-  }
   const selectedCells = () => p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => `${c.row},${c.col}`))
   const undoDepth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
   const clipboard = () => p.evaluate(() => navigator.clipboard.readText())
@@ -69,7 +64,7 @@ describe('attacks on input', { concurrency: false }, () => {
     await pickTool(p, 'draw')
     const [, , size] = await cellCentre(p, 0, 0)
     const notes = [['11', 1.5], ['22', 3.5], ['33', 5.5], ['44', 7.5]]
-    for (const [text, row] of notes) await makeNote([row, 1.5], text)
+    for (const [text, row] of notes) await makeNote(p, [row, 1.5], text)
     const moveNote = async ([text, row], interrupt) => {
       const [x, y] = await draw.middleAt(p, await gridPoint(p, [row, 1.5]))
       const before = (await draw.noteInCells(p, text))[1]
@@ -113,7 +108,7 @@ describe('attacks on input', { concurrency: false }, () => {
 
     // Notes: a double-click on a note opens it once, a triple-click inside keeps it one box, and Escape keeps the text; the same on empty space leaves no note.
     await pickTool(p, 'draw')
-    await makeNote([4.5, 4.5], '15')
+    await makeNote(p, [4.5, 4.5], '15')
     const noteAt = await draw.middleAt(p, await gridPoint(p, [4.5, 4.5]))
     await p.mouse.click(...noteAt, { clickCount: 2, delay: 0 })
     assert.equal(await p.locator(draw.TEXT_BOX).count(), 1, 'a double-click on a note opens it')
@@ -131,7 +126,7 @@ describe('attacks on input', { concurrency: false }, () => {
     assertClean(errors, 'the notes')
 
     // Hold-to-edit buttons: fast clicks pick the color and open no picker (a hold of a second does).
-    const colorOf = () => p.evaluate(() => Framework.getData('DrawTool_color'))
+    const colorOf = () => p.evaluate((key) => Framework.getData(key), draw.COLOR_KEY)
     const textButton = await p.locator(`${draw.KEYPAD} button[data-key="4"]`).boundingBox()
     for (const clickCount of [2, 3]) await p.mouse.click(...draw.middleOf(textButton), { clickCount, delay: 0 })
     assert.equal(await settle(colorOf, 4), 4, 'fast clicks on Text Anywhere\'s color button pick it')
@@ -146,17 +141,19 @@ describe('attacks on input', { concurrency: false }, () => {
   })
 
   it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V in a note being edited work on its text and leave SudokuPad\'s cells alone', async () => {
-    // SudokuPad's own cell copy first: a value in one cell, copied, with another cell selected for the paste.
+    // SudokuPad's own cell copy first: a value in one cell, copied, with another cell selected for the paste a stray Ctrl+V would fill.
     const [row, col] = await emptyCell(p)
     await pickTool(p, 'normal')
     await p.mouse.click(...await gridPoint(p, [row + 0.5, col + 0.5]))
     await p.keyboard.press('7')
     await p.keyboard.press('Control+c')
-    const cellsBefore = await cellState(p, [row, col])
+    const [pasteRow, pasteCol] = (await p.evaluate(() => Framework.app.puzzle.cells.filter((c) => !c.given).map((c) => [c.row, c.col])))[1]
+    await p.mouse.click(...await gridPoint(p, [pasteRow + 0.5, pasteCol + 0.5]))
+    const cellsBefore = [await cellState(p, [row, col]), await cellState(p, [pasteRow, pasteCol])]
     const selectedBefore = await selectedCells()
     const depthBefore = await undoDepth()
     await pickTool(p, 'draw')
-    await makeNote([4.5, 4.5], '15')
+    await makeNote(p, [4.5, 4.5], '15')
     await p.mouse.dblclick(...await draw.middleAt(p, await gridPoint(p, [4.5, 4.5])))
     await p.keyboard.press('Control+End')
     await p.keyboard.press('Control+a')
@@ -170,7 +167,7 @@ describe('attacks on input', { concurrency: false }, () => {
     assert.equal(await p.locator(draw.TEXT_BOX).textContent(), '15', 'Ctrl+A then Ctrl+V replaces the whole text')
     await draw.finishNote(p)
     assert.deepEqual(await draw.texts(p), ['15'], 'the note keeps the text')
-    assert.equal(await cellState(p, [row, col]), cellsBefore, 'the cell is as it was')
+    assert.deepEqual([await cellState(p, [row, col]), await cellState(p, [pasteRow, pasteCol])], cellsBefore, 'the copied cell and the cell selected for the paste are as they were')
     assert.deepEqual(await selectedCells(), selectedBefore, 'the selection is as it was')
     assert.equal(await undoDepth(), depthBefore, 'SudokuPad\'s undo stack took nothing')
     assertClean(errors, 'the open note')
@@ -178,9 +175,9 @@ describe('attacks on input', { concurrency: false }, () => {
 
   it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V with notes selected, or none, change no note and no cell', { todo: `${COPY_BUG}: SudokuPad's Ctrl+C throws while Text Anywhere is the tool` }, async () => {
     await pickTool(p, 'draw')
-    await makeNote([4.5, 4.5], '15')
-    await makeNote([6.5, 6.5], '26')
-    const cellsBefore = JSON.stringify(await p.evaluate(() => Framework.app.puzzle.cells.map((c) => [c.value ?? null, c.pencilmarks, c.colours])))
+    await makeNote(p, [4.5, 4.5], '15')
+    await makeNote(p, [6.5, 6.5], '26')
+    const cellsBefore = await boardState(p)
     for (const selecting of [false, true]) {
       if (selecting) await p.mouse.click(...await draw.middleAt(p, await gridPoint(p, [4.5, 4.5])))
       for (const key of ['Control+a', 'Control+c', 'Control+v']) await p.keyboard.press(key)
@@ -188,33 +185,50 @@ describe('attacks on input', { concurrency: false }, () => {
       assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, 'no note is left open')
       await draw.finishNote(p)
     }
-    assert.equal(JSON.stringify(await p.evaluate(() => Framework.app.puzzle.cells.map((c) => [c.value ?? null, c.pencilmarks, c.colours]))), cellsBefore, 'no cell changed')
+    assert.equal(await boardState(p), cellsBefore, 'no cell changed')
     assertClean(errors, 'Ctrl+A, Ctrl+C and Ctrl+V')
   })
 
-  it('attack 72: number-pad digits act as the digit row does, and Caps Lock changes nothing, with each tool current', async () => {
-    // Each trial takes a cell no trial has touched, since a restart between trials changes what a key does (SudokuPad's own).
+  it('attack 72: number-pad digits act as the digit row does, and the keys Caps Lock types change nothing, with each tool current', async () => {
+    // Each trial takes cells no trial has touched, since a restart between trials changes what a key does (SudokuPad's own).
     const cells = await p.evaluate(() => Framework.app.puzzle.cells.filter((c) => !c.given).map((c) => [c.row, c.col]))
-    const extras = () => p.evaluate(() => [Framework.getData('DrawTool_color')])
-    // The board after `keys` pressed in a clean cell.
     const scratch = cells.pop()
+    // Playwright's own 'Numpad4' is the key with Num Lock off (it reports ArrowLeft), so a number-pad digit as typed with Num Lock on goes through the protocol.
+    const cdp = await context.newCDPSession(p)
+    const numpad = async (digit) => {
+      const key = { key: digit, code: `Numpad${digit}`, location: 3, text: digit, windowsVirtualKeyCode: 96 + Number(digit) }
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', ...key })
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...key })
+    }
+    const press = (key) => key.startsWith('Numpad') ? numpad(key.slice(-1)) : p.keyboard.press(key)
+    const clickCell = async ([row, col]) => p.mouse.click(...await gridPoint(p, [row + 0.5, col + 0.5]))
+    // The board after `keys` pressed in a clean cell. A click in a probe cell afterward shows the color the pen picked, which no key leaves in the cell itself.
     const trial = async (tool, keys) => {
-      const cell = cells.shift()
+      const [cell, probe] = [cells.shift(), cells.shift()]
       await pickTool(p, tool)
       // A tool's picked color is kept between cells, so each trial starts from color 1, picked in a cell of its own.
-      await p.mouse.click(...await gridPoint(p, [scratch[0] + 0.5, scratch[1] + 0.5]))
+      await clickCell(scratch)
       await p.keyboard.press('Digit1')
-      await p.mouse.click(...await gridPoint(p, [cell[0] + 0.5, cell[1] + 0.5]))
-      for (const key of keys) await p.keyboard.press(key)
-      return JSON.stringify([await cellState(p, cell), await extras()])
+      await clickCell(cell)
+      for (const key of keys) await press(key)
+      const state = [await cellState(p, cell), await p.evaluate((key) => Framework.getData(key), draw.COLOR_KEY)]
+      await clickCell(probe)
+      return JSON.stringify([...state, await cellState(p, probe)])
+    }
+    // The tool current after `key` pressed with `tool` current.
+    const toolAfter = async (tool, key) => {
+      await pickTool(p, tool)
+      await p.keyboard.press(key)
+      return draw.tool(p)
     }
     for (const tool of ['normal', 'corner', 'centre', 'colour', 'pen', 'draw']) {
       const none = await trial(tool, [])
       const numpad = await trial(tool, ['Numpad4'])
-      // In the pen tool a digit picks the pen's color, which a cell already marked by the click does not show.
-      if (tool !== 'pen') assert.notEqual(numpad, none, `${tool}: a number-pad 4 does something`)
+      assert.notEqual(numpad, none, `${tool}: a number-pad 4 does something`)
       assert.equal(await trial(tool, ['Digit4']), numpad, `${tool}: a number-pad 4 does what the digit row's 4 does`)
-      assert.equal(await trial(tool, ['CapsLock', 'Numpad4', 'CapsLock']), numpad, `${tool}: Caps Lock changes nothing`)
+      // The browser here cannot turn the lock on, so the key is pressed and the capital letter the lock types is sent: a tool hotkey in capitals does what the lowercase one does.
+      assert.equal(await trial(tool, ['CapsLock', 'Numpad4', 'CapsLock']), numpad, `${tool}: the Caps Lock key changes nothing`)
+      assert.equal(await toolAfter(tool, 'X'), await toolAfter(tool, 'x'), `${tool}: a capital hotkey does what the lowercase one does`)
       assertClean(errors, tool)
     }
   })

@@ -5,11 +5,11 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { assertClean, installScripts, openAttackPage, pickTool } from './attack-fixtures.mjs'
+import { assertClean, installScripts, makeNote, openAttackPage, pickTool } from './attack-fixtures.mjs'
 import { captureConsoleErrors, gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
-import { mouseDrag, openPenTool, penEntries, setSlider, gridPoint } from './pen.mjs'
+import { mouseDrag, openPenTool, penEntries, setSlider } from './pen.mjs'
 import { closeDialogWith, code, openScriptDialog, paste, SETTINGS_SCRIPTS } from './settings.mjs'
-import { settle } from './settle.mjs'
+import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
 
@@ -18,6 +18,11 @@ const FULL_STORE_BUG = '#634'
 
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
+// The pen settings attack 75 saves, with the keys and values it expects back.
+const THICKNESS_KEY = 'PenColor_thickness'
+const OPACITY_KEY = 'PenColor_opacity'
+const OTHER_TAB_THICKNESS = 9
+const THIS_TAB_OPACITY = 60
 // The longest a paste, even of a megabyte, gets to answer.
 const PASTE_BUDGET_MS = 5000
 const MEGABYTE = 1024 * 1024
@@ -37,22 +42,22 @@ describe('attacks on storage', { concurrency: false }, () => {
 
     it('attack 73: a full store (setItem throws QuotaExceededError) on the scripts\' own keys leaves every feature working in the session, with no uncaught error or skip line', { todo: `${FULL_STORE_BUG}: a refused write is read as SudokuPad having changed, and the script's saved data goes off` }, async () => {
       // Only the scripts' keys refuse: SudokuPad's own writes (its tool and progress) throw uncaught on a full store with no script installed.
-      await p.evaluate(() => {
+      // The keys are the three scripts', as SETTINGS_SCRIPTS names them, behind the site's own prefix.
+      const owns = SETTINGS_SCRIPTS.filter((script) => ['draw-tool.user.js', 'pen-tool-extras.user.js', 'color-by-digit.user.js'].includes(script.file)).map((script) => script.owns.source)
+      await p.evaluate((patterns) => {
         const set = Storage.prototype.setItem
         Storage.prototype.setItem = function (key, value) {
-          if (/(DrawTool|PenColor|EdgeMarks|ColorByDigit)_/.test(key)) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+          if (patterns.some((pattern) => new RegExp(pattern).test(key.replace(/^svencodes_/, '')))) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
           return set.call(this, key, value)
         }
-      })
+      }, owns)
       const dismissNotice = async () => {
         const ok = p.locator('.dialog button').filter({ hasText: /^\s*OK\s*$/ })
         if (await ok.count() > 0) await ok.click()
       }
 
       await pickTool(p, 'draw')
-      await p.mouse.click(...await gridPoint(p, [4.5, 4.5]))
-      await p.keyboard.type('15')
-      await draw.finishNote(p)
+      await makeNote(p, [4.5, 4.5], '15')
       await dismissNotice()
       assert.deepEqual(await draw.texts(p), ['15'], 'Text Anywhere draws the note')
 
@@ -62,7 +67,7 @@ describe('attacks on storage', { concurrency: false }, () => {
 
       const before = await labelOn(p)
       await p.click('#control-colorbydigit')
-      assert.notEqual(await settle(() => labelOn(p), before), before, 'Color by Digit changes its mode')
+      assert.notEqual(await readUntil(() => labelOn(p), (label) => label !== before), before, 'Color by Digit changes its mode')
 
       assertClean(errors, 'a full store')
     })
@@ -119,25 +124,24 @@ describe('attacks on storage', { concurrency: false }, () => {
     const stored = (page, key) => page.evaluate((k) => Framework.getData(k), key)
 
     // The other tab changes three settings, one of each script, the way a user does.
-    await setSlider(other.p, THICKNESS, 9)
+    await setSlider(other.p, THICKNESS, OTHER_TAB_THICKNESS)
+    const modeBefore = await labelOn(other.p)
     await other.p.click('#control-colorbydigit')
-    const modeThere = await settle(() => labelOn(other.p), await labelOn(p))
+    const modeThere = await readUntil(() => labelOn(other.p), (label) => label !== modeBefore)
     await pickTool(other.p, 'draw')
     await draw.slideTo(other.p, draw.SIZE_SLIDER, 40)
     const widthThere = await draw.valueOf(other.p, draw.SIZE_SLIDER)
-    assert.equal(await stored(p, 'PenColor_thickness'), 9, 'the first tab sees the saved thickness')
+    assert.equal(await stored(p, THICKNESS_KEY), OTHER_TAB_THICKNESS, 'the first tab sees the saved thickness')
 
     // This tab goes on working through the change, and a save of one setting does not put back the old value of another.
     await openPenTool(p)
     await mouseDrag(p, [[1.5, 1.5], [1.5, 4.5]])
     assert.equal((await penEntries(p)).length, 3, 'the first tab draws a line')
-    await setSlider(p, OPACITY, 60)
-    assert.equal(await stored(p, 'PenColor_thickness'), 9, 'the first tab\'s save of the opacity leaves the other tab\'s thickness')
-    assert.equal(await stored(p, 'PenColor_opacity'), 60, 'the opacity is saved')
+    await setSlider(p, OPACITY, THIS_TAB_OPACITY)
+    assert.equal(await stored(p, THICKNESS_KEY), OTHER_TAB_THICKNESS, 'the first tab\'s save of the opacity leaves the other tab\'s thickness')
+    assert.equal(await stored(p, OPACITY_KEY), THIS_TAB_OPACITY, 'the opacity is saved')
     await pickTool(p, 'draw')
-    await p.mouse.click(...await gridPoint(p, [4.5, 4.5]))
-    await p.keyboard.type('15')
-    await draw.finishNote(p)
+    await makeNote(p, [4.5, 4.5], '15')
     assert.deepEqual(await draw.texts(p), ['15'], 'the first tab makes a note')
     assert.equal(await draw.valueOf(other.p, draw.SIZE_SLIDER), widthThere, 'the first tab\'s note does not change the other tab\'s width')
 
@@ -145,8 +149,8 @@ describe('attacks on storage', { concurrency: false }, () => {
     await p.reload({ waitUntil: 'load' })
     await installScripts(p)
     await openPenTool(p)
-    assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), THICKNESS), 9, 'the reload shows the thickness the other tab saved')
-    assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), OPACITY), 60, 'the reload shows the opacity this tab saved')
+    assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), THICKNESS), OTHER_TAB_THICKNESS, 'the reload shows the thickness the other tab saved')
+    assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), OPACITY), THIS_TAB_OPACITY, 'the reload shows the opacity this tab saved')
     assert.equal(await labelOn(p), modeThere, 'the reload shows the mode the other tab saved')
     await pickTool(p, 'draw')
     assert.equal(await draw.valueOf(p, draw.SIZE_SLIDER), widthThere, 'the reload shows the width the other tab saved')

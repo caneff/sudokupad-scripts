@@ -1,5 +1,5 @@
 // Shared by the live checks: opening SudokuPad's settings dialog the way a user finds a script's
-// entry, and the version in a script's header. Not a check itself, so `live/**/*.live.mjs` skips it.
+// entry, the version in a script's header, and the Copy settings and Paste settings buttons of the scripts with a dialog. Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -54,7 +54,6 @@ export const effectiveOpacities = (page, selector) => page.evaluate((sel) => [..
   return Math.round(product * 1000) / 1000
 }), selector)
 
-// The Copy settings and Paste settings buttons of the five scripts with a settings dialog, shared by the live checks that paste into them.
 export const code = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 export const STATUS = '.dialog [data-role="settings-status"]'
 // Every script's two buttons are icons, so each pair is found by its act, not its words.
@@ -73,7 +72,7 @@ export const SETTINGS_SCRIPTS = [
 
 // Puts `text` on the clipboard, clears the last status, presses Paste settings and returns the status it shows.
 export async function paste (p, text) {
-  await p.evaluate((t) => { document.querySelector('.dialog [data-role="settings-status"]').textContent = ''; return navigator.clipboard.writeText(t) }, text)
+  await p.evaluate(([selector, t]) => { document.querySelector(selector).textContent = ''; return navigator.clipboard.writeText(t) }, [STATUS, text])
   await actButton(p, 'paste-settings').click()
   const status = p.locator(STATUS).filter({ hasText: /\S/ })
   await status.waitFor()
