@@ -486,7 +486,7 @@ test(`${DRAW} stays short: its text is under ${DRAW_WORD_LIMIT} words`, () => {
 })
 
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {
-  assert.deepEqual(section(DRAW, 'Good to know'), ['The notes are kept in this browser only, so another browser or device does not show them.', 'Undo right after Restart brings the notes back. If the notes cannot be saved, a message says so.'])
+  assert.deepEqual(section(DRAW, 'Good to know'), ['The notes are kept in this browser only, so another browser or device does not show them.', 'Undo right after Restart restores the notes. If the notes cannot be saved, a message says so.'])
 })
 
 // A script in docs/research/ takes a picture when its header names the picture's file.
