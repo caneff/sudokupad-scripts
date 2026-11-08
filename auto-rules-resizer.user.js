@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.1
+// @version      0.4.4
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.4.1'
+  const VERSION = '0.4.4'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -323,6 +323,12 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
+  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  function snapshotStore (store, keys) {
+    const before = keys.map((key) => [key, store.getData(key)])
+    return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
+  }
+
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
@@ -419,19 +425,30 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
+    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
+      let restore = null
       try {
-        if (failed || changed()) save()
+        if (failed || changed()) {
+          restore = snapshot ? snapshot() : null
+          save()
+        }
       } catch (error) {
         failed = true
+        let message = `Not saved: ${errorText(error)}`
+        try {
+          if (restore) restore()
+        } catch (restoreError) {
+          message += `; the earlier values could not be put back: ${errorText(restoreError)}`
+        }
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), message)
         return
       }
       close()
