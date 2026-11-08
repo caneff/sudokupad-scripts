@@ -8,12 +8,13 @@
 //   pen-tool-extras-slide-6-arrow.png      an arrow line
 //   pen-tool-extras-slide-7-edges.png      four cell edges marked, clicked once to four times: an X, a circle and both arrows
 //   pen-tool-extras-slide-8-corner.png     two grid corners marked, clicked once and twice: an X and a circle
-//   pen-tool-extras-slide-9-thickness.png  the Thickness slider up: every line and mark thicker
-//   pen-tool-extras-slide-10-opacity.png   the Opacity slider down: the whole pen layer fainter
-//   pen-tool-extras-slide-11-outline-off.png  a line across dark cells with White outlines off
-//   pen-tool-extras-slide-12-outline-on.png   the same line with White outlines on
-//   pen-tool-extras-slide-13-erase.png     a red ring on a line, where a right press is held and the line is faded
-//   pen-tool-extras-slide-14-erased.png    the whole line gone after the right click
+//   pen-tool-extras-slide-9-center.png     three cell centers marked, clicked once to three times: a circle, a cross and a dot
+//   pen-tool-extras-slide-10-thickness.png  the Thickness slider up: every line and mark thicker
+//   pen-tool-extras-slide-11-opacity.png   the Opacity slider down: the whole pen layer fainter
+//   pen-tool-extras-slide-12-outline-off.png  a line across dark cells with White outlines off
+//   pen-tool-extras-slide-13-outline-on.png   the same line with White outlines on
+//   pen-tool-extras-slide-14-erase.png     a red ring on a line, where a right press is held and the line is faded
+//   pen-tool-extras-slide-15-erased.png    the whole line gone after the right click
 // Every line is a real drag, every mark a real click, every hold a real press; a red ring marks where a hold or the right click lands,
 // since a screenshot draws no pointer. Each line, mark and hold is checked to have landed. The board patch and the panel are joined side
 // by side on white with Python's Pillow (python3 with Pillow).
@@ -56,7 +57,7 @@ sheet.save(target)
 const [TEAL_ROW, SOLID_ROW, DASHED_ROW, ARROW_ROW] = [0.5, 1, 1.5, 2]
 const DARK_ROW = 3
 const OUTLINE_ROW = DARK_ROW + 0.5
-// The row whose cells take the edge marks, and the grid corners that take the corner marks, which are written beside the slide.
+// The row whose cells take the edge marks and the center marks, and the grid corners that take the corner marks, which are written beside the slide.
 const EDGE_MARK_ROW = 2
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
@@ -137,7 +138,7 @@ const holdWithRing = async (key) => {
 }
 const line = async (key, points) => { await pick(key); await landing(`the line from ${points[0]}`, () => mouseDrag(p, points)); await park() }
 const turnPage = async () => { await p.locator(PAGE_BUTTON).click(); await park() }
-const [NEW_PEN_COLOR_KEY, SOLID_PEN, EDGE_PEN, CORNER_PEN, OUTLINE_PEN] = [1, 6, 9, 5, 8]
+const [NEW_PEN_COLOR_KEY, SOLID_PEN, EDGE_PEN, CORNER_PEN, OUTLINE_PEN, CENTER_PEN] = [1, 6, 9, 5, 8, 4]
 // SudokuPad's cell color key for the dark grey the outline picture draws on.
 const DARK_CELL_KEY = '3'
 const sliderValue = async (selector, value) => { await setInputValue(p.locator(selector), value); await park() }
@@ -200,35 +201,47 @@ for (const [at, clicks, what, value] of [[[3, 1], 2, 'a circle', 'x'], [[3, 2], 
 }
 await slide('8-corner')
 
-// 9 and 10. The sliders change every line and mark already drawn.
+// 9. Three cell centers, clicked once to three times: a circle, a cross and a dot, in SudokuPad's own cell values 5 and 6 and the script's z.
+await pick(CENTER_PEN)
+for (const [col, clicks, what, value] of [[0, 1, 'a circle', '5'], [1, 2, 'a cross', '6'], [2, 3, 'a dot', 'z']]) {
+  const [cx, cy] = await cellCentre(p, EDGE_MARK_ROW, col)
+  for (let i = 0; i < clicks; i++) {
+    const click = async () => { await p.mouse.click(cx, cy); await park() }
+    if (i === clicks - 1) await marking(`${what} in the cell of column ${col}`, value, click)
+    else await changing(`click ${i + 1} in the cell of column ${col}`, click)
+  }
+}
+await slide('9-center')
+
+// 10 and 11. The sliders change every line and mark already drawn.
 await sliderValue(THICKNESS, 12)
-await slide('9-thickness')
+await slide('10-thickness')
 await sliderValue(THICKNESS, 5)
 await sliderValue(OPACITY, 30)
-await slide('10-opacity')
+await slide('11-opacity')
 await sliderValue(OPACITY, 80)
 
-// 11 and 12. A line across dark cells, White outlines off and then on.
+// 12 and 13. A line across dark cells, White outlines off and then on.
 for (const col of [0, 1, 2]) await colorCell(DARK_ROW, col, DARK_CELL_KEY)
 await line(OUTLINE_PEN, [[OUTLINE_ROW, 0.5], [OUTLINE_ROW, 2.5]])
 await setOutline(false)
-await slide('11-outline-off')
+await slide('12-outline-off')
 await setOutline(true)
-await slide('12-outline-on')
+await slide('13-outline-on')
 
-// 13 and 14. A right press on the first line fades the whole line; letting go erases it.
+// 14 and 15. A right press on the first line fades the whole line; letting go erases it.
 const before = await penCount()
 const [lx, ly] = await gridPoint(p, [TEAL_ROW, 1.5])
 await ring(lx, ly)
 await p.mouse.move(lx, ly)
 await p.mouse.down({ button: 'right' })
 await p.waitForFunction(() => document.querySelector('.pen-tool-extras-faded') !== null, null, { timeout: SETTLE_TIMEOUT_MS })
-await slide('13-erase')
+await slide('14-erase')
 await p.mouse.up({ button: 'right' })
 await unring()
 await park()
 await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, before, { timeout: SETTLE_TIMEOUT_MS })
-await slide('14-erased')
+await slide('15-erased')
 
 rmSync(frames, { recursive: true })
 await browser.close()
