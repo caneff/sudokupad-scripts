@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.9
+// @version      0.25.10
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.9'
+  const VERSION = '0.25.10'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -170,8 +170,9 @@
     return cell.propVisible('centre') ? cell.propGet('centre') : []
   }
 
+  // A given the fog hides (`hideclue`) is not a digit the solver can see, so it has none here and takes no color.
   function toPlanCell (cell) {
-    return { given: cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
+    return { given: cell.hideclue ? '' : cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
 
   // A group is the digits that share a color. 0 counts after 9 in the order of groups; a group's own digits are listed 0 first, as the preloads save them.
@@ -2349,9 +2350,11 @@
         const all = allCells(app)
         const indices = touched.map((cell) => all.indexOf(cell))
         const before = touched.map((cell) => entrySignature(toPlanCell(cell)))
+        const hiddenBefore = all.map((cell) => cell.hideclue === true)
         const enter = () => {
           const result = stock(action)
-          const changed = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
+          const fogChanged = changedIndices(hiddenBefore, allCells(app).map((cell) => cell.hideclue === true))
+          const changed = [...new Set([...changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i]), ...fogChanged])]
           recolor(app, (plans) => planCellColors(plans, loadGroups(), changed))
           return result
         }

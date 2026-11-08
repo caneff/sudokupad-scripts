@@ -79,6 +79,12 @@ test('toPlanCell gives no centre marks for a cell that hides them, so its hidden
   assert.deepEqual(plan([toPlanCell(hidden)], centreGroups), [])
 })
 
+test('toPlanCell hides the digit of a given the fog covers, so it gets no color', () => {
+  const given = { given: '1', value: '', colours: [], hideclue: true, propVisible: () => true, propGet: () => [] }
+  assert.deepEqual(plan([toPlanCell(given)]), [])
+  assert.deepEqual(plan([toPlanCell({ ...given, hideclue: false })]), [{ index: 0, key: 'a' }])
+})
+
 test('digits in no group are skipped', () => {
   assert.deepEqual(plan([{ value: '7' }, { given: '9' }]), [])
 })
