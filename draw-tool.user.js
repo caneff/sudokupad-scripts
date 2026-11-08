@@ -307,8 +307,8 @@
     return read(0, '').runs
   }
 
-  // A line that starts with "- " or "* " is a bullet: a first run `{ text: '•', bullet: true }`, then the rest of the line read as markdown.
   const BULLET_MARK = /^[-*] /
+  // A bullet line's first run is the bullet itself, `{ text: '•', bullet: true }`.
   const parseBlock = (line) => BULLET_MARK.test(line) ? [{ text: '•', bullet: true }, ...parseLine(line.slice(2))] : parseLine(line)
 
   const isBullet = (runs) => Boolean(runs[0]?.bullet)
@@ -326,6 +326,9 @@
 
   const shownLength = (runs) => runs.reduce((sum, run) => sum + run.text.length, 0)
 
+  // A line's width in characters: a bullet's indent is wider than the one character its run holds.
+  const lineChars = (runs) => shownLength(runs) + (isBullet(runs) ? BULLET_INDENT_EM / CHAR_WIDTH - 1 : 0)
+
   // The size a note was last drawn at, in board units, kept on its item under a symbol, which a spread copies and JSON leaves out, so no save stores it.
   const DRAWN_SIZE = Symbol('drawn size')
 
@@ -334,7 +337,7 @@
   function noteSize (item) {
     if (item.box) return item.box
     if (item[DRAWN_SIZE]) return item[DRAWN_SIZE]
-    const widths = parsedText(item.text).map((runs) => Math.max(1, shownLength(runs) + (isBullet(runs) ? BULLET_INDENT_EM / CHAR_WIDTH - 1 : 0)) * CHAR_WIDTH)
+    const widths = parsedText(item.text).map((runs) => Math.max(1, lineChars(runs)) * CHAR_WIDTH)
     const rows = widths.reduce((sum, width) => sum + Math.ceil(width / BOX_WIDTH_EM), 0)
     return [Math.min(BOX_WIDTH_EM, Math.max(...widths)) * item.size, Math.min(BOX_LINES, rows) * LINE_HEIGHT * item.size]
   }
@@ -1129,14 +1132,13 @@
     return line
   }
 
-  // A finished note shows the styled runs, lines joined by line breaks. A bullet block ends its own line, so a break goes only between two plain lines
-  // and before a bullet that follows an empty line.
+  // A bullet block ends its own line, so a line break goes only between two plain lines, and before a bullet that follows an empty line.
+  const breaksBefore = (runs, previous) => isBullet(runs) ? previous.length === 0 : !isBullet(previous)
+
+  // A finished note shows the styled runs, lines joined by line breaks.
   function noteContent (text) {
     const lines = parsedText(text)
-    return lines.flatMap((runs, i) => {
-      const before = i && (isBullet(runs) ? lines[i - 1].length === 0 : !isBullet(lines[i - 1])) ? ['\n'] : []
-      return [...before, ...(isBullet(runs) ? [bulletElement(runs)] : runs.map(runElement))]
-    })
+    return lines.flatMap((runs, i) => [...(i && breaksBefore(runs, lines[i - 1]) ? ['\n'] : []), ...(isBullet(runs) ? [bulletElement(runs)] : runs.map(runElement))])
   }
 
   // The note open for typing shows its text as typed, markers and all.
@@ -2156,7 +2158,7 @@
     else if (ended.start === -1) selectInRectangle(ended)
   }
 
-  // An erase in progress, or a drag, ends as a release ends it; a press that never moved opens no text box.
+  // An erase in progress, or a drag, ends as a release ends it; a press that never moved opens no text box. A nudge not yet saved is saved too.
   function endGesture () {
     flushFrame()
     if (erasing) endErase()
@@ -2235,13 +2237,15 @@
     else if (d.start === -1) showRectangle(d)
   }
 
+  // Each moving note with the screen point `offset` takes it to.
+  const movedBy = (moves, [dx, dy], map) => moves.map(({ index, item }) => {
+    const [x, y] = screenPoint(item, map.toScreen)
+    return { index, item, point: [x + dx, y + dy] }
+  })
+
   // Each note keeps its offset from the pointer, and its own drop point decides whether it is pinned to the grid or fixed on the screen.
-  function applyMove (d, map) {
-    const [dx, dy] = dragOffset(d)
-    for (const { index, item } of d.move) {
-      const [x, y] = screenPoint(item, map.toScreen)
-      drawing[index] = placedItem(item, [x + dx, y + dy], map)
-    }
+  function place (moved, map) {
+    for (const { index, item, point } of moved) drawing[index] = placedItem(item, point, map)
   }
 
   // A note stays where a press can still reach it: its middle inside the window and clear of the controls. The notes' layer takes no pointer, so the page under it answers.
@@ -2251,13 +2255,7 @@
     return under !== null && under.closest(CONTROLS) === null
   }
 
-  function moveKeepsReachable (d, [px, py], map) {
-    const [dx, dy] = [px - d.points[0][0], py - d.points[0][1]]
-    return d.move.every(({ item }) => {
-      const [x, y] = screenPoint(item, map.toScreen)
-      return reachable([x + dx, y + dy])
-    })
-  }
+  const moveKeepsReachable = (d, [px, py], map) => movedBy(d.move, [px - d.points[0][0], py - d.points[0][1]], map).every(({ point }) => reachable(point))
 
   const NUDGE_PX = 1
   const NUDGE_SHIFT_PX = 10
@@ -2265,15 +2263,12 @@
   // Whether a nudge has moved notes that are not saved yet; the release of the key saves it.
   let nudged = false
 
-  // Moves the selected notes `step` screen pixels along `direction`, a unit vector, and not at all when that would leave one out of reach.
+  // The same reach rule as a drag: no note moves when one would end out of reach.
   function nudgeSelected (direction, step) {
     const map = boardMap()
-    const moved = selected.map((i) => {
-      const [x, y] = screenPoint(drawing[i], map.toScreen)
-      return [i, [x + direction[0] * step, y + direction[1] * step]]
-    })
-    if (!moved.every(([, point]) => reachable(point))) return
-    for (const [i, point] of moved) drawing[i] = placedItem(drawing[i], point, map)
+    const moved = movedBy(selected.map((index) => ({ index, item: drawing[index] })), direction.map((v) => v * step), map)
+    if (!moved.every(({ point }) => reachable(point))) return
+    place(moved, map)
     nudged = true
     redraw()
   }
@@ -2285,7 +2280,8 @@
   }
 
   function endMove (d) {
-    applyMove(d, boardMap())
+    const map = boardMap()
+    place(movedBy(d.move, dragOffset(d), map), map)
     clearMove(d)
     renderDrawing()
     save()
@@ -2434,7 +2430,6 @@
       window.removeEventListener('mousemove', trackPointer, { capture: true })
       pointer = null
       endGesture()
-      saveNudge()
       if (editing) finishText()
       selected = []
       renderDrawing()
@@ -2450,7 +2445,7 @@
     },
     // SudokuPad calls every tool's handleKeydown first, and true ends the keydown there. Shift would otherwise switch
     // to Corner for as long as it is held (that tool's tempKey), and a drag with it held would never reach Text Annotation.
-    // With notes selected, Escape ends the selection and Delete or Backspace (a Mac's delete key) deletes them, and none reaches the cells.
+    // With notes selected, Escape ends the selection, Delete or Backspace (a Mac's delete key) deletes them and an arrow key nudges them, and none reaches the cells.
     handleKeydown (event) {
       if (Framework.app.tool !== TOOL_NAME) return false
       if (event.key === 'Shift') return true
@@ -2460,6 +2455,10 @@
       else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
       else return false
       return true
+    },
+    // SudokuPad calls every tool's handleKeyup too. An arrow released with Shift still held would otherwise switch to Corner (its tempKey), which leaves this tool and ends the selection.
+    handleKeyup (event) {
+      return Framework.app.tool === TOOL_NAME && selected.length > 0 && Boolean(ARROWS[event.key])
     }
   }
 

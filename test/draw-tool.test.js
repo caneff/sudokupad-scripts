@@ -554,6 +554,9 @@ test('a dash that does not start a line, or has no space after it, is not a bull
   assert.deepEqual(parseMarkdown('a - b'), [[{ text: 'a - b' }]])
   assert.deepEqual(parseMarkdown('-one'), [[{ text: '-one' }]])
   assert.deepEqual(parseMarkdown(' - one'), [[{ text: ' - one' }]])
+})
+
+test('a line that starts with italic markers and no space is italic, not a bullet', () => {
   assert.deepEqual(parseMarkdown('*one* and'), [[{ text: 'one', italic: true }, { text: ' and' }]])
 })
 
