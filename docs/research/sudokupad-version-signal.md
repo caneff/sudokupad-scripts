@@ -25,5 +25,6 @@ Both sides are read by the first `?v=<digits and dots>` in the document (`pageVe
 
 - Not checked: that the version moves on every release, since only one version (0.611.0, then 0.612.0 in
   `sudokupad-replay-files.md`) was seen. A release that changed assets without changing `v=` would keep a recording
-  that lacks them; `LIVE_REFRESH=1` records again, and a replayed request the recording lacks fails the run naming it.
+  that lacks them; `LIVE_REFRESH=1` records again, and a replayed request the recording lacks fails the run naming it. The nightly watch
+  records again and runs the full suite once a week whatever `?v=` says (`live/README.md` § The daily watch).
 - Not checked: whether the version moves a second time inside one day's rollout. The check runs once per 24 hours.
