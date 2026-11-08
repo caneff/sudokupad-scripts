@@ -145,3 +145,13 @@ value. Existing values `h` to `y` cannot take it, since marks already saved with
 - Pen Tool Extras' own dialog is fixed in v1.4.2: a `pointerdown` on its overlay (told apart by the editor inside it)
   swallows the events that end the press, as the dialog buttons do. Stock dialogs are unchanged.
 - Not run: a touch screen, Windows, Tampermonkey.
+
+## Cell-middle click and the cell dot, 2026-11-07 (v0.611.0, `ToolPen.tool.clickCell.toString()` read on the page; #479)
+
+- `clickCell` takes a cell-middle click when the pointer is within 0.5 of the cell's middle and not in the edge zone. It queues one `select`
+  of the cell and then the toggles that step its own cycle: `pen 5` with nothing there (circle), `pen 5` then `pen 6` with a circle there
+  (circle to cross), `pen 6` with a cross there (cross to nothing). Read through `cellHasPen`, so a cell holding both steps as if it held the circle.
+- Pen Tool Extras reads that queue (`isCellActs`) and replaces it with its own cycle, circle (`5`), cross (`6`), dot (`z`), empty, so `z` is
+  used: `h` to `z` are all taken by the script.
+- Run on the page in `live/pen-tool-extras/pen-tool-extras-marks.live.mjs`: the cycle, one undo per click, `pe:z/0` in `getReplay()`, a replay and a
+  reload keep the dot. An SVG path cannot take its fill from its stroke, so the dot is filled by one CSS rule per pen color character.

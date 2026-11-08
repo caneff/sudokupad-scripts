@@ -160,7 +160,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Erase a whole line', 'White outlines']
+const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
 
 test(`${DETAILS} lists what the script adds as a grid of short items, one per feature, and never mentions the middle button`, () => {
   assert.deepEqual(section(DETAILS, 'What it adds'), [
@@ -169,6 +169,7 @@ test(`${DETAILS} lists what the script adds as a grid of short items, one per fe
     'Digit keys pick the pen Press 1 to 9 to pick that pen color, on whichever page of pens is showing.',
     'Marks on cell edges Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners Click near a corner for an X or a circle.',
+    'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
     'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
     'White outlines An outline keeps lines readable over colored cells.'
   ])
@@ -486,7 +487,7 @@ test(`${DRAW} stays short: its text is under ${DRAW_WORD_LIMIT} words`, () => {
 })
 
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {
-  assert.deepEqual(section(DRAW, 'Good to know'), ['The notes are kept in this browser only, so another browser or device does not show them.', 'Restart clears the notes. If the notes cannot be saved, a message says so.'])
+  assert.deepEqual(section(DRAW, 'Good to know'), ['The notes are kept in this browser only, so another browser or device does not show them.', 'Undo right after Restart restores the notes. If the notes cannot be saved, a message says so.'])
 })
 
 // A script in docs/research/ takes a picture when its header names the picture's file.
