@@ -108,7 +108,9 @@ Only lines change with the page. A cell circle, a cross and the edge and corner 
 - Press Tab. Tab does nothing else in the pen tool with this script on, with or without No Tab Letters. Shift+Tab is left to SudokuPad.
 - Turn the mouse wheel over the page button, as SudokuPad's color tool does over its own page button: down for the next page, up for the previous. Over the rest of the pen panel the wheel is left to SudokuPad.
 
-The script takes no input SudokuPad doesn't itself use that way: Tab turns the page because the color tool does, and the wheel only over the page button for the same reason (`docs/research/sudokupad-color-tool-paging.md`).
+**Picking a pen with a digit key**: with the pen tool on, a bare digit key 1 to 9 picks pen N on the page showing, as a click on that color button does: on page 2, key 3 picks page 2's pen 3. The key follows the button's number, so Keypad Flipped changes nothing. Key 0, a digit with Ctrl, Alt, Meta or Shift held, and a digit typed into a text field are left to SudokuPad and the browser.
+
+Besides Tab and the wheel, which SudokuPad's color tool uses the same way (`docs/research/sudokupad-color-tool-paging.md`), the digit keys are the one input the script takes that SudokuPad's pen tool ignores.
 
 The same pen number stays selected across pages. The selected pen is saved under `PenColor_pen` and comes back after a reload. SudokuPad's own `ToolPen_color` only ever holds the pen's number, so removing the script leaves stock SudokuPad working with that pen on its first page.
 
@@ -191,7 +193,7 @@ The settings dialog names the skipped steps in one line at its top, for example 
 | Step | Not installed when SudokuPad has no | What you see with it skipped |
 | --- | --- | --- |
 | colors | the cell color tool (`tools.colour`); also skipped when reading its page or opening the pickers fails | No darker page preset is offered or saved, and a hold on a pen color button opens no pickers. The dialog's pickers, SudokuPad colors and saved colors still work. With no color tool at all, the install save stores SudokuPad colors. A color tool that is merely slow or empty is waited for, with SudokuPad's own pen colors until it is ready |
-| pen pages | the pen tool's `setSelectedColor`, `handleToolEnter` or `handleToolExit` | Only SudokuPad's nine pens. Tab, the mouse wheel and the page button do nothing, and a pen on page 2 or 3 that was selected is replaced by the same color on page 1. Lines already stored with a page 2 or page 3 pen keep their color |
+| pen pages | the pen tool's `setSelectedColor`, `handleToolEnter` or `handleToolExit` | Only SudokuPad's nine pens. Tab, the mouse wheel, the digit keys and the page button do nothing, and a pen on page 2 or 3 that was selected is replaced by the same color on page 1. Lines already stored with a page 2 or page 3 pen keep their color |
 | arrow lines | the renderer's `renderPen` or `renderPart`, the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, or the app's `puzzle.cells` | Page 3 lines draw as plain lines of the pen's color, and a line dragged with a page 3 pen is stored in the pen's own character, with no direction |
 | drag highlight | the pen tool's `drawLineHint` | The highlight of a line being dragged fades with the opacity setting and takes the white outline |
 | marks | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, `rcToPathData` or `CellSize`, the grid's `getCell`, `rows` or `cols`, or the app's `puzzle.cells` | A click on an edge or a corner is SudokuPad's own edge click (its X). The arrows, circles and corner marks you drew stay stored in the puzzle and its replay, and draw as nothing |
