@@ -23,6 +23,7 @@
   .check { display: inline-block; width: .8em; height: .8em; border: 2px solid currentColor; border-radius: 3px; margin-right: .3em; vertical-align: -.05em; cursor: pointer; position: relative; }
   .check.done::after { content: ''; position: absolute; left: .2em; top: -.05em; width: .25em; height: .5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }
   .line.done { text-decoration: line-through; opacity: .6; }
+  .note.boxed { background: #fff3a8; padding: 2px 8px; border-radius: 4px; box-shadow: 0 0 0 1px #c4c4c4; text-shadow: none; color: #1f7a1f; }
   .note.editing { cursor: text !important; background: rgba(255,255,255,.6); outline: 1.5px solid var(--purple); }
   /* OLD looks */
   .note.sel { outline: 2px dashed #8a4fd0; outline-offset: 2px; }
@@ -46,7 +47,7 @@
 </head>
 <body>
 <header><b>Prototype, throwaway.</b> Text Anywhere polish ideas 1–4 and 6, plus symbols as you type (-> != <= >= <- sum), checklists (a line starting - [ ] ), and a see-through note while dragging (60% opaque, so the board shows through). Snap: 4 px pull to cell middles and to cell edges (a note's top, bottom, left or right meeting a cell line), with a guide line; also to other notes' edges and middles. Each switch in the bar turns one idea on; off is today's look.
-Click a note to select it, drag to move it, drag on empty space to select several, double-click to edit, drag a corner to resize.</header>
+The yellow note has a box (Background on, Yellow, Thin grey border). Click a note to select it, drag to move it, drag on empty space to select several, double-click to edit, drag a corner to resize.</header>
 <div id="stage">
   <div id="board"></div>
   <div id="gx" class="guide"></div><div id="gy" class="guide"></div>
@@ -78,6 +79,7 @@ const flags = {}
 let notes = [
   { text: 'A=B+5', x: 440, y: 40 }, { text: 'X+Y=2Z', x: 610, y: 40 },
   { text: 'r1: 4,6 in c7-9', x: 970, y: 98 }, { text: '15', x: 1075, y: 314 }, { text: 'odd', x: 520, y: 260 },
+  { text: 'X = 2 or 7', x: 1040, y: 520, bg: true },
   { text: '- [ ] r1 pair → c7\n- [x] 45 rule on box 5\n- [ ] r4c3 ≠ 8', x: 140, y: 440 }
 ].map((n, i) => ({ id: i, ...n }))
 let selected = [], editing = null, drag = null, lastSnap = { x: null, y: null }
@@ -86,7 +88,7 @@ function render () {
   for (const el of stage.querySelectorAll('.note, .handle')) el.remove()
   for (const n of notes) {
     const el = document.createElement('div')
-    el.className = 'note' + (selected.includes(n.id) ? ' sel' : '') + (editing === n.id ? ' editing' : '') + (n.w ? ' sized' : '')
+    el.className = 'note' + (selected.includes(n.id) ? ' sel' : '') + (editing === n.id ? ' editing' : '') + (n.w ? ' sized' : '') + (n.bg ? ' boxed' : '')
     el.style.left = n.x + 'px'; el.style.top = n.y + 'px'
     if (n.w) { el.style.width = n.w + 'px'; el.style.height = n.h + 'px' }
     el.dataset.id = n.id
