@@ -3,7 +3,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { withInertTab, ignoreKey } = require('../no-tab-letters.user.js')
+const { headerVersion } = require('./header-version.js')
+const { VERSION, withInertTab, ignoreKey, lackingInternals, FEATURES } = require('../no-tab-letters.user.js')
 
 const toggle = () => {}
 const typeLetter = () => {}
@@ -62,4 +63,25 @@ test('the header names the script and points updates at its own file', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'no-tab-letters.user.js'), 'utf8')
   assert.match(source, /^\/\/ @name\s+SudokuPad No Tab Letters$/m)
   assert.match(source, /^\/\/ @updateURL\s+https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/no-tab-letters\.user\.js$/m)
+})
+
+test('without the letter tool\'s key list, the Tab feature is lacking, and a SudokuPad that has it lacks nothing', () => {
+  const roots = () => ({ Framework: {}, ToolLetter: { tool: { keyHandlers: [] } } })
+  assert.deepEqual(lackingInternals(FEATURES, roots()), new Map())
+  for (const remove of [(r) => { delete r.ToolLetter.tool.keyHandlers }, (r) => { delete r.ToolLetter.tool }, (r) => { r.ToolLetter = undefined }]) {
+    const broken = roots()
+    remove(broken)
+    assert.deepEqual(lackingInternals(FEATURES, broken), new Map([['ToolLetter.tool.keyHandlers', ['tab']]]))
+  }
+})
+
+test('No Tab Letters declares its feature through the shared guard, with no guard code of its own', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'no-tab-letters.user.js'), 'utf8')
+  const own = source.replace(/\/\/ <lib:sudokupad>[\s\S]*?\/\/ <\/lib:sudokupad>/, '')
+  assert.match(own, /createGuard\(\{ script: 'no-tab-letters'[^\n]*features: FEATURES \}\)/)
+  for (const text of ['has no ToolLetter.tool, so', 'has no Tab binding to the toggle, so']) assert.equal(own.includes(text), false, text)
+})
+
+test('VERSION is the @version in the script header', () => {
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'no-tab-letters.user.js'), 'utf8')))
 })
