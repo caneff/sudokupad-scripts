@@ -154,7 +154,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
   describe('attack 68', () => {
     const FOG_LIT = [[0, 0], [0, 1], [1, 0], [1, 1]]
     const openFog = () => open(puzzleData({ id: 'attack-fog', givens: CLASSIC_GIVENS, foglight: FOG_LIT, metadata: { title: 'fog', rules: RULES } }))
-    const fogged = () => p.evaluate(() => Framework.app.puzzle.cells.filter((c) => c.given).map((c) => ({ row: c.row, col: c.col, hidden: c.hideclue === true, colours: (c.colours || []).length })))
+    const fogged = () => p.evaluate(() => Framework.app.puzzle.cells.filter((c) => c.given).map((c) => ({ row: c.row, col: c.col, digit: c.given, hidden: c.hideclue === true, colours: (c.colours || []).length, colour: (c.colours || []).join() })))
 
     it('attack 68: a fog-of-war puzzle: only the lit cells show their clues, and pen marks, a note, a digit and a color work in the fog', async () => {
       await openFog()
@@ -191,8 +191,12 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       await p.keyboard.press('4')
       const lifted = await readUntil(fogged, (now) => now.some((g, i) => before[i].hidden && !g.hidden))
       const uncovered = lifted.filter((g, i) => before[i].hidden && !g.hidden)
-      assert.equal(uncovered.length > 0, true, 'a digit in the fog lifts it from some given')
       assert.deepEqual(uncovered.filter((g) => g.colours === 0), [], 'every given the fog uncovered has its color')
+      // The Odd/Even profile: the shown givens of one parity share a color, and the two parities differ.
+      const colourOfParity = (parity) => new Set(lifted.filter((g) => !g.hidden && g.digit % 2 === parity).map((g) => g.colour))
+      const [odd, even] = [colourOfParity(1), colourOfParity(0)]
+      assert.deepEqual([odd.size, even.size], [1, 1], 'the shown givens of one digit group share one color')
+      assert.notDeepEqual([...odd], [...even], 'the two groups have two colors')
       assert.deepEqual(lifted.filter((g) => g.hidden && g.colours > 0), [], 'a given the fog still hides has none')
     })
 
