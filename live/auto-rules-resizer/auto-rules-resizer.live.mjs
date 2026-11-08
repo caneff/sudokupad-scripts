@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
+import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 
@@ -228,6 +229,25 @@ describe('a landscape window, short rules', { concurrency: false }, () => {
 
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
+  })
+})
+
+describe('a press on the left of a font button (#521)', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await rulesPage(LANDSCAPE, (p) => p.evaluate(() => Framework.setSetting('toolpen', true))))
+    await openPenTool(p)
+    await p.locator('.tool-pen button[data-key="1"]').click()
+    await inject(p)
+  })
+  after(async () => { await context.close() })
+
+  it('adds no pen mark: the pen tool used to draw an X on the grid\'s right edge', async () => {
+    await hoverPane(p)
+    await p.locator(FONT_BAR).waitFor({ state: 'visible' })
+    const { added } = await clickLeftEdge(p, `${FONT_BAR} button:first-child`)
+    assert.deepEqual(added, [])
   })
 })
 

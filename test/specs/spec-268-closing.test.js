@@ -35,14 +35,14 @@ test('spec 268 gives a solver a text tool whose notes are kept per puzzle', () =
   const store = storeOf(saved)
   draw.saveDrawingTo(store, 'other', [sum])
   draw.saveDrawingTo(store, key, drawing)
-  assert.deepEqual(draw.readDrawing(JSON.parse(JSON.stringify(saved[draw.DRAWING_PREFIX + key]))), drawing)
-  assert.deepEqual(saved[draw.DRAWING_PREFIX + 'other'], [sum])
+  assert.deepEqual(draw.readDrawing(JSON.parse(JSON.stringify(saved[draw.DRAWING_PREFIX + key].data))).items, drawing)
+  assert.deepEqual(saved[draw.DRAWING_PREFIX + 'other'], { v: 0, data: [sum] })
   assert.deepEqual(draw.readIndex(saved[draw.INDEX_KEY]), ['other', key])
 
   // Drawing on 49 more puzzles, the 51st, drops the oldest, 'other', and keeps this one and the 49 after it.
   for (let i = 1; i <= 49; i++) draw.saveDrawingTo(store, `p${i}`, [sum])
   assert.equal(saved[draw.DRAWING_PREFIX + 'other'], undefined)
-  assert.deepEqual(saved[draw.DRAWING_PREFIX + key], drawing)
+  assert.deepEqual(saved[draw.DRAWING_PREFIX + key], { v: 0, data: drawing })
   assert.equal(saved[draw.INDEX_KEY].length, 50)
   assert.deepEqual(saved[draw.INDEX_KEY].slice(0, 2), [key, 'p1'])
 

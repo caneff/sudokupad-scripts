@@ -4,10 +4,10 @@
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, statSync, utimesSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { checkVersion, cleanHar, ensureRecording, harPath, LOCK_STALE_MS, MAX_AGE_MS, misses, modeFor, pageVersion, puzzleUrl, routeSudokuPad } from './cache.mjs'
+import { checkVersion, cleanHar, ensureRecording, hasFabric, writeRecording, harPath, LOCK_STALE_MS, MAX_AGE_MS, misses, modeFor, pageVersion, puzzleUrl, routeSudokuPad } from './cache.mjs'
 
 const HOUR = 60 * 60 * 1000
 
@@ -63,6 +63,19 @@ describe('modeFor', () => {
 
   it('LIVE_REFRESH=1 records over a fresh recording', () => {
     assert.equal(modeFor({ env: { LIVE_REFRESH: '1' }, ...fresh }), 'record')
+  })
+
+  it('records a fresh recording that lacks a file a check needs, once per run', () => {
+    assert.equal(modeFor({ env: {}, ...fresh, incomplete: true }), 'record')
+    assert.equal(modeFor({ env: {}, ...fresh, incomplete: true, refreshedThisRun: true }), 'replay')
+  })
+
+  it('records an incomplete stale recording whatever the version check says', () => {
+    assert.equal(modeFor({ env: {}, ...stale, incomplete: true, versionCheck: 'same' }), 'record')
+  })
+
+  it('LIVE_OFFLINE=1 replays an incomplete recording', () => {
+    assert.equal(modeFor({ env: { LIVE_OFFLINE: '1' }, ...fresh, incomplete: true }), 'replay')
   })
 
   it('LIVE_OFFLINE=1 replays a stale recording', () => {
@@ -158,6 +171,50 @@ describe('checkVersion', () => {
   })
 })
 
+const harWith = (...urls) => ({ log: { entries: urls.map((url) => ({ request: { method: 'GET', url }, response: { status: 200, content: {} } })) } })
+const FABRIC_URL = 'https://sudokupad.app/fabric-5.3.1.min.js'
+
+describe('hasFabric', () => {
+  it('is false for a recording of the page without the file Test Markup loads on demand', () => {
+    assert.equal(hasFabric(harWith('https://sudokupad.app/', 'https://sudokupad.app/main.js')), false)
+  })
+
+  it('is true when the recording holds it, whatever version of fabric.js SudokuPad ships and with or without a ?v= tag', () => {
+    for (const url of [FABRIC_URL, 'https://sudokupad.app/fabric-6.0.0.min.js', `${FABRIC_URL}?v=0.611.0`]) assert.equal(hasFabric(harWith(url)), true, url)
+  })
+
+  it('does not count a fabric file from another host, or a source map', () => {
+    assert.equal(hasFabric(harWith('https://cdn.example/fabric-5.3.1.min.js')), false)
+    assert.equal(hasFabric(harWith(`${FABRIC_URL}.map`)), false)
+  })
+})
+
+describe('writeRecording', () => {
+  let dir
+  before(() => { dir = mkdtempSync(join(tmpdir(), 'write-recording-')) })
+  after(() => rmSync(dir, { recursive: true, force: true }))
+  const fresh = (har) => { const tmp = join(dir, 'fresh.recording'); writeFileSync(tmp, JSON.stringify(har)); return tmp }
+
+  it('writes the cleaned recording when it holds fabric.js', () => {
+    const file = join(dir, 'ok', 'sudokupad.har')
+    writeRecording(fresh(harWith(FABRIC_URL)), file)
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).log.entries.length, 1)
+  })
+
+  it('refuses a recording without it and leaves the file as it was', () => {
+    const file = join(dir, 'kept.har')
+    writeFileSync(file, 'old')
+    assert.throws(() => writeRecording(fresh(harWith('https://sudokupad.app/')), file), /lacks fabric\.js/)
+    assert.equal(readFileSync(file, 'utf8'), 'old')
+  })
+
+  it('refuses a recording whose only fabric request was aborted (status -1)', () => {
+    const har = harWith(FABRIC_URL)
+    har.log.entries[0].response.status = -1
+    assert.throws(() => writeRecording(fresh(har), join(dir, 'aborted.har')), /lacks fabric\.js/)
+  })
+})
+
 describe('cleanHar', () => {
   const entry = (url, { status = 200, mimeType = 'text/css', text = 'x', encoding, method = 'GET', postData } = {}) => ({
     request: { method, url, ...(postData ? { postData: { text: postData } } : {}) },
@@ -208,7 +265,7 @@ describe('ensureRecording', () => {
     calls.push(file)
     await new Promise((resolve) => setTimeout(resolve, wait))
     mkdirSync(join(file, '..'), { recursive: true })
-    writeFileSync(file, '{"log":{"entries":[]}}')
+    writeFileSync(file, JSON.stringify(harWith(FABRIC_URL)))
   }
   const answer = (outcome) => async () => { checks.push(outcome); if (outcome === 'failed') throw new Error('network down'); return outcome }
   const ensure = (env, { ppid = 4242, record = recorder(), checkVersion = answer('changed') } = {}) =>
@@ -225,6 +282,15 @@ describe('ensureRecording', () => {
     await ensure({})
     await ensure({})
     assert.equal(calls.length, 1)
+  })
+
+  it('records again over a fresh recording that lacks fabric.js, and replays the next call', async () => {
+    reset()
+    await ensure({})
+    writeFileSync(file(), JSON.stringify(harWith('https://sudokupad.app/')))
+    await ensure({})
+    await ensure({})
+    assert.equal(calls.length, 2)
   })
 
   it('replays a recording younger than 24 hours without recording', async () => {
@@ -410,7 +476,7 @@ describe('routeSudokuPad', () => {
     process.env.XDG_CACHE_HOME = cache
     process.env.LIVE_OFFLINE = '1'
     mkdirSync(join(cache, 'sudokupad-scripts', 'live'), { recursive: true })
-    writeFileSync(harPath(process.env, ''), '{"log":{"entries":[]}}')
+    writeFileSync(harPath(process.env, ''), JSON.stringify(harWith(FABRIC_URL)))
   })
   after(() => {
     for (const [key, value] of [['XDG_CACHE_HOME', saved.XDG], ['LIVE_OFFLINE', saved.OFFLINE]]) {
@@ -456,7 +522,7 @@ describe('routeSudokuPad on a stale recording when the network fails', () => {
     cache = mkdtempSync(join(tmpdir(), 'cache-wiring-'))
     const file = harPath({ XDG_CACHE_HOME: cache }, '')
     mkdirSync(join(file, '..'), { recursive: true })
-    writeFileSync(file, '{"log":{"entries":[]}}')
+    writeFileSync(file, JSON.stringify(harWith(FABRIC_URL)))
     const old = (Date.now() - MAX_AGE_MS - HOUR) / 1000
     utimesSync(file, old, old)
   })

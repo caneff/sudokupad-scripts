@@ -6,13 +6,13 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
 import { keydownDefaults } from '../pen.mjs'
+import { LETTER_MODE_KEY as MODE_KEY } from '../scripts.mjs'
 import { settle } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../no-tab-letters.user.js', import.meta.url), 'utf8')
 
 const DIGITS = '1234567890'
 const LETTERS = 'ABCDEFGHIO'
-const MODE_KEY = 'ToolLetter_letterMode'
 const TOGGLE_BUTTON = 'button[data-control="toggleletter"]'
 const WARNING = /no-tab-letters/
 const BAR = '#sudokupad-scripts-notices [data-script="no-tab-letters"]'

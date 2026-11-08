@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -1882,4 +1882,95 @@ test('a document listener of the mode button whose own code throws turns the but
 test('with cell coloring off, the icon and the digit shades still wait for the puzzle to load', () => {
   const { added } = startOnStandInPage(SCRIPT, FEATURES, { missing: ['app.act'] })
   assert.ok(added.some(({ where }) => where === 'Framework.app.puzzle.addEventListener()'), added.map(({ where }) => where).join(', '))
+})
+
+// The settings dialog's draft: three profiles over twoPages' colors, the second one active.
+const dialogState = () => ({ profiles: [{ name: 'A', groups: [g('a2', ['1'])] }, { name: 'B', groups: [g('b3', ['2'])] }, { name: 'C', groups: [] }], active: 1 })
+const opened = (state = dialogState(), mode = 'cell') => openingDraft(state, mode, twoPages())
+const run = (draft, ...events) => events.reduce(reduceDraft, draft)
+const shownGroups = (draft) => draft.state.profiles[draft.selected].groups
+
+test('openingDraft selects the active profile, keeps its name, and starts the brush on its lowest group\'s color and page', () => {
+  const draft = opened(dialogState(), 'both')
+  assert.deepEqual({ selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page, mode: draft.mode }, { selected: 1, keptName: 'B', brush: 'b3', page: 1, mode: 'both' })
+  assert.deepEqual(draft.state, dialogState())
+})
+
+test('reduceDraft select: the row\'s profile is selected, its name kept, and the brush and page restart from its groups', () => {
+  const draft = run(opened(), { type: 'select', index: 0 })
+  assert.deepEqual({ selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page }, { selected: 0, keptName: 'A', brush: 'a2', page: 0 })
+  assert.equal(draft.state.active, 1, 'selecting picks no profile')
+  assert.deepEqual(run(opened(), { type: 'select', index: 2 }).brush, 'b1', 'a profile with no groups starts on the current page\'s first color')
+})
+
+test('reduceDraft paint: the stroke\'s first digit decides paint or clear, and every digit after follows it', () => {
+  const painting = run(opened(), { type: 'press' }, { type: 'paint', digit: '5' }, { type: 'paint', digit: '2' })
+  assert.deepEqual(shownGroups(painting), [g('b3', ['2', '5'])], 'a stroke that started by painting never clears')
+  const clearing = run(painting, { type: 'press' }, { type: 'paint', digit: '2' }, { type: 'paint', digit: '5' }, { type: 'paint', digit: '7' })
+  assert.deepEqual(shownGroups(clearing), [], 'a stroke that started on a brush-colored digit clears each digit it passes')
+})
+
+test('reduceDraft paint: with no brush, or a digit already as the stroke leaves it, the draft is the same draft', () => {
+  const noBrush = { ...opened(), brush: null }
+  assert.equal(run(noBrush, { type: 'press' }, { type: 'paint', digit: '5' }), noBrush)
+  const painted = run(opened(), { type: 'press' }, { type: 'paint', digit: '5' })
+  assert.equal(reduceDraft(painted, { type: 'paint', digit: '5' }), painted)
+})
+
+test('reduceDraft key-paint: a keyboard click on a digit toggles it in the brush\'s color, with no stroke', () => {
+  const painted = run(opened(), { type: 'key-paint', digit: '5' })
+  assert.deepEqual(shownGroups(painted), [g('b3', ['2', '5'])])
+  assert.deepEqual(shownGroups(run(painted, { type: 'key-paint', digit: '5' })), [g('b3', ['2'])])
+  const noBrush = { ...opened(), brush: null }
+  assert.equal(reduceDraft(noBrush, { type: 'key-paint', digit: '2' }), noBrush, 'with no brush a keyboard click leaves the digit\'s color alone')
+})
+
+test('reduceDraft brush, page and clear: a swatch sets the brush, the page choice the page, and Clear empties the selected profile', () => {
+  const draft = run(opened(), { type: 'brush', key: 'a7' }, { type: 'page', page: 0 }, { type: 'clear' })
+  assert.deepEqual({ brush: draft.brush, page: draft.page, groups: shownGroups(draft) }, { brush: 'a7', page: 0, groups: [] })
+  assert.deepEqual(draft.state.profiles[0].groups, [g('a2', ['1'])], 'only the selected profile is cleared')
+})
+
+test('reduceDraft rename: the typed name renames the selected profile, and a blank one restores the name it had when selected', () => {
+  const typed = run(opened(), { type: 'rename', name: 'Bee' })
+  assert.equal(typed.state.profiles[1].name, 'Bee')
+  assert.equal(run(typed, { type: 'rename', name: '   ' }).state.profiles[1].name, 'B')
+})
+
+test('reduceDraft choose: Mode sets the draft mode, Cell the active profile, and Digit None moves a digit mode to one without digit colors', () => {
+  assert.equal(run(opened(), { type: 'choose', role: 'mode-draft', value: 'both' }).mode, 'both')
+  assert.equal(run(opened(), { type: 'choose', role: 'cell-profile', value: '2' }).state.active, 2)
+  const none = run(opened(dialogState(), 'both'), { type: 'choose', role: 'digit-profile', value: 'none' })
+  assert.equal(none.mode, 'cell')
+  assert.equal(usesDigitColors(none.state), false)
+  assert.throws(() => reduceDraft(opened(), { type: 'choose', role: 'color-choice', value: '0' }), /no pulldown color-choice/)
+})
+
+test('reduceDraft new-profile: the selected profile is copied to the end and the copy selected; at the limit the draft is the same draft', () => {
+  const copied = run(opened(), { type: 'new-profile' })
+  assert.deepEqual({ count: copied.state.profiles.length, selected: copied.selected, groups: shownGroups(copied) }, { count: 4, selected: 3, groups: [g('b3', ['2'])] })
+  const full = opened({ profiles: Array.from({ length: MAX_PROFILES }, (_, i) => ({ name: `P${i}`, groups: [] })), active: 0 })
+  assert.equal(reduceDraft(full, { type: 'new-profile' }), full)
+})
+
+test('reduceDraft delete: the row goes and the selection stays on the same profile; a refused delete is the same draft', () => {
+  const deleted = run(opened(), { type: 'delete', index: 0 })
+  assert.deepEqual(deleted.state.profiles.map((p) => p.name), ['B', 'C'])
+  assert.equal(deleted.state.profiles[deleted.selected].name, 'B')
+  const one = opened({ profiles: [{ name: 'Only', groups: [] }], active: 0 })
+  assert.equal(reduceDraft(one, { type: 'delete', index: 0 }), one)
+})
+
+test('reduceDraft move: a dragged row moves, the selection follows its profile, and a drop on its own place is the same draft', () => {
+  const moved = run(opened(), { type: 'move', from: 0, to: 2 })
+  assert.deepEqual(moved.state.profiles.map((p) => p.name), ['B', 'C', 'A'])
+  assert.equal(moved.state.profiles[moved.selected].name, 'B')
+  const draft = opened()
+  assert.equal(reduceDraft(draft, { type: 'move', from: 1, to: 1 }), draft)
+})
+
+test('reduceDraft reload: pasted settings replace the draft, selecting their active profile, in their mode', () => {
+  const pasted = { profiles: [{ name: 'X', groups: [g('a5', ['9'])] }, { name: 'Y', groups: [] }], active: 0 }
+  const draft = run(opened(), { type: 'brush', key: 'b9' }, { type: 'reload', state: pasted, mode: 'off' })
+  assert.deepEqual({ state: draft.state, mode: draft.mode, selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page }, { state: pasted, mode: 'off', selected: 0, keptName: 'X', brush: 'a5', page: 0 })
 })
