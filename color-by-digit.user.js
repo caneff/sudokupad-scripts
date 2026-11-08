@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.4
+// @version      0.25.5
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.4'
+  const VERSION = '0.25.5'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1152,6 +1152,8 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  // Reads ERROR_LOG_KEY, readErrorLog and formatErrorLog from sudokupad.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog */
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -1226,6 +1228,40 @@
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
+  const ERROR_LOG_ROW = 'data-role="error-log"'
+
+  // Under the script's own settings: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
+  function renderErrorLogRow (prefix) {
+    return `<div class="${prefix}error-log" ${ERROR_LOG_ROW}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
+  }
+
+  // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
+  function wireErrorLog (dialog, win) {
+    const say = (message) => setDialogStatus(dialog, message)
+    dialog.querySelector(`[${ERROR_LOG_ROW}]`).addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-error-log' && act !== 'clear-error-log') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'clear-error-log') {
+          win.localStorage.removeItem(ERROR_LOG_KEY)
+          say('Error log cleared.')
+          return
+        }
+        const log = readErrorLog(win.localStorage)
+        if (log.length === 0) {
+          say(formatErrorLog(log))
+          return
+        }
+        await win.navigator.clipboard.writeText(formatErrorLog(log))
+        say('Error log copied.')
+      } catch (error) {
+        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`)
+      }
+    })
+  }
+
   function dialogTitleCss (prefix) {
     const tools = `.${prefix}tools`
     return [
@@ -1238,6 +1274,9 @@
       `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
+      `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
+      `.${prefix}error-log button { background: none !important; border: none !important; box-shadow: none !important; padding: 2px 0 !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; cursor: pointer; }`,
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
@@ -1308,12 +1347,14 @@
       parts: [
         { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
         { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
+        { tag: 'text', innerHTML: renderErrorLogRow(prefix) },
         { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
       ]
     })
     const body = doc.getElementById(bodyId)
     if (!body) return null
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    wireErrorLog(body.closest('.dialog'), win)
     const row = body.closest('.dialog')?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
     return body
@@ -1678,6 +1719,35 @@
     return found ? found[1] : null
   }
 
+  // One key for every script, so a reader finds every feature any script turned off.
+  const ERROR_LOG_KEY = 'sudokupad-scripts-error-log'
+  const ERROR_LOG_LIMIT = 50
+  // A report is a URL, and GitHub refuses a long one.
+  const REPORT_STACK_LIMIT = 1200
+
+  // Oldest first. Throws when the storage is blocked or the saved text is not a list, so a caller never mistakes either for an empty log.
+  function readErrorLog (storage) {
+    const saved = storage.getItem(ERROR_LOG_KEY)
+    if (saved === null) return []
+    const log = JSON.parse(saved)
+    if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
+    return log
+  }
+
+  const indented = (text, spaces) => text.split('\n').map((line) => ' '.repeat(spaces) + line).join('\n')
+
+  // V8's stack opens with the message; Firefox's does not.
+  const withStack = (message, stack) => (typeof stack !== 'string' || stack === '' ? message : stack.includes(message) ? stack : `${message}\n${stack}`)
+
+  function formatErrorLog (log) {
+    if (log.length === 0) return 'The error log is empty.'
+    return [...log].reverse().map((record) => [
+      `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
+      `  ${record.url}`,
+      record.missing ? `  SudokuPad has no ${record.missing}` : indented(withStack(record.message, record.stack), 2)
+    ].join('\n')).join('\n\n')
+  }
+
   // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
   function reportUrl ({ name, version, sudokupad, off }) {
     const shownVersion = sudokupad || 'unknown'
@@ -1686,7 +1756,7 @@
       `Script: ${name} ${version}`,
       `SudokuPad version: ${shownVersion}`,
       '',
-      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : String(why)}`)
+      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : withStack(String(why), why && why.stack).slice(0, REPORT_STACK_LIMIT)}`)
     ].join('\n')
     return `${REPORT_URL}?${new URLSearchParams({ title: `${name}: ${labels} off on SudokuPad ${shownVersion}`, body })}`
   }
@@ -1722,6 +1792,22 @@
     const dismissed = () => {
       const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
+    }
+
+    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page.
+    let sudokupad = null
+    let logFailed = false
+    function logOff (label, why) {
+      if (logFailed) return
+      const fields = typeof why === 'string' ? { missing: why } : { message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
+      try {
+        const log = readErrorLog(globalThis.localStorage)
+        log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
+        globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
+      } catch (error) {
+        logFailed = true
+        console.warn(`${script}: the error log cannot be saved, so ${label} and later features turned off are not recorded:`, error)
+      }
     }
 
     let bar = null
@@ -1773,6 +1859,7 @@
           if (feature.off) return
           feature.off = true
           reasons.push({ name: featureName, label, why })
+          logOff(label, why)
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
             try {
@@ -1830,11 +1917,12 @@
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
     function probe ({ roots, store, doc = document }) {
+      sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
         console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
       })
-      page = { store, doc, sudokupad: sudokupadVersion(doc) }
+      page = { store, doc, sudokupad }
       showNotice()
     }
 
