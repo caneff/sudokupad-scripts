@@ -3,12 +3,14 @@
 // and no guide shows. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { cellCentre, gridPoint } from '../pen.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
+const { SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
 const SELECTION = '#draw-tool-layer .draw-tool-selection'
 const GUIDE_X = '#draw-tool-layer .draw-tool-snap-guide[data-axis="x"]'
 // The selection outline's line is 2 px wide, 2 px outside the note's box: its middle is 3 px out.
@@ -114,7 +116,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(await outlineLeft() - line) < NEAR_PX, true, 'and stays there after the release')
   })
 
-  it('a fast drag released at once drops where the pointer put it, with no jump onto the line', async () => {
+  it('a fast drag released just before the pointer would rest drops where it was drawn, with no jump onto the line', async () => {
     const line = await lineX(COLUMN_LINE)
     const note = await noteBox('15')
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
@@ -123,8 +125,11 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     await p.mouse.down()
     await p.mouse.move(px - 150, py, { steps: 4 })
     await p.mouse.move(px + gap, py, { steps: 4 })
+    // Past the 100 ms the speed is measured over, short of the 120 ms after which the move is drawn again: the drawn move is the unpulled one, and the release is not to pull it.
+    await p.evaluate((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)), SPEED_WINDOW_MS + 4)
+    const shown = await outlineLeft()
     await p.mouse.up()
-    assert.equal(Math.abs(await outlineLeft() - (line + 2)) < NEAR_PX, true, 'dropped 2 px past the line, as it was drawn')
+    assert.equal(Math.abs(await outlineLeft() - shown) < NEAR_PX, true, `dropped at ${await outlineLeft()}, as drawn at ${shown}`)
   })
 
   it('with Shift held the locked axis is not pulled: only the free axis snaps', async () => {
