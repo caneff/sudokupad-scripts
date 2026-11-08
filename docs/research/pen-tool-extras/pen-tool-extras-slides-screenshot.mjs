@@ -57,7 +57,7 @@ sheet.save(target)
 const [TEAL_ROW, SOLID_ROW, DASHED_ROW, ARROW_ROW] = [0.5, 1, 1.5, 2]
 const DARK_ROW = 3
 const OUTLINE_ROW = DARK_ROW + 0.5
-// The row whose cells take the edge marks and the center marks, and the grid corners that take the corner marks, which are written beside the slide.
+// The row whose cells take the edge marks and the cell marks, and the grid corners that take the corner marks, which are written beside the slide.
 const EDGE_MARK_ROW = 2
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
@@ -137,6 +137,14 @@ const holdWithRing = async (key) => {
   await holdPenButton(p, key)
 }
 const line = async (key, points) => { await pick(key); await landing(`the line from ${points[0]}`, () => mouseDrag(p, points)); await park() }
+// Clicks `point` `clicks` times: each click but the last must change the pen values, and the last must leave the pen value `value` somewhere.
+const clickMark = async (point, clicks, what, value) => {
+  for (let i = 0; i < clicks; i++) {
+    const click = async () => { await p.mouse.click(...point); await park() }
+    if (i === clicks - 1) await marking(what, value, click)
+    else await changing(`click ${i + 1} on ${what}`, click)
+  }
+}
 const turnPage = async () => { await p.locator(PAGE_BUTTON).click(); await park() }
 const [NEW_PEN_COLOR_KEY, SOLID_PEN, EDGE_PEN, CORNER_PEN, OUTLINE_PEN, CENTER_PEN] = [1, 6, 9, 5, 8, 4]
 // SudokuPad's cell color key for the dark grey the outline picture draws on.
@@ -180,11 +188,7 @@ await pick(EDGE_PEN)
 for (const [col, down, clicks, what, value] of [[0, false, 1, 'an X', '3'], [1, false, 2, 'a circle', 'j'], [0, true, 3, 'an arrow', 'k'], [2, true, 4, 'the arrow turned round', 'l']]) {
   const [ex, ey, ew] = await cellCentre(p, EDGE_MARK_ROW, col)
   const edge = down ? [ex, ey + ew / 2 - EDGE_INSET_PX] : [ex + ew / 2 - EDGE_INSET_PX, ey]
-  for (let i = 0; i < clicks; i++) {
-    const click = async () => { await p.mouse.click(...edge); await park() }
-    if (i === clicks - 1) await marking(`${what} on the edge of column ${col}`, value, click)
-    else await changing(`click ${i + 1} on the edge of column ${col}`, click)
-  }
+  await clickMark(edge, clicks, `${what} on the edge of column ${col}`, value)
 }
 await slide('7-edges')
 
@@ -193,23 +197,15 @@ await pick(CORNER_PEN)
 // An inner corner is stored as the X u or the circle x.
 for (const [at, clicks, what, value] of [[[3, 1], 2, 'a circle', 'x'], [[3, 2], 1, 'an X', 'u']]) {
   const corner = await gridPoint(p, at)
-  for (let i = 0; i < clicks; i++) {
-    const click = async () => { await p.mouse.click(...corner); await park() }
-    if (i === clicks - 1) await marking(`${what} on the corner ${at}`, value, click)
-    else await changing(`click ${i + 1} on the corner ${at}`, click)
-  }
+  await clickMark(corner, clicks, `${what} on the corner ${at}`, value)
 }
 await slide('8-corner')
 
-// 9. Three cell centers, clicked once to three times: a circle, a cross and a dot, in SudokuPad's own cell values 5 and 6 and the script's z.
+// 9. Three cell centers, clicked once to three times: the cell marks: a circle, a cross and a dot, in SudokuPad's own cell values 5 and 6 and the script's z.
 await pick(CENTER_PEN)
 for (const [col, clicks, what, value] of [[0, 1, 'a circle', '5'], [1, 2, 'a cross', '6'], [2, 3, 'a dot', 'z']]) {
   const [cx, cy] = await cellCentre(p, EDGE_MARK_ROW, col)
-  for (let i = 0; i < clicks; i++) {
-    const click = async () => { await p.mouse.click(cx, cy); await park() }
-    if (i === clicks - 1) await marking(`${what} in the cell of column ${col}`, value, click)
-    else await changing(`click ${i + 1} in the cell of column ${col}`, click)
-  }
+  await clickMark([cx, cy], clicks, `${what} in the cell of column ${col}`, value)
 }
 await slide('9-center')
 
