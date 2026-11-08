@@ -134,7 +134,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
 
   it('61 Auto Rules Resizer\'s fit run while a Text Anywhere note sits over the rules panel', () => attack(browser, async (p) => {
     await setLongRules(p)
-    assert.equal(await settle(() => rulesScroll(p), false), false, 'the long rules fit')
+    assert.equal(await settle(() => rulesScroll(p), false), false, 'the long rules do not scroll')
     await placeNote(p, [2.5, 2.5], 'over the rules')
     // A new note cannot be started on the controls, so the note is dragged there, as Text Anywhere allows since #581.
     const note = await p.locator(NOTES).first().boundingBox()
@@ -148,11 +148,11 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     const widths = []
     for (const size of [{ width: 1100, height: 800 }, { width: 1500, height: 1000 }, { width: 1200, height: 900 }]) {
       await p.setViewportSize(size)
-      assert.equal(await settle(() => rulesScroll(p), false), false, `the rules fit at ${size.width}x${size.height}`)
+      assert.equal(await settle(() => rulesScroll(p), false), false, `the rules do not scroll at ${size.width}x${size.height}`)
       widths.push(await stable(() => rulesWidth(p)))
       assert.equal(await noteCount(p), 1, 'the note is still there')
     }
-    assert.equal(widths[0] < widths[1], true, `the fit followed the window: pane widths ${widths}`)
+    assert.equal(widths[0] < widths[1], true, `the rules pane followed the window: widths ${widths}`)
     assert.equal(await p.locator(NOTES).first().textContent(), 'over the rules')
   }))
 })

@@ -37,8 +37,8 @@ error, the notice bar) and what a player expects to see. The ones for one script
 - A test that finds a bug on main is marked `{ todo: '#<bug>' }` with a filed `bug` ticket, so the suite stays green; the fix
   PR removes the mark.
 - Headless Chromium has no zoom keys, so attack 54 sets the page's CSS size and pixel ratio, which is what zoom changes.
-- Attack 56 blocks only the keys the scripts save under: SudokuPad's own saves throw uncaught errors on a page whose whole
-  localStorage is blocked, with no script loaded.
+- Attack 56 makes every key the six scripts save under throw and leaves SudokuPad's own keys alone: SudokuPad's own saves throw
+  uncaught errors on a page whose whole localStorage is blocked, with no script loaded.
 
 ## The recording
 
