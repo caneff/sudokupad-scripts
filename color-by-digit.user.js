@@ -867,13 +867,13 @@
   }
 
   const PURPLE = '#6a1b9a'
-  const GREY = '#b3acbf'
+  const OFF_WORD_GREY = '#b3acbf'
 
   // No pointer events, so a press on the label is a press on the button.
-  function modeLabelHtml (mode) {
+  function modeWordHtml (mode) {
     const on = mode !== 'off'
     return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-3px;top:-2px;' +
-      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
+      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
@@ -893,9 +893,9 @@
   // SudokuPad's own app buttons put their icon in <div class="icon">.
   const iconHtml = (mode, groups, colorOf, digitProfileGroups) =>
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" overflow="visible" xmlns="http://www.w3.org/2000/svg">' +
-    iconRun(mode, groups, colorOf, digitProfileGroups) + '</svg>' + modeLabelHtml(mode) + ARROW_BOX_HTML + '</div>'
+    iconRun(mode, groups, colorOf, digitProfileGroups) + '</svg>' + modeWordHtml(mode) + ARROW_BOX_HTML + '</div>'
 
-  // The title and aria-label name the mode in words, as the word above the chips does.
+  // The mode in words for the title and aria-label, which the chips' look alone does not say.
   const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
 
   // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.

@@ -436,9 +436,8 @@ describe('the mode word on the button, injected after Start Puzzle (#509)', { co
   after(async () => { await context.close() })
 
   it('shows the word of each mode as a press steps Cell, Digit, Both, Off', async () => {
-    const words = []
+    const words = [await wordOn(p)]
     for (const want of ['Digit', 'Both', 'Off', 'Cell']) {
-      if (words.length === 0) words.push(await wordOn(p))
       await pressTo(p, want)
       words.push(await wordOn(p))
     }
@@ -450,6 +449,7 @@ describe('the mode word on the button, injected after Start Puzzle (#509)', { co
     for (const want of ['Digit', 'Both', 'Off', 'Cell']) {
       await pressTo(p, want)
       const { word, chips, arrow } = await buttonBoxesOn(p)
+      assert.equal(word.right > word.left && word.bottom > word.top, true, `${want}: the word is drawn: ${JSON.stringify(word)}`)
       assert.equal(apart(word, chips), true, `${want}: word over chips ${JSON.stringify([word, chips])}`)
       assert.equal(apart(chips, arrow), true, `${want}: chips over arrow ${JSON.stringify([chips, arrow])}`)
       assert.equal(apart(word, arrow), true, `${want}: word over arrow ${JSON.stringify([word, arrow])}`)

@@ -1663,7 +1663,7 @@ test('renderChips gives a group whose palette color is unreadable a grey cell, a
   assert.deepEqual(look('both'), [['#ccc', 'rgb(29, 106, 229)']])
 })
 
-test('iconHtml draws the run of cells in the mode\'s look under the mode word, and keeps the menu arrow box', () => {
+test('iconHtml draws the run of cells in the mode\'s look with the mode word, and keeps the menu arrow box', () => {
   const groups = [{ key: 'a', digits: ['3'] }, { key: 'b', digits: ['7'] }]
   for (const mode of ['cell', 'digit', 'both', 'off']) {
     const html = iconHtml(mode, groups, colorFor)
