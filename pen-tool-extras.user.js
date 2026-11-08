@@ -1620,11 +1620,12 @@
     }
   }
 
-  // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back.
+  // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back. Acts queued and never sent mean SudokuPad changed how a click is sent, which throws.
   function queuedActs (tool, click) {
     let queued = null
     try {
       withOwnProperty(tool, 'actSend', function () { queued = this._actList.slice() }, click)
+      if (queued === null && tool._actList.length) throw new Error('clickCell queued its acts but never sent them')
     } finally {
       tool._actList.length = 0
     }
@@ -1663,7 +1664,8 @@
         const acts = cornerActs(corner)
         return stock.sudokupad(() => { this.actStart(); sendActs(this, acts) })
       }
-      const queued = stock.sudokupad(() => queuedActs(this, () => original.apply(this, args)), false)
+      // Only SudokuPad's own call is inside `stock.sudokupad`, so the unsent-acts throw of `queuedActs` is the script's and switches marks off.
+      const queued = queuedActs(this, () => stock.sudokupad(() => original.apply(this, args), false))
       if (queued === null) return
       let acts = queued
       if (isEdgeActs(queued)) {

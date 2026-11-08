@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.27.5
+// @version      0.27.6
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.27.5'
+  const VERSION = '0.27.6'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -1982,6 +1982,8 @@
   let layerFont = ''
   let lastLayout = ''
 
+  // The key of the puzzle these notes were loaded for, so a save lands there even when the page's puzzle has changed since. Null before the first load, when there are no notes to save and a save does nothing.
+  let loadedKey = null
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
   const selectedNotes = () => selected.map((i) => drawing[i])
 
@@ -2345,6 +2347,7 @@
   }
 
   function save () {
+    if (loadedKey === null) return
     if (!savable) {
       report('This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
       return
@@ -2352,7 +2355,7 @@
     // A write the browser refuses (a full localStorage) is reported, and is not a SudokuPad change that turns the saved data off.
     if (!storage.off) {
       try {
-        saveDrawingTo(Framework, currentPuzzleKey(), drawing)
+        saveDrawingTo(Framework, loadedKey, drawing)
       } catch (err) {
         report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
       }
@@ -2640,9 +2643,10 @@
     cancelInput()
     drawing = []
     savable = true
+    loadedKey = currentPuzzleKey()
     if (!storage.off) {
       try {
-        drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))
+        drawing = readDrawing(Framework.getData(drawingKey(loadedKey)))
       } catch (err) {
         console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's notes are not saved.`)
         drawing = []
