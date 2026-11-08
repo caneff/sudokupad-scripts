@@ -220,17 +220,23 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await openPenTool(p)
     })
 
-    it('a pointer that leaves the grid right after a click leaves no ghost and no faded mark behind', async () => {
+    it('a pointer that leaves the grid in the task of a release leaves no ghost and no faded mark behind', async () => {
       await restartPuzzle(p)
       await selectPenOnPage(1, 3)
+      // four clicks in, the next one would clear the mark: the state a stale refresh would leave faded
       for (let click = 0; click < 4; click++) {
         await p.mouse.click(...await gridPoint(p, [3.5, 4.0]))
-        await p.mouse.move(5, 5)
         await p.mouse.click(5, 5) // a click off the grid, or the next press draws nothing
       }
-      // four steps in, the next click would clear the mark: that is the state the leaving pointer must not leave faded
       assert.equal(await settle(() => penEntries(p).then((all) => all.length), 1), 1, 'one mark after four clicks')
-      await sleep(200) // "nothing happened in 200 ms" check: the release's own refresh has had its turn
+      const [x, y] = await gridPoint(p, [3.5, 4.0])
+      // The release and the move off the grid arrive in one task, so the release's refresh runs after the move is queued.
+      await read(([px, py]) => {
+        const grid = document.querySelector('#svgrenderer')
+        grid.dispatchEvent(new MouseEvent('mouseup', { clientX: px, clientY: py, bubbles: true }))
+        document.body.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5, bubbles: true, buttons: 0 }))
+      }, [x, y])
+      await sleep(200) // "nothing happened in 200 ms" check: the release's refresh and the move's have both had their turn
       assert.equal(await ghostOf(), null, 'no ghost')
       assert.deepEqual(await fadedStrokes(), [], 'no faded mark')
       await undoAll()

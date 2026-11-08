@@ -1827,17 +1827,20 @@
     let timer = null
     let latest = null
     let lastAt = -Infinity
-    let moves = 0
     const hide = () => {
-      clearTimeout(timer)
-      timer = null
       if (ghost !== null) ghost.remove()
       ghost = null
       shown = null
       clearing = []
       fadeClass(CLEARING_CLASS, [])
     }
-    const guarded = (handler) => (event) => steps.markPreview.run(() => handler(event), hide)
+    // A press, a key or the pointer leaving also cancels the tick that is waiting, which would show the preview again.
+    const hideAndCancel = () => {
+      clearTimeout(timer)
+      timer = null
+      hide()
+    }
+    const guarded = (handler) => (event) => steps.markPreview.run(() => handler(event), hideAndCancel)
     const show = ({ cell, plan }, pen) => {
       const key = JSON.stringify([cell.row, cell.col, plan.remove, plan.add, pen])
       if (key === shown) return
@@ -1861,18 +1864,14 @@
     }
     window.addEventListener('pointermove', guarded((event) => {
       latest = event
-      moves++
       if (timer !== null) return
       timer = setTimeout(guarded(() => { timer = null; lastAt = performance.now(); update(latest) }), Math.max(0, lastAt + PREVIEW_EVERY_MS - performance.now()))
     }), true)
-    window.addEventListener('pointerdown', guarded(hide), true)
-    window.addEventListener('keydown', guarded(hide), true)
-    document.documentElement.addEventListener('pointerleave', guarded(hide))
-    // SudokuPad stores a click on `mouseup`, after the `pointerup`. A pointer that has moved since is the move's to place, not the release's.
-    window.addEventListener('mouseup', guarded((event) => {
-      const movesAtRelease = moves
-      setTimeout(guarded(() => { if (moves === movesAtRelease) update(event) }))
-    }), true)
+    window.addEventListener('pointerdown', guarded(hideAndCancel), true)
+    window.addEventListener('keydown', guarded(hideAndCancel), true)
+    document.documentElement.addEventListener('pointerleave', guarded(hideAndCancel))
+    // SudokuPad stores a click on `mouseup`, after the `pointerup`.
+    window.addEventListener('mouseup', guarded((event) => setTimeout(guarded(() => update(event)))), true)
   }
 
   // 7. Right click erase

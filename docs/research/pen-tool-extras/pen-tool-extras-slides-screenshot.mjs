@@ -12,7 +12,7 @@
 //   pen-tool-extras-slide-10-opacity.png   the Opacity slider down: the whole pen layer fainter
 //   pen-tool-extras-slide-11-outline-off.png  a line across dark cells with White outlines off
 //   pen-tool-extras-slide-12-outline-on.png   the same line with White outlines on
-//   pen-tool-extras-slide-13-erase.png     a red ring on a line, where a right press is held and the line is faded
+//   pen-tool-extras-slide-13-erase.png     a red ring on a line, where a right click lands
 //   pen-tool-extras-slide-14-erased.png    the whole line gone after the right click
 // Every line is a real drag, every mark a real click, every hold a real press; a red ring marks where a hold or the right click lands,
 // since a screenshot draws no pointer. Each line, mark and hold is checked to have landed. The board patch and the panel are joined side
@@ -216,15 +216,12 @@ await slide('11-outline-off')
 await setOutline(true)
 await slide('12-outline-on')
 
-// 13 and 14. A right press on the first line fades the whole line; letting go erases it.
+// 13 and 14. One right click erases the whole first line.
 const before = await penCount()
 const [lx, ly] = await gridPoint(p, [TEAL_ROW, 1.5])
 await ring(lx, ly)
-await p.mouse.move(lx, ly)
-await p.mouse.down({ button: 'right' })
-await p.waitForFunction(() => document.querySelector('.pen-tool-extras-faded') !== null, null, { timeout: SETTLE_TIMEOUT_MS })
 await slide('13-erase')
-await p.mouse.up({ button: 'right' })
+await p.mouse.click(lx, ly, { button: 'right' })
 await unring()
 await park()
 await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, before, { timeout: SETTLE_TIMEOUT_MS })
