@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.23.0
+// @version      0.24.0
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.23.0'
+  const VERSION = '0.24.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -163,6 +163,8 @@
   /* eslint-enable no-unused-vars */
   // </lib:palette>
   const HEX_COLOR = /^#([0-9a-f]{6})$/
+  // The page's own color, as SudokuPad's buttons use it behind their icons.
+  const PAGE_COLOR = 'var(--body-bg, #fff)'
   // Preset ids; the labels are what the dialog shows.
   const PEN_PRESET = 'pen'
   const PRESET_LABELS = {
@@ -173,6 +175,8 @@
   const WIDTH_KEY = 'DrawTool_width'
   const OUTLINE_KEY = 'DrawTool_outline'
   const BACKGROUND_KEY = 'DrawTool_background'
+  const BOX_KEY = 'DrawTool_box'
+  const FRAME_KEY = 'DrawTool_frame'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
   const CHAR_WIDTH = 0.6
   // A line's height as a share of the text size, in the font's own spacing, so a note's box is as tall as the note drawn.
@@ -459,6 +463,25 @@
   const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
   const readBackground = (saved) => saved === true
+  // The color behind every note with a box: a preset, or a #rrggbb color the dialog's Custom picks. The page's own color is the default.
+  const BOX_PRESETS = { page: 'Page', white: 'White', yellow: 'Sticky yellow', tint: 'Tint' }
+  const DEFAULT_BOX = 'page'
+  const BOX_YELLOW = '#fff4b0'
+  const BOX_TINT_PERCENT = 15
+  const readBox = (saved) => Object.hasOwn(BOX_PRESETS, saved) ? saved : savedHex(saved) ?? DEFAULT_BOX
+  const boxChoice = (setting) => Object.hasOwn(BOX_PRESETS, setting) ? setting : 'custom'
+  // `noteColor` is the note's own color as CSS, which only Tint uses.
+  function boxFill (setting, noteColor) {
+    if (setting === 'page') return PAGE_COLOR
+    if (setting === 'white') return '#ffffff'
+    if (setting === 'yellow') return BOX_YELLOW
+    if (setting === 'tint') return `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${PAGE_COLOR})`
+    return setting
+  }
+  // The frame is one screen pixel: PIXEL_VAR is that in the units of a note's group, and a fixed note's group, in screen pixels, sets none.
+  const FRAME_COLOR = '#c4c4c4'
+  const readFrame = (saved) => saved === true
+  const frameShadow = (on) => on ? `0 0 0 var(${PIXEL_VAR}, 1px) ${FRAME_COLOR}` : 'none'
   // Board units, as a text's height.
   const TEXT_SIZE_PER_WIDTH = 2
   const TEXT_SIZE_BASE = 8
@@ -792,16 +815,19 @@
     return { ...paletteColors(preset, pages, readCell).colors }
   }
 
-  // Copy and Paste carry the colors and the size, and not the notes, the color picked or the background button.
+  // Copy and Paste carry the colors, size, box color and frame, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) : undefined
   const READERS = {
     [COLORS_KEY]: readPastedColors,
-    [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined
+    [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
+    // A box color or frame that does not check out is pasted as the default, not skipped.
+    [BOX_KEY]: readBox,
+    [FRAME_KEY]: readFrame
   }
 
-  // The size in force, default included, so a paste can put it back to its default; the colors only once they are saved.
+  // The size, box color and frame in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store) {
-    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)) }
+    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [BOX_KEY]: readBox(store.getData(BOX_KEY)), [FRAME_KEY]: readFrame(store.getData(FRAME_KEY)) }
     const savedColors = readDrawColors(store.getData(COLORS_KEY))
     if (savedColors) copied[COLORS_KEY] = savedColors
     return JSON.stringify(copied)
@@ -992,7 +1018,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1041,16 +1067,13 @@
     return { box: { left, top, right, bottom }, toBoard: through(ctm.inverse()), toScreen: through(ctm), scale: ctm.a, matrix: [ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f] }
   }
 
-  // The page's own color, as SudokuPad's buttons use it behind their icons.
-  const PAGE_COLOR = 'var(--body-bg, #fff)'
-
   // Until Text Annotation is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
   const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
 
   // The opacity is the text's alone, so a note's background box stays solid.
   const textColor = (item) => itemOpacity(item) === 100 ? itemColor(item.color) : `color-mix(in srgb, ${itemColor(item.color)} ${itemOpacity(item)}%, transparent)`
 
-  // A note's style, centred on `point` and drawn at `scale` pixels of its box per board unit; a background is a page-colored rounded box around the text.
+  // A note's style, centred on `point` and drawn at `scale` pixels of its box per board unit; a background is a rounded box around the text, in the box color and framed when the frame is on.
   // A resized note is exactly its stored box; any other takes the stylesheet's auto width and height. A note with no background is padded by its
   // halo's reach, since its box clips what overflows it.
   function noteStyle (item, [x, y], scale) {
@@ -1067,7 +1090,8 @@
       maxWidth: limit,
       maxHeight: limit,
       color: textColor(item),
-      backgroundColor: item.bg ? PAGE_COLOR : 'transparent',
+      backgroundColor: item.bg ? boxFill(boxColor, itemColor(item.color)) : 'transparent',
+      boxShadow: item.bg ? frameShadow(frame) : 'none',
       textShadow: item.bg ? 'none' : haloShadow(readOutline(item), PAGE_COLOR),
       padding: `${padY} ${padX}`,
       borderRadius: item.bg ? px(BACKGROUND_RADIUS * item.size) : '0'
@@ -1258,6 +1282,9 @@
   let outline = DEFAULT_OUTLINE
   // Whether the next note is made with a background. The Background button turns it on and off, and it is remembered.
   let background = false
+  // The box color and the frame of every note with a box, as the settings dialog sets them.
+  let boxColor = DEFAULT_BOX
+  let frame = false
   // Text Annotation's nine colors, or null until they are first copied from the pen colors.
   let colors = null
   // The elements the panel adds to SudokuPad's keypad while Text Annotation is current.
@@ -1321,13 +1348,33 @@
     Framework.setData(OUTLINE_KEY, next)
   }
 
-  // The settings dialog: nine color pickers and a preset list that fill a draft Save writes, and Copy and Paste settings, which act at once.
+  // The notes with a box are drawn again, now in the box color and frame in force.
+  function showBoxes () {
+    if (Framework.app.puzzle.currentPuzzle) redraw()
+  }
+
+  function saveBoxColor (next) {
+    boxColor = next
+    Framework.setData(BOX_KEY, next)
+    showBoxes()
+  }
+
+  function saveFrame (on) {
+    frame = on
+    Framework.setData(FRAME_KEY, on)
+    showBoxes()
+  }
+
+  // The settings dialog: nine color pickers and a preset list, the box color and the frame, which fill a draft Save writes, and Copy and Paste settings, which act at once.
   const DIALOG_ID = 'draw-tool-dialog'
   const DIALOG_STYLE_ID = 'draw-tool-dialog-style'
   const CUSTOM_LABEL = 'Custom'
   const SAVE_LABEL = 'Save'
   const DIALOG_CSS = [
     `#${DIALOG_ID} .draw-tool-section-title { font-weight: 600; margin: 6px 0 0; }`,
+    `#${DIALOG_ID} .draw-tool-box-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }`,
+    `#${DIALOG_ID} .draw-tool-box-row .draw-tool-color-choice { flex: 1 1 0; width: auto; min-width: 0; }`,
+    `#${DIALOG_ID} .draw-tool-frame-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }`,
     colorBlockCss(CLASS_PREFIX, `#${DIALOG_ID}`)
   ].join('\n')
 
@@ -1338,6 +1385,8 @@
       showPanelValues()
     }
     if (COLORS_KEY in values) saveColors(values[COLORS_KEY])
+    if (BOX_KEY in values) saveBoxColor(values[BOX_KEY])
+    if (FRAME_KEY in values) saveFrame(values[FRAME_KEY])
   }
 
   function openDialog () {
@@ -1351,6 +1400,9 @@
     let draft = colors ?? copiedPenColors(readPenColor)
     let chosen = null
     let changed = false
+    let draftBox = boxColor
+    let draftCustom = savedHex(boxColor) ?? '#ffffff'
+    let draftFrame = frame
     let pages = []
     let paletteNote = ''
     try {
@@ -1368,7 +1420,7 @@
           tag: 'options',
           options: [
             { tag: 'button', content: CANCEL_LABEL, action: 'close' },
-            { tag: 'button', content: SAVE_LABEL, handler: () => { if (changed) saveColors(draft); Framework.closeDialog() } }
+            { tag: 'button', content: SAVE_LABEL, handler: () => { if (changed) saveColors(draft); if (draftBox !== boxColor) saveBoxColor(draftBox); if (draftFrame !== frame) saveFrame(draftFrame); Framework.closeDialog() } }
           ]
         }
       ]
@@ -1377,9 +1429,13 @@
     if (!box) return
     const draw = () => {
       const options = [{ value: '', label: CUSTOM_LABEL, selected: !chosen }, ...presetOptions(pages.length).map((id) => ({ value: id, label: PRESET_LABELS[id], selected: id === chosen }))]
+      const boxOptions = [...Object.entries(BOX_PRESETS), ['custom', CUSTOM_LABEL]].map(([id, label]) => `<option value="${id}"${boxChoice(draftBox) === id ? ' selected' : ''}>${label}</option>`).join('')
       box.innerHTML = '<div class="draw-tool-section-title">Colors</div>' +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
-        (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '')
+        (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
+        '<div class="draw-tool-section-title">Notes with a background</div>' +
+        `<div class="draw-tool-box-row"><select class="draw-tool-color-choice" data-role="box-choice" aria-label="Background box color">${boxOptions}</select>${boxChoice(draftBox) === 'custom' ? `<input type="color" class="draw-tool-swatch" data-role="box-custom" value="${draftCustom}" aria-label="Custom background box color" title="Custom background box color">` : ''}</div>` +
+        `<label class="draw-tool-frame-row"><input type="checkbox" data-role="frame"${draftFrame ? ' checked' : ''}> Frame</label>`
     }
     draw()
     box.addEventListener('change', (event) => {
@@ -1391,6 +1447,13 @@
           changed = true
         }
         draw()
+      } else if (target.matches('[data-role="box-choice"]')) {
+        draftBox = target.value === 'custom' ? draftCustom : target.value
+        draw()
+      } else if (target.matches('[data-role="box-custom"]')) {
+        draftCustom = draftBox = hexColor(target.value)
+      } else if (target.matches('[data-role="frame"]')) {
+        draftFrame = target.checked
       } else if (target.matches('input[data-role="swatch"]')) {
         draft = editedColor(draft, Number(target.dataset.key), target.value)
         chosen = null
@@ -1400,6 +1463,9 @@
     })
     wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       applyPasted(values)
+      draftBox = boxColor
+      draftCustom = savedHex(boxColor) ?? draftCustom
+      draftFrame = frame
       draft = colors ?? draft
       chosen = null
       changed = false
@@ -2425,6 +2491,8 @@
     outline = readSavedOutline(Framework.getData(OUTLINE_KEY))
     background = readBackground(Framework.getData(BACKGROUND_KEY))
     colors = readDrawColors(Framework.getData(COLORS_KEY))
+    boxColor = readBox(Framework.getData(BOX_KEY))
+    frame = readFrame(Framework.getData(FRAME_KEY))
     showColors()
     const style = document.createElement('style')
     style.id = PANEL_STYLE_ID

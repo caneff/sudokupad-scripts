@@ -44,6 +44,8 @@ export const WIDTH_KEY = 'DrawTool_width'
 export const COLORS_KEY = 'DrawTool_colors'
 export const BACKGROUND_KEY = 'DrawTool_background'
 export const OUTLINE_KEY = 'DrawTool_outline'
+export const BOX_KEY = 'DrawTool_box'
+export const FRAME_KEY = 'DrawTool_frame'
 
 // The pickers appear only when the hold timer fires.
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000

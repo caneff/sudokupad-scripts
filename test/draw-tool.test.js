@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -211,13 +211,51 @@ test('a Darker page preset the palette lacks, or an unknown one, throws', () => 
   assert.throws(() => presetColors('nope', [], () => undefined, () => undefined), /not a preset/)
 })
 
-test('Copy settings holds the colors and the size, default included, and no notes, color pick or background', () => {
-  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, DrawTool_color: 4, DrawTool_drawing_x: [] })))
-  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3 })
+test('Copy settings holds the colors, size, box color and frame, defaults included, and no notes, color pick or background', () => {
+  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, [BOX_KEY]: 'tint', [FRAME_KEY]: true, DrawTool_color: 4, DrawTool_drawing_x: [] })))
+  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, [BOX_KEY]: 'tint', [FRAME_KEY]: true })
 })
 
 test('Copy settings leaves the colors out until they are saved', () => {
-  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH })
+  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [BOX_KEY]: 'page', [FRAME_KEY]: false })
+})
+
+test('the box color setting reads a preset or a #rrggbb color and anything else as Page', () => {
+  assert.equal(DEFAULT_BOX, 'page')
+  for (const preset of ['page', 'white', 'yellow', 'tint']) assert.equal(readBox(preset), preset)
+  assert.equal(readBox('#A1b2C3'), '#a1b2c3')
+  for (const bad of [undefined, null, 5, true, {}, 'red', '#abc', '#12345g', 'custom', 'Tint']) assert.equal(readBox(bad), 'page', String(bad))
+})
+
+test('the box choice is the preset, and Custom for a color', () => {
+  assert.deepEqual(['page', 'white', 'yellow', 'tint', '#123456'].map(boxChoice), ['page', 'white', 'yellow', 'tint', 'custom'])
+  assert.deepEqual(Object.keys(BOX_PRESETS), ['page', 'white', 'yellow', 'tint'])
+})
+
+test('the box is filled with the page color, white, the yellow, a tint of the note\'s own color, or the custom color', () => {
+  assert.equal(boxFill('page', 'var(--c)'), 'var(--body-bg, #fff)')
+  assert.equal(boxFill('white', 'var(--c)'), '#ffffff')
+  assert.equal(boxFill('yellow', 'var(--c)'), BOX_YELLOW)
+  assert.equal(boxFill('#123456', 'var(--c)'), '#123456')
+  assert.equal(boxFill('tint', 'var(--c)'), 'color-mix(in srgb, var(--c) 15%, var(--body-bg, #fff))')
+  assert.notEqual(boxFill('tint', 'red'), boxFill('tint', 'blue'))
+})
+
+test('the yellow keeps every one of SudokuPad\'s nine colors about as readable as white does', () => {
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05)
+  for (const hex of Object.values(SUDOKUPAD_PEN_COLORS)) {
+    assert.equal(contrast(hex, BOX_YELLOW) >= 0.8 * contrast(hex, '#ffffff'), true, `${hex} on the yellow ${BOX_YELLOW}: ${contrast(hex, BOX_YELLOW).toFixed(2)} against ${contrast(hex, '#ffffff').toFixed(2)} on white`)
+  }
+})
+
+test('the frame setting is on only for true, and a frame is a thin light gray ring round a boxed note and nothing otherwise', () => {
+  assert.deepEqual([true, false, undefined, null, 1, 'true'].map(readFrame), [true, false, false, false, false, false])
+  assert.equal(frameShadow(false), 'none')
+  assert.equal(frameShadow(true), `0 0 0 var(--draw-tool-px, 1px) ${FRAME_COLOR}`)
 })
 
 test('Paste settings returns the colors and size, ignores other scripts\' keys, the old opacity and counts a refused value as skipped', () => {
@@ -226,6 +264,12 @@ test('Paste settings returns the colors and size, ignores other scripts\' keys, 
   const bad = readPaste(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99 }))
   assert.deepEqual(bad, { values: {}, skipped: 2 })
   assert.deepEqual(readPaste(JSON.stringify({ [COLORS_KEY]: {} })), { values: {}, skipped: 1 }, 'colors with no color in them')
+})
+
+test('Paste settings returns the box color and the frame, and an invalid value reads as Page and as off', () => {
+  assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: 'yellow', [FRAME_KEY]: true })), { values: { [BOX_KEY]: 'yellow', [FRAME_KEY]: true }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: '#00FF00' })).values, { [BOX_KEY]: '#00ff00' })
+  assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: 'plaid', [FRAME_KEY]: 'yes' })), { values: { [BOX_KEY]: 'page', [FRAME_KEY]: false }, skipped: 0 })
 })
 
 test('Paste settings fills a missing color with SudokuPad\'s and refuses text that is not settings', () => {

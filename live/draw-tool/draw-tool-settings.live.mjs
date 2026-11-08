@@ -8,7 +8,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '../settings.mjs'
 
-const { COLORS_KEY, SETTINGS_BUTTON, WIDTH_KEY, pickDraw, script } = draw
+const { BOX_KEY, COLORS_KEY, FRAME_KEY, SETTINGS_BUTTON, WIDTH_KEY, pickDraw, script } = draw
 const EDITOR = '#draw-tool-dialog'
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const STATUS = '.dialog [data-role="settings-status"]'
@@ -91,13 +91,13 @@ describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
     assert.deepEqual(await savedColors(p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
   })
 
-  it('Copy settings then Paste settings in a fresh page restores the colors and the size, and carries nothing else', async () => {
+  it('Copy settings then Paste settings in a fresh page restores the colors and the size, with the box color and frame, and carries nothing else', async () => {
     await read(p, (w) => Framework.setData(w, 3.5), WIDTH_KEY)
     await p.click(SETTINGS_BUTTON)
     await p.locator('.dialog button[data-act="copy-settings"]').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
     const copied = await p.evaluate(() => navigator.clipboard.readText())
-    assert.deepEqual(Object.keys(JSON.parse(copied)).sort(), [COLORS_KEY, WIDTH_KEY], 'colors and size only')
+    assert.deepEqual(Object.keys(JSON.parse(copied)).sort(), [BOX_KEY, COLORS_KEY, FRAME_KEY, WIDTH_KEY], 'colors, size, box color and frame only')
     await closeDialogWith(p, 'Cancel', EDITOR)
 
     const other = await open()
@@ -107,7 +107,7 @@ describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
       await other.p.evaluate((t) => navigator.clipboard.writeText(t), copied)
       await other.p.click(SETTINGS_BUTTON)
       await other.p.locator('.dialog button[data-act="paste-settings"]').click()
-      await other.p.locator(STATUS).filter({ hasText: 'Pasted 2 settings.' }).waitFor()
+      await other.p.locator(STATUS).filter({ hasText: 'Pasted 4 settings.' }).waitFor()
       assert.deepEqual(await savedColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
       assert.deepEqual(await dialogColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
       // A size of 3.5 is a text size of 15, and the nearest the Size menu has is 14.
