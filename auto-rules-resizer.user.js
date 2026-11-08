@@ -198,7 +198,7 @@
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
   // Every style property the fit writes on the pane; it also moves the controls column by its `translate`.
-  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'overflowY']
+  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY']
 
   function clearFit (rules, controls) {
     for (const k of FIT_STYLES) rules.style[k] = ''
@@ -261,7 +261,7 @@
       viewport
     })
     // A height drag starts from SudokuPad's own pane height so the pane grows by what the corner moved. A sideways
-    // drag has no height of its own to add, so it holds the fitted pane's, which the room under the pane would outgrow.
+    // drag has no height of its own to add, so it holds the fitted pane's.
     const sideways = Boolean(applied.w && !applied.h)
     let startRoom = autoRoom
     if (applied.h) startRoom = home.height / scale
@@ -277,7 +277,12 @@
     if (dragging) fitRulesFont(rules, fitted.room, ownPx, nudgePx)
     else rules.style.fontSize = `${fontPx}px`
     // The text may shrink to the held height, never grow into it.
-    if (sideways && parseFloat(rules.style.fontSize) > fontPx) rules.style.fontSize = `${fontPx}px`
+    if (sideways) {
+      if (parseFloat(rules.style.fontSize) > fontPx) rules.style.fontSize = `${fontPx}px`
+      // A wider pane reflows to fewer lines; the height stays, with blank space below the text (Chris, 2026-11-08).
+      rules.style.minHeight = `${startRoom}px`
+      rules.style.minHeight = `${startRoom - (rules.offsetHeight - startRoom)}px`
+    }
     // SudokuPad sets `overflow-y: scroll`, which draws an empty track beside rules that fit.
     if (rules.scrollHeight <= rules.clientHeight) rules.style.overflowY = 'auto'
     return applied

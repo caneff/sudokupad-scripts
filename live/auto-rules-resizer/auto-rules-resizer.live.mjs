@@ -104,8 +104,8 @@ async function dragCorner (p, corner, dx, dy, midDrag) {
   await p.mouse.up()
 }
 
-// A sideways drag changes the pane's width only: its height and font never rise above where the fit had them.
-describe('a sideways corner drag never raises the pane\'s height or font', { concurrency: false }, () => {
+// A sideways drag changes the pane's width only: its height stays and its font never rises above where the fit had them.
+describe('a sideways corner drag keeps the pane\'s height and never raises its font', { concurrency: false }, () => {
   const SIDEWAYS = [
     { corner: 'ur', name: 'wider', dx: 120 },
     { corner: 'ur', name: 'narrower', dx: -120 },
@@ -127,8 +127,7 @@ describe('a sideways corner drag never raises the pane\'s height or font', { con
             await dragCorner(p, corner, dx, drift)
             const now = await stable(() => pane(p))
             assert.equal(now.width !== start.width, true, `the drag moved the width ${start.width} -> ${now.width}`)
-            // A wider pane reflows to fewer lines, so its height may fall; it never rises, and the font never grows.
-            assert.equal(now.cssHeight <= start.cssHeight + 1, true, `height ${start.cssHeight} -> ${now.cssHeight} px, font ${start.font} -> ${now.font} px`)
+            assert.equal(Math.abs(now.cssHeight - start.cssHeight) <= 1, true, `height ${start.cssHeight} -> ${now.cssHeight} px, font ${start.font} -> ${now.font} px`)
             assert.equal(now.font <= start.font, true, `font ${start.font} -> ${now.font} px, height ${start.cssHeight} -> ${now.cssHeight} px`)
             assert.deepEqual(errors, [])
           } finally {
@@ -148,7 +147,7 @@ describe('a sideways corner drag never raises the pane\'s height or font', { con
       await dragCorner(p, 'dl', -200, 0)
       const now = await stable(() => pane(p))
       assert.equal(now.width > start.width, true, `width ${start.width} -> ${now.width}`)
-      assert.equal(now.cssHeight <= start.cssHeight + 1, true, `height ${start.cssHeight} -> ${now.cssHeight} px`)
+      assert.equal(Math.abs(now.cssHeight - start.cssHeight) <= 1, true, `height ${start.cssHeight} -> ${now.cssHeight} px`)
       assert.equal(now.font <= start.font, true, `font ${start.font} -> ${now.font} px`)
       assert.deepEqual(errors, [])
     } finally {
