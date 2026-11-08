@@ -18,12 +18,12 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 | Pen Tool Extras | Adds pen colors, solid, dashed and arrow pens, sliders, and edge and corner marks. [Details](docs/pen-tool-extras.md) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js) |
 | Text Anywhere | Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes. [Details](https://caneff.github.io/sudokupad-scripts/draw-tool.html) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/draw-tool.user.js) |
 | Dark Page | Makes the page black around the puzzle, or a color you pick. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |
-| No Tab Letters | Stops Tab from toggling SudokuPad's letter mode. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/no-tab-letters.user.js) |
 | Auto Rules Resizer | Fits the rules pane to the screen in landscape: the largest text that fits, widening the pane only when the rules need it. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js) |
+| UI Tweaks | Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches to letters, hide the Toggle Selection button, and wrap the bottom row after five buttons. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js) |
 
 ## Settings
 
-Each script except No Tab Letters adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it. A script's dialog shows its version beside the heading.
+Each script adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it. UI Tweaks also adds a settings command to Tampermonkey's menu. A script's dialog shows its version beside the heading.
 
 Settings live in the browser's own storage, so another browser profile or device starts with none. Each of those dialogs has **Copy settings** and **Paste settings**, two icons at the right end of the title row: Copy puts that script's settings, as they are now, on the clipboard as one line of JSON, and Paste, in the other browser, saves what the clipboard holds and applies it at once. Paste keeps only that script's own settings, skips any value the script would not accept and says how many, and tells you when the text is not settings. It needs the browser's clipboard permission, which the browser asks for on first use.
 
@@ -52,22 +52,23 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
 - On a dark color, the control buttons go dark gray with light purple icons. On a light color, they stay as SudokuPad draws them.
 - Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 
-### No Tab Letters
+### UI Tweaks
 
-SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a stray Tab left the number pad on letters after a refresh.
+Its dialog has three options, each applied at once on Save and kept in the browser:
 
-- During play, Tab does what it did before, minus the toggle, and a held Tab is stopped too.
-- The letter button and `/` still toggle, and Tab still moves focus in dialogs.
-- It works whenever you turn the letter tool on in settings, and it has no settings entry.
-- If a SudokuPad update changes the letter tool or its Tab binding, it logs a console warning and changes nothing.
+- **Tab never switches to letters** (on at first): SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a stray Tab left the number pad on letters after a refresh. During play, Tab does what it did before, minus the toggle, and a held Tab is stopped too. The letter button and `/` still toggle, and Tab still moves focus in dialogs. It works whenever you turn the letter tool on in settings.
+- **Hide the Toggle Selection button** (off at first): hides SudokuPad's Select button in the bottom row, and the other buttons close up.
+- **Wrap buttons** (off at first): the bottom row of tool buttons wraps onto a second line after five. Color by Digit already caps that row at five on its own, so with it installed this option changes nothing.
+
+If a SudokuPad update changes what the Tab option, the saved options or the settings entry needs, that part logs a console warning and turns itself off, and a bar at the bottom of the page says so. Hide the Toggle Selection button and Wrap buttons are style rules only, with nothing of SudokuPad's to break.
 
 ### Auto Rules Resizer
 
 Ported from the rules-pane fit of twitch-rules-scroller's stream script, which grew from Nell Gwynn's resizing scripts.
 
-- In landscape, the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the room SudokuPad gives the pane. Only when the rules would still scroll at SudokuPad's own font size does it widen, as far as it takes to stop the scroll at that size and no further than the window's right edge, less 8 px. The font never goes below SudokuPad's own, so rules too long still scroll. It refits on a window resize and on each SudokuPad layout.
+- In landscape, the rules pane takes the room SudokuPad gives it and keeps SudokuPad's width. Only when the rules would still scroll at SudokuPad's own font size does it widen, as far as it takes to stop the scroll at that size and no further than the window's right edge, less 8 px. Only when they would still scroll at the widest does the font shrink, to 70% of SudokuPad's size at the least; below that the rules scroll. Rules that fit take the largest font at which they still do, up to 150% of SudokuPad's size. It refits on a window resize and on each SudokuPad layout.
 - In portrait it leaves SudokuPad as it is.
-- f+ and f-, above the pane's top-left corner, move the font a pixel at a time from the fitted size; f- may go below SudokuPad's own. f+ also widens the pane when the bigger font would scroll at the current width, only as far as it takes. The two buttons show only while the pointer is over the pane, a corner or the buttons.
+- f+ and f-, above the pane's top-left corner, move the font a pixel at a time from the fitted size, between 70% and 150% of SudokuPad's own. f+ also widens the pane when the bigger font would scroll at the current width, only as far as it takes. The two buttons show only while the pointer is over the pane, a corner or the buttons.
 - Two corners show while the pointer is over the pane. The top right grows the pane right and up, moving the controls up; the bottom left grows it left and down. The pane never grows onto the board, the controls never go off the window, even after the window gets smaller, and a drag never shrinks the pane under 15 × 7 rem.
 - A "Rules Resizer" entry in SudokuPad's settings opens a dialog with a max auto width and a max auto height, in CSS px. An empty box means no limit, and both start empty. The limits cap only the automatic fit, so a corner drag can still go past them, and the height limit caps the room the font is fitted to. They are saved in SudokuPad's own storage.
 - The font change and the drag are not saved: they last until a reload, and a new puzzle resets the drag.

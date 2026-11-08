@@ -302,3 +302,17 @@ Not run through Tampermonkey or on `crackingthecryptic.com`. Screenshots from
 - Chris then ruled one page at a time per group: a `<select>` of the pages, labelled `Page 1`,
   `Page 2 (current)` and so on, with a small swatch of the group's color beside it. At 390 px
   one group is one 3x3 grid plus the digit buttons, where showing every page took a screen each.
+
+## Edit mode: how it starts and ends (read 2026-11-08)
+
+From SudokuPad's `tool-color.js` (v0.611.0), copy read from sudokupad.app on 2026-11-06:
+
+- **Starts**: holding a colour button for `C.HoldToEditDelayMs` (`handlePadButtonDown` sets a timeout that calls
+  `toggleEditMode`), or pressing **left Alt** while the colour tool is current (`handleKeydown`: `AltLeft` calls `enterEditMode`).
+  `enterEditMode` adds `edit-colors` to `.controls-input` and puts an `<input type="color">` over each colour button.
+- **Ends** (`exitEditMode`): a second hold (the same timeout toggles), **changing the palette page** (`setPage`, so Tab
+  or the page button), **the window losing focus** (`handleBlur`), **releasing left Alt** (`handleKeyup`: `AltLeft`),
+  and **leaving the colour tool** (`handleToolExit`).
+- It does **not** end on Escape or on a click elsewhere. `exitEditMode` removes a window pointer-down handler that
+  `enterEditMode` never adds, so a click-outside exit may once have existed and is gone. `handleColorPickerExit`
+  (the native picker's `change`) has its `exitEditMode()` commented out, so picking a colour keeps edit mode on.

@@ -27,6 +27,19 @@ as narrow a pattern as the break allows: a pattern for a whole script lets a sec
 suite also counts its warnings.
 `live/skip-lines.live.mjs` plants a skip with no declaration and checks it lands in `errors`.
 
+## The predefined attacks
+
+`live/sudokupad-attacks.live.mjs` (attacks 49-56, things a player does to SudokuPad) and `live/script-clash-attacks.live.mjs`
+(attacks 57-61, scripts set against each other) are the fixed "try to break it" tests of #590: all six scripts on one page
+(`live/attacks.mjs`), each test named for its attack number, checking the crash signals (a skip line, a page error, a console
+error, the notice bar) and what a player expects to see. The ones for one script's own gestures are in `live/<script name>/`.
+
+- A test that finds a bug on main is marked `{ todo: '#<bug>' }` with a filed `bug` ticket, so the suite stays green; the fix
+  PR removes the mark.
+- Headless Chromium has no zoom keys, so attack 54 sets the page's CSS size and pixel ratio, which is what zoom changes.
+- Attack 56 makes every key the six scripts save under throw and leaves SudokuPad's own keys alone: SudokuPad's own saves throw
+  uncaught errors on a page whose whole localStorage is blocked, with no script loaded.
+
 ## The recording
 
 SudokuPad is served from a recording, not from sudokupad.app on every page load. `live/cache.mjs`
@@ -45,6 +58,24 @@ owns it; its header comment is the full rule.
   fresh recording without it is not written and the run fails; an existing one without it is recorded again at once.
 - A replayed request the recording lacks is aborted, and the process then exits 1 naming each such
   URL, with or without `LIVE_OFFLINE=1`. `LIVE_REFRESH=1` records again.
+
+## Puzzles other than the recorded one
+
+`live/puzzles.mjs` builds a puzzle as data (`puzzleData`: any grid size, boxes, givens, `overlays`, `foglight`, `metadata.bgimage`), turns it into
+an id with the page's own compression (`puzzleIdFor`) and opens it by that id in the same tab (`openPuzzleId`); the page document is
+served from the recording whatever the path, so no new recording is needed. Give every built puzzle its own `id`: an inline `scl` puzzle has none
+and SudokuPad then saves its progress under `progress_undefined`, shared by every such puzzle. `installAll` runs all six scripts at
+`DOMContentLoaded` of every load, as a userscript manager does, and answers the requests the recording lacks for the solved dialog (two icons) and for Tag
+Manager with empty files. A history move (Back, Forward) or a second puzzle leaves the pen and replay tools off again, which `startWithTools` and
+`resumeAfterHistory` turn on.
+
+## The fuzz proof
+
+`live/fuzz/` proves fast-check can drive SudokuPad (#592; `docs/research/ui-fuzz-tools.md` § Tried with Playwright). `fuzz.mjs` runs random
+click / type / undo sequences, each on a page of its own, against a planted rule ("no more than 2 digits entered") and a planted page error;
+`fuzz.proof.mjs` checks that each is found, shrunk to the shortest sequence and, for the rule, replayed. A failure prints
+`node live/fuzz/run.mjs --seed ... --path ... --replay-path ...`, which reproduces it. The proof takes about five minutes, nearly all of it
+shrinking, so it is not a `*.live.mjs` and `npm run test:live` skips it: `npm run test:fuzz` runs it.
 
 ## The daily watch
 

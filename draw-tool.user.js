@@ -365,19 +365,21 @@
   }
 
   const BULLET_MARK = /^[-*] /
-  const CHECK_MARK = /^- \[([ xX])\] /
+  // The end of the line ends the match too, so an empty item still matches once `closedText` has dropped its trailing space.
+  const CHECK_MARK = /^([-*] )?\[([ xX]?)\](?: |$)/
+  const isTicked = (state) => /x/i.test(state)
   // A bullet line's first run is the bullet itself, `{ text: '•', bullet: true }`. A checklist line takes the bullet's place with `{ text: '☐' | '☑', bullet: true, checked }`.
   function parseBlock (line) {
     const check = CHECK_MARK.exec(line)
     if (check) {
-      const checked = check[1] !== ' '
+      const checked = isTicked(check[2])
       return [{ text: checked ? '☑' : '☐', bullet: true, checked }, ...parseLine(line.slice(check[0].length))]
     }
     return BULLET_MARK.test(line) ? [{ text: '•', bullet: true }, ...parseLine(line.slice(2))] : parseLine(line)
   }
 
   function toggledCheck (text, index) {
-    return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, state) => `- [${state === ' ' ? 'x' : ' '}] `) : line).join('\n')
+    return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, dash = '', state) => `${dash}[${isTicked(state) ? ' ' : 'x'}]${mark.endsWith(' ') ? ' ' : ''}`) : line).join('\n')
   }
 
   // Symbols typed as ASCII. `sum` is a word of its own, so "summary" stays.
@@ -1110,6 +1112,8 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  // Reads ERROR_LOG_KEY, readErrorLog and formatErrorLog from sudokupad.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog */
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -1184,6 +1188,51 @@
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
+  // SudokuPad styles a dialog's buttons by tag, so a button that is to look like bare text or a bare icon has each of these forced.
+  const BARE_BUTTON = 'background: none !important; border: none !important; box-shadow: none !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; cursor: pointer;'
+  const ERROR_LOG_ATTRIBUTE = 'data-role="error-log"'
+  const ERROR_LOG_SELECTOR = `[${ERROR_LOG_ATTRIBUTE}]`
+
+  function errorLogCss (prefix) {
+    return [
+      `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
+      `.${prefix}error-log button { ${BARE_BUTTON} padding: 2px 0 !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; }`,
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`
+    ].join('\n')
+  }
+
+  // Under the footer buttons: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
+  function renderErrorLogRow (prefix) {
+    return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
+  }
+
+  // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
+  function wireErrorLog (dialog, win) {
+    const say = (message) => setDialogStatus(dialog, message)
+    dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-error-log' && act !== 'clear-error-log') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'clear-error-log') {
+          win.localStorage.removeItem(ERROR_LOG_KEY)
+          say('Error log cleared.')
+          return
+        }
+        const log = readErrorLog(win.localStorage)
+        if (log.length === 0) {
+          say(formatErrorLog(log))
+          return
+        }
+        await win.navigator.clipboard.writeText(formatErrorLog(log))
+        say('Error log copied.')
+      } catch (error) {
+        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`)
+      }
+    })
+  }
+
   function dialogTitleCss (prefix) {
     const tools = `.${prefix}tools`
     return [
@@ -1191,7 +1240,7 @@
       `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
-      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
@@ -1266,12 +1315,15 @@
       parts: [
         { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
         { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
-        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) },
+        // Below the footer, so the script's own layout still runs down to the footer line.
+        { tag: 'text', innerHTML: renderErrorLogRow(prefix) }
       ]
     })
     const body = doc.getElementById(bodyId)
     if (!body) return null
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    wireErrorLog(body.closest('.dialog'), win)
     const row = body.closest('.dialog')?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
     return body
@@ -1372,6 +1424,35 @@
     return found ? found[1] : null
   }
 
+  // One key for every script, so a reader finds every feature any script turned off.
+  const ERROR_LOG_KEY = 'sudokupad-scripts-error-log'
+  const ERROR_LOG_LIMIT = 50
+  // A report is a URL, and GitHub refuses a long one.
+  const REPORT_STACK_LIMIT = 1200
+
+  // Oldest first. Throws when the storage is blocked or the saved text is not a list, so a caller never mistakes either for an empty log.
+  function readErrorLog (storage) {
+    const saved = storage.getItem(ERROR_LOG_KEY)
+    if (saved === null) return []
+    const log = JSON.parse(saved)
+    if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
+    return log
+  }
+
+  // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
+  const withStack = (headline, stack) => (typeof stack !== 'string' || stack === '' ? headline : stack.startsWith(headline) ? stack : `${headline}\n${stack}`)
+
+  function formatErrorLog (log) {
+    if (log.length === 0) return 'The error log is empty.'
+    return [...log].reverse().map((record) => [
+      `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
+      `  ${record.url}`,
+      record.missing
+        ? `  SudokuPad has no ${record.missing}`
+        : withStack(record.name ? `${record.name}: ${record.message}` : record.message, record.stack).split('\n').map((line) => `  ${line}`).join('\n')
+    ].join('\n')).join('\n\n')
+  }
+
   // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
   function reportUrl ({ name, version, sudokupad, off }) {
     const shownVersion = sudokupad || 'unknown'
@@ -1380,7 +1461,7 @@
       `Script: ${name} ${version}`,
       `SudokuPad version: ${shownVersion}`,
       '',
-      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : String(why)}`)
+      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : withStack(String(why), why && why.stack).slice(0, REPORT_STACK_LIMIT)}`)
     ].join('\n')
     return `${REPORT_URL}?${new URLSearchParams({ title: `${name}: ${labels} off on SudokuPad ${shownVersion}`, body })}`
   }
@@ -1416,6 +1497,26 @@
     const dismissed = () => {
       const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
+    }
+
+    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page. A missing internal
+    // is the same fact on every load, so one already recorded for this script version and SudokuPad version is not recorded again: it
+    // would push the one-off throw out of the newest 50.
+    let sudokupad = null
+    let logFailed = false
+    function recordFeatureOff (label, why) {
+      if (logFailed) return
+      const fields = typeof why === 'string' ? { missing: why } : { name: why && why.name, message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
+      try {
+        const log = readErrorLog(globalThis.localStorage)
+        const same = (record) => record.script === script && record.version === version && record.sudokupad === sudokupad && record.feature === label && record.missing === fields.missing
+        if (fields.missing && log.some(same)) return
+        log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
+        globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
+      } catch (error) {
+        logFailed = true
+        console.warn(`${script}: the error log cannot be saved, so ${label} and later features turned off are not recorded:`, error)
+      }
     }
 
     let bar = null
@@ -1467,6 +1568,7 @@
           if (feature.off) return
           feature.off = true
           reasons.push({ name: featureName, label, why })
+          recordFeatureOff(label, why)
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
             try {
@@ -1524,11 +1626,12 @@
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
     function probe ({ roots, store, doc = document }) {
+      sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
         console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
       })
-      page = { store, doc, sudokupad: sudokupadVersion(doc) }
+      page = { store, doc, sudokupad }
       showNotice()
     }
 
@@ -2350,6 +2453,8 @@
   let resizing = null
   // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
+  // Set when Ctrl+Enter or Cmd+Enter closes a note, until that Enter is released or another key is pressed.
+  let endedByEnter = false
   let drawing = []
   // The saved entries that are not notes, strokes or shapes (a note that failed its check, say): never drawn, and saved back as they were.
   let keptEntries = []
@@ -2554,6 +2659,7 @@
     editing.box = { left: left + shift[0], top: top + shift[1], right: right + shift[0], bottom: bottom + shift[1] }
     showHandles(editing.box)
     showSelection(map)
+    showEdgeCursor(hoverPoint)
   }
 
   // The point of a screen box that corner `corner` of CORNERS names, or of the opposite corner with `opposite`.
@@ -2813,7 +2919,7 @@
 
   const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
 
-  function writeDrawing () {
+  function writeDrawing (items = drawing) {
     forgetParsedTexts()
     if (loadedKey === null) return
     reportKept()
@@ -2824,7 +2930,7 @@
     // A write the browser refuses (a full localStorage) is reported, and is not a SudokuPad change that turns the saved data off.
     if (!storage.off) {
       try {
-        saveDrawingTo(Framework, loadedKey, drawing, keptEntries)
+        saveDrawingTo(Framework, loadedKey, items, keptEntries)
       } catch (err) {
         report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
       }
@@ -2934,6 +3040,8 @@
       // Only a typed character completes a symbol: deleting, pasting and Undo leave the text as it is.
       if (event.inputType === 'insertText') replaceTypedSymbol()
       showEditing(boardMap())
+      clearTimeout(openNoteSaveTimer)
+      openNoteSaveTimer = setTimeout(under(textTool, saveOpenNote), OPEN_NOTE_SAVE_MS)
     }))
     editing = { index, item, element }
     drawingLayer().append(element)
@@ -2979,9 +3087,33 @@
   // Blank lines before and after the text are dropped; line breaks inside it stay.
   const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
 
+  // The open note is saved with the rest of the notes, as typed so far, once typing pauses and when the page is hidden or unloaded, so a reload or a crashed tab
+  // keeps it. The notes in memory are not changed: finishing the note decides them.
+  const OPEN_NOTE_SAVE_MS = 500
+  let openNoteSaveTimer
+
+  // What the open note's text becomes when it closes. A last word `sum` becomes a sigma before the trailing spaces go, so a sigma the typist undid stays the word.
+  function closingText ({ index, element }) {
+    const typed = typedText(element)
+    return typed === (index === -1 ? '' : drawing[index].text) ? typed : closedText(closedSymbols(typed))
+  }
+
+  // An empty note is saved as no note, which is what closing it does; one never saved leaves the saved notes as they are.
+  function saveOpenNote () {
+    clearTimeout(openNoteSaveTimer)
+    if (!editing) return
+    const text = closingText(editing)
+    if (text === '' && !editing.saved) return
+    const { index, item } = editing
+    editing.saved = true
+    if (text === '') writeDrawing(drawing.filter((_, i) => i !== index))
+    else writeDrawing(index === -1 ? [...drawing, { ...item, text }] : drawing.map((note, i) => i === index ? { ...item, text } : note))
+  }
+
   // An empty box removes its text.
   // Takes the open note's element and handles off the page, and ends any resize.
   function closeEditing () {
+    clearTimeout(openNoteSaveTimer)
     const open = editing
     editing = null
     resizing = null
@@ -2993,11 +3125,10 @@
 
   // Closes the open note. The index of the note it leaves, or -1 when there is none (it was empty).
   function finishText () {
-    const { index, item, element } = closeEditing()
+    const open = closeEditing()
+    const { index, item, saved } = open
     const before = index === -1 ? '' : drawing[index].text
-    const typed = typedText(element)
-    // A last word `sum` becomes a sigma before the trailing spaces go, so a sigma the typist undid stays the word.
-    const text = typed === before ? typed : closedText(closedSymbols(typed))
+    const text = closingText(open)
     const resized = index !== -1 && String(item.box) !== String(drawing[index].box)
     let left = index
     const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || itemOpacity(item) !== itemOpacity(drawing[index]) || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
@@ -3010,7 +3141,9 @@
     }
     renderDrawing()
     if (changed && resized && text !== '') snapToPixels([index])
+    // A save made while typing is written over, even when the note ended as it began; that is no edit, so it leaves what Undo can bring back after a Restart.
     if (changed) saveNotes()
+    else if (saved) writeDrawing()
     showPanelValues()
     return left
   }
@@ -3019,15 +3152,25 @@
   // a key typed in the box is stopped in the window's capture phase, before them all. Its default is left alone, so
   // the note types, edits, pastes and composes as any editable text does, and F5 does what it does anywhere.
   function keepBoxKeys (event) {
+    // The Enter that closed a note is released after the box is gone, and SudokuPad would end the selection on it. A key
+    // pressed since means that release never came (a Mac sends no keyup for a key released under Cmd).
+    if (event.type === 'keydown') endedByEnter = false
+    if (event.type === 'keyup' && event.key === 'Enter' && endedByEnter) {
+      endedByEnter = false
+      event.stopImmediatePropagation()
+      return
+    }
     if (!editing || event.target !== editing.element) return
     event.stopImmediatePropagation()
     if (event.type !== 'keydown' || event.isComposing) return
     // Tab does nothing in the note: it neither closes it nor reaches SudokuPad.
     if (event.key === 'Tab') event.preventDefault()
-    if (event.key === 'Escape') {
+    // Ctrl+Enter and Cmd+Enter finish the note as Escape does and add no line; Shift+Enter and Enter still do.
+    if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
       event.preventDefault()
       // A resize in progress is put back and the note stays open; otherwise the note closes and stays selected.
       if (resizing && !resizing.cancelled) return cancelResize()
+      endedByEnter = event.key === 'Enter'
       const left = finishText()
       if (left !== -1) select([left])
     }
@@ -3036,10 +3179,31 @@
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
-    if (!editing || editing.element.contains(event.target) || handles.some(({ element }) => element === event.target) || isPanelControl(event.target)) return
-    // A left press on another note goes on to select it, and to drag it.
-    pressFinishedText = !(event.button === PRIMARY_BUTTON && pressedNote(event))
-    finishText()
+    if (!editing || editing.element.contains(event.target) || isHandle(event.target) || isPanelControl(event.target)) return
+    // A left press on another note goes on to select it, and to drag it. So does one on the open note's edge, on the note as it closes: its closed box is not the open one's
+    // (trailing blank lines go, and the open one may be shifted clear of the window's edge), so it is not looked for again by position.
+    const left = event.button === PRIMARY_BUTTON
+    const onEdge = left && onOpenEdge(eventPoint(event))
+    const onOther = left && !onEdge && pressedNote(event)
+    const closed = finishText()
+    edgeNote = onEdge && closed !== -1 ? drawing[closed][NOTE_ELEMENT] : null
+    pressFinishedText = !(onOther || edgeNote)
+  }
+
+  const isHandle = (target) => handles.some(({ element }) => element === target)
+
+  // The note whose edge the press that closed it was on; the press goes on to select it and to drag it.
+  let edgeNote = null
+
+  // The band round the open note, outside its box and within HIT_MARGIN_PX of it: a press there moves the note, as one inside selects its text.
+  const onOpenEdge = (point) => Boolean(editing) && inBox(point, grownBox(editing.box, HIT_MARGIN_PX)) && !inBox(point, editing.box)
+
+  // The move cursor over the open note's edge, which lies outside its element and so cannot carry a cursor of its own.
+  let edgeCursor = false
+  function showEdgeCursor (point) {
+    const over = Boolean(point) && !drag && !resizing && onOpenEdge(point)
+    if (over !== edgeCursor) holdCursor(over ? 'move' : null)
+    edgeCursor = over
   }
 
   // A press on a panel button keeps the focus in the open note, so its caret stays. A slider takes the focus, and the note gets it back when the
@@ -3079,7 +3243,7 @@
     else if (ended.start === -1) selectInRectangle(ended, click)
   }
 
-  // Escape mid-drag puts the notes back where they were at the press. The press stays the tool's until its release, which then does nothing.
+  // Cancelling a drag puts the notes back where they were at the press. The press stays the tool's until its release, which then does nothing.
   function cancelDrag () {
     const d = drag
     if (d.rectangle) d.rectangle.remove()
@@ -3422,7 +3586,8 @@
 
   // SudokuPad's Undo brings back what Restart cleared when the undo stack is empty: the first Undo after a Restart, past any selection made since. Its puzzle
   // triggers `act` after each action, so whether the stack was empty before an Undo is read off the last action, a reset or a load.
-  const undoStackEmpty = () => Framework.app.puzzle.undoStack.length === 0
+  let emptyStackLength = 0
+  const undoStackEmpty = () => Framework.app.puzzle.undoStack.length <= emptyStackLength
   let undoWasEmpty = false
 
   function followUndo (_, action) {
@@ -3512,7 +3677,8 @@
       if (event.button !== PRIMARY_BUTTON) return false
       // A press on a note moves the selection once it drags, after selecting just that note when it was not selected; with Shift it only adds or removes the note on its release.
       // A press on empty space draws a selection rectangle once it drags.
-      const note = pressedNote(event)
+      const note = edgeNote ?? pressedNote(event)
+      edgeNote = null
       const box = event.target.closest(`.${CHECK_CLASS}`)
       if (note && box) {
         tickCheck(note, box)
@@ -3608,8 +3774,11 @@
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
       else if (ARROWS[event.key]) pressArrow(event.key, event.shiftKey)
-      else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
-      else return false
+      else if (event.key === 'Delete' || event.key === 'Backspace') {
+        // A move in progress holds the note; cancelling it first leaves its release nothing to place.
+        if (drag?.move) cancelDrag()
+        deleteSelected()
+      } else return false
       return true
     },
     // SudokuPad calls every tool's handleKeyup too. An arrow released with Shift still held would otherwise switch to Corner (its tempKey), which leaves this tool and ends the selection.
@@ -3654,12 +3823,13 @@
       onWindow(textTool, 'mousedown', keepNoteFocus, { capture: true })
       // After the slider guards' own release handler, which takes the focus off the slider.
       onWindow(textTool, 'pointerup', returnFocusToNote, { capture: true })
-      onWindow(textTool, 'pointerup', () => { pressFinishedText = false }, { capture: true })
+      onWindow(textTool, 'pointerup', () => { pressFinishedText = false; edgeNote = null }, { capture: true })
       onWindow(textTool, 'wheel', scrollNote, { capture: true, passive: false })
       onWindow(textTool, 'mousemove', resizeMove, { capture: true })
       onWindow(textTool, 'mousemove', (event) => {
         showChrome()
         hoverPoint = overControl(event) ? null : eventPoint(event)
+        showEdgeCursor(isHandle(event.target) ? null : hoverPoint)
         inFrame('hover', showHover)
       }, { capture: true })
       onWindow(textTool, 'mouseout', (event) => {
@@ -3670,6 +3840,8 @@
       onWindow(textTool, 'mouseup', endResize, { capture: true })
       for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
       onWindow(textTool, 'keyup', releaseKey, { capture: true })
+      onWindow(textTool, 'pagehide', saveOpenNote)
+      document.addEventListener('visibilitychange', under(textTool, () => { if (document.visibilityState === 'hidden') saveOpenNote() }))
     })
     settingsUi.run(() => addSettingsEntry(dialogs, { name: 'drawtool', content: 'Text Anywhere', open: under(settingsUi, openDialog) }))
     boardNotes.run(() => {
@@ -3679,7 +3851,11 @@
     })
     undoRestart.run(() => {
       app.puzzle.on('act', under(undoRestart, followUndo))
-      for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, under(undoRestart, () => { undoWasEmpty = undoStackEmpty() }))
+      // Another script may act after Restart in its own 'restarted' handler; the stack it leaves, read once all of them have run, is the empty one.
+      app.on('restarted', under(undoRestart, () => queueMicrotask(() => { emptyStackLength = Framework.app.puzzle.undoStack.length; undoWasEmpty = undoStackEmpty() })))
+      for (const event of ['reset', 'progressloaded']) {
+        app.puzzle.on(event, under(undoRestart, () => { emptyStackLength = 0; undoWasEmpty = undoStackEmpty() }))
+      }
     })
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
