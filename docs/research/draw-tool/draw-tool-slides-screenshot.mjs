@@ -1,7 +1,7 @@
 // Takes the five slides of Text Annotation's slideshow on site/index.html, each the board patch beside the Text Annotation panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in.
-// The notes are what a solver writes: formulas (A=B+5, X+Y=2Z) and short deductions, mostly in the margin beside the grid or above it, as solvers do, and on the board only where the slide needs it (a note over digits, on a cell's corner or edge), never one digit and never centered in a cell (the script checks both).
+// The notes are what a solver writes: formulas (A=B+5, X+Y=2Z) and short deductions, mostly in the margin beside the grid or above it, as solvers do, and on the board only where the slide needs it (a note on a cell's edge, in a box), never one digit and never centered in a cell (the script checks both).
 //   draw-tool-slide-1-type.png        a three-line note typed with Enter in the margin beside rows 1 and 2
-//   draw-tool-slide-3-background.png  the Background button on: a formula in a page-colored box over the digits, beside one made with it off
+//   draw-tool-slide-3-background.png  the Background button on: a formula in a page-colored box over the grid lines, beside one made with it off
 //   draw-tool-slide-6-select.png      three margin notes selected by a drag on empty space, the dragged box dashed, and recolored together from the panel
 //   draw-tool-slide-7-erase.png       the pointer on a note with a red ring round it, where a right click erases it (the click follows the shot and must erase the note)
 //   draw-tool-slide-9-long.png        a four-line note open for typing, made two lines tall with its bottom right handle of four, so it scrolls, its scroll bar visible
@@ -63,7 +63,6 @@ async function scene () {
     if (set !== width) throw new Error(`the Size slider is at ${set}, not ${width}`)
   }
   const pick = (color, size) => p.click(`.controls-input button[data-key="${color}"]`).then(() => pickSize(size))
-  // Types the lines of a note, Enter between them.
   const typeLines = async (lines) => {
     for (const [i, line] of lines.entries()) {
       if (i) await p.keyboard.press('Enter')
@@ -131,7 +130,7 @@ const ABOVE_COL_8 = [-0.55, 7.3]
   await s.shoot('1-type')
 }
 
-// 3: one formula made with Background off, one with it on, both over digits on the board, where the box is what the slide shows.
+// 3: one formula made with Background off, one with it on, both on the board over grid lines, where the box is what the slide shows.
 {
   const s = await scene()
   await s.pick(RED, 26)
@@ -150,7 +149,7 @@ const ABOVE_COL_8 = [-0.55, 7.3]
   await s.pick(ORANGE, 26)
   await s.note(ABOVE_COL_5, 'A=B+5')
   await s.note(ABOVE_COL_8, 'X+Y=2Z')
-  await s.note(BESIDE_ROWS_1_2, 'r3: 4,6,8 in c7-9')
+  await s.note(BESIDE_ROWS_1_2, 'r1: 4,6 in c7-9')
   const FROM = [-0.9, 2.9]
   const TO = [1.7, 14.6]
   await s.p.mouse.move(...s.at(FROM))
