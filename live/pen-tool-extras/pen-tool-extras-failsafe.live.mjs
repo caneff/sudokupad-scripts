@@ -89,7 +89,7 @@ const CASES = [
     off: 'marks',
     warns: changed('marks'),
     edgeAgain: null,
-    source: planted('      if (isEdgeActs(queued)) {\n', "        throw new Error('planted in the click wrapper')\n")
+    source: planted('      if (clicked !== null) {\n', "        throw new Error('planted in the click wrapper')\n")
   },
   // SudokuPad's click queues its actions and never calls `actSend`: marks go off and the click lands as SudokuPad's own, the next one with `actSend` as before.
   {
