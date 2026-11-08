@@ -66,8 +66,8 @@
       },
       {
         "picture": "pen-tool-extras-slide-13-erase.png",
-        "alt": "A red ring on the first line, where a right click lands",
-        "caption": "Right-click a line to delete it"
+        "alt": "A red ring on the first line, which has faded to show it is the line a right press will erase",
+        "caption": "Hold a right click on a line and it fades; let go to delete it"
       },
       {
         "picture": "pen-tool-extras-slide-14-erased.png",

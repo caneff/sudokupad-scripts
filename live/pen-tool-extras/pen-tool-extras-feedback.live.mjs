@@ -1,7 +1,7 @@
 // Live check of pen-tool-extras.user.js's feedback before a gesture lands, on sudokupad.app in headless Chromium: the right-click erase's preview and its Escape (#546 rows 1 and 7),
 // the faint mark a left click would place (row 4), and the drag highlight in the pen's style (row 5). Every press, move and key is real input; each check reads the page's computed
 // style and what is stored (`cell.pen`).
-/* global Framework, getComputedStyle */
+/* global Framework, getComputedStyle, MouseEvent, PointerEvent */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
