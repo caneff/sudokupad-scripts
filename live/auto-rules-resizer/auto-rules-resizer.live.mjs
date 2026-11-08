@@ -544,7 +544,7 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
   })
 
   it('keep the line at the top at the top after a resize', async () => {
-    // The text offset of the line under the pane's top-left content corner.
+    // The text offset of the line under the pane's top-left content corner; the width holds across both windows, so the lines break alike and the offset holds to a character or two. A pixel offset kept instead drifts a whole line (about 90).
     const topOffset = () => p.evaluate(() => {
       const rules = document.querySelector('.puzzle-rules')
       const r = rules.getBoundingClientRect()
@@ -559,11 +559,11 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
     const heldAt = await topOffset()
     assert.equal(heldAt > 1000, true, `scrolled to text offset ${heldAt}`)
     await p.setViewportSize(SMALLER)
-    const moved = await settle(async () => (await pane(p)).top !== undefined && Math.abs((await topOffset()) - heldAt) <= 120, true)
+    const moved = await settle(async () => (await pane(p)).top !== undefined && Math.abs((await topOffset()) - heldAt) <= 10, true)
     const after = await topOffset()
     assert.equal(moved, true, `the top line was at text offset ${heldAt} and is at ${after}`)
     await p.setViewportSize(LANDSCAPE)
-    const back = await settle(async () => Math.abs((await topOffset()) - heldAt) <= 120, true)
+    const back = await settle(async () => Math.abs((await topOffset()) - heldAt) <= 10, true)
     assert.equal(back, true, `back in the first window: text offset ${await topOffset()}, was ${heldAt}`)
   })
 
