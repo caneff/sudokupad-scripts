@@ -607,11 +607,12 @@ describe('rules with blank lines (SudokuPad sets each newline as a break)', { co
     })
     const held = await topIndex()
     assert.deepEqual(held.inRules, true, 'the top of the pane is on a break of the pane itself')
-    for (const viewport of [SMALLER, { width: 1280, height: 720 }, LANDSCAPE]) {
-      await p.setViewportSize(viewport)
+    // A bigger font moves every blank line, so a kept pixel offset would put another one at the top.
+    for (let i = 0; i < 4; i++) {
+      await clickFont(p, 'f+')
       await stable(topIndex)
     }
-    assert.deepEqual(await topIndex(), held, 'the same blank line is at the top after three refits')
+    assert.deepEqual(await topIndex(), held, 'the same blank line is at the top after four larger fonts')
   })
 
   it('the page raised no error', () => {
