@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -427,12 +427,12 @@ test('a text\'s box starts at its point, as tall as its line and wider with more
 
 test('a drag across a text touches it, and one that passes clear of it does not', () => {
   const box = textBox(sum)
-  assert.equal(touchesText(sum, [110, 0], [110, 100]), true, 'across it')
-  assert.equal(touchesText(sum, [0, 0], [200, 100]), true, 'on a slant through it')
-  assert.equal(touchesText(sum, [110, 60], [110, 60]), true, 'a press on it')
-  assert.equal(touchesText(sum, [box.right + ERASE_TOLERANCE - 0.1, 0], [box.right + ERASE_TOLERANCE - 0.1, 100]), true, 'within the tolerance')
-  assert.equal(touchesText(sum, [box.right + ERASE_TOLERANCE + 0.1, 0], [box.right + ERASE_TOLERANCE + 0.1, 100]), false, 'just past it')
-  assert.equal(touchesText(sum, [0, 0], [200, 0]), false, 'above it')
+  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [110, 0], [110, 100]), true, 'across it')
+  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [0, 0], [200, 100]), true, 'on a slant through it')
+  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [110, 60], [110, 60]), true, 'a press on it')
+  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [box.right + HIT_MARGIN_PX - 0.1, 0], [box.right + HIT_MARGIN_PX - 0.1, 100]), true, 'within the margin')
+  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [box.right + HIT_MARGIN_PX + 0.1, 0], [box.right + HIT_MARGIN_PX + 0.1, 100]), false, 'just past it')
+  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [0, 0], [200, 0]), false, 'above it')
 })
 
 // A board drawn at twice its size with its corner at (100, 50) on the screen: board units from (0, 0) to (600, 600).
@@ -494,7 +494,7 @@ test('a note with a background answers to the box drawn behind it: a selection r
   assert.deepEqual(notesTouched([boxed], edge, edge), [0])
   const past = textBox(boxed).right + 20 * 0.35 + 0.1
   assert.deepEqual(notesTouched([boxed], [past, 50], [past, 50]), [], 'past the box')
-  assert.equal(touchesText(boxed, [past + ERASE_TOLERANCE - 0.2, 0], [past + ERASE_TOLERANCE - 0.2, 100]), true, 'an erase within the tolerance of the box')
+  assert.equal(touchesBox(grownBox(noteBox(boxed), HIT_MARGIN_PX), [past + HIT_MARGIN_PX - 0.2, 0], [past + HIT_MARGIN_PX - 0.2, 100]), true, 'an erase within the margin of the box')
   assert.deepEqual(noteBox(plain), textBox(plain))
 })
 
@@ -1064,4 +1064,76 @@ test('snapAxis snaps a note whose edge lies exactly on the grid\'s outer line, a
 test('snapAxis takes the grid\'s span from the outline, which lies reach past the box', () => {
   assert.deepEqual(snapAxis(10, 97, { lines: LINES, reach: 3 }), { shift: 0, guide: 100 })
   assert.equal(snapAxis(10, 96.9, { lines: LINES, reach: 3 }), null)
+})
+
+test('a box grown by a margin reaches that far on every side and no further', () => {
+  assert.deepEqual(grownBox({ left: 10, right: 30, top: 20, bottom: 40 }, 4), { left: 6, right: 34, top: 16, bottom: 44 })
+})
+
+test('the note a point hits is the topmost whose box, grown by the margin, holds it; a point past the margin hits none', () => {
+  const boxes = [{ left: 0, right: 100, top: 0, bottom: 20 }, { left: 50, right: 150, top: 0, bottom: 20 }]
+  assert.equal(noteAtPoint(boxes, [75, 10], 0), 1, 'where two overlap, the later one is on top')
+  assert.equal(noteAtPoint(boxes, [153.9, 10], HIT_MARGIN_PX), 1, 'just inside the margin')
+  assert.equal(noteAtPoint(boxes, [154.1, 10], HIT_MARGIN_PX), -1, 'just past the margin')
+  assert.equal(noteAtPoint(boxes, [153.9, 10], 0), -1, 'a margin of none is the box itself')
+  assert.equal(noteAtPoint(boxes, [-3.9, 24.1], HIT_MARGIN_PX), -1, 'a corner past the margin on one side')
+  assert.equal(noteAtPoint(boxes, [-3.9, 23.9], HIT_MARGIN_PX), 0, 'a corner within the margin on both sides')
+})
+
+test('pointerSpeed is the distance the pointer covered over the last SPEED_WINDOW_MS in px per ms, counting the time it has stood still', () => {
+  assert.equal(pointerSpeed([[0, 0, 900], [30, 40, 950]], 950), 1, '50 px in 50 ms')
+  assert.equal(pointerSpeed([[0, 0, 900], [30, 40, 950]], 1000), 0.5, 'the same move 50 ms ago is slower now')
+  assert.equal(pointerSpeed([[0, 0, 800], [30, 40, 950]], 950), 0, 'a sample older than the window is not counted, so the pointer has stopped')
+})
+
+test('a pointer that has not moved for a window, or has one sample, is not moving', () => {
+  assert.equal(pointerSpeed([], 1000), 0)
+  assert.equal(pointerSpeed([[5, 5, 1000]], 1000), 0)
+  assert.equal(pointerSpeed([[0, 0, 100], [500, 500, 150]], 150 + SPEED_WINDOW_MS + 1), 0, 'both samples are older than the window')
+})
+
+test('a drag places a note, so snaps, only below SNAP_MAX_SPEED', () => {
+  assert.equal(SNAP_MAX_SPEED, 0.5)
+  assert.equal(isPlacing([[0, 0, 900], [24, 0, 950]], 950), true, '0.48 px/ms')
+  assert.equal(isPlacing([[0, 0, 900], [25, 0, 950]], 950), false, '0.5 px/ms is the limit and passes freely')
+  assert.equal(isPlacing([[0, 0, 900], [80, 0, 950]], 950), false, 'a fast throw')
+  assert.equal(isPlacing([], 950), true, 'a press that has not moved')
+})
+
+test('a locked move keeps the axis of greater movement and zeroes the other; a tie keeps x', () => {
+  assert.deepEqual(axisLocked([30, -12], true), [30, 0])
+  assert.deepEqual(axisLocked([5, -12], true), [0, -12])
+  assert.deepEqual(axisLocked([-7, 7], true), [-7, 0])
+  assert.deepEqual(axisLocked([5, -12], false), [5, -12], 'unlocked moves freely')
+})
+
+test('lockedAxis is the axis of lesser movement, and x on a tie', () => {
+  assert.equal(lockedAxis([30, -12]), 1)
+  assert.equal(lockedAxis([5, -12]), 0)
+  assert.equal(lockedAxis([7, 7]), 1)
+  assert.equal(lockedAxis([0, 0]), 1)
+})
+
+const WIN = { left: 0, top: 0, right: 1000, bottom: 800 }
+
+test('viewShift moves a box in from the window edge so it stays WINDOW_PAD_PX inside, and leaves one already inside alone', () => {
+  assert.equal(WINDOW_PAD_PX, 20)
+  assert.deepEqual(viewShift({ left: 400, top: 300, right: 500, bottom: 330 }, WIN, []), [0, 0])
+  assert.deepEqual(viewShift({ left: 900, top: 300, right: 1010, bottom: 330 }, WIN, []), [-30, 0], 'past the right edge: right ends at 980')
+  assert.deepEqual(viewShift({ left: -10, top: 790, right: 40, bottom: 805 }, WIN, []), [30, -25], 'left ends at 20 and bottom at 780')
+  assert.deepEqual(viewShift({ left: 981, top: 300, right: 990, bottom: 330 }, WIN, []), [-10, 0], 'inside the window but within the pad of the edge')
+})
+
+test('viewShift moves a box clear of a control it overlaps, by the nearest way', () => {
+  const control = { left: 700, right: 1000, top: 0, bottom: 800 }
+  const [dx, dy] = viewShift({ left: 650, top: 300, right: 750, bottom: 330 }, WIN, [control])
+  assert.equal(dy, 0)
+  assert.equal(750 + dx < 700, true, `its right edge ${750 + dx} is left of the control`)
+  assert.equal(650 + dx >= WINDOW_PAD_PX, true)
+})
+
+test('viewShift leaves a box beside a control where it is, and puts a box too big for the window at the middle', () => {
+  assert.deepEqual(viewShift({ left: 400, top: 300, right: 500, bottom: 330 }, WIN, [{ left: 700, right: 1000, top: 0, bottom: 800 }]), [0, 0])
+  const [dx] = viewShift({ left: -50, top: 300, right: 1100, bottom: 330 }, WIN, [])
+  assert.equal((-50 + 1100) / 2 + dx, 500, 'centred on the window')
 })
