@@ -159,7 +159,7 @@ describe('startup', { concurrency: CONCURRENCY }, () => {
 
         before(async () => {
           const injection = { mode, code: (mode === 'before-start' ? RECORD_START_SHOWN : '') + source(script.file) }
-          ;({ context, p, errors } = await openPage(browser, { injection }))
+          ;({ context, p, errors } = await openPage(browser, { injection, seed: captureConsoleErrors }))
           await startPuzzle(p, { injection })
           await script.ready(p)
         })

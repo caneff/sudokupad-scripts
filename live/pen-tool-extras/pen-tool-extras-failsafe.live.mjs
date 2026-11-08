@@ -159,7 +159,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
             page.on('console', (m) => {
               if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
             })
-            captureConsoleErrors(page, errs)
+            // The case plants its own breakage, so its skip lines are expected (`warned` holds them); any other console line is an error.
+            captureConsoleErrors(page, errs, (text) => /^pen-tool-extras: .+ skipped: /.test(text))
           }
         }))
         await startPuzzle(p)

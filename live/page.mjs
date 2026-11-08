@@ -22,13 +22,19 @@ export async function newPage (context) {
   return { p, errors }
 }
 
+// A line a script logs when it switches a step off because SudokuPad changed: `<script>: <step> skipped: <reason>` (lib/steps.js).
+const SKIP_LINE = /^(?:auto-rules-resizer|color-by-digit|dark-page|draw-tool|no-tab-letters|pen-tool-extras): .+ skipped: /
+
 // Collects the page's `console.error` lines into `errors`, leaving out a resource that failed to load, which a
-// replay's aborted trackers print. Fits `openPage`'s `seed` as it is. `take(text)`, when given, is asked first:
-// a line it returns true for is the caller's, and stays out of `errors`.
+// replay's aborted trackers print. It also collects a script's skip line (any console type), so a test that asserts
+// `errors` is empty fails when a script lost a step. Fits `openPage`'s `seed` as it is. `take(text)`, when given, is
+// asked first: a line it returns true for is the caller's, and stays out of `errors`.
 export const captureConsoleErrors = (page, errors, take = () => false) => {
   page.on('console', (m) => {
-    if (m.type() !== 'error' || /Failed to load resource/.test(m.text()) || take(m.text())) return
-    errors.push(`console.error: ${m.text()}`)
+    const text = m.text()
+    if (take(text)) return
+    if (m.type() === 'error' && !/Failed to load resource/.test(text)) errors.push(`console.error: ${text}`)
+    else if (SKIP_LINE.test(text)) errors.push(`console.${m.type() === 'warning' ? 'warn' : m.type()}: ${text}`)
   })
 }
 
