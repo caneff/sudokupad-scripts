@@ -6,7 +6,6 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const { RAW, pictureTags, tagOf } = require('../tag-pictures.js')
-const { renderShow } = require('../sync-slides.js')
 const SCRIPT_SUFFIX = '.user.js'
 const ROOT = path.join(__dirname, '..')
 const SITE_DIR = path.join(ROOT, 'site')
@@ -231,7 +230,7 @@ test(`${HOME}'s other rows show one picture and no pager`, () => {
 })
 
 // Each slideshow's pictures, alt text and captions live once, in site/slideshows.json; `node sync-slides.js` writes them into the pages.
-const SOURCE = require('../sync-slides.js').SHOWS
+const { SHOWS: SOURCE, syncText } = require('../sync-slides.js')
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, id: 'color-by-digit' },
   { heading: 'Pen Tool Extras', page: DETAILS, id: 'pen-tool-extras' },
@@ -240,10 +239,7 @@ const SHOWS = [
 
 // A slideshow's own markup, from a homepage row or a details page (where it ends at "What it adds").
 const showOf = html => html.split('<div class="slideshow">')[1].split(/<h2>What it adds<\/h2>|<\/section>/)[0]
-const captionsOf = html => [...html.matchAll(/<p class="slide-caption( current)?">([^<]*)<\/p>/g)].map(m => ({ current: Boolean(m[1]), text: m[2] }))
 const homeShow = heading => showOf(rowsOf(read(HOME)).find(r => r.includes(`<h2>${heading}</h2>`)))
-
-const rawBlock = (html, id) => html.match(new RegExp(`^[ \\t]*<!-- slideshow:${id} -->\\n[\\s\\S]*?\\n[ \\t]*<!-- /slideshow:${id} -->`, 'm'))?.[0]
 
 test('slideshows.json names exactly the slideshows the site shows', () => {
   assert.deepEqual(Object.keys(SOURCE).sort(), SHOWS.map(s => s.id).sort())
@@ -263,22 +259,13 @@ for (const { heading, page: file, id } of SHOWS) {
   for (const page of [HOME, file]) {
     test(`${page} shows ${heading} as slideshows.json says: node sync-slides.js has been run`, () => {
       const raw = fs.readFileSync(path.join(SITE_DIR, page), 'utf8')
-      const block = rawBlock(raw, id)
-      assert.ok(block, `${page} has no <!-- slideshow:${id} --> block`)
-      const indent = /^[ \t]*/.exec(block)[0].length
-      const want = `${' '.repeat(indent)}<!-- slideshow:${id} -->\n${renderShow(SOURCE[id], indent)}\n${' '.repeat(indent)}<!-- /slideshow:${id} -->`
-      assert.equal(block, want)
+      assert.match(raw, new RegExp(`<!-- slideshow:${id} -->`), `${page} has no <!-- slideshow:${id} --> block`)
+      assert.deepEqual(syncText(raw), { text: raw, problems: [] })
     })
   }
 
-  test(`${HOME}'s ${heading} slideshow shows its first slide and caption without script, in the order of its source`, () => {
-    const show = homeShow(heading)
-    assert.deepEqual(captionsOf(show).map(c => c.text), slides.map(s => s.caption))
-    assert.deepEqual(captionsOf(show).map(c => c.current), slides.map((_, i) => i === 0))
-    imgs(show).forEach((img, i) => {
-      assert.match(img, i === 0 ? /class="slide current"/ : /class="slide"/)
-      assertDeclaredAtFileShape(img, `${dir}${slides[i].picture}`, `slide ${i + 1}`)
-    })
+  test(`${HOME}'s ${heading} slides each declare the size of their file`, () => {
+    imgs(homeShow(heading)).forEach((img, i) => assertDeclaredAtFileShape(img, `${dir}${slides[i].picture}`, `slide ${i + 1}`))
   })
 }
 

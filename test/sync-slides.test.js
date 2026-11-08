@@ -1,7 +1,10 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { renderShow, syncText } = require('../sync-slides.js')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { renderShow, syncText, syncDir } = require('../sync-slides.js')
 
 const show = { dir: 'docs/research/x/', width: 10, height: 5, slides: [{ picture: 'a.png', alt: 'A "one" & <more>', caption: 'First' }, { picture: 'b.png', alt: 'Two', caption: 'Second' }] }
 const hashOf = file => file === 'docs/research/x/a.png' ? 'aaaaaaa' : 'bbbbbbb'
@@ -39,5 +42,29 @@ test('a marker naming no slideshow, or opened and never closed, is a problem and
   assert.match(syncText(unknown, {}, hashOf).problems[0], /slideshow:x/)
   assert.equal(syncText(unknown, {}, hashOf).text, unknown)
   const open = '<!-- slideshow:x -->\nbody'
-  assert.match(syncText(open, { x: show }, hashOf).problems[0], /slideshow:x/)
+  assert.match(syncText(open, { x: show }, hashOf).problems[0], /no closing marker/)
+  assert.equal(syncText(open, { x: show }, hashOf).text, open)
+})
+
+test('an opening marker never closed does not let the next block swallow what lies between them', () => {
+  const doubled = `<!-- slideshow:x -->\nkeep me\n${page('  <div class="slideshow">old</div>')}`
+  const result = syncText(doubled, { x: show }, hashOf)
+  assert.equal(result.problems.length, 1)
+  assert.equal(result.text, doubled)
+})
+
+test('a page with Windows line endings is a problem, not a page already in sync', () => {
+  const crlf = page('  old').replace(/\n/g, '\r\n')
+  assert.match(syncText(crlf, { x: show }, hashOf).problems[0], /line endings/)
+  assert.equal(syncText(crlf, { x: show }, hashOf).text, crlf)
+})
+
+test('syncDir rewrites each page and names the page of every problem', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-slides-'))
+  try {
+    fs.writeFileSync(path.join(dir, 'a.html'), page('old'))
+    fs.writeFileSync(path.join(dir, 'b.html'), '<!-- slideshow:y -->\nbody')
+    assert.deepEqual(syncDir(dir, { x: show }, hashOf).map(p => p.slice(0, 7)), ['b.html:'])
+    assert.equal(fs.readFileSync(path.join(dir, 'a.html'), 'utf8'), page(renderShow(show, 2, hashOf)))
+  } finally { fs.rmSync(dir, { recursive: true }) }
 })
