@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -752,4 +752,20 @@ test('a window listener of Text Anywhere whose own code throws turns its feature
   // Most listeners act only mid-gesture; the ones that read their event at once show the throw turning the Text tool off.
   const warned = runs.filter(({ warnings }) => warnings.some((warning) => /^draw-tool: Text tool skipped because SudokuPad changed: Error: the listener read event\./.test(warning)))
   assert.ok(warned.length >= 2, warned.map(({ where }) => where).join(', '))
+})
+
+test('a held arrow key repeats only after the pause, and its step grows from one nudge to the maximum over the ramp', () => {
+  assert.equal(nudgeStep(0, false), 0)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS - 1, false), 0)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS, false), NUDGE_PX)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS, false) < nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS / 2, false), true)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS / 2, false) < nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS, false), true)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS, false), NUDGE_MAX_PX)
+  assert.equal(nudgeStep(NUDGE_RAMP_MS * 10, false), NUDGE_MAX_PX)
+})
+
+test('with Shift the step grows from ten pixels to the Shift maximum', () => {
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS - 1, true), 0)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS, true), NUDGE_SHIFT_PX)
+  assert.equal(nudgeStep(NUDGE_RAMP_MS * 10, true), NUDGE_SHIFT_MAX_PX)
 })
