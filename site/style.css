@@ -52,10 +52,9 @@ p { margin: 0 0 .5rem; }
 .details .slide-frame img { position: static; grid-area: 1 / 1; margin: 0; max-width: 100%; max-height: none; }
 /* The bar adds nothing to the slideshow's width, so the caption and pager sit under the frame at its width. */
 .details .slide-bar { contain: inline-size; }
-.details .lede { max-width: 44rem; font-size: 1.1rem; }
+.details .lede { font-size: 1.1rem; }
 .details .actions { margin: .75rem 0 1.5rem; }
 .details h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--frame-edge); }
-.details .prose, .details .notes { max-width: 44rem; }
 .details .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem 2rem; margin: 0; padding: 0; list-style: none; }
 .details .features strong { display: block; margin-bottom: .15rem; }
 .details .features p { margin: 0; }
