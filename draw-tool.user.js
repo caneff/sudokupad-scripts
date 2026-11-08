@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.39.2
+// @version      0.40.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.39.2'
+  const VERSION = '0.40.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -568,6 +568,15 @@
     const { left, right, top, bottom } = noteScreenBox(item, map, outline)
     return [(left + right) / 2, (top + bottom) / 2]
   }
+
+  // Line breaks as \n, and blank lines before and after the text dropped; line breaks inside it stay.
+  const withoutBlankEdges = (text) => text.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
+
+  // The text of the notes `notes` ({ text, left, top } of each), raw as typed: one paragraph each with a blank line between, top to bottom, then left to right.
+  const copiedNotesText = (notes) => [...notes].sort((a, b) => a.top - b.top || a.left - b.left).map((note) => note.text).join('\n\n')
+
+  // The text a paste makes into a note: the clipboard's, with no text at all (empty or only blanks) the empty string.
+  const pastedNoteText = (clipboard) => clipboard?.trim() ? withoutBlankEdges(clipboard) : ''
 
   // The gap left to the window's edge, so the half pixel a note's measured size and its rounded point can differ by never puts it back out of reach.
   const REACH_MARGIN_PX = 1
@@ -1808,7 +1817,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, copiedNotesText, pastedNoteText, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -3170,8 +3179,7 @@
   // The controls that work on the open note: a press on one leaves the note open.
   const isPanelControl = (target) => Boolean(target?.closest?.(`${PANEL} button.digit[data-key], ${PANEL} .${SLIDERS_CLASS}, ${PANEL} .${BACKGROUND_CLASS}`))
 
-  // Blank lines before and after the text are dropped; line breaks inside it stay.
-  const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
+  const typedText = (element) => withoutBlankEdges(element.textContent)
 
   // The open note is saved with the rest of the notes, as typed so far, once typing pauses and when the page is hidden or unloaded, so a reload or a crashed tab
   // keeps it. The notes in memory are not changed: finishing the note decides them.
@@ -3260,6 +3268,40 @@
       const left = finishText()
       if (left !== -1) select([left])
     }
+  }
+
+  // Ctrl+C and Ctrl+V with no note open are Text Anywhere's own, and stop in the window's capture phase, before SudokuPad's cell copy and paste: its Ctrl+C
+  // throws, with no entry for this tool in its SmartSelectToolOrder. In an open note, or any other field, they stay the browser's.
+  // The key of the copy or paste being held: SudokuPad's keyup for C would switch to Centre (its tempKey), which leaves this tool and ends the selection.
+  let copyPasteCode = null
+  function copyPasteNotes (event) {
+    if (Framework.app.tool !== TOOL_NAME || editing || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return
+    if ((event.code !== 'KeyC' && event.code !== 'KeyV') || event.target.closest?.('input, textarea, [contenteditable]')) return
+    event.stopImmediatePropagation()
+    event.preventDefault()
+    copyPasteCode = event.code
+    if (event.code === 'KeyC') copySelectedNotes()
+    else pasteNote()
+  }
+
+  function copySelectedNotes () {
+    if (selected.length === 0) return
+    const map = boardMap()
+    const text = copiedNotesText(selectedNotes().map((item) => ({ text: item.text, ...noteScreenBox(item, map, outline) })))
+    navigator.clipboard.writeText(text).catch((error) => report(`Could not copy the notes: ${errorText(error)}`))
+  }
+
+  // The note starts at the pointer, else the middle of the board, and is left closed and selected.
+  function pasteNote () {
+    navigator.clipboard.readText().then(under(textTool, (clipboard) => {
+      const text = pastedNoteText(clipboard)
+      if (text === '' || Framework.app.tool !== TOOL_NAME) return
+      const map = boardMap()
+      const { left, right, top, bottom } = map.box
+      const index = drawing.push({ ...newNote(hoverPoint ?? [(left + right) / 2, (top + bottom) / 2], map), text }) - 1
+      saveNotes()
+      select([index])
+    }), (error) => report(`Could not paste the note: ${errorText(error)}`))
   }
 
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
@@ -3842,6 +3884,8 @@
         if (drag?.move) inFrame('drag', dragMoves)
         return true
       }
+      // Ctrl or Cmd would switch to Centre (its tempKey), which ends the selection before the Ctrl+C that copies it. In the middle of a drag or a resize it still does, and that ends the gesture.
+      if ((event.key === 'Control' || event.key === 'Meta') && !drag && !resizing) return true
       // Escape in the middle of a drag or a resize puts the notes back and ends the gesture; the selection stays.
       if (event.key === 'Escape' && drag && !drag.cancelled) {
         cancelDrag()
@@ -3868,10 +3912,15 @@
       return true
     },
     // SudokuPad calls every tool's handleKeyup too. An arrow released with Shift still held would otherwise switch to Corner (its tempKey), which leaves this tool and ends the selection.
+    // Ctrl or Cmd released would leave and re-enter the tool, as pressed would have left it.
     handleKeyup (event) {
       holdShift = event.shiftKey
       if (event.key === 'Shift' && drag?.move) inFrame('drag', dragMoves)
-      return Framework.app.tool === TOOL_NAME && selected.length > 0 && Boolean(ARROWS[event.key])
+      if (event.code === copyPasteCode) {
+        copyPasteCode = null
+        return true
+      }
+      return Framework.app.tool === TOOL_NAME && (event.key === 'Control' || event.key === 'Meta' || (selected.length > 0 && Boolean(ARROWS[event.key])))
     }
   }
 
@@ -3925,6 +3974,7 @@
       }, { capture: true })
       onWindow(textTool, 'mouseup', endResize, { capture: true })
       for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
+      onWindow(textTool, 'keydown', copyPasteNotes, { capture: true })
       onWindow(textTool, 'keyup', releaseKey, { capture: true })
       onWindow(textTool, 'pagehide', saveOpenNote)
       document.addEventListener('visibilitychange', under(textTool, () => { if (document.visibilityState === 'hidden') saveOpenNote() }))

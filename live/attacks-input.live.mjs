@@ -11,9 +11,6 @@ import { cellCentre, gridPoint, mouseDrag, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
 
-// The bug tickets of the attacks that fail on main (todo until fixed).
-const COPY_BUG = '#636'
-
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
@@ -174,14 +171,16 @@ describe('attacks on input', { concurrency: false }, () => {
     await assertNoCrash(p, errors)
   })
 
-  it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V with notes selected, or none, change no note and no cell', { todo: `${COPY_BUG}: SudokuPad's Ctrl+C throws while Text Anywhere is the tool` }, async () => {
+  it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V with notes selected, or none, change no note and no cell and throw nothing', async () => {
     await pickTool(p, 'draw')
     await makeNote(p, [4.5, 4.5], '15')
     await makeNote(p, [6.5, 6.5], '26')
     const cellsBefore = await boardState(p)
+    await p.evaluate(() => navigator.clipboard.writeText(''))
     for (const selecting of [false, true]) {
       if (selecting) await p.mouse.click(...await draw.middleAt(p, await gridPoint(p, [4.5, 4.5])))
       for (const key of ['Control+a', 'Control+c', 'Control+v']) await p.keyboard.press(key)
+      // Ctrl+A selects the cells and ends the note selection, so the Ctrl+C copies nothing and the empty clipboard pastes nothing.
       assert.deepEqual((await draw.texts(p)).sort(), ['15', '26'], `${selecting ? 'with a note selected' : 'with none selected'}: both notes keep their text`)
       assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, 'no note is left open')
       await draw.finishNote(p)

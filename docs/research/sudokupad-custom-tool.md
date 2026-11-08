@@ -208,3 +208,10 @@ SudokuPad v0.611.0 (`script.js`, the live recording), read 2026-11-07.
   tool times it. Text Anywhere starts its own interval on the press and stops it on the key's keyup, a blur, or the
   selection ending.
 - `handleKeyup` is forwarded without such a check, and `App.handleBlur` forwards `Blur` to tools after clearing its own keys.
+
+## Copy and paste of notes (#636)
+
+SudokuPad v0.611.0, run on the page in `live/draw-tool/draw-tool-copy-paste.live.mjs` (2026-11-08).
+
+- **`feature-cellpaste.js`** listens for `keydown` on `document` in the capture phase and runs `handleCopy` on Ctrl/Cmd+C, which reads `SmartSelectToolOrder[prevTool || tool]`. That table has no `draw` (nor `pen`) entry, so the call throws while Text Anywhere is current. A window capture `keydown` listener with `stopImmediatePropagation` runs first and keeps both `handleCopy` and `handlePaste` from running.
+- **Ctrl and C switch the tool.** `App.handleKeydown` switches to Centre (its tempKey) when Ctrl or Cmd goes down, and `App.handleKeyup` does it again on the keyup of C (the same tempKey match), so the Ctrl+C that copies would have ended the note selection first. A tool's `handleKeydown` or `handleKeyup` that returns true ends the event for all of them: Text Anywhere returns true for Ctrl and Cmd (not mid-drag, where the switch still ends the gesture) and for the keyup of the C or V it took.
