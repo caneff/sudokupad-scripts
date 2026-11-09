@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.6.7
+// @version      0.6.8
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.6.7'
+  const VERSION = '0.6.8'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -343,8 +343,9 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer. A script
+  // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -360,10 +361,26 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
-  function snapshotStore (store, keys) {
+  // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
+  // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
+  // put back after them; the first throw then goes on. The stored values are held by reference, so a script's save must replace a value
+  // and never edit one in place.
+  function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
-    return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
+    const putMirrorBack = holdMirror()
+    return () => {
+      const failures = []
+      before.forEach(([key, value]) => {
+        try {
+          if (value == null) store.removeData(key)
+          else store.setData(key, value)
+        } catch (error) {
+          failures.push(error)
+        }
+      })
+      putMirrorBack()
+      if (failures.length > 0) throw failures[0]
+    }
   }
 
   // A thrown value that is not an Error has no message, so it is shown as itself.
@@ -523,8 +540,9 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  // `snapshot` is `writeOrRestore`'s, and Save writes under it; the script hands the same one to `wireCopyPaste`.
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
+  // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
+  // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
@@ -533,7 +551,7 @@
     let failed = false
     const saveAndClose = () => {
       try {
-        if (failed || changed()) writeOrRestore(snapshot, save)
+        if (failed || changed()) feature.runInDialog(() => writeOrRestore(snapshot, save))
       } catch (error) {
         failed = true
         // The dialog stays open so the failure is read and the choices are kept.
@@ -559,9 +577,11 @@
     })
     const body = doc.getElementById(bodyId)
     if (!body) return null
+    const dialog = body.closest('.dialog')
+    wireErrorLog(dialog, win)
+    wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
-    wireErrorLog(body.closest('.dialog'), win)
-    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    const row = dialog?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
     return body
   }
@@ -597,10 +617,10 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept, under the
-  // dialog's own `snapshot` (`writeOrRestore`'s), so a paste that fails half-way puts every key back; `readers` and `upgrade` are `pastedSettings`'.
-  function wireCopyPaste (root, { copied, readers, upgrade, snapshot }, apply) {
-    if (typeof snapshot !== 'function') throw new Error('Paste settings needs a snapshot')
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, and `apply(values)` takes what a paste kept,
+  // under `snapshot` (`writeOrRestore`'s) in a dialog action of `feature` (`runInDialog`), so a paste that fails half-way puts every key
+  // back. `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
@@ -613,7 +633,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) writeOrRestore(snapshot, () => apply(values))
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -631,20 +651,6 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
-
-  // The index `delta` steps from `index` in a list of `count`, going round past either end.
-  const wrapIndex = (index, delta, count) => (((index + delta) % count) + count) % count
-
-  // The page's style element `id`, added on the first call, holds `css`.
-  function writeStyle (id, css, doc = document) {
-    let style = doc.getElementById(id)
-    if (!style) {
-      style = doc.createElement('style')
-      style.id = id
-      doc.head.appendChild(style)
-    }
-    style.textContent = css
-  }
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:pointer-session>
@@ -938,8 +944,8 @@
       host.append(message)
     }
 
-    // While a dialog write (`runOrThrow`) runs, a store write that throws goes on, marked here, to the dialog's `writeOrRestore`.
-    let dialogWrites = 0
+    // While a dialog action (`runInDialog`) runs, a store write that throws goes on, marked here, through every `run` to the caller.
+    let dialogActions = 0
     const storeFailures = new WeakSet()
 
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
@@ -973,18 +979,15 @@
             return fallback()
           }
         },
-        // A save, copy or paste in a settings dialog: its throw goes on to the dialog's status line, and one with the feature off says so.
-        // A store write that fails in it passes with every feature still on, so `writeOrRestore` can put the earlier keys back through the store.
-        runOrThrow (fn) {
+        // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
+        // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
+        runInDialog (fn) {
           if (feature.off) throw new Error(`${name} turned off its ${label}`)
-          dialogWrites++
+          dialogActions++
           try {
             return fn()
-          } catch (error) {
-            if (!storeFailures.has(error)) feature.skip(error)
-            throw error
           } finally {
-            dialogWrites--
+            dialogActions--
           }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
@@ -1034,7 +1037,7 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws turns the feature off and its caller goes on, except in a dialog write, where it throws on (`runOrThrow`). A
+    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
     // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
@@ -1044,7 +1047,7 @@
         try {
           fn()
         } catch (error) {
-          if (dialogWrites > 0) {
+          if (dialogActions > 0) {
             if (Object(error) === error) storeFailures.add(error)
             throw error
           }
@@ -1361,18 +1364,13 @@
   const CLASS_PREFIX = 'rules-resizer-'
   const DIALOG_ID = 'rules-resizer-dialog'
   const dialogs = guard.dialogsFor(maxSizeSettings)
+  // The limits are written only from the dialog, so a write that fails reaches its status line with the max size settings still on.
+  const savedLimits = guard.storeFor(maxSizeSettings)
   // Both Max Size keys and the limits mirroring them, as a function that puts them back after a Save or Paste that failed half-way.
-  function snapshotLimits () {
-    const restoreStored = snapshotStore(Framework, [MAX_WIDTH_KEY, MAX_HEIGHT_KEY])
+  const snapshotLimits = () => snapshotStore(savedLimits, [MAX_WIDTH_KEY, MAX_HEIGHT_KEY], () => {
     const was = limits
-    return () => {
-      try {
-        restoreStored()
-      } finally {
-        limits = was
-      }
-    }
-  }
+    return () => { limits = was }
+  })
 
   function openDialog () {
     const row = (id, label, value) => `<label for="${id}">${label}</label>` +
@@ -1392,26 +1390,28 @@
         return typed.maxWidth !== limits.maxWidth || typed.maxHeight !== limits.maxHeight
       },
       snapshot: snapshotLimits,
-      save: () => maxSizeSettings.runOrThrow(() => {
+      feature: maxSizeSettings,
+      save: () => {
         limits = typedLimits()
-        saveLimits(Framework, limits)
+        saveLimits(savedLimits, limits)
         fitPage()
-      })
+      },
+      copyPaste: {
+        copied: () => maxSizeSettings.runInDialog(() => copiedSettings(Framework)),
+        readers: READERS,
+        apply: (values) => {
+          limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
+          saveLimits(savedLimits, limits)
+          if (MAX_WIDTH_KEY in values) document.getElementById(MAX_WIDTH_INPUT_ID).value = limits.maxWidth ?? ''
+          if (MAX_HEIGHT_KEY in values) document.getElementById(MAX_HEIGHT_INPUT_ID).value = limits.maxHeight ?? ''
+          fitPage()
+        }
+      }
     })
     if (!body) return
     body.innerHTML = '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
       row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
       '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
-    const widthInput = document.getElementById(MAX_WIDTH_INPUT_ID)
-    const heightInput = document.getElementById(MAX_HEIGHT_INPUT_ID)
-    const copied = () => maxSizeSettings.runOrThrow(() => copiedSettings(Framework))
-    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS, snapshot: snapshotLimits }, (values) => maxSizeSettings.runOrThrow(() => {
-      limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
-      saveLimits(Framework, limits)
-      if (MAX_WIDTH_KEY in values) widthInput.value = limits.maxWidth ?? ''
-      if (MAX_HEIGHT_KEY in values) heightInput.value = limits.maxHeight ?? ''
-      fitPage()
-    }))
   }
 
   // The drag reads the puzzle's id, so it is the fit's.

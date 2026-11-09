@@ -1,10 +1,10 @@
-// Live check of the Copy settings and Paste settings buttons of the five scripts with a settings dialog, on sudokupad.app in
+// Live check of the Copy settings and Paste settings buttons of the scripts with a settings dialog, on sudokupad.app in
 // headless Chromium: Copy puts the saved keys on the real clipboard, Paste reads them back through the same dialog.
-import { after, afterEach, before, describe, it } from 'node:test'
+import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
-import { actButton, code, dialogButton, openScriptDialog, paste, SETTINGS_SCRIPTS, STATUS } from './settings.mjs'
+import { actButton, closeDialogWith, code, dialogButton, openScriptDialog, paste, SETTINGS_SCRIPTS, STATUS } from './settings.mjs'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -65,73 +65,113 @@ for (const script of SETTINGS_SCRIPTS) {
   })
 }
 
-// A throw planted on the height key's write: the width, written just before it, is put back by the dialog's snapshot. Each case
-// has its own page, since the failure turns the max size settings off.
-describe('auto-rules-resizer.user.js: a failed Save or Paste leaves the width unsaved', { concurrency: false }, () => {
-  const WIDTH_KEY = 'AutoRulesResizer_maxWidth'
-  const HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
-  let context, p, errors
-  const openWithHeightWriteThrowing = async () => {
-    ({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] }, expectedSkips: [/max size settings skipped/] }))
-    await startPuzzle(p, { injection: { mode: 'after-start', code: code('auto-rules-resizer.user.js') } })
-    await openScriptDialog(p, 'Rules Resizer', '#auto-rules-resizer-max-width')
-    await p.evaluate((key) => {
-      const setData = Framework.setData
-      Framework.setData = function (name, value) {
-        if (name === key) throw new Error('planted height write failure')
-        return setData.call(this, name, value)
-      }
-    }, HEIGHT_KEY)
+// The next write of `key` through SudokuPad's Framework.setData throws `message`; the one after it, a restore's, goes through.
+const failNextWriteOf = (p, key, message) => p.evaluate(([name, text]) => {
+  const setData = Framework.setData
+  let armed = true
+  Framework.setData = function (written, value) {
+    if (armed && written === name) {
+      armed = false
+      throw new Error(text)
+    }
+    return setData.call(this, written, value)
   }
-  afterEach(async () => { await context?.close() })
+}, [key, message])
 
-  it('Paste: says the paste failed and the width key is still unsaved', async () => {
-    await openWithHeightWriteThrowing()
-    assert.equal(await paste(p, JSON.stringify({ [WIDTH_KEY]: 640, [HEIGHT_KEY]: 480 })), 'Could not paste: planted height write failure')
-    assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), null)
-    assert.deepEqual(errors, [])
-  })
+const stored = (p, keys) => p.evaluate((names) => names.map((name) => Framework.getData(name)), keys)
 
-  it('Save: says it was not saved and the width key is still unsaved', async () => {
-    await openWithHeightWriteThrowing()
-    await p.fill('#auto-rules-resizer-max-width', '640')
-    await p.fill('#auto-rules-resizer-max-height', '480')
-    await dialogButton(p, 'Save').click()
-    await p.locator(STATUS).filter({ hasText: 'Not saved: planted height write failure' }).waitFor()
-    assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), null)
-    assert.deepEqual(errors, [])
-  })
-})
+// What each control matching `selectors` shows: a box's tick, a toggle button's pressed state, any other control's value.
+const shown = (p, selectors) => p.evaluate((sels) => sels.map((sel) => {
+  const el = document.querySelector(sel)
+  if (!el) return null
+  if (el.type === 'checkbox') return el.checked
+  return el.matches('button') ? el.getAttribute('aria-pressed') : el.value
+}), selectors)
 
-// The three scripts whose saved data goes through the guard's store: a throw planted on the second key a paste writes reaches the
-// dialog's snapshot, which puts the first key back. Each case has its own page.
-const STORE_PASTES = [
-  { file: 'color-by-digit.user.js', entry: 'Color by Digit', editor: '#color-by-digit-editor', first: ['ColorByDigit_profiles', SETTINGS_SCRIPTS.find((s) => s.file === 'color-by-digit.user.js').saved], second: ['ColorByDigit_mode', 'digit'] },
-  { file: 'draw-tool.user.js', entry: 'Text Anywhere', editor: '#draw-tool-dialog', first: ['DrawTool_width', 3.5], second: ['DrawTool_opacity', 50] },
-  { file: 'pen-tool-extras.user.js', entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', first: ['PenColor_thickness', 9], second: ['PenColor_opacity', 50] }
+// Each script's paste of `pasted` writes its keys in order, and the write of `failing`, the last, throws. The dialog's snapshot puts
+// every key back, and the script's in-memory copy of them too: the controls in `shows` are drawn from that copy when the dialog opens
+// again. A failed write leaves the feature on, so the page has no skip line.
+const FAILED_PASTES = [
+  { file: 'dark-page.user.js', entry: 'Dark Page', editor: '#dark-page-input', pasted: { DarkPage_color: '#336699' }, failing: 'DarkPage_color', shows: ['#dark-page-input'] },
+  {
+    file: 'auto-rules-resizer.user.js',
+    entry: 'Rules Resizer',
+    editor: '#auto-rules-resizer-max-width',
+    pasted: { AutoRulesResizer_maxWidth: 640, AutoRulesResizer_maxHeight: 480 },
+    failing: 'AutoRulesResizer_maxHeight',
+    shows: ['#auto-rules-resizer-max-width', '#auto-rules-resizer-max-height']
+  },
+  {
+    file: 'ui-tweaks.user.js',
+    entry: 'UI Tweaks',
+    editor: '#ui-tweaks-dialog',
+    pasted: { UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true },
+    failing: 'UiTweaks_wrapButtons',
+    shows: ['input[data-option="hideSelect"]', 'input[data-option="wrapButtons"]']
+  },
+  {
+    file: 'color-by-digit.user.js',
+    entry: 'Color by Digit',
+    editor: '#color-by-digit-editor',
+    pasted: { ColorByDigit_profiles: SETTINGS_SCRIPTS.find((s) => s.file === 'color-by-digit.user.js').saved, ColorByDigit_mode: 'digit' },
+    failing: 'ColorByDigit_mode',
+    shows: ['select[data-role="mode-draft"]']
+  },
+  {
+    file: 'draw-tool.user.js',
+    entry: 'Text Anywhere',
+    editor: '#draw-tool-dialog',
+    pasted: { DrawTool_width: 3.5, DrawTool_opacity: 50, DrawTool_frame: true, DrawTool_font: 'fixed' },
+    failing: 'DrawTool_font',
+    shows: ['button[data-role="frame-pick"][data-value="on"]', 'select[data-role="font-choice"]']
+  },
+  {
+    file: 'pen-tool-extras.user.js',
+    entry: 'Pen Tool Extras',
+    editor: '#pen-tool-extras-editor',
+    pasted: { PenColor_thickness: 9, PenColor_colors: { 3: '#123456' } },
+    failing: 'PenColor_colors',
+    shows: ['#pen-tool-extras-setting-thickness']
+  }
 ]
 
-for (const kase of STORE_PASTES) {
-  describe(`${kase.file}: a paste whose second write throws leaves every key as before`, { concurrency: false }, () => {
+for (const failedPaste of FAILED_PASTES) {
+  describe(`${failedPaste.file}: a paste whose last write throws leaves every key, and what the dialog shows, as before`, { concurrency: false }, () => {
     let context, p, errors
     after(async () => { await context?.close() })
 
-    it('says the paste failed and both keys hold what they held before', async () => {
+    it('says the paste failed, and the keys, the open dialog and the dialog opened again all show what they did before', async () => {
       ({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
-      await startPuzzle(p, { injection: { mode: 'after-start', code: code(kase.file) } })
-      await openScriptDialog(p, kase.entry, kase.editor)
-      const keys = [kase.first[0], kase.second[0]]
-      const before = await p.evaluate((names) => names.map((name) => Framework.getData(name)), keys)
-      await p.evaluate((key) => {
-        const setData = Framework.setData
-        Framework.setData = function (name, value) {
-          if (name === key) throw new Error('planted second write failure')
-          return setData.call(this, name, value)
-        }
-      }, kase.second[0])
-      assert.equal(await paste(p, JSON.stringify(Object.fromEntries([kase.first, kase.second]))), 'Could not paste: planted second write failure')
-      assert.deepEqual(await p.evaluate((names) => names.map((name) => Framework.getData(name)), keys), before)
+      await startPuzzle(p, { injection: { mode: 'after-start', code: code(failedPaste.file) } })
+      await openScriptDialog(p, failedPaste.entry, failedPaste.editor)
+      const keys = Object.keys(failedPaste.pasted)
+      const before = { stored: await stored(p, keys), shown: await shown(p, failedPaste.shows) }
+      await failNextWriteOf(p, failedPaste.failing, 'planted write failure')
+      assert.equal(await paste(p, JSON.stringify(failedPaste.pasted)), 'Could not paste: planted write failure')
+      assert.deepEqual(await stored(p, keys), before.stored)
+      assert.deepEqual(await shown(p, failedPaste.shows), before.shown, 'the open dialog took the paste that failed')
+      await closeDialogWith(p, 'Cancel', failedPaste.editor)
+      await openScriptDialog(p, failedPaste.entry, failedPaste.editor)
+      assert.deepEqual(await shown(p, failedPaste.shows), before.shown, 'the script\'s in-memory settings kept the paste that failed')
       assert.deepEqual(errors, [])
     })
   })
 }
+
+describe('auto-rules-resizer.user.js: a Save whose height write throws', { concurrency: false }, () => {
+  let context, p, errors
+  after(async () => { await context?.close() })
+
+  it('says it was not saved, the width key is still unsaved and the max size settings stay on', async () => {
+    ({ context, p, errors } = await openPage(browser))
+    await startPuzzle(p, { injection: { mode: 'after-start', code: code('auto-rules-resizer.user.js') } })
+    await openScriptDialog(p, 'Rules Resizer', '#auto-rules-resizer-max-width')
+    await failNextWriteOf(p, 'AutoRulesResizer_maxHeight', 'planted height write failure')
+    await p.fill('#auto-rules-resizer-max-width', '640')
+    await p.fill('#auto-rules-resizer-max-height', '480')
+    await dialogButton(p, 'Save').click()
+    await p.locator(STATUS).filter({ hasText: 'Not saved: planted height write failure' }).waitFor()
+    assert.equal(await p.evaluate((key) => Framework.getData(key), 'AutoRulesResizer_maxWidth'), null)
+    assert.deepEqual(errors, [])
+  })
+})

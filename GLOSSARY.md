@@ -177,7 +177,9 @@
   feature that lacks one at startup, or whose own code throws, turns off alone while the rest of the script keeps working.
 - **feature** — a part of a script declared to the **SudokuPad guard**, with the label the console warning and the **notice bar** call it and
   the SudokuPad internals it needs. Its calls into SudokuPad run under it, so one that throws turns it off; off, it acts as if the script
-  lacked it, until the page reloads. A **refused write** is the exception: its saves go through `write`, which leaves the feature on.
+  lacked it, until the page reloads. Its saved settings go through the guard's store for it. Two failures leave it on: a **refused
+  write**, and any throw in a settings dialog's Save, Copy or Paste, whether a write or the script's own step. There the dialog stays open
+  and its status line names the failure, after a Save or Paste has put every key back.
 - **refused write** — a save the browser refuses with `QuotaExceededError` (a full `localStorage`). It is the browser's doing, not a SudokuPad change: the
   guard warns once in the console, puts up a plain bar, and the feature keeps saving once space frees.
 - **notice bar** — the guard's bar at the bottom of the page, in the one purple every script's bar uses (Pen Tool Extras' and the site's

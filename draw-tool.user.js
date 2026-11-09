@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.8
+// @version      0.44.9
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.8'
+  const VERSION = '0.44.9'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -704,10 +704,12 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+  /* eslint-enable no-unused-vars */
+  // </lib:plain>
 
-  // The index `delta` steps from `index` in a list of `count`, going round past either end.
-  const wrapIndex = (index, delta, count) => (((index + delta) % count) + count) % count
-
+  // <lib:write-style>
+  // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
   // The page's style element `id`, added on the first call, holds `css`.
   function writeStyle (id, css, doc = document) {
     let style = doc.getElementById(id)
@@ -719,7 +721,7 @@
     style.textContent = css
   }
   /* eslint-enable no-unused-vars */
-  // </lib:plain>
+  // </lib:write-style>
   // <lib:store>
   // Generated from lib/store.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -1250,8 +1252,9 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer. A script
+  // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -1267,10 +1270,26 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
-  function snapshotStore (store, keys) {
+  // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
+  // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
+  // put back after them; the first throw then goes on. The stored values are held by reference, so a script's save must replace a value
+  // and never edit one in place.
+  function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
-    return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
+    const putMirrorBack = holdMirror()
+    return () => {
+      const failures = []
+      before.forEach(([key, value]) => {
+        try {
+          if (value == null) store.removeData(key)
+          else store.setData(key, value)
+        } catch (error) {
+          failures.push(error)
+        }
+      })
+      putMirrorBack()
+      if (failures.length > 0) throw failures[0]
+    }
   }
 
   // A thrown value that is not an Error has no message, so it is shown as itself.
@@ -1430,8 +1449,9 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  // `snapshot` is `writeOrRestore`'s, and Save writes under it; the script hands the same one to `wireCopyPaste`.
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
+  // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
+  // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
@@ -1440,7 +1460,7 @@
     let failed = false
     const saveAndClose = () => {
       try {
-        if (failed || changed()) writeOrRestore(snapshot, save)
+        if (failed || changed()) feature.runInDialog(() => writeOrRestore(snapshot, save))
       } catch (error) {
         failed = true
         // The dialog stays open so the failure is read and the choices are kept.
@@ -1466,9 +1486,11 @@
     })
     const body = doc.getElementById(bodyId)
     if (!body) return null
+    const dialog = body.closest('.dialog')
+    wireErrorLog(dialog, win)
+    wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
-    wireErrorLog(body.closest('.dialog'), win)
-    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    const row = dialog?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
     return body
   }
@@ -1504,10 +1526,10 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept, under the
-  // dialog's own `snapshot` (`writeOrRestore`'s), so a paste that fails half-way puts every key back; `readers` and `upgrade` are `pastedSettings`'.
-  function wireCopyPaste (root, { copied, readers, upgrade, snapshot }, apply) {
-    if (typeof snapshot !== 'function') throw new Error('Paste settings needs a snapshot')
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, and `apply(values)` takes what a paste kept,
+  // under `snapshot` (`writeOrRestore`'s) in a dialog action of `feature` (`runInDialog`), so a paste that fails half-way puts every key
+  // back. `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
@@ -1520,7 +1542,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) writeOrRestore(snapshot, () => apply(values))
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -1738,8 +1760,8 @@
       host.append(message)
     }
 
-    // While a dialog write (`runOrThrow`) runs, a store write that throws goes on, marked here, to the dialog's `writeOrRestore`.
-    let dialogWrites = 0
+    // While a dialog action (`runInDialog`) runs, a store write that throws goes on, marked here, through every `run` to the caller.
+    let dialogActions = 0
     const storeFailures = new WeakSet()
 
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
@@ -1773,18 +1795,15 @@
             return fallback()
           }
         },
-        // A save, copy or paste in a settings dialog: its throw goes on to the dialog's status line, and one with the feature off says so.
-        // A store write that fails in it passes with every feature still on, so `writeOrRestore` can put the earlier keys back through the store.
-        runOrThrow (fn) {
+        // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
+        // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
+        runInDialog (fn) {
           if (feature.off) throw new Error(`${name} turned off its ${label}`)
-          dialogWrites++
+          dialogActions++
           try {
             return fn()
-          } catch (error) {
-            if (!storeFailures.has(error)) feature.skip(error)
-            throw error
           } finally {
-            dialogWrites--
+            dialogActions--
           }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
@@ -1834,7 +1853,7 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws turns the feature off and its caller goes on, except in a dialog write, where it throws on (`runOrThrow`). A
+    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
     // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
@@ -1844,7 +1863,7 @@
         try {
           fn()
         } catch (error) {
-          if (dialogWrites > 0) {
+          if (dialogActions > 0) {
             if (Object(error) === error) storeFailures.add(error)
             throw error
           }
@@ -2205,7 +2224,8 @@
   // <lib:panel>
   // Generated from lib/panel.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads rem from plain, and SUDOKUPAD_PURPLE from sudokupad.
+  // Reads rem from plain, and SUDOKUPAD_PURPLE from sudokupad. A script that copies in settings-dialog as well has a second `global` naming
+  // SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global rem, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
   // A tool's purple panel: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of three controls at the full 4rem, and the sliders across the rest. A tray sits behind the last two rows; it is placed in
@@ -2447,21 +2467,16 @@
   }
 
   // The colors, outline, box color, frame, font, size and opacity as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
-  function snapshotSave () {
-    const restoreStored = snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, WIDTH_KEY, OPACITY_KEY])
+  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, WIDTH_KEY, OPACITY_KEY], () => {
     const was = { colors, outline, boxColor, frame, noteFont, width, opacity }
     return () => {
-      try {
-        restoreStored()
-      } finally {
-        ;({ colors, outline, boxColor, frame, noteFont, width, opacity } = was)
-        showPanelValues()
-        showColors()
-        if (colors) refreshPickers(CLASS_PREFIX, (n) => colors[n])
-        showBoxes()
-      }
+      ;({ colors, outline, boxColor, frame, noteFont, width, opacity } = was)
+      showPanelValues()
+      showColors()
+      if (colors) refreshPickers(CLASS_PREFIX, (n) => colors[n])
+      showBoxes()
     }
-  }
+  })
 
   function saveColors (next) {
     colors = next
@@ -2573,14 +2588,32 @@
       css: DIALOG_CSS,
       changed: () => Object.values(edits()).some(Boolean),
       snapshot: snapshotSave,
-      save: () => settingsUi.runOrThrow(() => {
+      feature: settingsUi,
+      save: () => {
         const edited = edits()
         if (edited.colors) saveColors(draft)
         if (edited.outline) saveOutline(draftOutline)
         if (edited.box) saveBoxColor(draftBox)
         if (edited.frame) saveFrame(draftFrame)
         if (edited.font) saveFont(draftFont)
-      })
+      },
+      copyPaste: {
+        // A copy with the saved settings off says so, rather than copy the defaults as if they were saved.
+        copied: () => storage.runInDialog(() => copiedSettings(savedData)),
+        readers: READERS,
+        apply: (values) => {
+          applyPasted(values)
+          draftOutline = outline
+          draftBox = boxColor
+          draftCustom = savedHex(boxColor) ?? draftCustom
+          draftFrame = frame
+          draftFont = noteFont
+          draft = colors ?? draft
+          chosen = null
+          colorsEdited = false
+          draw()
+        }
+      }
     }), () => null)
     if (!box) return
     const draw = () => {
@@ -2624,18 +2657,6 @@
       else return
       draw()
       box.querySelector(`button[data-role="${role}"][data-value="${value}"]`)?.focus()
-    }))
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(savedData), readers: READERS, snapshot: snapshotSave }, (values) => settingsUi.runOrThrow(() => {
-      applyPasted(values)
-      draftOutline = outline
-      draftBox = boxColor
-      draftCustom = savedHex(boxColor) ?? draftCustom
-      draftFrame = frame
-      draftFont = noteFont
-      draft = colors ?? draft
-      chosen = null
-      colorsEdited = false
-      draw()
     }))
   }
 

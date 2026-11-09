@@ -15,10 +15,11 @@
 //   pageColor     the page's background as a computed `rgb(r, g, b)`
 //   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight }; null on a puzzle with no rules text (#679)
 //   letterMode    whether the number pad shows letters
-import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 
-// The shared color module is pasted text for the scripts, not a module, so it is evaluated here as its own test does.
-const { parseColor, wcagLuminance } = new Function(`${readFileSync(new URL('../../lib/color-math.js', import.meta.url), 'utf8')}\nreturn { parseColor, wcagLuminance }`)() // eslint-disable-line no-new-func
+// The shared color module is pasted text for the scripts, not a module, so it is evaluated here by the lib tests' loader.
+const { loadLib } = createRequire(import.meta.url)('../../test/load-lib.js')
+const { parseColor, wcagLuminance } = loadLib(['color-math'], ['parseColor', 'wcagLuminance'])
 
 // The Dark Page rule: a page color this light or lighter is not dark. WCAG relative luminance, 0 black to 1 white; the fuzz's dark colors are under 0.02.
 const DARK_PAGE_MAX_LUMINANCE = 0.2
