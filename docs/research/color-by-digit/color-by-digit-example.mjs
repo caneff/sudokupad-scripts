@@ -15,6 +15,8 @@ const script = readFileSync(new URL('../../../color-by-digit.user.js', import.me
 
 // The demo profile is active; Modular (orange, pink, yellow) follows it for the menu picture. savedProfiles also sets the two flags that stop the script adding its
 // own preloads, so the menu lists exactly these two.
+// The digit of the one given.
+export const GIVEN = '2'
 const DEMO_PROFILE = 'Entropic, no blue'
 const PROFILES = {
   profiles: [
@@ -32,9 +34,9 @@ const SPLIT_SAVED = { ...savedProfiles({ ...PROFILES, digitActive: 1 }), [MODE_S
 const DIGITS = [[0, 2, '3'], [0, 5, '8'], [1, 0, '9'], [1, 2, '1'], [1, 5, '6'], [2, 1, '6'], [2, 3, '3']]
 // SudokuPad flags a mark that repeats a given in its row or column: the corner 2s at (0, 4) and (2, 0) and the center 2 at (0, 1) all
 // conflict with the given 2. A corner mark colors nothing in Cell.
-const CORNER = [[0, 3, '19'], [0, 4, '25'], [1, 4, '27'], [2, 0, '25'], [2, 5, '19']]
+export const CORNER = [[0, 3, '19'], [0, 4, '25'], [1, 4, '27'], [2, 0, '25'], [2, 5, '19']]
 // (0, 1) is the 0-3 group alone, (1, 1) all 7-9 and (1, 3) all 0-3, so each takes a group's color; (2, 2) mixes groups and stays white.
-const CENTRE = [[0, 1, '2'], [1, 1, '78'], [1, 3, '2'], [2, 2, '47']]
+export const CENTRE = [[0, 1, '2'], [1, 1, '78'], [1, 3, '2'], [2, 2, '47']]
 const CONFLICTS = 3
 const ROWS = 3
 const COLS = 6
@@ -48,7 +50,7 @@ export async function openExample (browser, { leave = [], split = false } = {}) 
     seed: (page) => page.addInitScript((saved) => Object.entries(saved).forEach(([key, value]) => window.localStorage.setItem(key, JSON.stringify(value))), split ? SPLIT_SAVED : SAVED)
   })
   await startPuzzle(p)
-  await p.evaluate(() => Framework.app.loadCompactClassicSudoku('2' + '0'.repeat(80)))
+  await p.evaluate((given) => Framework.app.loadCompactClassicSudoku(given + '0'.repeat(80)), GIVEN)
   await p.waitForFunction(() => Framework.app.grid.getCell(0, 0).given)
   await p.addStyleTag({ content: '#svenpeek { display: none !important }' })
   await p.addScriptTag({ content: script })

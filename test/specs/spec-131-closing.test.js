@@ -31,8 +31,8 @@ function warningWithoutGetApp (name) {
 }
 
 // Spec 131's acceptance as one pass over its scripts that are still in the repo, at `npm test`. This seam is blind
-// to real SudokuPad: the Framework calls, rendering and undo are `npm run test:live`'s, and neither run covers a real
-// Tampermonkey install or crackingthecryptic.com.
+// to real SudokuPad: the Framework calls, rendering and undo are `npm run test:live`'s, and a real
+// Tampermonkey install is `npm run test:tampermonkey`'s.
 test('Color by Digit and Dark Page hold spec 131 together', () => {
   const { paintDigit, rowAfterKey, layoutPages } = colorByDigit
   // Painting a digit moves it, and a group left with no digits is gone.

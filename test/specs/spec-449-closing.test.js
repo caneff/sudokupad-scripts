@@ -13,7 +13,7 @@ const SCRIPTS = readdirSync(ROOT).filter((file) => file.endsWith('.user.js')).so
 // that every call into it throws, and every way back into the script is taken (broken-sudokupad.js). This seam is blind to what that
 // file's head names (a path behind a state the stand-in never takes, and the methods a script wraps), and to real SudokuPad: the bar,
 // the console and each script's other features after a missing internal are `npm run test:live`'s (`live/*/*-guard.live.mjs` and the
-// rest), and neither run covers a real Tampermonkey install.
+// rest), and a real Tampermonkey install is `npm run test:tampermonkey`'s.
 test('every script declares its features through the shared guard', () => {
   assert.equal(SCRIPTS.length, 6, SCRIPTS.join(', '))
   for (const file of SCRIPTS) {

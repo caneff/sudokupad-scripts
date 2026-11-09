@@ -25,8 +25,8 @@ const VERSIONS_BEFORE = { 'pen-tool-extras.user.js': '1.14.11', 'color-by-digit.
 // Spec 204's acceptance at `npm test`: the 11 sections, the one mark table, the one color-character map, the marks boxes in the
 // settings table and the dialog stylesheets. This seam is blind to real SudokuPad: `npm run test:live` covers the marks cycles,
 // Restore defaults leaving the mark boxes alone, the dialogs' look and the startup there, and a dialog's pixels were compared once
-// in each stylesheet change. It is blind too to a real Tampermonkey install with marks saved by 1.14.13 and to crackingthecryptic.com,
-// which no automated run reaches.
+// in each stylesheet change. It is blind too to marks saved by 1.14.13 in a real Tampermonkey install, which
+// `npm run test:tampermonkey` does not set up.
 test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a feature or a saved setting', () => {
   const pen = read('pen-tool-extras.user.js')
 

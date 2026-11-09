@@ -23,8 +23,8 @@ const digitsIn = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m
 // and their press cycle, label and starting mode; copy and paste of the mode, from settings saved before it too; leaving
 // cell coloring; the digit stylesheet, its shades and the conflict circle's CSS; the Each digit preload; the digit
 // profile sync and "Use digit colors"; and Digit Color gone. This seam is blind to real SudokuPad: the Framework calls,
-// the rendering of cells, digits and circles, and undo are `npm run test:live`'s, and neither run covers a real
-// Tampermonkey install or crackingthecryptic.com.
+// the rendering of cells, digits and circles, and undo are `npm run test:live`'s, and a real
+// Tampermonkey install is `npm run test:tampermonkey`'s.
 test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is merged into it', () => {
   const { nextMode, allowedMode, startingMode, buttonLabel, copiedSettings, pastedSettings } = byDigit
 

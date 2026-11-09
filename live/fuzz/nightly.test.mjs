@@ -202,10 +202,8 @@ describe('failureTitle', () => {
     assert.match(failureTitle('crash signal after the last action: page error or console error: boom'), /^Fuzz: crash: /)
   })
   it('never ends in a space, which a stored title would lose', () => {
-    for (let n = 100; n < 125; n++) {
-      const title = failureTitle(`crash signal after "s": ${'a'.repeat(n - 30)} ${'b'.repeat(40)}`)
-      assert.equal(title, title.trimEnd())
-    }
+    // The space lands at index 109, the last character the title keeps.
+    assert.equal(failureTitle(`crash signal after "s": ${'a'.repeat(96)} ${'b'.repeat(40)}`), `Fuzz: crash: ${'a'.repeat(96)}`)
   })
   it('folds numbers in a crash signal, so another seed has the same title', () => {
     assert.equal(failureTitle('crash signal after "s": page error or console error: boom 12'), failureTitle('crash signal after "t": page error or console error: boom 99'))

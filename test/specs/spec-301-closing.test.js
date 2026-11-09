@@ -19,7 +19,7 @@ const readPen = (n) => PEN[n]
 // its own nine colors and the first-use copy; the presets and Copy/Paste settings; old drawings; and the homepage, details page
 // and README. This seam is blind to real
 // SudokuPad: the panel's layout in the keypad, the hold-to-recolor picker, a drag on the board, rendering, the settings
-// entry and undo are `npm run test:live`'s, and neither run covers a real Tampermonkey install.
+// entry and undo are `npm run test:live`'s, and a real Tampermonkey install is `npm run test:tampermonkey`'s.
 test('spec 301: Text Anywhere has its own colors, one Size slider and a settings dialog', () => {
   // Size: 1 to 16 in steps of 0.5, default 6; text size is 2w + 8.
   assert.equal(draw.readWidth(null), 6)

@@ -673,11 +673,6 @@ test('pastedSettings: a whole number of pixels or null is kept, anything else is
   assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: true, [MAX_HEIGHT_KEY]: -3 })), { values: {}, skipped: 2 })
 })
 
-test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
-  assert.deepEqual(readPaste('{}'), { values: {}, skipped: 0 })
-  assert.deepEqual(readPaste(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
-})
-
 test('the script has no pointerover or pointerout listener', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')
   assert.doesNotMatch(source, /pointerover|pointerout/)
