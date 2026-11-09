@@ -14,10 +14,10 @@ const SITE_ADDRESS = /^https?:\/\/(caneff\.github\.io\/sudokupad-scripts|[^/]*ne
 const HOME = 'index.html'
 const DETAILS = 'pen-tool-extras.html'
 const DRAW = 'text-anywhere.html'
-// The old address of the Text Anywhere page, kept so links already shared still reach it.
-const OLD_DRAW = 'draw-tool.html'
+// The page's address before it was renamed, kept so links already shared still reach it.
+const REDIRECT = 'draw-tool.html'
 const CBD = 'color-by-digit.html'
-const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && f !== OLD_DRAW)
+const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && f !== REDIRECT)
 // Comments are dropped first: a link inside one is not a link on the page.
 const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 
@@ -103,11 +103,12 @@ test('each details page is named for its h1: lower-case words joined by hyphens'
   }
 })
 
-test(`${OLD_DRAW} is the one redirect page: a meta refresh and a plain link to ${DRAW}`, () => {
-  const page = read(OLD_DRAW)
+test(`${REDIRECT} is the one redirect page: a meta refresh and a plain link to ${DRAW}`, () => {
+  const page = read(REDIRECT)
   assert.match(page, new RegExp(`<meta http-equiv="refresh" content="0; url=${DRAW.replace('.', '\\.')}">`))
   assert.deepEqual(siteLinks(page), [DRAW])
-  assert.equal(fs.existsSync(path.join(SITE_DIR, DRAW)), true)
+  assert.doesNotMatch(page, /<script\b/i)
+  for (const t of targets(page)) assert.doesNotMatch(t, SITE_ADDRESS, `site/${REDIRECT} links ${t} by its absolute address`)
 })
 
 // Each details page: its script's install file and the homepage heading whose entry links to it.
