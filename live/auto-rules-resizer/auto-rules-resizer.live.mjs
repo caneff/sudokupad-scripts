@@ -4,6 +4,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { addScripts, openWith, scriptSource, useBrowser } from '../session.mjs'
+import { undoDepth } from '../board.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
@@ -467,13 +468,12 @@ describe('the max auto width and height', { concurrency: false }, () => {
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
-      const undoDepth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
-      const depthBefore = await undoDepth()
+      const depthBefore = await undoDepth(p)
       await p.locator(MAX_WIDTH_INPUT).click()
       await p.keyboard.type('500')
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '500')
       // A leaked 5-0-0 could leave the cell empty again (a repeated digit toggles off), so the board's undo history is what shows an entry.
-      assert.equal(await undoDepth(), depthBefore, 'typing in the box entered nothing on the board')
+      assert.equal(await undoDepth(p), depthBefore, 'typing in the box entered nothing on the board')
     })
 
     it('Save keeps the limits and applies them at once', async () => {

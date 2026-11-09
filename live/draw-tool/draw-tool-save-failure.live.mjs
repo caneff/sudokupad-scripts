@@ -5,10 +5,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as draw from './draw-tool-fixtures.mjs'
-import { closeDialogWith, dialogButton } from '../settings.mjs'
+import { STATUS, closeDialogWith, dialogButton } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
-const { COLORS_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS } = draw
+const { COLORS_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR } = draw
 const COLORS_STYLE_ID = 'draw-tool-colors'
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const SWATCH_2 = `${EDITOR} input[data-role="swatch"][data-key="2"]`

@@ -4,10 +4,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as draw from './draw-tool-fixtures.mjs'
-import { closeDialogWith } from '../settings.mjs'
+import { STATUS, actButton, closeDialogWith } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
-const { BOX_KEY, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXTS, pickDraw } = draw
+const { BOX_KEY, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, pickDraw } = draw
 const PICKS = `${EDITOR} button[data-role="box-pick"]`
 const CUSTOM = `${EDITOR} input[data-role="box-custom"]`
 const FRAME_PICKS = `${EDITOR} button[data-role="frame-pick"]`
@@ -197,7 +197,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       await p.locator(FRAME_ON).click()
     })
     await p.click(SETTINGS_BUTTON)
-    await p.locator('.dialog button[data-act="copy-settings"]').click()
+    await actButton(p, 'copy-settings').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
     const copied = JSON.parse(await p.evaluate(() => navigator.clipboard.readText()))
     assert.equal(copied[BOX_KEY], 'yellow')
@@ -212,7 +212,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       for (const [text, box, frame] of [[JSON.stringify(copied), 'yellow', true], [JSON.stringify({ [BOX_KEY]: 'plaid', [FRAME_KEY]: 'yes' }), 'page', false]]) {
         await other.p.evaluate((t) => navigator.clipboard.writeText(t), text)
         await other.p.click(SETTINGS_BUTTON)
-        await other.p.locator('.dialog button[data-act="paste-settings"]').click()
+        await actButton(other.p, 'paste-settings').click()
         await other.p.locator(STATUS).filter({ hasText: /^Pasted \d settings?\.$/ }).waitFor()
         assert.equal(await stored(other.p, BOX_KEY), box)
         assert.equal(await stored(other.p, FRAME_KEY), frame)

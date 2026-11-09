@@ -8,7 +8,7 @@ import { EXTRAS_EDITOR, closeExtrasEditorWith, dialogButton, headerVersion, open
 import { gridPoint } from '../board.mjs'
 import { openPenTool, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
-import { openWith, useBrowser } from '../session.mjs'
+import { addScripts, openWith, useBrowser } from '../session.mjs'
 
 const { HOLD_TO_EDIT_MS, HOLD_WAIT_MS, STYLE } = extras
 
@@ -808,7 +808,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
     const warned = []
     p.on('console', (m) => { if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text()) })
     try {
-      await p.addScriptTag({ content: extras.script })
+      await addScripts(p, [extras.SCRIPT_FILE])
       await p.locator(STYLE).waitFor({ state: 'attached' })
       // The wait ends at 10 s: wait for the one warning instead of sleeping past it. A save during the wait would still be stored, so the checks below see it.
       assert.equal(await settle(() => warned.length, 1, COLOR_TOOL_TIMEOUT_MS + 10000, Infinity), 1, warned.join('\n'))
@@ -841,7 +841,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
   it('picking SudokuPad colors and saving while the script waits outranks the install save', async () => {
     const { context, p } = await openWithNoPalette()
     try {
-      await p.addScriptTag({ content: extras.script })
+      await addScripts(p, [extras.SCRIPT_FILE])
       await openExtrasEditor(p)
       await p.locator('#pen-tool-extras-editor select[data-role="color-choice"]').selectOption('sudokupad')
       await closeExtrasEditorWith(p, 'Save')
@@ -859,7 +859,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
   it('the install save arriving after a thickness is set in the panel leaves the thickness in place', async () => {
     const { context, p } = await openWithNoPalette()
     try {
-      await p.addScriptTag({ content: extras.script })
+      await addScripts(p, [extras.SCRIPT_FILE])
       await p.evaluate(() => Framework.setSetting('toolpen', true))
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       await setSlider(p, '#pen-tool-extras-thickness', 11)
@@ -876,7 +876,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
   it('a save made while the script waits for the color tool outranks the install save', async () => {
     const { context, p } = await openWithNoPalette()
     try {
-      await p.addScriptTag({ content: extras.script })
+      await addScripts(p, [extras.SCRIPT_FILE])
       await openExtrasEditor(p)
       await p.locator('#pen-tool-extras-editor input[data-key="4"]').fill(FOUR.hex)
       await closeExtrasEditorWith(p, 'Save')

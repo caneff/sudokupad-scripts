@@ -82,7 +82,7 @@ snapshot; a failure is replayed by index and shrunk for at most 10 minutes.
 - **CDP** ("Profiler domain", https://chromedevtools.github.io/devtools-protocol/tot/Profiler/): `startPreciseCoverage({ callCount, detailed })` "resets execution
   counters" and prevents optimized code; `takePreciseCoverage` "Collect[s] coverage data ... and resets execution counters", so a per-action delta is possible
   through a CDP session, which Playwright's wrapper does not expose.
-- **What it takes here**: `injectAtIdle` (`live/page.mjs`) inserts each script as an inline `<script>` element with no URL, which the coverage API treats as anonymous.
+- **What it takes here**: `installAtIdle` (`live/session.mjs`) inserts each script as an inline `<script>` element with no URL, which the coverage API treats as anonymous.
   Appending `\n//# sourceURL=<file>.user.js` to the injected text (as `tagged` in `live/redraw-probe.mjs` already does) names it. Then collect coverage per list in
   `openTarget`/`close`, merge by function name and offset over the night, and print the functions of each script with a count of 0. A plant would no longer be
   needed to find an action gap. The offsets refer to the injected text, which is the file on disk plus the tag, so mapping back to lines is direct.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { pickDraw } from './draw-tool/draw-tool-fixtures.mjs'
 import { captureConsoleErrors } from './page.mjs'
 import { SCRIPTS } from './scripts.mjs'
-import { openWith, reloadWith, scriptSource } from './session.mjs'
+import { addScripts, openWith, reloadWith } from './session.mjs'
 
 export const NOTICE_BAR = '#sudokupad-scripts-notices [data-script]'
 export const NOTES = '#draw-tool-layer .draw-tool-text'
@@ -19,7 +19,7 @@ async function allReady (p) {
 }
 
 export async function loadScripts (p) {
-  for (const file of FILES) await p.addScriptTag({ content: scriptSource(file) })
+  await addScripts(p, FILES)
   await allReady(p)
 }
 

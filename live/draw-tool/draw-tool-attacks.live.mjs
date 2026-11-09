@@ -8,7 +8,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { captureConsoleErrors } from '../page.mjs'
 import { SETTLE_MS, settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
-import { boxOpen, clickAt, finishNote, gridPoint, mouseDrag, restart, typeText } from '../board.mjs'
+import { boxOpen, clickAt, finishNote, gridPoint, mouseDrag, restart, typeText, undoDepth } from '../board.mjs'
 
 const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SELECTED, SIZE_SLIDER, TEXT_BOX, TEXTS, slideTo } = draw
 const { HIT_MARGIN_PX } = createRequire(import.meta.url)('../../draw-tool.user.js')
@@ -119,12 +119,11 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
   })
 
   it('attack 21c: the saves while typing add no SudokuPad undo step and leave the note\'s own Undo working a character at a time', async () => {
-    const undoSteps = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
-    const before = await undoSteps()
+    const before = await undoDepth(p)
     await clickAt(p, SPOT)
     await p.keyboard.type('abcdef')
     assert.deepEqual(await settle(savedTexts, ['abcdef'], SETTLE_MS, SAVE_QUIET_MS), ['abcdef'], 'the save while typing ran')
-    assert.equal(await undoSteps(), before, 'the saves added no undo step')
+    assert.equal(await undoDepth(p), before, 'the saves added no undo step')
     await p.keyboard.press('Control+z')
     assert.equal(await boxText(), 'abcde', 'one Undo in the note removes the last character typed')
     await finishNote(p)

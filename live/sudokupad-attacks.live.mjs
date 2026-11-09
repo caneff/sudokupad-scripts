@@ -7,7 +7,7 @@ import { assertNoCrash, attack, cellsState, colorCell, emptyCells, flushSave, lo
 import { BUTTON as CBD_BUTTON, labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { captureConsoleErrors } from './page.mjs'
 import { BLACK } from './scripts.mjs'
-import { gridPoint, placeNote, restart } from './board.mjs'
+import { gridPoint, placeNote, restart, undoDepth } from './board.mjs'
 import { draw, openPenTool, penEntries, setInputValue } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
 import { DRAW_BUTTON } from './draw-tool/draw-tool-fixtures.mjs'
@@ -57,14 +57,13 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
   it('50 Undo past the start 100 times, then redo 100 times', () => attack(browser(), async (p) => {
     const filled = await fillBoard(p, await cellsState(p))
     const penBefore = await penEntries(p)
-    const depth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
-    const filledDepth = await depth()
+    const filledDepth = await undoDepth(p)
     for (let i = 0; i < 100; i++) await p.keyboard.press('Control+z')
-    assert.equal(await settle(depth, 0), 0, 'every action was undone')
+    assert.equal(await settle(() => undoDepth(p), 0), 0, 'every action was undone')
     assert.deepEqual(await penEntries(p), [], 'no pen line')
     assert.equal(await noteCount(p), 1, 'the note stays: Undo does not touch notes')
     for (let i = 0; i < 100; i++) await p.keyboard.press('Control+y')
-    assert.equal(await settle(depth, filledDepth), filledDepth, 'every action was redone')
+    assert.equal(await settle(() => undoDepth(p), filledDepth), filledDepth, 'every action was redone')
     assert.deepEqual(await settle(() => cellsState(p), filled), filled, 'redo brought everything back')
     assert.deepEqual(await penEntries(p), penBefore)
     assert.equal(await noteCount(p), 1, 'the note is still there')

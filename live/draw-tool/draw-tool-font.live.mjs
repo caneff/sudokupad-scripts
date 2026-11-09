@@ -3,11 +3,11 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as draw from './draw-tool-fixtures.mjs'
-import { closeDialogWith } from '../settings.mjs'
+import { STATUS, actButton, closeDialogWith } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
 
-const { FONT_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXTS, TEXT_BOX } = draw
+const { FONT_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, TEXT_BOX } = draw
 const FONT = `${EDITOR} select[data-role="font-choice"]`
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const CLIPBOARD = { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }
@@ -108,7 +108,7 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
       await draw.pickDraw(other.p)
       await other.p.evaluate((text) => navigator.clipboard.writeText(text), JSON.stringify({ [FONT_KEY]: 'fixed' }))
       await other.p.click(SETTINGS_BUTTON)
-      await other.p.locator('.dialog button[data-act="paste-settings"]').click()
+      await actButton(other.p, 'paste-settings').click()
       await other.p.locator(STATUS).filter({ hasText: 'Pasted 1 setting.' }).waitFor()
       assert.equal(await other.p.locator(FONT).inputValue(), 'fixed')
       assert.equal(await other.p.evaluate((key) => Framework.getData(key), FONT_KEY), 'fixed')

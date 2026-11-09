@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import * as draw from './draw-tool-fixtures.mjs'
 import { plantUnchecked } from '../pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
-import { useBrowser } from '../session.mjs'
+import { addScripts, useBrowser } from '../session.mjs'
 import { gridPoint, typeText } from '../board.mjs'
 
 const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, OPACITY_SLIDER, SLIDERS, TEXTS, WIDTH_KEY, slideTo, valueOf } = draw
@@ -82,7 +82,7 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
 
     // Last, so the checks above run with one copy of the script on the page.
     it('a second start adds no second panel style', async () => {
-      await p.addScriptTag({ content: draw.script })
+      await addScripts(p, [draw.SCRIPT_FILE])
       assert.equal(await p.locator('style#draw-tool-style').count(), 1)
     })
 

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { boardState, cellState, emptyCell, pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts } from './attacks.mjs'
-import { cellCentre, finishNote, gridPoint, mouseDrag, typeText } from './board.mjs'
+import { cellCentre, finishNote, gridPoint, mouseDrag, typeText, undoDepth } from './board.mjs'
 import { penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
@@ -23,7 +23,6 @@ describe('attacks on input', { concurrency: false }, () => {
   afterEach(async () => { await context?.close() })
 
   const selectedCells = () => p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => `${c.row},${c.col}`))
-  const undoDepth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
   const clipboard = () => p.evaluate(() => navigator.clipboard.readText())
 
   it('attack 69: Ctrl+wheel, the wheel and a middle click in the middle of a pen line and of a note move leave a whole line and a whole note, and the next drag works', async () => {
@@ -148,7 +147,7 @@ describe('attacks on input', { concurrency: false }, () => {
     await p.mouse.click(...await gridPoint(p, [pasteRow + 0.5, pasteCol + 0.5]))
     const cellsBefore = [await cellState(p, [row, col]), await cellState(p, [pasteRow, pasteCol])]
     const selectedBefore = await selectedCells()
-    const depthBefore = await undoDepth()
+    const depthBefore = await undoDepth(p)
     await pickTool(p, 'draw')
     await typeText(p, [4.5, 4.5], '15')
     await p.mouse.dblclick(...await draw.middleAt(p, await gridPoint(p, [4.5, 4.5])))
@@ -166,7 +165,7 @@ describe('attacks on input', { concurrency: false }, () => {
     assert.deepEqual(await draw.texts(p), ['15'], 'the note keeps the text')
     assert.deepEqual([await cellState(p, [row, col]), await cellState(p, [pasteRow, pasteCol])], cellsBefore, 'the copied cell and the cell selected for the paste are as they were')
     assert.deepEqual(await selectedCells(), selectedBefore, 'the selection is as it was')
-    assert.equal(await undoDepth(), depthBefore, 'SudokuPad\'s undo stack took nothing')
+    assert.equal(await undoDepth(p), depthBefore, 'SudokuPad\'s undo stack took nothing')
     await assertNoCrash(p, errors)
   })
 

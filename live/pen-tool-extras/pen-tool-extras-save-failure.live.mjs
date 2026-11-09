@@ -5,7 +5,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
-import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
+import { STATUS, closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
 
 const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
@@ -49,7 +49,7 @@ describe('Pen Tool Extras\' Save is all-or-nothing', { concurrency: false }, () 
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await dialogButton(p, 'Save').click()
-    await p.locator('.dialog [data-role="settings-status"]').filter({ hasText: 'Not saved: style refused' }).waitFor()
+    await p.locator(STATUS).filter({ hasText: 'Not saved: style refused' }).waitFor()
     assert.deepEqual(await stored(COLORS_KEY), colorsBefore)
     assert.equal(await stored(THICKNESS_KEY), thicknessBefore)
     assert.equal(await p.locator(STYLE).evaluate((el) => el.textContent), styleBefore, 'the page draws with the colors and thickness in force before Save')

@@ -65,7 +65,6 @@ export const HANDLES = '#draw-tool-layer .draw-tool-resize'
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
 export const SETTINGS_EDITOR = '#draw-tool-dialog'
-export const SETTINGS_STATUS = '.dialog [data-role="settings-status"]'
 export const PICKER_BOX = '.draw-tool-picker'
 
 export async function holdForPickers (p, selector, button, state) {

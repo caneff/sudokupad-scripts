@@ -4,7 +4,7 @@ import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as draw from './draw-tool-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
-import { finishNote, gridPoint } from '../board.mjs'
+import { finishNote, gridPoint, undoDepth } from '../board.mjs'
 
 const { TEXT_BOX } = draw
 const SPOT = [3.5, 3.5]
@@ -15,7 +15,6 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
   let context, p, errors
 
   const boxText = () => p.locator(TEXT_BOX).textContent()
-  const undoSteps = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
   const openNote = async () => p.mouse.click(...await gridPoint(p, SPOT))
 
   before(async () => {
@@ -33,7 +32,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await p.mouse.click(...await gridPoint(p, [0.5, 0.5]))
     await p.keyboard.press('5')
     await draw.pickDraw(p)
-    const before = await undoSteps()
+    const before = await undoDepth(p)
     assert.equal(before > 0, true, 'SudokuPad has a step to lose')
     // SudokuPad's key listeners are on the document and window; none may see an undo or redo key.
     await p.evaluate(() => {
@@ -47,7 +46,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     assert.equal(await boxText(), 'a')
     await p.keyboard.press('Control+y')
     assert.equal(await boxText(), 'ab')
-    assert.equal(await undoSteps(), before, 'SudokuPad\'s undo stack is unchanged')
+    assert.equal(await undoDepth(p), before, 'SudokuPad\'s undo stack is unchanged')
     assert.equal(await p.evaluate(() => window.__undoKeys), 0, 'no undo or redo key reached the page')
     await finishNote(p)
   })

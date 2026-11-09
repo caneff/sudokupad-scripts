@@ -5,7 +5,7 @@
 import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
+import { STATUS, closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
 const SLIDERS = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth']
@@ -161,10 +161,10 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     const buttons = [await copy.boundingBox(), await paste.boundingBox()]
     for (const button of buttons) near(button.y + button.height / 2, title.top + title.height / 2, 'level with the title')
     assert.equal(buttons[0].x < buttons[1].x, true)
-    await p.evaluate(() => { document.querySelector('.dialog [data-role="settings-status"]').textContent = 'Settings copied.' })
-    const status = await rect('.dialog [data-role="settings-status"]')
+    await p.evaluate(([sel, text]) => { document.querySelector(sel).textContent = text }, [STATUS, 'Settings copied.'])
+    const status = await rect(STATUS)
     assert.equal(status.right <= buttons[0].x + 1, true, 'the status is left of the icons')
-    assert.equal(await p.locator('.dialog .pen-tool-extras-title-row').evaluate((row) => row.contains(document.querySelector('.dialog [data-role="settings-status"]'))), true)
+    assert.equal(await p.locator('.dialog .pen-tool-extras-title-row').evaluate((row, sel) => row.contains(document.querySelector(sel)), STATUS), true)
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
@@ -191,9 +191,9 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await p.setViewportSize({ width: 500, height: 1000 })
     try {
       await openSettledEditor(p)
-      await p.evaluate(() => { document.querySelector('.dialog [data-role="settings-status"]').textContent = 'Pasted 3 settings; skipped 2 that did not check out.' })
+      await p.evaluate(([sel, text]) => { document.querySelector(sel).textContent = text }, [STATUS, 'Pasted 3 settings; skipped 2 that did not check out.'])
       const title = await rect('.dialog .pen-tool-extras-title-row b')
-      const status = await rect('.dialog [data-role="settings-status"]')
+      const status = await rect(STATUS)
       const copy = await p.getByRole('button', { name: 'Copy settings' }).boundingBox()
       assert.equal(status.left >= title.right - HALF_PIXEL, true, `the status (from ${status.left}) starts after the title (to ${title.right})`)
       assert.equal(status.right <= copy.x + HALF_PIXEL, true, 'and ends before the icons')

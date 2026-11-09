@@ -4,11 +4,11 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as draw from './draw-tool-fixtures.mjs'
-import { closeDialogWith, dialogButton } from '../settings.mjs'
+import { STATUS, actButton, closeDialogWith, dialogButton } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 import { typeText } from '../board.mjs'
 
-const { OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXT_BOX } = draw
+const { OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXT_BOX } = draw
 const PICKS = `${EDITOR} button[data-role="outline-pick"]`
 const OUTLINES = ['None', 'Thin', 'Thick']
 const pick = (page, name) => page.locator(`${PICKS}[aria-label="${name}"]`)
@@ -103,7 +103,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   it('Copy then Paste in a fresh page carries the outline, and an invalid pasted one reads as Thick', async () => {
     await chooseOutline('None')
     await p.click(SETTINGS_BUTTON)
-    await p.locator('.dialog button[data-act="copy-settings"]').click()
+    await actButton(p, 'copy-settings').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
     const copied = await p.evaluate(() => navigator.clipboard.readText())
     assert.equal(JSON.parse(copied)[OUTLINE_KEY], 'none')
@@ -114,7 +114,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
       for (const [text, outline] of [[copied, 'none'], [JSON.stringify({ [OUTLINE_KEY]: 'plaid' }), 'medium']]) {
         await other.p.evaluate((t) => navigator.clipboard.writeText(t), text)
         await other.p.click(SETTINGS_BUTTON)
-        await other.p.locator('.dialog button[data-act="paste-settings"]').click()
+        await actButton(other.p, 'paste-settings').click()
         await other.p.locator(STATUS).filter({ hasText: /Pasted \d+ settings?\./ }).waitFor()
         assert.equal(await stored(other.p, OUTLINE_KEY), outline)
         assert.equal(await other.p.locator(`${PICKS}[aria-pressed="true"]`).getAttribute('data-value'), outline, 'the dialog shows it')

@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
 import { cellCentre } from '../../../live/board.mjs'
+import { addScripts } from '../../../live/session.mjs'
 import { goToPenPage, openPenTool, PAGE_THREE } from '../../../live/pen.mjs'
 import { PROBE_INIT, PROBE_TAG, round, startProbe, stopProbe, sum, summarize, tagged } from '../../../live/redraw-probe.mjs'
 
@@ -15,7 +16,8 @@ const MOVES = 400
 
 async function session (browser, variant) {
   const { p } = await openPage(browser, { seed: (page) => page.addInitScript(PROBE_INIT, PROBE_TAG) })
-  await startPuzzle(p, variant === 'extras' ? { injection: { mode: 'after-start', code: tagged(script) } } : {})
+  await startPuzzle(p)
+  if (variant === 'extras') await addScripts(p, [{ code: tagged(script) }])
   await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app.svgRenderer)
   // The pen tool is off until its own setting turns it on.
   await p.evaluate(() => Framework.setSetting('toolpen', true))

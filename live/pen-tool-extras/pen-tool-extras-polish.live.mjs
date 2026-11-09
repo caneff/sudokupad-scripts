@@ -1,13 +1,12 @@
 // Live check of Pen Tool Extras' small touches (#547) on sudokupad.app in headless Chromium: a press state on the panel buttons, the grid's hand cursor kept under the pen tool, an erased line that
 // leaves no copy, a fade-in on edit mode's pickers, the press state and the pickers off under reduced motion, and a pixel floor on the corner and the right-click line hit.
 // Every press, click and drag is real mouse input. The floor is checked on a grid scaled to half size (a 35 px cell at 1200 x 900), which is what a big grid does to its cells.
-/* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { assertPressState, restartPuzzle } from '../page.mjs'
-import { cellCentre, gridPoint } from '../board.mjs'
+import { cellCentre, gridPoint, undoDepth } from '../board.mjs'
 import { drag, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
@@ -47,7 +46,6 @@ const stopWatchingCopies = (p) => p.evaluate(() => {
 for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced motion', { reducedMotion: 'reduce' }, true]]) {
   describe(`Pen Tool Extras${name}`, { concurrency: false }, () => {
     let context, p
-    const undoDepth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
     before(async () => {
       ;({ context, p } = await open({ contextOptions }))
     })
@@ -67,14 +65,14 @@ for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced
       const [x, y] = await gridPoint(p, [0.5, 3])
       await p.mouse.move(x, y)
       await p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
-      const depth = await undoDepth()
+      const depth = await undoDepth(p)
       // The held press shows the erase preview, a group of copies that is meant to be there; the watch starts once it has, so only what the release adds is counted.
       await p.mouse.down({ button: 'right' })
       await p.locator('.pen-tool-extras-faded-group').waitFor({ state: 'attached' })
       await watchCopies(p)
       await p.mouse.up({ button: 'right' })
       assert.deepEqual(await settle(() => penEntries(p), []), [], 'the whole line is erased')
-      assert.equal(await undoDepth() > depth, true, 'an undo step')
+      assert.equal(await undoDepth(p) > depth, true, 'an undo step')
       assert.deepEqual(await stopWatchingCopies(p), [], 'a copy of the erased line was drawn')
       assert.equal(await p.locator('.pen-tool-extras-faded-group').count(), 0, 'the preview group is gone with the release')
       await p.click('#control-undo')

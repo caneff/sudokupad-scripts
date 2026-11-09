@@ -13,7 +13,7 @@ import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settin
 import { cellCentre } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_ONE, PAGE_THREE, PAGE_TWO, padValues, penStrings, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
-import { addPage, openWith, useBrowser } from '../session.mjs'
+import { addPage, addScripts, openWith, useBrowser } from '../session.mjs'
 
 const UI_TWEAKS_FILE = 'ui-tweaks.user.js'
 
@@ -522,7 +522,7 @@ describe('injected after the pen tool is already on', { concurrency: false }, ()
 
   it('the first Tab selects pen c, the dashed version of the pen already selected, and ToolPen_color stays 3', async () => {
     assert.equal(await p.evaluate(() => ToolPen.tool.selectedColor), 3)
-    await p.addScriptTag({ content: extras.script })
+    await addScripts(p, [extras.SCRIPT_FILE])
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
     await p.keyboard.press('Tab')
     assert.equal(await settle(() => p.evaluate(() => ToolPen.tool.selectedColor), 'c'), 'c')
