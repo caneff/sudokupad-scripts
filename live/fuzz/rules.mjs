@@ -62,9 +62,10 @@ const viewDifferences = (was, now) => Object.keys(was).filter((field) => JSON.st
 // What a reload must leave as it was. Color by Digit colors the entered cells every time the page opens in Cell or Both mode, as one undo step, so a coloring
 // undone before the reload comes back by design: in those modes the cells' colors (and the serialized cells that hold them) are left out. Not read: the notes
 // (notes-survive-reload counts a note still open for typing), the undo stack depth and the letter pad, none of which a reload promises to keep.
-const reloadView = (page) => {
+const reloadView = (page, ignorePenColors = false) => {
   const { mode, groups, cells } = page.colorByDigit
-  const base = { penState: sorted(page.penState), penDrawn: sorted(page.penDrawn), pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit) }
+  const strokes = (list) => sorted(ignorePenColors ? list.map((s) => s.replace(/ pencolor-\S+$/, '')) : list)
+  const base = { penState: strokes(page.penState), penDrawn: strokes(page.penDrawn), pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit) }
   return colorsCells(mode) ? base : { ...base, cells: page.cells, colours: cells.map((cell) => cell.colours) }
 }
 
@@ -120,8 +121,15 @@ export const RULES = [
   },
   {
     name: 'reload-changes-nothing',
-    // All scripts: what the player sees after a reload is what they saw before it, as far as `reloadView` reads.
-    check: ({ now, before, action }) => (action === 'reload' ? viewDifferences(reloadView(before.page), reloadView(now.page)) : [])
+    // All scripts: what the player sees after a reload is what they saw before it, as far as `reloadView` reads. One exception (#681): a reload within about half
+    // a second of a pen stroke can bring every stroke back in color 1. SudokuPad does it alone: with Pen Tool Extras not installed, `npm run test:fuzz -- --seed 4
+    // --path 40@:` still failed 3 of 3 runs (docs/research/pen-reload-color.md). So when every stroke after the reload is color 1, colors are not compared.
+    check: ({ now, before, action }) => {
+      if (action !== 'reload') return []
+      const strokes = now.page.penState.concat(now.page.penDrawn)
+      const resetToOne = strokes.length > 0 && strokes.every((s) => s.endsWith(' pencolor-1'))
+      return viewDifferences(reloadView(before.page, resetToOne), reloadView(now.page, resetToOne))
+    }
   },
   {
     name: 'undo-redo-restores',

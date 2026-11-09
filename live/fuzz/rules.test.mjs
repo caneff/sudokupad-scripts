@@ -120,6 +120,16 @@ describe('the rules', () => {
       const two = { penState: ['pen-1 pencolor-1', 'pen-e pencolor-1'], penDrawn: ['pen-1 pencolor-1', 'pen-e pencolor-1'] }
       assert.deepEqual(check('reload-changes-nothing', { ...two, penState: [...two.penState].reverse(), penDrawn: [...two.penDrawn].reverse() }, { before: two, action: 'reload' }), [])
     })
+    it('holds when a reload draws every stroke in color 1 (SudokuPad alone does it after a quick reload, #681)', () => {
+      const reset = { ...board, penState: ['pen-1 pencolor-1'], penDrawn: ['pen-1 pencolor-1'] }
+      assert.deepEqual(check('reload-changes-nothing', reset, { before: board, action: 'reload' }), [])
+    })
+    it('fails when a reload gives a stroke another color than color 1, or changes its shape', () => {
+      const other = { ...board, penState: ['pen-1 pencolor-3'], penDrawn: ['pen-1 pencolor-3'] }
+      assert.equal(check('reload-changes-nothing', other, { before: board, action: 'reload' }).length, 2)
+      const shape = { ...board, penState: ['pen-5 pencolor-1'], penDrawn: ['pen-5 pencolor-1'] }
+      assert.equal(check('reload-changes-nothing', shape, { before: board, action: 'reload' }).length, 2)
+    })
     it('fails when a reload changes a digit', () => {
       assert.equal(check('reload-changes-nothing', { ...board, colorByDigit: colorByDigit('Digit', [['6', ['5']], [''], ['']]) }, { before: board, action: 'reload' }).length, 1)
     })
