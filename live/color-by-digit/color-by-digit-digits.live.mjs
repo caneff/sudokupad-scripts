@@ -2,8 +2,8 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
-import { gotoPuzzle, PUZZLE_URL } from '../page.mjs'
+import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, styleOn, watch, selectCell, reloadSession } from './color-by-digit-fixtures.mjs'
+import { PUZZLE_URL } from '../page.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -123,8 +123,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     return drawn.map((c) => ({ dx: c.cx - cx, dy: c.cy - cy })).sort((m, n) => Math.hypot(m.dx, m.dy) - Math.hypot(n.dx, n.dy))[0]
   }
 
-  const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-  const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
+  const enter = async (r, c, digit) => { await selectCell(p, r, c); await p.keyboard.press(digit) }
   const markMode = async (id, fn) => { await p.click(id); try { await fn() } finally { await p.click('#control-normal') } }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
@@ -401,8 +400,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   }
 
   it('the shades survive a reload', async () => {
-    await gotoPuzzle(p)
-    await startInjected(p, script)
+    await reloadSession(p, script)
     await expectShadesAfterEntry()
   })
 
@@ -432,7 +430,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     // rebuilds the board in place. The repo holds one puzzle URL, so it is the same puzzle again.
     it('the board rebuilt in the page without a reload still gets the shades', async () => {
       // PuzzleLoader is a top-level binding of the page's script, not a window property.
-      await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
+      await p.evaluate(() => { window.pageLoader = PuzzleLoader }) // eslint-disable-line no-undef
       await read(() => document.querySelectorAll('#cell-givens text').forEach((e) => e.setAttribute('data-old-board', '')))
       await read(async (id) => {
         const { parsePuzzleData, fetchPuzzle } = window.pageLoader
@@ -519,14 +517,13 @@ describe('digit colors from the palette the page shows, injected after Start Puz
       palette.colors['4'] = pink
       Framework.app.tools.colour.savePalette(palette)
     }, PINK)
-    await gotoPuzzle(p)
-    await startInjected(p, script)
+    await reloadSession(p, script)
   })
   after(async () => { await context.close() })
 
   it('a digit takes the shade of its group\'s color as the page shows it', async () => {
     assert.equal(await paletteColorOn(p, '4'), PINK)
-    await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
+    await selectCell(p, 0, 2)
     await p.keyboard.press('4')
     const shade = shadeOf(PINK)
     assert.deepEqual(await settle(allFillsOn(p, 'entered', '4'), [shade]), [shade])

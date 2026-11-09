@@ -3,8 +3,9 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, startInjected, watch, wordOn } from './color-by-digit-fixtures.mjs'
-import { gotoPuzzle, MODES } from '../page.mjs'
+import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, watch, wordOn, cellsStateOn, selectCell, wrongColorCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
+import { MODES } from '../page.mjs'
+import { restart } from '../board.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -25,9 +26,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const cellsState = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({
-    r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])]
-  })))
+  const cellsState = () => cellsStateOn(p)
   const at = (s, r, c) => s.find((x) => x.r === r && x.c === c)
   const allColors = async () => JSON.stringify((await cellsState()).map((x) => x.colours))
   const coloredCount = () => coloredCountOn(p)
@@ -61,7 +60,6 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   const MODE_SELECT = `${EDITOR} select[data-role="mode-draft"]`
   const chooseMode = (mode) => p.selectOption(MODE_SELECT, mode)
   const modeIsChosen = async (mode) => (await p.locator(MODE_SELECT).inputValue()) === mode
-  const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
   const paint = (r, c, key) => paintOn(p, r, c, key)
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
@@ -82,8 +80,8 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('setup: two entered digits land in Off and color nothing; the replay is kept', async () => {
-    await select(0, 2); await p.keyboard.press('4')
-    await select(0, 3); await p.keyboard.press('7')
+    await selectCell(p, 0, 2); await p.keyboard.press('4')
+    await selectCell(p, 0, 3); await p.keyboard.press('7')
     const typed = await settle(async () => [await valueAt(0, 2), await valueAt(0, 3)], ['4', '7'])
     assert.deepEqual(typed, ['4', '7'])
     assert.equal(await coloredCount(), 0)
@@ -91,7 +89,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('a press steps to Cell, drawing the chips filled with blue digits, saves it, and colors the givens, the entered digits and centre marks', async () => {
-    await select(8, 5); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3'); await p.click('#control-normal')
+    await selectCell(p, 8, 5); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3'); await p.click('#control-normal')
     assert.equal(await settle(() => marks(8, 5), '13'), '13')
     assert.equal(await coloredCount(), 0)
     await pressTo(p, 'Cell')
@@ -144,7 +142,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('in Digit a typed digit gets no cell color', async () => {
-    await select(0, 6); await p.keyboard.press('8')
+    await selectCell(p, 0, 6); await p.keyboard.press('8')
     assert.equal(await settle(() => valueAt(0, 6), '8'), '8')
     assert.deepEqual(await watch(() => colorsAt(0, 6)), [[]])
     await undo()
@@ -164,7 +162,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('in Both a typed digit takes its color in the same undo step', async () => {
-    await select(0, 6); await p.keyboard.press('8')
+    await selectCell(p, 0, 6); await p.keyboard.press('8')
     assert.deepEqual(await settle(async () => [await valueAt(0, 6), await colorsAt(0, 6)], ['8', ['2']]), ['8', ['2']])
     await undo()
     assert.deepEqual(await settle(async () => [await valueAt(0, 6), await colorsAt(0, 6)], ['', []]), ['', []])
@@ -194,7 +192,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('the keyboard stays with the puzzle right after a press: a digit typed next lands and takes its color', async () => {
-    await select(0, 5)
+    await selectCell(p, 0, 5)
     await pressTo(p, 'Cell')
     await p.keyboard.press('3')
     assert.equal(await settle(() => valueAt(0, 5), '3'), '3')
@@ -223,49 +221,49 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('a Delete that changes nothing leaves the redo stack alone', async () => {
-    await select(8, 6)
+    await selectCell(p, 8, 6)
     await p.keyboard.press('Delete')
     assert.equal(await read(() => Framework.app.puzzle.redoStack.length) > 0, true)
-    await select(0, 5)
+    await selectCell(p, 0, 5)
     await redo()
     assert.deepEqual(await settle(async () => [await valueAt(8, 1), await valueAt(8, 2)], ['1', '1']), ['1', '1'])
     await undo()
   })
 
   it('a change to a digit moves the color: 3 to 4 swaps the odd color for the even one, in one step', async () => {
-    await select(0, 5); await p.keyboard.press('4')
+    await selectCell(p, 0, 5); await p.keyboard.press('4')
     assert.deepEqual(await settle(async () => [await valueAt(0, 5), await colorsAt(0, 5)], ['4', ['2']]), ['4', ['2']])
     await undo()
     assert.deepEqual(await settle(async () => [await valueAt(0, 5), await colorsAt(0, 5)], ['3', ['1']]), ['3', ['1']])
   })
 
   it('a cell that is not pure loses its color when its digit goes', async () => {
-    await select(0, 5); await p.keyboard.press('Delete')
+    await selectCell(p, 0, 5); await p.keyboard.press('Delete')
     assert.deepEqual(await settle(async () => [await valueAt(0, 5), await colorsAt(0, 5)], ['', []]), ['', []])
     await undo()
     assert.deepEqual(await settle(async () => [await valueAt(0, 5), await colorsAt(0, 5)], ['3', ['1']]), ['3', ['1']])
   })
 
   it('with Multi-color off, a Delete takes the group color off a cell that holds two colors', async () => {
-    await select(8, 6); await p.keyboard.press('4')
+    await selectCell(p, 8, 6); await p.keyboard.press('4')
     assert.deepEqual(await settle(() => colorsAt(8, 6), ['2']), ['2'])
     await paint(8, 6, NO_GROUP_KEY)
     assert.deepEqual(await settle(() => sortedColorsAt(8, 6), ['2', NO_GROUP_KEY]), ['2', NO_GROUP_KEY])
     await read(() => Framework.setSetting('multicolour', false))
-    await select(8, 6); await p.keyboard.press('Delete')
+    await selectCell(p, 8, 6); await p.keyboard.press('Delete')
     assert.equal(await settle(() => valueAt(8, 6), ''), '')
     assert.equal((await colorsAt(8, 6)).includes('2'), false)
     await read(() => Framework.setSetting('multicolour', true))
   })
 
   it('centre marks of one group color an empty cell, marks of two groups take it away, and corner marks are ignored', async () => {
-    await select(8, 0); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3')
+    await selectCell(p, 8, 0); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3')
     assert.equal(await settle(() => marks(8, 0), '13'), '13')
     assert.deepEqual(await settle(() => colorsAt(8, 0), ['1']), ['1'])
     await p.keyboard.press('2')
     assert.deepEqual(await settle(() => colorsAt(8, 0), []), [])
     await p.click('#control-normal')
-    await select(8, 1); await p.click('#control-corner'); await p.keyboard.press('1'); await p.click('#control-normal')
+    await selectCell(p, 8, 1); await p.click('#control-corner'); await p.keyboard.press('1'); await p.click('#control-normal')
     const corner = () => read(() => Framework.app.grid.getCell(8, 1).propGet('corner').join(''))
     assert.equal(await settle(corner, '1'), '1')
     assert.deepEqual(await watch(() => colorsAt(8, 1)), [[]])
@@ -275,13 +273,13 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     await paint(0, 5, '1')
     assert.deepEqual(await settle(() => colorsAt(0, 5), []), [])
     assert.deepEqual(await watch(() => colorsAt(0, 5)), [[]])
-    await select(0, 5); await p.keyboard.press('5')
+    await selectCell(p, 0, 5); await p.keyboard.press('5')
     assert.deepEqual(await settle(() => colorsAt(0, 5), ['1']), ['1'])
   })
 
   it('an entry SudokuPad runs inside its own group, as a paste does, is colored and undone with it', async () => {
     const state = async () => [await valueAt(8, 3), await colorsAt(8, 3)]
-    await select(8, 3); await p.keyboard.press('7')
+    await selectCell(p, 8, 3); await p.keyboard.press('7')
     assert.deepEqual(await settle(state, ['7', ['1']]), ['7', ['1']])
     await read(() => {
       const a = Framework.app
@@ -306,8 +304,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('a restart colors the givens again', async () => {
-    await p.click('#control-restart')
-    await p.locator('.dialog button').filter({ hasText: /Restart/ }).filter({ hasNotText: /Keep Time/ }).first().click()
+    await restart(p)
     assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
     assert.equal(await valueAt(0, 2), '')
   })
@@ -390,7 +387,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
       const digit = x.given || x.value
       return digit ? [Number(digit) % 2 ? '1' : '2'] : []
     }
-    const wrong = async () => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(oddEven(x))).length
+    const wrong = () => wrongColorCountOn(p, oddEven)
     assert.equal(await settle(wrong, 0), 0)
     await undo()
     assert.equal(await settle(allColors, before), before)
@@ -398,7 +395,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
 
   it('one Save that enters Cell and changes the groups recolors every pure cell, not only the givens', async () => {
     await pressTo(p, 'Digit')
-    await select(0, 6); await p.keyboard.press('8')
+    await selectCell(p, 0, 6); await p.keyboard.press('8')
     assert.equal(await settle(() => valueAt(0, 6), '8'), '8')
     assert.deepEqual(await watch(() => colorsAt(0, 6)), [[]])
     await openEditor()
@@ -502,13 +499,12 @@ for (const mode of MODES) {
 
     before(async () => {
       ({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles(SEED), [AUTO_STORAGE_KEY]: false }, mode }))
-      await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
+      await selectCell(p, 0, 2)
       await p.keyboard.press('4')
       // SudokuPad saves progress a moment after a change.
       await p.waitForFunction(() => Object.keys(window.localStorage).some((k) => /progress/i.test(k)), null, { timeout: SETTLE_MS })
       await p.evaluate(([key]) => Framework.setData(key, true), [AUTO_KEY])
-      await gotoPuzzle(p)
-      await startInjected(p, script, mode)
+      await reloadSession(p, script, mode)
     })
     after(async () => { await context.close() })
 

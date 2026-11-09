@@ -4,10 +4,10 @@
 /* global Framework */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { captureConsoleErrors, gotoPuzzle, restartPuzzle } from '../page.mjs'
+import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
-import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, savedState, selectCell, startInjected, typeProfileName, wrongCountOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, savedState, selectCell, typeProfileName, wrongCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -179,8 +179,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.equal(await p.locator(`${PROFILE_ROWS} button[data-act=delete]`).first().isDisabled(), true, 'the last profile cannot be deleted')
     await closeEditor('Save')
     assert.equal((await getState()).profiles.length, 1)
-    await gotoPuzzle(p)
-    await startInjected(p, script)
+    await reloadSession(p, script)
     assert.equal((await getState()).profiles.length, 1, 'a reload keeps the one profile')
     assert.equal(await settle(label, 'Cell'), 'Cell')
   })
@@ -197,8 +196,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.deepEqual((await getState()).profiles.map((x) => x.name), SEED.profiles.map((x) => x.name), 'Cancel after the restart saves nothing')
     await openEditor()
     await p.click(NEW_PROFILE)
-    await gotoPuzzle(p)
-    await startInjected(p, script)
+    await reloadSession(p, script)
     assert.equal(await label(), 'Cell')
     assert.deepEqual((await getState()).profiles.map((x) => x.name), SEED.profiles.map((x) => x.name), 'the draft was never saved')
     await openEditor()

@@ -6,10 +6,11 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { captureConsoleErrors, gotoPuzzle, openPage, START, startPuzzle } from '../page.mjs'
+import { captureConsoleErrors, START } from '../page.mjs'
+import { selectCell } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
-import { scriptSource, useBrowser } from '../session.mjs'
+import { openWith, reloadWith, scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('dark-page.user.js')
 const { PAGE, BOARD_ID, STYLE_ID, LOCAL_DATA_KEY } = createRequire(import.meta.url)('../../dark-page.user.js')
@@ -63,8 +64,7 @@ const OTHER_BOARDS = {
 // Enters digits, corner marks, centre marks and colored cells, then deselects, so the board holds
 // every kind of entry the script could disturb and no selection highlight.
 async function fillBoard (p) {
-  const select = (r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-  const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
+  const enter = async (r, c, digit) => { await selectCell(p, r, c); await p.keyboard.press(digit) }
   const markMode = async (id, fn) => { await p.click(id); try { await fn() } finally { await p.click('#control-normal') } }
   await enter(0, 2, '4')
   await enter(0, 3, '2')
@@ -207,15 +207,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator(BOARD_BOX).waitFor({ state: 'attached' })
   }
 
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(STYLE).waitFor({ state: 'attached' })
-  }
-
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser()))
-    await boot()
+    ;({ context, p, errors } = await openWith(browser(), [{ code: script }]))
+    await p.locator(STYLE).waitFor({ state: 'attached' })
     await p.addStyleTag({ content: HIDE_PAGE_UI })
   })
   after(async () => { await context.close() })
@@ -446,7 +440,7 @@ describe('at document-start', { concurrency: false }, () => {
   // `saved` is put in storage before the script runs; `atLoad` is a color put in, or `null` taking it out (`false`: no change), at
   // DOMContentLoaded just before `start` (the sampler's listener is registered first, so it runs first).
   const samples = async (saved, atLoad = false) => {
-    const { context, p, errors } = await openPage(browser(), {
+    const { context, p, errors } = await openWith(browser(), [], {
       // Two init scripts run in order at document start, before the page's own: the sampler, then the script. At that point
       // `document.documentElement` does not exist yet, as in an injector that runs the script first.
       seed: async (page, errors) => {
@@ -471,7 +465,6 @@ describe('at document-start', { concurrency: false }, () => {
     })
     try {
       await p.locator(STYLE).waitFor({ state: 'attached' })
-      await startPuzzle(p)
       return {
         errors,
         frames: await p.evaluate(() => window.__frames),
@@ -531,28 +524,26 @@ describe('the page color dialog', { concurrency: false }, () => {
     await p.locator(`.dialog ${PICKER}`).waitFor({ state: 'visible' })
   }
   const dialogButton = (name) => p.locator('.dialog').getByRole('button', { name, exact: true })
-  const started = async () => {
-    await startPuzzle(p)
-    await p.locator(STYLE).waitFor({ state: 'attached' })
-  }
   const load = async () => {
-    await gotoPuzzle(p)
-    await started()
+    await reloadWith(p, [], { mode: 'document-idle' })
+    await p.locator(STYLE).waitFor({ state: 'attached' })
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser(), {
+    ;({ context, p, errors } = await openWith(browser(), [{ code: script }], {
+      mode: 'document-idle',
       // Records the script's CSS the moment its style first exists, before any frame paints with it.
-      seed: (page) => page.addInitScript(([src, styleId]) => {
-        document.addEventListener('DOMContentLoaded', () => {
-          const s = document.createElement('script')
-          s.textContent = src
-          document.documentElement.appendChild(s)
-          window.__firstCss = document.getElementById(styleId).textContent
+      seed: (page) => page.addInitScript((styleId) => {
+        const watcher = new window.MutationObserver(() => {
+          const style = document.getElementById(styleId)
+          if (!style) return
+          window.__firstCss = style.textContent
+          watcher.disconnect()
         })
-      }, [script, STYLE_ID])
+        watcher.observe(document, { childList: true, subtree: true })
+      }, STYLE_ID)
     }))
-    await started()
+    await p.locator(STYLE).waitFor({ state: 'attached' })
   })
   after(async () => { await context.close() })
 
@@ -662,15 +653,13 @@ describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => 
   const WARNING = /^dark-page: /
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser(), {
+    const breaks = 'const original = Framework.addSetting; Framework.addSetting = undefined; Framework.getApp().then(() => { Framework.addSetting = original })'
+    ;({ context, p, errors } = await openWith(browser(), [{ code: `;{ ${breaks} }\n${script}` }], {
       expectedSkips: [WARNING],
       seed: (page) => {
         page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })
       }
     }))
-    await startPuzzle(p)
-    const breaks = 'const original = Framework.addSetting; Framework.addSetting = undefined; Framework.getApp().then(() => { Framework.addSetting = original })'
-    await p.addScriptTag({ content: `;{ ${breaks} }\n${script}` })
     await p.locator(STYLE).waitFor({ state: 'attached' })
   })
   after(async () => { await context.close() })

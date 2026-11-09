@@ -7,8 +7,7 @@ import { settle } from '../settle.mjs'
 import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
 import { flushSave } from '../attacks.mjs'
-import { startPuzzle } from '../page.mjs'
-import { scriptSource, useBrowser } from '../session.mjs'
+import { reloadWith, scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
 
@@ -195,8 +194,7 @@ describe('The first Undo after a Restart, saved', { concurrency: false }, () => 
       assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT, 'the givens are colored after the Undo')
       assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined), true), true)
       await flushSave(p)
-      await p.reload({ waitUntil: 'load' })
-      await startPuzzle(p)
+      await reloadWith(p, [])
       assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT, 'a reload without the script shows them colored')
     } finally {
       await context.close()
@@ -206,11 +204,10 @@ describe('The first Undo after a Restart, saved', { concurrency: false }, () => 
 
 describe('The first Undo after a Restart, with Text Anywhere loaded', { concurrency: false }, () => {
   it('brings its note back too', async () => {
-    const both = await openSession(browser(), script)
+    const both = await openSession(browser(), script, { also: [draw.script] })
     try {
       const q = both.p
       await pressTo(q, 'Cell')
-      await q.addScriptTag({ content: draw.script })
       await q.locator(draw.DRAW_BUTTON).waitFor({ state: 'visible' })
       await draw.pickDraw(q)
       await q.mouse.click(...await gridPoint(q, [2.5, 2.5]))

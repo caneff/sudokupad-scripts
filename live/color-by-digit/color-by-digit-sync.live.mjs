@@ -3,7 +3,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, savedState, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, savedState, shadeReaders, watch, selectCell, reloadSession } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -36,8 +36,7 @@ const tools = (p) => {
   const getState = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
   const icon = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
   const shownCircles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].filter((c) => window.getComputedStyle(c.parentNode).display !== 'none').length, CIRCLES)
-  const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-  const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
+  const enter = async (r, c, digit) => { await selectCell(p, r, c); await p.keyboard.press(digit) }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
   const openMenu = async () => {
@@ -69,7 +68,7 @@ const tools = (p) => {
     assert.equal(await settle(() => p.locator(DIGIT_SELECT).inputValue(), value), value)
   }
   const modeChoice = () => p.$$eval(`${EDITOR} select[data-role="mode-draft"] option`, (es) => es.map((e) => `${e.value}${e.selected ? '*' : ''}`))
-  return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, select, undo, redo, menu, pick, openEditor, save, chooseDigit, modeChoice }
+  return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, undo, redo, menu, pick, openEditor, save, chooseDigit, modeChoice }
 }
 
 describe('the digit profile unsynced, saved synced in Both, injected after Start Puzzle', { concurrency: false }, () => {
@@ -175,8 +174,7 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   })
 
   it('a reload keeps both picks', async () => {
-    await p.reload({ waitUntil: 'load' })
-    await startInjected(p, script)
+    await reloadSession(p, script)
     assert.equal(await t.label(), 'Digit')
     assert.deepEqual(await t.icon(), ODD_EVEN_ICON)
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], heads: ['Cell', 'Digit'] })
@@ -315,8 +313,7 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
   })
 
   it('a reload keeps it off', async () => {
-    await p.reload({ waitUntil: 'load' })
-    await startInjected(p, script)
+    await reloadSession(p, script)
     assert.equal(await t.label(), 'Cell')
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], heads: [] })
     assert.deepEqual(await watch(fill('4')), [[DEFAULT_FILL]])

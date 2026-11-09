@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { openPage, startPuzzle } from '../page.mjs'
+import { reloadWith, openWith } from '../session.mjs'
 import { POLL_MS, settle } from '../settle.mjs'
 
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by puzzle-url.txt; the
@@ -65,36 +65,33 @@ export async function watch (read) {
   return seen.map((s) => JSON.parse(s))
 }
 
-// Runs the loaded page through the script's injection time for `mode` (document-idle is already set up by `openSession`)
-// and Start Puzzle, and returns once the script's button shows.
-// A script without the button (`buttonExpected` false: SudokuPad lacks what adds it) waits for nothing of its own.
-export async function startInjected (p, script, mode = 'after-start', buttonExpected = true) {
-  await startPuzzle(p, {
-    injection: { mode, code: script },
-    beforeStart: mode === 'before-start' && buttonExpected ? () => p.locator(BUTTON).waitFor({ state: 'attached' }) : undefined
-  })
-  if (buttonExpected) await p.locator(BUTTON).waitFor({ state: 'visible' })
-}
-
-// A page with `script` injected at `mode`. `saved` maps a localStorage key to a JSON value, written before the page's own
-// scripts run and only while the key is absent, so a reload keeps what was saved. `force` is written every load.
-// With neither, the page starts with SEED saved as the profiles and the mode saved Off.
-export async function openSession (browser, script, { saved = SEEDED_OFF, force = {}, contextOptions = {}, mode = 'after-start', buttonExpected = true, seed = async () => {}, expectedSkips } = {}) {
+// A page with `script` injected at `mode` (live/session.mjs decides when). `saved` maps a localStorage key to a JSON value, written before
+// the page's own scripts run and only while the key is absent, so a reload keeps what was saved. `force` is written every load.
+// `also` is the text of other scripts, injected after it. With neither, the page starts with SEED saved as the profiles and the mode saved Off. Returns once the script's button shows;
+// a script without the button (`buttonExpected` false: SudokuPad lacks what adds it) waits for nothing of its own.
+export async function openSession (browser, script, { saved = SEEDED_OFF, force = {}, contextOptions = {}, mode = 'after-start', buttonExpected = true, seed = async () => {}, expectedSkips, also = [] } = {}) {
   const entries = (object) => Object.entries(object).map(([key, value]) => [key, JSON.stringify(value)])
-  const opened = await openPage(browser, {
+  const opened = await openWith(browser, [script, ...also].map((code) => ({ code })), {
     contextOptions,
     expectedSkips,
-    injection: { mode, code: script },
-    seed: async (page) => {
-      await seed(page)
+    mode,
+    seed: async (page, errors) => {
+      await seed(page, errors)
       await page.addInitScript((list) => {
         list.forEach(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) })
       }, entries(saved))
       await page.addInitScript((list) => list.forEach(([key, value]) => window.localStorage.setItem(key, value)), entries(force))
     }
   })
-  await startInjected(opened.p, script, mode, buttonExpected)
+  if (buttonExpected) await opened.p.locator(BUTTON).waitFor({ state: 'visible' })
   return opened
+}
+
+// Reloads the page opened by `openSession` and returns once the script's button shows again. A script injected at document-idle
+// stays registered through the reload, so that mode names none.
+export async function reloadSession (p, script, mode = 'after-start') {
+  await reloadWith(p, mode === 'document-idle' ? [] : [{ code: script }], { mode })
+  await p.locator(BUTTON).waitFor({ state: 'visible' })
 }
 
 const LABEL_PREFIX = 'Color by digit: '
@@ -191,15 +188,18 @@ export const deleteProfileRow = async (p, n) => {
 
 export const keyOf = (groups, digit) => (groups.find((g) => g.digits.includes(String(digit))) || {}).key
 
-const cellsStateOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({ r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])] })))
+export const cellsStateOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({ r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])], corner: [...(c.pencilmarks || [])] })))
+
+// How many cells hold colors other than `expected(cell)`, a cell being a `cellsStateOn` entry.
+export async function wrongColorCountOn (p, expected) {
+  return (await cellsStateOn(p)).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(expected(x))).length
+}
 
 // How many cells hold a color other than their digit's group color in `groups`: a given or an entered digit takes its group's key, an empty cell none.
-export async function wrongCountOn (p, groups) {
-  return (await cellsStateOn(p)).filter((x) => {
-    const digit = String(x.given || x.value || '')
-    return JSON.stringify(x.colours) !== JSON.stringify(digit === '' ? [] : [keyOf(groups, digit)])
-  }).length
-}
+export const wrongCountOn = (p, groups) => wrongColorCountOn(p, (x) => {
+  const digit = String(x.given || x.value || '')
+  return digit === '' ? [] : [keyOf(groups, digit)]
+})
 
 export const selectCell = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
 
