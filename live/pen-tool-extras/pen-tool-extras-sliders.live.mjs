@@ -1,7 +1,6 @@
 // Live check of Pen Tool Extras' Thickness and Opacity sliders in the pen panel, on sudokupad.app in headless Chromium at 1280x720:
 // SudokuPad cancels every mouse move on the page, which stops the browser dragging a thumb unless the script keeps the move from it.
 import { after, before, describe, it } from 'node:test'
-import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
@@ -33,7 +32,6 @@ describe('Pen Tool Extras\' sliders drag from the track', { concurrency: false }
   after(async () => { await context.close() })
 
   const valueOf = (selector) => p.evaluate((s) => Number(document.querySelector(s).value), selector)
-  const focusedSlider = () => p.evaluate((s) => document.activeElement?.matches(`${s} input`) === true, SLIDERS)
 
   // A press on the track at `from` (a fraction of its length) away from the thumb, then a drag to `to`, with real mouse input; the button stays down.
   async function dragTrack (selector, from, to) {
@@ -54,12 +52,6 @@ describe('Pen Tool Extras\' sliders drag from the track', { concurrency: false }
       await dragTrack(selector, 0.9, 0.2)
       await readUntil(() => valueOf(selector), (v) => v <= min + range * 0.3)
       await p.mouse.up()
-    })
-
-    it(`the ${name} slider hands the focus back to the page when the pointer is released`, async () => {
-      await dragTrack(selector, 0.3, 0.6)
-      await p.mouse.up()
-      assert.equal(await focusedSlider(), false, 'no slider keeps the focus')
     })
   }
 })

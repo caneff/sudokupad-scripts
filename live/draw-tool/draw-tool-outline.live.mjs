@@ -63,6 +63,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   after(async () => { await context.close() })
 
   it('the panel has no Outline button, and the dialog\'s Outline choice has the None, Thin and Thick samples with Thick pressed', async () => {
+    assert.equal(await p.locator('.controls-input button[title*="Outline" i], .controls-input button[aria-label*="Outline" i]').count(), 0, 'no Outline button on the panel')
     await p.click(SETTINGS_BUTTON)
     assert.deepEqual(await p.locator(PICKS).evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label'))), OUTLINES)
     assert.equal(await pickedLabel(p), 'Thick')

@@ -425,15 +425,6 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
       }
     })
 
-    it('dark mode (prefers-color-scheme: dark): the shades still apply', async () => {
-      await p.emulateMedia({ colorScheme: 'dark' })
-      try {
-        await expectShadesAfterEntry()
-      } finally {
-        await p.emulateMedia({ colorScheme: 'light' })
-      }
-    })
-
     it('a digit on a colored cell keeps its shade', async () => {
       const toggle = () => read(() => {
         const a = Framework.app

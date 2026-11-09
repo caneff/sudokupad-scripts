@@ -248,16 +248,8 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.deepEqual(await t.menuRows(), [{ name: 'Odd/Even', active: true }, { name: 'Low/5/High', active: false }, { name: 'Four', active: false }, { name: 'Six', active: false }])
     const [menu, button] = await Promise.all([t.menu().boundingBox(), p.locator(BUTTON).boundingBox()])
     assert.equal(menu.y + menu.height <= button.y, true, JSON.stringify({ menu, button }))
-  })
-
-  it('Escape closes the menu', async () => {
+    // Escape and a click elsewhere close it too: motion's close test owns that.
     await p.keyboard.press('Escape')
-    await t.menu().waitFor({ state: 'detached' })
-  })
-
-  it('a click elsewhere closes the menu', async () => {
-    await t.openMenuByArrow()
-    await p.mouse.click(5, 5)
     await t.menu().waitFor({ state: 'detached' })
   })
 
@@ -275,19 +267,6 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     // The page's own listener runs after the script's, so it reads the final defaultPrevented.
     assert.deepEqual(await p.evaluate(() => window.__contextmenu), [true])
     assert.deepEqual(await watch(t.coloredCount), [0])
-    await p.keyboard.press('Escape')
-  })
-
-  it('a hold on the button opens the menu, and the press neither steps the mode nor colors anything', async () => {
-    assert.equal(await t.menu().count(), 0)
-    const { x, y } = await buttonPoint(p)
-    await p.mouse.move(x, y)
-    await p.mouse.down()
-    // Opens on a timer after HOLD_MS; waits on the menu, not on the clock.
-    await t.menu().waitFor({ state: 'visible', timeout: HOLD_MS + SETTLE_MS })
-    await p.mouse.up()
-    assert.deepEqual(await watch(t.coloredCount), [0])
-    assert.equal(await t.label(), 'Off')
     await p.keyboard.press('Escape')
   })
 

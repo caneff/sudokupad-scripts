@@ -58,7 +58,9 @@ for (const script of SETTINGS_SCRIPTS) {
     })
 
     it('reports text that is not settings, and saves nothing', async () => {
+      const before = await p.evaluate((key) => Framework.getData(key), script.key)
       assert.equal(await paste(p, 'not json'), 'Could not paste: the clipboard text is not JSON')
+      assert.deepEqual(await p.evaluate((key) => Framework.getData(key), script.key), before)
     })
 
     it('had no page error', () => assert.deepEqual(errors, []))

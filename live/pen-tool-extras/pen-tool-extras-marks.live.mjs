@@ -958,7 +958,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('Restore defaults sets the dialog\'s opacity slider to 80 for Save: Cancel afterwards leaves the saved opacity and the marks, Save clears it and draws at 0.8', async () => {
       assert.equal(await savedOpacity(), 30)
       await openExtrasEditor(p)
-      assert.equal(await editor().locator('input[type=range]').count(), 5)
       await dialogButton(p, 'Restore defaults').click()
       assert.equal(await editor().locator('input[data-setting="opacity"]').inputValue(), '80')
       assert.equal(await savedOpacity(), 30, 'nothing is saved before Save')

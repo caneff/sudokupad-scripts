@@ -285,7 +285,7 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
     assert.equal(await settle(t.shownCircles, 1), 1)
   })
 
-  it('the Digit pulldown is at the top of the dialog; on None, the mode choice is Cell and Off with Both fallen back to Cell', async () => {
+  it('the Digit pulldown opens on the saved digit profile and lists Same as cell, the profiles and None; on None the mode choice is Cell and Off, with Both fallen back to Cell', async () => {
     await t.openEditor()
     assert.equal(await p.locator(DIGIT_SELECT).inputValue(), '1')
     assert.deepEqual(await t.modeChoice(), ['cell', 'digit', 'both*', 'off'])

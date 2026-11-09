@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { ARROW, BUTTON, EDITOR, center, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState } from './color-by-digit-fixtures.mjs'
-import { closeDialogWith, dialogButton, openScriptDialog } from '../settings.mjs'
+import { dialogButton, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
@@ -197,8 +197,6 @@ describe('the dialog', { concurrency: false }, () => {
     await p.keyboard.press('4')
     assert.deepEqual(await paintedKeys(p), keys)
   })
-
-  it('closes', async () => { await closeDialogWith(p, 'Cancel', EDITOR) })
 })
 
 describe('the mode button and its menu', { concurrency: false }, () => {

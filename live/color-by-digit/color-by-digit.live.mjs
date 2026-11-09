@@ -123,13 +123,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(fits(l), true, JSON.stringify(l))
   })
 
-  it('the button shows an icon or readable text', async () => {
+  it('the button shows an icon', async () => {
     const look = await p.locator(BUTTON).evaluate((e) => {
       const svg = e.querySelector('.icon svg')
       const box = svg ? svg.getBoundingClientRect() : { width: 0, height: 0 }
-      return { icon: box.width > 8 && box.height > 8, text: e.textContent.trim(), fontSize: parseFloat(window.getComputedStyle(e).fontSize) }
+      return { icon: box.width > 8 && box.height > 8, width: box.width, height: box.height }
     })
-    assert.equal(look.icon || (look.text.length > 0 && look.fontSize > 4), true, JSON.stringify(look))
+    assert.equal(look.icon, true, JSON.stringify(look))
   })
 
   let baseline
@@ -513,8 +513,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('painting with a key the default palette lacks colors the digit key in the page\'s color', async () => {
       await digitKey('4').click()
       assert.equal(await keyOf('4'), 'u')
-      // rgb(10, 20, 30) at SudokuPad's 60% cell opacity
-      assert.equal(await digitKey('4').evaluate((e) => window.getComputedStyle(e).backgroundColor), 'color(srgb 0.0392157 0.0784314 0.117647 / 0.6)')
+      // rgb(10, 20, 30) at SudokuPad's 60% cell opacity, read as channels and alpha whatever notation Chromium serializes it in (rgba() or color(srgb ...))
+      const bg = await digitKey('4').evaluate((e) => window.getComputedStyle(e).backgroundColor)
+      const numbers = bg.match(/[\d.]+/g).map(Number)
+      const [r, g, b] = bg.startsWith('color(srgb') ? numbers.slice(0, 3).map((v) => v * 255) : numbers.slice(0, 3)
+      assert.equal([r - 10, g - 20, b - 30].every((d) => Math.abs(d) <= 1) && Math.abs(numbers[numbers.length - 1] - 0.6) < 0.01, true, bg)
     })
   })
 

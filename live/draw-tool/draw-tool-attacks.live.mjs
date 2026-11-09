@@ -366,6 +366,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     await slideTo(p, SIZE_SLIDER, 14)
     await slideTo(p, OPACITY_SLIDER, 40)
     const changed = await saved()
+    assert.equal(changed.length, 3, 'all three notes took the change')
     for (const [i, item] of changed.entries()) {
       assert.equal(item.color, RED, 'recolored')
       assert.ok(item.size > before[i].size, 'bigger')

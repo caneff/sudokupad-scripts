@@ -114,13 +114,22 @@ export const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/mat
 // How long a held button gets to show its press before the read gives up: far inside the 1000 ms hold that opens edit mode on a color button.
 const PRESS_READ_MS = 500
 
-// The scale a panel button has while the real mouse holds it down, read until it is `expected` or PRESS_READ_MS passes; the mouse then lets go away from the button.
+// The scale a panel button has while the real mouse holds it down, read until it is `expected` or PRESS_READ_MS passes (for `expected` 1, every reading in PRESS_READ_MS must be 1); the mouse then lets go away from the button.
 export async function scaleWhilePressed (page, selector, expected) {
   const box = await page.locator(selector).boundingBox()
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
+  const read = async () => scaleOf(await page.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transform, selector))
   try {
-    return await settle(async () => scaleOf(await page.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transform, selector)), expected, PRESS_READ_MS, PRESS_READ_MS)
+    if (expected !== 1) return await settle(read, expected, PRESS_READ_MS, PRESS_READ_MS)
+    // A button that keeps its size has nothing to wait for: settle would return on the first full-size reading, before a shrink that is still transitioning in.
+    // So this is a "nothing happened in PRESS_READ_MS" window, and the first reading that is not full size is the answer.
+    const until = Date.now() + PRESS_READ_MS
+    while (Date.now() < until) {
+      const scale = await read()
+      if (scale !== 1) return scale
+    }
+    return 1
   } finally {
     await page.mouse.move(2, 2)
     await page.mouse.up()

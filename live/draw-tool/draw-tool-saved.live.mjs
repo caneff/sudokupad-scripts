@@ -292,9 +292,11 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     const key = DRAWING_PREFIX + await puzzleKey()
     const planted = () => read((k) => Framework.getData(k), key)
     await read((k) => Framework.setData(k, 'not a drawing {'), key)
+    // An earlier test already filled `warnings` with a match, so only a warning from this load counts.
+    const warnedBefore = warnings.length
     await reload()
     assert.deepEqual(await texts(), [])
-    assert.equal(warnings.some((w) => /saved drawing/.test(w)), true, warnings.join('\n'))
+    assert.equal(warnings.slice(warnedBefore).some((w) => /saved drawing/.test(w)), true, warnings.join('\n'))
     assert.match(await dialogText(), /saved notes cannot be read/, 'the solver is told at load that the notes are not saved')
     await closeDialog()
     await pickDraw()

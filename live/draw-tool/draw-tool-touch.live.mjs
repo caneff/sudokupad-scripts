@@ -10,6 +10,8 @@ import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 
 const { TEXTS, TEXT_BOX } = draw
+// The script's CHROME_BACK_MS, which it does not export.
+const CHROME_BACK_MS = 300
 const { HIT_MARGIN_PX, WINDOW_PAD_PX } = createRequire(import.meta.url)('../../draw-tool.user.js')
 const SELECTION = '#draw-tool-layer .draw-tool-selection'
 const HANDLES = '#draw-tool-layer .draw-tool-resize'
@@ -74,7 +76,12 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
       await p.keyboard.press('ArrowRight')
       assert.deepEqual(await visible(SELECTION), ['hidden'], 'the outline hides')
       assert.deepEqual(await visible(HANDLES), ['hidden', 'hidden', 'hidden', 'hidden'], 'the handles hide')
+      // A second nudge restarts the wait: they are still hidden after it, and they come back no sooner than CHROME_BACK_MS after it (a lower bound a timer cannot beat).
+      await p.keyboard.press('ArrowRight')
+      const lastNudge = await p.evaluate(() => window.performance.now())
+      assert.deepEqual(await visible(SELECTION), ['hidden'], 'the outline stays hidden while nudging')
       await p.waitForFunction((s) => [...document.querySelectorAll(s)].every((e) => window.getComputedStyle(e).visibility === 'visible'), `${SELECTION}, ${HANDLES}`)
+      assert.equal(await p.evaluate(() => window.performance.now()) - lastNudge >= CHROME_BACK_MS, true, 'they come back about 300 ms after the last nudge, not sooner')
       assert.equal(await p.locator(`${TEXTS}.draw-tool-selected`).count(), 1, 'the note is still selected')
     })
 

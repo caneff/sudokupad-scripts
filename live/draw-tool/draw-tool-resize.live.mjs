@@ -176,7 +176,7 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     })
   }
 
-  it('dragging the top left handle in rewraps the text, and the size it set survives a reload', async () => {
+  it('dragging the top left handle in rewraps the text', async () => {
     await p.mouse.click(...await middleOfNote())
     const before = await box(TEXTS)
     await dragHandle(40, 0, 0)

@@ -107,7 +107,8 @@ describe('Undo after a Restart', { concurrency: false }, () => {
     await pressTo(p, 'Cell')
     assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
     await p.evaluate(() => Framework.app.restartPuzzle())
-    await settle(async () => (await coloredCount()) > 0, true)
+    assert.equal(await settle(async () => (await coloredCount()) > 0, true), true, 'the Restart leaves the board colored')
+    assert.equal(await label(), 'Cell')
     // Whatever each Undo takes back, a colored board means Cell and an uncolored one means Off.
     const agree = async () => (await label()) === ((await coloredCount()) > 0 ? 'Cell' : 'Off')
     let undos = 0
@@ -116,6 +117,7 @@ describe('Undo after a Restart', { concurrency: false }, () => {
       undos++
       assert.equal(await settle(agree, true), true, `after Undo ${undos}: ${await label()}, ${await coloredCount()} colored`)
     }
+    assert.equal(undos > 0, true, 'at least one Undo was checked')
     assert.deepEqual([await label(), await coloredCount()], ['Off', 0])
   })
 })
@@ -191,13 +193,14 @@ describe('The first Undo after a Restart, saved', { concurrency: false }, () => 
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
       await pressTo(p, 'Cell')
       await p.evaluate(() => Framework.app.restartPuzzle())
-      const givens = await settle(() => givensColoredOn(p), 30)
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
       await p.click('#control-undo')
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT, 'the givens are colored after the Undo')
       assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined), true), true)
       await flushSave(p)
       await p.reload({ waitUntil: 'load' })
       await startPuzzle(p)
-      assert.equal(await settle(() => givensColoredOn(p), givens), givens)
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT, 'a reload without the script shows them colored')
     } finally {
       await context.close()
     }

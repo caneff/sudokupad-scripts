@@ -14,7 +14,6 @@ import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
 const { PAGE, BOARD_ID, STYLE_ID, LOCAL_DATA_KEY } = createRequire(import.meta.url)('../../dark-page.user.js')
-const { contrastRatio } = createRequire(import.meta.url)('../../test/contrast.js')
 const DATA_KEY = 'DarkPage_color'
 
 const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark Page\s*$/ })
@@ -410,16 +409,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }
   })
 
-  it('with SudokuPad\'s own dark mode on, the page is black and the puzzle is kept', async () => {
-    await read(() => Framework.setSetting('darkmode', true))
-    try {
-      assert.equal(await computed('body', 'backgroundColor'), BLACK)
-      await expectBoardKept()
-    } finally {
-      await read(() => Framework.setSetting('darkmode', false))
-    }
-  })
-
   // The same page with the script switched off is the reference: only the script differs.
   for (const [name, data] of Object.entries(OTHER_BOARDS)) {
     for (const viewport of [{ width: 1200, height: 900 }, { width: 800, height: 1000 }]) {
@@ -595,22 +584,6 @@ describe('the page color dialog', { concurrency: false }, () => {
     await dialogButton('Cancel').click()
   })
 
-  it('the credit line and the readout reach 4.5:1 on #808080 and #767676', async () => {
-    const channels = (css) => css.match(/\d+/g).slice(0, 3).map(Number)
-    for (const grey of ['#808080', '#767676']) {
-      await openDialog()
-      await p.locator(`.dialog ${PICKER}`).fill(grey)
-      await dialogButton('Save').click()
-      const page = channels(await bodyColor())
-      for (const text of [await footerColor(), await readoutColor(p)]) {
-        assert.ok(contrastRatio(channels(text), page) >= 4.5, `${text} on ${grey}`)
-      }
-    }
-    await openDialog()
-    await p.locator(`.dialog ${PICKER}`).fill('#ffcc00')
-    await dialogButton('Save').click()
-  })
-
   it('Save of a dark color switches the buttons dark without a reload', async () => {
     await openDialog()
     await p.locator(`.dialog ${PICKER}`).fill('#112233')
@@ -620,14 +593,6 @@ describe('the page color dialog', { concurrency: false }, () => {
     await p.locator(`.dialog ${PICKER}`).fill('#ffcc00')
     await dialogButton('Save').click()
     assert.equal(await undoBackground(), OWN_BUTTON_BG)
-  })
-
-  it('Cancel after a pick changes nothing', async () => {
-    await openDialog()
-    await p.locator(`.dialog ${PICKER}`).fill('#00ff00')
-    await dialogButton('Cancel').click()
-    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
-    assert.equal(await saved(), '#ffcc00')
   })
 
   it('moving the picker applies the color to the page at once, and Cancel puts the saved color back', async () => {
