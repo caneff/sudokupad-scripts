@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's Font setting on sudokupad.app: Fixed width and Save puts every note, the open one included, in the monospace stack, measures a selected note's box again, and a reload keeps it,
+// Live check of text-anywhere.user.js's Font setting on sudokupad.app: Fixed width and Save puts every note, the open one included, in the monospace stack, measures a selected note's box again, and a reload keeps it,
 // Proportional brings back the page's font, Cancel saves nothing, and Paste settings applies the font. A pulldown in the dialog is no wider than its longest option, its arrow and its padding.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

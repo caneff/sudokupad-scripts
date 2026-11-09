@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's typed text on sudokupad.app: a click opens a text box whose keys never reach
+// Live check of text-anywhere.user.js's typed text on sudokupad.app: a click opens a text box whose keys never reach
 // SudokuPad, Enter starts a new line, a click elsewhere and Escape end it, a click on a keypad color does not, a double-click on text edits it, and the Size slider. Real
 // mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'

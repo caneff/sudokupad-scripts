@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.45.0
+// @version      0.45.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -9,14 +9,14 @@
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
 // @run-at       document-idle
-// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/draw-tool.user.js
-// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/draw-tool.user.js
+// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js
+// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js
 // ==/UserScript==
 
 (function () {
   'use strict'
 
-  const VERSION = '0.45.0'
+  const VERSION = '0.45.1'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8

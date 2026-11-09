@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's notes off the board on sudokupad.app: a click anywhere on the page but a control starts a
+// Live check of text-anywhere.user.js's notes off the board on sudokupad.app: a click anywhere on the page but a control starts a
 // note there, fixed on the screen; a click on a control starts none; a resize or a layout change that leaves an off-board note in reach leaves it
 // where it was (text-anywhere-reach.live.mjs has the one put out of reach) and an on-board note over its cells; a right click beside the board erases with no browser menu, and one on a control keeps its menu; a drag across the board's edge stores the note as its drop point
 // requires, kept over a reload; notes saved before 0.18.0 load in their places; a dialog covers the notes. Real mouse input throughout.

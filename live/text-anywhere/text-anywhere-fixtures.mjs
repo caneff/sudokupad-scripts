@@ -6,9 +6,9 @@ import { createRequire } from 'node:module'
 import { openWith, reloadWith, scriptSource } from '../session.mjs'
 import { clickUntil, SETTLE_MS } from '../settle.mjs'
 
-const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
+const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
-export const SCRIPT_FILE = 'draw-tool.user.js'
+export const SCRIPT_FILE = 'text-anywhere.user.js'
 export const script = scriptSource(SCRIPT_FILE)
 
 // SudokuPad's tool keys, App.toolHotkeys.

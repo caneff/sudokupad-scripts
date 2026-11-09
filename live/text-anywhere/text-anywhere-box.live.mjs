@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's Box color and Box border sample buttons on sudokupad.app: each preset and a custom color recolor every boxed note
+// Live check of text-anywhere.user.js's Box color and Box border sample buttons on sudokupad.app: each preset and a custom color recolor every boxed note
 // at Save and survive a reload, Tint tints each note from its own color, Cancel changes nothing, a note without a box gets neither, and Copy then Paste
 // in a fresh page carries both, an invalid pasted value reading as Page and as off.
 import { after, before, describe, it } from 'node:test'

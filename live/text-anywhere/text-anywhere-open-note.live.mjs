@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's panel while a note is open: it shows the open note's color and size, a color button or the Size and Transparency sliders change that note
+// Live check of text-anywhere.user.js's panel while a note is open: it shows the open note's color and size, a color button or the Size and Transparency sliders change that note
 // and leaves the next-note settings alone (a brand-new note's color and size also become the next note's), the press keeps the note open with its caret, and finishing the note brings the next-note values back. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

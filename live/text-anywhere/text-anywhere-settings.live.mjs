@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's settings dialog on sudokupad.app: it opens from SudokuPad's settings (Experimental) and from the
+// Live check of text-anywhere.user.js's settings dialog on sudokupad.app: it opens from SudokuPad's settings (Experimental) and from the
 // panel's gear, shows the version, a preset sets all nine colors and Save writes them, and Copy then Paste in a fresh page restores
 // the colors and the size.
 import { after, before, describe, it } from 'node:test'

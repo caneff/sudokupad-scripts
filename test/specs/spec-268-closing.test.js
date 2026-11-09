@@ -2,7 +2,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { fakeStore } = require('../fake-store.js')
-const textAnywhere = require('../../draw-tool.user.js')
+const textAnywhere = require('../../text-anywhere.user.js')
 
 // Spec 268's acceptance at `npm test`, through Text Anywhere's pure functions: a text and a click that opens it, the notes saved per puzzle and read back, the 51st puzzle dropping the oldest, a stored stroke
 // kept untouched, and the panel's choices read back with bad values refused. This seam is blind to real

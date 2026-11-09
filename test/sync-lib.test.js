@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { syncText, readLib, scriptFiles, generatedLine, libNamesOnDisk } = require('../sync-lib.js')
+const { syncText, readLib, scriptFiles, generatedLine, libNamesOnDisk, HANDOVERS } = require('../sync-lib.js')
 
 const syncPlain = (source, readModule) => syncText(source, readModule, [])
 const modules = { plain: 'const a = 1\n\nconst b = 2\n' }
@@ -146,6 +146,13 @@ test('node sync-lib.js exits 1 on a marker problem, names it, and still rewrites
   assert.equal(run.status, 1)
   assert.match(run.stderr, /^b\.user\.js: line 4: malformed lib marker$/m)
   assert.deepEqual(run.files, { 'a.user.js': script(current, '1.2.4'), 'b.user.js': broken })
+})
+
+test('scriptFiles lists every *.user.js at the root but a handover, which stays frozen and is never synced', () => {
+  const root = fs.readdirSync(path.join(__dirname, '..')).filter((f) => f.endsWith('.user.js')).sort()
+  for (const old of Object.keys(HANDOVERS)) assert.ok(root.includes(old), `${old} is a handover and is missing`)
+  assert.deepEqual(scriptFiles(), root.filter((f) => !(f in HANDOVERS)))
+  assert.ok(Object.values(HANDOVERS).every((file) => scriptFiles().includes(file)), 'every handover names a script')
 })
 
 test('every script\'s lib blocks match lib/ (run node sync-lib.js to fix)', () => {

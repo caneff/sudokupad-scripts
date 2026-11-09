@@ -8,7 +8,7 @@ const { headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys } = require('../draw-tool.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -347,7 +347,33 @@ test('closedText drops trailing spaces and tabs from each line, and a note of on
 })
 
 test('VERSION matches the @version header', () => {
-  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'draw-tool.user.js'), 'utf8')))
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'text-anywhere.user.js'), 'utf8')))
+})
+
+// draw-tool.user.js, Text Anywhere's old install address, stays frozen as its handover (#711): a copy installed from it updates to this file,
+// whose @updateURL and @downloadURL send every later update to text-anywhere.user.js. `npm run test:tampermonkey` follows the move in a real Tampermonkey.
+const OLD_ADDRESS = 'draw-tool.user.js'
+const NEW_ADDRESS = 'text-anywhere.user.js'
+// The last @version main served from the old address, before the move.
+const LAST_OLD_VERSION = '0.44.14'
+const HANDOVER_VERSION = '0.45.1'
+const headerField = (source, field) => new RegExp(`^// @${field}\\s+(.+?)\\s*$`, 'm').exec(source)?.[1]
+const newerThan = (a, b) => a.localeCompare(b, undefined, { numeric: true }) > 0
+
+test('draw-tool.user.js is the frozen handover: it sends updates to text-anywhere.user.js under the same @name and @namespace', () => {
+  const { RAW } = require('../tag-pictures.js')
+  const { HANDOVERS } = require('../sync-lib.js')
+  const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
+  const handover = read(OLD_ADDRESS)
+  const script = read(NEW_ADDRESS)
+  assert.deepEqual(HANDOVERS, { [OLD_ADDRESS]: NEW_ADDRESS })
+  for (const source of [handover, script]) {
+    for (const field of ['updateURL', 'downloadURL']) assert.equal(headerField(source, field), RAW + NEW_ADDRESS, field)
+  }
+  for (const field of ['name', 'namespace']) assert.equal(headerField(handover, field), headerField(script, field), field)
+  assert.equal(headerVersion(handover), HANDOVER_VERSION, 'the handover is frozen at one version')
+  assert.ok(newerThan(HANDOVER_VERSION, LAST_OLD_VERSION), 'a copy from the old address updates to the handover')
+  assert.ok(newerThan(headerVersion(script), HANDOVER_VERSION), 'the handover updates to text-anywhere.user.js')
 })
 
 // SudokuPad's first cell color page: keys 0 to 9, 0 empty.
@@ -1220,7 +1246,7 @@ test('without one internal, only the features that need it are lacking', () => {
 const textToolPicked = ({ Framework }) => { Framework.app.tool = TOOL_NAME }
 
 test('a window listener of Text Anywhere whose own code throws turns its feature off, and the throw stays in the script', () => {
-  const runs = failEachListener(path.join(__dirname, '..', 'draw-tool.user.js'), FEATURES, 'window', textToolPicked)
+  const runs = failEachListener(path.join(__dirname, '..', 'text-anywhere.user.js'), FEATURES, 'window', textToolPicked)
   assert.ok(runs.length >= 15, runs.map(({ where }) => where).join(', '))
   for (const { where, escaped } of runs) assert.deepEqual(escaped.map(({ error }) => String(error)), [], where)
   // Most listeners act only mid-gesture; the ones that read their event at once show the throw turning the Text tool off.

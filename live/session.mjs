@@ -2,14 +2,15 @@
 // three times a userscript can load (live/README.md § Injection time). Only this module injects a script; live/README.md § Injection
 // time names the checks that load one another way and why. Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { after, before } from 'node:test'
 import { chromium } from 'playwright'
 import { gotoPuzzle, MODES, newPage, startPuzzle, VIEWPORT } from './page.mjs'
+import { scriptFiles } from '../sync-lib.js'
 
 const ROOT = new URL('../', import.meta.url)
-// The scripts at the repo root, by file name.
-export const SCRIPT_FILES = readdirSync(ROOT).filter((f) => f.endsWith('.user.js')).sort()
+// The scripts at the repo root, by file name; a handover (sync-lib.js) is none.
+export const SCRIPT_FILES = scriptFiles()
 
 // The text of the script `file` (one of SCRIPT_FILES), as a user installs it.
 export function scriptSource (file) {

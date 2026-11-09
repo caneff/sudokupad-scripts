@@ -1,4 +1,4 @@
-// Takes the Text Anywhere tool button in SudokuPad's real toolbar, from the real draw-tool.user.js on the recorded puzzle,
+// Takes the Text Anywhere tool button in SudokuPad's real toolbar, from the real text-anywhere.user.js on the recorded puzzle,
 // not selected and selected, at 4x, side by side in one picture: text-anywhere-button.png
 // The script fails when the button's icon paths are filled, since the picture would then show a solid square.
 // Run from the repo root with Playwright's Chromium installed: node docs/research/text-anywhere/text-anywhere-button-screenshot.mjs

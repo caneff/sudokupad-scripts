@@ -11,7 +11,7 @@ import { useBrowser } from '../session.mjs'
 import { boxOpen, clickAt, finishNote, gridPoint, mouseDrag, restart, typeText, undoDepth } from '../board.mjs'
 
 const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SELECTED, SIZE_SLIDER, TEXT_BOX, TEXTS, slideTo } = textAnywhere
-const { HIT_MARGIN_PX } = createRequire(import.meta.url)('../../draw-tool.user.js')
+const { HIT_MARGIN_PX } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const HOME = { width: 1200, height: 900 }
 const SPOT = [2.5, 2.5]
 const OTHER = [6.5, 5.5]

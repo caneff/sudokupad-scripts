@@ -28,7 +28,7 @@ as one read-only Opus subagent with the prompt below, then puts the findings to 
 > unsupported (AGENTS.md); ignore them.
 >
 > Sources, in this order: GLOSSARY.md (it states behavior precisely), site/*.html and docs/*.md (what users are told),
-> then the scripts themselves (draw-tool.user.js is Text Anywhere, pen-tool-extras.user.js, color-by-digit.user.js,
+> then the scripts themselves (text-anywhere.user.js is Text Anywhere, pen-tool-extras.user.js, color-by-digit.user.js,
 > dark-page.user.js, ui-tweaks.user.js, auto-rules-resizer.user.js) to confirm each finding in code. Every finding must
 > be confirmed in code with file:line, not only from the glossary. Do not run live tests or the fuzz.
 >

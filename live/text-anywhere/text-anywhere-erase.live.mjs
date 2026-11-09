@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's erasing on sudokupad.app: a right-drag or right click deletes the notes it crosses (a middle click or drag does nothing), the
+// Live check of text-anywhere.user.js's erasing on sudokupad.app: a right-drag or right click deletes the notes it crosses (a middle click or drag does nothing), the
 // board's context menu is suppressed while Text Anywhere is current, Clear all asks first, and closing its dialog over the board
 // makes no note and opens no text box. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'

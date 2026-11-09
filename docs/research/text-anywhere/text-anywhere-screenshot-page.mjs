@@ -1,9 +1,9 @@
-// Shared by Text Anywhere's screenshot scripts: the recorded puzzle past Start Puzzle, with draw-tool.user.js injected
+// Shared by Text Anywhere's screenshot scripts: the recorded puzzle past Start Puzzle, with text-anywhere.user.js injected
 // and the Text Anywhere tool on. Not a script to run.
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
 
-const script = readFileSync(new URL('../../../draw-tool.user.js', import.meta.url), 'utf8')
+const script = readFileSync(new URL('../../../text-anywhere.user.js', import.meta.url), 'utf8')
 
 export async function openDrawPage (browser, deviceScaleFactor) {
   const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor } })

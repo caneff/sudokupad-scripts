@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's Size and Transparency sliders on sudokupad.app in headless Chromium at 1280x720: the two sliders under the controls in the shared
+// Live check of text-anywhere.user.js's Size and Transparency sliders on sudokupad.app in headless Chromium at 1280x720: the two sliders under the controls in the shared
 // style (no Size or Outline button), a drag that follows the pointer, a move with nothing selected (the next note, saved), with notes selected (those only), with a note
 // open, and a saved size off the old menu's six that is kept. Real mouse input.
 import { after, before, describe, it } from 'node:test'

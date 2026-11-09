@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { LOAD_MS, puzzleUrl, routeSudokuPad, START } from './cache.mjs'
-import { SCRIPT_FILES } from './session.mjs'
+import { SCRIPT_FILES, scriptSource } from './session.mjs'
 import { settle } from './settle.mjs'
 
 export { START }
@@ -20,11 +20,12 @@ const FRAMEWORK_MS = 30000
 
 // A line a script logs when it turns a feature off because SudokuPad has no internal it needs or changed
 // (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`, lib/sudokupad.js).
-// The ids are the scripts' (SCRIPT_FILES), so a new script is matched without an edit here. Built on first use: session.mjs imports this
-// module, so SCRIPT_FILES is not yet set while this one loads.
+// The ids are the ones each script hands its guard, read from its source, so a new script is matched without an edit here; Text Anywhere's
+// is still `draw-tool`, its old file name. Built on first use: session.mjs imports this module, so SCRIPT_FILES is not yet set while this one loads.
 let skipLine
+const guardId = (file) => /createGuard\(\{ script: '([a-z-]+)'/.exec(scriptSource(file))[1]
 const isSkipLine = (text) => {
-  skipLine ??= new RegExp(`^(?:${SCRIPT_FILES.map((f) => f.replace('.user.js', '')).join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
+  skipLine ??= new RegExp(`^(?:${SCRIPT_FILES.map(guardId).join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
   return skipLine.test(text)
 }
 

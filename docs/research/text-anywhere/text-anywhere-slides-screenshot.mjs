@@ -1,4 +1,4 @@
-// Takes the five slides of Text Anywhere's slideshow on site/index.html, each an 800 x 320 crop (PICTURE) of the board round the notes it shows, with the panel hidden, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in.
+// Takes the five slides of Text Anywhere's slideshow on site/index.html, each an 800 x 320 crop (PICTURE) of the board round the notes it shows, with the panel hidden, from the real text-anywhere.user.js on the recorded puzzle, with no caption drawn in.
 // The notes are what a solver writes: formulas (A=B+5, X+Y=2Z) and short deductions, mostly in the margin beside the grid or above it, as solvers do, and on the board only where the slide needs it (a note on a cell's edge, in a box), never one digit and never centered in a cell (the script checks both).
 //   text-anywhere-slide-1-type.png        a three-line note typed with Enter in the margin beside rows 1 and 2
 //   text-anywhere-slide-3-background.png  the Background button on: a formula in a page-colored box over the grid lines, beside one made with it off

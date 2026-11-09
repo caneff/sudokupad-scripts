@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's motion and precision touches on sudokupad.app (#535): the cursor holds during a drag or a resize, the hover outline and the
+// Live check of text-anywhere.user.js's motion and precision touches on sudokupad.app (#535): the cursor holds during a drag or a resize, the hover outline and the
 // handles fade in, a deleted note leaves at once, an empty new note shows a faint box, and a
 // note's drawn left and top land on whole device pixels after a move, a nudge or a resize. Reduced motion makes the fade in instant. Real mouse and keyboard input.
 import { after, before, beforeEach, describe, it } from 'node:test'

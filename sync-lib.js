@@ -117,7 +117,12 @@ const readLib = (name) => {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined
 }
 const libNamesOnDisk = () => fs.readdirSync(LIB_DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.test.js')).map((f) => f.slice(0, -3)).sort()
-const scriptFiles = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js')).sort()
+// A script's old install address, which every copy installed from it still checks for updates, to its new one. The old file stays
+// frozen at one handover version whose @updateURL and @downloadURL name the new file, so those copies move there by themselves (#711).
+// It is no script of its own: nothing syncs, lists, tests or links it.
+const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
+// The scripts: every *.user.js at the root but a handover.
+const scriptFiles = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js') && !(f in HANDOVERS)).sort()
 
 if (require.main === module) {
   let failed = false
@@ -132,4 +137,4 @@ if (require.main === module) {
   if (failed) process.exit(1)
 }
 
-module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, generatedLine, RUN }
+module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, HANDOVERS, generatedLine, RUN }

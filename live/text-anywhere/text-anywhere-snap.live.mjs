@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's snap on sudokupad.app: a dragged note is pulled onto a cell line when its selection outline's line is within 4 px of it
+// Live check of text-anywhere.user.js's snap on sudokupad.app: a dragged note is pulled onto a cell line when its selection outline's line is within 4 px of it
 // and the pointer moves slowly (or has stopped), and a faint guide line shows while it is; 6 px off it, or in a fast drag, it stays where the pointer put it
 // and no guide shows. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
@@ -9,7 +9,7 @@ import { useBrowser } from '../session.mjs'
 import { cellCentre, finishNote, gridPoint } from '../board.mjs'
 
 const { TEXT_BOX, TEXTS } = textAnywhere
-const { SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
+const { SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const SELECTION = '#text-anywhere-layer .text-anywhere-selection'
 const GUIDE_X = '#text-anywhere-layer .text-anywhere-snap-guide[data-axis="x"]'
 // The selection outline's line is 2 px wide, 2 px outside the note's box: its middle is 3 px out.

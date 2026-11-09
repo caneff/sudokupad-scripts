@@ -158,7 +158,7 @@ describe('the replay tool\'s button and key with Text Anywhere installed', { con
 
   before(async () => {
     withTextAnywhere = await openSolver(SCRIPT_FILES)
-    without = await openSolver(SCRIPT_FILES.filter((f) => f !== 'draw-tool.user.js'))
+    without = await openSolver(SCRIPT_FILES.filter((f) => f !== 'text-anywhere.user.js'))
   })
   after(async () => {
     await withTextAnywhere?.context.close()

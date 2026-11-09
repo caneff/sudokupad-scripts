@@ -122,7 +122,7 @@ export const SCRIPTS = [
   },
   {
     name: 'Text Anywhere',
-    file: 'draw-tool.user.js',
+    file: 'text-anywhere.user.js',
     ready: (p) => p.locator(TOOL_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(TOOL_BUTTON).waitFor({ state: 'visible' }),
     act: (p) => placeNote(p, [2.5, 2.5], '15')

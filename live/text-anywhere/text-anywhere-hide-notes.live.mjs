@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's Hide all notes button on sudokupad.app in headless Chromium at 1280x720: the eye sits at the right end of the sliders' block with both sliders beside it and
+// Live check of text-anywhere.user.js's Hide all notes button on sudokupad.app in headless Chromium at 1280x720: the eye sits at the right end of the sliders' block with both sliders beside it and
 // no overlap; a click hides every note (none visible, none hit-testable, selection cleared) and shows the closed eye; another click brings them back in place; a click on the board while they
 // are hidden shows them all and opens the new note; Undo straight after Restart shows them when it brings notes back; a reload shows the notes. Real mouse input.
 import { after, before, describe, it } from 'node:test'

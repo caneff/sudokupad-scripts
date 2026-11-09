@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's arrow-key nudge and bulleted lines on sudokupad.app: with a note selected the right arrow moves it about 1 screen pixel and
+// Live check of text-anywhere.user.js's arrow-key nudge and bulleted lines on sudokupad.app: with a note selected the right arrow moves it about 1 screen pixel and
 // Shift+right about 10, SudokuPad's cell cursor stays where it was, the move is saved, and with nothing selected the arrow keys move the cell cursor as before; a
 // note's "- " lines show as bullets with inline markup inside, kept over a reload. Real mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'

@@ -1,4 +1,4 @@
-// Takes the two pictures of Text Anywhere's Formatting section on site/text-anywhere.html, from the real draw-tool.user.js on the recorded puzzle at 1200x900:
+// Takes the two pictures of Text Anywhere's Formatting section on site/text-anywhere.html, from the real text-anywhere.user.js on the recorded puzzle at 1200x900:
 //   text-anywhere-formatting.png      one large finished note on the board that uses every formatting option once, each rendered, with the ticked item ticked by a click on its box
 //   text-anywhere-formatting-raw.png  the same note open for typing, so the raw text that made it shows
 // The note's words name each style, so the picture needs no legend. Both pictures are the same crop of the board: the note plus a little board.

@@ -39,7 +39,7 @@ describe('attacks on storage', { concurrency: false }, () => {
     it('attack 73: a full store (setItem throws QuotaExceededError) on the scripts\' own keys leaves every feature working in the session, tells the user in plain words and turns no saved data off', async () => {
       // Only the scripts' keys refuse: SudokuPad's own writes (its tool and progress) throw uncaught on a full store with no script installed.
       // The keys are the three scripts', as SETTINGS_SCRIPTS names them, behind the site's own prefix.
-      const owns = SETTINGS_SCRIPTS.filter((script) => ['draw-tool.user.js', 'pen-tool-extras.user.js', 'color-by-digit.user.js'].includes(script.file)).map((script) => script.owns.source)
+      const owns = SETTINGS_SCRIPTS.filter((script) => ['text-anywhere.user.js', 'pen-tool-extras.user.js', 'color-by-digit.user.js'].includes(script.file)).map((script) => script.owns.source)
       await p.evaluate((patterns) => {
         const set = Storage.prototype.setItem
         Storage.prototype.setItem = function (key, value) {
