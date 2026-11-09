@@ -5,8 +5,9 @@
 /* global Framework */
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { buttonPoint, GIVENS, SEED, savedProfiles, startInjected, MODE_STORAGE_KEY } from '../../../live/color-by-digit/color-by-digit-fixtures.mjs'
+import { BUTTON, buttonPoint, GIVENS, SEED, savedProfiles, MODE_STORAGE_KEY } from '../../../live/color-by-digit/color-by-digit-fixtures.mjs'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
+import { addScripts } from '../../../live/session.mjs'
 import { combine, PROBE_INIT, PROBE_TAG, round, startProbe, stopProbe, sum, summarize, tagged, worstEventMs } from '../../../live/redraw-probe.mjs'
 
 const script = readFileSync(new URL('../../../color-by-digit.user.js', import.meta.url), 'utf8')
@@ -20,8 +21,11 @@ async function session (browser, mode) {
       await page.addInitScript((list) => list.forEach(([k, v]) => window.localStorage.setItem(k, v)), Object.entries(saved).map(([k, v]) => [k, JSON.stringify(v)]))
     }
   })
-  if (mode === 'baseline') await startPuzzle(p)
-  else await startInjected(p, tagged(script))
+  await startPuzzle(p)
+  if (mode !== 'baseline') {
+    await addScripts(p, [{ code: tagged(script) }])
+    await p.locator(BUTTON).waitFor({ state: 'visible' })
+  }
   return p
 }
 
