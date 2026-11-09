@@ -1367,7 +1367,7 @@ test('canonicalGroups and the paint operations do not change the list they were 
   assert.deepEqual(before, copy)
 })
 
-test('setDigitGroup sets a digit\'s color or, given null, clears it', () => {
+test('setDigitGroup moves a digit into the group of a color key or, given null, out of every group', () => {
   assert.deepEqual(setDigitGroup([g('a', ['1', '2'])], '2', 'b'), [g('a', ['1']), g('b', ['2'])])
   assert.deepEqual(setDigitGroup([g('a', ['1', '2'])], '2', null), [g('a', ['1'])])
   assert.deepEqual(setDigitGroup([g('a', ['1', '2'])], '2', 'a'), [g('a', ['1', '2'])])

@@ -279,10 +279,11 @@
 
   const isSynced = (state) => state.digitActive === undefined
   const usesDigitColors = (state) => state.useDigitColors !== false
-  // `changes` names the fields that change (profiles, active, digitActive, useDigitColors); the rest carry over, profiles as copies.
+  // `changes` names the fields that change (profiles, active, digitActive, useDigitColors); the rest carry over, profiles as copies when `changes` has none.
   // A `digitActive` of undefined is a change: it syncs the digit pick to the cell profile.
   function editState (state, changes) {
-    const next = { profiles: state.profiles.map(cloneProfile), active: state.active, digitActive: state.digitActive, useDigitColors: usesDigitColors(state), ...changes }
+    const next = { active: state.active, digitActive: state.digitActive, useDigitColors: usesDigitColors(state), ...changes }
+    next.profiles ??= state.profiles.map(cloneProfile)
     return makeState(next.profiles, next.active, next.digitActive, next.useDigitColors)
   }
 
@@ -422,6 +423,10 @@
     // A synced profile keeps the Cell strip's own order, so Both shows the Cell strip.
     return (best && !sameGroups(cellGroups, digitGroups) ? best : strip).map(chipOf)
   }
+
+  // The two calls that feed the button and the profile list, named once so their arguments cannot drift.
+  const buttonChips = (mode, state) => shownChips(mode, activeGroups(state), digitGroups(state))
+  const cellChips = (groups) => shownChips('cell', groups, groups)
 
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
@@ -1740,7 +1745,7 @@
       const chosen = i === selected
       return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
-        `<span class="cbd-chips">${renderChips(shownChips('cell', profile.groups, profile.groups), colorOf, { size: CHIP_PX })}</span>` +
+        `<span class="cbd-chips">${renderChips(cellChips(profile.groups), colorOf, { size: CHIP_PX })}</span>` +
         (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${escapeHtml(profile.name)}</span>`) +
         `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
@@ -1754,7 +1759,7 @@
   const MENU_DOT_COLUMN = 44
   const DOT_RING = '#cfc7da'
   const chipColumn = (groups, colorOf) =>
-    `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(shownChips('cell', groups, groups), colorOf, { size: CHIP_PX })}</span>`
+    `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(cellChips(groups), colorOf, { size: CHIP_PX })}</span>`
   // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
   const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
   const dotColumn = (role, html, align, attributes = '') => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}"${attributes}>${html}</span>`
@@ -2373,7 +2378,7 @@
     modeButton.run(() => {
       const icon = document.querySelector(`${BUTTON} .icon`)
       const state = loadState()
-      if (icon) icon.outerHTML = iconHtml(mode, shownChips(mode, activeGroups(state), digitGroups(state)), readColor)
+      if (icon) icon.outerHTML = iconHtml(mode, buttonChips(mode, state), readColor)
       labelButton()
     })
     digitColors.run(showDigitColors)
@@ -2879,7 +2884,7 @@
     addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
     addStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {
-      installButton(Framework, app, mode, shownChips(mode, activeGroups(state), digitGroups(state)), readColor)
+      installButton(Framework, app, mode, buttonChips(mode, state), readColor)
       labelButton()
     })
     installCellColoring(app)
