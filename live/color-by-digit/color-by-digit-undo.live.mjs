@@ -7,7 +7,7 @@ import { chromium } from 'playwright'
 import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo, selectCell } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
-import { gridPoint } from '../board.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 import { flushSave } from '../attacks.mjs'
 import { startPuzzle } from '../page.mjs'
 
@@ -218,7 +218,7 @@ describe('The first Undo after a Restart, with Text Anywhere loaded', { concurre
       await draw.pickDraw(q)
       await q.mouse.click(...await gridPoint(q, [2.5, 2.5]))
       await q.keyboard.type('15')
-      await draw.finishNote(q)
+      await finishNote(q)
       await q.evaluate(() => Framework.app.restartPuzzle())
       assert.deepEqual(await settle(() => draw.texts(q), []), [])
       await q.click('#control-undo')

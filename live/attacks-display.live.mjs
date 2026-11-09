@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts, reloadWithScripts } from './attacks.mjs'
-import { cellCentre, gridPoint, mouseDrag, typeText } from './board.mjs'
+import { cellCentre, finishNote, gridPoint, mouseDrag, typeText } from './board.mjs'
 import { penDrawnCount, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
@@ -79,7 +79,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
         const off = await offGrid()
         assert.equal(off.every((part) => part < CRISP_EPSILON), true, `${ratio}: the moved note's left and top are on whole device pixels: ${off}`)
       }
-      await draw.finishNote(p)
+      await finishNote(p)
     }
     await assertNoCrash(p, errors)
   })
@@ -154,7 +154,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
     await timed('draw a note', async () => {
       await p.mouse.click(...await gridPoint(p, [8.8, 0.3]))
       await p.keyboard.type('new')
-      await draw.finishNote(p)
+      await finishNote(p)
     }, async () => (await draw.texts(p)).length === NOTE_COUNT + 1)
     const [, , size] = await cellCentre(p, 0, 0)
     const moved = async () => (await draw.saved(p)).find((item) => item.text === 'n105').at.join()

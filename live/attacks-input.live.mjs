@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { boardState, cellState, emptyCell, pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts } from './attacks.mjs'
-import { cellCentre, gridPoint, mouseDrag, typeText } from './board.mjs'
+import { cellCentre, finishNote, gridPoint, mouseDrag, typeText } from './board.mjs'
 import { penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
@@ -113,11 +113,11 @@ describe('attacks on input', { concurrency: false }, () => {
     assert.equal(await p.locator(draw.TEXT_BOX).count(), 1, 'a double-click on a note opens it')
     await p.mouse.click(...noteAt, { clickCount: 3, delay: 0 })
     assert.equal(await p.locator(draw.TEXT_BOX).count(), 1, 'a triple-click inside the open note keeps it one box')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await draw.texts(p), ['15'], 'the note keeps its text')
     for (const clickCount of [2, 3]) {
       await p.mouse.click(...await gridPoint(p, [1.5, 1.5]), { clickCount, delay: 0 })
-      await draw.finishNote(p)
+      await finishNote(p)
       assert.deepEqual(await draw.texts(p), ['15'], `${clickCount} clicks on empty space leave no extra note`)
       assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, `${clickCount} clicks on empty space leave no text box`)
     }
@@ -164,7 +164,7 @@ describe('attacks on input', { concurrency: false }, () => {
     await p.keyboard.press('Control+a')
     await p.keyboard.press('Control+v')
     assert.equal(await p.locator(draw.TEXT_BOX).textContent(), '15', 'Ctrl+A then Ctrl+V replaces the whole text')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await draw.texts(p), ['15'], 'the note keeps the text')
     assert.deepEqual([await cellState(p, [row, col]), await cellState(p, [pasteRow, pasteCol])], cellsBefore, 'the copied cell and the cell selected for the paste are as they were')
     assert.deepEqual(await selectedCells(), selectedBefore, 'the selection is as it was')
@@ -182,7 +182,7 @@ describe('attacks on input', { concurrency: false }, () => {
       for (const key of ['Control+a', 'Control+c', 'Control+v']) await p.keyboard.press(key)
       assert.deepEqual((await draw.texts(p)).sort(), ['15', '26'], `${selecting ? 'with a note selected' : 'with none selected'}: both notes keep their text`)
       assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, 'no note is left open')
-      await draw.finishNote(p)
+      await finishNote(p)
     }
     assert.equal(await boardState(p), cellsBefore, 'no cell changed')
     await assertNoCrash(p, errors)

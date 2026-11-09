@@ -29,7 +29,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
   let context, p, errors, idA, idB
 
   beforeEach(async () => {
-    ;({ context, p, errors } = await openPage(browser, { seed: installAll }))
+    ;({ context, p, errors } = await openPage(browser, { seed: (page) => installAll(page) }))
     idA = await puzzleIdFor(p, puzzleData({ id: 'live-attack-a', metadata: { title: 'puzzle A' }, givens: CLASSIC_GIVENS }))
     idB = await puzzleIdFor(p, puzzleData({ id: 'live-attack-b', metadata: { title: 'puzzle B' }, givens: [[0, 0, 1], [8, 8, 9]] }))
     await openPuzzleId(p, idA)
