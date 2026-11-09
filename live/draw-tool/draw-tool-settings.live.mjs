@@ -90,7 +90,7 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
   })
 
   it('Copy settings then Paste settings in a fresh page restores the colors, size, transparency, outline, box color, frame and font, and carries nothing else', async () => {
-    await read(p, (values) => Object.entries(values).forEach(([key, value]) => Framework.setData(key, value)), { [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin' })
+    await read(p, (values) => Object.entries(values).forEach(([key, value]) => Framework.setData(key, value)), { [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' })
     await p.click(SETTINGS_BUTTON)
     await p.locator('.dialog button[data-act="copy-settings"]').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
@@ -112,7 +112,10 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
       assert.equal(await valueOf(other.p, SIZE_SLIDER), 3.5)
       assert.equal(await read(other.p, (key) => Framework.getData(key), WIDTH_KEY), 3.5, 'the pasted size is saved as it is')
       assert.equal(await valueOf(other.p, draw.OPACITY_SLIDER), 55)
-      assert.equal(await read(other.p, (key) => Framework.getData(key), OUTLINE_KEY), 'thin')
+      for (const [key, value] of [[OUTLINE_KEY, 'thin'], [BOX_KEY, 'tint'], [FRAME_KEY, true], [FONT_KEY, 'fixed']]) assert.equal(await read(other.p, (k) => Framework.getData(k), key), value, `${key} is saved as pasted`)
+      // The dialog's draft was reset to the pasted looks, so none of them reads as an unsaved edit.
+      for (const [role, value] of [['outline-pick', 'thin'], ['box-pick', 'tint'], ['frame-pick', 'on']]) assert.equal(await other.p.locator(`${EDITOR} button[data-role="${role}"][data-value="${value}"]`).getAttribute('aria-pressed'), 'true', role)
+      assert.equal(await other.p.locator(`${EDITOR} [data-role="font-choice"]`).inputValue(), 'fixed')
       assert.equal(await dialogButton(other.p, 'Save').count(), 1)
       assert.deepEqual(other.errors, [])
     } finally {

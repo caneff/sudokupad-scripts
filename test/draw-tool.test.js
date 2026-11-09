@@ -7,7 +7,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep } = require('../draw-tool.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedLooks } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -311,6 +311,45 @@ test('Copy settings holds the colors, size, transparency, outline, box color, fr
 
 test('Copy settings leaves the colors out until they are saved', () => {
   assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY, [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false, [FONT_KEY]: 'proportional' })
+})
+
+// A row added to a copy of the table is handled by Copy, Paste, the start load, the snapshot's keys and Save's changed list, with no other edit.
+const SPIN_KEY = 'DrawTool_spin'
+const SPIN_ROW = { name: 'spin', key: SPIN_KEY, read: (saved) => (saved === 'left' ? 'left' : 'none'), dialog: true }
+const WITH_SPIN = [...LOOKS, SPIN_ROW]
+
+test('a row added to a copy of the looks table is copied, pasted, loaded, snapshotted and saved', () => {
+  const store = storeOf({ [SPIN_KEY]: 'left' })
+  assert.equal(JSON.parse(copiedSettings(store, WITH_SPIN))[SPIN_KEY], 'left')
+  assert.equal(JSON.parse(copiedSettings(storeOf({}), WITH_SPIN))[SPIN_KEY], 'none')
+  assert.deepEqual(pastedSettings(JSON.stringify({ [SPIN_KEY]: 'left' }), lookReaders(WITH_SPIN)).values, { [SPIN_KEY]: 'left' })
+  assert.equal(readLooks(store, WITH_SPIN).spin, 'left')
+  assert.equal(readLooks(storeOf({}), WITH_SPIN).spin, 'none')
+  assert.ok(lookKeys(WITH_SPIN).includes(SPIN_KEY))
+  assert.deepEqual(changedLooks(WITH_SPIN, { ...readLooks(storeOf({}), WITH_SPIN), spin: 'left' }, readLooks(storeOf({}), WITH_SPIN)).map((row) => row.name), ['spin'])
+})
+
+test('the looks table is the one list behind Paste and Copy: every row reads and copies, and the paste readers match', () => {
+  assert.deepEqual(Object.keys(lookReaders(LOOKS)), LOOKS.map((row) => row.key))
+  assert.deepEqual(Object.keys(JSON.parse(copiedSettings(storeOf({})))), LOOKS.map((row) => row.key))
+  assert.deepEqual(Object.keys(readLooks(storeOf({}))), LOOKS.map((row) => row.name))
+  for (const key of lookKeys(LOOKS)) assert.ok(key in READERS, key)
+})
+
+test('a pasted size or transparency that is off its slider is skipped, and a pasted outline, box color, frame or font that is invalid is read as its default', () => {
+  const readers = lookReaders(LOOKS)
+  assert.equal(readers[WIDTH_KEY](3.5), 3.5)
+  assert.equal(readers[WIDTH_KEY](999), undefined)
+  assert.equal(readers[OPACITY_KEY]('x'), undefined)
+  assert.equal(readers[OUTLINE_KEY]('nope'), DEFAULT_OUTLINE)
+  assert.equal(readers[BOX_KEY]('nope'), DEFAULT_BOX)
+})
+
+test('changedLooks lists the rows whose draft differs from the value in force', () => {
+  const now = readLooks(storeOf({}))
+  assert.deepEqual(changedLooks(LOOKS, { ...now }, now), [])
+  assert.deepEqual(changedLooks(LOOKS, { ...now, frame: true, noteFont: 'fixed' }, now).map((row) => row.name), ['frame', 'noteFont'])
+  assert.deepEqual(changedLooks(LOOKS, { ...now, width: 9 }, now), [], 'the sliders are not the dialog\'s')
 })
 
 test('the box color setting reads a preset or a #rrggbb color and anything else as Page', () => {
