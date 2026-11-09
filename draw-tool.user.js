@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.10
+// @version      0.44.11
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.10'
+  const VERSION = '0.44.11'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -694,6 +694,9 @@
     const shared = (values) => values.every((v) => v === values[0]) ? values[0] : null
     return { color: shared(items.map((item) => item.color)), width: widthFor(items[0].size), opacity: itemOpacity(items[0]), bg: shared(items.map((item) => Boolean(item.bg))) }
   }
+
+  // Which notes a change of color, size, transparency or Background reaches: the open note, else the selected ones, else the next one typed.
+  const lookTarget = (editing, selected) => editing ? 'open' : selected.length ? 'selected' : 'next'
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
   // <lib:plain>
@@ -2015,7 +2018,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, LOOKS, lookReaders, lookKeys, readLooks, changedLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, LOOKS, lookReaders, lookKeys, readLooks, changedLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2452,18 +2455,18 @@
     savedData.setData(COLOR_KEY, color)
   }
 
-  function pickColor (next) {
-    if (editing) {
-      changeOpen((item) => ({ ...item, color: next }), () => setColor(next))
-      return
+  // Applies `change` to the notes `lookTarget` names; a new open note's look also becomes the next note's (`setNext`).
+  function applyLook (change, setNext) {
+    const target = lookTarget(editing, selected)
+    if (target === 'open') changeOpen(change, setNext)
+    else if (target === 'selected') changeSelected(change)
+    else {
+      setNext()
+      showPanelValues()
     }
-    if (selected.length) {
-      changeSelected((item) => ({ ...item, color: next }))
-      return
-    }
-    setColor(next)
-    showPanelValues()
   }
+
+  const pickColor = (next) => applyLook((item) => ({ ...item, color: next }), () => setColor(next))
 
   function showColors () {
     writeStyle(COLORS_STYLE_ID, colors ? colorsCss(colors) : '')
@@ -2627,7 +2630,10 @@
   const BACKGROUND_ICON = `<rect class="${BACKGROUND_FILL_CLASS}" x="3" y="5" width="18" height="14" rx="3" fill="currentColor" fill-opacity=".22"/><rect x="3" y="5" width="18" height="14" rx="3" stroke-dasharray="3 3"/>${TEXT_GLYPH}`
 
   // The button shows the open note's own background while a note is open, the selection's (null when it is mixed) while notes are selected, and the setting for the next note otherwise.
-  const backgroundShown = () => editing ? Boolean(editing.item.bg) : selected.length ? panelLooks(selectedNotes()).bg : background
+  const backgroundShown = () => {
+    const target = lookTarget(editing, selected)
+    return target === 'open' ? Boolean(editing.item.bg) : target === 'selected' ? panelLooks(selectedNotes()).bg : background
+  }
 
   function showBackground () {
     const button = document.querySelector(`.${BACKGROUND_CLASS}`)
@@ -2647,23 +2653,14 @@
   // A press turns the open note's background on or off, and the setting only when the note is a new one; with no note open it turns the selected notes' on or off
   // (on when it is mixed), and with none selected the setting.
   function pressBackground () {
-    if (!editing && selected.length) {
-      const on = backgroundShown() !== true
-      changeSelected(({ bg, ...rest }) => on ? { ...rest, bg: true } : rest)
-      return
-    }
-    if (!editing) setBackground(!background)
-    else {
-      const on = !editing.item.bg
-      const { bg, ...rest } = editing.item
-      editing.item = on ? { ...rest, bg: true } : rest
-      styleNote(editing.element, editing.item, boardMap())
-      if (editing.index === -1) setBackground(on)
-    }
-    showBackground()
+    const on = lookTarget(editing, selected) === 'open' ? !editing.item.bg : backgroundShown() !== true
+    applyLook(({ bg, ...rest }) => on ? { ...rest, bg: true } : rest, () => setBackground(on))
   }
 
-  const panelValues = () => editing ? panelLooks([editing.item]) : selected.length ? panelLooks(selectedNotes()) : { color, width: look.width, opacity: look.opacity }
+  const panelValues = () => {
+    const target = lookTarget(editing, selected)
+    return target === 'open' ? panelLooks([editing.item]) : target === 'selected' ? panelLooks(selectedNotes()) : { color, width: look.width, opacity: look.opacity }
+  }
 
   function sliderRow (id, label, range, value) {
     const row = document.createElement('div')
@@ -2689,9 +2686,7 @@
     const { read, change: changeWith, setNext } = SLIDER_LOOKS[input.id]
     const value = read(Number(input.value))
     const change = changeWith(value)
-    if (editing) changeOpen(change, () => setNext(value))
-    else if (selected.length) changeSelected(change)
-    else setNext(value)
+    applyLook(change, () => setNext(value))
   }
 
   // The + and - keys move the Size slider one step, with the same effect as a move of it; the slider follows.

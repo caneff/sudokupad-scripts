@@ -9,7 +9,9 @@ import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
-const { BACKGROUND_BUTTON, BACKGROUND_KEY, TEXT_BGS, TEXT_BOX } = draw
+const { BACKGROUND_BUTTON, BACKGROUND_KEY, HANDLES, TEXT_BGS, TEXT_BOX } = draw
+// Pixels a measured edge may differ from its note's: the browser rounds both to device pixels.
+const ROUNDING_PX = 1.5
 // Five spots, in cells from the grid's top left, one row apart.
 const SPOTS = [[0.5, 4.5], [2.5, 4.5], [4.5, 4.5], [6.5, 4.5], [8.5, 4.5]]
 
@@ -156,6 +158,25 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
     assert.deepEqual(await savedBgs(), { a: false, b: false, c: false, d: false })
     assert.equal(await storedSetting(), false, 'the setting is unchanged')
     assert.equal(await pressed(), 'false', 'with no note open the button shows the setting')
+  })
+
+  it('turning Background on for an open note moves its handles with the padded box', async () => {
+    // The handles' span and the open note's own box, measured now.
+    const shape = () => p.evaluate(([handles, box]) => {
+      const lefts = [...document.querySelectorAll(handles)].map((h) => h.getBoundingClientRect())
+      const note = document.querySelector(box).getBoundingClientRect()
+      return { count: lefts.length, span: Math.max(...lefts.map((r) => r.right)) - Math.min(...lefts.map((r) => r.left)), width: note.width }
+    }, [HANDLES, TEXT_BOX])
+    await openAt(SPOTS[1])
+    assert.equal(await boxFilled(), false)
+    const before = await shape()
+    assert.equal(before.count, 4, 'the open note shows its four handles')
+    await p.click(BACKGROUND_BUTTON)
+    assert.equal(await boxFilled(), true)
+    const after = await shape()
+    assert.equal(after.width > before.width, true, 'the padding made the note wider')
+    assert.equal(Math.abs((after.span - before.span) - (after.width - before.width)) <= ROUNDING_PX, true, `the handles moved ${after.span - before.span}px for a note ${after.width - before.width}px wider`)
+    await draw.finishNote(p)
   })
 
   it('the page raised no error', () => {
