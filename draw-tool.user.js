@@ -3958,7 +3958,7 @@
     },
     // SudokuPad calls every tool's handleKeydown first, and true ends the keydown there. Shift would otherwise switch
     // to Corner for as long as it is held (that tool's tempKey), and a drag with it held would never reach Text Anywhere.
-    // + and - (also =, and the keypad's) change the size and go no further; with Ctrl, Alt or Meta held they are left to the browser.
+    // + and - (also =, and the keypad's) change the size and go no further.
     // With notes selected, Escape ends the selection, Delete or Backspace (a Mac's delete key) deletes them and an arrow key nudges them, and none reaches the cells.
     handleKeydown (event) {
       if (Framework.app.tool !== TOOL_NAME) return false
@@ -3983,7 +3983,7 @@
         return true
       }
       const sizeDirection = SIZE_KEYS[event.key]
-      if (sizeDirection && !editing && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      if (sizeDirection && !editing) {
         // A gesture holds its notes as they were at the press, and its release would put the old size back.
         if (!drag && !resizing) stepSize(sizeDirection)
         return true

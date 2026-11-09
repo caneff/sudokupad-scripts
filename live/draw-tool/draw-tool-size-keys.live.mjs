@@ -55,7 +55,7 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.equal(await savedSize('A'), 22)
   })
 
-  it('with Ctrl or Alt held the keys change nothing', async () => {
+  it('with Ctrl or Alt held the keys leave the size alone', async () => {
     await typeText(A, 'A')
     await clickAt(A)
     await p.keyboard.press('+')
