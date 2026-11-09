@@ -65,6 +65,9 @@ export const HANDLES = '#text-anywhere-layer .text-anywhere-resize'
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
 export const SETTINGS_EDITOR = '#text-anywhere-dialog'
+// The settings dialog's Box color buttons, and the color input shown under Own.
+export const BOX_PICKS = `${SETTINGS_EDITOR} button[data-role="box-pick"]`
+export const BOX_CUSTOM_INPUT = `${SETTINGS_EDITOR} input[data-role="box-custom"]`
 export const PICKER_BOX = '.text-anywhere-picker'
 
 export async function holdForPickers (p, selector, button, state) {

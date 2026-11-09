@@ -10,8 +10,7 @@
 //   env.useNotes()                           picks Text Anywhere's tool
 //   env.turnPenPage()  env.undo()  env.redo()  env.clickColorMode()
 //   env.undoAll()                            presses Undo until the undo stack is empty
-//   env.extrasDialog(save)                   opens Pen Tool Extras' settings dialog and presses Save or Cancel
-//   env.extrasSettings({ arrowSpacing, dash, thickness }, save)   the same, with those three values set in the dialog first
+//   env.extrasSettings({ arrowSpacing, dash, thickness }, save)   opens Pen Tool Extras' settings dialog, sets the values it is given and presses Save or Cancel
 //   env.sliderPoint(name, fraction) -> [x, y]   the page point `fraction` (0 to 1) along the track of slider `name` (`SLIDERS`), opening the tool that shows it
 //   env.focusSlider(name)  env.leaveSlider(name)   puts the keyboard focus on a slider, and takes it off
 //   env.noteBoxDialog(choice, color, save)   opens Text Anywhere's settings dialog, picks the Box color `choice` (`BOX_CHOICES`; `color` is the Own color) and presses Save or Cancel
@@ -20,7 +19,12 @@
 //   env.placeNote(text, i)                   a note with `text` at cell `i`, finished with Escape
 //   env.noteCentre() -> [x, y] | null        the middle of the first note drawn
 //   env.resize({ width, height })  env.blurFocus()  env.reload()  env.darkPage(color, save)
+import { createRequire } from 'node:module'
 import fc from 'fast-check'
+
+const require = createRequire(import.meta.url)
+const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.js')
+const { BOX_PRESETS } = require('../../text-anywhere.user.js')
 
 export const TOOL_KEYS = ['z', 'x', 'c', 'v']
 const WINDOW_SIZES = [{ width: 1024, height: 600 }, { width: 1200, height: 900 }, { width: 1400, height: 1000 }]
@@ -31,13 +35,11 @@ const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
 // The four sliders of the pen panel and the notes panel, by the name a step prints.
 export const SLIDERS = ['pen thickness', 'pen opacity', 'note size', 'note transparency']
 // Text Anywhere's Box color buttons, in the dialog's order; `custom` is Own.
-export const BOX_CHOICES = ['page', 'white', 'yellow', 'tint', 'custom']
-const BOX_LABELS = { page: 'Page', white: 'White', yellow: 'Yellow', tint: 'Tint', custom: 'Own' }
+const BOX_CHOICES = [...Object.keys(BOX_PRESETS), 'custom']
+const boxLabel = (choice) => BOX_PRESETS[choice] ?? 'Own'
 const SLIDER_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End']
-// The ranges of Pen Tool Extras' settings dialog (`THICKNESS`, `DASH` and `ARROW_SPACING` in the script), typed out here: the script does not export them.
-const THICKNESS_HALVES = { min: 2, max: 32 }
-const DASH_LENGTHS = { min: 0, max: 8 }
-const ARROW_SPACINGS = { min: 3, max: 12 }
+// The dialog's thickness slider moves in steps of `THICKNESS.step`, so it is drawn as a count of steps.
+const THICKNESS_STEPS = { min: THICKNESS.min / THICKNESS.step, max: THICKNESS.max / THICKNESS.step }
 
 const NOTE_DRAG = [70, 40]
 const ownColor = (rgb) => `#${rgb.toString(16).padStart(6, '0')}`
@@ -53,9 +55,10 @@ function buildKinds () {
   const note = (puzzle) => fc.tuple(fc.nat(NOTE_TEXTS.length - 1), cell(puzzle))
 
   // A pen drag from cell `a` to cell `b` with the left button still down.
-  async function penDragStart (env, [a, b, c]) {
+  // `pick` names the env method that opens the pen and picks its color: `usePen` for the page the pen is on, `useArrowPen` for page 3.
+  async function penDragStart (env, [a, b, c], pick = 'usePen') {
     const [from, to] = [await env.cellPoint(a), await env.cellPoint(b)]
-    await env.usePen(c)
+    await env[pick](c)
     await env.page.mouse.move(...from)
     await env.page.mouse.down()
     await env.page.mouse.move(...to, { steps: 6 })
@@ -210,7 +213,7 @@ function buildKinds () {
       weight: 1,
       arg: () => fc.boolean(),
       label: (save) => `Pen Tool Extras settings dialog ${save ? 'Save' : 'Cancel'}`,
-      run: (env, save) => env.extrasDialog(save)
+      run: (env, save) => env.extrasSettings({}, save)
     },
     {
       kind: 'slider drag',
@@ -243,16 +246,16 @@ function buildKinds () {
       kind: 'pen settings values',
       group: 'ordinary',
       weight: 3,
-      arg: () => fc.tuple(fc.integer(ARROW_SPACINGS), fc.integer(DASH_LENGTHS), fc.integer(THICKNESS_HALVES), fc.boolean()),
-      label: ([spacing, dash, halves, save]) => `Pen Tool Extras settings dialog: arrow spacing ${spacing} dash ${dash} thickness ${halves / 2} ${save ? 'Save' : 'Cancel'}`,
-      run: (env, [arrowSpacing, dash, halves, save]) => env.extrasSettings({ arrowSpacing, dash, thickness: halves / 2 }, save)
+      arg: () => fc.tuple(fc.integer({ min: ARROW_SPACING.min, max: ARROW_SPACING.max }), fc.integer({ min: DASH.min, max: DASH.max }), fc.integer(THICKNESS_STEPS), fc.boolean()),
+      label: ([spacing, dash, steps, save]) => `Pen Tool Extras settings dialog: arrow spacing ${spacing} dash ${dash} thickness ${steps * THICKNESS.step} ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [arrowSpacing, dash, steps, save]) => env.extrasSettings({ arrowSpacing, dash, thickness: steps * THICKNESS.step }, save)
     },
     {
       kind: 'note box color',
       group: 'ordinary',
       weight: 3,
       arg: () => fc.tuple(fc.constantFrom(...BOX_CHOICES), fc.integer({ min: 0, max: 0xffffff }), fc.boolean()),
-      label: ([choice, rgb, save]) => `Text Anywhere box color ${BOX_LABELS[choice]}${choice === 'custom' ? ` ${ownColor(rgb)}` : ''} ${save ? 'Save' : 'Cancel'}`,
+      label: ([choice, rgb, save]) => `Text Anywhere box color ${boxLabel(choice)}${choice === 'custom' ? ` ${ownColor(rgb)}` : ''} ${save ? 'Save' : 'Cancel'}`,
       run: (env, [choice, rgb, save]) => env.noteBoxDialog(choice, ownColor(rgb), save)
     },
     {
@@ -280,12 +283,8 @@ function buildKinds () {
       weight: 3,
       arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color),
       label: ([a, b, c], at) => `arrow line ${at(a)} -> ${at(b)} color ${c}`,
-      run: async (env, [a, b, c]) => {
-        const [from, to] = [await env.cellPoint(a), await env.cellPoint(b)]
-        await env.useArrowPen(c)
-        await env.page.mouse.move(...from)
-        await env.page.mouse.down()
-        await env.page.mouse.move(...to, { steps: 6 })
+      run: async (env, arg) => {
+        await penDragStart(env, arg, 'useArrowPen')
         await env.page.mouse.up()
       }
     },

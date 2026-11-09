@@ -133,7 +133,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
   drawn ones, and a reload keeps them; Color by Digit: in Cell or Both mode a cell whose digit just changed (every cell when the mode just changed) has its
   group's color; Dark Page: the page color stays dark; Auto Rules Resizer: the rules fit their pane, unless the text is already at 70% of SudokuPad's font; UI
   Tweaks: Tab never turns the number pad to letters; Text Anywhere (`note-box-color`, #713): every note with a box is filled with the box color the script has saved (`boxFill` of the stored value and the note's own color, resolved by the page). Each fuzz page therefore has the letter tool on, and a puzzle with rules text shows it (the long text on most puzzles). A broken rule fails the run like a
-  crash signal, named `rule broken after "<step>": <rule>: <what>`. The last two rules are read from the scripts, not from the ticket's wording: the resizer
+  crash signal, named `rule broken after "<step>": <rule>: <what>`. The resizer and Tab rules are read from the scripts, not from the ticket's wording: the resizer
   promises a fit down to its smallest font, not for any length, and Tab can reach letters only while the letter tool is on.
 - **Three rules check the scripts against themselves** (#677), knowing nothing of what a script should draw; each was written from what the scripts keep, and
   each leaves out what they do not:

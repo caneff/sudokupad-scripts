@@ -38,7 +38,7 @@ Only one plant was missed, and it points at an action gap, not at rules or timin
 
 Added to `live/fuzz/actions.mjs`: slider drags and key presses on the pen panel's Thickness and Opacity and on Text Anywhere's Size and Transparency; Pen Tool Extras'
 settings dialog saved with a changed arrow spacing, dash length and thickness; Text Anywhere's settings dialog with a Box color picked (a preset or an Own color), the
-Background button, a note placed with a box, and a line drawn with an arrow pen (page 3). New rule `note-box-color`; new plant `box-color-stale` (Text Anywhere saves a changed
+Background button, a note placed with a box, and a line drawn with an arrow pen (page 3), and the weight of the existing `pen page` action went from 1 to 2. The ticket named only the slider, dialog and Box color actions; the note with a box and the arrow line were added after the first two runs missed, because each plant needed a state two actions deep. New rule `note-box-color`; new plant `box-color-stale` (Text Anywhere saves a changed
 box color and keeps drawing boxes in the old one, found in `setLook`). Only the two plants below were run (4 minutes each over the whole puzzle set), so the other nine are
 not re-measured here.
 

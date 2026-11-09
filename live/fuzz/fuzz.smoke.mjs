@@ -7,6 +7,7 @@ import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
+import { scriptedList } from './actions.mjs'
 import { fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
@@ -77,6 +78,32 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     const puzzle = puzzleByName('recorded 9x9')
     const at = (row, col) => puzzle.cells.findIndex(([r, c]) => r === row && c === col)
     await fuzzScripted({ browser: browser(), puzzle, steps: [['place note', [0, at(0, 2)]], ['click cell', at(0, 3)], ['type digit', '1'], ['reload', null]] })
+  })
+
+  // Runs `steps` (`[kind, arg]`) on a fresh page of `puzzle` and returns the snapshot after the last, with no plant in.
+  async function snapshotAfter (puzzle, steps) {
+    const target = await openTarget(browser(), puzzle, {})
+    try {
+      for (const step of scriptedList(puzzle, steps)) await step.run({ selected: true }, { env: target.env })
+      await target.wait(300)
+      return await target.snapshot()
+    } finally {
+      await target.close()
+    }
+  }
+
+  it('the box color rule reads real notes (#713): a note with a box, then Yellow saved, is read as one boxed note filled with the yellow it should have', async () => {
+    const puzzle = puzzleByName('recorded 9x9')
+    const { page } = await snapshotAfter(puzzle, [['boxed note', [0, 0]], ['note box color', ['yellow', 0, true]]])
+    assert.deepEqual(page.noteBoxes.map(({ fill, expected }) => [fill, expected]), [['rgb(255, 244, 176)', 'rgb(255, 244, 176)']])
+  })
+
+  it('an arrow line is drawn with a page 3 pen and a thickness slider drag after it raises nothing (#713)', async () => {
+    const puzzle = puzzleByName('recorded 9x9')
+    const { page, errors } = await snapshotAfter(puzzle, [['arrow line', [0, 5, 1]], ['slider drag', [0, 0, 10]]])
+    assert.ok(page.penState.length > 0, 'the line is on the board')
+    assert.ok(page.penState.every((stroke) => /pencolor-[jlnprtvxz]$/.test(stroke)), page.penState.join(' | '))
+    assert.deepEqual(errors, [])
   })
 
   describe('a page error planted on Escape during a drag', () => {

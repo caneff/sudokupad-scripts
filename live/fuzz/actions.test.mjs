@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
+import { createRequire } from 'node:module'
 import { actionList, KIND_GROUPS, KIND_NAMES, scriptedList } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
@@ -10,6 +11,8 @@ const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList
 // fast-check wraps each generated command (`.cmd`), and prints a list only once it ran, so the steps are read from the commands.
 const actionsOf = (lists) => lists.flatMap((l) => [...l.commands].map((wrapped) => wrapped.cmd))
 const stepsOf = (lists) => actionsOf(lists).map(String)
+
+const { THICKNESS, DASH, ARROW_SPACING } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
 
 const runOn = async (action, options) => {
   const target = await fakeTargets(options).openTarget()
@@ -97,6 +100,10 @@ describe('the action vocabulary', () => {
         assert.equal(points.length, 2, `${a}: one point to press, one to drag to`)
         seen.add(points[0][1])
         assert.deepEqual(log.filter(([n]) => /^mouse\.(?:down|up)$/.test(n)).map(([n]) => n), ['mouse.down', 'mouse.up'])
+        // The fake puts a point at 100 + 200 * fraction: the button goes down at the first point and the drag ends on the second.
+        const moves = calls(log, 'mouse.move')
+        assert.deepEqual(moves[0].slice(1, 3), [100 + points[0][2] * 200, 300], `${a}: the press point`)
+        assert.deepEqual(moves.at(-1).slice(1, 3), [100 + points[1][2] * 200, 300], `${a}: the drag ends on the second point`)
       }
       assert.deepEqual([...seen].sort(), ['note size', 'note transparency', 'pen opacity', 'pen thickness'])
     })
@@ -113,28 +120,33 @@ describe('the action vocabulary', () => {
 
     it('the dialog action sets an arrow spacing, a dash length and a thickness inside the script\'s ranges, and saves or cancels', async () => {
       const sets = []
+      const saves = new Set()
       for (const a of actionsOf(sample(13, 300)).filter((x) => x.kind === 'pen settings values')) {
         const { log } = await runOn(a)
         const [[, values, save]] = calls(log, 'extrasSettings')
         sets.push(values)
-        assert.equal(typeof save, 'boolean')
-        assert.ok(values.arrowSpacing >= 3 && values.arrowSpacing <= 12 && Number.isInteger(values.arrowSpacing))
-        assert.ok(values.dash >= 0 && values.dash <= 8 && Number.isInteger(values.dash))
-        assert.ok(values.thickness >= 1 && values.thickness <= 16 && Number.isInteger(values.thickness * 2))
+        saves.add(save)
+        const onRange = (v, { min, max, step }) => v >= min && v <= max && Number.isInteger((v - min) / step)
+        assert.ok(onRange(values.arrowSpacing, ARROW_SPACING), `arrow spacing ${values.arrowSpacing}`)
+        assert.ok(onRange(values.dash, DASH), `dash ${values.dash}`)
+        assert.ok(onRange(values.thickness, THICKNESS), `thickness ${values.thickness}`)
       }
+      assert.deepEqual([...saves].sort(), [false, true])
       assert.ok(new Set(sets.map((v) => v.arrowSpacing)).size > 3, 'the spacing varies')
     })
 
     it('the box color action picks a preset or an own color, and saves or cancels', async () => {
       const picks = new Set()
+      const saves = new Set()
       for (const a of actionsOf(sample(14, 400)).filter((x) => x.kind === 'note box color')) {
         const { log } = await runOn(a)
         const [[, choice, color, save]] = calls(log, 'noteBoxDialog')
         picks.add(choice)
-        assert.equal(typeof save, 'boolean')
+        saves.add(save)
         if (choice === 'custom') assert.match(color, /^#[0-9a-f]{6}$/)
       }
       assert.deepEqual([...picks].sort(), ['custom', 'page', 'tint', 'white', 'yellow'])
+      assert.deepEqual([...saves].sort(), [false, true])
     })
 
     it('the background action sets the Background button on or off', async () => {
@@ -154,14 +166,15 @@ describe('the action vocabulary', () => {
       const [[, action]] = kindsNamed(/^arrow line$/)
       const { log } = await runOn(action)
       const names = log.map(([n]) => n)
-      assert.ok(names.indexOf('useArrowPen') < names.indexOf('mouse.down'), 'the pen first')
+      assert.equal(names.filter((n) => n === 'useArrowPen').length, 1, 'the arrow pen is picked')
+      assert.ok(names.indexOf('useArrowPen') < names.indexOf('mouse.down'), 'before the button goes down')
       assert.deepEqual(names.filter((n) => /^mouse\.(?:down|up)$/.test(n)), ['mouse.down', 'mouse.up'])
     })
 
     it('their steps read as plain words naming what they set', () => {
       const steps = stepsOf(sample(15, 400))
       assert.ok(steps.some((s) => /^drag the pen thickness slider from \d+% to \d+%$/.test(s)), 'drag')
-      assert.ok(steps.some((s) => /^press ArrowLeft 2 times on the note size slider$/.test(s) || /^press \w+ \d times on the \w+ \w+ slider$/.test(s)), 'keys')
+      assert.ok(steps.some((s) => /^press \w+ \d times on the \w+ \w+ slider$/.test(s)), 'keys')
       assert.ok(steps.some((s) => /^Pen Tool Extras settings dialog: arrow spacing \d+ dash \d thickness [\d.]+ (?:Save|Cancel)$/.test(s)), 'values')
       assert.ok(steps.some((s) => /^Text Anywhere box color (?:Page|White|Yellow|Tint) (?:Save|Cancel)$/.test(s)), 'preset')
       assert.ok(steps.some((s) => /^note ".*" with a box at r\d+c\d+$/.test(s)), 'boxed note')
