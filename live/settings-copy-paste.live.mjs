@@ -1,6 +1,6 @@
 // Live check of the Copy settings and Paste settings buttons of the five scripts with a settings dialog, on sudokupad.app in
 // headless Chromium: Copy puts the saved keys on the real clipboard, Paste reads them back through the same dialog.
-import { after, before, describe, it } from 'node:test'
+import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
@@ -83,14 +83,13 @@ describe('auto-rules-resizer.user.js: a failed Save or Paste leaves the width un
       }
     }, HEIGHT_KEY)
   }
-  after(async () => { await context?.close() })
+  afterEach(async () => { await context?.close() })
 
   it('Paste: says the paste failed and the width key is still unsaved', async () => {
     await openWithHeightWriteThrowing()
     assert.equal(await paste(p, JSON.stringify({ [WIDTH_KEY]: 640, [HEIGHT_KEY]: 480 })), 'Could not paste: the max size settings are off')
     assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), null)
     assert.deepEqual(errors, [])
-    await context.close()
   })
 
   it('Save: says it was not saved and the width key is still unsaved', async () => {
