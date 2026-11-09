@@ -698,23 +698,12 @@
       host.append(message)
     }
 
-    // A store write's throw, with the feature whose store threw it: whichever feature's code it reaches, that store's feature is the one
-    // that fails. A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once
-    // space frees.
-    const storeFailures = new WeakMap()
-    function failStore (owner, error) {
-      if (!isRefusedWrite(error)) return owner.skip(error)
-      console.warn(`${script}: ${owner.label} could not save, the browser refused the write:`, error)
-      tell(`${name}: the browser has no room left, so ${owner.label} could not be saved.`)
-    }
+    // While a dialog write (`runOrThrow`) runs, a store write that throws goes on, marked here, to the dialog's `writeOrRestore`.
+    let dialogWrites = 0
+    const storeFailures = new WeakSet()
 
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
-      const fail = (error) => {
-        const owner = storeFailures.get(error)
-        if (owner) failStore(owner, error)
-        else feature.skip(error)
-      }
       const feature = {
         label,
         off: false,
@@ -739,19 +728,23 @@
           try {
             return fn()
           } catch (error) {
-            fail(error)
+            if (storeFailures.has(error)) throw error
+            feature.skip(error)
             return fallback()
           }
         },
         // A save, copy or paste in a settings dialog: its throw goes on to the dialog's status line, and one with the feature off says so.
-        // A store failure passes with every feature still on, so the dialog's `writeOrRestore` can put the earlier keys back through it.
+        // A store write that fails in it passes with every feature still on, so `writeOrRestore` can put the earlier keys back through the store.
         runOrThrow (fn) {
           if (feature.off) throw new Error(`${name} turned off its ${label}`)
+          dialogWrites++
           try {
             return fn()
           } catch (error) {
             if (!storeFailures.has(error)) feature.skip(error)
             throw error
+          } finally {
+            dialogWrites--
           }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
@@ -779,7 +772,7 @@
               return body.call(this, stock, ...args)
             } catch (error) {
               if (failure && failure.error === error) throw error
-              fail(error)
+              feature.skip(error)
               return reached ? result : original.apply(this, args)
             }
           }
@@ -801,17 +794,23 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws goes on to its caller with the feature still on, so a dialog's `writeOrRestore` can put back the keys written
-    // before it; the feature fails only where a feature's own `run` catches the throw. `keep`, the copy of an unreadable value, turns the
-    // feature off on any throw, a refusal included, so nothing can save over the original.
+    // A write that throws turns the feature off and its caller goes on, except in a dialog write, where it throws on (`runOrThrow`). A
+    // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
+    // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
+    // can save over the original.
     function storeFor (feature) {
       const write = (fn) => {
         if (feature.off) return
         try {
           fn()
         } catch (error) {
-          if (Object(error) === error) storeFailures.set(error, feature)
-          throw error
+          if (dialogWrites > 0) {
+            if (Object(error) === error) storeFailures.add(error)
+            throw error
+          }
+          if (!isRefusedWrite(error)) return feature.skip(error)
+          console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
+          tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
         }
       }
       return {
