@@ -6,13 +6,14 @@ import { RULES, ruleViolations } from './rules.mjs'
 
 const rule = (name) => RULES.find((r) => r.name === name)
 // The violations of one rule between a snapshot `before` and one `now` (page overrides), for the kind of action between them.
-const check = (name, now, { before = {}, action = 'click cell' } = {}) => rule(name).check({ now: { page: quietPage(now) }, before: { page: quietPage(before) }, action })
+// `earlier` is the step before `before` as overrides of its page: `{ action, page }`.
+const check = (name, now, { before = {}, action = 'click cell', earlier = null } = {}) => rule(name).check({ now: { page: quietPage(now) }, before: { page: quietPage(before) }, action, earlier: earlier && { action: earlier.action, before: { page: quietPage(earlier.page) } } })
 
 const colorByDigit = (mode, cells, groups = [{ key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]) => ({ mode, groups, cells: cells.map(([digit, colours = [], given = false]) => ({ digit, given, colours })) })
 
 describe('the rules', () => {
   it('each script has a rule, and the names are unique', () => {
-    assert.deepEqual(RULES.map((r) => r.name), ['undo-to-start', 'pen-lines-drawn', 'notes-saved-match-drawn', 'notes-survive-reload', 'digit-cells-colored', 'page-stays-dark', 'rules-fit-pane', 'tab-not-letters'])
+    assert.deepEqual(RULES.map((r) => r.name), ['undo-to-start', 'pen-lines-drawn', 'notes-saved-match-drawn', 'notes-survive-reload', 'reload-changes-nothing', 'undo-redo-restores', 'digit-cells-colored', 'page-stays-dark', 'rules-fit-pane', 'tab-not-letters'])
   })
 
   it('a quiet page breaks none, and a violation is reported with its rule name', () => {
@@ -29,6 +30,16 @@ describe('the rules', () => {
     })
     it('fails when the undo stack is empty and a cell still holds something', () => {
       assert.deepEqual(check('undo-to-start', { undoDepth: 0, cells: ['', '////12', ''] }), ['the undo stack is empty but cell 1 still holds "////12"'])
+    })
+    it('fails when the undo stack is empty and a pen stroke is still drawn, though the state holds none', () => {
+      assert.deepEqual(check('undo-to-start', { undoDepth: 0, penDrawn: ['pen-1 pencolor-2'] }), ['the undo stack is empty but a pen stroke is still drawn: pen-1 pencolor-2'])
+    })
+    it('fails when the undo stack is empty and a cell is still colored', () => {
+      const colored = colorByDigit('Cell', [[''], ['', ['5']]])
+      assert.deepEqual(check('undo-to-start', { undoDepth: 0, colorByDigit: colored }), ['the undo stack is empty but cell 1 is still colored 5'])
+    })
+    it('leaves the notes alone, which do not ride the undo stack', () => {
+      assert.deepEqual(check('undo-to-start', { undoDepth: 0, notesSaved: [{ kind: 'text', text: '15' }], notesDrawn: ['15'], notesSeen: ['15'] }), [])
     })
   })
 
@@ -86,6 +97,67 @@ describe('the rules', () => {
     })
     it('says nothing after any other action, which may change the notes', () => {
       assert.deepEqual(check('notes-survive-reload', { notesSeen: [] }, { before: { notesSeen: ['a'] }, action: 'undo' }), [])
+    })
+  })
+
+  describe('reload-changes-nothing', () => {
+    const board = { cells: ['5///5', '', ''], penState: ['pen-1 pencolor-2'], penDrawn: ['pen-1 pencolor-2'], pageColor: 'rgb(0, 0, 32)', colorByDigit: colorByDigit('Digit', [['5', ['5']], [''], ['']]) }
+    it('holds when the page after a reload is the page before it', () => {
+      assert.deepEqual(check('reload-changes-nothing', board, { before: board, action: 'reload' }), [])
+    })
+    it('fails when a reload changes a cell, naming the field', () => {
+      assert.deepEqual(check('reload-changes-nothing', { ...board, cells: ['', '', ''] }, { before: board, action: 'reload' }), ['cells was ["5///5","",""] and is now ["","",""]'])
+    })
+    it('fails when a reload changes the pen strokes drawn, the page color or the Color by Digit mode', () => {
+      assert.equal(check('reload-changes-nothing', { ...board, penDrawn: [] }, { before: board, action: 'reload' }).length, 1)
+      assert.equal(check('reload-changes-nothing', { ...board, pageColor: 'rgb(0, 0, 0)' }, { before: board, action: 'reload' }).length, 1)
+      assert.equal(check('reload-changes-nothing', { ...board, colorByDigit: colorByDigit('Off', [['5', ['5']], [''], ['']]) }, { before: board, action: 'reload' }).length, 1)
+    })
+    it('holds when a reload draws the same strokes in another order', () => {
+      const two = { penState: ['pen-1 pencolor-1', 'pen-e pencolor-1'], penDrawn: ['pen-1 pencolor-1', 'pen-e pencolor-1'] }
+      assert.deepEqual(check('reload-changes-nothing', { ...two, penState: [...two.penState].reverse(), penDrawn: [...two.penDrawn].reverse() }, { before: two, action: 'reload' }), [])
+    })
+    it('fails when a reload changes a digit', () => {
+      assert.equal(check('reload-changes-nothing', { ...board, colorByDigit: colorByDigit('Digit', [['6', ['5']], [''], ['']]) }, { before: board, action: 'reload' }).length, 1)
+    })
+    it('fails when a reload changes the cell colors in Digit mode, which colors no cell', () => {
+      assert.equal(check('reload-changes-nothing', { ...board, colorByDigit: colorByDigit('Digit', [['5', []], [''], ['']]) }, { before: board, action: 'reload' }).length, 1)
+    })
+    it('holds when a reload colors the cells in Cell or Both mode, which Color by Digit does every time the page opens', () => {
+      for (const mode of ['Cell', 'Both']) {
+        const bare = { cells: ['', '', ''], colorByDigit: colorByDigit(mode, [['5'], [''], ['']]) }
+        const colored = { cells: ['5///5', '', ''], colorByDigit: colorByDigit(mode, [['5', ['5']], [''], ['']]) }
+        assert.deepEqual(check('reload-changes-nothing', colored, { before: bare, action: 'reload' }), [], mode)
+      }
+    })
+    it('leaves the notes to notes-survive-reload and the undo stack depth alone', () => {
+      assert.deepEqual(check('reload-changes-nothing', { ...board, notesSeen: [], undoDepth: 0 }, { before: { ...board, notesSeen: ['a'], undoDepth: 4 }, action: 'reload' }), [])
+    })
+    it('says nothing after any other action, which may change the page', () => {
+      assert.deepEqual(check('reload-changes-nothing', { cells: ['', '', ''] }, { before: board, action: 'undo' }), [])
+    })
+  })
+
+  describe('undo-redo-restores', () => {
+    const board = { undoDepth: 2, cells: ['5///5', '', ''], penState: ['pen-1 pencolor-2'], penDrawn: ['pen-1 pencolor-2'], colorByDigit: colorByDigit('Cell', [['5', ['5']], [''], ['']]) }
+    const undone = { undoDepth: 1, cells: ['', '', ''], penState: [], penDrawn: [], colorByDigit: colorByDigit('Cell', [[''], [''], ['']]) }
+    const undoThenRedo = (now, earlierPage = board) => check('undo-redo-restores', now, { before: undone, action: 'redo', earlier: { action: 'undo', page: earlierPage } })
+    it('holds when a redo right after an undo gives back the page from before the undo', () => {
+      assert.deepEqual(undoThenRedo(board), [])
+    })
+    it('fails when the page differs, naming the field', () => {
+      assert.deepEqual(undoThenRedo({ ...board, penDrawn: [] }), ['penDrawn was ["pen-1 pencolor-2"] and is now []'])
+    })
+    it('fails when the undo stack is a different depth', () => {
+      assert.equal(undoThenRedo({ ...board, undoDepth: 3 }).length, 1)
+    })
+    it('says nothing for a redo after another action, or an undo followed by another action', () => {
+      assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'redo', earlier: { action: 'click cell', page: board } }), [])
+      assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'redo' }), [])
+      assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'click cell', earlier: { action: 'undo', page: board } }), [])
+    })
+    it('leaves the rules pane out, which is layout', () => {
+      assert.deepEqual(undoThenRedo({ ...board, rulesPane: { fontPx: 12, ownFontPx: 17.6, scrollHeight: 900, clientHeight: 300 } }), [])
     })
   })
 
