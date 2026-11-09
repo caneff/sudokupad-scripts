@@ -1,5 +1,3 @@
-// Live check of the shared settings dialog shell (`lib/settings-dialog.js`) in all five scripts on sudokupad.app, in headless Chromium:
-// the buttons are Save then Cancel (extra buttons after them), and Save with nothing changed writes nothing.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { openPage, startPuzzle } from './page.mjs'

@@ -50,7 +50,6 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
   })
   after(async () => { await context.close() })
 
-  // The note's text starts back on its own point, and its stored point is that point.
   const atHome = async () => {
     const point = await settle(async () => (await boxes()).point.map(Math.round), RIGHT_OF_PANEL)
     assert.deepEqual(point, RIGHT_OF_PANEL, 'drawn at its own point')

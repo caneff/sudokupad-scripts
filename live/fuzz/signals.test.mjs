@@ -1,4 +1,3 @@
-// Unit tests of the fuzz's crash signals and error-log lines, on hand-built snapshots.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { crashSignals, newestErrorRecords } from './signals.mjs'

@@ -42,7 +42,6 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
       await p.keyboard.type(line)
     }
   }
-  // The note whose text begins with `start`, in the layer: its content box in pixels and in em, its scroll, and its look.
   const note = (start, selector = TEXTS) => read(([s, want]) => {
     const e = [...document.querySelectorAll(s)].find((n) => n.textContent.startsWith(want))
     const style = window.getComputedStyle(e)

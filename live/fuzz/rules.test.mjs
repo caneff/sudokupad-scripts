@@ -1,11 +1,9 @@
-// Unit tests of the fuzz's rules with hand-built snapshots: each rule passes on a page where it holds and fails, naming what broke, on one where it does not.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { quietPage } from './fake-target.mjs'
 import { RULES, ruleViolations } from './rules.mjs'
 
 const rule = (name) => RULES.find((r) => r.name === name)
-// The violations of one rule between a snapshot `before` and one `now` (page overrides), for the kind of action between them.
 // `earlier` is the step before `before` as overrides of its page: `{ action, page }`, with its own `earlier` the same way.
 const check = (name, now, { before = {}, action = 'click cell', earlier = null } = {}) => {
   const step = (e) => e && { action: e.action, before: { page: quietPage(e.page) }, earlier: step(e.earlier) }

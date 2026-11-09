@@ -22,7 +22,6 @@ const { script } = extras
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'EdgeMarks_marks']
 const SLIDERS = '#pen-tool-extras-thickness'
 const NOTHING_OFF = ''
-// The color tool wait's limit in the script (COLOR_TOOL_TIMEOUT_MS) and the panel check's pause (PANEL_CHECK_MS).
 const COLOR_TOOL_TIMEOUT_MS = 10000
 const PANEL_CHECK_MS = 1000
 const WARNING = /^pen-tool-extras: /

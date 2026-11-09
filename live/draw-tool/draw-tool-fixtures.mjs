@@ -20,7 +20,6 @@ export const DIGIT_BUTTON = '#control-normal'
 const NOTE_GROUPS = '.draw-tool-board, .draw-tool-screen'
 // Anything in the notes' layer that is not a note, a resize handle, a selection outline or one of the groups, such as a stroke or shape an earlier version drew: none is drawn now.
 export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, .draw-tool-resize, .draw-tool-selection, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
-// Every element in the layer but the groups themselves.
 export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
 // The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
 export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
@@ -32,7 +31,6 @@ export const STRIKE_PIECE = '.draw-tool-strike-piece'
 const STRIKES = `${TEXTS} .draw-tool-strike`
 export const STRIKE_PIECES = `${STRIKES} ${STRIKE_PIECE}`
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
-// The sliders under the controls, and the Size and Transparency sliders in them.
 export const SLIDERS = '.draw-tool-sliders'
 export const TRAY = '.draw-tool-tray'
 export const SIZE_SLIDER = '#draw-tool-size'
@@ -70,7 +68,6 @@ export const SETTINGS_EDITOR = '#draw-tool-dialog'
 export const SETTINGS_STATUS = '.dialog [data-role="settings-status"]'
 export const PICKER_BOX = '.draw-tool-picker'
 
-// A press held on the middle of `selector` with `button`, until the pickers reach `state`.
 export async function holdForPickers (p, selector, button, state) {
   const box = await p.locator(selector).boundingBox()
   await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -82,13 +79,11 @@ export async function holdForPickers (p, selector, button, state) {
   }
 }
 
-// The middle of a Playwright bounding box.
 export const middleOf = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
 
 export const tool = (p) => p.evaluate(() => Framework.app.tool)
 // The slider thumb's width in rem, as lib/panel.js's SLIDER_THUMB_REM draws it.
 const SLIDER_THUMB_REM = 1.1
-// A slider's value.
 export const valueOf = (p, slider) => p.evaluate((selector) => Number(document.querySelector(selector).value), slider)
 // Presses on `slider`'s track where `value` lies and releases, with real mouse input. The thumb's centre runs from half a thumb in from each end of the track.
 // A press on the thumb drags it by the offset it was pressed at and does not jump, so when the thumb is under the target the track is first pressed at its other end.
@@ -118,7 +113,6 @@ export const drawingOf = (value) => {
 }
 export const saved = async (p) => drawingOf(await p.evaluate((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey(p)))
 
-// Each note drawn: its text, its computed color and its size in board units, its font size on the screen over the board's scale.
 export const noteLooks = (p) => p.evaluate((selector) => {
   const scale = Framework.app.svgRenderer.getElem().getScreenCTM().a
   return [...document.querySelectorAll(selector)].map((e) => {
@@ -185,7 +179,6 @@ export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.re
 export const SELECTED = '#draw-tool-layer .draw-tool-selected'
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
-// Removes every saved drawing, every set of notes a Restart kept, and the index.
 export const forgetDrawings = (p) => p.evaluate(([prefixes, index]) => {
   Object.keys(window.localStorage).filter((k) => prefixes.some((prefix) => k.includes(prefix))).forEach((k) => window.localStorage.removeItem(k))
   Framework.removeData(index)
@@ -213,7 +206,6 @@ export async function reloadOnDraw (p) {
   await pickDraw(p)
 }
 
-// Plants `items` as the saved drawing of the puzzle on the page, so the next load reads them.
 export async function plantDrawing (p, items) {
   const key = DRAWING_PREFIX + await puzzleKey(p)
   await p.evaluate(([k, value]) => Framework.setData(k, value), [key, items])

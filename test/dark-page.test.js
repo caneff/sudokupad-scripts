@@ -152,8 +152,6 @@ test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8')))
 })
 
-// Starts the script on a page that has a document with a head and a body, with `framework` as the page's Framework, or none.
-// `appended` is what went in the head; `bar` is the text of the notice bar, or null for none.
 function startOnBoard (framework) {
   const appended = []
   const inBody = []
@@ -210,7 +208,6 @@ test('pastedSettings: a valid color is kept lower-case, a bad one is skipped and
   assert.deepEqual(readPaste(JSON.stringify({ [DATA_KEY]: 'red' })), { values: {}, skipped: 1 })
 })
 
-// A SudokuPad with every internal Dark Page needs.
 const completeFramework = () => ({ Framework: { getApp () {}, getData () {}, addSetting () {}, showDialog () {}, closeDialog () {}, setData () {}, removeData () {} } })
 
 test('Dark Page declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {

@@ -30,7 +30,6 @@ const browser = useBrowser()
 describe('Text Anywhere\'s snap', { concurrency: false }, () => {
   let context, p, errors
 
-  // The page x of the grid's column line `k`.
   const lineX = async (k) => {
     const [x0, , size] = await cellCentre(p, 0, 0)
     return x0 - size / 2 + k * size
@@ -59,7 +58,6 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     const after = await outlineLeft()
     assert.equal(Math.abs(after - guide) < OUTLINE_ON_GUIDE_PX, true, `the outline's line ${after} is off the guide ${guide} it was snapped to, after the release`)
   }
-  // Drags the note so its outline's left line lies `gap` px right of column line `COLUMN_LINE`.
   const dragToGap = async (gap, snaps = false) => dragBy(await lineX(COLUMN_LINE) + gap - ((await noteBox('15')).x - OUTLINE_MIDDLE_PX), 0, snaps)
 
   before(async () => {

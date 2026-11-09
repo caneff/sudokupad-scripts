@@ -162,7 +162,6 @@ const section = (file, heading) => {
   assert.ok(m, `site/${file} has no <h2>${heading}</h2> followed by a list`)
   return items(m[1]).map(plain)
 }
-// An item's opening words are its bold lead-in: the first <strong> of the item.
 const leadIn = li => (li.match(/^<strong>([^<]*)<\/strong>/) || [])[1]
 const leadIns = page => items(page).map(leadIn).filter(Boolean)
 
@@ -255,7 +254,6 @@ const SHOWS = [
   { heading: 'Text Anywhere', page: DRAW, id: 'text-anywhere' }
 ]
 
-// A slideshow's own markup, from a homepage row or a details page (where it ends at "What it adds").
 const showOf = html => html.split('<div class="slideshow">')[1].split(/<h2>What it adds<\/h2>|<\/section>/)[0]
 const homeShow = heading => showOf(rowsOf(read(HOME)).find(r => r.includes(`<h2>${heading}</h2>`)))
 
@@ -287,7 +285,6 @@ for (const { heading, page: file, id } of SHOWS) {
   })
 }
 
-// Each details page's sections, in order: the page lays out the lede and Install, the slideshow, "What it adds", then its own sections.
 const assertSectionsInOrder = (file, markers) => {
   const page = read(file)
   assert.match(page, /<body class="details">/)
@@ -379,7 +376,6 @@ const pictureSize = (file) => {
   return [bytes.readUInt16LE(6), bytes.readUInt16LE(8)]
 }
 
-// Asserts an <img>'s declared width and height keep the shape of its file; returns the file's size.
 const assertDeclaredAtFileShape = (img, file, what) => {
   const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))
   const [fileW, fileH] = pictureSize(file)

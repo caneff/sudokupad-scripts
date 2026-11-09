@@ -15,7 +15,6 @@ const browser = useBrowser()
 describe('Text Anywhere\'s Discord formatting in notes', { concurrency: false }, () => {
   let context, p, errors
 
-  // The computed look of the block whose text starts with `start`, and of the note itself.
   const lineLook = (start) => p.evaluate(([selector, start]) => {
     const note = document.querySelector(selector)
     const line = [...note.querySelectorAll('div')].find((e) => e.textContent.startsWith(start))

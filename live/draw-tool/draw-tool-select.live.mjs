@@ -53,12 +53,10 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
       await p.keyboard.up('Shift')
     }
   }
-  // A rectangle over A, B and C, where they are before the group move, or after it when `moved`.
   const selectThree = async (moved = false) => {
     await mouseDrag(p, moved ? [shifted(CORNER), shifted(FAR_CORNER)] : [CORNER, [3, 3], FAR_CORNER])
     assert.deepEqual(await selectedTexts(), ['A', 'B', 'C'])
   }
-  // The color button marked current, or null for none.
   const markedColor = () => p.evaluate((keypad) => document.querySelector(`${keypad} button.digit.current`)?.dataset.key ?? null, KEYPAD)
   const backgroundPressed = () => p.locator(BACKGROUND_BUTTON).getAttribute('aria-pressed')
   const reload = () => draw.reloadOnDraw(p)

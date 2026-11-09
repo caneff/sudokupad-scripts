@@ -17,7 +17,6 @@ import { useBrowser } from './session.mjs'
 
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
-// The pen settings attack 75 saves, with the keys and values it expects back.
 const THICKNESS_KEY = 'PenColor_thickness'
 const OPACITY_KEY = 'PenColor_opacity'
 const OTHER_TAB_THICKNESS = 9
@@ -87,7 +86,6 @@ describe('attacks on storage', { concurrency: false }, () => {
       ;({ context, p, errors } = await openPage(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await startPuzzle(p, { injection: { mode: 'after-start', code: code(script.file) } })
       await openScriptDialog(p, script.entry, script.editor)
-      // Everything the script owns in the store, as saved strings.
       const owned = () => p.evaluate((pattern) => Object.fromEntries(Object.keys(window.localStorage).filter((k) => new RegExp(pattern).test(k.replace(/^svencodes_/, ''))).sort().map((k) => [k, window.localStorage.getItem(k)])), script.owns.source)
       const timed = async (text) => {
         const started = Date.now()
@@ -104,7 +102,6 @@ describe('attacks on storage', { concurrency: false }, () => {
       assert.equal(await p.evaluate(() => ({}).polluted), undefined, `${script.file}: a pasted __proto__ pollutes nothing`)
       assert.deepEqual(await owned(), savedBefore, `${script.file}: malformed text saved nothing`)
 
-      // A megabyte of text that is not JSON, and a megabyte under a key the script's reader refuses.
       assert.equal(await timed('x'.repeat(MEGABYTE)), 'Could not paste: the clipboard text is not JSON', `${script.file}: a megabyte of text is refused`)
       assert.equal(await timed(JSON.stringify({ [script.badKey]: 'x'.repeat(MEGABYTE) })), 'Pasted 0 settings; skipped 1 that did not check out.', `${script.file}: a megabyte value is skipped`)
       assert.deepEqual(await owned(), savedBefore, `${script.file}: a megabyte saved nothing`)
@@ -155,7 +152,6 @@ describe('attacks on storage', { concurrency: false }, () => {
     assert.deepEqual(await draw.texts(p), ['15'], 'the first tab makes a note')
     assert.equal(await draw.valueOf(other.p, draw.SIZE_SLIDER), widthThere, 'the first tab\'s note does not change the other tab\'s width')
 
-    // A reload shows the other tab's settings and this tab's own.
     await reloadWithScripts(p)
     await openPenTool(p)
     assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), THICKNESS), OTHER_TAB_THICKNESS, 'the reload shows the thickness the other tab saved')

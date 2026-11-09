@@ -42,19 +42,16 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
 
   const open = async (data) => openPuzzleId(p, await puzzleIdFor(p, data))
   const gridSize = () => p.evaluate(() => [Framework.app.puzzle.rows, Framework.app.puzzle.cols])
-  // The page x of the grid's column line `k`.
   const lineX = async (k) => {
     const [x0, , size] = await cellCentre(p, 0, 0)
     return x0 - size / 2 + k * size
   }
-  // The board's box on the page: from the first cell's top left to the last cell's bottom right.
   const boardBox = () => p.evaluate(() => {
     const cells = Framework.app.puzzle.cells
     const [first, last] = [cells[0].elem.getBoundingClientRect(), cells[cells.length - 1].elem.getBoundingClientRect()]
     return { x: first.x, y: first.y, width: last.right - first.x, height: last.bottom - first.y }
   })
 
-  // A pen line along the last row from its first cell to its last, an edge mark on the last cell's right edge, and the pen strokes on the board.
   const penMarks = async (rows, cols) => {
     const before = (await penEntries(p)).length
     await openPenTool(p)
@@ -108,7 +105,6 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     assert.equal(await settle(() => colorOf(enter), groups[ODD - 1]), groups[ODD - 1], 'an entered odd digit takes the odd color')
   }
 
-  // The rules text fits its pane without being cut off.
   const rulesFit = async () => {
     const read = () => p.evaluate(() => { const e = document.querySelector('.puzzle-rules'); return { fits: e.scrollHeight <= e.clientHeight + 1, shown: e.textContent.includes('Normal sudoku rules apply') } })
     assert.deepEqual(await settle(read, { fits: true, shown: true }), { fits: true, shown: true }, 'the rules show and fit their pane')
@@ -182,7 +178,6 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       const lifted = await readUntil(fogged, (now) => now.some((g, i) => before[i].hidden && !g.hidden))
       const uncovered = lifted.filter((g, i) => before[i].hidden && !g.hidden)
       assert.deepEqual(uncovered.filter((g) => g.colours === 0), [], 'every given the fog uncovered has its color')
-      // The Odd/Even profile: the shown givens of one parity share a color, and the two parities differ.
       const colourOfParity = (parity) => new Set(lifted.filter((g) => !g.hidden && g.digit % 2 === parity).map((g) => g.colour))
       const [odd, even] = [colourOfParity(1), colourOfParity(0)]
       assert.deepEqual([odd.size, even.size], [1, 1], 'the shown givens of one digit group share one color')
@@ -193,7 +188,6 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     it('attack 68: a puzzle with a background image: the image stays under the board while every script draws and notes', async () => {
       const image = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="#88c"/></svg>').toString('base64')
       await open(puzzleData({ id: 'attack-bg', givens: CLASSIC_GIVENS, metadata: { title: 'background', rules: RULES, bgimage: image, bgimageopacity: '0.5' } }))
-      // The image's box on the page against the board's: it must reach every edge of the board, whatever size the board is drawn at.
       const underBoard = async () => {
         const [images, board] = [await p.evaluate(() => [...document.querySelectorAll('#svgrenderer image')].map((i) => { const r = i.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom } })), await boardBox()]
         return { count: images.length, covers: images.length === 1 && images[0].x <= board.x + 1 && images[0].y <= board.y + 1 && images[0].right >= board.x + board.width - 1 && images[0].bottom >= board.y + board.height - 1 }

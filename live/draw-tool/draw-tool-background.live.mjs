@@ -25,9 +25,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
   const bgCount = () => p.locator(TEXT_BGS).count()
   const pressed = () => p.locator(BACKGROUND_BUTTON).getAttribute('aria-pressed')
   const storedSetting = () => read((key) => Framework.getData(key) ?? null, BACKGROUND_KEY)
-  // Which saved notes have a background, by text.
   const savedBgs = async () => Object.fromEntries((await saved()).map((item) => [item.text, item.bg ?? false]))
-  // A double-click opens a note already made.
   const openAt = async (at) => draw.reopen(p, await gridPoint(p, at))
   const boxFilled = () => p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)')
 
@@ -59,7 +57,6 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
     await typeText(p, SPOTS[1], 'b')
     assert.equal(await bgCount(), 1)
     assert.deepEqual(await savedBgs(), { a: false, b: true })
-    // The box is the note's own element, and the text's box is measured by a range over its characters.
     const inside = await read((bg) => {
       const note = document.querySelector(bg)
       const box = note.getBoundingClientRect()

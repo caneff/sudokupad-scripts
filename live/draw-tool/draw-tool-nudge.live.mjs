@@ -109,7 +109,6 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     assert.equal(end.x + end.width / 2 <= width - 1, true, `the note's middle ${end.x + end.width / 2} stayed inside the window of width ${width}`)
   })
 
-  // Counts the writes of this puzzle's drawing, so a test sees how many times a held key saved.
   const countSaves = async () => {
     await p.evaluate((prefix) => {
       const counting = window.drawSaves !== undefined

@@ -24,7 +24,6 @@ const FOUR_PROFILES = {
 
 const browser = useBrowser()
 
-// A page with the script injected; `saved` maps a localStorage key to a JSON value, saved before the page loads.
 // With no mode saved the page starts in Cell; `savedOff` saves the mode Off beside `saved`.
 const openProfiles = (saved, contextOptions = {}) => openSession(browser(), script, { saved, contextOptions })
 const savedOff = (saved) => ({ ...saved, [MODE_STORAGE_KEY]: 'off' })
@@ -386,7 +385,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   })
 })
 
-// One touch event on the page's CDP session; a `touchEnd` carries no touch points.
+// A `touchEnd` carries no touch points.
 const touch = (cdp, type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
 
 describe('the menu on a touch screen, injected after Start Puzzle', { concurrency: false }, () => {
@@ -471,7 +470,6 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await p.mouse.move(start.x, end.y, { steps: 4 })
     await p.mouse.up()
   }
-  // The same drag with a finger.
   const dragWithTouch = async (from, to) => {
     const { start, end } = await dragPoints(from, to)
     await touch(cdp, 'touchStart', start.x, start.y)

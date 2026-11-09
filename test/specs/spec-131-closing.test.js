@@ -3,7 +3,6 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const colorByDigit = require('../../color-by-digit.user.js')
 
-// The warnings each script prints starting on a page whose Framework has no getApp.
 function warningWithoutGetApp (name) {
   const file = require.resolve(`../../${name}.user.js`)
   const element = () => ({ style: { setProperty () {} }, setAttribute () {}, append () {}, addEventListener () {}, remove () {} })

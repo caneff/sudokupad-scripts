@@ -24,7 +24,6 @@ const OPACITY = '#pen-tool-extras-opacity'
 const OPACITY_KEY = 'PenColor_opacity'
 // The drawn drag highlight: SudokuPad's own `.penhint`, which the script moves into its hint layer.
 const HINTS = '.penhint, #pen-tool-extras-hint *'
-// SudokuPad's hotkey for the Corner tool, and the tool it names.
 const OTHER_TOOL_KEY = 'x'
 const OTHER_TOOL = 'corner'
 // Where the line goes, as [row, column] in cells from the grid's top left: along row 2.5 from column 1.5 to 4.5.
@@ -74,7 +73,6 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
     assert.deepEqual(await penEntries(p), [], `${why}: undoing everything leaves the pen as it began`)
     assert.deepEqual(errors, [], `${why}: the page shows no error after recovering`)
   }
-  // The line is drawn once or not at all: after the interruption's release, what the pen holds is the clean drag's entries or nothing.
   const assertWholeOrNone = async (why) => {
     const entries = await settle(async () => JSON.stringify(await penEntries(p)), JSON.stringify(whole), FLOOR_MS * 2, STABLE_MS)
     assert.equal([JSON.stringify([]), JSON.stringify(whole)].includes(entries), true, `${why}: the pen holds ${entries}, neither the whole line ${JSON.stringify(whole)} nor nothing`)

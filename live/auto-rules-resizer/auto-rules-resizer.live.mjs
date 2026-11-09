@@ -29,8 +29,8 @@ const MAX_WIDTH_INPUT = '#auto-rules-resizer-max-width'
 const MAX_HEIGHT_INPUT = '#auto-rules-resizer-max-height'
 // SudokuPad's own rules font (1.1rem), and the gap the script keeps to the window's right edge.
 const SUDOKUPAD_FONT_PX = 17.6
-const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7 // the smallest the fit goes
-const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5 // the largest
+const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7
+const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5
 const EDGE_PX = 8
 const PORTRAIT = { width: 800, height: 1100 }
 const STYLE = '#auto-rules-resizer-style'
@@ -77,7 +77,6 @@ const pane = (p) => p.evaluate(() => {
 })
 const fontPx = async (p) => (await pane(p)).font
 const controlsMoved = (p) => p.evaluate(() => document.getElementById('controls').style.translate)
-// The controls column's top and bottom, in visual px.
 const column = (p) => p.evaluate(() => {
   const r = document.getElementById('controls').getBoundingClientRect()
   return { top: Math.round(r.top), bottom: Math.round(r.bottom) }
@@ -110,7 +109,6 @@ async function dragCorner (p, corner, dx, dy, midDrag) {
   await p.mouse.up()
 }
 
-// A sideways drag changes the pane's width only: its height stays and its font never rises above where the fit had them.
 describe('a sideways corner drag keeps the pane\'s height and never raises its font', { concurrency: false }, () => {
   const SIDEWAYS = [
     { corner: 'ur', name: 'wider', dx: 120 },
@@ -229,7 +227,7 @@ describe('a landscape window, rules that fill the pane at SudokuPad\'s width', {
   })
 
   it('the font bar shows only while the pointer is over the pane or the bar, and stays shown on the way up to it', async () => {
-    await p.mouse.move(200, 500) // over the board
+    await p.mouse.move(200, 500)
     assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), false), false, 'pointer on the board')
     await hoverPane(p)
     assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), true, 'pointer on the pane')
@@ -247,7 +245,7 @@ describe('a landscape window, rules that fill the pane at SudokuPad\'s width', {
 
   it('the drag corners show only while the pointer is over the rules pane', async () => {
     const shown = () => Promise.all(['ur', 'dl'].map((c) => p.locator(CORNER(c)).isVisible()))
-    await p.mouse.move(200, 500) // over the board
+    await p.mouse.move(200, 500)
     assert.deepEqual(await settle(shown, [false, false]), [false, false], 'pointer on the board')
     const now = await pane(p)
     await p.mouse.move((now.left + now.right) / 2, (now.top + now.bottom) / 2)
@@ -523,7 +521,6 @@ describe('the max auto width and height', { concurrency: false }, () => {
 const READABLE_CHARS = 90
 const COPY_ICON = '.rules-copy'
 
-// Characters a line on average and the line height in css px, from the pane's text and its laid-out height.
 const lineStats = (p) => p.evaluate(() => {
   const rules = document.querySelector('.puzzle-rules')
   const style = window.getComputedStyle(rules)
@@ -880,7 +877,6 @@ const columnScale = (p) => p.evaluate(() => {
   const controls = document.getElementById('controls')
   return controls.getBoundingClientRect().width / controls.offsetWidth
 })
-// Reads the column's scale, the column's bottom, the pane's height and the window's size on every frame from now on, into window.__frames.
 const logFrames = (p) => p.evaluate(() => {
   window.__frames = []
   const sample = () => {

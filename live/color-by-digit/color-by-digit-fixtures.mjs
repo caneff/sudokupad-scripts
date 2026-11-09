@@ -16,8 +16,7 @@ export const group = (key, digits) => ({ key, digits })
 export const ODD_EVEN = [group('1', ['1', '3', '5', '7', '9']), group('2', ['0', '2', '4', '6', '8'])]
 export const LOW_FIVE_HIGH = [group('1', ['0', '1', '2', '3', '4']), group('5', ['5']), group('9', ['6', '7', '8', '9'])]
 
-// The saved profiles every session starts with: Odd/Even active, Low/5/High to switch to. The fresh install and the
-// migration are checked in color-by-digit-profiles.live.mjs.
+// The fresh install and the migration are checked in color-by-digit-profiles.live.mjs.
 export const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
 
 // The keys the script saves under, and the ones Framework.setData stores them at (the site's own prefix in front).
@@ -42,14 +41,12 @@ export const SEEDED_OFF = { ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'off' }
 
 export const BUTTON = '#control-colorbydigit'
 export const EDITOR = '#color-by-digit-editor'
-// The arrow box that opens the profile menu, and that menu.
 export const ARROW = `${BUTTON} [data-role="menu"]`
 export const MENU = '#color-by-digit-menu'
 
-// The editor's digit keys as { digit: palette key }, '' for a digit in no group.
+// '' for a digit in no group.
 export const paintedKeys = (p) => p.$$eval(`${EDITOR} button[data-act=digit]`, (es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.dataset.key])))
 
-// How many groups the editor shows: the colors its digit keys share.
 export async function groupCountOn (p) {
   return new Set(Object.values(await paintedKeys(p)).filter(Boolean)).size
 }
@@ -57,7 +54,6 @@ export async function groupCountOn (p) {
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
 const QUIET_MS = 500
 
-// Watches `read` for QUIET_MS and returns every distinct reading.
 export async function watch (read) {
   const seen = [JSON.stringify(await read())]
   const deadline = Date.now() + QUIET_MS
@@ -101,7 +97,6 @@ export async function openSession (browser, script, { saved = SEEDED_OFF, force 
   return opened
 }
 
-// The button's aria-label for a mode (Cell, Digit, Both or Off), and the mode the label names now.
 const LABEL_PREFIX = 'Color by digit: '
 export const modeLabel = (mode) => `${LABEL_PREFIX}${mode}`
 export const labelOn = async (p) => {
@@ -109,20 +104,17 @@ export const labelOn = async (p) => {
   return label?.startsWith(LABEL_PREFIX) ? label.slice(LABEL_PREFIX.length) : label
 }
 
-// The mode word drawn above the chips, and the boxes of the word, the chips and the arrow box, to judge that they do not overlap.
 export const wordOn = (p) => p.locator(`${BUTTON} [data-role="mode"]`).textContent()
 export const buttonBoxesOn = (p) => p.locator(BUTTON).evaluate((button) => {
   const box = (selector) => { const r = button.querySelector(selector).getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
   return { word: box('[data-role="mode"]'), chips: box('svg[data-role="chips"]'), arrow: box('[data-role="menu"]') }
 })
 
-// The middle of a located element, in page pixels.
 export const center = async (locator) => { const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
 
 // A profile row's top-left corner in the dialog, clear of its drag handle.
 export const ROW_CORNER = { position: { x: 2, y: 2 } }
 
-// The button's chips as drawn: each cell's [fill, digit color], and the outline's color.
 export const chipLookOn = (p) => p.locator(`${BUTTON} svg[data-role="chips"]`).evaluate((run) => ({
   cells: [...run.querySelectorAll('[data-role="chip"]')].map((g) => [window.getComputedStyle(g.querySelector('rect')).fill, window.getComputedStyle(g.querySelector('text')).fill]),
   outline: window.getComputedStyle(run.querySelector(':scope > rect[fill="none"]')).stroke
@@ -141,7 +133,6 @@ export async function pressTo (p, want) {
   assert.equal(await settle(() => labelOn(p), want), want)
 }
 
-// How many cells hold a color, and how many givens do.
 export const coloredCountOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).length).length)
 export const givensColoredOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
 
@@ -156,7 +147,6 @@ export const DEFAULT_FILL = 'rgb(29, 106, 229)'
 
 const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
 
-// The page's own resolved color for palette key `key`.
 export const paletteColorOn = (p, key) => p.evaluate((key) => {
   const probe = document.createElement('span')
   probe.style.color = window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
@@ -173,7 +163,6 @@ export function shadeReaders ({ darkenColor, parseColor }) {
   return { shadeOf, shadeOn: async (p, key) => shadeOf(await paletteColorOn(p, key)) }
 }
 
-// One computed style property of the elements that show `digit`, per place on the board.
 // `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
 export const styleOn = (p, property, place, digit, conflict = false) => p.evaluate(([property, place, digit, conflict]) => {
   const sel = {
@@ -189,7 +178,6 @@ export const styleOn = (p, property, place, digit, conflict = false) => p.evalua
 }, [property, place, digit, conflict])
 export const allFillsOn = (p, place, digit, conflict) => async () => [...new Set(await styleOn(p, 'fill', place, digit, conflict))]
 
-// The editor's profile rows and the selected row's name field.
 export const PROFILE_ROWS = `${EDITOR} [data-role=profile-row]`
 export const PROFILE_NAME_FIELD = `${EDITOR} [data-role=profile-name]`
 // How far past a row's middle a drag ends to land beyond it.
@@ -201,10 +189,8 @@ export const deleteProfileRow = async (p, n) => {
   await p.click(`${PROFILE_ROWS}:nth-child(${n}) button[data-act=delete]`)
 }
 
-// The palette key of the group holding `digit` in `groups`, undefined when none does.
 export const keyOf = (groups, digit) => (groups.find((g) => g.digits.includes(String(digit))) || {}).key
 
-// Every cell's row, column, given, entered value and colors.
 const cellsStateOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({ r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])] })))
 
 // How many cells hold a color other than their digit's group color in `groups`: a given or an entered digit takes its group's key, an empty cell none.
@@ -215,10 +201,8 @@ export async function wrongCountOn (p, groups) {
   }).length
 }
 
-// Selects the cell at row r, column c as a click would, deselecting any other.
 export const selectCell = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
 
-// Drags the handle of profile row `from` to just past the middle of row `to`, with the real mouse.
 export async function dragProfileRow (p, from, to) {
   await p.locator(PROFILE_ROWS).first().scrollIntoViewIfNeeded()
   const start = await center(p.locator(`${PROFILE_ROWS} [data-role=handle]`).nth(from))

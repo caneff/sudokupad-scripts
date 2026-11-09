@@ -1,4 +1,3 @@
-// Live check of the shared settings helpers (`live/settings.mjs`) on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { openPage, startPuzzle } from './page.mjs'

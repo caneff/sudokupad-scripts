@@ -42,7 +42,6 @@ function without (a, b) {
   })
 }
 
-// Every digit that changed in a cell between two snapshots: a cell entered, replaced, erased, or one an undo, a redo or a reload put back.
 const digitsChanged = (now, before) => now.cells.flatMap((cell, i) => (cell.digit === before.cells[i]?.digit ? [] : [i]))
 
 // What a rule that compares two snapshots reads, leaving out `rulesPane`, which is a measure of the layout and is checked by its own rule.
@@ -82,7 +81,6 @@ const reloadView = (page, ignorePenColors) => {
   return colorsCells(mode) ? base : { ...base, cells: shown.cells, colours: cells.map((cell) => cell.colours) }
 }
 
-// Whether the rules pane shows all its text, or has shrunk the text as far as Auto Rules Resizer goes.
 export function rulesPaneFits (pane) {
   return pane.scrollHeight - pane.clientHeight <= SCROLL_TOLERANCE_PX || pane.fontPx <= pane.ownFontPx * MIN_FONT_RATIO + FONT_TOLERANCE_PX
 }
@@ -185,7 +183,6 @@ export const RULES = [
   },
   {
     name: 'rules-fit-pane',
-    // Auto Rules Resizer: it shrinks the text until the rules fit the pane, down to 70% of SudokuPad's font, and past that the rules scroll.
     check: ({ now }) => {
       const pane = now.page.rulesPane
       // A puzzle with no rules text shows no pane, and there is nothing to fit.
@@ -200,5 +197,4 @@ export const RULES = [
   }
 ]
 
-// The violations of every rule for one action, as `<rule name>: <line>`.
 export const ruleViolations = (context) => RULES.flatMap((rule) => rule.check(context).map((line) => `${rule.name}: ${line}`))

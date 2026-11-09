@@ -1,6 +1,4 @@
-// Shared by the live checks: opening SudokuPad's puzzle page and getting it past Start Puzzle, with a script
-// injected at any of the three times a userscript can load. Not a check itself, so `live/**/*.live.mjs` skips it.
-
+// Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { LOAD_MS, puzzleUrl, routeSudokuPad, START } from './cache.mjs'
@@ -41,8 +39,6 @@ export const collectPageErrors = (page, errors) => {
   page.on('pageerror', (e) => errors.push(e?.stack || String(e)))
 }
 
-// A page of `context` served from the recording, with its uncaught errors and its skip lines collected into the returned
-// `errors`; `expectedSkips` (patterns) names the skip lines left out.
 export async function newPage (context, { expectedSkips } = {}) {
   const errors = []
   const p = await context.newPage()
@@ -72,7 +68,6 @@ export const injectAtIdle = (p, code) => p.addInitScript((src) => {
   })
 }, code)
 
-// Loads the puzzle page and returns when it has loaded.
 export const gotoPuzzle = (p) => p.goto(PUZZLE_URL, { waitUntil: 'load', timeout: LOAD_MS })
 
 // Opens a context (1200x900 unless `contextOptions` say otherwise) with one page on the puzzle, served from the
@@ -89,7 +84,6 @@ export async function openPage (browser, { contextOptions = {}, seed, injection,
   return { context, p, errors }
 }
 
-// Waits for SudokuPad's own page to have a puzzle.
 const waitForFramework = (p) => p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: FRAMEWORK_MS })
 
 // Waits for the puzzle, clicks Start Puzzle once it shows and returns once the controls exist. `beforeStart()`
@@ -142,7 +136,6 @@ export async function assertPressState (page, selector, expected) {
   assert.equal(await settle(async () => scaleOf(await page.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transform, selector)), 1), 1, `${selector} let go`)
 }
 
-// The width a stroke draws at on screen, from its computed `strokeWidth` and `transform`, rounded to 4 places.
 export const drawnWidth = ({ strokeWidth, transform }) => Math.round(parseFloat(strokeWidth) * scaleOf(transform) * 1e4) / 1e4
 
 // Empties the puzzle's replay and undo stack. Every earlier check in a file grows the replay, and `loadReplay` plays one back

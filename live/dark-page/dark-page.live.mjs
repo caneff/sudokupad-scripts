@@ -192,9 +192,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const readButton = (selector) => read((selector) => { const c = window.getComputedStyle(document.querySelector(selector)); return { bg: c.backgroundColor, fg: c.color, border: c.borderTopColor } }, selector)
   const computed = (selector, property) => read(([selector, property]) => window.getComputedStyle(document.querySelector(selector))[property], [selector, property])
-  // Switches the script's stylesheet off and on in the page the checks already use.
   const setScript = (on) => read(([selector, on]) => { document.querySelector(selector).media = on ? '' : 'not all' }, [STYLE, on])
-  // The board as it is now with the script on, against the same board with it off.
   const expectBoardKept = async () => {
     const on = await boardShot(p)
     await setScript(false)
@@ -406,7 +404,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }
   })
 
-  // The same page with the script switched off is the reference: only the script differs.
   for (const [name, data] of Object.entries(OTHER_BOARDS)) {
     for (const viewport of [{ width: 1200, height: 900 }, { width: 800, height: 1000 }]) {
       for (const selected of [false, true]) {

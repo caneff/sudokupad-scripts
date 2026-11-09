@@ -12,7 +12,6 @@ import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
 
-// The digit keys of a drag across the first row of the pad, and of one across the second.
 const FIRST_ROW = ['1', '2', '3']
 const SECOND_ROW = ['4', '5', '6']
 

@@ -638,7 +638,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['z']), ['z'], 'redo')
     assert.ok(await undoDepth() > depth)
     await clearMarks()
-    // a drag draws a line, not an edge mark
     const before = await penCount()
     const [x, y] = await cellCentre(p, 6, 1)
     await p.mouse.move(x, y)
@@ -832,7 +831,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const slider = () => p.locator('#pen-tool-extras-opacity')
     const setOpacity = (value) => setSlider(p, '#pen-tool-extras-opacity', value)
     const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
-    // The pen value (`pen-<value>` class) and the opacity each drawn mark shows at, without repeats.
     const opacities = async () => {
       const shown = await effectiveOpacities(p, '#cell-pen .cell-pen')
       const values = await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
@@ -887,7 +885,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('at the default the grid matches SudokuPad\'s own per-stroke opacity to within a few levels per channel, where marks do not overlap', async () => {
       // The white outline (on by default) is a filter on the layer, which fading the layer as one picture and fading each stroke do not agree on; it is left out of both pictures.
-      // Drops every line of the script's style that matches `drop` and returns the style's length before and after.
       const dropLines = (drop) => read((source) => {
         const style = document.getElementById('pen-tool-extras-style')
         const before = style.textContent.length
@@ -995,8 +992,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await read(() => Framework.closeDialog())
       await p.locator('.dialog').waitFor({ state: 'detached' })
     }
-    // Runs `open` to show the button, clicks the grid at the button's point with the dialog gone
-    // to see the point makes a mark, then runs `open` again and returns the button's point.
     const probedPoint = async (open, button) => {
       await open()
       // opening may itself click over the grid, so the count starts after it

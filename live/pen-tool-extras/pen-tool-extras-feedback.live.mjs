@@ -26,7 +26,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // The strokes the preview has faded, as `row,col:value`: the originals are hidden and their copies show in one group at the faded opacity.
   const fadedStrokes = () => read(() => [...document.querySelectorAll('#cell-pen .cell-pen.pen-tool-extras-faded, #pen-tool-extras-marks .cell-pen.pen-tool-extras-faded')]
     .map((el) => `${el.getAttribute('row')},${el.getAttribute('col')}:${el.getAttribute('value')}`).sort())
-  // The red, green and blue of the screen pixel at (x, y), read off a screenshot loaded into a second page's canvas.
   const pixelAt = async (x, y) => {
     const png = await p.screenshot({ clip: { x: Math.floor(x), y: Math.floor(y), width: 1, height: 1 } })
     const color = await reader.evaluate(async (b64) => {

@@ -14,9 +14,7 @@ const ROWS = `${EDITOR} [data-role=profile-row]`
 const THREE = { profiles: [...SEED.profiles, { name: 'Third', groups: [{ key: '9', digits: ['1', '2', '3'] }] }], active: 0 }
 // The picked row's fill while it blinks: the active row's.
 const BLINK_FILL = 'rgb(241, 235, 251)'
-// The longest a picked menu may take to go.
 const GONE_WITHIN_MS = 1000
-// How far a drag goes past the last row's middle.
 const PAST_LAST_ROW_PX = 8
 
 const browser = useBrowser()

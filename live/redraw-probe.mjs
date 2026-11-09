@@ -94,6 +94,5 @@ export function summarize ({ handlerMs, mutations }, events) {
   }
 }
 
-// The recordings of several events as one, and the most handler time any one of them spent.
 export const combine = (recordings) => ({ handlerMs: recordings.flatMap((r) => r.handlerMs), mutations: recordings.flatMap((r) => r.mutations) })
 export const worstEventMs = (recordings) => round(Math.max(...recordings.map((r) => sum(r.handlerMs.map((h) => h.ms)))))

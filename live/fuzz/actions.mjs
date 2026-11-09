@@ -22,7 +22,6 @@ const NOTE_TEXTS = ['15', 'a->b', 'sum 12', '!= 3', 'x\ny']
 // Dark colors only: Dark Page has no off switch, its page color is the setting, and a rule says it stays dark (#590).
 const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
 
-// How far (page pixels) a note is dragged.
 const NOTE_DRAG = [70, 40]
 const OUTSIDE = [-5, -5]
 
@@ -84,7 +83,6 @@ function buildKinds () {
     await env.page.mouse.down()
     await env.page.mouse.move(centre[0] + NOTE_DRAG[0], centre[1] + NOTE_DRAG[1], { steps: 6 })
   }
-  // The same on the first note, placed first when there is none.
   async function noteDragStart (env, [t, a]) {
     await dragNote(env, await env.noteCentre() ?? (await env.placeNote(NOTE_TEXTS[t], a), await env.noteCentre()))
   }
@@ -248,7 +246,6 @@ function buildKinds () {
 }
 
 const KINDS = buildKinds()
-// Every kind's name, in the order above.
 export const KIND_NAMES = KINDS.map((k) => k.kind)
 export const KIND_GROUPS = Object.fromEntries(KINDS.map((k) => [k.kind, k.group]))
 

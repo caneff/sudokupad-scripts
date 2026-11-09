@@ -24,7 +24,6 @@ const addStandInsAfter = (p) => p.evaluate(`(() => { ${addStandIns}; Framework.a
 
 const browser = useBrowser()
 
-// The row's buttons grouped into visual rows by their top edge, as the ids in each, and every control button's box.
 const layout = (p) => p.evaluate((row) => {
   const boxes = [...document.querySelectorAll('#controls button')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.id, left: r.left, top: r.top, right: r.right, bottom: r.bottom, view: { width: window.innerWidth, height: window.innerHeight } } })
   const inRow = [...document.querySelectorAll(`${row} > button`)].map((b) => ({ id: b.id, top: Math.round(b.getBoundingClientRect().top) }))

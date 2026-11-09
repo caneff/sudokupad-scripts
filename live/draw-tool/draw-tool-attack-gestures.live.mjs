@@ -17,7 +17,6 @@ const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SELECTE
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
 const COLOR_BUTTON = `${KEYPAD} button[data-key="4"]`
 const RECTANGLE = '#draw-tool-layer .draw-tool-selection-rectangle'
-// SudokuPad's hotkey for the Corner tool, and the tool it names.
 const OTHER_TOOL_KEY = 'x'
 const OTHER_TOOL = 'corner'
 // In cells from the grid's top left: the note's start, a drag's end (a move by BY) and a cell clear of both.
@@ -44,7 +43,6 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
   const noteItems = async () => (await items()).filter((i) => i.kind === 'text')
   const selectedCount = () => p.locator(SELECTED).count()
   const handleCount = () => p.locator(HANDLES).count()
-  // The first note's middle on the screen, and whether it is inside the window and clear of the controls.
   const noteBox = () => read((selector) => {
     const note = document.querySelector(selector).getBoundingClientRect()
     const controls = document.querySelector('#controls').getBoundingClientRect()
@@ -69,7 +67,6 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await makeNote()
   }
 
-  // The drawn notes are the saved notes, with the text they were typed with, and a reload shows the same.
   const assertWhole = async (why, texts = [NOTE_TEXT]) => {
     assert.deepEqual(errors, [], `${why}: the page shows no error`)
     assert.deepEqual(await settle(() => draw.texts(p), texts), texts, `${why}: the drawn notes`)
@@ -85,7 +82,6 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     assert.deepEqual(await settle(() => draw.texts(p), texts), texts, `${why}: a reload shows the same notes`)
     assert.deepEqual(await items(), saved, `${why}: a reload leaves the saved notes as they were`)
   }
-  // An ordinary move drag still moves the note, and a new note can still be made.
   const assertWorks = async (why) => {
     await finishNote(p)
     await pickText()

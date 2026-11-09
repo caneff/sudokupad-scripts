@@ -31,7 +31,6 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     await p.mouse.move(...await draw.middleAt(p, await gridPoint(p, at)))
     await draw.frames(p)
   }
-  // The computed values of `props` on the first element matching `selector` whose text is `text`, or the first at all.
   const styleOf = (selector, props, text) => p.evaluate(([s, names, t]) => {
     const found = [...document.querySelectorAll(s)].find((e) => t === undefined || e.textContent === t)
     const style = window.getComputedStyle(found)

@@ -20,7 +20,6 @@ const browser = useBrowser()
 describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: false }, () => {
   let context, p
 
-  // Each note's computed opacity, color, box fill and frame, by text.
   const noteOpacities = () => p.evaluate((selector) => Object.fromEntries([...document.querySelectorAll(selector)].map((e) => {
     const style = window.getComputedStyle(e)
     return [e.textContent, { opacity: style.opacity, color: style.color, fill: style.backgroundColor, shadow: style.boxShadow }]

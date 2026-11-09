@@ -30,10 +30,8 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
   const reload = () => draw.reloadOnDraw(p)
   const texts = () => draw.texts(p)
   const near = (got, want) => got.length === want.length && got.every((v, i) => Math.abs(v - want[i]) <= NEAR_UNITS)
-  // A press at `from`, then a drag by BY, in cells.
   const dragBy = (from) => mouseDrag(p, [from, [from[0] + BY[0], from[1] + BY[1]]])
   const textAts = async () => (await saved()).filter((i) => i.kind === 'text').map((i) => i.at)
-  // The top left corner of each box, in board units.
   const bgBoxes = () => read((selector) => {
     const toBoard = Framework.app.svgRenderer.getElem().getScreenCTM().inverse()
     return [...document.querySelectorAll(selector)].map((e) => {
@@ -95,7 +93,7 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
   })
 
   it('a drag held, or ended, over the controls stays there, and one past the window leaves the note inside it', async () => {
-    // The note's middle on the screen, and whether it is inside the window; found by its text, since a note dropped off the board leaves the board's group.
+    // Found by its text, since a note dropped off the board leaves the board's group.
     const [text] = await texts()
     const reachable = () => read(([selector, content]) => {
       const note = [...document.querySelectorAll(selector)].find((e) => e.textContent === content).getBoundingClientRect()

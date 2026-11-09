@@ -32,7 +32,6 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = () => draw.saved(p)
-  // The note's text box inside its padding, on the screen, with its text size and how far its text runs past it.
   const box = (selector) => read((s) => {
     const e = document.querySelector(s)
     const r = e.getBoundingClientRect()
@@ -55,7 +54,6 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     const { x, y, width, height } = await p.locator(HANDLE).nth(which).boundingBox()
     return [x + width / 2, y + height / 2]
   }
-  // A press on the handle dragged by (dx, dy) screen pixels.
   const dragHandle = async (dx, dy, which = BOTTOM_RIGHT) => {
     const [x, y] = await handleMiddle(which)
     await p.mouse.move(x, y)
@@ -131,7 +129,6 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     assert.deepEqual((await saved())[0].box, MIN_EM.map((em) => em * 20))
   })
 
-  // The note's middle on the screen.
   const middleOfNote = async () => {
     const { left, top, right, bottom } = await box(TEXTS)
     return [(left + right) / 2, (top + bottom) / 2]

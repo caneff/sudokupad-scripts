@@ -20,9 +20,7 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
   const reload = () => draw.reloadOnDraw(p)
   const eye = () => p.locator(HIDE_BUTTON)
   const pressed = () => eye().getAttribute('aria-pressed')
-  // How many notes the page draws, and how many of them it paints.
   const painted = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].filter((e) => e.checkVisibility({ visibilityProperty: true })).length, TEXTS)
-  // The notes the page would hit at the middle of each drawn note.
   const hitNotes = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].flatMap((note) => {
     const { x, y, width, height } = note.getBoundingClientRect()
     return document.elementsFromPoint(x + width / 2, y + height / 2).filter((e) => e.matches(selector))
@@ -38,7 +36,6 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
   })
   after(async () => { await context.close() })
 
-  // The eye and both sliders in the block, on `page`: the eye to the right of both, level with them and centered on the two, nothing overlapping, all inside the panel.
   const checkLayout = async (page) => {
     assert.equal(await page.locator(HIDE_BUTTON).getAttribute('aria-pressed'), 'false')
     assert.equal(await page.locator(HIDE_BUTTON).getAttribute('title'), 'Hide all notes')

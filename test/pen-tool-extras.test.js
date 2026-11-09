@@ -167,8 +167,6 @@ test('the full width values are the free lines and the cell circle and cross, no
   assert.deepEqual(FULL_WIDTH_VALUES, ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
 })
 
-// The stroke width and scale each pen value's rule gives it, read back from the CSS, as { value: { width, scale } }
-// (a rule with no transform has scale 1).
 function rulesByValue (css) {
   const byValue = {}
   for (const rule of css.split('\n')) {
@@ -701,8 +699,6 @@ test('the corner X is two crossing diagonals of half-size s, drawn from the poin
   assert.equal(shapePath('x', 8), ' m -8,-8 l16,16 m -16,0 l16,-16')
 })
 
-// Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dashed, page 3 is j to z and 0, two
-// to a pen, drawn as arrow lines.
 test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dashed, then arrow lines with a character for each way', () => {
   assert.deepEqual(PEN_PAGES, [
     { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dashed: false },
@@ -855,8 +851,6 @@ test('the dash setting keeps a saved whole number from 0 to 8, a saved 0 include
   for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(SETTINGS.dash.normalize(bad), 3, String(bad))
 })
 
-// The declarations of the first (orthogonal) and second (diagonal) page 2 line rule, as { dash, gap, offset } numbers
-// (offset 0 where a rule has no dashoffset).
 const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).filter((r) => r.body.startsWith('stroke-dasharray'))
   .map((r) => {
     const [, on, gap] = /^stroke-dasharray: ([\d.]+) ([\d.]+);/.exec(r.body)
@@ -865,7 +859,6 @@ const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).fi
   })
 
 test('at dash 0 the page 2 lines are the dots they were: the spacing origin/main gave, as literals', () => {
-  // The dasharray of the orthogonal and the diagonal rule at thicknesses 1, 5 and 12.
   const before = { 1: ['0 1.9998', '0 2.011124822779531'], 5: ['0 10.6656', '0 10.055624113897656'], 12: ['0 21.3312', '0 22.625154256269724'] }
   for (const [thickness, want] of Object.entries(before)) {
     const got = rulesOf(buildPagesCss(Number(thickness), 0)).filter((r) => r.body.startsWith('stroke-dasharray'))
@@ -2090,7 +2083,6 @@ test('lineSegmentsOf lists the line values of every cell with their color, and l
 // The requirement table: which SudokuPad internal each feature (an install step, the saved settings, the settings dialog) cannot work without.
 const FRAMEWORK_FNS = ['getApp', 'getData', 'setData', 'removeData', 'addSetting', 'showDialog', 'closeDialog']
 const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint']
-// SudokuPad's roots with every internal the features need.
 const completeSudokuPad = () => {
   class Renderer {
     static CellSize = 64

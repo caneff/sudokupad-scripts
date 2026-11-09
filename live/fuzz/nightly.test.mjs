@@ -17,7 +17,6 @@ const failedOutput = (seed, error, steps = ['click cell 3', 'digit 5']) => [
 const RULE = 'rule broken after "digit 5": pen-lines-drawn: drawn but not in the state: r1c1-r1c2'
 const CRASH = 'crash signal after "reload": page error or console error: TypeError: x is null at 123'
 
-// A fake `gh`: open issues are kept, and every call is recorded.
 const fakeGh = () => {
   const open = []
   const calls = []

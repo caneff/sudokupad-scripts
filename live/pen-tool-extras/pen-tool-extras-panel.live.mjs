@@ -81,7 +81,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // (see LINE_PATHS in the script): a center line joins cell middles, an edge line runs along the cell edges between cell corners.
   const CENTER_LINES = ['1', '2', 'd', 'e']
   const EDGE_LINES = ['7', '8', '9', 'a', 'f', 'g']
-  // The kinds of line a real drag adds: one drag of each shape, over cell middles and over cell corners.
   const dragKinds = async (points) => {
     const before = await penEntries(p)
     await drag(p, points)

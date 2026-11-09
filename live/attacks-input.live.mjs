@@ -212,7 +212,6 @@ describe('attacks on input', { concurrency: false }, () => {
       await clickCell(probe)
       return JSON.stringify([...state, await cellState(p, probe)])
     }
-    // The tool current after `key` pressed with `tool` current.
     const toolAfter = async (tool, key) => {
       await pickTool(p, tool)
       await p.keyboard.press(key)

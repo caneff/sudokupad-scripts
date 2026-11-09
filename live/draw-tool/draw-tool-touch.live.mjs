@@ -41,7 +41,6 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   const middle = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
   const selectedCount = () => p.locator(`${TEXTS}.draw-tool-selected`).count()
   const onlySelected = async (text) => (await p.locator(`${TEXTS}.draw-tool-selected`).allTextContents()).join() === text
-  // The board point a screen point is over, to compare with a saved note's point.
   const boardPoint = (point) => p.evaluate(([x, y]) => {
     const m = Framework.app.svgRenderer.getElem().getScreenCTM().inverse()
     const q = new window.DOMPoint(x, y).matrixTransform(m)
@@ -53,7 +52,6 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  // Three notes apart from each other, Text Anywhere current and nothing selected.
   beforeEach(async () => {
     await draw.forgetDrawings(p)
     await draw.reloadOnDraw(p)

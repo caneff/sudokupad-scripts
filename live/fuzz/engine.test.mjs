@@ -1,5 +1,3 @@
-// Unit tests of the fuzz engine on a fake page: a planted page error during an interruption is caught, blamed on its action, shrunk to the one step that
-// causes it and replayed from the numbers it prints; a clean page passes and runs the lists asked for; a run that never got to run is not a failure.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { runFuzz } from './engine.mjs'

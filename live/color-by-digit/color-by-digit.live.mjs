@@ -226,7 +226,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // Hovering first waits for the dialog to stop moving, so the box read is where the key is.
   const centre = async (locator) => { await locator.hover(); const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
   const reopen = async () => { await closeDialogWith(p, 'Cancel', EDITOR); await openEditor() }
-  // Presses at `from`, drags through `through` and releases: the pointer events of one stroke.
   const dragThrough = async (from, through) => {
     await p.mouse.move(from.x, from.y)
     await p.mouse.down()

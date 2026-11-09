@@ -620,7 +620,6 @@ test('makeTrailing: runs once, the given time after the last call', () => {
   assert.equal(runs, 1)
 })
 
-// An event target that keeps its listeners, so a test can fire events at it.
 function fakeTarget () {
   const listeners = {}
   return {
@@ -679,7 +678,6 @@ test('the script has no pointerover or pointerout listener', () => {
   assert.doesNotMatch(source, /pointerover|pointerout/)
 })
 
-// A SudokuPad with every internal Auto Rules Resizer needs.
 const completeSudokuPad = () => ({
   Framework: { getApp () {}, app: { puzzle: {}, resize () {} }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} }
 })
@@ -705,7 +703,6 @@ test('without one internal, only the features that need it are lacking: getApp h
   assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['fit', 'refit']]]))
 })
 
-// Starts the script on a page with `framework` as its Framework; returns the warnings and the notice bar's text, or null for none.
 function startWith (framework) {
   const inBody = []
   const element = () => {

@@ -179,7 +179,6 @@ const names = (state) => state.profiles.map((p) => p.name)
 
 const PROFILES = 'ColorByDigit_profiles'
 const LEGACY = 'ColorByDigit_groups'
-// The state in force with `profiles` and `legacy` saved; null or undefined is a key not saved.
 const fromStored = (profiles, legacy) => quietly(() => stateFromStored(fakeStore({ ...(profiles != null && { [PROFILES]: profiles }), ...(legacy != null && { [LEGACY]: legacy }) }))).result
 
 test('garbage under the profiles key gives the preloads, and is still in _unreadable after the preloads are saved', () => {
@@ -559,7 +558,6 @@ test('the stylesheet has no rule for the dialog title\'s Copy and Paste settings
 
 const menuPicks = (html) => [...html.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`)
 
-// Each row of the menu, in order: its name, and the attributes of the elements in it that pick.
 const menuRows = (html) => html.split('data-role="menu-row"').slice(1).map((row) => ({
   name: /data-role="name"[^>]*>([^<]*)</.exec(row)[1],
   picks: menuPicks(row),
@@ -916,7 +914,6 @@ const pageDocument = (extra = {}) => ({
   createElement: () => ({ style: {}, remove: () => {}, setAttribute: () => {}, append: () => {}, addEventListener: () => {} }),
   ...extra
 })
-// Fires one event at the page's listeners, from a target inside the elements `inside` names (selector to element).
 function fire (type, inside = {}, extra = {}) {
   const target = { closest: (selector) => inside[selector] ?? null }
   ;[...(global.document.listeners[type] || [])].forEach((fn) => fn({ type, target, pointerType: 'mouse', button: 0, clientX: 0, clientY: 0, preventDefault () {}, stopPropagation () {}, ...extra }))
@@ -1189,7 +1186,6 @@ test('Each digit: an install already offered it keeps the Each digit it has, on 
 })
 
 // A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.
-// The editor without a profile list.
 const editor = (groups, pages, page = 0, brush = null) => renderEditor({ groups, pages, page, brush })
 const colorOf = (key) => (key === 'clear' ? 'transparent' : `#${key}`)
 const keys = (names) => names.split(' ')
@@ -1374,7 +1370,6 @@ test('renderEditor puts the digit pad beside the swatch grid, in rows of three k
   assert.match(css, /\.cbd-swatches \{[^}]*grid-template-columns: repeat\(3, 34px\); gap: 4px;/)
 })
 
-// The swatch grid's cells and the digit pad's cells, left to right and row by row: a swatch by its key, a digit key by its digit, an empty cell by its kind.
 function paintBlock (html) {
   const block = /<div class="cbd-swatches">(.*?)<\/div><div data-role="paint">(.*?)<\/div>/.exec(html)
   assert.ok(block, 'the pad follows the swatch grid in its row')
@@ -1609,7 +1604,6 @@ test('digitOfText reads a single digit and nothing else', () => {
   for (const bad of ['', '12', 'x', '-1', null, undefined]) assert.equal(digitOfText(bad), null, String(bad))
 })
 
-// Each cell of a run of chips, in order: its key, place, fill, digit color and digit.
 const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*)"><rect x="([\d.]+)" y="0" width="([\d.]+)" height="[\d.]+" fill="([^"]*)"(?: fill-opacity="([\d.]+)")?\/><text[^>]*fill="([^"]*)"[^>]*>([^<]*)<\/text><\/g>/g)]
   .map((m) => ({ key: m[1], x: Number(m[2]), width: Number(m[3]), fill: m[4], opacity: m[5], ink: m[6], digit: m[7] }))
 
@@ -1726,7 +1720,6 @@ test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a 
   assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]), runCells(renderChips(chipsOf(LOW), colorFor, { size: 16 })))
 })
 
-// The declarations of every STYLE_CSS rule whose selector list holds `selector`, joined.
 const declarationsOf = (selector) => [...STYLE_CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)]
   .filter((m) => m[1].split(',').map((x) => x.trim()).includes(selector)).map((m) => m[2].replace(/\s+/g, ' ').trim()).join(' ')
 
@@ -1840,7 +1833,6 @@ test('shownChips: Both with unsynced profiles lists its chips in ascending digit
   assert.deepEqual(digitsOf(shownChips('both', [{ key: 'a', digits: ['0'] }, { key: 'b', digits: ['1', '2'] }], ODD)), ['0', '1'])
 })
 
-// A SudokuPad with every internal Color by Digit needs.
 const completeRoots = () => {
   const app = { act () {}, select () {}, deselect () {}, on () {}, refreshControls () {}, puzzle: { cells: [], selectedCells: [], undoStack: [], redoStack: [], addEventListener () {} } }
   return { Framework: { getApp () {}, getData () {}, setData () {}, removeData () {}, addControlButton () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }, app }
@@ -1910,7 +1902,6 @@ test('with cell coloring off, the icon and the digit shades are drawn once the p
   })
 })
 
-// The settings dialog's draft: three profiles over twoPages' colors, the second one active.
 const dialogState = () => ({ profiles: [{ name: 'A', groups: [g('a2', ['1'])] }, { name: 'B', groups: [g('b3', ['2'])] }, { name: 'C', groups: [] }], active: 1 })
 const opened = (state = dialogState(), mode = 'cell') => openingDraft(state, mode, twoPages())
 const run = (draft, ...events) => events.reduce(reduceDraft, draft)
