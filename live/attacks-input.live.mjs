@@ -11,9 +11,6 @@ import { cellCentre, gridPoint, mouseDrag, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
 
-// The bug tickets of the attacks that fail on main (todo until fixed).
-const COPY_BUG = '#636'
-
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
@@ -174,7 +171,7 @@ describe('attacks on input', { concurrency: false }, () => {
     await assertNoCrash(p, errors)
   })
 
-  it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V with notes selected, or none, change no note and no cell', { todo: `${COPY_BUG}: SudokuPad's Ctrl+C throws while Text Anywhere is the tool` }, async () => {
+  it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V with notes selected, or none, change no note and no cell', async () => {
     await pickTool(p, 'draw')
     await makeNote(p, [4.5, 4.5], '15')
     await makeNote(p, [6.5, 6.5], '26')

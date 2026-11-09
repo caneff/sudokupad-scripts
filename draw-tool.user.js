@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.40.0
+// @version      0.40.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.40.0'
+  const VERSION = '0.40.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -3319,6 +3319,13 @@
     }
   }
 
+  // SudokuPad's cell copy (feature-cellpaste.js) runs on Ctrl+C or Cmd+C and throws for a tool with no entry in its SmartSelectToolOrder, which Text Anywhere lacks.
+  // It reads the tool the key was pressed under (prevTool while Ctrl has switched to Centre), so Ctrl still switches and only the copy is stopped. The key's default is left
+  // alone, so a copy in an open note is still the browser's.
+  function stopCellCopy (event) {
+    if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC' && (Framework.app.prevTool || Framework.app.tool) === TOOL_NAME) event.stopImmediatePropagation()
+  }
+
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
@@ -3982,6 +3989,7 @@
       }, { capture: true })
       onWindow(textTool, 'mouseup', endResize, { capture: true })
       for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
+      onWindow(textTool, 'keydown', stopCellCopy, { capture: true })
       onWindow(textTool, 'keyup', releaseKey, { capture: true })
       onWindow(textTool, 'pagehide', saveOpenNote)
       document.addEventListener('visibilitychange', under(textTool, () => { if (document.visibilityState === 'hidden') saveOpenNote() }))
