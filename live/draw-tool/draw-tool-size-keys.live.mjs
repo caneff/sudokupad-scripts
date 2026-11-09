@@ -59,9 +59,10 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     await typeText(A, 'A')
     await clickAt(A)
     await p.keyboard.press('+')
-    await p.keyboard.press('Control+-')
-    await p.keyboard.press('Alt+=')
-    assert.equal(await savedSize('A'), 21, 'only the plain + stepped')
+    for (const chord of ['Control+-', 'Alt+=', 'Control+Shift+=']) {
+      await p.keyboard.press(chord)
+      assert.equal(await savedSize('A'), 21, `${chord} left the size as the plain + made it`)
+    }
   })
 
   it('a + pressed in the middle of a move of the note changes nothing, and the size stays what the drop leaves', async () => {
