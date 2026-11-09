@@ -122,6 +122,24 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 
 Each failure the run finds is fixed in a ticket of its own, whose PR adds the shrunk list as a named fixed live test.
 
+## Measuring the fuzz: planted bugs
+
+`npm run fuzz:plants` (`live/fuzz/plants-run.mjs`, #678) answers "can the fuzz catch a bug at all". It injects one planted bug at a time in place of the real script, fuzzes
+it, and prints a table of which plants were caught, how fast, and the shrunk steps. It is not in `npm test`; the first results are in `docs/research/fuzz-planted-bugs.md`.
+
+```
+npm run fuzz:plants -- [--minutes <m per plant>] [--shrink-minutes <m>] [--seed <n>] [--plant <id> ...]
+```
+
+- **The plants** (`plants.mjs`) are about 10 one-line bugs, each `{ id, file, kind, find, replace, expect }`: `find` and `replace` are applied to the text of the script read
+  from disk and injected by `installAll`, so the root `*.user.js` never hold a bug. A `find` that matches anywhere but once fails the run before any page opens
+  (`plants.test.mjs` checks every plant against the shipped scripts in `npm test`). `kind` is `rule` or `crash`; `expect` is the failure message that counts as a catch, so a
+  failure the real scripts already have (it prints as "other failure") is not scored.
+- **The budget** is 4 minutes a plant by default, split over both puzzles (the 9x9, then the 6x6 only if the 9x9 did not catch it), plus a shrink of up to 2 minutes. All ten take about 40 minutes
+  on one core and one Chromium; run it under `job-run`.
+- **A miss** is read for its likely reason: no rule sees it, no action reaches it, the board is too empty, or timing. Add a plant by adding an entry to `plants.mjs`.
+- **Replaying a catch**: `npm run test:fuzz -- --seed <n> --path <path> --plant <id>` replays one list with the plant in.
+
 ## The nightly fuzz
 
 `npm run fuzz:nightly` (`live/fuzz/nightly.mjs`, #595) runs `live/fuzz/run.mjs` with a fresh random seed and files what it finds, on GitHub Actions
