@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.42.1
+// @version      0.43.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.42.1'
+  const VERSION = '0.43.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -2205,11 +2205,13 @@
   // </lib:panel>
   const COLOR_LABEL_REM = 1.7
   // The eye is a square that fills the sliders block's height, with its icon a little smaller.
-  const HIDE_BUTTON_REM = 3
+  const HIDE_BUTTON_REM = 2.8
   const HIDE_ICON_REM = 2.2
   // The column of each control in its row: Clear all, the Background button and the settings gear.
   const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [BACKGROUND_CLASS]: 2, [SETTINGS_CLASS]: 3 }
   const PANEL = '.tool-draw .controls-input'
+  // Under the panel's own button rule, which sets a color and background on every button in it.
+  const HIDE_ALL = `${PANEL} button.${HIDE_ALL_CLASS}`
   const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
   // Each color button shows "Aa" in its draw color, so a recolor follows.
   const hoverShare = (percent) => `color-mix(in srgb, ${PANEL_COLOR} min(100%, calc(${percent}% / var(${NOTE_OPACITY_VAR}))), transparent)`
@@ -2226,15 +2228,15 @@
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${BACKGROUND_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every 'svg path' and the paths in a tool button's icon, which would turn the icons' lines into blobs, the tool button's note into a solid square.
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, #control-${TOOL_NAME}) :is(path, circle, rect, ellipse), .${BACKGROUND_CLASS} :is(path, circle, rect, ellipse):not(.${BACKGROUND_FILL_CLASS}) { fill: none !important; }`,
-    `:is(.${BACKGROUND_CLASS}, .${HIDE_ALL_CLASS})[aria-pressed="true"] { background-color: ${TRAY_COLOR}; outline: 2px solid ${PANEL_COLOR}; }`,
-    // The eye sits at the left of the sliders block, which is a row of it and the two slider rows, and presses like the panel's other buttons.
+    `:is(.${BACKGROUND_CLASS}, ${HIDE_ALL})[aria-pressed="true"] { background-color: ${TRAY_COLOR}; outline: 2px solid ${PANEL_COLOR}; }`,
+    // The eye sits at the right end of the sliders block, which is a row of the two slider rows and it, and presses like the panel's other buttons.
     `.${SLIDERS_CLASS} { flex-direction: row; align-items: center; gap: 0.4rem; }`,
     `.${SLIDER_ROWS_CLASS} { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: space-evenly; }`,
-    `.${HIDE_ALL_CLASS} { flex: none; display: flex; align-items: center; justify-content: center; width: ${HIDE_BUTTON_REM}rem; height: ${HIDE_BUTTON_REM}rem; min-height: 0; margin: 0; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; transition: transform ${PRESS_MS}ms ease-out; }`,
-    `.${HIDE_ALL_CLASS}:active { transform: scale(${PRESS_SCALE}); }`,
-    `@media (prefers-reduced-motion: reduce) { .${HIDE_ALL_CLASS} { transition: none; } .${HIDE_ALL_CLASS}:active { transform: none; } }`,
-    `.${HIDE_ALL_CLASS} svg { width: ${HIDE_ICON_REM}rem; height: ${HIDE_ICON_REM}rem; }`,
-    `.${HIDE_ALL_CLASS} :is(path, circle) { fill: none !important; }`,
+    `${HIDE_ALL} { flex: none; display: flex; align-items: center; justify-content: center; width: ${HIDE_BUTTON_REM}rem; height: ${HIDE_BUTTON_REM}rem; min-height: 0; margin: 0; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; transition: transform ${PRESS_MS}ms ease-out; }`,
+    `${HIDE_ALL}:active { transform: scale(${PRESS_SCALE}); }`,
+    `@media (prefers-reduced-motion: reduce) { ${HIDE_ALL} { transition: none; } ${HIDE_ALL}:active { transform: none; } }`,
+    `${HIDE_ALL} svg { width: ${HIDE_ICON_REM}rem; height: ${HIDE_ICON_REM}rem; }`,
+    `${HIDE_ALL} :is(path, circle) { fill: none !important; }`,
     // Hidden notes keep their layout, so they measure and come back in place; a hidden element takes no pointer, so none can be hit.
     `#${LAYER_ID}.${HIDDEN_CLASS} { visibility: hidden; }`,
     // Some selected notes have a box and some do not: a dashed ring, neither on nor off.
@@ -2645,7 +2647,7 @@
     sliderRows.append(sliderRow(SIZE_SLIDER, SIZE_LABEL, { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width), sliderRow(OPACITY_SLIDER, OPACITY_LABEL, { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }, opacity))
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
-    sliders.append(hideAll, sliderRows)
+    sliders.append(sliderRows, hideAll)
     // Arrow keys on a slider end in a change.
     sliders.addEventListener('change', under(textTool, returnFocusToNote))
     sliders.addEventListener('input', under(textTool, (event) => slideLook(event.target)))

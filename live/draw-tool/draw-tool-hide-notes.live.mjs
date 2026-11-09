@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's Hide all notes button on sudokupad.app in headless Chromium at 1280x720: the eye sits at one end of the sliders' block with both sliders beside it and
+// Live check of draw-tool.user.js's Hide all notes button on sudokupad.app in headless Chromium at 1280x720: the eye sits at the right end of the sliders' block with both sliders beside it and
 // no overlap; a click hides every note (none visible, none hit-testable, selection cleared) and shows the closed eye; another click brings them back in place; a click on the board while they
 // are hidden shows them all and opens the new note; Undo straight after Restart shows them when it brings notes back; a reload shows the notes. Real mouse input.
 import { after, before, describe, it } from 'node:test'
@@ -56,15 +56,16 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
   })
   after(async () => { await context.close() })
 
-  it('the eye is an open eye at the left of the sliders block, level with both sliders and clear of them, inside the panel', async () => {
+  it('the eye is an open eye at the right of the sliders block, level with both sliders and clear of them, inside the panel', async () => {
     assert.equal(await pressed(), 'false')
     assert.equal(await eye().getAttribute('title'), 'Hide all notes')
     const rect = (selector) => p.locator(selector).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.x, right: r.right, y: r.y, bottom: r.bottom } })
     const [button, size, opacity, block, panel] = await Promise.all([HIDE_BUTTON, SIZE_SLIDER, OPACITY_SLIDER, SLIDERS, draw.KEYPAD].map(rect))
-    assert.ok(button.right <= size.x && button.right <= opacity.x, 'the eye ends before either slider starts')
-    assert.ok(button.y <= size.y + 1 && button.bottom >= opacity.bottom - 1, 'the eye spans both slider rows')
+    assert.ok(size.right <= button.x && opacity.right <= button.x, 'either slider ends before the eye starts')
+    assert.ok(button.y < size.bottom && button.bottom > opacity.y, 'the eye is level with both slider rows')
+    assert.ok(Math.abs((button.y + button.bottom) / 2 - (size.y + opacity.bottom) / 2) <= 2, 'and centered on the two')
     assert.ok(size.bottom <= opacity.y + 1, 'the sliders do not overlap')
-    assert.ok(button.x >= block.x && Math.max(size.right, opacity.right) <= block.right && block.right <= panel.right, 'all fit the block, inside the panel')
+    assert.ok(Math.min(size.x, opacity.x) >= block.x && button.right <= block.right && block.right <= panel.right, 'all fit the block, inside the panel')
     assert.ok(size.right - size.x > 60, 'a slider keeps room to drag')
   })
 
