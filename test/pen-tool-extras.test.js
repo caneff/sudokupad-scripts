@@ -15,7 +15,7 @@ const {
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
   planCellClick, clickedMarks, DOT_FILL_CSS,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
+  PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX,
@@ -693,14 +693,6 @@ test('normalizePen keeps a saved color character of any page and nothing else', 
   // SudokuPad's getData parses a saved '3' into the number 3
   assert.equal(normalizePen(3), '3')
   for (const bad of [null, undefined, 0, 10, 3.5, 'k', '0', 'A', '', 'ab', ['a'], { a: 1 }]) assert.equal(normalizePen(bad), null, JSON.stringify(bad))
-})
-
-test('wrapIndex goes round a list of any length in either direction', () => {
-  assert.equal(wrapIndex(0, 1, 2), 1)
-  assert.equal(wrapIndex(1, 1, 2), 0)
-  assert.equal(wrapIndex(0, -1, 2), 1)
-  assert.equal(wrapIndex(1, -1, 3), 0)
-  assert.equal(wrapIndex(2, 1, 3), 0)
 })
 
 const rulesOf = (css) => css.split('\n').filter(Boolean).map((rule) => { const i = rule.indexOf(' { '); return { selector: rule.slice(0, i), body: rule.slice(i + 3, -2) } })

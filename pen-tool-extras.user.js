@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.14
+// @version      1.31.15
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.14'
+  const VERSION = '1.31.15'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -54,6 +54,20 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // The index `delta` steps from `index` in a list of `count`, going round past either end.
+  const wrapIndex = (index, delta, count) => (((index + delta) % count) + count) % count
+
+  // The page's style element `id`, added on the first call, holds `css`.
+  function writeStyle (id, css, doc = document) {
+    let style = doc.getElementById(id)
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = id
+      doc.head.appendChild(style)
+    }
+    style.textContent = css
+  }
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:pointer-session>
@@ -84,6 +98,7 @@
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global Framework */
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
@@ -288,9 +303,25 @@
       host.append(message)
     }
 
+    // A store write's throw, with the feature whose store threw it: whichever feature's code it reaches, that store's feature is the one
+    // that fails. A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once
+    // space frees.
+    const storeFailures = new WeakMap()
+    function failStore (owner, error) {
+      if (!isRefusedWrite(error)) return owner.skip(error)
+      console.warn(`${script}: ${owner.label} could not save, the browser refused the write:`, error)
+      tell(`${name}: the browser has no room left, so ${owner.label} could not be saved.`)
+    }
+
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
+      const fail = (error) => {
+        const owner = storeFailures.get(error)
+        if (owner) failStore(owner, error)
+        else feature.skip(error)
+      }
       const feature = {
+        label,
         off: false,
         skip (why, installed = true) {
           if (feature.off) return
@@ -313,22 +344,20 @@
           try {
             return fn()
           } catch (error) {
-            feature.skip(error)
+            fail(error)
             return fallback()
           }
         },
-        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
-        // frees. Any other throw skips the feature as `run` does.
-        write (fn) {
-          return feature.run(() => {
-            try {
-              return fn()
-            } catch (error) {
-              if (!isRefusedWrite(error)) throw error
-              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
-              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
-            }
-          })
+        // A save, copy or paste in a settings dialog: its throw goes on to the dialog's status line, and one with the feature off says so.
+        // A store failure passes with every feature still on, so the dialog's `writeOrRestore` can put the earlier keys back through it.
+        runOrThrow (fn) {
+          if (feature.off) throw new Error(`${name} turned off its ${label}`)
+          try {
+            return fn()
+          } catch (error) {
+            if (!storeFailures.has(error)) feature.skip(error)
+            throw error
+          }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
         // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
@@ -355,7 +384,7 @@
               return body.call(this, stock, ...args)
             } catch (error) {
               if (failure && failure.error === error) throw error
-              feature.skip(error)
+              fail(error)
               return reached ? result : original.apply(this, args)
             }
           }
@@ -376,14 +405,39 @@
       showNotice()
     }
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
+    // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
+    // A write that throws goes on to its caller with the feature still on, so a dialog's `writeOrRestore` can put back the keys written
+    // before it; the feature fails only where a feature's own `run` catches the throw. `keep`, the copy of an unreadable value, turns the
+    // feature off on any throw, a refusal included, so nothing can save over the original.
+    function storeFor (feature) {
+      const write = (fn) => {
+        if (feature.off) return
+        try {
+          fn()
+        } catch (error) {
+          if (Object(error) === error) storeFailures.set(error, feature)
+          throw error
+        }
+      }
+      return {
+        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        setData: (key, value) => write(() => Framework.setData(key, value)),
+        removeData: (key) => write(() => Framework.removeData(key)),
+        keep: (key, value) => feature.run(() => Framework.setData(key, value))
+      }
+    }
+
+    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
+    const dialogsFor = (feature) => ({
+      addSetting: (setting) => Framework.addSetting(setting),
+      showDialog: (options) => Framework.showDialog(options),
+      closeDialog: () => feature.run(() => Framework.closeDialog())
+    })
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
-
-  function wrapIndex (index, delta, count) {
-    return (((index + delta) % count) + count) % count
-  }
 
   // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
   function inRange (value, range) {
@@ -587,13 +641,7 @@
 
   // The panel rules are left out once SudokuPad's line mode pulldown, whose row they take, is not ours to hide.
   function applyStyle () {
-    let style = document.getElementById(STYLE_ID)
-    if (!style) {
-      style = document.createElement('style')
-      style.id = STYLE_ID
-      document.head.appendChild(style)
-    }
-    style.textContent = [
+    writeStyle(STYLE_ID, [
       buildCss(active.colors),
       buildThicknessCss(inForce.thickness),
       buildOpacityCss(inForce.opacity),
@@ -604,7 +652,7 @@
       pickerCss(CLASS_PREFIX, 'pen'),
       DIALOG_CSS,
       steps.penPanel.off ? '' : PANEL_CSS
-    ].join('\n')
+    ].join('\n'))
   }
 
   // The effects run with every new value in place, and the style is written once.
@@ -2482,22 +2530,19 @@
       if (focused && focused.matches(`${sliders} input`)) focused.blur()
     }, true)
   }
+
+  // A panel's settings gear: its viewBox centres its ink, measured from rendered pixels like the other control icons. The gear is Lucide's `settings` (https://lucide.dev, ISC licence). Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT);
+  // all other copyright (c) for Lucide are held by Lucide Contributors 2022. Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is
+  // hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+  const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
+  const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   const guard = createGuard({ script: 'pen-tool-extras', name: 'Pen Tool Extras', version: VERSION, features: FEATURES })
   const steps = guard.features
   // The saved data is read and written only here: with the saved settings off nothing is read, so the defaults show, and nothing is kept.
-  const savedData = {
-    getData: (key) => steps.saved.run(() => Framework.getData(key), () => null),
-    setData: (key, value) => steps.saved.write(() => Framework.setData(key, value)),
-    removeData: (key) => steps.saved.run(() => Framework.removeData(key))
-  }
-  // What the settings entry and dialog are handed in place of Framework: the dialog's close runs under the settings dialog when a button is pressed.
-  const dialogs = {
-    addSetting: (setting) => Framework.addSetting(setting),
-    showDialog: (options) => Framework.showDialog(options),
-    closeDialog: () => steps.settings.run(() => Framework.closeDialog())
-  }
+  const savedData = guard.storeFor(steps.saved)
+  const dialogs = guard.dialogsFor(steps.settings)
   const openSettings = () => steps.settings.run(openDialog)
   const MODE_BUTTON = 'pen-tool-extras-mode'
   const SETTINGS_BUTTON = 'pen-tool-extras-settings'
@@ -2523,7 +2568,6 @@
   // Each icon is drawn at one size, 34 px on the longest side of its visible ink, centred on its ink, at 1200x900 (docs/research/pen-tool-extras/pen-tool-extras-panel-redesign-mockup.png). The
   // corrections were measured from rendered pixels, one for each picture an icon can show, and live in its viewBox (live/pen-tool-extras/pen-tool-extras-panel-layout.live.mjs measures them again).
   const MODE_ICON_VIEWBOX = { both: '-0.62 -0.8 25.059 25.059', centeronly: '0.25 -0.57 24 24', edgeonly: '-0.54 -0.7 24.882 24.882' }
-  const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const MODE_ICON_SHOWS = { both: ['center', 'edge'], centeronly: ['center'], edgeonly: ['edge'] }
 
   function nextLineMode (lineMode) {
@@ -2552,11 +2596,6 @@
       row(show.opacity, OPACITY_SLIDER, 'Opacity', OPACITY, opacity) +
       '</div>'
   }
-
-  // The settings icon is Lucide's `settings` (https://lucide.dev, ISC licence). Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT);
-  // all other copyright (c) for Lucide are held by Lucide Contributors 2022. Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is
-  // hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
-  const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
 
   function renderSettingsButton () {
     return `<button class="${SETTINGS_BUTTON}" data-control="penextras-settings" title="${SETTINGS_LABEL}" aria-label="${SETTINGS_LABEL}">` +
@@ -2883,7 +2922,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     if (!box) return
     draw()
     // A copy with the saved settings off says so in the dialog's status line, rather than copy the defaults as if they were saved.
-    const copied = () => steps.saved.run(() => copiedSettings(Framework), () => { throw new Error(`the ${FEATURES.saved.label} are off`) })
+    const copied = () => steps.saved.runOrThrow(() => copiedSettings(Framework))
     wireCopyPaste(box.closest('.dialog'), { copied, readers: READERS, snapshot: snapshotSave }, (values) => {
       const pasted = SETTING_NAMES.filter((name) => SETTINGS[name].key in values)
       const next = { ...inForce, ...Object.fromEntries(pasted.map((name) => [name, values[SETTINGS[name].key]])) }
@@ -2956,7 +2995,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  // What `keys` hold now, as a function that puts them back; a key that held nothing is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys) {
     const before = keys.map((key) => [key, store.getData(key)])
     return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
@@ -3220,7 +3259,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
+    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return

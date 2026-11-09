@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.22
+// @version      0.25.23
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.22'
+  const VERSION = '0.25.23'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -108,7 +108,7 @@
   const modesFor = (useDigitColors) => (useDigitColors ? MODES : DIGITLESS_MODES)
   const nextMode = (mode, useDigitColors) => {
     const modes = modesFor(useDigitColors)
-    return modes[(modes.indexOf(mode) + 1) % modes.length]
+    return modes[wrapIndex(modes.indexOf(mode), 1, modes.length)]
   }
   const allowedMode = (mode, useDigitColors) => (useDigitColors ? mode : DIGITLESS_FALLBACK[mode] ?? mode)
   const colorsCells = (mode) => mode === 'cell' || mode === 'both'
@@ -432,6 +432,7 @@
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global Framework */
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
@@ -636,9 +637,25 @@
       host.append(message)
     }
 
+    // A store write's throw, with the feature whose store threw it: whichever feature's code it reaches, that store's feature is the one
+    // that fails. A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once
+    // space frees.
+    const storeFailures = new WeakMap()
+    function failStore (owner, error) {
+      if (!isRefusedWrite(error)) return owner.skip(error)
+      console.warn(`${script}: ${owner.label} could not save, the browser refused the write:`, error)
+      tell(`${name}: the browser has no room left, so ${owner.label} could not be saved.`)
+    }
+
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
+      const fail = (error) => {
+        const owner = storeFailures.get(error)
+        if (owner) failStore(owner, error)
+        else feature.skip(error)
+      }
       const feature = {
+        label,
         off: false,
         skip (why, installed = true) {
           if (feature.off) return
@@ -661,22 +678,20 @@
           try {
             return fn()
           } catch (error) {
-            feature.skip(error)
+            fail(error)
             return fallback()
           }
         },
-        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
-        // frees. Any other throw skips the feature as `run` does.
-        write (fn) {
-          return feature.run(() => {
-            try {
-              return fn()
-            } catch (error) {
-              if (!isRefusedWrite(error)) throw error
-              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
-              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
-            }
-          })
+        // A save, copy or paste in a settings dialog: its throw goes on to the dialog's status line, and one with the feature off says so.
+        // A store failure passes with every feature still on, so the dialog's `writeOrRestore` can put the earlier keys back through it.
+        runOrThrow (fn) {
+          if (feature.off) throw new Error(`${name} turned off its ${label}`)
+          try {
+            return fn()
+          } catch (error) {
+            if (!storeFailures.has(error)) feature.skip(error)
+            throw error
+          }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
         // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
@@ -703,7 +718,7 @@
               return body.call(this, stock, ...args)
             } catch (error) {
               if (failure && failure.error === error) throw error
-              feature.skip(error)
+              fail(error)
               return reached ? result : original.apply(this, args)
             }
           }
@@ -724,7 +739,36 @@
       showNotice()
     }
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
+    // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
+    // A write that throws goes on to its caller with the feature still on, so a dialog's `writeOrRestore` can put back the keys written
+    // before it; the feature fails only where a feature's own `run` catches the throw. `keep`, the copy of an unreadable value, turns the
+    // feature off on any throw, a refusal included, so nothing can save over the original.
+    function storeFor (feature) {
+      const write = (fn) => {
+        if (feature.off) return
+        try {
+          fn()
+        } catch (error) {
+          if (Object(error) === error) storeFailures.set(error, feature)
+          throw error
+        }
+      }
+      return {
+        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        setData: (key, value) => write(() => Framework.setData(key, value)),
+        removeData: (key) => write(() => Framework.removeData(key)),
+        keep: (key, value) => feature.run(() => Framework.setData(key, value))
+      }
+    }
+
+    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
+    const dialogsFor = (feature) => ({
+      addSetting: (setting) => Framework.addSetting(setting),
+      showDialog: (options) => Framework.showDialog(options),
+      closeDialog: () => feature.run(() => Framework.closeDialog())
+    })
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
@@ -1488,7 +1532,7 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  // What `keys` hold now, as a function that puts them back; a key that held nothing is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys) {
     const before = keys.map((key) => [key, store.getData(key)])
     return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
@@ -1934,6 +1978,20 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // The index `delta` steps from `index` in a list of `count`, going round past either end.
+  const wrapIndex = (index, delta, count) => (((index + delta) % count) + count) % count
+
+  // The page's style element `id`, added on the first call, holds `css`.
+  function writeStyle (id, css, doc = document) {
+    let style = doc.getElementById(id)
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = id
+      doc.head.appendChild(style)
+    }
+    style.textContent = css
+  }
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:store>
@@ -2097,17 +2155,8 @@
   if (typeof Framework === 'undefined') return
 
   // The saved data is read and written only here: with no getData or setData nothing is read, so the preloads and the starting mode show, and nothing is kept.
-  const readData = (key) => storage.run(() => Framework.getData(key), () => null)
-  const writeData = (key, value) => storage.write(() => Framework.setData(key, value))
-  // What the shared store reads and writes through: the saved settings feature's guarded calls, never Framework itself.
-  // `keep` is the copy of an unreadable value: a refusal there turns saving off, so nothing can overwrite the original.
-  const savedData = { getData: readData, setData: writeData, keep: (key, value) => storage.run(() => Framework.setData(key, value)), removeData: (key) => storage.run(() => Framework.removeData(key)) }
-  // What the settings entry and the editor are handed in place of Framework: the editor's close runs under the editor when a button is pressed.
-  const dialogs = {
-    addSetting: (setting) => Framework.addSetting(setting),
-    showDialog: (options) => Framework.showDialog(options),
-    closeDialog: () => editor.run(() => Framework.closeDialog())
-  }
+  const savedData = guard.storeFor(storage)
+  const dialogs = guard.dialogsFor(editor)
 
   function readPages () {
     const tool = readyColorTool()
@@ -2119,11 +2168,11 @@
 
   function addPreloadsOnce () {
     for (const { key, names } of ADDED_PRELOADS) {
-      if (readData(key) === true) continue
+      if (savedData.getData(key) === true) continue
       const state = loadState()
       const added = withAddedPreloads(state, names)
       if (added.profiles.length !== state.profiles.length) saveState(added)
-      writeData(key, true)
+      savedData.setData(key, true)
     }
   }
   const loadGroups = () => activeGroups(loadState())
@@ -2333,13 +2382,7 @@
 
   // Digit colors are a stylesheet, not SudokuPad state, so they are never an undo step.
   function showDigitColors () {
-    let style = document.getElementById(DIGIT_STYLE_ID)
-    if (!style) {
-      style = document.createElement('style')
-      style.id = DIGIT_STYLE_ID
-      document.head.appendChild(style)
-    }
-    style.textContent = colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : ''
+    writeStyle(DIGIT_STYLE_ID, colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : '')
     syncDigits()
   }
 
@@ -2364,7 +2407,7 @@
 
   function showMode (next) {
     mode = next
-    writeData(MODE_KEY, next)
+    savedData.setData(MODE_KEY, next)
     redraw()
   }
 
@@ -2686,8 +2729,8 @@
       if (draft.state.profiles[draft.selected].groups !== groups) draw()
     }
     draw()
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings({ getData: readData }), readers: READERS, upgrade: withModeFromAuto, snapshot: snapshotSave }, (values) => {
-      ADDED_PRELOADS.forEach(({ key }) => { if (key in values) writeData(key, values[key]) })
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings({ getData: savedData.getData }), readers: READERS, upgrade: withModeFromAuto, snapshot: snapshotSave }, (values) => {
+      ADDED_PRELOADS.forEach(({ key }) => { if (key in values) savedData.setData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
       edit({ type: 'reload', state: savedState, mode })
@@ -2859,7 +2902,7 @@
     editor.run(() => addSettingsEntry(dialogs, { name: 'colorbydigit', content: 'Color by Digit', open: () => editor.run(() => openDialog(app)) }))
     addPreloadsOnce()
     const state = loadState()
-    mode = allowedMode(startingMode(readData(MODE_KEY), readData(AUTO_KEY)), usesDigitColors(state))
+    mode = allowedMode(startingMode(savedData.getData(MODE_KEY), savedData.getData(AUTO_KEY)), usesDigitColors(state))
     addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
     addStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {

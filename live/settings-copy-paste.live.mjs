@@ -87,7 +87,7 @@ describe('auto-rules-resizer.user.js: a failed Save or Paste leaves the width un
 
   it('Paste: says the paste failed and the width key is still unsaved', async () => {
     await openWithHeightWriteThrowing()
-    assert.equal(await paste(p, JSON.stringify({ [WIDTH_KEY]: 640, [HEIGHT_KEY]: 480 })), 'Could not paste: the max size settings are off')
+    assert.equal(await paste(p, JSON.stringify({ [WIDTH_KEY]: 640, [HEIGHT_KEY]: 480 })), 'Could not paste: planted height write failure')
     assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), null)
     assert.deepEqual(errors, [])
   })
@@ -97,8 +97,41 @@ describe('auto-rules-resizer.user.js: a failed Save or Paste leaves the width un
     await p.fill('#auto-rules-resizer-max-width', '640')
     await p.fill('#auto-rules-resizer-max-height', '480')
     await dialogButton(p, 'Save').click()
-    await p.locator(STATUS).filter({ hasText: 'Not saved: the max size settings are off' }).waitFor()
+    await p.locator(STATUS).filter({ hasText: 'Not saved: planted height write failure' }).waitFor()
     assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), null)
     assert.deepEqual(errors, [])
   })
 })
+
+// The three scripts whose saved data goes through the guard's store: a throw planted on the second key a paste writes reaches the
+// dialog's snapshot, which puts the first key back. Each case has its own page.
+const STORE_PASTES = [
+  { file: 'color-by-digit.user.js', entry: 'Color by Digit', editor: '#color-by-digit-editor', first: ['ColorByDigit_profiles', SETTINGS_SCRIPTS.find((s) => s.file === 'color-by-digit.user.js').saved], second: ['ColorByDigit_mode', 'digit'] },
+  { file: 'draw-tool.user.js', entry: 'Text Anywhere', editor: '#draw-tool-dialog', first: ['DrawTool_width', 3.5], second: ['DrawTool_opacity', 50] },
+  { file: 'pen-tool-extras.user.js', entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', first: ['PenColor_thickness', 9], second: ['PenColor_opacity', 50] }
+]
+
+for (const kase of STORE_PASTES) {
+  describe(`${kase.file}: a paste whose second write throws leaves every key as before`, { concurrency: false }, () => {
+    let context, p, errors
+    after(async () => { await context?.close() })
+
+    it('says the paste failed and both keys hold what they held before', async () => {
+      ({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+      await startPuzzle(p, { injection: { mode: 'after-start', code: code(kase.file) } })
+      await openScriptDialog(p, kase.entry, kase.editor)
+      const keys = [kase.first[0], kase.second[0]]
+      const before = await p.evaluate((names) => names.map((name) => Framework.getData(name)), keys)
+      await p.evaluate((key) => {
+        const setData = Framework.setData
+        Framework.setData = function (name, value) {
+          if (name === key) throw new Error('planted second write failure')
+          return setData.call(this, name, value)
+        }
+      }, kase.second[0])
+      assert.equal(await paste(p, JSON.stringify(Object.fromEntries([kase.first, kase.second]))), 'Could not paste: planted second write failure')
+      assert.deepEqual(await p.evaluate((names) => names.map((name) => Framework.getData(name)), keys), before)
+      assert.deepEqual(errors, [])
+    })
+  })
+}

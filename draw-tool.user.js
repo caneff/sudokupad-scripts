@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.7
+// @version      0.44.8
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.7'
+  const VERSION = '0.44.8'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -704,6 +704,20 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // The index `delta` steps from `index` in a list of `count`, going round past either end.
+  const wrapIndex = (index, delta, count) => (((index + delta) % count) + count) % count
+
+  // The page's style element `id`, added on the first call, holds `css`.
+  function writeStyle (id, css, doc = document) {
+    let style = doc.getElementById(id)
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = id
+      doc.head.appendChild(style)
+    }
+    style.textContent = css
+  }
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:store>
@@ -1253,7 +1267,7 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  // What `keys` hold now, as a function that puts them back; a key that held nothing is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys) {
     const before = keys.map((key) => [key, store.getData(key)])
     return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
@@ -1519,6 +1533,7 @@
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global Framework */
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
@@ -1723,9 +1738,25 @@
       host.append(message)
     }
 
+    // A store write's throw, with the feature whose store threw it: whichever feature's code it reaches, that store's feature is the one
+    // that fails. A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once
+    // space frees.
+    const storeFailures = new WeakMap()
+    function failStore (owner, error) {
+      if (!isRefusedWrite(error)) return owner.skip(error)
+      console.warn(`${script}: ${owner.label} could not save, the browser refused the write:`, error)
+      tell(`${name}: the browser has no room left, so ${owner.label} could not be saved.`)
+    }
+
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
+      const fail = (error) => {
+        const owner = storeFailures.get(error)
+        if (owner) failStore(owner, error)
+        else feature.skip(error)
+      }
       const feature = {
+        label,
         off: false,
         skip (why, installed = true) {
           if (feature.off) return
@@ -1748,22 +1779,20 @@
           try {
             return fn()
           } catch (error) {
-            feature.skip(error)
+            fail(error)
             return fallback()
           }
         },
-        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
-        // frees. Any other throw skips the feature as `run` does.
-        write (fn) {
-          return feature.run(() => {
-            try {
-              return fn()
-            } catch (error) {
-              if (!isRefusedWrite(error)) throw error
-              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
-              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
-            }
-          })
+        // A save, copy or paste in a settings dialog: its throw goes on to the dialog's status line, and one with the feature off says so.
+        // A store failure passes with every feature still on, so the dialog's `writeOrRestore` can put the earlier keys back through it.
+        runOrThrow (fn) {
+          if (feature.off) throw new Error(`${name} turned off its ${label}`)
+          try {
+            return fn()
+          } catch (error) {
+            if (!storeFailures.has(error)) feature.skip(error)
+            throw error
+          }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
         // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
@@ -1790,7 +1819,7 @@
               return body.call(this, stock, ...args)
             } catch (error) {
               if (failure && failure.error === error) throw error
-              feature.skip(error)
+              fail(error)
               return reached ? result : original.apply(this, args)
             }
           }
@@ -1811,7 +1840,36 @@
       showNotice()
     }
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
+    // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
+    // A write that throws goes on to its caller with the feature still on, so a dialog's `writeOrRestore` can put back the keys written
+    // before it; the feature fails only where a feature's own `run` catches the throw. `keep`, the copy of an unreadable value, turns the
+    // feature off on any throw, a refusal included, so nothing can save over the original.
+    function storeFor (feature) {
+      const write = (fn) => {
+        if (feature.off) return
+        try {
+          fn()
+        } catch (error) {
+          if (Object(error) === error) storeFailures.set(error, feature)
+          throw error
+        }
+      }
+      return {
+        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        setData: (key, value) => write(() => Framework.setData(key, value)),
+        removeData: (key) => write(() => Framework.removeData(key)),
+        keep: (key, value) => feature.run(() => Framework.setData(key, value))
+      }
+    }
+
+    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
+    const dialogsFor = (feature) => ({
+      addSetting: (setting) => Framework.addSetting(setting),
+      showDialog: (options) => Framework.showDialog(options),
+      closeDialog: () => feature.run(() => Framework.closeDialog())
+    })
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
@@ -1941,16 +1999,8 @@
   const guard = createGuard({ script: 'draw-tool', name: 'Text Anywhere', version: VERSION, features: FEATURES })
   const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets, undoRestart } = guard.features
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
-  const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)
-  const writeData = (key, value) => storage.write(() => Framework.setData(key, value))
-  // `keep` is the copy of an unreadable value: a refusal there turns saving off, so nothing can overwrite the original.
-  const savedData = { getData: readData, setData: writeData, keep: (key, value) => storage.run(() => Framework.setData(key, value)), removeData: (key) => storage.run(() => Framework.removeData(key)) }
-  // What the settings dialog's shell is handed in place of Framework: its calls into SudokuPad run under the settings.
-  const dialogs = {
-    addSetting: (setting) => Framework.addSetting(setting),
-    showDialog: (options) => Framework.showDialog(options),
-    closeDialog: () => settingsUi.run(() => Framework.closeDialog())
-  }
+  const savedData = guard.storeFor(storage)
+  const dialogs = guard.dialogsFor(settingsUi)
   // A listener on the page or on one of the script's own elements runs under the feature it belongs to.
   const under = (feature, handler) => (...args) => feature.run(() => handler(...args))
   const onWindow = (feature, type, handler, options) => window.addEventListener(type, under(feature, handler), options)
@@ -2241,6 +2291,12 @@
       if (focused && focused.matches(`${sliders} input`)) focused.blur()
     }, true)
   }
+
+  // A panel's settings gear: its viewBox centres its ink, measured from rendered pixels like the other control icons. The gear is Lucide's `settings` (https://lucide.dev, ISC licence). Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT);
+  // all other copyright (c) for Lucide are held by Lucide Contributors 2022. Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is
+  // hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+  const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
+  const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   const COLOR_LABEL_REM = 1.7
@@ -2329,9 +2385,6 @@
     // The tool bar is a grid and stock buttons have order 0, so Text Anywhere's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
-  // Pen Tool Extras' gear, at its viewBox.
-  const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
-  const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
   const SETTINGS_LABEL = 'Text Anywhere settings'
   // The panel's three control buttons draw their icon with these strokes.
   const controlIcon = (paths, viewBox = '0 0 24 24') => `<svg viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
@@ -2374,7 +2427,7 @@
 
   function setColor (next) {
     color = next
-    writeData(COLOR_KEY, color)
+    savedData.setData(COLOR_KEY, color)
   }
 
   function pickColor (next) {
@@ -2391,13 +2444,7 @@
   }
 
   function showColors () {
-    let style = document.getElementById(COLORS_STYLE_ID)
-    if (!style) {
-      style = document.createElement('style')
-      style.id = COLORS_STYLE_ID
-      document.head.appendChild(style)
-    }
-    style.textContent = colors ? colorsCss(colors) : ''
+    writeStyle(COLORS_STYLE_ID, colors ? colorsCss(colors) : '')
   }
 
   // The colors, outline, box color, frame, font, size and opacity as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
@@ -2419,7 +2466,7 @@
 
   function saveColors (next) {
     colors = next
-    writeData(COLORS_KEY, colors)
+    savedData.setData(COLORS_KEY, colors)
     showColors()
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
   }
@@ -2427,12 +2474,12 @@
   // The next note's size and transparency are saved for the next visit, and a paste sets them as a move of the slider would.
   function setSize (value) {
     width = value
-    writeData(WIDTH_KEY, value)
+    savedData.setData(WIDTH_KEY, value)
   }
 
   function setOpacity (value) {
     opacity = value
-    writeData(OPACITY_KEY, value)
+    savedData.setData(OPACITY_KEY, value)
   }
 
   function showBoxes () {
@@ -2441,7 +2488,7 @@
 
   // A look setting is stored, then the notes are drawn again in it.
   function writeLook (key, value) {
-    writeData(key, value)
+    savedData.setData(key, value)
     showBoxes()
   }
 
@@ -2579,9 +2626,7 @@
       draw()
       box.querySelector(`button[data-role="${role}"][data-value="${value}"]`)?.focus()
     }))
-    // A failed paste turns the settings off, as a throw in any listener does, and throws on so the snapshot puts every key back.
-    const settingsOff = () => { throw new Error(`the ${FEATURES.settings.label} are off`) }
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(savedData), readers: READERS, snapshot: snapshotSave }, (values) => settingsUi.run(() => {
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(savedData), readers: READERS, snapshot: snapshotSave }, (values) => settingsUi.runOrThrow(() => {
       applyPasted(values)
       draftOutline = outline
       draftBox = boxColor
@@ -2592,7 +2637,7 @@
       chosen = null
       colorsEdited = false
       draw()
-    }, settingsOff))
+    }))
   }
 
   const BACKGROUND_ON_LABEL = 'Background: on. Click to turn off'
@@ -2615,7 +2660,7 @@
 
   function setBackground (on) {
     background = on
-    writeData(BACKGROUND_KEY, on)
+    savedData.setData(BACKGROUND_KEY, on)
   }
 
   // A press turns the open note's background on or off, and the setting only when the note is a new one; with no note open it turns the selected notes' on or off
@@ -4170,15 +4215,15 @@
   // Without getApp there is no app: the features that need one are off, and the rest start without it.
   const start = (app) => {
     guard.probe({ roots: { Framework, app }, store: Framework })
-    color = readColor(readData(COLOR_KEY))
-    width = readWidth(readData(WIDTH_KEY))
-    opacity = readOpacity(readData(OPACITY_KEY))
-    outline = readOutline(readData(OUTLINE_KEY))
-    background = readBackground(readData(BACKGROUND_KEY))
-    colors = readDrawColors(readData(COLORS_KEY))
-    boxColor = readBox(readData(BOX_KEY))
-    frame = readFrame(readData(FRAME_KEY))
-    noteFont = readFont(readData(FONT_KEY))
+    color = readColor(savedData.getData(COLOR_KEY))
+    width = readWidth(savedData.getData(WIDTH_KEY))
+    opacity = readOpacity(savedData.getData(OPACITY_KEY))
+    outline = readOutline(savedData.getData(OUTLINE_KEY))
+    background = readBackground(savedData.getData(BACKGROUND_KEY))
+    colors = readDrawColors(savedData.getData(COLORS_KEY))
+    boxColor = readBox(savedData.getData(BOX_KEY))
+    frame = readFrame(savedData.getData(FRAME_KEY))
+    noteFont = readFont(savedData.getData(FONT_KEY))
     showColors()
     // The features are independent: one that fails to install costs the others nothing.
     textTool.run(() => {
