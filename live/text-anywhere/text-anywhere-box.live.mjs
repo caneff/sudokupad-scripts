@@ -7,9 +7,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { STATUS, actButton, closeDialogWith } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
-const { BOX_KEY, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, pickTextAnywhere } = textAnywhere
-const PICKS = `${EDITOR} button[data-role="box-pick"]`
-const CUSTOM = `${EDITOR} input[data-role="box-custom"]`
+const { BOX_CUSTOM_INPUT: CUSTOM, BOX_KEY, BOX_PICKS: PICKS, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, pickTextAnywhere } = textAnywhere
 const FRAME_PICKS = `${EDITOR} button[data-role="frame-pick"]`
 const FRAME_ON = `${FRAME_PICKS}[data-value="on"]`
 const FRAME_OFF = `${FRAME_PICKS}[data-value="off"]`

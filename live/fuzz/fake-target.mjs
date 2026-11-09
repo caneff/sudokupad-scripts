@@ -14,6 +14,7 @@ export const quietPage = (overrides = {}) => ({
   pageColor: 'rgb(0, 0, 0)',
   rulesPane: { fontPx: 17.6, ownFontPx: 17.6, scrollHeight: 300, clientHeight: 300 },
   letterMode: false,
+  noteBoxes: [],
   ...overrides
 })
 
@@ -62,7 +63,13 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       undoAll: async () => { log.push(['undoAll']); undoDepth = 0 },
       clickColorMode: rec('clickColorMode'),
       placeNote: async (...a) => { log.push(['placeNote', ...a]); notes++ },
-      extrasDialog: rec('extrasDialog'),
+      extrasSettings: rec('extrasSettings'),
+      sliderPoint: async (name, fraction) => { log.push(['sliderPoint', name, fraction]); return [100 + fraction * 200, 300] },
+      focusSlider: rec('focusSlider'),
+      leaveSlider: rec('leaveSlider'),
+      noteBoxDialog: rec('noteBoxDialog'),
+      setNoteBackground: rec('setNoteBackground'),
+      useArrowPen: rec('useArrowPen'),
       resize: rec('resize'),
       blurFocus: async (...a) => { log.push(['blurFocus', ...a]); if (whitenOnBlur) pageColor = 'rgb(255, 255, 255)'; if (whitenOnWait) whitenPending = true; if (lettersOnBlur) letterMode = true },
       reload: rec('reload'),

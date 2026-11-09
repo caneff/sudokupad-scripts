@@ -263,6 +263,18 @@ describe('the rules', () => {
     })
   })
 
+  describe('note-box-color', () => {
+    it('holds when no note has a box, and when every boxed note is filled with the box color', () => {
+      assert.deepEqual(check('note-box-color', { noteBoxes: [] }), [])
+      assert.deepEqual(check('note-box-color', { noteBoxes: [{ text: '15', fill: 'rgb(255, 244, 176)', expected: 'rgb(255, 244, 176)' }, { text: 'a', fill: 'rgb(0, 0, 0)', expected: 'rgb(0, 0, 0)' }] }), [])
+    })
+    it('fails for each boxed note that keeps another color than the one saved, naming both', () => {
+      assert.deepEqual(
+        check('note-box-color', { noteBoxes: [{ text: '15', fill: 'rgb(255, 255, 255)', expected: 'rgb(255, 244, 176)' }, { text: 'a', fill: 'rgb(1, 2, 3)', expected: 'rgb(1, 2, 3)' }] }),
+        ['the note "15" has a box filled rgb(255, 255, 255), not the saved box color rgb(255, 244, 176)'])
+    })
+  })
+
   describe('tab-not-letters', () => {
     it('holds when Tab leaves the pad on digits', () => {
       assert.deepEqual(check('tab-not-letters', { letterMode: false }, { action: 'tab' }), [])

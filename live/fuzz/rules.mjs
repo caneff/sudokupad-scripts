@@ -15,6 +15,7 @@
 //   pageColor     the page's background as a computed `rgb(r, g, b)`
 //   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight }; null on a puzzle with no rules text (#679)
 //   letterMode    whether the number pad shows letters
+//   noteBoxes     one { text, fill, expected } per finished note with a box: its computed fill, and the fill of the box color Text Anywhere has saved (`boxFill` of the stored value and the note's color), both as computed rgb text
 import { createRequire } from 'node:module'
 
 // The shared color module is pasted text for the scripts, not a module, so it is evaluated here by the lib tests' loader.
@@ -189,6 +190,11 @@ export const RULES = [
       if (pane === null || rulesPaneFits(pane)) return []
       return [`the rules need ${pane.scrollHeight}px in a pane of ${pane.clientHeight}px at ${pane.fontPx}px, above the smallest font ${(pane.ownFontPx * MIN_FONT_RATIO).toFixed(2)}px`]
     }
+  },
+  {
+    name: 'note-box-color',
+    // Text Anywhere: every note with a box is filled with the box color the script has saved, however many times the color changed before the note was made.
+    check: ({ now }) => now.page.noteBoxes.filter(({ fill, expected }) => fill !== expected).map(({ text, fill, expected }) => `the note ${JSON.stringify(text)} has a box filled ${fill}, not the saved box color ${expected}`)
   },
   {
     name: 'tab-not-letters',

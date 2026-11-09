@@ -33,3 +33,26 @@ The next change this decides: an action that moves the pen panel's thickness sli
 Only one plant was missed, and it points at an action gap, not at rules or timing. The catches were fast (all under 2 minutes, most under 15 s), so a quiet nightly of
 30 minutes is evidence for these kinds of bug. Plants chosen by the same author as the rules favor what the rules look for; a plant from a bug the fuzz found by itself
 (#668, #681) would be a fairer test.
+
+## Second run: the slider and box-color actions (#713)
+
+Added to `live/fuzz/actions.mjs`: slider drags and key presses on the pen panel's Thickness and Opacity and on Text Anywhere's Size and Transparency; Pen Tool Extras'
+settings dialog saved with a changed arrow spacing, dash length and thickness; Text Anywhere's settings dialog with a Box color picked (a preset or an Own color), the
+Background button, a note placed with a box, and a line drawn with an arrow pen (page 3), and the weight of the existing `pen page` action went from 1 to 2. The ticket named only the slider, dialog and Box color actions; the note with a box and the arrow line were added after the first two runs missed, because each plant needed a state two actions deep. New rule `note-box-color`; new plant `box-color-stale` (Text Anywhere saves a changed
+box color and keeps drawing boxes in the old one, found in `setLook`). Only the two plants below were run (4 minutes each over the whole puzzle set), so the other nine are
+not re-measured here.
+
+| seed | actions | `redraw-typo` | `box-color-stale` |
+| --- | --- | --- | --- |
+| 713 | sliders, dialog values, box color, Background | missed, 85 lists in 240 s | missed, 86 lists in 240 s |
+| 714 | the same, weights of those actions raised | missed, 81 lists in 240 s | missed, 81 lists in 240 s |
+| 715 | plus `boxed note` and `arrow line` | **caught**, recorded 9x9, 111 s | **caught**, cages 9x9, 91 s |
+
+- **`redraw-typo` is now caught**, shrunk to 2 steps: `arrow line r1c3 -> r1c4 color 1`, then `drag the pen thickness slider from 0% to 0%`. The slider and dialog actions
+  alone did not do it: the redraw only runs when a page 3 line is on the board, and a list that reached page 3, drew on it and then changed the thickness was rare (not measured).
+  The signal is the script's own skip line (`console.warn: pen-tool-extras: arrow lines skipped because SudokuPad changed: TypeError: cell.renderContents is not a function`).
+- **`box-color-stale` is caught**, shrunk to 2 steps: `note "15" with a box at r1c2`, then `Text Anywhere box color Tint Save`. Likewise the Box color dialog alone did not do it:
+  a boxed note needs the Background button on first, and a list held a boxed note and a Save of Yellow, Tint or Own in about 1 list in 100 (measured on 2000 generated lists).
+  The rule does not see a White pick, which looks the same as Page on a white page.
+- **The lesson for the next plant** is the arithmetic in `fuzz-hit-rate.md`: a bug behind a state two actions deep needs an action that builds that state in one step.
+  Each of the two plants was one weighted action away from being reachable, and a single seed per plant is a single sample of about 90 lists, so the three seeds above are not a rate.
