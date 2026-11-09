@@ -3,11 +3,13 @@
 
 import { createRequire } from 'node:module'
 import { openWith, reloadWith, scriptSource } from '../session.mjs'
-import { openPenTool, PAGE_BUTTON } from '../pen.mjs'
+import { openPenTool, PAGE_BUTTON, PAGE_ONE, PAGE_THREE, PAGE_TWO } from '../pen.mjs'
 
 export const SCRIPT_FILE = 'pen-tool-extras.user.js'
 export const script = scriptSource(SCRIPT_FILE)
 export const STYLE = 'style#pen-tool-extras-style'
+// The pen tool's three pages of pens, by page number: the characters on each page's buttons.
+export const PAGES = { 1: PAGE_ONE, 2: PAGE_TWO, 3: PAGE_THREE }
 
 // What the script exports for tests, such as its constants.
 export const scriptExports = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
@@ -36,7 +38,7 @@ export async function open (browser, { scripts = [SCRIPT_FILE], penTool, setting
   return opened
 }
 
-// Reloads the page with the same scripts and gets it ready again, as `open` does.
+// Reloads the page with `scripts` (Pen Tool Extras alone by default, as `open` has it) and gets it ready again, as `open` does.
 export async function reload (p, { scripts = [SCRIPT_FILE], penTool, settings } = {}) {
   await reloadWith(p, scripts)
   await ready(p, { penTool, settings })

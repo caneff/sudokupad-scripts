@@ -44,7 +44,12 @@ export async function restart (page) {
   await page.locator('.dialog').waitFor({ state: 'detached' })
 }
 
-export const boxOpen = async (page) => (await page.locator(TEXT_BOX).count()) === 1
+// Whether a note's text box is open: two boxes at once is a bug, so it throws rather than read as closed.
+export async function boxOpen (page) {
+  const open = await page.locator(TEXT_BOX).count()
+  assert.ok(open <= 1, `${open} text boxes are open at once`)
+  return open === 1
+}
 
 // Escape finishes the open note and leaves it selected; a second Escape ends that selection, so the next click on empty space opens a note again.
 export async function finishNote (page) {

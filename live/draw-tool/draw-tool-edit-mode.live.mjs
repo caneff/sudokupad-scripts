@@ -5,9 +5,7 @@ import assert from 'node:assert/strict'
 import * as draw from './draw-tool-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 
-const { KEYPAD, NEAR_PX, NINE, PICKER_BOX, SLIDERS } = draw
-// The tray behind the controls reaches past the keypad's sides on purpose.
-const TRAY = '.draw-tool-tray'
+const { KEYPAD, NEAR_PX, NINE, PICKER_BOX, SLIDERS, TRAY } = draw
 
 const browser = useBrowser()
 

@@ -6,7 +6,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { closePauseDialog, dialogAtRest, dialogWith, pauseGame, PAUSED } from '../puzzles.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
-import { finishNote, gridPoint } from '../board.mjs'
+import { finishNote, gridPoint, typeText } from '../board.mjs'
 
 const { SELECTED, TEXTS, TEXT_BOX } = draw
 const ON_BOARD = [2.5, 4.5]
@@ -36,9 +36,7 @@ describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: fals
     ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
     await draw.reloadOnDraw(p)
-    await p.mouse.click(...await gridPoint(p, ON_BOARD))
-    await p.keyboard.type('r3c4 = 7')
-    await finishNote(p)
+    await typeText(p, ON_BOARD, 'r3c4 = 7')
     const right = await read(() => {
       const controls = document.querySelector('#controls').getBoundingClientRect()
       return [Math.round((controls.right + window.innerWidth) / 2), Math.round(controls.top + controls.height / 2)]

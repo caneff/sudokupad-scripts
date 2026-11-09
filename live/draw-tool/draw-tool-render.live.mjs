@@ -31,6 +31,8 @@ const MOVES_PER_FRAME = 4
 const DRAG_BY = [0.5, 0.5]
 // One frame at 60 Hz.
 const FRAME_MS = 16
+// What a frame's moves may take, with room for a loaded box: four frames' worth, where the script takes about one tenth of one.
+const FRAME_BUDGET_MS = 4 * FRAME_MS
 // A note is written at most once per pointer move: measured on the script, a frame's 4 moves give a note 4 style writes, so a write that fanned out per move would show here.
 const WRITES_PER_NOTE_FRAME = MOVES_PER_FRAME
 // A note's place and the rectangle's corner are kept to a hundredth of a pixel or unit, so a point can land off the pointer's.
@@ -142,8 +144,9 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     assert.deepEqual(recreatedByRelease, [], 'the redraw on release keeps every note\'s element, the moved ones too')
     const moved = (await draw.saved(p)).slice(0, 2).map((item) => item.at)
     assert.deepEqual(moved.map((at, i) => at.map((v, k) => Math.round((v - PLANTED[i].at[k]) / CELL * 10) / 10)), [[0.5, 0.5], [0.5, 0.5]], 'both notes moved by the drag')
-    // The frame time is a wall-clock budget a loaded box can break without the script being at fault, so it is only reported; the work per move is checked by counting writes.
-    t.diagnostic(`budget ${FRAME_MS} ms: ${Math.max(...busy) < FRAME_MS ? 'met' : 'exceeded'}`)
+    // A frame's work is a wall-clock time a loaded box can stretch without the script being at fault, so its budget is widened to FRAME_BUDGET_MS, and the typical
+    // frame (the median) is held to it: a few slow frames pass, while work added to every pointer move moves them all. The writes are counted besides, which time does not move.
+    assert.equal(percentile(busy, 0.5) < FRAME_BUDGET_MS, true, `the median frame of the drag took under ${FRAME_BUDGET_MS} ms: ${summary(busy)}`)
     assert.equal(await read(() => window.__maxWritesPerFrame) <= WRITES_PER_NOTE_FRAME, true, `each note written at most ${WRITES_PER_NOTE_FRAME} times a frame`)
   })
 

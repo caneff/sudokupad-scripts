@@ -8,12 +8,11 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
 import { gridPoint, undoAll } from '../board.mjs'
-import { drag, goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penEntries } from '../pen.mjs'
+import { drag, goToPenPage, openPenTool, penEntries } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'PenColor_middleerase']
-const PAGES = { 1: PAGE_ONE, 2: PAGE_TWO, 3: PAGE_THREE }
 const HEADS = '.pen-tool-extras-hint-arrows'
 
 const browser = useBrowser()
@@ -56,7 +55,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const selectPenOnPage = async (page, key) => {
     await openPenTool(p)
-    await goToPenPage(p, PAGES[page])
+    await goToPenPage(p, extras.PAGES[page])
     await p.locator(`.tool-pen button[data-key="${key}"]`).click()
   }
 
