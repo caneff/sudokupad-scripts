@@ -15,7 +15,7 @@ import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 const run = promisify(execFile)
 const PASSING_SEEDS = [2, 3]
 const PLANTED_SEED = 3
-// The seed the planted Tab bug is caught on before the failure #681 (a pen color that reload changes) is reached.
+// The seed the planted Tab bug is caught on.
 const TAB_PLANT_SEED = 4
 const ROOT = new URL('../../', import.meta.url)
 const INTERRUPTED_BY_ESCAPE = /^(?:pen drag|right-click erase held|note drag).* then Escape then release$/
