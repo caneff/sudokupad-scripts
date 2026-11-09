@@ -270,6 +270,9 @@
   const TRAY_CLASS = 'draw-tool-tray'
   const SLIDERS_CLASS = 'draw-tool-sliders'
   const SLIDER_ROW_CLASS = 'draw-tool-slider'
+  const SLIDER_ROWS_CLASS = 'draw-tool-slider-rows'
+  const HIDE_ALL_CLASS = 'draw-tool-hide-all'
+  const HIDDEN_CLASS = 'draw-tool-hidden'
   const SIZE_SLIDER = 'draw-tool-size'
   const OPACITY_SLIDER = 'draw-tool-opacity'
   const SIZE_LABEL = 'Size'
@@ -2201,6 +2204,9 @@
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   const COLOR_LABEL_REM = 1.7
+  // The eye is a square that fills the sliders block's height, with its icon a little smaller.
+  const HIDE_BUTTON_REM = 3
+  const HIDE_ICON_REM = 2.2
   // The column of each control in its row: Clear all, the Background button and the settings gear.
   const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [BACKGROUND_CLASS]: 2, [SETTINGS_CLASS]: 3 }
   const PANEL = '.tool-draw .controls-input'
@@ -2220,7 +2226,17 @@
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${BACKGROUND_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every 'svg path' and the paths in a tool button's icon, which would turn the icons' lines into blobs, the tool button's note into a solid square.
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, #control-${TOOL_NAME}) :is(path, circle, rect, ellipse), .${BACKGROUND_CLASS} :is(path, circle, rect, ellipse):not(.${BACKGROUND_FILL_CLASS}) { fill: none !important; }`,
-    `.${BACKGROUND_CLASS}[aria-pressed="true"] { background-color: ${TRAY_COLOR}; outline: 2px solid ${PANEL_COLOR}; }`,
+    `:is(.${BACKGROUND_CLASS}, .${HIDE_ALL_CLASS})[aria-pressed="true"] { background-color: ${TRAY_COLOR}; outline: 2px solid ${PANEL_COLOR}; }`,
+    // The eye sits at the left of the sliders block, which is a row of it and the two slider rows, and presses like the panel's other buttons.
+    `.${SLIDERS_CLASS} { flex-direction: row; align-items: center; gap: 0.4rem; }`,
+    `.${SLIDER_ROWS_CLASS} { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: space-evenly; }`,
+    `.${HIDE_ALL_CLASS} { flex: none; display: flex; align-items: center; justify-content: center; width: ${HIDE_BUTTON_REM}rem; height: ${HIDE_BUTTON_REM}rem; min-height: 0; margin: 0; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; transition: transform ${PRESS_MS}ms ease-out; }`,
+    `.${HIDE_ALL_CLASS}:active { transform: scale(${PRESS_SCALE}); }`,
+    `@media (prefers-reduced-motion: reduce) { .${HIDE_ALL_CLASS} { transition: none; } .${HIDE_ALL_CLASS}:active { transform: none; } }`,
+    `.${HIDE_ALL_CLASS} svg { width: ${HIDE_ICON_REM}rem; height: ${HIDE_ICON_REM}rem; }`,
+    `.${HIDE_ALL_CLASS} :is(path, circle) { fill: none !important; }`,
+    // Hidden notes keep their layout, so they measure and come back in place; a hidden element takes no pointer, so none can be hit.
+    `#${LAYER_ID}.${HIDDEN_CLASS} { visibility: hidden; }`,
     // Some selected notes have a box and some do not: a dashed ring, neither on nor off.
     `.${BACKGROUND_CLASS}[aria-pressed="mixed"] { outline: 2px dashed ${PANEL_COLOR}; }`,
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
@@ -2279,6 +2295,11 @@
   // Clear all is a trash can.
   const CLEAR_LABEL = 'Clear all'
   const DELETE_SELECTED_LABEL = 'Delete the selected notes'
+  // Hide all notes is an eye, open while the notes show and shut (the lid closed, lashes down) while they are hidden.
+  const HIDE_LABEL = 'Hide all notes'
+  const SHOW_LABEL = 'Show all notes'
+  const EYE_OPEN_ICON = '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'
+  const EYE_SHUT_ICON = '<path d="M2 9C6 17 18 17 22 9"/><path d="M4.3 12.1L3.2 14.5M8.5 14.5L7.8 17M15.5 14.5L16.2 17M19.7 12.1L20.8 14.5"/>'
   const CLEAR_ICON = '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
@@ -2616,14 +2637,21 @@
     backgroundButton.className = BACKGROUND_CLASS
     backgroundButton.innerHTML = controlIcon(BACKGROUND_ICON)
     backgroundButton.addEventListener('click', under(textTool, pressBackground))
+    const hideAll = document.createElement('button')
+    hideAll.className = HIDE_ALL_CLASS
+    hideAll.addEventListener('click', under(textTool, () => setNotesHidden(!notesHidden)))
+    const sliderRows = document.createElement('div')
+    sliderRows.className = SLIDER_ROWS_CLASS
+    sliderRows.append(sliderRow(SIZE_SLIDER, SIZE_LABEL, { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width), sliderRow(OPACITY_SLIDER, OPACITY_LABEL, { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }, opacity))
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
-    sliders.append(sliderRow(SIZE_SLIDER, SIZE_LABEL, { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width), sliderRow(OPACITY_SLIDER, OPACITY_LABEL, { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }, opacity))
+    sliders.append(hideAll, sliderRows)
     // Arrow keys on a slider end in a change.
     sliders.addEventListener('change', under(textTool, returnFocusToNote))
     sliders.addEventListener('input', under(textTool, (event) => slideLook(event.target)))
     panelParts = [tray, clear, backgroundButton, ...(settingsUi.off ? [] : [settings]), sliders]
     keypad().append(...panelParts)
+    showHideButton()
     showPanelValues()
   }
 
@@ -3049,6 +3077,30 @@
     note.classList.toggle(SCROLLS_CLASS, scrollRoom(note) > 1)
   }
 
+  // Whether the notes are hidden by the eye. Not saved, so a reload shows them, and not an undo step.
+  let notesHidden = false
+
+  function showHideButton () {
+    const button = document.querySelector(`.${HIDE_ALL_CLASS}`)
+    if (!button) return
+    const label = notesHidden ? SHOW_LABEL : HIDE_LABEL
+    button.title = label
+    button.setAttribute('aria-label', label)
+    button.setAttribute('aria-pressed', String(notesHidden))
+    button.innerHTML = controlIcon(notesHidden ? EYE_SHUT_ICON : EYE_OPEN_ICON)
+  }
+
+  // Hiding closes the open note and ends the selection, so nothing is left to act on unseen. A hidden note can be neither hit nor snapped to: no gesture can reach one.
+  function setNotesHidden (hide) {
+    if (hide === notesHidden) return
+    if (hide && editing) finishText()
+    notesHidden = hide
+    drawingLayer().classList.toggle(HIDDEN_CLASS, hide)
+    if (hide) select([])
+    else redraw()
+    showHideButton()
+  }
+
   // The note an event's target is in, or null; only while Text Anywhere is current is a note ever the target.
   const noteOf = (event) => event.target instanceof window.Element ? event.target.closest(`#${LAYER_ID} .${TEXT_CLASS}`) : null
 
@@ -3062,6 +3114,7 @@
 
   // The topmost drawn note whose screen box, grown by `margin` px, holds `point`, as its element, or null. The notes on the board are under the fixed ones.
   function noteAt (point, margin) {
+    if (notesHidden) return null
     const map = boardMap()
     const drawn = drawing.filter((item) => item.kind === TEXT_KIND && item[NOTE_ELEMENT]?.isConnected)
     const onTop = [...drawn.filter((item) => !item.fixed), ...drawn.filter((item) => item.fixed)]
@@ -3232,6 +3285,7 @@
 
   // The note is typed in place: `index` names the text to reopen, with the caret at screen point `point` (the end of its text with none), or -1 for a new one starting at `point`. Opening a note ends the selection.
   function openText (index, point) {
+    setNotesHidden(false)
     selected = []
     const map = boardMap()
     const item = index === -1 ? newNote(point, map) : { ...drawing[index] }
@@ -3542,7 +3596,7 @@
 
   function selectInRectangle (d, click) {
     const map = boardMap()
-    const touched = notesTouched(boardDrawing(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]))
+    const touched = notesHidden ? [] : notesTouched(boardDrawing(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]))
     if (touched.length === 0 && isSmallRectangle(d.points)) return click(d)
     select(d.shift ? [...selected, ...touched] : touched)
   }
@@ -3783,6 +3837,7 @@
   function showSavedDrawing () {
     cancelInput()
     drawing = []
+    setNotesHidden(false)
     savable = true
     loadedKey = currentPuzzleKey()
     forgetRestarted()
@@ -3845,6 +3900,7 @@
       return
     }
     if (notes.length === 0) return
+    setNotesHidden(false)
     cancelInput()
     const first = drawing.length
     drawing = drawing.concat(notes)
@@ -3908,6 +3964,7 @@
       const map = boardMap()
       const point = eventPoint(event)
       if (event.button === SECONDARY_BUTTON) {
+        if (notesHidden) return true
         const at = map.toBoard(point)
         erasing = { last: at, pending: [], erased: false }
         if (eraseAlong(at, at, map)) redraw()
