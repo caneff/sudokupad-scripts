@@ -50,7 +50,7 @@ async function runList (openTarget, actions, landMs, settleMs) {
         const now = await target.snapshot()
         assertClean(now, `after "${action}"`)
         assertRules(now, before, action.cmd.kind, `after "${action}"`, earlier)
-        earlier = { action: action.cmd.kind, before }
+        earlier = { action: action.cmd.kind, before, earlier: earlier && { action: earlier.action, before: earlier.before } }
         before = now
       }
     })
