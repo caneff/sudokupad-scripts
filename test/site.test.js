@@ -442,7 +442,7 @@ test(`${HOME} describes Text Anywhere in a short summary ending in a Details lin
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Typed notes anywhere Click to type; Esc or Ctrl+Enter finishes; Ctrl+Z and Ctrl+Y undo and redo the typing; double-click a note to edit.',
-    'Formatting **bold**, *italic*, __underline__, ~~strikethrough~~ (they combine, like Discord), and lines starting - become bullets or [ ] checklist items (- [ ] and [] work too); two spaces before a dash nest it one level, and 1. starts a numbered item. A line starting # , ## or ### is a header, and -# makes small faded subtext. Typing ->, != or sum gives → ≠ Σ. `code` and a block between two lines of ``` show in monospace, with nothing else read inside.',
+    'Formatting Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and ->, != or sum typed as → ≠ Σ. One note below shows every style, and the text that made it.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders. The + and - keys make the selected notes, or the next note, one Size step bigger or smaller.',
@@ -459,7 +459,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
 })
 
 test(`${DRAW} has the slideshow between the install link and "What it adds", then the panel`, () => {
-  assertSectionsInOrder(DRAW, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The Text Anywhere panel</h2>', '<h2>Good to know</h2>'])
+  assertSectionsInOrder(DRAW, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>One note, every style</h2>', '<h2>The Text Anywhere panel</h2>', '<h2>Good to know</h2>'])
 })
 
 test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated picture whose alt text names every label`, () => {
@@ -474,6 +474,17 @@ test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated pictur
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
   assert.match(alt, /press 1 to 9/)
+})
+
+test(`${DRAW} shows one figure: the finished note, the same note open for typing, and a caption`, () => {
+  const m = read(DRAW).match(/<h2>One note, every style<\/h2>\s*<div class="figure">([\s\S]*?)<\/div>\s*<h2>/)
+  assert.ok(m, `site/${DRAW} has no figure under <h2>One note, every style</h2>`)
+  const found = imgs(m[1])
+  assert.deepEqual(found.map(img => withoutTag(img).match(/src="([^"]*)"/)[1]), ['draw-tool-formatting.png', 'draw-tool-formatting-raw.png'].map(f => `${RAW}docs/research/draw-tool/${f}`))
+  for (const [i, [, words]] of [['rendered', ['bold italics', 'underlined', 'struck through', 'nested bullet', 'numbered', 'ticked', 'code block', '→ ≠ Σ']], ['raw text', ['# Header one', '-# subtext', '***bold italics***', '~~struck through~~', '- [x] a ticked item', '```']]].entries()) {
+    for (const word of words) assert.ok(altOf(found[i]).includes(word), `the ${i ? 'second' : 'first'} picture's alt text does not name "${word}"`)
+  }
+  assert.match(m[1], /<p class="caption">[^<]+<\/p>/)
 })
 
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {

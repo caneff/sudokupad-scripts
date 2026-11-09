@@ -61,6 +61,8 @@ body.details { max-width: 46rem; }
 .details .features p { margin: 0; }
 .details .figure { margin: 1rem 0; }
 .details .figure img { display: block; max-width: 100%; height: auto; }
+.details .figure img + img { margin-top: .75rem; }
+.details .figure .caption { margin: .5rem 0 0; font-size: .95rem; }
 .details .notes li { margin-bottom: .45rem; }
 .details .notes { padding-left: 1.4rem; }
 .details footer { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--frame-edge); font-size: .95rem; }
