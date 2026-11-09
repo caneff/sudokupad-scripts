@@ -35,7 +35,6 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   // A note starts at its click, so a press meant for the note at cell spot `at` lands in its middle.
   const noteAt = async (at) => draw.middleAt(p, await gridPoint(p, at))
   const clickNote = async (at) => p.mouse.click(...await noteAt(at))
-  // A press at `at`, a move by (dx, dy) screen pixels, and the release.
   const slip = async (at, dx, dy) => {
     const [x, y] = await gridPoint(p, at)
     await p.mouse.move(x, y)
@@ -49,7 +48,6 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     return [x + width / 2, y + height / 2]
   }
 
-  // Opens the note at A_AT, drags its resize handle, presses `key` mid-drag and releases: the size is back and the note is still open.
   const resizeUndoneBy = async (key) => {
     await draw.reopen(p, await gridPoint(p, A_AT))
     const open = await p.locator(TEXT_BOX).boundingBox()

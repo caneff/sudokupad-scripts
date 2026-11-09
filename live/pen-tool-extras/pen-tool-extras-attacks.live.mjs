@@ -15,7 +15,6 @@ import { useBrowser } from '../session.mjs'
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
-// The sliders' limits, as the script's panel gives them.
 const THICKNESS_LIMITS = { min: 1, max: 16 }
 const OPACITY_LIMITS = { min: 20, max: 100 }
 const DIALOG_THICKNESS = `${EXTRAS_EDITOR} input[data-setting="thickness"]`
@@ -49,7 +48,6 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
     }
   })
 
-  // A line along row `row` (0 to 8) from column `col` to two columns right, in cell middles.
   const lineIn = (row, col) => mouseDrag(p, [[row + 0.5, col + 0.5], [row + 0.5, col + 2.5]])
 
   it('attack 35: a line on every pen page in every color, then undo all', async () => {
@@ -164,7 +162,6 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
     assert.ok(widest.max > widest.min, `max thickness draws wider than min: ${widest.max} vs ${widest.min}`)
   })
 
-  // Every range, checkbox, preset and pen color in the dialog, with the value to change it to.
   const changeEveryValue = async () => {
     await editor().locator('select[data-role="color-choice"]').selectOption({ index: 1 })
     const swatches = editor().locator('input[data-role="swatch"]')
@@ -212,17 +209,14 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
       await openExtrasEditor(p)
       await setInputValue(p.locator(DIALOG_THICKNESS), 9)
     }
-    // Escape closes it and saves nothing.
     await edit()
     await p.keyboard.press('Escape')
     await editor().waitFor({ state: 'detached' })
     assert.equal(await thickness(), null, 'Escape saved nothing')
-    // A click outside closes it and saves nothing.
     await edit()
     await p.mouse.click(5, 5)
     await editor().waitFor({ state: 'detached' })
     assert.equal(await thickness(), null, 'a click outside saved nothing')
-    // Enter leaves the dialog open and unsaved, and the dialog still works.
     await edit()
     await p.keyboard.press('Enter')
     await p.waitForTimeout(300) // "nothing happened in 300 ms" check

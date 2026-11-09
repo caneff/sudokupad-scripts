@@ -57,7 +57,6 @@ const puzzles = (n) => Array.from({ length: n }, (_, i) => `p${i + 1}`)
 
 // A cage sum "15" at size 20, centred on (100, 50) in board units.
 const sum = textItem([100, 50], '15', 3, 20)
-// The notes a saved list reads as; the entries it keeps are `readDrawing(saved).kept`.
 const readItems = (saved) => readDrawing(saved).items
 // What an earlier version saved: neither is drawn, and both stay in storage.
 const oldStroke = { kind: 'stroke', color: 1, width: 6, opacity: 100, points: [[0, 50], [200, 50]] }
@@ -1078,7 +1077,6 @@ test('once a note is drawn its box is the size drawn, not the guess from its cha
   assert.deepEqual(textBox({ ...long, box: [200, 60], [DRAWN_SIZE]: [300, 23] }), { left: 100, right: 300, top: 50, bottom: 110 })
 })
 
-// A 1000x900 window.
 const WINDOW = { left: 0, top: 0, right: 1000, bottom: 900 }
 
 test('a note whose box is inside the window stays where it is', () => {
@@ -1111,7 +1109,6 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 294.4, right: 385.6, top: 394.4, bottom: 451.6 })
 })
 
-// A SudokuPad with every internal the features declare, and the helpers that take one away.
 const completeRoots = () => {
   const app = { on () {}, getToolNames () {}, puzzle: { on () {} } }
   const Framework = { getApp () {}, getData () {}, setData () {}, removeData () {}, addTool () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { svgRenderer: { getElem () {} }, puzzle: { undoStack: [] }, grid: { rows: 9, cols: 9 }, tools: { colour: {} } } }
@@ -1169,7 +1166,6 @@ test('with Shift the step grows from ten pixels to the Shift maximum', () => {
 })
 
 const contains = (text, part, message) => assert.match(text, new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), message)
-// The dialog's three sample rows: the buttons of one row, in order, each as { role, value, label, pressed, style }.
 const pick = (html, role) => [...html.matchAll(new RegExp(`<button[^>]*data-role="${role}"[^>]*>`, 'g'))].map(([tag]) => ({
   value: tag.match(/data-value="([^"]*)"/)[1],
   label: tag.match(/aria-label="([^"]*)"/)[1],

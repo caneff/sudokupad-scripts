@@ -21,7 +21,6 @@ const browser = useBrowser()
 describe('Text Anywhere\'s code in notes', { concurrency: false }, () => {
   let context, p, errors
 
-  // The look of every code element in the finished note.
   const looks = () => p.evaluate(([selector, inline, block]) => {
     const note = document.querySelector(selector)
     const read = (e) => {

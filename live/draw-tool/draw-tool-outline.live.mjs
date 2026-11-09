@@ -27,7 +27,6 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   const reload = () => draw.reloadOnDraw(p)
   const textShadowOf = (text) => p.evaluate(([selector, want]) => window.getComputedStyle([...document.querySelectorAll(selector)].find((e) => e.textContent === want)).textShadow, [draw.TEXTS, text])
   const fontSizeOf = (text) => p.evaluate(([selector, want]) => parseFloat(window.getComputedStyle([...document.querySelectorAll(selector)].find((e) => e.textContent === want)).fontSize), [draw.TEXTS, text])
-  // A note's halo reach as a share of its own text size: 0 for none.
   const reach = async (text) => {
     const shadow = await textShadowOf(text)
     if (shadow === 'none') return 0

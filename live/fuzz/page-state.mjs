@@ -1,5 +1,5 @@
 /* global Framework */
-// Reads a snapshot's `page` (the shape `rules.mjs` describes) from real SudokuPad. Not a check itself.
+// The `page` shape is documented in rules.mjs.
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { PROFILES_KEY } from '../color-by-digit/color-by-digit-fixtures.mjs'
@@ -14,7 +14,6 @@ const COLOR_BUTTON_TITLE = /^Color by digit: (\w+)$/
 // reads the finished fit, and a pane that never fits is still read and reported.
 const RULES_FIT_MS = 2000
 
-// What the page holds that the rules read, in one round trip.
 const readDom = ({ texts, seenTexts, profilesKey, expectRules }) => {
   const puzzle = Framework.app.puzzle
   const strokeOf = (names) => `pen-${names[0]} pencolor-${names.slice(1)}`

@@ -13,7 +13,6 @@ import { openWith, useBrowser } from '../session.mjs'
 const { HOLD_TO_EDIT_MS, HOLD_WAIT_MS, STYLE } = extras
 
 const DATA_KEY = 'PenColor_colors'
-// The color tool wait's limit in the script (COLOR_TOOL_TIMEOUT_MS).
 const COLOR_TOOL_TIMEOUT_MS = 10000
 const THICKNESS_KEY = 'PenColor_thickness'
 // SudokuPad's cell color pages, darkened: the pen color presets. Typed out
@@ -572,8 +571,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.up()
     }
     const editModeOn = () => p.locator('.tool-pen.pen-tool-extras-editing').count()
-    // Dispatches a cancelable contextmenu on the first element matching `selector` and says
-    // whether the page left it alone (dispatchEvent returns false when preventDefault ran).
     const menuAllowed = (selector) => read((sel) => document.querySelector(sel).dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })), selector)
 
     before(async () => {

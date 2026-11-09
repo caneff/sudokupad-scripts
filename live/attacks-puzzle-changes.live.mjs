@@ -18,7 +18,6 @@ import { useBrowser } from './session.mjs'
 const CONGRATS = 'Congrats'
 const OK = /^\s*OK\s*$/
 const SCRIPT_DIALOGS = [['Pen Tool Extras', EXTRAS_EDITOR], ['Color by Digit', COLOR_BY_DIGIT_EDITOR], ['Text Anywhere', SETTINGS_EDITOR], ['Dark Page', '.dialog input[type=color]'], ['Rules Resizer', '#auto-rules-resizer-max-width']]
-// The cell the color tool colors in puzzle A, and its key.
 const COLORED = [4, 4]
 
 const browser = useBrowser()
@@ -89,14 +88,12 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     }
   })
 
-  // Opens each script's dialog from SudokuPad's settings and closes it with Cancel.
   const openEachScriptDialog = async () => {
     for (const [name, editor] of SCRIPT_DIALOGS) {
       await openScriptDialog(p, name, editor)
       await closeDialogWith(p, 'Cancel', editor)
     }
   }
-  // Enters the classic puzzle's solution with a click on each empty cell and its digit, and returns when SudokuPad shows its solved dialog at rest.
   const solve = async () => {
     await useTool(p, '#control-normal')
     for (let i = 0; i < 81; i++) {
@@ -166,7 +163,6 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     await p.keyboard.type('5')
     await p.mouse.click(...await insideDialog())
     assert.deepEqual(await boardOf(p), paused, 'a digit key and a click changed nothing under the pause dialog')
-    // With the pen tool current a drag from the overlay draws nothing.
     await p.evaluate(() => Framework.app.changeTool('pen'))
     await mouseDrag(p, OVERLAY_DRAG)
     assert.deepEqual(await penEntries(p), [], 'the drag drew no pen line under the dialog')
@@ -176,7 +172,6 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     assert.equal(await settle(gridBlurred, false), false, 'the grid shows after Stay Paused')
     const marks = await markA()
     assert.equal(await running(), false, 'still paused after the marks')
-    // The timer button resumes it, and the marks stay.
     await p.click('.timer-control')
     assert.equal(await settle(running, true), true, 'the timer runs again')
     assert.deepEqual(await boardOf(p), marks, 'the marks are still there after resuming')

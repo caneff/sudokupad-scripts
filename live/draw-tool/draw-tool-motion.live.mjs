@@ -32,7 +32,6 @@ describe('Text Anywhere\'s motion and precision touches', { concurrency: false }
     await draw.reload(p)
     await pickDraw(p)
   }
-  // The computed cursor of the element under the page point `[x, y]` and of the body.
   const cursorsAt = ([x, y]) => p.evaluate(([px, py]) => [document.elementFromPoint(px, py), document.body].map((e) => window.getComputedStyle(e).cursor), [x, y])
   const durationOf = (selector) => p.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transitionDuration, selector)
   const drawnLeftTop = (text) => p.evaluate(([selector, want, ratio]) => {
@@ -121,7 +120,6 @@ describe('Text Anywhere\'s motion and precision touches', { concurrency: false }
   describe('a deleted note', () => {
     beforeEach(reset)
 
-    // Whether the note's element is still in the page right after `act`.
     const lingersAfter = async (text, act) => {
       await act()
       return p.evaluate(([selector, want]) => [...document.querySelectorAll(selector)].some((e) => e.textContent === want), [TEXTS, text])

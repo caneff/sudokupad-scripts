@@ -1,6 +1,4 @@
 /* global Framework, loadFPuzzle */
-// Shared by the live attacks that build their own puzzles: every script installed the way a userscript manager does, puzzles other than
-// `live/puzzle-url.txt` built as data and opened by their id, the board read back, and the steps those attacks repeat. Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { LOAD_MS } from './cache.mjs'
 import { GIVENS, MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
@@ -35,7 +33,6 @@ export const seedOddEvenCells = (p) => {
   return p.addInitScript((list) => list.forEach(([k, v]) => window.localStorage.setItem(k, v)), entries)
 }
 
-// Starts the puzzle on the page and turns on the pen and replay tools, so every script has its control.
 export async function startWithTools (p) {
   await startPuzzle(p)
   await enableTools(p)
@@ -76,14 +73,11 @@ export async function puzzleIdFor (p, data) {
   return p.evaluate((json) => 'scl' + loadFPuzzle.compressPuzzle(json), JSON.stringify(data))
 }
 
-// Goes to the puzzle with `id` in the same tab and starts it (Resume or Continue when the page remembers it).
 export async function openPuzzleId (p, id) {
   await p.goto(SUDOKUPAD + id, { waitUntil: 'load', timeout: LOAD_MS })
   await startWithTools(p)
 }
 
-// The board as a solver sees it: entered digits, corner and centre marks, cell colors (the color tool's and Color by Digit's),
-// the pen entries, and the Text Anywhere notes' texts.
 export const boardOf = async (p) => ({
   ...await p.evaluate(() => {
     const cells = Framework.app.puzzle.cells
@@ -104,7 +98,6 @@ export const boardOf = async (p) => ({
 export const NOTE_POINT = [8.2, 2.25]
 export const OVERLAY_DRAG = [[4.5, 0.6], [4.5, 1.5]]
 
-// The open dialog whose text holds `text`.
 export const dialogWith = (p, text) => p.locator('.dialog', { hasText: text })
 
 // SudokuPad's pause dialog: opened by the timer button, closed by its Stay Paused or Resume button.
@@ -119,7 +112,6 @@ export async function closePauseDialog (p, button) {
   await p.locator('.dialog').waitFor({ state: 'detached' })
 }
 
-// A real click on the center of the cell at `row`, `col`.
 export async function clickCell (p, row, col) {
   const [x, y] = await cellCentre(p, row, col)
   await p.mouse.click(x, y)
@@ -131,7 +123,6 @@ export async function useTool (p, button) {
   assert.equal(await clickUntil(() => p.click(button), () => tool(p), name, SETTLE_MS), name)
 }
 
-// Returns once the page after a Back or a Forward shows its puzzle, pressing Start Puzzle (or Continue) when the page asks for it.
 export async function resumeAfterHistory (p) {
   const state = await p.waitForFunction(([source, flags]) => {
     if (typeof Framework === 'undefined' || !Framework.app?.puzzle?.cells?.length) return false

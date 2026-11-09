@@ -16,7 +16,6 @@ const GIVEN_FILL = 'rgb(0, 0, 0)'
 const CONFLICT_RED = 'rgb(179, 58, 58)'
 // The active profile: 1 to 5 on palette key 4, 8 and 9 on key 6; 0, 6 and 7 in no group, so they keep SudokuPad's color.
 const SPLIT = [group('4', ['1', '2', '3', '4', '5']), group('6', ['8', '9'])]
-// The givens Split colors: those of a digit in one of its groups.
 const GROUPED_GIVENS = [...GIVENS].filter((d) => SPLIT.some((g) => g.digits.includes(d))).length
 const SEEDED_DIGIT = { ...savedProfiles({ profiles: [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_EVEN }], active: 0 }), [MODE_STORAGE_KEY]: 'digit' }
 // How far from a mark's box, in screen pixels, a circle may sit and still be that mark's circle. This
@@ -55,13 +54,11 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   const undoSteps = () => read(() => Framework.app.puzzle.undoStack.length)
   const label = () => labelOn(p)
 
-  // Every circle in the group, as it is drawn: its centre in screen pixels and radius, and whether it paints at all.
   const circles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].map((c) => {
     const centre = new window.DOMPoint(Number(c.getAttribute('cx')), Number(c.getAttribute('cy'))).matrixTransform(c.getScreenCTM())
     return { cx: centre.x, cy: centre.y, r: Number(c.getAttribute('r')), shown: window.getComputedStyle(c.parentNode).display !== 'none' }
   }), CIRCLES)
   const shownCircles = async () => (await circles()).filter((c) => c.shown).length
-  // Circles drawn beyond one per conflicting mark on the board: zero when each mark has its own and no other stands.
   const extraCircles = () => read(([circles, conflicting]) => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length, [CIRCLES, Object.values(CONFLICTING).join(',')])
   // The middle of each conflicting mark of `digit` in `place` and the middle of every circle, both
   // in screen pixels so the board's own transforms are the page's to apply. A mark's middle here is
@@ -73,8 +70,6 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
       return { cx: box.x + box.width / 2, cy: box.y + box.height / 2 }
     })
   }, [CONFLICTING[place], digit])
-  // How many conflicting marks of `digit` in `place` there are, how many of them have a shown circle
-  // beside them, and how many circles are drawn beyond one per conflicting mark on the board.
   const circleState = (place, digit) => async () => {
     const marks = await middles(place, digit)
     const drawn = await circles()
@@ -202,7 +197,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
       return drawn.length
     }, [CIRCLES])
     const state = () => read(([circles]) => ({ all: document.querySelectorAll(circles + ' circle').length, untagged: document.querySelectorAll(circles + ' circle:not([data-kept])').length }), [CIRCLES])
-    // Attribute writes on the tagged circles from now on (a write of the value already there counts).
+    // A write of the value already there counts.
     const watchWrites = () => read(([circles]) => {
       window.__keptWrites = 0
       const watcher = new window.MutationObserver((records) => { window.__keptWrites += records.filter((r) => r.target.hasAttribute('data-kept')).length })
@@ -276,7 +271,6 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   // The page's clock changes text every second and redraws the circles anyway, so this reads the
   // circles two frames after the class change, before a tick is likely.
   it('a mark entering or leaving the conflict state with no other change on the page gets or loses its circle at once', async () => {
-    // Circles drawn beyond one per conflicting mark, read two frames after each class change.
     const extraAfterToggle = await read(async ([circles, conflicting]) => {
       const extra = () => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length
       const twoFrames = () => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))

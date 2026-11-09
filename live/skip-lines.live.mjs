@@ -1,6 +1,3 @@
-// Live check that the shared page helper collects a script's skip line on every page it opens, with no suite seeding it:
-// a skip line nobody declared lands in `errors`, so a suite that asserts `errors` is empty fails on it, and one a suite
-// declares in `expectedSkips` does not.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { openPage, startPuzzle } from './page.mjs'

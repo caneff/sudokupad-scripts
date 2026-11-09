@@ -32,7 +32,6 @@ export const LOCK_STALE_MS = 10 * 60 * 1000
 const LOCK_WAIT_MS = 15 * 60 * 1000
 // How long a run marker (below) names its runner: a full run takes minutes, so an older one is another run's.
 const RUN_MARKER_MAX_AGE_MS = 60 * 60 * 1000
-// How long a page gets to load.
 export const LOAD_MS = 60000
 
 const SUDOKUPAD_ORIGIN = 'https://sudokupad.app'
@@ -41,7 +40,6 @@ const SUDOKUPAD_ORIGIN = 'https://sudokupad.app'
 const TRACKERS = /cookiebot|googletagmanager|plausible|api\.sudokupad\.com\/counter/
 // SudokuPad serves its fonts as text/html, which Playwright would store as UTF-8 text and so corrupt.
 const FONT_FILE = /^https:\/\/sudokupad\.app\/.*\.(ttf|otf|woff2?)(\?|$)/
-// The label of the button that starts the puzzle, or resumes one the page remembers.
 export const START = /Start Puzzle|Continue|Resume/i
 
 export const puzzleUrl = () => readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -68,7 +66,6 @@ export function modeFor ({ env, exists, mtimeMs, now, refreshedThisRun, versionC
 
 const VERSION = /\?v=(\d+(?:\.\d+)+)/
 
-// The version a SudokuPad puzzle page names, or null when it names none.
 export const pageVersion = (html) => VERSION.exec(html)?.[1] ?? null
 
 const fetchPuzzlePage = async () => {

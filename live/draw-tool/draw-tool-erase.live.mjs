@@ -28,10 +28,8 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
   const pickDigit = () => clickUntil(() => p.click(DIGIT_BUTTON), tool, 'normal', SETTLE_MS)
   const texts = () => draw.texts(p)
   const textBoxCount = () => p.locator(TEXT_BOX).count()
-  // A click at `at`, in cells from the grid's top left, then `content` typed and Escape.
   const saved = () => draw.saved(p)
   const reload = () => draw.reload(p)
-  // Both notes, the lower one made first.
   const makeTwo = async () => {
     await pickDraw()
     await typeText(p, LOWER_AT, '20')
@@ -69,7 +67,6 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
     assert.equal(inside, true, `the ${label} button is over the board`)
     return [x, y]
   }
-  // A press at (x, y), a drag across the board and the release on it.
   const pressDragRelease = async ([x, y]) => {
     await p.mouse.move(x, y)
     await p.mouse.down()

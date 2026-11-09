@@ -31,7 +31,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     ;({ context, p, errors } = await openPage(browser()))
     await startPuzzle(p)
     await p.addScriptTag({ content: script })
-    // Enable Letter Tool, switched on after the page and the script are in.
     await p.evaluate(() => Framework.setSetting('toolletter', true))
     await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })
   })
@@ -130,7 +129,6 @@ describe('the Tab binding is not found', () => {
     try {
       await startPuzzle(p, {
         beforeStart: async () => {
-          // A SudokuPad whose letter tool binds no Tab.
           await p.evaluate(() => { ToolLetter.tool.keyHandlers = ToolLetter.tool.keyHandlers.filter((e) => e.key !== 'Tab') })
         }
       })

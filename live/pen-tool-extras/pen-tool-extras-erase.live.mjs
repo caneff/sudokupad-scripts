@@ -91,7 +91,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const editor = () => p.locator('#pen-tool-extras-editor')
-  // Starts a log of every pointerdown and mousedown: its button and whether the page prevented it. Read by `window.__pressLog`.
   const watchPresses = () => read(() => {
     window.__pressLog = []
     if (!window.__pressLogged) {

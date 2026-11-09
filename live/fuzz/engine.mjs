@@ -21,13 +21,11 @@ const DEFAULT_SHRINK_MINUTES = 10
 
 const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
 
-// Throws when the snapshot holds a crash signal; `when` says after which action.
 function assertClean (snapshot, when) {
   const signals = crashSignals(snapshot)
   if (signals.length) throw new Error(`${signals.length === 1 ? 'crash signal' : 'crash signals'} ${when}: ${signals.join('; ')}`)
 }
 
-// Throws when a rule is broken between two snapshots; `action` is the kind (`actions.mjs`) of the action between them and `when` says after which.
 function assertRules (now, before, action, when, earlier) {
   const broken = ruleViolations({ now, before, action, earlier })
   if (broken.length) throw new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`)

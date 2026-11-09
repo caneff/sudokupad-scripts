@@ -1,5 +1,3 @@
-// Live check of the error log on sudokupad.app in headless Chromium: a feature turned off is recorded in the page's localStorage, the
-// record outlives a reload, and Copy error log in a script's settings dialog puts it on the real clipboard; Clear empties it.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { ERROR_LOG_KEY as LOG_KEY, gotoPuzzle, openPage, startPuzzle } from './page.mjs'

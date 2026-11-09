@@ -13,7 +13,6 @@ import { scriptSource, useBrowser } from '../session.mjs'
 const script = scriptSource('color-by-digit.user.js')
 
 const NEW_PROFILE = `${EDITOR} button[data-act=new-profile]`
-// The script's limits on profiles and on a name's length.
 const MAX_PROFILES = 6
 const MAX_NAME_LENGTH = 24
 const MODE_CYCLE = ['Cell', 'Digit', 'Both', 'Off']
@@ -38,12 +37,11 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
   const rowNames = () => p.$$eval(PROFILE_ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label')))
   const pulldownNames = () => p.$$eval(`${EDITOR} select[data-role=cell-profile] option`, (es) => es.map((e) => e.textContent))
   const wrongCount = (groups) => wrongCountOn(p, groups)
-  // One press of a digit key on the cell at row r, column c (a given ignores it).
   const enter = async (r, c, key) => {
     await selectCell(p, r, c)
     await p.keyboard.press(key)
   }
-  // Undoes until the cell at column `col` of the row holds no digit. SudokuPad keeps a digit and its color as separate steps, so it takes a few.
+  // SudokuPad keeps a digit and its color as separate undo steps, so it takes a few.
   const undoUntilGone = async (col) => {
     for (let i = 0; i < 6 && (await valuesInRow())[col] !== ''; i++) {
       await undo()
@@ -74,7 +72,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     for (let i = 0; i < 10; i++) await p.mouse.click(x, y)
     const want = MODE_CYCLE[(start + 10) % MODE_CYCLE.length]
     assert.equal(await settle(label, want), want, `ten presses from ${MODE_CYCLE[start]} land on ${want}`)
-    // The board agrees with the button: Cell and Both color the cells, Digit and Off leave them bare.
     if (want === 'Cell' || want === 'Both') assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'every digit has its group color')
     else assert.equal(await settle(coloredCount, 0), 0, 'no cell colored')
   })
@@ -90,7 +87,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.equal(await settle(label, 'Cell'), 'Cell', 'one undo undoes the mode change')
     assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'the cell colors are back, digits included')
     assert.deepEqual((await valuesInRow()).slice(0, 2), ['3', '4'], 'both digits are still there')
-    // SudokuPad keeps a digit and its color as separate steps, so a few more undos take the last digit.
     await undoUntilGone(1)
     assert.deepEqual((await valuesInRow()).slice(0, 2), ['3', ''], 'undo takes the last digit and not the first')
     assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'the other cells keep their colors')
@@ -145,7 +141,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
   it('attack 46: in the editor add, rename, copy, move and delete profiles up to six', async () => {
     await openEditor()
     assert.deepEqual(await rowNames(), ['Odd/Even', 'Low/5/High'])
-    // Rename: an emptied name keeps the old one; a long name is cut to the limit; quotes, a bracket and an ampersand stay text.
     await p.click(`${PROFILE_ROWS}:nth-child(1)`, ROW_CORNER)
     await typeProfileName(p, '')
     assert.deepEqual(await rowNames(), ['Odd/Even', 'Low/5/High'], 'an emptied name keeps the old one')
@@ -159,11 +154,9 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     await p.click(`${PROFILE_ROWS}:nth-child(1)`, ROW_CORNER)
     await typeProfileName(p, 'X'.repeat(MAX_NAME_LENGTH * 2))
     assert.deepEqual(await rowNames(), ['X'.repeat(MAX_NAME_LENGTH), 'Low/5/High'], 'a very long name is cut to the limit')
-    // Copy: + New profile copies the selected profile; the name stays within the limit.
     await p.click(NEW_PROFILE)
     const copyName = (await rowNames())[2]
     assert.ok(copyName.length <= MAX_NAME_LENGTH, `the copy's name is within the limit: ${copyName.length} characters`)
-    // Up to six: the button goes off at the limit.
     while ((await rowNames()).length < MAX_PROFILES) await p.click(NEW_PROFILE)
     assert.match(await editor().innerText(), new RegExp(`${MAX_PROFILES} of ${MAX_PROFILES}`))
     assert.equal(await p.locator(NEW_PROFILE).isDisabled(), true, '+ New profile is off at six')
@@ -174,7 +167,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.deepEqual(await settle(rowNames, [names[last], ...names.slice(0, last)]), [names[last], ...names.slice(0, last)], 'the last row moved to the top')
     await dragProfileRow(p, 0, last)
     assert.deepEqual(await settle(rowNames, names), names, 'and back to the end')
-    // Save, then delete down to one profile: the last one cannot go.
     await closeEditor('Save')
     assert.deepEqual((await getState()).profiles.map((x) => x.name), names)
     await openEditor()
@@ -232,7 +224,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.deepEqual(Object.values(await painted()), Array(10).fill(''), 'Clear all leaves every digit with no color')
     await closeEditor('Save')
     assert.equal(await settle(coloredCount, 0), 0, 'with no digit colored the board shows none')
-    // The button still answers: a press steps the mode.
     await pressTo(p, 'Digit')
   })
 })

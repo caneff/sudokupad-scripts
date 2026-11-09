@@ -37,7 +37,6 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     }
     throw new Error(`no character ${i}`)
   }, index)
-  // What a color value computes to, as the page's own elements show it.
   const resolved = (color, property = 'color') => p.evaluate(([c, name]) => {
     const probe = document.createElement('i')
     probe.style[name] = c

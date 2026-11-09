@@ -94,7 +94,6 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     const [x1, y1] = await gridPoint(p, [from[0] + by[0], from[1] + by[1]])
     return Array.from({ length: count }, (_, k) => [x0 + (x1 - x0) * (k + 1) / count, y0 + (y1 - y0) * (k + 1) / count])
   }
-  // Every element in the notes' layer whose attributes or children change while `act` runs and for three frames after it.
   const changedInLayer = (act) => read(async (actSource) => {
     const records = []
     const watch = new window.MutationObserver((list) => records.push(...list))

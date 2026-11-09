@@ -16,7 +16,6 @@ const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'u
 
 const CONCURRENCY = 5
 
-// Prepended to a before-start injection: records whether the Start Puzzle button shows as the script runs.
 const RECORD_START_SHOWN = `window.__startShownAtInjection = [...document.querySelectorAll('button')].some((b) => ${START}.test(b.textContent) && b.getClientRects().length > 0);\n`
 
 const browser = useBrowser()

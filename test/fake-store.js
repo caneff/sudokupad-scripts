@@ -11,7 +11,6 @@ function fakeStore (saved = {}) {
   }
 }
 
-// Runs `run` with console.warn caught, so a test can read what an unreadable value logged.
 function quietly (run) {
   const warn = console.warn
   const warnings = []

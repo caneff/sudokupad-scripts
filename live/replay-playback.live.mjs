@@ -24,7 +24,6 @@ const KEY_SWITCHES_MS = 700
 
 const browser = useBrowser()
 
-// A page with `files` injected after Start Puzzle, Color by Digit saved in Cell mode, and the pen and replay tools on.
 async function openSolver (files) {
   const opened = await openPage(browser(), { seed: seedOddEvenCells })
   await startPuzzle(opened.p)
@@ -59,8 +58,6 @@ for (const [order, files] of INSTALL_ORDERS) {
       assert.equal(await settle(async () => (await penStrings(p)).length > count, true), true, 'a pen line appeared')
     }
 
-    // The board as a solver sees it: every cell's digit, marks, colors (as Color by Digit and the color tool set them), the
-    // pen elements as drawn, and the Text Anywhere notes.
     const board = async () => ({
       cells: await read(() => Framework.app.puzzle.cells.map((c) => [c.row, c.col, c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), [...(c.colours || [])], c.given])),
       actions: await read(() => Framework.app.puzzle.replayStack.length),

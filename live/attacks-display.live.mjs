@@ -14,7 +14,6 @@ import { useBrowser } from './session.mjs'
 
 const FULLSCREEN_BUTTON = 'button[data-control="fullscreen"]'
 const WINDOW = { width: 1200, height: 900 }
-// What a screen of its own gives a fullscreen page.
 const SCREEN = { width: 1600, height: 1000 }
 // The most a note's left or top may sit off a whole device pixel: Text Anywhere puts a released note on whole device pixels, and the browser's layout
 // rounds to 1/64 of a CSS pixel, up to 0.03 device pixels at a ratio of 2. A note drawn soft sits half a pixel off.
@@ -32,11 +31,8 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
   })
   afterEach(async () => { await context?.close() })
 
-  // A line along a row from column 1.5 to 4.5, in cell middles.
   const rowLine = (row) => mouseDrag(p, [[row + 0.5, 1.5], [row + 0.5, 4.5]])
-  // Where each pen line is drawn on the screen, to a tenth of a pixel.
   const penBoxes = () => p.evaluate(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((g) => Object.values(g.getBoundingClientRect().toJSON()).map((v) => Math.round(v * 10) / 10)))
-  // A drag with the real mouse from one screen point to another.
   const dragBetween = async ([x0, y0], [x1, y1]) => {
     await p.mouse.move(x0, y0)
     await p.mouse.down()
@@ -44,7 +40,6 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
     await p.mouse.up()
     await draw.frames(p)
   }
-  // The left and top of the first note in device pixels, as the part past a whole pixel.
   const offGrid = () => p.evaluate((selector) => {
     const box = document.querySelector(selector).getBoundingClientRect()
     return [box.left, box.top].map((side) => Math.abs(side * window.devicePixelRatio - Math.round(side * window.devicePixelRatio)))

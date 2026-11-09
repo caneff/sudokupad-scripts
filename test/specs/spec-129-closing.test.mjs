@@ -25,7 +25,6 @@ const REMOVED = ['closeWith', 'pressUntil', 'sleep', 'selectPen']
 // What a live file boots with when it goes round page.mjs.
 const OWN_BOOT = /\.newContext\(|\.goto\(|routeSudokuPad|puzzle-url\.txt|typeof Framework\b.*waitForFunction|waitForFunction\(.*typeof Framework\b/
 const COLOR_BY_DIGIT = ['color-by-digit.live.mjs', 'color-by-digit-mode.live.mjs', 'color-by-digit-profiles.live.mjs', 'color-by-digit-digits.live.mjs', 'color-by-digit-sync.live.mjs'].map((name) => `color-by-digit/${name}`)
-// What the fixtures own for those files: the board, the keys, the selectors and the shared press, count and paint helpers.
 const FIXTURE_NAMES = ['GIVENS', 'SEED', 'ODD_EVEN', 'LOW_FIVE_HIGH', 'BUTTON', 'EDITOR', 'ARROW', 'MENU', 'PROFILES_KEY', 'AUTO_KEY', 'MODE_KEY', 'buttonPoint', 'pressTo', 'labelOn', 'modeLabel', 'ROW_CORNER', 'coloredCountOn', 'givensColoredOn', 'paintOn']
 
 // Spec 129's acceptance as one pass over the live harness, at `npm test`: the live files are read as text, and

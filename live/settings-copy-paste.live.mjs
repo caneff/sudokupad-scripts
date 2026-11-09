@@ -1,5 +1,3 @@
-// Live check of the Copy settings and Paste settings buttons of the scripts with a settings dialog, on sudokupad.app in
-// headless Chromium: Copy puts the saved keys on the real clipboard, Paste reads them back through the same dialog.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { openPage, startPuzzle } from './page.mjs'

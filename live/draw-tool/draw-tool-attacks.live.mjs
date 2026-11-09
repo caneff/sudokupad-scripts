@@ -42,7 +42,6 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: HOME, permissions: ['clipboard-read', 'clipboard-write'] }, seed: captureConsoleErrors }))
   })
   after(async () => { await context.close() })
-  // Each attack starts from a clean page with Text Anywhere current and no notes.
   beforeEach(async () => {
     await p.setViewportSize(HOME)
     await draw.forgetDrawings(p)
@@ -92,7 +91,6 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     await noOpenBox()
     assert.deepEqual((await shown()).sort(), ['saved', 'unsaved'])
     assert.deepEqual((await savedTexts()).sort(), ['saved', 'unsaved'], 'what is drawn is what is saved')
-    // The page still takes a note.
     await typeText(p, [7.5, 1.5], 'again')
     assert.ok((await shown()).includes('again'))
   })
@@ -181,7 +179,6 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.equal(await boxText(), 'abc')
     await finishNote(p)
     assert.deepEqual(await savedTexts(), ['abc'])
-    // SudokuPad's own Undo and Redo from the toolbar, again and again, leave the note alone.
     for (let i = 0; i < 6; i++) {
       await undoButton()
       await p.click('#control-redo')
@@ -368,7 +365,6 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     await typeText(p, [3.5, 1.5], 'B')
     await mouseDrag(p, [[0.6, 0.6], [2, 2], [4.4, 3.4]])
     assert.equal(await p.locator(SELECTED).count(), 2, 'two notes are selected')
-    // Counts the writes of this puzzle's drawing.
     await p.evaluate((prefix) => {
       window.drawSaves = 0
       const setData = Framework.setData

@@ -1,5 +1,3 @@
-// Shared by the live checks: per script, what shows it has started, its control and one representative action. Not a
-// check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { openScriptDialog, openSettings } from './settings.mjs'
@@ -44,7 +42,6 @@ export const SCRIPTS = [
     file: 'dark-page.user.js',
     ready: (p) => p.locator('#dark-page-style').waitFor({ state: 'attached' }),
     control: (p) => settingsEntry(p, /^\s*Dark Page\s*$/),
-    // The page paints black.
     act: async (p) => {
       const background = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
       assert.equal(await settle(background, BLACK), BLACK)
@@ -86,7 +83,6 @@ export const SCRIPTS = [
         Framework.app.resize()
       })
     },
-    // The font bar shows while the pointer is over the pane.
     control: async (p) => {
       const box = await p.locator('.puzzle-rules').boundingBox()
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -128,7 +124,6 @@ export const SCRIPTS = [
     file: 'draw-tool.user.js',
     ready: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' }),
-    // With Text Anywhere picked, a left click on r3c3 and 15 typed leave one note.
     act: async (p) => {
       assert.equal(await pickDraw(p), 'draw')
       await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))

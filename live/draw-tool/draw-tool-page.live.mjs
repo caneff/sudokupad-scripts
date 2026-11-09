@@ -29,7 +29,6 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
   const reload = () => draw.reloadOnDraw(p)
   const near = (got, want) => got.length === want.length && got.every((v, i) => Math.abs(v - want[i]) <= NEAR_PX)
   const savedNote = async (text) => (await saved()).find((item) => item.text === text)
-  // The middle of the note that reads `text`, on the screen.
   const noteMiddle = (text) => read(([selector, want]) => {
     const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
     return [box.x + box.width / 2, box.y + box.height / 2]
@@ -37,7 +36,6 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
   const notePoint = (text) => draw.notePoint(p, text)
   const noteStart = (text) => draw.noteStart(p, text)
   const noteInCells = (text) => draw.noteInCells(p, text)
-  // Blank page points clear of the board and the controls: right of the controls, and below the board.
   const blankPoints = () => read(() => {
     const controls = document.querySelector('#controls').getBoundingClientRect()
     const board = Framework.app.svgRenderer.getElem().getBoundingClientRect()

@@ -32,7 +32,6 @@ async function chooseAndSave (p, choices) {
   for (const [id, on] of Object.entries(choices)) await box(p, id).setChecked(on)
   await closeDialogWith(p, 'Save', DIALOG)
 }
-// The bottom row's visible buttons, in order, with where each sits.
 const rowButtons = (p) => p.evaluate((row) => [...document.querySelector(row).children]
   .filter((button) => button.getClientRects().length > 0)
   .map((button) => { const at = button.getBoundingClientRect(); return { id: button.id, x: Math.round(at.x), y: Math.round(at.y), width: Math.round(at.width) } }), ROW)

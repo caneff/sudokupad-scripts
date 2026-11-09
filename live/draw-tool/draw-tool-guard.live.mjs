@@ -29,7 +29,6 @@ const CASES = [
     owner: 'Framework',
     name: 'addTool',
     off: 'Text tool',
-    // There is no tool button, but the notes saved for the puzzle are still drawn, and the settings open from SudokuPad's own.
     works: async (p) => {
       assert.equal(await p.locator(DRAW_BUTTON).count(), 0, 'no tool button')
       assert.deepEqual(await settle(() => texts(p), ['15']), ['15'], 'the saved note is drawn')
@@ -42,7 +41,6 @@ const CASES = [
     owner: 'Framework',
     name: 'addSetting',
     off: 'settings',
-    // There is no settings entry and no gear, but the tool works and the saved note is drawn.
     works: async (p) => {
       await pickDraw(p)
       assert.equal(await tool(p), 'draw')

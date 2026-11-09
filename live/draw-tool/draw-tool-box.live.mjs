@@ -24,7 +24,6 @@ const browser = useBrowser()
 
 const open = () => draw.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
 const stored = (p, key) => p.evaluate((k) => Framework.getData(k) ?? null, key)
-// Each note's box fill and shadow as the browser computes them, by text.
 const looks = (p) => p.evaluate((selector) => Object.fromEntries([...document.querySelectorAll(selector)].map((e) => {
   const style = window.getComputedStyle(e)
   return [e.textContent, { fill: style.backgroundColor, shadow: style.boxShadow }]

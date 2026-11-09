@@ -13,12 +13,10 @@ import { gridPoint, typeText } from '../board.mjs'
 const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, OPACITY_SLIDER, SLIDERS, TEXTS, WIDTH_KEY, slideTo, valueOf } = draw
 // r1c3 of the recorded puzzle, empty.
 const EMPTY_CELL = [0, 2]
-// #rrggbb as the browser computes it.
 const rgb = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
 
 const browser = useBrowser()
 
-// The keypad's rectangle, and the lowest and highest edge of anything shown in it.
 const keypadBox = (p) => p.evaluate(() => {
   const panel = document.querySelector('.controls-input')
   const box = panel.getBoundingClientRect()
@@ -100,7 +98,6 @@ describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
   const pickDraw = () => draw.pickDraw(p)
   const pickDigit = () => clickUntil(() => p.click(DIGIT_BUTTON), tool, 'normal', SETTLE_MS)
   const reload = () => draw.reload(p)
-  // The keypad's digit buttons, 1 to 9: the Aa label each shows and its color, and whether it is marked current.
   const keypad = () => read(() => [...document.querySelectorAll('.controls-input button.digit')]
     .filter((b) => b.dataset.key !== '0')
     .map((b) => {
@@ -112,7 +109,6 @@ describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
   // The text size the Size slider's width gives.
   const sizeShown = async () => 2 * await valueOf(p, SIZE_SLIDER) + 8
   const savedColors = () => read((key) => Framework.getData(key) ?? null, COLORS_KEY)
-  // The computed color and the size in board units of the last and the first note on the board.
   const look = ({ color, size }) => ({ color, size })
   const lastNote = async () => look((await draw.noteLooks(p)).pop())
   const firstNote = async () => look((await draw.noteLooks(p))[0])

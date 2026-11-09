@@ -7,7 +7,6 @@ const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { syncText, readLib, scriptFiles, generatedLine, libNamesOnDisk } = require('../sync-lib.js')
 
-// For a script with no lib module to look a dependency up in.
 const syncPlain = (source, readModule) => syncText(source, readModule, [])
 const modules = { plain: 'const a = 1\n\nconst b = 2\n' }
 const read = (name) => modules[name]

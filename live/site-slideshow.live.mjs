@@ -32,7 +32,6 @@ describe('site slideshows', { concurrency: false }, () => {
     await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(r.request().url().slice(RAW.length).replace(/\?.*$/, ''), ROOT)), contentType: 'image/png' }))
   })
 
-  // What the slideshow under `root` shows now: the counter, the caption and the file name of the one visible picture.
   const shown = (root) => page.evaluate((root) => {
     const show = document.querySelector(root)
     const current = [...show.querySelectorAll('.slide.current')]
