@@ -210,7 +210,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       expectedSkips: SAVED.map(([script, feature]) => new RegExp(`^${script}: ${feature} skipped because SudokuPad changed: SecurityError: denied$`)),
       seed: (page) => page.on('console', (m) => { if (/ skipped because SudokuPad changed: SecurityError: denied$/.test(m.text())) said.push(m.text().split(' skipped')[0]) }),
       afterStart: (p) => p.evaluate(() => {
-        const scripts = new RegExp(`^${Framework.LocalDataPrefix}_([a-z-]+-notice$|ColorByDigit_|DarkPage_|AutoRulesResizer_|DrawTool_|UiTweaks_|EdgeMarks_|PenColor_(?!pen$|colors$))`)
+        const scripts = new RegExp(`^${Framework.LocalDataPrefix}_([a-z-]+-notice$|ColorByDigit_|DarkPage_|AutoRulesResizer_|TextAnywhere_|DrawTool_|UiTweaks_|EdgeMarks_|PenColor_(?!pen$|colors$))`)
         for (const method of ['getItem', 'setItem', 'removeItem']) {
           const original = window.Storage.prototype[method]
           window.Storage.prototype[method] = function (key, ...rest) {

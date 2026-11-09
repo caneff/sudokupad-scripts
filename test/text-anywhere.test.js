@@ -8,8 +8,8 @@ const { headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks } = require('../draw-tool.user.js')
-const readPaste = (text) => pastedSettings(text, READERS)
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys } = require('../draw-tool.user.js')
+const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
 const keydown = (eventPhase) => ({ type: 'keydown', eventPhase })
@@ -144,6 +144,84 @@ test('an index with no saved data is empty, and one that is not a list of keys t
   for (const saved of ['oops', { a: 1 }, [1, 2]]) assert.throws(() => readIndex(saved), /saved index/, JSON.stringify(saved))
 })
 
+const hexes = (value) => Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, value]))
+// What a version before the rename saved each key as, and back.
+const oldKey = (key) => key.replace(/^TextAnywhere_notes_/, 'DrawTool_drawing_').replace(/^TextAnywhere_/, 'DrawTool_')
+const newKey = (key) => key.replace(/^DrawTool_drawing_/, 'TextAnywhere_notes_').replace(/^DrawTool_/, 'TextAnywhere_')
+const SETTINGS = { [COLOR_KEY]: 4, [COLORS_KEY]: hexes('#112233'), [BACKGROUND_KEY]: true, [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' }
+const withOldKeys = (saved) => Object.fromEntries(Object.entries(saved).map(([key, value]) => [oldKey(key), value]))
+
+test('every key is saved under TextAnywhere_, the notes under TextAnywhere_notes_, and the old name of each is its DrawTool_ twin', () => {
+  for (const key of [...Object.keys(SETTINGS), INDEX_KEY, NOTES_PREFIX, RESTARTED_PREFIX]) assert.match(key, /^TextAnywhere_/)
+  assert.deepEqual([WIDTH_KEY, NOTES_PREFIX, INDEX_KEY, RESTARTED_PREFIX], ['TextAnywhere_width', 'TextAnywhere_notes_', 'TextAnywhere_index', 'TextAnywhere_restarted_'])
+  assert.deepEqual([WIDTH_KEY, NOTES_PREFIX, INDEX_KEY, RESTARTED_PREFIX].map(oldKey), ['DrawTool_width', 'DrawTool_drawing_', 'DrawTool_index', 'DrawTool_restarted_'])
+})
+
+test('copyOldKeys: old keys only, so every setting, the index and each puzzle\'s notes and Restart\'s kept notes are copied, and the old keys stay', () => {
+  const old = withOldKeys({ ...SETTINGS, [INDEX_KEY]: ['p1', 'p2'], [NOTES_PREFIX + 'p1']: { v: 0, data: [sum] }, [RESTARTED_PREFIX + 'p2']: [line] })
+  const saved = structuredClone(old)
+  const store = fakeStore(saved)
+  copyOldKeys(store)
+  const copied = Object.fromEntries(Object.entries(old).map(([key, value]) => [newKey(key), value]))
+  assert.deepEqual(saved, { ...old, ...copied })
+  assert.deepEqual(loadNotes(store, 'p1').items, [sum], 'the copied notes load under the new key')
+  assert.deepEqual(readLooks(store).width, 3.5, 'the copied settings read under the new keys')
+})
+
+test('copyOldKeys: new keys only, nothing changes', () => {
+  const saved = { ...SETTINGS, [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: [sum] }
+  const before = structuredClone(saved)
+  copyOldKeys(fakeStore(saved))
+  assert.deepEqual(saved, before)
+})
+
+test('copyOldKeys: both present, the new values are never overwritten and the old ones are kept', () => {
+  const newer = { [WIDTH_KEY]: 8, [FONT_KEY]: 'proportional', [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: [sum] }
+  const old = withOldKeys({ [WIDTH_KEY]: 3.5, [FONT_KEY]: 'fixed', [OPACITY_KEY]: 55, [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: [line] })
+  const saved = { ...structuredClone(newer), ...structuredClone(old) }
+  copyOldKeys(fakeStore(saved))
+  assert.deepEqual(saved, { ...newer, ...old, [OPACITY_KEY]: 55 }, 'only the setting with no new value is copied')
+})
+
+test('copyOldKeys: once the new index is saved, a puzzle cleared since is not brought back from its old notes', () => {
+  const old = withOldKeys({ [INDEX_KEY]: ['p1', 'p2'], [NOTES_PREFIX + 'p1']: [line], [NOTES_PREFIX + 'p2']: [line], [RESTARTED_PREFIX + 'p2']: [line] })
+  const saved = { ...structuredClone(old), [INDEX_KEY]: ['p2'], [NOTES_PREFIX + 'p2']: [sum] }
+  copyOldKeys(fakeStore(saved))
+  assert.deepEqual(saved, { ...old, [INDEX_KEY]: ['p2'], [NOTES_PREFIX + 'p2']: [sum] })
+})
+
+test('copyOldKeys: an unreadable old value is copied as it was saved, and the new key\'s load keeps it aside as lib/store.js does', () => {
+  const later = { v: 99, data: [sum] }
+  const old = withOldKeys({ [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: later, [COLORS_KEY]: 'not colors' })
+  const saved = structuredClone(old)
+  const store = fakeStore(saved)
+  copyOldKeys(store)
+  assert.deepEqual(saved, { ...old, [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: later, [COLORS_KEY]: 'not colors' })
+  const { result, warnings } = quietly(() => loadNotes(store, 'p1'))
+  assert.match(result.unreadable, /later version/)
+  assert.deepEqual(saved[NOTES_PREFIX + 'p1_unreadable'], later)
+  assert.equal(warnings.length, 1)
+  copyOldKeys(store)
+  assert.deepEqual(saved[NOTES_PREFIX + 'p1'], later, 'a second start copies nothing over it')
+  assert.deepEqual(saved[oldKey(NOTES_PREFIX + 'p1')], later, 'the old key keeps it')
+})
+
+test('copyOldKeys: an unreadable old index is copied as it was saved, says why its puzzles\' notes stay under the old keys, and copies no notes', () => {
+  const old = withOldKeys({ [INDEX_KEY]: 'oops', [NOTES_PREFIX + 'p1']: [line] })
+  const saved = structuredClone(old)
+  const { warnings } = quietly(() => copyOldKeys(fakeStore(saved)))
+  assert.deepEqual(saved, { ...old, [INDEX_KEY]: 'oops' })
+  assert.equal(warnings.length, 1)
+  assert.match(warnings[0], /saved index/)
+})
+
+test('Paste settings copied before the rename, under DrawTool_ keys, returns them under the new keys; a new key beside its old twin wins', () => {
+  assert.deepEqual(readPaste(JSON.stringify(withOldKeys({ [WIDTH_KEY]: 3.5, [FRAME_KEY]: true, [COLORS_KEY]: hexes('#aabbcc') }))),
+    { values: { [WIDTH_KEY]: 3.5, [FRAME_KEY]: true, [COLORS_KEY]: hexes('#aabbcc') }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ [oldKey(WIDTH_KEY)]: 3.5, [WIDTH_KEY]: 8 })), { values: { [WIDTH_KEY]: 8 }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ [oldKey(WIDTH_KEY)]: 99 })), { values: {}, skipped: 1 }, 'an old value is checked as a new one is')
+})
+
 test('the size slider runs 1 to 16 and starts at 6, a new note is fully opaque, and color 1 is the default', () => {
   assert.deepEqual([MIN_WIDTH, MAX_WIDTH, DEFAULT_WIDTH], [1, 16, 6])
   assert.equal(DEFAULT_OPACITY, 100)
@@ -270,7 +348,6 @@ test('VERSION matches the @version header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'draw-tool.user.js'), 'utf8')))
 })
 
-const hexes = (value) => Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, value]))
 // SudokuPad's first cell color page: keys 0 to 9, 0 empty.
 const PAGE = ['transparent', 'rgb(255, 0, 0)', 'rgb(0, 128, 0)', 'rgb(0, 0, 255)', 'rgb(255, 255, 0)', 'rgb(128, 0, 128)', 'rgb(255, 165, 0)', 'rgb(0, 255, 255)', 'rgb(200, 200, 200)', 'rgb(10, 10, 10)']
 
@@ -299,7 +376,7 @@ test('a Darker page preset the palette lacks, or an unknown one, throws', () => 
 })
 
 test('Copy settings holds the colors, size, transparency, outline, box color, frame and font, defaults included, and no notes, color pick or background', () => {
-  const copied = JSON.parse(copiedSettings(fakeStore({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed', DrawTool_color: 4, DrawTool_drawing_x: [] })))
+  const copied = JSON.parse(copiedSettings(fakeStore({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed', [COLOR_KEY]: 4, [NOTES_PREFIX + 'x']: [] })))
   assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' })
 })
 
@@ -310,7 +387,7 @@ test('Copy settings leaves the colors out until they are saved', () => {
 // A row added to a copy of the table is handled by Copy, Paste, the start load, the snapshot's keys and Save's changed list, with no other edit. The script's own
 // snapshotSave and Save read the real table, so these helpers are what a copy can reach. Live, settings-copy-paste.live.mjs's failed Text Anywhere paste
 // covers the snapshot's looks, and text-anywhere-outline.live.mjs's 'Save applies the choice to every note' covers Save's.
-const SPIN_KEY = 'DrawTool_spin'
+const SPIN_KEY = 'TextAnywhere_spin'
 const SPIN_ROW = { name: 'spin', key: SPIN_KEY, read: (saved) => (saved === 'left' ? 'left' : 'none'), dialog: true }
 const WITH_SPIN = [...LOOKS, SPIN_ROW]
 
@@ -1483,7 +1560,7 @@ test('the store over load, edit, Restart and Undo: what Restart keeps reads back
   assert.deepEqual(store.getData(INDEX_KEY), ['p1'], 'the puzzle stays indexed while its kept notes wait')
 })
 
-// The names "draw tool" and "drawing" stay only where a rename would lose data or installs: the stored keys, the install address and
+// The names "draw tool" and "drawing" stay only where a rename would lose data or installs: the old stored keys a start copies from, the install address and
 // the script id that keys its notice dismissal, the old site page that redirects, and docs/research's notes, which record history.
 const RETIRED_NAME = /draw.?tool|drawing/i
 const KEPT_NAMES = [
@@ -1493,13 +1570,13 @@ const KEPT_NAMES = [
   /\bdraw-tool\b(?![-./])/g,
   // SudokuPad's own markup tool flag.
   /isDrawingMode/g,
-  // The glossary says what the script was called, so a reader of the stored keys finds why they say DrawTool.
+  // The glossary says what the script was called, so a reader of the old DrawTool_ keys finds why they say DrawTool.
   /Called Draw Tool before 0\.17\.0/g
 ]
 const BINARY = /\.(png|jpe?g|gif|webp|ico|har)$/
 const isResearchNote = (file) => file.startsWith('docs/research/') && !/\.m?js$/.test(file)
 
-test('nothing but the stored keys, the install address and docs/research\'s notes still says draw tool or drawing', () => {
+test('nothing but the old stored keys, the install address and docs/research\'s notes still says draw tool or drawing', () => {
   const root = path.join(__dirname, '..')
   const self = path.relative(root, __filename)
   const files = require('node:child_process').execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n')
