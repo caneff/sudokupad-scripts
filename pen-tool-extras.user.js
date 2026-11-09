@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.17
+// @version      1.31.18
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.17'
+  const VERSION = '1.31.18'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -615,6 +615,9 @@
 
   // SudokuPad calls `clickCell` on the release, with no event, so the button is read from the pointer events before it.
   let lastButton = 0
+
+  // The one test of whether a press of `button` is the right click erase's, so the marks' click and SudokuPad's own leave it alone.
+  const isEraseButton = (button) => button === RIGHT_BUTTON && inForce.eraseClicks
 
   function trackButton () {
     const remember = (event) => { lastButton = event.button }
@@ -1810,14 +1813,6 @@
     return planCycleClick(EDGE_CYCLE, (type) => valueOfType(edge, type), present, settings)
   }
 
-  function planCornerClick (kind, present, settings) {
-    return planCycleClick(CORNER_CYCLE, (type) => CORNER_VALUES[kind][CORNER_CYCLE.types.indexOf(type)], present, settings)
-  }
-
-  function planCellClick (present, settings) {
-    return planCycleClick(CELL_CYCLE, (type) => CELL_CYCLE.values[type], present, settings)
-  }
-
   function hitRadiusAt (base, cap, cellPx) {
     return Math.min(cap, Math.max(base, HIT_FLOOR_PX / cellPx))
   }
@@ -1905,12 +1900,38 @@
       const edge = acts[1].arg
       return { cell: acts[0].arg[0], values: ['x', ...ADDED_ORDER].map((type) => valueOfType(edge, type)), plan: (present, settings) => planClick(edge, present, settings) }
     }
-    if (isCellActs(acts)) return { cell: acts[0].arg[0], values: CELL_VALUES, plan: planCellClick }
+    if (isCellActs(acts)) return { cell: acts[0].arg[0], values: CELL_VALUES, plan: (present, settings) => planCycleClick(CELL_CYCLE, (type) => CELL_CYCLE.values[type], present, settings) }
     return null
+  }
+
+  // A grid corner's marks, in the shape of clickedMarks.
+  function cornerMarks (kind, cell) {
+    const values = CORNER_VALUES[kind]
+    return { cell, values, plan: (present, settings) => planCycleClick(CORNER_CYCLE, (type) => values[CORNER_CYCLE.types.indexOf(type)], present, settings) }
   }
 
   function penValuesOf (cell) {
     return (cell.pen || []).map((valueColor) => valueColor[0])
+  }
+
+  // The marks a click at `point` reaches, for the click and the erase alike: `marks` is clickedMarks's `{ cell, values, plan }`, or null, and `queued` the acts
+  // `stockActs(point)`, SudokuPad's own click there, queued, null when it queued nothing or did not run. A grid corner within `radius` is checked first.
+  // `corners` names when a corner is taken:
+  // - 'ticked', the click's: whenever a corner mark is ticked in `settings`, and never while both are unticked, so the original hit test handles every click as it did before.
+  // - 'held', the erase's: only when it holds a mark, ticked or not, so a mark drawn before its box was unticked still erases, and an empty corner leaves the edge or cell middle there to be found.
+  function marksAtPoint (point, { grid, radius, corners, settings, stockActs }) {
+    const takes = {
+      ticked: () => settings.cornerX || settings.cornerCircle,
+      held: (marks) => marks.values.some((value) => penValuesOf(marks.cell).includes(value))
+    }[corners]
+    const corner = cornerAt(point.r, point.c, grid.rows, grid.cols, radius)
+    if (corner !== null) {
+      const { kind, row, col } = cornerStorage(corner.row, corner.col, grid.rows, grid.cols)
+      const marks = cornerMarks(kind, grid.getCell(row, col))
+      if (takes(marks)) return { marks, queued: null }
+    }
+    const queued = stockActs(point)
+    return { marks: clickedMarks(queued), queued }
   }
 
   function planActs (cell, plan) {
@@ -1965,22 +1986,9 @@
     return queued
   }
 
-  // null also while both corner boxes are unticked, so the original hit test handles every click as it did before.
-  function cornerAtPoint ({ r, c }) {
-    if (!inForce.marks.cornerX && !inForce.marks.cornerCircle) return null
-    const { rows, cols } = Framework.app.grid
-    return cornerAt(r, c, rows, cols, cornerRadiusNow())
-  }
-
-  function cornerCellOf (corner) {
-    const { rows, cols } = Framework.app.grid
-    const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
-    return { kind, cell: Framework.app.grid.getCell(row, col) }
-  }
-
-  function cornerActs (corner) {
-    const { kind, cell } = cornerCellOf(corner)
-    return planActs(cell, planCornerClick(kind, penValuesOf(cell), inForce.marks))
+  // marksAtPoint's options for this page's grid, the corner radius at its present zoom and the marks ticked.
+  function marksAtPointNow (point, corners, stockActs) {
+    return marksAtPoint(point, { grid: Framework.app.grid, radius: cornerRadiusNow(), corners, settings: inForce.marks, stockActs })
   }
 
   // A click within the corner radius (CORNER_RADIUS, floored for small cells) of a grid corner is a corner click, checked first. Otherwise the original `clickCell` runs unchanged, so its edge-versus-cell hit test decides what
@@ -1988,25 +1996,21 @@
   // is left to the erase; a right click with the erase off steps the mark as SudokuPad's own right click, which acts as a left click, does.
   function wrapClickCell (tool, original) {
     steps.marks.wrap(tool, 'clickCell', function (stock, ...args) {
-      if (lastButton === RIGHT_BUTTON && inForce.eraseClicks) return stock(...args)
+      if (isEraseButton(lastButton)) return stock(...args)
       // SudokuPad's own `clickCell` hit-tests `getInputRc()`, the pointer in cell units, and so does this.
-      const corner = cornerAtPoint(this.getInputRc())
-      if (corner !== null) {
-        const acts = cornerActs(corner)
-        return stock.sudokupad(() => { this.actStart(); sendActs(this, acts) })
-      }
       // Only SudokuPad's own call is inside `stock.sudokupad`, so the unsent-acts throw of `queuedActs` is the script's and switches marks off.
-      const queued = queuedActs(this, () => stock.sudokupad(() => original.apply(this, args), false))
-      if (queued === null) return
-      let acts = queued
-      const clicked = clickedMarks(queued)
-      if (clicked !== null) {
-        const { cell } = clicked
-        const plan = clicked.plan(penValuesOf(cell), inForce.marks)
-        if (plan === null) return
-        acts = planActs(cell, plan)
+      const { marks, queued } = marksAtPointNow(this.getInputRc(), 'ticked', () => queuedActs(this, () => stock.sudokupad(() => original.apply(this, args), false)))
+      if (marks === null) {
+        if (queued !== null) stock.sudokupad(() => sendActs(this, queued))
+        return
       }
-      stock.sudokupad(() => sendActs(this, acts))
+      const plan = marks.plan(penValuesOf(marks.cell), inForce.marks)
+      if (plan === null) return
+      // A corner's acts start their own group: SudokuPad's click, which starts one, did not run.
+      stock.sudokupad(() => {
+        if (queued === null) this.actStart()
+        sendActs(this, planActs(marks.cell, plan))
+      })
     })
   }
 
@@ -2106,47 +2110,38 @@
     return withOwnProperty(tool, 'getInputRc', () => ({ r, c }), () => queuedActs(tool, () => stockClick.apply(tool, [])))
   }
 
-  // The marks at the point as `{ cell, values }`, or null: a grid corner first, as a click does, then the edge or cell middle SudokuPad's own click would take.
-  function marksAt (tool, stockClick, point) {
-    const { rows, cols } = Framework.app.grid
-    const corner = cornerAt(point.r, point.c, rows, cols, cornerRadiusNow())
-    const held = (cell, values) => {
-      const present = penValuesOf(cell)
-      const there = values.filter((value) => present.includes(value))
-      return there.length ? { cell, values: there } : null
-    }
-    if (corner !== null) {
-      const { kind, cell } = cornerCellOf(corner)
-      const found = held(cell, CORNER_VALUES[kind])
-      if (found !== null) return found
-    }
-    const clicked = clickedMarks(stockClickActsAt(tool, stockClick, point))
-    return clicked === null ? null : held(clicked.cell, clicked.values)
+  // The marks held at the point as `{ cell, values }`, or null.
+  function heldMarksAt (tool, stockClick, point) {
+    const { marks } = marksAtPointNow(point, 'held', () => stockClickActsAt(tool, stockClick, point))
+    if (marks === null) return null
+    const present = penValuesOf(marks.cell)
+    const values = marks.values.filter((value) => present.includes(value))
+    return values.length ? { cell: marks.cell, values } : null
   }
 
   function startErase (firstPoint) {
     return { segments: lineSegmentsOf(Framework.app.puzzle.cells), lines: new Set(), marks: new Map(), at: firstPoint }
   }
 
-  function crossPoint (marksAtPoint, erase, point) {
+  function crossPoint (marksAt, erase, point) {
     const hit = segmentNear([point.r, point.c], erase.segments, hitRadiusAt(LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX, cellPixels()))
     if (hit !== null) {
       connectedLine(erase.segments, hit).forEach((segment) => erase.lines.add(segment))
       return
     }
-    const found = marksAtPoint(point)
+    const found = marksAt(point)
     if (found === null) return
     const values = erase.marks.get(found.cell) || new Set()
     found.values.forEach((value) => values.add(value))
     erase.marks.set(found.cell, values)
   }
 
-  function crossTo (marksAtPoint, erase, to) {
+  function crossTo (marksAt, erase, to) {
     const length = Math.hypot(to.r - erase.at.r, to.c - erase.at.c)
     const samples = Math.max(1, Math.ceil(length / ERASE_SAMPLE_STEP))
     for (let i = 1; i <= samples; i++) {
       const t = i / samples
-      crossPoint(marksAtPoint, erase, { r: erase.at.r + t * (to.r - erase.at.r), c: erase.at.c + t * (to.c - erase.at.c) })
+      crossPoint(marksAt, erase, { r: erase.at.r + t * (to.r - erase.at.r), c: erase.at.c + t * (to.c - erase.at.c) })
     }
     erase.at = to
   }
@@ -2169,12 +2164,12 @@
   // The press's own coordinates are hit-tested, not SudokuPad's cached pointer position, which a dialog stops updating.
   // The browser's menu stays shut: Linux raises it on the press, over the grid, and Windows on the release, wherever the drag ended, so a right press owes it one refusal.
   function installLineErase (app, tool, sudokupadClick) {
-    const marksAtPoint = (point) => marksAt(tool, sudokupadClick, point)
+    const marksAt = (point) => heldMarksAt(tool, sudokupadClick, point)
     let erase = null
     let menuOwed = false
     // A press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
-    steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => lastButton === RIGHT_BUTTON && inForce.eraseClicks ? undefined : stock(...args))
-    const erasePress = (event) => inForce.eraseClicks && event.button === RIGHT_BUTTON && overGridInPenTool(app, event)
+    steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => isEraseButton(lastButton) ? undefined : stock(...args))
+    const erasePress = (event) => isEraseButton(event.button) && overGridInPenTool(app, event)
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
     const showErasing = () => fadeStrokes(erase === null ? [] : erasedElements(erase))
     const guarded = guardedBy(steps.lineErase, () => { erase = null; menuOwed = false; showErasing() })
@@ -2188,13 +2183,13 @@
       const started = startErase(point)
       erase = started
       menuOwed = true
-      crossPoint(marksAtPoint, started, point)
+      crossPoint(marksAt, started, point)
       showErasing()
       // A `pointerup` comes only once the last button is up, whichever it is, so a drag with a second button pressed ends at that release.
       trackPointer(window, {
         move: guarded((moveEvent) => {
           if (erase === started && (moveEvent.buttons & RIGHT_BIT)) {
-            crossTo(marksAtPoint, started, pointOf(moveEvent))
+            crossTo(marksAt, started, pointOf(moveEvent))
             showErasing()
           }
         }),
@@ -2203,7 +2198,7 @@
           erase = null
           showErasing()
           if (endEvent.type === 'pointercancel') return
-          crossTo(marksAtPoint, started, pointOf(endEvent))
+          crossTo(marksAt, started, pointOf(endEvent))
           finishErase(tool, started)
         })
       })
@@ -3214,7 +3209,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
+    module.exports = { clickedMarks, cornerMarks, marksAtPoint, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return
