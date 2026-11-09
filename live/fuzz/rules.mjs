@@ -45,9 +45,10 @@ function without (a, b) {
 const digitsChanged = (now, before) => now.cells.flatMap((cell, i) => (cell.digit === before.cells[i]?.digit ? [] : [i]))
 
 // What a rule that compares two snapshots reads, leaving out `rulesPane`, which is a measure of the layout and is checked by its own rule.
+// The strokes are compared as a set: the order they sit in on the page is not something a player sees.
 const comparable = (page) => {
   const { rulesPane, ...rest } = page // eslint-disable-line no-unused-vars
-  return rest
+  return { ...rest, penState: [...page.penState].sort(), penDrawn: [...page.penDrawn].sort() }
 }
 
 // One line per field that differs between two views of a page, naming the field and both values.
@@ -57,10 +58,10 @@ const viewDifferences = (was, now) => Object.keys(was).filter((field) => JSON.st
 // What a reload must leave as it was. Color by Digit colors the entered cells every time the page opens in Cell or Both mode, as one undo step, so a coloring
 // undone before the reload comes back by design: in those modes the cells' colors (and the serialized cells that hold them) are left out. Not read: the notes
 // (notes-survive-reload counts a note still open for typing), the undo stack depth and the letter pad, none of which a reload promises to keep.
-// The strokes are compared as a set: the order they sit in on the page is not something a player sees.
 const reloadView = (page) => {
   const { mode, groups, cells } = page.colorByDigit
-  const base = { penState: [...page.penState].sort(), penDrawn: [...page.penDrawn].sort(), pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit) }
+  const { penState, penDrawn } = comparable(page)
+  const base = { penState, penDrawn, pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit) }
   return mode === 'Cell' || mode === 'Both' ? base : { ...base, cells: page.cells, colours: cells.map((cell) => cell.colours) }
 }
 

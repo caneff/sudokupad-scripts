@@ -156,6 +156,10 @@ describe('the rules', () => {
       assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'redo' }), [])
       assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'click cell', earlier: { action: 'undo', page: board } }), [])
     })
+    it('holds when the strokes come back drawn in another order', () => {
+      const two = { penState: ['pen-1 pencolor-1', 'pen-2 pencolor-1'], penDrawn: ['pen-1 pencolor-1', 'pen-2 pencolor-1'] }
+      assert.deepEqual(undoThenRedo({ ...board, ...two, penDrawn: [...two.penDrawn].reverse() }, { ...board, ...two }), [])
+    })
     it('leaves the rules pane out, which is layout', () => {
       assert.deepEqual(undoThenRedo({ ...board, rulesPane: { fontPx: 12, ownFontPx: 17.6, scrollHeight: 900, clientHeight: 300 } }), [])
     })
