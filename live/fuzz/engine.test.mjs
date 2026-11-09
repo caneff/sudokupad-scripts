@@ -74,6 +74,22 @@ describe('the fuzz engine on a fake page', () => {
     })
   })
 
+  describe('a rule broken by a blur', () => {
+    it('fails the run naming the rule and the step, and is shrunk to the one blur', async () => {
+      const { openTarget } = fakeTargets({ whitenOnBlur: true })
+      const found = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 200, ...WAITS })
+      assert.equal(found.failed, true)
+      assert.match(found.error, /rule broken after ".*blur.*": page-stays-dark: the page color rgb\(255, 255, 255\) is not dark/)
+      assert.equal(found.sequence.length, 1, found.sequence.join(' | '))
+      assert.match(found.sequence[0], /blur/)
+    })
+
+    it('the same seed with the page left dark passes', async () => {
+      const { openTarget } = fakeTargets()
+      assert.equal((await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 100, ...WAITS })).failed, false)
+    })
+  })
+
   describe('where a late error is read', () => {
     it('with no wait after an action, the wait after the last action still catches it', async () => {
       const { openTarget } = fakeTargets({ plantEscapeError: true })

@@ -8,6 +8,7 @@
 //   env.usePen(color)                        opens the pen tool and picks its pen color 1 to 9
 //   env.useNotes()                           picks Text Anywhere's tool
 //   env.turnPenPage()  env.undo()  env.redo()  env.clickColorMode()
+//   env.undoAll()                            presses Undo until the undo stack is empty
 //   env.extrasDialog(save)                   opens Pen Tool Extras' settings dialog and presses Save or Cancel
 //   env.placeNote(text, i)                   a note with `text` at cell `i`, finished with Escape
 //   env.noteCentre() -> [x, y] | null        the middle of the first note drawn
@@ -122,6 +123,7 @@ function buildKinds () {
       run: (env, d) => env.page.keyboard.press(String(d))
     },
     { kind: 'undo', group: 'ordinary', weight: 3, arg: () => fc.constant(null), label: () => 'undo', run: (env) => env.undo() },
+    { kind: 'undo all', group: 'ordinary', weight: 1, arg: () => fc.constant(null), label: () => 'undo back to the start', run: (env) => env.undoAll() },
     { kind: 'redo', group: 'ordinary', weight: 2, arg: () => fc.constant(null), label: () => 'redo', run: (env) => env.redo() },
     { kind: 'tool key', group: 'ordinary', weight: 3, arg: () => toolKey, label: (k) => `press ${k}`, run: (env, k) => env.page.keyboard.press(k) },
     { kind: 'tab', group: 'ordinary', weight: 1, arg: () => fc.constant(null), label: () => 'press Tab', run: (env) => env.page.keyboard.press('Tab') },
