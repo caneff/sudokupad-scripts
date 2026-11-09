@@ -14,7 +14,7 @@ for (const [root, file] of [[before, 'site-draw-tool-fit-before.png'], [here, 's
   if (!root) continue
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage()
   await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(r.request().url().slice(RAW.length).replace(/\?.*$/, ''), here)), contentType: 'image/png' }))
-  await page.goto(new URL('site/draw-tool.html', root).href, { waitUntil: 'load' })
+  await page.goto(new URL('site/text-anywhere.html', root).href, { waitUntil: 'load' })
   await page.locator('.slide-frame').screenshot({ path: fileURLToPath(new URL('docs/research/site/' + file, here)) })
   await page.close()
 }

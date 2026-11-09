@@ -59,7 +59,7 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   const summary = /Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own/
   assert.match(read('site/index.html'), summary)
   assert.match(read('draw-tool.user.js'), summary)
-  const details = read('site/draw-tool.html')
+  const details = read('site/text-anywhere.html')
   for (const lead of ['Typed notes anywhere', 'Colors, size and transparency', 'Readable over digits', 'Settings']) assert.match(details, new RegExp(`<strong>${lead}</strong>`))
   assert.match(read('README.md'), /Each script adds an entry/)
 })

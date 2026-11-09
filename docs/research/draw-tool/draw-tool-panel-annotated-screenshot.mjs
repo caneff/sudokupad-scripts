@@ -1,4 +1,4 @@
-// Takes the one annotated picture of the Text Annotation panel on site/draw-tool.html ("The Text Annotation panel"), from the real
+// Takes the one annotated picture of the Text Annotation panel on site/text-anywhere.html ("The Text Annotation panel"), from the real
 // draw-tool.user.js on the recorded puzzle: the panel (nine color buttons, Clear all, the Background button, the settings gear
 // the Size and Transparency sliders and the Hide all notes eye) cropped close at 3x, with each part labelled on its left by a short phrase and a line from the phrase to the part:
 //   draw-tool-panel-annotated.png

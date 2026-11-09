@@ -13,9 +13,11 @@ const SITE_DIR = path.join(ROOT, 'site')
 const SITE_ADDRESS = /^https?:\/\/(caneff\.github\.io\/sudokupad-scripts|[^/]*netlify)/i
 const HOME = 'index.html'
 const DETAILS = 'pen-tool-extras.html'
-const DRAW = 'draw-tool.html'
+const DRAW = 'text-anywhere.html'
+// The old address of the Text Anywhere page, kept so links already shared still reach it.
+const OLD_DRAW = 'draw-tool.html'
 const CBD = 'color-by-digit.html'
-const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))
+const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && f !== OLD_DRAW)
 // Comments are dropped first: a link inside one is not a link on the page.
 const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 
@@ -92,6 +94,21 @@ for (const name of PAGES) {
     for (const t of targets(page)) assert.doesNotMatch(t, SITE_ADDRESS, `site/${name} links ${t} by its absolute address`)
   })
 }
+
+test('each details page is named for its h1: lower-case words joined by hyphens', () => {
+  for (const name of PAGES.filter(f => f !== HOME)) {
+    const h1 = read(name).match(/<h1>([^<]*)<\/h1>/)
+    assert.ok(h1, `site/${name} has no <h1>`)
+    assert.equal(name, h1[1].trim().toLowerCase().split(/\s+/).join('-') + '.html')
+  }
+})
+
+test(`${OLD_DRAW} is the one redirect page: a meta refresh and a plain link to ${DRAW}`, () => {
+  const page = read(OLD_DRAW)
+  assert.match(page, new RegExp(`<meta http-equiv="refresh" content="0; url=${DRAW.replace('.', '\\.')}">`))
+  assert.deepEqual(siteLinks(page), [DRAW])
+  assert.equal(fs.existsSync(path.join(SITE_DIR, DRAW)), true)
+})
 
 // Each details page: its script's install file and the homepage heading whose entry links to it.
 const DETAIL_PAGES = [
@@ -495,7 +512,7 @@ test(`${DRAW} good to know says the notes stay in this browser, and what clears 
 
 test('the README has a Text Anywhere row with a Details link, and the Settings sentence is kept', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
-  assert.match(readme, /^\| Text Anywhere \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/draw-tool\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
+  assert.match(readme, /^\| Text Anywhere \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/text-anywhere\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
   assert.match(readme, /Each script adds an entry to SudokuPad's settings/)
 })
 

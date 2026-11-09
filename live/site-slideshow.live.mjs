@@ -14,7 +14,7 @@ const slideOf = ({ slides }, i) => [slides.at(i).picture, slides.at(i).caption]
 const SHOWS = [
   { heading: 'Color by Digit', row: 3, details: 'color-by-digit.html', id: 'color-by-digit' },
   { heading: 'Pen Tool Extras', row: 1, details: 'pen-tool-extras.html', id: 'pen-tool-extras' },
-  { heading: 'Text Anywhere', row: 2, details: 'draw-tool.html', id: 'text-anywhere' }
+  { heading: 'Text Anywhere', row: 2, details: 'text-anywhere.html', id: 'text-anywhere' }
 ].map((show) => ({
   ...show,
   slides: SOURCE[show.id].slides.length,

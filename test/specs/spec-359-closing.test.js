@@ -62,7 +62,7 @@ test('spec 359: the homepage is rows of slideshows, the details pages carry the 
     assert.equal(imgsOf(row).length, 1)
     assert.doesNotMatch(row, /slideshow|slide-caption/)
   }
-  const details = { 'Pen Tool Extras': 'pen-tool-extras.html', 'Text Anywhere': 'draw-tool.html', 'Color by Digit': 'color-by-digit.html' }
+  const details = { 'Pen Tool Extras': 'pen-tool-extras.html', 'Text Anywhere': 'text-anywhere.html', 'Color by Digit': 'color-by-digit.html' }
   rows.slice(0, 3).forEach((row, i) => {
     const heading = Object.keys(details)[i]
     const show = showOf(row)
