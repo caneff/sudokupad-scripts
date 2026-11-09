@@ -77,11 +77,11 @@ function describePuzzle ({ name, data, rules, margin = false, rows = data.cells.
   const fromData = data ? data.cells.flatMap((row, r) => row.flatMap((c, i) => (c.value ? [`${r},${i}`] : []))) : []
   const given = new Set([...givens.map(([r, c]) => `${r},${c}`), ...fromData])
   const free = Array.from({ length: rows * cols }, (_, i) => [Math.floor(i / cols), i % cols]).filter(([r, c]) => !given.has(`${r},${c}`)).map(cell)
-  const around = !margin ? [] : [
+  const around = [
     ...Array.from({ length: cols }, (_, c) => [-1, c]), ...Array.from({ length: cols }, (_, c) => [rows, c]),
     ...Array.from({ length: rows }, (_, r) => [r, -1]), ...Array.from({ length: rows }, (_, r) => [r, cols])
   ]
-  return { name, data, rows, cols, rules, margin, keys: keysFor(Math.max(rows, cols)), free, cells: [...free, ...around] }
+  return { name, data, rows, cols, rules, margin, keys: keysFor(Math.max(rows, cols)), free, cells: [...free, ...(margin ? around : [])] }
 }
 
 export const FUZZ_PUZZLES = [
