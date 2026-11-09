@@ -9,7 +9,7 @@ const { fakeStore, quietly } = require('./fake-store.js')
 const {
   VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
-  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
+  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, sizingFor, persistSizing, restoreSizing, SIZING_KEY_PREFIX, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
 } = require('../auto-rules-resizer.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -529,11 +529,47 @@ test('draggedPane: the drag\'s deltas on the fit\'s answers, in css px, never un
   assert.deepEqual(draggedPane({ ...base, width: 200, room: 60, box: { w: -10, h: -10, x: 0, y: 10 } }), { width: 200, room: 60 })
 })
 
-test('draggedBox: a drag lasts for the puzzle and resets on a new one', () => {
-  draggedBox('puzzle-a').w = 40
-  assert.deepEqual(draggedBox('puzzle-a'), { w: 40, h: 0, x: 0, y: 0 })
-  assert.deepEqual(draggedBox('puzzle-b'), noRulesDrag())
-  assert.deepEqual(draggedBox('puzzle-a'), noRulesDrag(), 'back to the first puzzle is a new puzzle too')
+test('sizingFor: a puzzle never resized starts at the default, and another puzzle does not inherit a resized one', () => {
+  const store = fakeStore()
+  const a = sizingFor(store, 'puzzle-a')
+  a.nudgePx = 2
+  a.box.w = 40
+  persistSizing(store)
+  assert.deepEqual(sizingFor(store, 'puzzle-b'), { nudgePx: 0, box: noRulesDrag() })
+  persistSizing(store)
+  assert.deepEqual(Object.keys(store.data), [`${SIZING_KEY_PREFIX}puzzle-a`], 'the untouched puzzle saves nothing')
+})
+
+test('sizingFor: back on a resized puzzle, its nudge and pane are read from the store', () => {
+  const store = fakeStore()
+  sizingFor(store, 'puzzle-a').nudgePx = -3
+  sizingFor(store, 'puzzle-a').box.h = 25
+  persistSizing(store)
+  sizingFor(store, 'puzzle-b')
+  assert.deepEqual(sizingFor(store, 'puzzle-a'), { nudgePx: -3, box: { w: 0, h: 25, x: 0, y: 0 } })
+  const reloaded = fakeStore(store.data)
+  sizingFor(reloaded, 'puzzle-c')
+  assert.deepEqual(sizingFor(reloaded, 'puzzle-a'), { nudgePx: -3, box: { w: 0, h: 25, x: 0, y: 0 } }, 'a fresh store over the same data, as after a reload')
+})
+
+test('sizingFor: an unreadable saved sizing is kept aside and the puzzle starts at the default', () => {
+  const bad = { v: 0, data: { nudgePx: 'big', box: {} } }
+  const store = fakeStore({ [`${SIZING_KEY_PREFIX}puzzle-x`]: bad })
+  const { result, warnings } = quietly(() => sizingFor(store, 'puzzle-x'))
+  assert.deepEqual(result, { nudgePx: 0, box: noRulesDrag() })
+  assert.deepEqual(store.data[`${SIZING_KEY_PREFIX}puzzle-x_unreadable`], bad)
+  assert.equal(warnings.length, 1)
+})
+
+test('restoreSizing: clears the current puzzle\'s sizing and its key, in place', () => {
+  const store = fakeStore()
+  const sizing = sizingFor(store, 'puzzle-r')
+  sizing.nudgePx = 4
+  sizing.box.w = 10
+  persistSizing(store)
+  restoreSizing(store)
+  assert.deepEqual(sizing, { nudgePx: 0, box: noRulesDrag() })
+  assert.deepEqual(store.data, {})
 })
 
 test('isLandscape: SudokuPad\'s own rule, the game area wider than it is tall', () => {
@@ -631,14 +667,15 @@ test('Auto Rules Resizer declares each SudokuPad internal it calls, and a comple
 
 test('without one internal, only the features that need it are lacking: getApp holds off the fit and the refit', () => {
   const removals = [
-    ['Framework.app.puzzle', (r) => { delete r.Framework.app.puzzle }, 'fit'],
-    ['Framework.app.resize', (r) => { delete r.Framework.app.resize }, 'refit'],
-    ...['addSetting', 'showDialog', 'closeDialog', 'getData', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, 'settings'])
+    ['Framework.app.puzzle', (r) => { delete r.Framework.app.puzzle }, ['fit']],
+    ['Framework.app.resize', (r) => { delete r.Framework.app.resize }, ['refit']],
+    ...['addSetting', 'showDialog', 'closeDialog'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, ['settings']]),
+    ...['getData', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, ['sizing', 'settings']])
   ]
   for (const [internal, remove, feature] of removals) {
     const roots = completeSudokuPad()
     remove(roots)
-    assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[internal, [feature]]]), internal)
+    assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[internal, feature]]), internal)
   }
   const roots = completeSudokuPad()
   delete roots.Framework.getApp

@@ -985,3 +985,72 @@ describe('the pane takes the page\'s spare height without SudokuPad shrinking th
     assert.deepEqual(errors, [])
   })
 })
+
+// A puzzle's sizing (the f+/f- nudge and the dragged pane) is kept under its own key and read back when the script starts, as after a reload.
+describe('sizing kept per puzzle', { concurrency: false }, () => {
+  const sizingKey = (p) => p.evaluate(() => 'AutoRulesResizer_sizing_' + String(Framework.app.puzzle.puzzleId || window.location.href))
+  const seedSizing = (value) => async (p) => {
+    const key = await sizingKey(p)
+    await p.evaluate(([key, value]) => Framework.setData(key, value), [key, value])
+  }
+  const startedFont = async (seed) => {
+    const opened = await rulesPage(LANDSCAPE, seed, FILLING_RULES)
+    try {
+      await inject(opened.p)
+      const font = await settle(async () => (await pane(opened.p)).inlineFont !== '', true).then(() => fontPx(opened.p))
+      return { ...opened, font }
+    } catch (error) {
+      await opened.context.close()
+      throw error
+    }
+  }
+
+  it('f+ saves the nudge under the puzzle\'s key, and a page that starts with it saved fits one px larger', async () => {
+    const plain = await startedFont(null)
+    try {
+      assert.equal(await plain.p.evaluate((key) => Framework.getData(key), await sizingKey(plain.p)), null, 'a puzzle never resized saves nothing')
+      await clickFont(plain.p, 'f+')
+      assert.equal(await settle(() => fontPx(plain.p), plain.font + 1), plain.font + 1, 'f+')
+      const saved = await plain.p.evaluate((key) => Framework.getData(key), await sizingKey(plain.p))
+      assert.deepEqual(saved, { v: 0, data: { nudgePx: 1, box: { w: 0, h: 0, x: 0, y: 0 } } })
+      const again = await startedFont(seedSizing(saved))
+      try {
+        assert.equal(again.font, plain.font + 1, 'the reloaded puzzle keeps its nudge')
+        assert.deepEqual(again.errors, [])
+      } finally {
+        await again.context.close()
+      }
+    } finally {
+      await plain.context.close()
+    }
+  })
+
+  it('an unreadable saved sizing is kept aside and the puzzle starts at the default', async () => {
+    const plain = await startedFont(null)
+    const bad = { v: 0, data: { nudgePx: 'big' } }
+    const opened = await startedFont(seedSizing(bad))
+    try {
+      assert.equal(opened.font, plain.font)
+      const key = await sizingKey(opened.p)
+      assert.deepEqual(await opened.p.evaluate((key) => Framework.getData(key + '_unreadable'), key), bad)
+    } finally {
+      await plain.context.close()
+      await opened.context.close()
+    }
+  })
+
+  it('Restore defaults in the dialog clears the puzzle\'s sizing', async () => {
+    const opened = await startedFont(null)
+    const { p } = opened
+    try {
+      await clickFont(p, 'f+')
+      await settle(async () => (await p.evaluate((key) => Framework.getData(key), await sizingKey(p))) !== null, true)
+      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
+      await p.getByRole('button', { name: 'Restore defaults' }).click()
+      assert.equal(await settle(async () => (await p.evaluate((key) => Framework.getData(key), await sizingKey(p))) === null, true), true, 'the key is gone')
+      assert.equal(await settle(() => fontPx(p), opened.font), opened.font, 'back at the automatic size')
+    } finally {
+      await opened.context.close()
+    }
+  })
+})

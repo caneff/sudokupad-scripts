@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.6.9
-// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
+// @version      0.7.0
+// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.6.9'
+  const VERSION = '0.7.0'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -195,10 +195,42 @@
     }
   }
 
-  const dragged = { key: null, box: noRulesDrag() }
-  function draggedBox (key) {
-    if (dragged.key !== key) Object.assign(dragged, { key, box: noRulesDrag() })
-    return dragged.box
+  // A puzzle's sizing is its f+/f- nudge and its dragged box, kept under its own key; a puzzle never resized has none, and starts at the default.
+  const SIZING_KEY_PREFIX = 'AutoRulesResizer_sizing_'
+  const noSizing = () => ({ nudgePx: 0, box: noRulesDrag() })
+  const isDefaultSizing = ({ nudgePx, box }) => nudgePx === 0 && Object.values(box).every((n) => n === 0)
+
+  function readSizing (data) {
+    if (!isPlainObject(data) || !Number.isInteger(data.nudgePx) || !isPlainObject(data.box)) return undefined
+    const { w, h, x, y } = data.box
+    return [w, h, x, y].every(Number.isFinite) ? { nudgePx: data.nudgePx, box: { w, h, x, y } } : undefined
+  }
+
+  // The sizing in force is the current puzzle's, read from the store when the puzzle changes. A saved one that cannot be read is kept
+  // aside by `load`, and the puzzle starts at the default.
+  const inForce = { key: null, saved: '', sizing: noSizing() }
+  function sizingFor (store, key) {
+    if (inForce.key !== key) {
+      const sizing = load(store, { key: SIZING_KEY_PREFIX + key, read: readSizing }).value ?? noSizing()
+      Object.assign(inForce, { key, sizing, saved: JSON.stringify(sizing) })
+    }
+    return inForce.sizing
+  }
+
+  // Writes the sizing in force when it differs from what is saved; the default is no key, so a puzzle never resized saves nothing.
+  function persistSizing (store) {
+    const now = JSON.stringify(inForce.sizing)
+    if (inForce.key === null || now === inForce.saved) return
+    const key = SIZING_KEY_PREFIX + inForce.key
+    if (isDefaultSizing(inForce.sizing)) store.removeData(key)
+    else save(store, key, inForce.sizing)
+    inForce.saved = now
+  }
+
+  // Back to the default in place: the fit holds the box and the nudge by reference.
+  function restoreSizing (store) {
+    Object.assign(inForce.sizing, noSizing())
+    persistSizing(store)
   }
 
   // SudokuPad's own rule in App.resize.
@@ -1071,6 +1103,10 @@
       }
     },
     refit: { label: 'rules refit', needs: { 'Framework.getApp': 'function', 'Framework.app.resize': 'function' } },
+    sizing: {
+      label: 'saved sizing',
+      needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' }
+    },
     settings: {
       label: 'max size settings',
       needs: {
@@ -1084,7 +1120,7 @@
     }
   }
   const guard = createGuard({ script: 'auto-rules-resizer', name: 'Auto Rules Resizer', version: VERSION, features: FEATURES })
-  const { fit: rulesFit, refit: rulesRefit, settings: maxSizeSettings } = guard.features
+  const { fit: rulesFit, refit: rulesRefit, sizing: savedSizing, settings: maxSizeSettings } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -1112,7 +1148,10 @@
       dragRulesBox,
       clampDrag,
       draggedPane,
-      draggedBox,
+      sizingFor,
+      persistSizing,
+      restoreSizing,
+      SIZING_KEY_PREFIX,
       noRulesDrag,
       isLandscape,
       makeTrailing,
@@ -1158,7 +1197,6 @@
     .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; hyphens: auto; }
   `
 
-  let nudgePx = 0
   let fitted = false // whether the fit's output may be on the pane
   let limits = noLimits()
 
@@ -1169,6 +1207,9 @@
   const rulesPane = () => document.querySelector('.puzzle-rules')
   const controlsColumn = () => document.getElementById('controls')
   const dragKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
+  // The sizing store reads null and drops a write once its feature is off, so a failing store leaves the fit running on the default.
+  const sizingStore = guard.storeFor(savedSizing)
+  const sizingNow = () => sizingFor(sizingStore, dragKey())
 
   function addFontBar () {
     const bar = document.createElement('div')
@@ -1178,10 +1219,10 @@
       button.type = 'button'
       button.textContent = label
       button.title = step > 0 ? 'Larger rules font' : 'Smaller rules font'
-      button.addEventListener('click', () => {
-        nudgePx += step
+      button.addEventListener('click', () => rulesFit.run(() => {
+        sizingNow().nudgePx += step
         fitPage()
-      })
+      }))
       bar.appendChild(button)
     }
     // SudokuPad stops `mousedown` on the buttons it knew at startup; this bar comes later and sits within a cell of the grid, so a press would reach its board.
@@ -1304,7 +1345,7 @@
         return
       }
       const board = document.getElementById('board')
-      const box = draggedBox(dragKey())
+      const { box } = sizingNow()
       const place = given === undefined ? readingPlace(rules) : given // before the text class and the fit change the layout
       rules.classList.add(TEXT_CLASS)
       const applied = fitRulesPane({
@@ -1316,8 +1357,8 @@
         pageTop: game.getBoundingClientRect().top,
         useSpare: !rulesRefit.off,
         boardRight: board ? board.getBoundingClientRect().right : 0,
-        nudgePx,
-        onNudge: (px) => { nudgePx = px },
+        nudgePx: sizingNow().nudgePx,
+        onNudge: (px) => { sizingNow().nudgePx = px },
         box,
         limits,
         readable: (fontPx) => readableWidth(rules, fontPx)
@@ -1326,6 +1367,7 @@
       keepReadingPlace(rules, place)
       rulesRefit.run(() => watchText(rules))
       fitted = fitted || Boolean(applied)
+      persistSizing(sizingStore)
       showControls(Boolean(applied))
       if (applied) placeControls(rules)
     })
@@ -1361,6 +1403,8 @@
       },
       snapshot: snapshotLimits,
       feature: maxSizeSettings,
+      // Restore defaults clears this puzzle's font nudge and dragged pane at once; the limits are drafts and stay as they are.
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => rulesFit.run(() => { sizingNow(); restoreSizing(sizingStore); fitPage() }) }],
       save: () => {
         limits = typedLimits()
         saveLimits(savedLimits, limits)
@@ -1392,7 +1436,7 @@
       const paneSize = rules.getBoundingClientRect()
       const scale = paneScale(rules)
       const minSize = { width: RULES_MIN.width * scale, height: RULES_MIN.height * scale }
-      const box = draggedBox(dragKey())
+      const { box } = sizingNow()
       Object.assign(box, dragRulesBox(box, corner, dx, dy, paneSize, minSize))
       fitPage()
     })
