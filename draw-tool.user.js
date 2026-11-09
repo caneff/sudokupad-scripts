@@ -1922,20 +1922,16 @@
       label: 'notes on the board',
       needs: BOARD,
       onSkip () {
-        const layer = document.getElementById(LAYER_ID)
-        if (layer) layer.remove()
+        document.getElementById(LAYER_ID)?.remove()
       }
     },
     tool: {
       label: 'Text tool',
       needs: { ...BOARD, 'Framework.addTool': 'function', 'Framework.showDialog': 'function', 'app.getToolNames': 'function', 'Framework.app.grid.rows': 'integer', 'Framework.app.grid.cols': 'integer' },
       onSkip () {
-        const button = document.getElementById(`control-${TOOL_NAME}`)
-        if (button) button.remove()
-        const layer = document.getElementById(LAYER_ID)
-        if (layer) layer.classList.remove(ACTIVE_CLASS)
-        const style = document.getElementById(PANEL_STYLE_ID)
-        if (style) style.remove()
+        document.getElementById(`control-${TOOL_NAME}`)?.remove()
+        document.getElementById(LAYER_ID)?.classList.remove(ACTIVE_CLASS)
+        document.getElementById(PANEL_STYLE_ID)?.remove()
         hidePanel()
       }
     },
@@ -1943,8 +1939,7 @@
       label: 'settings',
       needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' },
       onSkip () {
-        const gear = document.querySelector(`.${SETTINGS_CLASS}`)
-        if (gear) gear.remove()
+        document.querySelector(`.${SETTINGS_CLASS}`)?.remove()
         Framework.closeDialog()
       }
     },
@@ -3637,14 +3632,19 @@
     if (d.move) d.settle = setTimeout(() => { if (drag === d) inFrame('drag', dragMoves) }, SPEED_WINDOW_MS + SETTLE_SLACK_MS)
   }
 
+  // What every end of a drag takes down: its settle timer, then `between` (the cursor, for the ends that release it), then its selection rectangle.
+  function clearDrag (d, between = () => {}) {
+    clearTimeout(d.settle)
+    between()
+    d.rectangle?.remove()
+  }
+
   // A drag ends its move or its selection rectangle on its release; a press that never moved does nothing more, unless `click` is given to run it.
   // A drag Escape cancelled does nothing on its release. A small rectangle that selects nothing is a click that slipped.
   function endDrag (click = () => {}) {
     const ended = drag
     drag = null
-    clearTimeout(ended.settle)
-    holdCursor(null)
-    if (ended.rectangle) ended.rectangle.remove()
+    clearDrag(ended, () => holdCursor(null))
     if (ended.cancelled) return
     if (isClick(ended.points)) click(ended)
     else if (ended.move) endMove(ended)
@@ -3654,9 +3654,8 @@
   // Cancelling a drag puts the notes back where they were at the press. The press stays the tool's until its release, which then does nothing.
   function cancelDrag () {
     const d = drag
-    if (d.rectangle) d.rectangle.remove()
     if (d.move) clearMove(d)
-    clearTimeout(d.settle)
+    clearDrag(d)
     Object.assign(d, { move: null, rectangle: null, pending: [], cancelled: true })
     redraw()
   }
@@ -3935,9 +3934,8 @@
   }
 
   function cancelInput () {
-    if (drag?.rectangle) drag.rectangle.remove()
     if (drag?.move) clearMove(drag)
-    if (drag) clearTimeout(drag.settle)
+    if (drag) clearDrag(drag)
     drag = null
     showChrome()
     erasing = null
@@ -4220,10 +4218,7 @@
     showColors()
     // The features are independent: one that fails to install costs the others nothing.
     textTool.run(() => {
-      const style = document.createElement('style')
-      style.id = PANEL_STYLE_ID
-      style.textContent = PANEL_CSS
-      document.head.appendChild(style)
+      addStyleOnce(PANEL_STYLE_ID, PANEL_CSS)
       textTool.wrap(app, 'getToolNames', function (stock) { return toolNamesFor(stock(), this.currentEvent) })
       Framework.addTool({
         button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
