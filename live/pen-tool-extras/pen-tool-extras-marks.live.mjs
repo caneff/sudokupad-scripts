@@ -4,22 +4,19 @@
 /* global Replay, Framework, ToolPen, MouseEvent, Node, createImageBitmap, OffscreenCanvas */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { chromium } from 'playwright'
-import { gotoPuzzle, newPage, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { restartPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, dialogButton, effectiveOpacities, openExtrasEditor, openSettings } from '../settings.mjs'
 import { cellCentre } from '../board.mjs'
 import { openPenTool, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
-
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
+import { addPage, openWith, useBrowser } from '../session.mjs'
 
 const DATA_KEY = 'EdgeMarks_marks'
 const OPACITY_KEY = 'PenColor_opacity'
 const COLORS_KEY = 'PenColor_colors'
-const { CORNER_RADIUS, MARK_VALUES, MARKS_LAYER_ID } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
+const { CORNER_RADIUS, MARK_VALUES, MARKS_LAYER_ID } = extras.scriptExports
 const MARK_BOXES = ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot']
 const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
 const SIZE = 9
@@ -54,9 +51,7 @@ const CORNERS = {
   'outer bottom, between columns 4 and 5': { corner: [SIZE, 4], stored: [SIZE - 1, 3], cycle: ['u', 'x', null] }
 }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -120,21 +115,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const settingsEntry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen Tool Extras' }).first()
   const box = (mark) => editor().locator(`input[data-box="marks.${mark}"]`)
 
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    // The pen tool is off until its own setting turns it on.
-    await read(() => Framework.setSetting('toolpen', true))
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await openPenTool(p)
+  const reload = async () => {
+    await extras.reload(p)
     await watchMenus()
   }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await boot()
+    ;({ context, p, errors } = await extras.open(browser()))
+    await watchMenus()
   })
   after(async () => { await context.close() })
 
@@ -1144,9 +1132,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 describe('without the script', { concurrency: false }, () => {
   it('a replay holding these values loads with no page error, and the values draw nothing', async () => {
     // First page: the script, to record a replay with every kind of added mark.
-    const { context, p: withScript } = await openPage(browser)
+    const { context, p: withScript } = await openWith(browser(), [extras.SCRIPT_FILE], { mode: 'before-start' })
     try {
-      await startPuzzle(withScript, { injection: { mode: 'before-start', code: script } })
       const replay = await withScript.evaluate(() => {
         const { app } = Framework
         const cell = app.puzzle.cells.find((c) => c.row === 3 && c.col === 3)
@@ -1160,9 +1147,7 @@ describe('without the script', { concurrency: false }, () => {
       await withScript.close()
 
       // Second page: no script. Load the replay.
-      const { p: bare, errors } = await newPage(context)
-      await gotoPuzzle(bare)
-      await startPuzzle(bare)
+      const { p: bare, errors } = await addPage(context, [])
       await bare.evaluate((r) => Framework.app.loadReplay(r), replay)
       await bare.waitForFunction(() => Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3).pen.length === 18, null, { timeout: 15000 })
       const pen = await bare.evaluate(() => {
@@ -1183,6 +1168,7 @@ describe('without the script', { concurrency: false }, () => {
 describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   // Each is read by the corner click or its hit test; with one gone the click wrap would throw on every pen click, so the script skips the marks step and warns once.
   const TURNED_OFF = /^pen-tool-extras: .*marks.* skipped because SudokuPad /
+  const watchSkips = (warnings) => (page) => page.on('console', (m) => { if (m.type() === 'warning' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
   const REMOVALS = {
     'ToolPen.tool.actStart': () => { ToolPen.tool.actStart = undefined },
     'ToolPen.tool.getInputRc': () => { ToolPen.tool.getInputRc = undefined },
@@ -1193,14 +1179,12 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   for (const [member, remove] of Object.entries(REMOVALS)) {
     it(`${member} gone: one warning that marks are skipped`, async () => {
       const warnings = []
-      const { context, p } = await openPage(browser, {
+      const { context } = await openWith(browser(), [extras.SCRIPT_FILE], {
         expectedSkips: [TURNED_OFF],
-        seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
+        seed: watchSkips(warnings),
+        afterStart: (page) => page.evaluate(`(${remove})()`)
       })
       try {
-        await startPuzzle(p)
-        await p.evaluate(`(${remove})()`)
-        await p.addScriptTag({ content: script })
         await settle(async () => warnings.length, 1)
         assert.equal(warnings.length, 1, JSON.stringify(warnings))
       } finally {
@@ -1211,16 +1195,14 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
 
   it('warns once, skips marks, and the pen tool still works', async () => {
     const warnings = []
-    const { context, p, errors } = await openPage(browser, {
+    const { context, p, errors } = await openWith(browser(), [extras.SCRIPT_FILE], {
       expectedSkips: [TURNED_OFF],
-      seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
-    })
-    try {
-      await startPuzzle(p)
+      seed: watchSkips(warnings),
       // `_actList` is the field the click wrap reads; SudokuPad's own `actStart` recreates it
       // on the first click, so the pen tool still works.
-      await p.evaluate(() => { ToolPen.tool._actList = undefined })
-      await p.addScriptTag({ content: script })
+      afterStart: (page) => page.evaluate(() => { ToolPen.tool._actList = undefined })
+    })
+    try {
       await p.evaluate(() => Framework.setSetting('toolpen', true))
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       await settle(async () => warnings.length, 1)
