@@ -69,16 +69,19 @@ describe('the rules', () => {
 
   describe('notes-survive-reload', () => {
     it('holds when the notes drawn after a reload are the ones drawn before it, in any order', () => {
-      assert.deepEqual(check('notes-survive-reload', { notesDrawn: ['b', 'a'] }, { before: { notesDrawn: ['a', 'b'] }, action: 'reload' }), [])
+      assert.deepEqual(check('notes-survive-reload', { notesSeen: ['b', 'a'] }, { before: { notesSeen: ['a', 'b'] }, action: 'reload' }), [])
     })
     it('fails when a reload loses a note', () => {
-      assert.deepEqual(check('notes-survive-reload', { notesDrawn: ['a'] }, { before: { notesDrawn: ['a', 'b'] }, action: 'reload' }), ['drawn before the reload and not after it: "b"'])
+      assert.deepEqual(check('notes-survive-reload', { notesSeen: ['a'] }, { before: { notesSeen: ['a', 'b'] }, action: 'reload' }), ['drawn before the reload and not after it: "b"'])
     })
     it('fails when a reload adds a note', () => {
-      assert.equal(check('notes-survive-reload', { notesDrawn: ['a', 'a'] }, { before: { notesDrawn: ['a'] }, action: 'reload' }).length, 1)
+      assert.equal(check('notes-survive-reload', { notesSeen: ['a', 'a'] }, { before: { notesSeen: ['a'] }, action: 'reload' }).length, 1)
+    })
+    it('holds when a note that was open for typing before the reload is a finished note after it', () => {
+      assert.deepEqual(check('notes-survive-reload', { notesSeen: ['15', '1'] }, { before: { notesSeen: ['15', '1'] }, action: 'reload' }), [])
     })
     it('says nothing after any other action, which may change the notes', () => {
-      assert.deepEqual(check('notes-survive-reload', { notesDrawn: [] }, { before: { notesDrawn: ['a'] }, action: 'undo' }), [])
+      assert.deepEqual(check('notes-survive-reload', { notesSeen: [] }, { before: { notesSeen: ['a'] }, action: 'undo' }), [])
     })
   })
 
