@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.12
+// @version      0.44.14
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.12'
+  const VERSION = '0.44.14'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -40,7 +40,6 @@
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math.
   /* global parseColor, darkenColor, toOklab */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
@@ -58,7 +57,6 @@
   // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
-  // One page preset per cell color page, up to three, then SudokuPad's own colors.
   const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
   const SUDOKUPAD_PRESET = 'sudokupad'
   const PALETTE_PRESET_LABELS = {
@@ -104,7 +102,6 @@
     return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
   }
 
-  // `pages` is the palette's pages of color keys, and `readCell` reads a key's color as CSS text.
   function paletteColors (preset, pages, readCell) {
     if (preset === SUDOKUPAD_PRESET) return SUDOKUPAD_SET
     const page = paletteOptions(pages.length).indexOf(preset)
@@ -122,7 +119,6 @@
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
   }
 
-  // The pages of cell color keys of the palette in force, or none until the color tool has one.
   function palettePages () {
     const palette = colorTool()?.palette
     if (!palette) return []
@@ -736,7 +732,6 @@
   // <lib:store>
   // Generated from lib/store.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads isPlainObject from plain.
   /* global isPlainObject */
   // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
   // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
@@ -807,10 +802,8 @@
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
 
-  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 
-  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
   function colorFunction (value) {
     const fn = COLOR_FUNCTION.exec(value)
     if (!fn) return null
@@ -829,7 +822,6 @@
     return Boolean(fn && fn.alpha <= 0)
   }
 
-  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
   // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
   function parseColor (text) {
     if (typeof text !== 'string' || isTransparent(text)) return null
@@ -894,7 +886,6 @@
     return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
 
-  // WCAG relative luminance of [r, g, b] channels.
   function wcagLuminance (rgb) {
     const [r, g, b] = rgb.map((c) => {
       const x = c / 255
@@ -916,17 +907,15 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads PEN_COLOR_NUMBERS from palette.
   /* global PEN_COLOR_NUMBERS */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
-  // One swatch's side and the gap between swatches; a caller lining its own keys up with the grid uses the same two.
   const SWATCH_PX = 34
   const SWATCH_GAP_PX = 4
   // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
   const PICKER_INPUT_REM = 2.4
   const PICKER_COLUMNS = 3
-  // The pickers fade in from this scale over this long. They are rare, and ending edit mode takes them away at once.
+  // The pickers are rare enough to fade in; ending edit mode takes them away at once, with no fade out.
   const PICKER_ENTRY_SCALE = 0.95
   const PICKER_ENTRY_MS = 150
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
@@ -936,7 +925,6 @@
 
   const fillWithOpacity = (color, opacity) => opacity < 1 ? `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)` : color
 
-  // The dialog's color block: a pulldown above a grid of swatches, three to a row.
   // Free mode (no `picked`) makes each swatch a color input; palette mode makes each a button, `picked` the pressed one, and a null swatch an empty cell.
   // `options` are `{ value, label, selected, disabled }`; `beside` goes in the grid's row, after it.
   // A `fillOpacity` under 1 draws the palette swatches that strong over what is behind them; the border and the pressed ring stay whole.
@@ -974,7 +962,6 @@
     ].join('\n')
   }
 
-  // Edit mode's looks, for SudokuPad's tool `tool` (its panel carries `tool-<tool>`): each picker fills the grid cell of its button, whose own picture is hidden under it.
   // A picker is out of the flow, so it takes no cell from the buttons the panel places itself.
   function pickerCss (prefix, tool) {
     const panel = `.tool-${tool} .controls-input`
@@ -994,14 +981,11 @@
     ].join('\n')
   }
 
-  // Every open picker shows the color `colorOf(n)` gives now.
   function refreshPickers (prefix, colorOf) {
     document.querySelectorAll(`.${prefix}picker input`).forEach((input) => { input.value = colorOf(input.dataset.key) })
   }
 
-  // A hold of HOLD_TO_EDIT_MS on one of the tool's nine color buttons, with either mouse button, puts a color picker over each; a picker's input calls `save(n, value)` at once.
-  // Left Alt held with the tool current does the same until it is released, as SudokuPad's own color tool does.
-  // `guard` runs each toggle and each window listener, so a caller can report a failure its own way. `endEditMode()` ends edit mode from outside.
+  // Left Alt held opens edit mode until it is released, as SudokuPad's own color tool does.
   function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
     const toolClass = `tool-${tool}`
     const editing = `${prefix}editing`
@@ -1011,7 +995,6 @@
     // SudokuPad keeps one panel element and swaps its `tool-<name>` class for the next tool's, so a class watcher ends edit mode when the panel stops being this tool's.
     let leaveWatch = null
     let editPanel = null
-    // Whether left Alt opened this edit mode, so its release closes only that one.
     let altOpened = false
 
     function exit () {
@@ -1372,8 +1355,7 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
-  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  // The title rules travel with the row, so they are in the page exactly while the dialog is.
   function renderDialogTitle ({ prefix, name, version }) {
     return `<style>${dialogTitleCss(prefix)}</style>` +
       `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
@@ -1394,12 +1376,10 @@
     ].join('\n')
   }
 
-  // Under the footer buttons: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
   function renderErrorLogRow (prefix) {
     return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
-  // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
   function wireErrorLog (dialog, win) {
     const say = (message) => setDialogStatus(dialog, message)
     dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
@@ -1520,8 +1500,8 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText, writeOrRestore */ // from settings-dialog.js, which every script carries beside this one
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  /* global setDialogStatus, errorText, writeOrRestore */
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -1547,9 +1527,6 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, and `apply(values)` takes what a paste kept,
-  // under `snapshot` (`writeOrRestore`'s) in a dialog action of `feature` (`runInDialog`), so a paste that fails half-way puts every key
-  // back. `readers` and `upgrade` are `pastedSettings`'.
   function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
@@ -1599,7 +1576,6 @@
     return keys.reduce((owner, key) => (owner === undefined || owner === null ? undefined : owner[key]), roots[root])
   }
 
-  // Each internal lacking, with the features it holds off; a feature is listed under the first of its `needs` it lacks.
   function lackingInternals (features, roots) {
     const lacking = new Map()
     Object.entries(features).forEach(([name, { needs }]) => {
@@ -1646,7 +1622,6 @@
     ].join('\n')).join('\n\n')
   }
 
-  // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
   function reportUrl ({ name, version, sudokupad, off }) {
     const shownVersion = sudokupad || 'unknown'
     const labels = off.map((feature) => feature.label).join(', ')
@@ -1763,7 +1738,6 @@
       host.append(bar)
     }
 
-    // A bar of plain words, one per text and page load; the same host as the SudokuPad-changed bar, with no report link.
     const told = new Set()
     function tell (text) {
       if (told.has(text) || !page || !page.doc.body) return
@@ -1785,7 +1759,6 @@
     let dialogActions = 0
     const storeFailures = new WeakSet()
 
-    // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
       const feature = {
         label,
@@ -2262,7 +2235,6 @@
   // A pressed button shrinks to this scale over this long, so a click shows before it lets go; SudokuPad's own buttons have no pressed look.
   const PRESS_SCALE = 0.97
   const PRESS_MS = 120
-  // The tray reaches this far past the color block on each side, and holds its buttons this far from its edge on every side, so the margin of a button and the reach make up most of it.
   const TRAY_REACH_REM = 0.25
   const TRAY_PADDING_REM = 0.4
   const TRAY_TOP_REM = rem(CONTROLS_GAP_REM + PANEL_BUTTON_MARGIN_REM - TRAY_PADDING_REM)
@@ -2278,10 +2250,7 @@
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${SUDOKUPAD_PURPLE};`
 
-  // The panel's rules, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
-  // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
-  // (widening to the right) and the one drawn as a fade (faint to solid); every panel has both. `pressButtons`, when given, is the selector of buttons
-  // that are not placed by the grid but press like the others.
+  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders` and `sliderRow` are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
   function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
     const pressable = [`${panel} ${colorButton}`, controlButtons, ...(pressButtons ? [pressButtons] : [])].join(', ')

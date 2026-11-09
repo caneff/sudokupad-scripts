@@ -13,18 +13,21 @@ const {
   buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, VERSION, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
-  CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
-  planCellClick, clickedMarks, DOT_FILL_CSS,
+  CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
+  clickedMarks, marksAtPoint, holdsMark, DOT_FILL_CSS,
   PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX,
-  lackingInternals, FEATURES,
+  lackingInternals, FEATURES, arrowHeads,
   edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady
 } = require('../pen-tool-extras.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 const nextType = (current, settings) => stepType(current, settings, EDGE_CYCLE)
+// A corner's and a cell middle's step through their marks, as the click takes it.
+const planCornerClick = (kind, present, settings) => cornerMarks(kind, {}).plan(present, settings)
+const planCellClick = (present, settings) => clickedMarks([{ type: 'select', arg: [{}] }, { type: 'pen', arg: '5' }]).plan(present, settings)
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
 // Pen color 9 is written there as rgb(-36, -36, -36), which clamps to black.
@@ -563,6 +566,44 @@ test('cornerAt counts the four outer corners, also for a point just outside the 
 test('cornerAt reads a non-square grid by its own rows and columns', () => {
   assert.deepEqual(cornerAt(4, 6, 4, 6), { row: 4, col: 6 })
   assert.equal(cornerAt(4, 7, 4, 6), null)
+})
+
+// A 9 by 9 grid of cells holding their pen values; `stockActs` stands in for SudokuPad's own click, which hits the cell middle of (4, 4).
+const markGrid = (pens = {}) => {
+  const cells = Array.from({ length: 9 }, (_, row) => Array.from({ length: 9 }, (_, col) => ({ row, col, pen: (pens[`${row},${col}`] || []).map((value) => [value, 'r']) })))
+  return { rows: 9, cols: 9, getCell: (row, col) => cells[row][col] }
+}
+const marksFor = (point, takesCorner, grid = markGrid()) => {
+  const stockAt = []
+  const stockActs = (at) => { stockAt.push(at); return [{ type: 'select', arg: [grid.getCell(4, 4)] }, { type: 'pen', arg: '5' }] }
+  const found = marksAtPoint(point, { grid, radius: CORNER_RADIUS, takesCorner, stockActs })
+  return { ...found, stockAt, grid }
+}
+
+test('marksAtPoint for the erase takes a corner holding a mark, whatever is ticked', () => {
+  const { marks, corner, queued, stockAt, grid } = marksFor({ r: 3, c: 3 }, holdsMark, markGrid({ '2,2': ['u'] }))
+  assert.deepEqual([marks.cell, marks.values, corner, queued, stockAt], [grid.getCell(2, 2), ['u', 'x'], true, null, []])
+})
+
+test('marksAtPoint for the erase passes an empty corner to SudokuPad\'s own click, as what that click hit', () => {
+  const { marks, corner, queued, stockAt, grid } = marksFor({ r: 3, c: 3 }, holdsMark)
+  assert.deepEqual([marks.cell, marks.values, corner, queued.length, stockAt], [grid.getCell(4, 4), ['5', '6', 'z'], false, 2, [{ r: 3, c: 3 }]])
+})
+
+test('marksAtPoint takes an empty corner its predicate takes, and steps it through the corner cycle', () => {
+  const { marks, corner, queued, stockAt, grid } = marksFor({ r: 3, c: 3 }, () => true)
+  assert.deepEqual([marks.cell, marks.values, corner, queued, stockAt], [grid.getCell(2, 2), ['u', 'x'], true, null, []])
+  assert.deepEqual(marks.plan([], ALL), { remove: [], add: 'u' })
+})
+
+test('marksAtPoint leaves a corner its predicate refuses to SudokuPad\'s own click, a held mark too', () => {
+  const { marks, corner, stockAt, grid } = marksFor({ r: 3, c: 3 }, () => false, markGrid({ '2,2': ['u'] }))
+  assert.deepEqual([marks.cell, corner, stockAt], [grid.getCell(4, 4), false, [{ r: 3, c: 3 }]])
+})
+
+test('marksAtPoint for a click away from every corner asks no predicate and runs SudokuPad\'s own click', () => {
+  const { marks, corner, stockAt, grid } = marksFor({ r: 4.5, c: 4.5 }, () => { throw new Error('asked') })
+  assert.deepEqual([marks.cell, corner, stockAt], [grid.getCell(4, 4), false, [{ r: 4.5, c: 4.5 }]])
 })
 
 function allCorners (rows, cols) {
@@ -2331,4 +2372,10 @@ test('whenReady rejects with the error check() throws, rather than leaving the p
   await assert.rejects(
     whenReady(() => { throw new TypeError('boom') }, { timeoutMs: 1000, what: 'the tool' }),
     /boom/)
+})
+
+test('arrowHeads puts `count` heads at the middles of equal shares of the way, each pointing at the end', () => {
+  assert.equal(arrowHeads([0, 0], [64, 0], 1, 2), 'M14.56 2.13L17.44 0L14.56 -2.12ZM46.56 2.13L49.44 0L46.56 -2.12Z')
+  assert.equal(arrowHeads([0, 0], [0, 64], 1, 1), 'M-2.12 30.56L0 33.44L2.13 30.56Z')
+  assert.equal(arrowHeads([0, 0], [64, 0], 1, 0), '')
 })

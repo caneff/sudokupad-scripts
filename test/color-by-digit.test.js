@@ -9,7 +9,10 @@ const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+
+// The chips a profile pair draws in `style`; the digit profile is the cell profile unless given.
+const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -608,7 +611,7 @@ test('dropIndex gives the position the dragged row lands in, counting the rows a
 })
 
 test('renderChips labels each cell with its group\'s shown digit: the lowest if all are below 5, the highest if all are above 5, else the middle', () => {
-  const digitOf = (digits) => runCells(renderChips([{ key: 'a', digits }], colorFor, { size: 16 }))[0].digit
+  const digitOf = (digits) => runCells(renderChips(chipsOf([{ key: 'a', digits }]), colorFor, { size: 16 }))[0].digit
   assert.equal(digitOf(['0', '1', '2', '3', '4']), '1')
   assert.equal(digitOf(['5']), '5')
   assert.equal(digitOf(['6', '7', '8', '9']), '9')
@@ -619,7 +622,7 @@ test('renderChips labels each cell with its group\'s shown digit: the lowest if 
 })
 
 test('renderChips labels a group of only 0 with 0 and a group with no digits with none', () => {
-  const cells = runCells(renderChips([{ key: 'a', digits: ['0'] }, { key: 'b', digits: [] }, { key: 'c', digits: ['5', '0'] }], colorFor, { size: 16 }))
+  const cells = runCells(renderChips(chipsOf([{ key: 'a', digits: ['0'] }, { key: 'b', digits: [] }, { key: 'c', digits: ['5', '0'] }]), colorFor, { size: 16 }))
   assert.deepEqual(cells.map((c) => c.digit), ['0', '', '5'])
 })
 
@@ -868,7 +871,7 @@ test('renderProfiles has no Add button', () => {
 
 test('the button, renderProfiles and renderMenu all show a profile of six groups as a run of three cells', () => {
   const each = { profiles: [{ name: 'Each', groups: Array.from({ length: 6 }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1)] })) }], active: 0 }
-  for (const html of [renderProfiles(each, colorFor, 0), renderMenu(each, colorFor), iconHtml('cell', each.profiles[0].groups, colorFor)]) {
+  for (const html of [renderProfiles(each, colorFor, 0), renderMenu(each, colorFor), iconHtml('cell', chipsOf(each.profiles[0].groups), colorFor)]) {
     assert.equal(count(html, /data-role="chip"/g), 3)
     assert.equal(count(html, /<line /g), 2)
   }
@@ -896,7 +899,7 @@ test('installButton: adds an icon button titled "Color by digit" in the bottom r
     addAppButton: () => calls.push(['wrong row'])
   }
   const app = { refreshControls: () => calls.push(['refresh']) }
-  installButton(framework, app, 'off', ODD, colorFor, ODD)
+  installButton(framework, app, 'off', chipsOf(ODD, 'off'), colorFor)
   assert.deepEqual(calls.map((c) => c[0]), ['add', 'refresh'])
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
@@ -1360,14 +1363,14 @@ test('canonicalGroups and the paint operations do not change the list they were 
   const copy = JSON.parse(JSON.stringify(before))
   canonicalGroups(before)
   paintDigit(before, '2', 'b')
-  setDigitColor(before, '1', null)
+  setDigitGroup(before, '1', null)
   assert.deepEqual(before, copy)
 })
 
-test('setDigitColor sets a digit\'s color or, given null, clears it', () => {
-  assert.deepEqual(setDigitColor([g('a', ['1', '2'])], '2', 'b'), [g('a', ['1']), g('b', ['2'])])
-  assert.deepEqual(setDigitColor([g('a', ['1', '2'])], '2', null), [g('a', ['1'])])
-  assert.deepEqual(setDigitColor([g('a', ['1', '2'])], '2', 'a'), [g('a', ['1', '2'])])
+test('setDigitGroup moves a digit into the group of a color key or, given null, out of every group', () => {
+  assert.deepEqual(setDigitGroup([g('a', ['1', '2'])], '2', 'b'), [g('a', ['1']), g('b', ['2'])])
+  assert.deepEqual(setDigitGroup([g('a', ['1', '2'])], '2', null), [g('a', ['1'])])
+  assert.deepEqual(setDigitGroup([g('a', ['1', '2'])], '2', 'a'), [g('a', ['1', '2'])])
 })
 
 test('strokeKey is the brush color to paint with, or null to clear, from the digit a stroke starts on', () => {
@@ -1676,7 +1679,7 @@ const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*
 test('renderChips draws a joined run of square cells: one outer outline, n-1 single dividers, no rounded corners and no gaps', () => {
   for (const n of [1, 2, 3]) {
     const groups = Array.from({ length: n }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1)] }))
-    const svg = renderChips(groups, colorFor, { size: 16 })
+    const svg = renderChips(chipsOf(groups), colorFor, { size: 16 })
     assert.equal(count(svg, /<rect [^>]*fill="none"/g), 1, `${n} cells: ${svg}`)
     assert.equal(count(svg, /<line /g), n - 1)
     assert.doesNotMatch(svg, /rx=/)
@@ -1689,7 +1692,7 @@ test('renderChips draws a joined run of square cells: one outer outline, n-1 sin
 
 test('renderChips shows at most three cells, so a profile of six groups draws three cells and two dividers', () => {
   const six = Array.from({ length: 6 }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1)] }))
-  const svg = renderChips(six, colorFor, { size: 16 })
+  const svg = renderChips(chipsOf(six), colorFor, { size: 16 })
   assert.deepEqual(runCells(svg).map((c) => c.key), ['k0', 'k1', 'k2'])
   assert.equal(count(svg, /<line /g), 2)
 })
@@ -1699,7 +1702,7 @@ test('renderChips draws each mode the way it colors the board: Cell fills with b
   const shadeA = darkenColor([10, 10, 10])
   const shadeB = darkenColor([240, 240, 240])
   const look = (style) => {
-    const svg = renderChips(groups, colorFor, { size: 16, style })
+    const svg = renderChips(chipsOf(groups, style), colorFor, { size: 16, style })
     const outline = /<rect [^>]*fill="none" stroke="([^"]*)"/.exec(svg)[1]
     const dividers = [...svg.matchAll(/<line [^>]*stroke="([^"]*)"/g)].map((m) => m[1])
     return { cells: runCells(svg).map((c) => [c.fill, c.ink]), outline, dividers }
@@ -1711,7 +1714,7 @@ test('renderChips draws each mode the way it colors the board: Cell fills with b
 })
 
 test('renderChips gives a group whose palette color is unreadable a grey cell, and in Digit and Both SudokuPad\'s own digit color, as the board keeps it', () => {
-  const look = (style) => runCells(renderChips([{ key: 'q', digits: ['2'] }], () => '', { size: 16, style })).map((c) => [c.fill, c.ink])
+  const look = (style) => runCells(renderChips(chipsOf([{ key: 'q', digits: ['2'] }], style), () => '', { size: 16, style })).map((c) => [c.fill, c.ink])
   assert.deepEqual(look('cell'), [['#ccc', 'rgb(29, 106, 229)']])
   assert.deepEqual(look('digit'), [['#fff', 'rgb(29, 106, 229)']])
   assert.deepEqual(look('both'), [['#ccc', 'rgb(29, 106, 229)']])
@@ -1719,18 +1722,18 @@ test('renderChips gives a group whose palette color is unreadable a grey cell, a
 
 test('renderChips draws a group color at SudokuPad\'s 60% cell opacity, and a white cell whole', () => {
   const groups = [{ key: 'a', digits: ['3'] }]
-  const opacities = (style) => runCells(renderChips(groups, colorFor, { size: 16, style })).map((c) => c.opacity)
+  const opacities = (style) => runCells(renderChips(chipsOf(groups, style), colorFor, { size: 16, style })).map((c) => c.opacity)
   assert.deepEqual(opacities('cell'), ['0.6'])
   assert.deepEqual(opacities('both'), ['0.6'])
   assert.deepEqual(opacities('digit'), [undefined])
   assert.deepEqual(opacities('off'), [undefined])
   // A digit in no cell group is a white chip, not a grey tinted one.
-  const uncovered = runCells(renderChips([{ key: 'a', digits: ['3'] }], colorFor, { size: 16, chips: [{ digit: '8', cellKey: undefined, digitKey: undefined }] }))
+  const uncovered = runCells(renderChips([{ digit: '8', cellKey: undefined, digitKey: undefined }], colorFor, { size: 16 }))
   assert.deepEqual(uncovered.map((c) => [c.fill, c.opacity]), [['#fff', undefined]])
 })
 
 test('renderChips draws three blank dashed cells for a profile with no groups, in a run as wide as three chips', () => {
-  const svg = renderChips([], colorFor, { size: 16 })
+  const svg = renderChips(chipsOf([]), colorFor, { size: 16 })
   assert.match(svg, /^<svg data-role="chips" width="48" height="16" /)
   assert.equal(count(svg, /<rect data-role="blank-chip"[^>]*fill="#fff"/g), 3)
   assert.equal(count(svg, /<line [^>]*stroke-dasharray=/g), 2)
@@ -1739,7 +1742,7 @@ test('renderChips draws three blank dashed cells for a profile with no groups, i
 })
 
 test('iconHtml centres the three blank cells of a profile with no groups', () => {
-  const svg = /<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml('cell', [], colorFor))[0]
+  const svg = /<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml('cell', chipsOf([]), colorFor))[0]
   assert.match(svg, /width="114" height="38" x="-7" y="31"/)
   assert.equal(count(svg, /data-role="blank-chip"/g), 3)
 })
@@ -1754,9 +1757,9 @@ test('a painted digit key and a palette swatch are drawn at 60%, an unpainted ke
 test('iconHtml draws the run of cells in the mode\'s look with the mode word, and keeps the menu arrow box', () => {
   const groups = [{ key: 'a', digits: ['3'] }, { key: 'b', digits: ['7'] }]
   for (const mode of ['cell', 'digit', 'both', 'off']) {
-    const html = iconHtml(mode, groups, colorFor)
+    const html = iconHtml(mode, chipsOf(groups, mode), colorFor)
     const run = /<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]
-    assert.deepEqual(runCells(run), runCells(renderChips(groups, colorFor, { size: 1, style: mode })), mode)
+    assert.deepEqual(runCells(run), runCells(renderChips(chipsOf(groups, mode), colorFor, { size: 1, style: mode })), mode)
     const word = /<span data-role="mode" style="([^"]*)">([^<]*)<\/span>/.exec(html)
     assert.equal(word[2], mode.toUpperCase())
     assert.match(word[1], /pointer-events:none/)
@@ -1772,7 +1775,7 @@ test('iconHtml draws the run of cells in the mode\'s look with the mode word, an
 test('the button is titled and labelled with its mode in words', () => {
   assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
   let spec
-  installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, colorFor, ODD)
+  installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', chipsOf(ODD, 'both'), colorFor)
   assert.equal(spec.title, 'Color by digit: Both')
 })
 
@@ -1783,7 +1786,7 @@ test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a 
     assert.match(rows[0].chipWidth, /width:\d+px/)
   }
   const html = renderMenu(profileState, colorFor)
-  assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]), runCells(renderChips(LOW, colorFor, { size: 16 })))
+  assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]), runCells(renderChips(chipsOf(LOW), colorFor, { size: 16 })))
 })
 
 // The declarations of every STYLE_CSS rule whose selector list holds `selector`, joined.
@@ -1797,7 +1800,7 @@ test('the bottom row is capped at 21.6rem, which live/color-by-digit-rows.live.m
 test('renderProfiles draws each row\'s chips as a run of cells in the Cell look', () => {
   const html = renderProfiles(profileState, colorFor, 0)
   const runs = [...html.matchAll(/<svg data-role="chips"[\s\S]*?<\/svg>/g)].map((m) => runCells(m[0]))
-  assert.deepEqual(runs, [runCells(renderChips(LOW, colorFor, { size: 16 })), runCells(renderChips(ODD, colorFor, { size: 16 }))])
+  assert.deepEqual(runs, [runCells(renderChips(chipsOf(LOW), colorFor, { size: 16 })), runCells(renderChips(chipsOf(ODD), colorFor, { size: 16 }))])
 })
 
 test('the profile list is dense one-line rows of 30 px with no ring, the selected row filled', () => {
@@ -1878,15 +1881,15 @@ test('shownChips caps at three chips', () => {
 })
 
 test('iconHtml with separate profiles shows each mode\'s own digits: Cell and Off the cell profile, Digit the digit profile, Both the most variety', () => {
-  const cells = (mode) => runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml(mode, LOW, colorFor, ODD))[0]).map((c) => c.digit)
+  const cells = (mode) => runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml(mode, chipsOf(LOW, mode, ODD), colorFor))[0]).map((c) => c.digit)
   assert.deepEqual(['cell', 'off', 'digit', 'both'].map(cells), [['1', '5', '9'], ['1', '5', '9'], ['5', '4'], ['1', '5', '6']])
 })
 
 test('iconHtml draws a Both chip for a digit in no cell group white, and centres a run of two chips differently from three', () => {
   const palette = { 1: 'rgb(200, 0, 0)', 9: 'rgb(0, 0, 200)' }
   const cells = [{ key: '1', digits: ['1'] }]
-  const run = (mode, g, d) => /<svg data-role="chips"[^>]*>/.exec(iconHtml(mode, g, (k) => palette[k], d))[0]
-  assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml('both', cells, (k) => palette[k], [{ key: '1', digits: ['1'] }, { key: '9', digits: ['2'] }]))[0]).map((c) => c.fill), [palette[1], '#fff'])
+  const run = (mode, g, d) => /<svg data-role="chips"[^>]*>/.exec(iconHtml(mode, chipsOf(g, mode, d), (k) => palette[k]))[0]
+  assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml('both', chipsOf(cells, 'both', [{ key: '1', digits: ['1'] }, { key: '9', digits: ['2'] }]), (k) => palette[k]))[0]).map((c) => c.fill), [palette[1], '#fff'])
   assert.match(run('digit', LOW, ODD), /x="12"/)
   assert.match(run('both', LOW, ODD), /x="-7"/)
 })

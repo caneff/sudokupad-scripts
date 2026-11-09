@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.12
+// @version      0.7.14
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,11 +17,11 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.12'
+  const VERSION = '0.7.14'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
-  const BOARD = `body:has(#${BOARD_ID})`
+  const PAGE = `body:has(#${BOARD_ID})`
   const DATA_KEY = 'DarkPage_color'
   const DEFAULT_COLOR = '#000000'
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
@@ -38,20 +38,20 @@
   // shared LIGHT_TEXT and DARK_TEXT (#ddd, #222) fall to 3.5:1 on a mid grey.
   const PAGE_LIGHT_TEXT = '#ffffff'
   const PAGE_DARK_TEXT = '#000000'
-  function savedColor (data) {
+  function pageColorOf (data) {
     return typeof data === 'string' && HEX_COLOR.test(data) ? data.toLowerCase() : null
   }
 
-  // Throws when storage cannot be read: the startup read runs under the savedColor feature, the dialog's under settings.
-  const readSaved = (store) => savedColor(store.getData(DATA_KEY))
+  // Throws when storage cannot be read.
+  const readSaved = (store) => pageColorOf(store.getData(DATA_KEY))
 
   // Framework keeps its saved data in localStorage under `<Framework.LocalDataPrefix>_<name>` (`makeDataKey`), a color as
   // the plain string: the live checks in § at document-start fail if SudokuPad changes either.
   const LOCAL_DATA_KEY = `svencodes_${DATA_KEY}`
   // The saved color read straight from storage, for when Framework does not exist yet. Throws when storage is blocked.
-  const earlyColor = (storage) => savedColor(storage.getItem(LOCAL_DATA_KEY))
+  const earlyColor = (storage) => pageColorOf(storage.getItem(LOCAL_DATA_KEY))
 
-  const READERS = { [DATA_KEY]: (data) => savedColor(data) ?? undefined }
+  const READERS = { [DATA_KEY]: (data) => pageColorOf(data) ?? undefined }
 
   // The color in force, the default included, so a paste can put a page back to the default.
   const copiedSettings = (store) => JSON.stringify({ [DATA_KEY]: readSaved(store) ?? DEFAULT_COLOR })
@@ -71,10 +71,8 @@
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
 
-  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 
-  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
   function colorFunction (value) {
     const fn = COLOR_FUNCTION.exec(value)
     if (!fn) return null
@@ -93,7 +91,6 @@
     return Boolean(fn && fn.alpha <= 0)
   }
 
-  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
   // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
   function parseColor (text) {
     if (typeof text !== 'string' || isTransparent(text)) return null
@@ -158,7 +155,6 @@
     return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
 
-  // WCAG relative luminance of [r, g, b] channels.
   function wcagLuminance (rgb) {
     const [r, g, b] = rgb.map((c) => {
       const x = c / 255
@@ -186,23 +182,23 @@
   // page. Svg-painted icons and color swatch fills keep their colors.
   function buildCss (pageColor) {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
-    const boardRule = (selectors, ...declarations) => rule(selectors.map((selector) => `${BOARD} ${selector}`).join(', '), ...declarations)
+    const pageRule = (selectors, ...declarations) => rule(selectors.map((selector) => `${PAGE} ${selector}`).join(', '), ...declarations)
     const textColor = textColorFor(pageColor, PAGE_LIGHT_TEXT, PAGE_DARK_TEXT)
     const darkButtons = [
-      boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
-      boardRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]), `border-color: ${BUTTON_ACCENT}`),
-      boardRule(['.button-row button'], `border-color: ${BUTTON_BORDER}`),
+      pageRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
+      pageRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]), `border-color: ${BUTTON_ACCENT}`),
+      pageRule(['.button-row button'], `border-color: ${BUTTON_BORDER}`),
       // SudokuPad's own focus shadow cannot be seen on BUTTON_BG.
-      boardRule(BUTTON_GROUPS.map((group) => `${group} button:focus-visible`), `outline: 2px solid ${BUTTON_ACCENT}`, 'outline-offset: 2px'),
-      boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), `background-color: ${BUTTON_HOVER_BG}`),
-      boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), `background-color: ${BUTTON_PRESS_BG}`)
+      pageRule(BUTTON_GROUPS.map((group) => `${group} button:focus-visible`), `outline: 2px solid ${BUTTON_ACCENT}`, 'outline-offset: 2px'),
+      pageRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), `background-color: ${BUTTON_HOVER_BG}`),
+      pageRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), `background-color: ${BUTTON_PRESS_BG}`)
     ]
     return [
-      rule(BOARD, `background-color: ${pageColor}`),
-      boardRule([`#${BOARD_ID}`], 'background-color: var(--body-bg)'),
-      boardRule(['.controls-footer', '.controls-footer a'], `color: ${textColor}`),
-      boardRule(['.controls-input::after'], `color: ${textColor}`),
-      // The buttons go dark on the shared light-text test, so they switch on the same page colors as before; only the text pair is Dark Page's own.
+      rule(PAGE, `background-color: ${pageColor}`),
+      pageRule([`#${BOARD_ID}`], 'background-color: var(--body-bg)'),
+      pageRule(['.controls-footer', '.controls-footer a'], `color: ${textColor}`),
+      pageRule(['.controls-input::after'], `color: ${textColor}`),
+      // The buttons go dark on the shared light-text test, not on Dark Page's own text pair.
       ...(textColorFor(pageColor) === LIGHT_TEXT ? darkButtons : [])
     ].join('\n')
   }
@@ -309,8 +305,7 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
-  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  // The title rules travel with the row, so they are in the page exactly while the dialog is.
   function renderDialogTitle ({ prefix, name, version }) {
     return `<style>${dialogTitleCss(prefix)}</style>` +
       `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
@@ -331,12 +326,10 @@
     ].join('\n')
   }
 
-  // Under the footer buttons: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
   function renderErrorLogRow (prefix) {
     return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
-  // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
   function wireErrorLog (dialog, win) {
     const say = (message) => setDialogStatus(dialog, message)
     dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
@@ -457,8 +450,8 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText, writeOrRestore */ // from settings-dialog.js, which every script carries beside this one
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  /* global setDialogStatus, errorText, writeOrRestore */
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -484,9 +477,6 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, and `apply(values)` takes what a paste kept,
-  // under `snapshot` (`writeOrRestore`'s) in a dialog action of `feature` (`runInDialog`), so a paste that fails half-way puts every key
-  // back. `readers` and `upgrade` are `pastedSettings`'.
   function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
@@ -536,7 +526,6 @@
     return keys.reduce((owner, key) => (owner === undefined || owner === null ? undefined : owner[key]), roots[root])
   }
 
-  // Each internal lacking, with the features it holds off; a feature is listed under the first of its `needs` it lacks.
   function lackingInternals (features, roots) {
     const lacking = new Map()
     Object.entries(features).forEach(([name, { needs }]) => {
@@ -583,7 +572,6 @@
     ].join('\n')).join('\n\n')
   }
 
-  // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
   function reportUrl ({ name, version, sudokupad, off }) {
     const shownVersion = sudokupad || 'unknown'
     const labels = off.map((feature) => feature.label).join(', ')
@@ -700,7 +688,6 @@
       host.append(bar)
     }
 
-    // A bar of plain words, one per text and page load; the same host as the SudokuPad-changed bar, with no report link.
     const told = new Set()
     function tell (text) {
       if (told.has(text) || !page || !page.doc.body) return
@@ -722,7 +709,6 @@
     let dialogActions = 0
     const storeFailures = new WeakSet()
 
-    // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
       const feature = {
         label,
@@ -851,7 +837,7 @@
   // </lib:sudokupad>
   // The saved color is read through Framework with no need of the app; the settings entry is added once `Framework.getApp` says the app is ready.
   const FEATURES = {
-    savedColor: { label: 'saved color', needs: { 'Framework.getData': 'function' } },
+    savedPageColor: { label: 'saved color', needs: { 'Framework.getData': 'function' } },
     settings: {
       label: 'settings entry',
       needs: {
@@ -865,15 +851,15 @@
     }
   }
   const guard = createGuard({ script: 'dark-page', name: 'Dark Page', version: VERSION, features: FEATURES })
-  const { savedColor: savedPageColor, settings: settingsEntry } = guard.features
+  const { savedPageColor, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, savedColor, earlyColor, LOCAL_DATA_KEY, buildCss, BOARD, BOARD_ID, STYLE_ID, lackingInternals, FEATURES }
+    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, pageColorOf, earlyColor, LOCAL_DATA_KEY, buildCss, PAGE, BOARD_ID, STYLE_ID, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
   // The page color goes in before the first paint, so the page is never SudokuPad's white first. The board's `#svgrenderer`
-  // is in the page's own HTML, so `BOARD` matches as soon as the parser reaches it. A page whose storage cannot be read gets the default.
+  // is in the page's own HTML, so `PAGE` matches as soon as the parser reaches it. A page whose storage cannot be read gets the default.
   let pageColor = DEFAULT_COLOR
   try {
     pageColor = earlyColor(window.localStorage) || DEFAULT_COLOR

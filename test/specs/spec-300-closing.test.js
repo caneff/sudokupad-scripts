@@ -79,7 +79,7 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   const eachRow = (html, marker) => html.split(marker).find((row) => row.includes('Each digit'))
   assert.equal(count(eachRow(renderProfiles(STATE, colorOf, 0), 'data-role="profile-row"'), /data-role="chip"/g), 3)
   assert.equal(count(eachRow(renderMenu(STATE, colorOf), 'data-role="menu-row"'), /data-role="chip"/g), 3)
-  assert.equal(count(byDigit.iconHtml('cell', EACH, colorOf), /data-role="chip"/g), 3)
+  assert.equal(count(byDigit.iconHtml('cell', byDigit.shownChips('cell', EACH, EACH), colorOf), /data-role="chip"/g), 3)
 
   // The details page shows the annotated dialog picture, and the undo-with-Multi-color-off claim is gone.
   const page = read('site/color-by-digit.html')
