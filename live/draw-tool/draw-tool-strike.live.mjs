@@ -7,7 +7,7 @@ import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 
-const { OUTLINE_KEY, TEXTS } = draw
+const { OUTLINE_KEY, STRIKE_PIECES, TEXTS } = draw
 // A letter pixel is a green one: pen color 1 is green, and the board's grid lines and digits are not.
 const GREEN_LEAD = 30
 // With a halo the letters may lose at most this share of their pixels to antialiasing against white instead of the board.
@@ -28,15 +28,9 @@ describe('Text Anywhere\'s struck text under the halo', { concurrency: false }, 
     await draw.reload(p)
     await draw.pickDraw(p)
   }
-  // How many of the pixels over the note's text are the note's green: the same screen rectangle whatever the halo, since the padding a halo adds to the note moves nothing.
-  const inkOf = async (text) => {
-    const box = await p.evaluate(([selector, want]) => {
-      const note = [...document.querySelectorAll(selector)].find((e) => e.textContent.includes(want))
-      const range = document.createRange()
-      range.selectNodeContents(note)
-      return range.getBoundingClientRect().toJSON()
-    }, [TEXTS, text])
-    const png = await p.screenshot({ clip: { x: box.x, y: box.y, width: box.width, height: box.height } })
+  // Which pixels of a screen rectangle are the note's green, one flag each, row by row: the board's grid lines and digits are not green.
+  const greenIn = async (clip) => {
+    const png = await p.screenshot({ clip })
     return p.evaluate(async ([base64, lead]) => {
       const image = new window.Image()
       await new Promise((resolve) => { image.onload = resolve; image.src = `data:image/png;base64,${base64}` })
@@ -46,10 +40,21 @@ describe('Text Anywhere\'s struck text under the halo', { concurrency: false }, 
       const context = canvas.getContext('2d')
       context.drawImage(image, 0, 0)
       const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
-      let count = 0
-      for (let i = 0; i < data.length; i += 4) if (data[i + 1] - data[i] > lead && data[i + 1] - data[i + 2] > lead) count++
-      return count
+      const flags = []
+      for (let i = 0; i < data.length; i += 4) flags.push(data[i + 1] - data[i] > lead && data[i + 1] - data[i + 2] > lead)
+      return { width: canvas.width, flags }
     }, [png.toString('base64'), GREEN_LEAD])
+  }
+  // The rectangle of what the first element matching `selector` holds that reads `text`: the text's own extent, the same whatever the halo's padding.
+  const textRect = (selector, text) => p.evaluate(([sel, want]) => {
+    const element = [...document.querySelectorAll(sel)].find((e) => e.textContent.includes(want))
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    return { ...range.getBoundingClientRect().toJSON(), size: parseFloat(window.getComputedStyle(element).fontSize) }
+  }, [selector, text])
+  const inkOf = async (text) => {
+    const { x, y, width, height } = await textRect(TEXTS, text)
+    return (await greenIn({ x, y, width, height })).flags.filter(Boolean).length
   }
 
   before(async () => {
@@ -72,6 +77,31 @@ describe('Text Anywhere\'s struck text under the halo', { concurrency: false }, 
       for (const outline of ['thin', 'medium']) assert.ok(inks[outline] >= inks.none * (1 - LOSS_MAX), `${outline} halo covers the letters: ${JSON.stringify(inks)}`)
     })
   }
+
+  it('the line runs unbroken across a gap between struck words, past the halo of the letters beside it', async () => {
+    await draw.plantDrawing(p, [{ kind: 'text', color: 1, size: 40, opacity: 100, text: '~~HE XAM~~', at: [80, 80] }])
+    await p.evaluate(([key, value]) => Framework.setData(key, value), [OUTLINE_KEY, 'medium'])
+    await reload()
+    const { x, y, width, height, size } = await p.evaluate((selector) => {
+      const gap = [...document.querySelectorAll(selector)].find((e) => e.textContent === ' ')
+      return { ...gap.getBoundingClientRect().toJSON(), size: parseFloat(window.getComputedStyle(gap).fontSize) }
+    }, STRIKE_PIECES)
+    const line = await greenIn({ x, y: y + height * 0.52 + size * 0.015, width, height: size * 0.05 })
+    const columns = Array.from({ length: line.width }, (_, c) => line.flags.some((flag, i) => flag && i % line.width === c))
+    assert.ok(columns.length > 4, `the gap is ${line.width} px wide`)
+    assert.ok(columns.every(Boolean), `a neighbor's halo covers the line in the gap: ${columns.map(Number).join('')}`)
+  })
+
+  it('a note drawn later, with a box, covers a struck note\'s line', async () => {
+    await draw.plantDrawing(p, [
+      { kind: 'text', color: 1, size: 40, opacity: 100, text: '~~HEXAM~~', at: [80, 80] },
+      { kind: 'text', color: 2, size: 40, opacity: 100, bg: true, text: 'ZZZZZZ', at: [80, 80] }
+    ])
+    await reload()
+    const { x, y, width, height } = await textRect(TEXTS, 'ZZZZZZ')
+    const over = await greenIn({ x, y, width, height })
+    assert.ok(over.flags.filter(Boolean).length < 10, `the struck line shows through the later note's box: ${over.flags.filter(Boolean).length} green pixels`)
+  })
 
   it('the page threw nothing', () => assert.deepEqual(errors, []))
 })

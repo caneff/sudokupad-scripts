@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { readUntil, settle, stable } from '../settle.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, SIZE_SLIDER, WIDTH_KEY, slideTo, valueOf } = draw
+const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, STRIKE_PIECE, SIZE_SLIDER, WIDTH_KEY, slideTo, valueOf } = draw
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
@@ -239,10 +239,12 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
     assert.equal(await boxText(), '**a** *b* ~~c~~', 'the markers show while typing')
     await draw.finishNote(p)
     assert.deepEqual((await saved()).map((item) => item.text).slice(-1), ['**a** *b* ~~c~~'], 'the raw markdown is stored')
-    const spans = await read((selector) => [...document.querySelectorAll(`${selector} span:not(.draw-tool-strike-piece)`)].map((e) => {
+    // A struck run is drawn by a line across each of its pieces: the piece's ::after has a height and the run's color.
+    const spans = await read(([selector, piece]) => [...document.querySelectorAll(`${selector} span:not(${piece})`)].map((e) => {
       const style = window.getComputedStyle(e)
-      return { text: e.textContent, bold: Number(style.fontWeight) >= 700, italic: style.fontStyle === 'italic', strike: e.classList.contains('draw-tool-strike') }
-    }), TEXTS)
+      const line = e.querySelector(piece) && window.getComputedStyle(e.querySelector(piece), '::after')
+      return { text: e.textContent, bold: Number(style.fontWeight) >= 700, italic: style.fontStyle === 'italic', strike: Boolean(line) && parseFloat(line.height) > 0 && line.backgroundColor === style.color }
+    }), [TEXTS, STRIKE_PIECE])
     assert.deepEqual(spans, [
       { text: 'a', bold: true, italic: false, strike: false },
       { text: 'b', bold: false, italic: true, strike: false },
