@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.6.6
+// @version      0.6.7
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.6.6'
+  const VERSION = '0.6.7'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -360,7 +360,7 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  // What `keys` hold now, as a function that puts them back; a key that held nothing is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys) {
     const before = keys.map((key) => [key, store.getData(key)])
     return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
@@ -631,6 +631,20 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // The index `delta` steps from `index` in a list of `count`, going round past either end.
+  const wrapIndex = (index, delta, count) => (((index + delta) % count) + count) % count
+
+  // The page's style element `id`, added on the first call, holds `css`.
+  function writeStyle (id, css, doc = document) {
+    let style = doc.getElementById(id)
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = id
+      doc.head.appendChild(style)
+    }
+    style.textContent = css
+  }
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:pointer-session>
@@ -719,6 +733,7 @@
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global Framework */
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
@@ -923,9 +938,14 @@
       host.append(message)
     }
 
+    // While a dialog write (`runOrThrow`) runs, a store write that throws goes on, marked here, to the dialog's `writeOrRestore`.
+    let dialogWrites = 0
+    const storeFailures = new WeakSet()
+
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
       const feature = {
+        label,
         off: false,
         skip (why, installed = true) {
           if (feature.off) return
@@ -948,22 +968,24 @@
           try {
             return fn()
           } catch (error) {
+            if (storeFailures.has(error)) throw error
             feature.skip(error)
             return fallback()
           }
         },
-        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
-        // frees. Any other throw skips the feature as `run` does.
-        write (fn) {
-          return feature.run(() => {
-            try {
-              return fn()
-            } catch (error) {
-              if (!isRefusedWrite(error)) throw error
-              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
-              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
-            }
-          })
+        // A save, copy or paste in a settings dialog: its throw goes on to the dialog's status line, and one with the feature off says so.
+        // A store write that fails in it passes with every feature still on, so `writeOrRestore` can put the earlier keys back through the store.
+        runOrThrow (fn) {
+          if (feature.off) throw new Error(`${name} turned off its ${label}`)
+          dialogWrites++
+          try {
+            return fn()
+          } catch (error) {
+            if (!storeFailures.has(error)) feature.skip(error)
+            throw error
+          } finally {
+            dialogWrites--
+          }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
         // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
@@ -1011,7 +1033,42 @@
       showNotice()
     }
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
+    // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
+    // A write that throws turns the feature off and its caller goes on, except in a dialog write, where it throws on (`runOrThrow`). A
+    // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
+    // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
+    // can save over the original.
+    function storeFor (feature) {
+      const write = (fn) => {
+        if (feature.off) return
+        try {
+          fn()
+        } catch (error) {
+          if (dialogWrites > 0) {
+            if (Object(error) === error) storeFailures.add(error)
+            throw error
+          }
+          if (!isRefusedWrite(error)) return feature.skip(error)
+          console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
+          tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
+        }
+      }
+      return {
+        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        setData: (key, value) => write(() => Framework.setData(key, value)),
+        removeData: (key) => write(() => Framework.removeData(key)),
+        keep: (key, value) => feature.run(() => Framework.setData(key, value))
+      }
+    }
+
+    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
+    const dialogsFor = (feature) => ({
+      addSetting: (setting) => Framework.addSetting(setting),
+      showDialog: (options) => Framework.showDialog(options),
+      closeDialog: () => feature.run(() => Framework.closeDialog())
+    })
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
@@ -1303,14 +1360,7 @@
 
   const CLASS_PREFIX = 'rules-resizer-'
   const DIALOG_ID = 'rules-resizer-dialog'
-  // What the settings entry and dialog are handed in place of Framework: the dialog's close runs under the settings when a button is pressed.
-  const dialogs = {
-    addSetting: (setting) => Framework.addSetting(setting),
-    showDialog: (options) => Framework.showDialog(options),
-    closeDialog: () => maxSizeSettings.run(() => Framework.closeDialog())
-  }
-  // A copy or paste with the settings off says so in the dialog's status line.
-  const settingsOff = () => { throw new Error(`the ${FEATURES.settings.label} are off`) }
+  const dialogs = guard.dialogsFor(maxSizeSettings)
   // Both Max Size keys and the limits mirroring them, as a function that puts them back after a Save or Paste that failed half-way.
   function snapshotLimits () {
     const restoreStored = snapshotStore(Framework, [MAX_WIDTH_KEY, MAX_HEIGHT_KEY])
@@ -1342,11 +1392,11 @@
         return typed.maxWidth !== limits.maxWidth || typed.maxHeight !== limits.maxHeight
       },
       snapshot: snapshotLimits,
-      save: () => maxSizeSettings.run(() => {
+      save: () => maxSizeSettings.runOrThrow(() => {
         limits = typedLimits()
         saveLimits(Framework, limits)
         fitPage()
-      }, settingsOff)
+      })
     })
     if (!body) return
     body.innerHTML = '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
@@ -1354,14 +1404,14 @@
       '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
     const widthInput = document.getElementById(MAX_WIDTH_INPUT_ID)
     const heightInput = document.getElementById(MAX_HEIGHT_INPUT_ID)
-    const copied = () => maxSizeSettings.run(() => copiedSettings(Framework), settingsOff)
-    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS, snapshot: snapshotLimits }, (values) => maxSizeSettings.run(() => {
+    const copied = () => maxSizeSettings.runOrThrow(() => copiedSettings(Framework))
+    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS, snapshot: snapshotLimits }, (values) => maxSizeSettings.runOrThrow(() => {
       limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
       saveLimits(Framework, limits)
       if (MAX_WIDTH_KEY in values) widthInput.value = limits.maxWidth ?? ''
       if (MAX_HEIGHT_KEY in values) heightInput.value = limits.maxHeight ?? ''
       fitPage()
-    }, settingsOff))
+    }))
   }
 
   // The drag reads the puzzle's id, so it is the fit's.

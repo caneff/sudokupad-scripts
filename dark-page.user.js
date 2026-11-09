@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.10
+// @version      0.7.11
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.10'
+  const VERSION = '0.7.11'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -227,7 +227,7 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  // What `keys` hold now, as a function that puts them back; a key that held nothing is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys) {
     const before = keys.map((key) => [key, store.getData(key)])
     return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
@@ -493,6 +493,7 @@
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global Framework */
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
@@ -697,9 +698,14 @@
       host.append(message)
     }
 
+    // While a dialog write (`runOrThrow`) runs, a store write that throws goes on, marked here, to the dialog's `writeOrRestore`.
+    let dialogWrites = 0
+    const storeFailures = new WeakSet()
+
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
       const feature = {
+        label,
         off: false,
         skip (why, installed = true) {
           if (feature.off) return
@@ -722,22 +728,24 @@
           try {
             return fn()
           } catch (error) {
+            if (storeFailures.has(error)) throw error
             feature.skip(error)
             return fallback()
           }
         },
-        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
-        // frees. Any other throw skips the feature as `run` does.
-        write (fn) {
-          return feature.run(() => {
-            try {
-              return fn()
-            } catch (error) {
-              if (!isRefusedWrite(error)) throw error
-              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
-              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
-            }
-          })
+        // A save, copy or paste in a settings dialog: its throw goes on to the dialog's status line, and one with the feature off says so.
+        // A store write that fails in it passes with every feature still on, so `writeOrRestore` can put the earlier keys back through the store.
+        runOrThrow (fn) {
+          if (feature.off) throw new Error(`${name} turned off its ${label}`)
+          dialogWrites++
+          try {
+            return fn()
+          } catch (error) {
+            if (!storeFailures.has(error)) feature.skip(error)
+            throw error
+          } finally {
+            dialogWrites--
+          }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
         // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
@@ -785,7 +793,42 @@
       showNotice()
     }
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
+    // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
+    // A write that throws turns the feature off and its caller goes on, except in a dialog write, where it throws on (`runOrThrow`). A
+    // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
+    // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
+    // can save over the original.
+    function storeFor (feature) {
+      const write = (fn) => {
+        if (feature.off) return
+        try {
+          fn()
+        } catch (error) {
+          if (dialogWrites > 0) {
+            if (Object(error) === error) storeFailures.add(error)
+            throw error
+          }
+          if (!isRefusedWrite(error)) return feature.skip(error)
+          console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
+          tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
+        }
+      }
+      return {
+        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        setData: (key, value) => write(() => Framework.setData(key, value)),
+        removeData: (key) => write(() => Framework.removeData(key)),
+        keep: (key, value) => feature.run(() => Framework.setData(key, value))
+      }
+    }
+
+    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
+    const dialogsFor = (feature) => ({
+      addSetting: (setting) => Framework.addSetting(setting),
+      showDialog: (options) => Framework.showDialog(options),
+      closeDialog: () => feature.run(() => Framework.closeDialog())
+    })
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
@@ -845,14 +888,7 @@
 
   const CLASS_PREFIX = 'dark-page-'
   const DIALOG_ID = 'dark-page-dialog'
-  // What the settings entry and dialog are handed in place of Framework: the dialog's close runs under the settings entry when a button is pressed.
-  const dialogs = {
-    addSetting: (setting) => Framework.addSetting(setting),
-    showDialog: (options) => Framework.showDialog(options),
-    closeDialog: () => settingsEntry.run(() => Framework.closeDialog())
-  }
-  // A copy or paste with its feature off says so in the dialog's status line.
-  const offNow = (feature) => () => { throw new Error(`the ${FEATURES[feature].label} is off`) }
+  const dialogs = guard.dialogsFor(settingsEntry)
   // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
   const snapshotColor = () => snapshotStore(Framework, [DATA_KEY])
 
@@ -865,7 +901,7 @@
       bodyId: DIALOG_ID,
       changed: () => picked !== pageColor,
       snapshot: snapshotColor,
-      save: () => settingsEntry.run(() => saveColor(picked), offNow('settings'))
+      save: () => settingsEntry.runOrThrow(() => saveColor(picked))
     })
     if (!body) return
     body.innerHTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
@@ -883,13 +919,13 @@
     const reset = document.getElementById('dark-page-reset')
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase(); preview() })
-    const copied = () => savedPageColor.run(() => copiedSettings(Framework), offNow('savedColor'))
-    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS, snapshot: snapshotColor }, (values) => settingsEntry.run(() => {
+    const copied = () => savedPageColor.runOrThrow(() => copiedSettings(Framework))
+    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS, snapshot: snapshotColor }, (values) => settingsEntry.runOrThrow(() => {
       if (!(DATA_KEY in values)) return
       picked = values[DATA_KEY]
       input.value = picked
       saveColor(picked)
-    }, offNow('settings')))
+    }))
     reset.addEventListener('click', (event) => {
       event.preventDefault()
       event.stopPropagation()

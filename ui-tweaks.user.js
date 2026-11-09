@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.5
+// @version      0.1.6
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Toggle Selection button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.5'
+  const VERSION = '0.1.6'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -106,7 +106,7 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  // What `keys` hold now, as a function that puts them back; a key that held nothing is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys) {
     const before = keys.map((key) => [key, store.getData(key)])
     return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
@@ -372,6 +372,7 @@
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global Framework */
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
@@ -576,9 +577,14 @@
       host.append(message)
     }
 
+    // While a dialog write (`runOrThrow`) runs, a store write that throws goes on, marked here, to the dialog's `writeOrRestore`.
+    let dialogWrites = 0
+    const storeFailures = new WeakSet()
+
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
       const feature = {
+        label,
         off: false,
         skip (why, installed = true) {
           if (feature.off) return
@@ -601,22 +607,24 @@
           try {
             return fn()
           } catch (error) {
+            if (storeFailures.has(error)) throw error
             feature.skip(error)
             return fallback()
           }
         },
-        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
-        // frees. Any other throw skips the feature as `run` does.
-        write (fn) {
-          return feature.run(() => {
-            try {
-              return fn()
-            } catch (error) {
-              if (!isRefusedWrite(error)) throw error
-              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
-              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
-            }
-          })
+        // A save, copy or paste in a settings dialog: its throw goes on to the dialog's status line, and one with the feature off says so.
+        // A store write that fails in it passes with every feature still on, so `writeOrRestore` can put the earlier keys back through the store.
+        runOrThrow (fn) {
+          if (feature.off) throw new Error(`${name} turned off its ${label}`)
+          dialogWrites++
+          try {
+            return fn()
+          } catch (error) {
+            if (!storeFailures.has(error)) feature.skip(error)
+            throw error
+          } finally {
+            dialogWrites--
+          }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
         // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
@@ -664,7 +672,42 @@
       showNotice()
     }
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
+    // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
+    // A write that throws turns the feature off and its caller goes on, except in a dialog write, where it throws on (`runOrThrow`). A
+    // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
+    // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
+    // can save over the original.
+    function storeFor (feature) {
+      const write = (fn) => {
+        if (feature.off) return
+        try {
+          fn()
+        } catch (error) {
+          if (dialogWrites > 0) {
+            if (Object(error) === error) storeFailures.add(error)
+            throw error
+          }
+          if (!isRefusedWrite(error)) return feature.skip(error)
+          console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
+          tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
+        }
+      }
+      return {
+        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        setData: (key, value) => write(() => Framework.setData(key, value)),
+        removeData: (key) => write(() => Framework.removeData(key)),
+        keep: (key, value) => feature.run(() => Framework.setData(key, value))
+      }
+    }
+
+    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
+    const dialogsFor = (feature) => ({
+      addSetting: (setting) => Framework.addSetting(setting),
+      showDialog: (options) => Framework.showDialog(options),
+      closeDialog: () => feature.run(() => Framework.closeDialog())
+    })
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
@@ -733,14 +776,7 @@
     `#${DIALOG_ID} .${CLASS_PREFIX}option input { position: static !important; margin: 3px 0 0 !important; flex: none; width: 18px !important; height: 18px !important; cursor: pointer; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}option small { display: block; opacity: .65; }`
   ].join('\n')
-  // What the settings entry and dialog are handed in place of Framework: the dialog's close runs under the settings entry when a button is pressed.
-  const dialogs = {
-    addSetting: (setting) => Framework.addSetting(setting),
-    showDialog: (config) => Framework.showDialog(config),
-    closeDialog: () => settingsEntry.run(() => Framework.closeDialog())
-  }
-  // A copy or paste with its feature off says so in the dialog's status line.
-  const offNow = (feature) => () => { throw new Error(`the ${FEATURES[feature].label} is off`) }
+  const dialogs = guard.dialogsFor(settingsEntry)
   // Every option's key and the options in force, as a function that puts them back after a Save or Paste that failed half-way.
   function snapshotOptions () {
     const restoreStored = snapshotStore(Framework, OPTIONS.map((option) => option.key))
@@ -768,10 +804,10 @@
       css: DIALOG_CSS,
       changed: () => OPTIONS.some((option) => draft[option.id] !== options[option.id]),
       snapshot: snapshotOptions,
-      save: () => settingsEntry.run(() => {
+      save: () => settingsEntry.runOrThrow(() => {
         saveOptions(Framework, draft)
         applyOptions({ ...draft })
-      }, offNow('settings'))
+      })
     })
     if (!body) return
     body.innerHTML = OPTIONS.map(optionRow).join('')
@@ -780,8 +816,8 @@
       box(option.id).checked = draft[option.id]
       box(option.id).addEventListener('change', (event) => { draft[option.id] = event.target.checked })
     })
-    const copied = () => saved.run(() => copiedSettings(Framework), offNow('saved'))
-    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS, snapshot: snapshotOptions }, (values) => settingsEntry.run(() => {
+    const copied = () => saved.runOrThrow(() => copiedSettings(Framework))
+    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS, snapshot: snapshotOptions }, (values) => settingsEntry.runOrThrow(() => {
       const next = pastedOptions(options, values)
       saveOptions(Framework, next)
       applyOptions(next)
@@ -789,7 +825,7 @@
         draft[option.id] = next[option.id]
         box(option.id).checked = next[option.id]
       })
-    }, offNow('settings')))
+    }))
   }
 
   // The letter tool's own list holds whenever the tool is on, so a swapped list is not undone by the setting.
