@@ -92,6 +92,12 @@ test('on a light page color SudokuPad\'s buttons are left as they are', () => {
   assert.deepEqual(buttonRules('#ffcc00'), [])
 })
 
+test('the page text is white up to #757575 and black from #767676, as it was before textColorFor took the pair', () => {
+  const footerColor = (color) => /\.controls-footer a \{ color: (#\w+) !important \}/.exec(buildCss(color))[1]
+  for (const grey of ['#000000', '#333333', '#747474', '#757575']) assert.equal(footerColor(grey), '#ffffff', grey)
+  for (const grey of ['#767676', '#777777', '#cccccc', '#ffffff']) assert.equal(footerColor(grey), '#000000', grey)
+})
+
 test('the buttons switch exactly where the credit text does', () => {
   for (const color of ['#000000', '#333333', '#747474', '#757575', '#cccccc', '#ffffff', '#0000ff', '#ffff00']) {
     assert.equal(buttonRules(color).length > 0, textColorFor(color) === '#dddddd', color)

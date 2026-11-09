@@ -99,9 +99,9 @@ test('a name no lib module defines (a browser global, or one the script defines)
   assert.deepEqual(syncText(script(needyBlock), (name) => unrelated[name], libNames).problems, [])
 })
 
-test('the issue\'s case on the real modules: palette without color-math and ready names both', () => {
+test('the issue\'s case on the real modules: palette without color-math names it', () => {
   const problems = syncText(script(wrap('palette', '  const x = 1')), readLib, libNamesOnDisk()).problems
-  assert.deepEqual(problems, [['parseColor', 'color-math'], ['darkenColor', 'color-math'], ['toOklab', 'color-math'], ['whenReady', 'ready']].map(([used, owner]) => `lib:palette reads ${used} from lib:${owner}, which this script does not copy in`))
+  assert.deepEqual(problems, [['parseColor', 'color-math'], ['darkenColor', 'color-math'], ['toOklab', 'color-math']].map(([used, owner]) => `lib:palette reads ${used} from lib:${owner}, which this script does not copy in`))
 })
 
 test('every form of the global comment is read, and a name with a regex character is matched', () => {
