@@ -2341,10 +2341,10 @@
     `.${HANDLE_CLASS}.${ENTERING_CLASS} { opacity: 0; }`,
     `.${CHECK_CLASS} { display: inline-block; box-sizing: border-box; width: 0.8em; height: 0.8em; border: 2px solid currentColor; border-radius: 3px; vertical-align: -0.05em; position: relative; }`,
     `.${CODE_CLASS} { font-family: ${FIXED_FONT_STACK}; font-size: 0.9em; background: color-mix(in srgb, currentColor 15%, transparent); border-radius: 0.25em; padding: 0.05em 0.25em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }`,
-    // A struck run is a stacking context of its own, so a line's z-index puts it above its own pieces' halos and no higher: a note drawn later still covers it.
+    // A struck run is a stacking context of its own, so its lines paint with it: a note drawn later still covers them.
     `.${STRIKE_CLASS} { isolation: isolate; }`,
     `.${STRIKE_PIECE_CLASS} { position: relative; }`,
-    `.${STRIKE_PIECE_CLASS}::after { content: ''; position: absolute; z-index: 1; left: 0; right: 0; top: 52%; height: 0.07em; background: currentColor; }`,
+    `.${STRIKE_PIECE_CLASS}::after { content: ''; position: absolute; left: 0; right: 0; top: 52%; height: 0.07em; background: currentColor; }`,
     `.${CODE_BLOCK_CLASS} { display: block; padding: 0.15em 0.35em; border-radius: 0.3em; }`,
     `.${CHECK_DONE_CLASS}::after { content: ''; position: absolute; left: 0.2em; top: -0.1em; width: 0.25em; height: 0.5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) .${CHECK_CLASS} { cursor: pointer; }`,

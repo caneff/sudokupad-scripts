@@ -54,7 +54,7 @@ await p.click(`${KEYPAD} button[data-key="${BLUE}"]`)
 const SIZE_VALUE = (16 - 8) / 2
 await slideTo(p, SIZE_SLIDER, SIZE_VALUE)
 if ((await valueOf(p, SIZE_SLIDER)) !== SIZE_VALUE) throw new Error('the Size slider did not land')
-// A note with a box has no halo: the halo's shadow of a strikethrough line hides the top half of the struck letters.
+// A note with a box has no halo, so the picture shows the letters on the box color.
 const background = p.locator(BACKGROUND_BUTTON)
 if ((await background.getAttribute('aria-pressed')) !== 'true') await background.click()
 if ((await background.getAttribute('aria-pressed')) !== 'true') throw new Error('Background did not turn on')
