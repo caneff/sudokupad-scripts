@@ -21,12 +21,8 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
   let context, p, errors
 
   const savedSize = async (text) => (await draw.saved(p)).find((item) => item.text === text).size
-  const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
-  const typeText = async (at, content) => {
-    await clickAt(at)
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
-  }
+  const clickAt = (at) => draw.clickAt(p, at)
+  const typeText = (at, content) => draw.typeText(p, at, content)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } }))
@@ -57,6 +53,27 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.equal(await savedSize('A'), 23, '= and the keypad + step it too')
     await p.keyboard.press('NumpadSubtract')
     assert.equal(await savedSize('A'), 22)
+  })
+
+  it('with Ctrl or Alt held the keys change nothing', async () => {
+    await typeText(A, 'A')
+    await clickAt(A)
+    await p.keyboard.press('+')
+    await p.keyboard.press('Control+-')
+    await p.keyboard.press('Alt+=')
+    assert.equal(await savedSize('A'), 21, 'only the plain + stepped')
+  })
+
+  it('a + pressed in the middle of a move of the note changes nothing, and the size stays what the drop leaves', async () => {
+    await typeText(A, 'A')
+    await clickAt(A)
+    const [x, y] = await gridPoint(p, A)
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.move(x + 40, y + 40, { steps: 5 })
+    await p.keyboard.press('+')
+    await p.mouse.up()
+    assert.deepEqual([await savedSize('A'), await valueOf(p, SIZE_SLIDER)], [20, 6])
   })
 
   it('with nothing selected, + moves the slider and the next note\'s size, not a note already made', async () => {
