@@ -218,7 +218,9 @@ test('copyOldKeys: an unreadable old index is copied as it was saved, says why i
 test('Paste settings copied before the rename, under DrawTool_ keys, returns them under the new keys; a new key beside its old twin wins', () => {
   assert.deepEqual(readPaste(JSON.stringify(withOldKeys({ [WIDTH_KEY]: 3.5, [FRAME_KEY]: true, [COLORS_KEY]: hexes('#aabbcc') }))),
     { values: { [WIDTH_KEY]: 3.5, [FRAME_KEY]: true, [COLORS_KEY]: hexes('#aabbcc') }, skipped: 0 })
-  assert.deepEqual(readPaste(JSON.stringify({ [oldKey(WIDTH_KEY)]: 3.5, [WIDTH_KEY]: 8 })), { values: { [WIDTH_KEY]: 8 }, skipped: 0 })
+  for (const both of [{ [oldKey(WIDTH_KEY)]: 3.5, [WIDTH_KEY]: 8 }, { [WIDTH_KEY]: 8, [oldKey(WIDTH_KEY)]: 3.5 }]) {
+    assert.deepEqual(readPaste(JSON.stringify(both)), { values: { [WIDTH_KEY]: 8 }, skipped: 0 }, Object.keys(both).join(' then '))
+  }
   assert.deepEqual(readPaste(JSON.stringify({ [oldKey(WIDTH_KEY)]: 99 })), { values: {}, skipped: 1 }, 'an old value is checked as a new one is')
 })
 
