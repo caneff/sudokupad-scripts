@@ -1,6 +1,6 @@
 name: Fuzz SudokuPad
 
-# Nightly: `npm run fuzz:nightly` runs the random tester for 30 minutes with a fresh seed on real SudokuPad and files one `bug` issue per distinct
+# Nightly: `npm run fuzz:nightly` runs the random tester for 30 minutes on real SudokuPad, starting again on a fresh seed after each failure, and files one `bug` issue per distinct
 # failure (a comment on the open issue when one has the title), or a "did not run" issue when it cannot reach a verdict (live/fuzz/nightly.mjs).
 # Its own workflow, not a job of watch.yml: 30 minutes must not hold up the watch, and the two have their own concurrency groups.
 # `workflow_dispatch` is the manual run.
