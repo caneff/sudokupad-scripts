@@ -19,7 +19,7 @@ const {
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX,
-  lackingInternals, FEATURES,
+  lackingInternals, FEATURES, arrowHeads,
   edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady
 } = require('../pen-tool-extras.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
@@ -2367,4 +2367,10 @@ test('whenReady rejects with the error check() throws, rather than leaving the p
   await assert.rejects(
     whenReady(() => { throw new TypeError('boom') }, { timeoutMs: 1000, what: 'the tool' }),
     /boom/)
+})
+
+test('arrowHeads puts `count` heads at the middles of equal shares of the way, each pointing at the end', () => {
+  assert.equal(arrowHeads([0, 0], [64, 0], 1, 2), 'M14.56 2.13L17.44 0L14.56 -2.12ZM46.56 2.13L49.44 0L46.56 -2.12Z')
+  assert.equal(arrowHeads([0, 0], [0, 64], 1, 1), 'M-2.12 30.56L0 33.44L2.13 30.56Z')
+  assert.equal(arrowHeads([0, 0], [64, 0], 1, 0), '')
 })

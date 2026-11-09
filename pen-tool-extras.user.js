@@ -1310,14 +1310,14 @@
   // `:root:root` outranks SudokuPad's own rules whichever stylesheet loads last.
   function buildPagesCss (thickness, dash) {
     const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_KEYS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
-    PEN_PAGES.forEach((page, index) => {
+    COLOR_CHARS.forEach(({ page: index, number }, c) => {
       if (index === 0) return
-      page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {
-        rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLOR_KEYS[i]}); }`)
-        // A line is stroked and an arrow is filled, in the same color: the arrows' path has no stroke of its own.
-        if (page.arrowLines) rules.push(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${PEN_COLOR_KEYS[i]}); stroke: none; }`)
-      }))
-      if (!page.dashed) return
+      rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${number}); }`)
+      // A line is stroked and an arrow is filled, in the same color: the arrows' path has no stroke of its own.
+      if (PEN_PAGES[index].arrowLines) rules.push(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${number}); stroke: none; }`)
+    })
+    PEN_PAGES.forEach((page, index) => {
+      if (index === 0 || !page.dashed) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
       const lines = (values, length) => `:root:root .cell-pen:is(${values.map((v) => `.pen-${v}`).join(',')})${colors} { ${dashDeclarations(thickness, dash, length)} }`
       rules.push(lines(ORTHOGONAL_LINES, CELL_UNITS), lines(DIAGONAL_LINES, CELL_UNITS * Math.SQRT2))
@@ -1509,15 +1509,7 @@
     const shown = Math.max(0, on - 1)
     return { on: shown, gap: gap + 1, offset: shown / 2 }
   }
-  function swatchArrows () {
-    const headScale = arrowHeadScaleOf(THICKNESS.fallback) * SWATCH_ARROW_SCALE
-    const [half, wide] = [ARROW_LINE.halfLength * headScale, ARROW_LINE.halfWidth * headScale]
-    const length = SWATCH_LINE.to - SWATCH_LINE.from
-    return [0.25, 0.75].map((along) => {
-      const [wing, tip, other] = arrowCorners(SWATCH_LINE.from + along * length, SWATCH_LINE.middle, 1, 0, half, wide)
-      return `M${pointText(wing)}L${pointText(tip)}L${pointText(other)}Z`
-    }).join('')
-  }
+  const swatchArrows = () => arrowHeads([SWATCH_LINE.from, SWATCH_LINE.middle], [SWATCH_LINE.to, SWATCH_LINE.middle], arrowHeadScaleOf(THICKNESS.fallback) * SWATCH_ARROW_SCALE, 2)
   const SWATCH_PAINT = "fill='none' stroke='currentColor' stroke-linecap='round'"
   function swatchPicture (page, dash, angle) {
     const { on, gap, offset } = swatchDashes(dash)
@@ -1585,30 +1577,31 @@
     return out
   }
 
-  function arrowCorners (x, y, ux, uy, half, wide) {
-    return [[x - ux * half - uy * wide, y - uy * half + ux * wide], [x + ux * half, y + uy * half], [x - ux * half + uy * wide, y - uy * half - ux * wide]]
-  }
-
   const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
 
   const arrowHeadScaleOf = (thickness) => 0.8 * THICKNESS.fallback * (thickness / THICKNESS.fallback) ** 0.8
   const arrowGapOf = (thickness, spacing) => spacing * 8 * (thickness / THICKNESS.fallback) ** 0.2
 
   // Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join.
-  function arrowRun (from, to, thickness, spacing, shrink = 1) {
+  // `count` heads of `headScale`, each in the middle of its equal share of the way from `from` to `to`, pointing at `to`.
+  function arrowHeads (from, to, headScale, count) {
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
-    const headScale = arrowHeadScaleOf(thickness) * shrink
     const [half, wide] = [ARROW_LINE.halfLength * headScale, ARROW_LINE.halfWidth * headScale]
-    // Every segment holds at least one arrow, so a line never loses its direction.
-    const count = Math.max(1, Math.round(length / (arrowGapOf(thickness, spacing) * shrink)))
     let arrows = ''
     for (let i = 0; i < count; i++) {
       const along = (i + 0.5) * length / count
-      const [wing, tip, other] = arrowCorners(from[0] + ux * along, from[1] + uy * along, ux, uy, half, wide)
-      arrows += `M${pointText(wing)}L${pointText(tip)}L${pointText(other)}Z`
+      const [x, y] = [from[0] + ux * along, from[1] + uy * along]
+      const corners = [[x - ux * half - uy * wide, y - uy * half + ux * wide], [x + ux * half, y + uy * half], [x - ux * half + uy * wide, y - uy * half - ux * wide]]
+      arrows += `M${pointText(corners[0])}L${pointText(corners[1])}L${pointText(corners[2])}Z`
     }
     return arrows
+  }
+
+  function arrowRun (from, to, thickness, spacing) {
+    // Every segment holds at least one arrow, so a line never loses its direction.
+    const count = Math.max(1, Math.round(Math.hypot(to[0] - from[0], to[1] - from[1]) / arrowGapOf(thickness, spacing)))
+    return arrowHeads(from, to, arrowHeadScaleOf(thickness), count)
   }
 
   function arrowLine (value, forward, row, col, thickness, spacing) {
@@ -1765,8 +1758,7 @@
   // About a fifth of a cell across with the default stroke: 2 * 0.65 * 8 + 2.5 is 12.9 of 64 units.
   const DOT_RADIUS_PER_HALF_SIZE = 0.65
   // A pen stroke has no fill, so the dot is filled in its pen's color by the color character it was stored with, on every page.
-  const DOT_FILL_CSS = PEN_PAGES.flatMap((page) => page.chars.flatMap((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])]
-    .map((c) => `:root:root .cell-pen.pen-${CELL_CYCLE.values.dot}.pencolor-${c} { fill: var(--puzzle-pencolor-${PEN_COLOR_KEYS[i]}); }`))).join('\n')
+  const DOT_FILL_CSS = [...COLOR_CHARS].map(([c, { number }]) => `:root:root .cell-pen.pen-${CELL_CYCLE.values.dot}.pencolor-${c} { fill: var(--puzzle-pencolor-${number}); }`).join('\n')
   const ADDED_MARKS = new Map([
     ...Object.entries(EDGES).flatMap(([edge, { added, arrows }]) =>
       ADDED_ORDER.map((type, i) => [added[i], { edge, type, shape: type === 'circle' ? CIRCLE : arrows[i] }])),
@@ -1792,11 +1784,8 @@
   function stepType (current, settings, cycle) {
     const order = [...cycle.types, 'empty']
     const from = order.indexOf(current)
-    for (let step = 1; step <= order.length; step++) {
-      const type = order[wrapIndex(from, step, order.length)]
-      if (type === 'empty' || settings[cycle.setting[type]]) return type
-    }
-    throw new Error('pen-tool-extras: the cycle has no empty step')
+    // `empty` is in the order, so some step always matches.
+    return Array.from(order, (_, step) => order[wrapIndex(from, step + 1, order.length)]).find((type) => type === 'empty' || settings[cycle.setting[type]])
   }
 
   function planCycleClick (cycle, valueOf, present, settings) {
@@ -2087,13 +2076,9 @@
   // The bare value toggles a stroke or a mark off whichever color character it was stored with. One group sends the actions, so one undo restores everything erased.
   // `marks` is `{ cell, values }` per cell.
   function eraseActs (segments, marks, cellAt) {
-    const cellsOf = new Map()
-    for (const { value, row, col } of segments) {
-      if (!cellsOf.has(value)) cellsOf.set(value, [])
-      cellsOf.get(value).push(cellAt(row, col))
-    }
+    const cellsOf = Map.groupBy(segments, ({ value }) => value)
     const groups = [
-      ...[...cellsOf].map(([value, cells]) => [{ type: 'select', arg: cells }, { type: 'pen', arg: value }]),
+      ...[...cellsOf].map(([value, group]) => [{ type: 'select', arg: group.map(({ row, col }) => cellAt(row, col)) }, { type: 'pen', arg: value }]),
       ...marks.map(({ cell, values }) => [{ type: 'select', arg: [cell] }, ...values.map((arg) => ({ type: 'pen', arg }))])
     ]
     return groups.flatMap((group, i) => i === 0 ? group : [{ type: 'deselect' }, ...group])
@@ -3209,7 +3194,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { clickedMarks, cornerMarks, marksAtPoint, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
+    module.exports = { clickedMarks, cornerMarks, marksAtPoint, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return
