@@ -7,7 +7,7 @@ import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { openPenTool, PAGE_BUTTON } from '../pen.mjs'
 import { closeExtrasEditorWith, openExtrasEditor, openScriptDialog } from '../settings.mjs'
-import { pickDraw, TEXT_BOX, TEXTS } from '../draw-tool/draw-tool-fixtures.mjs'
+import { pickTextAnywhere, TEXT_BOX, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { runFuzz, runScript } from './engine.mjs'
 import { scriptedList } from './actions.mjs'
@@ -47,7 +47,7 @@ function envFor (p, puzzle) {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
   }
   const pickNotes = async () => {
-    if (await pickDraw(p) !== 'draw') throw new Error('Text Anywhere\'s tool could not be picked')
+    if (await pickTextAnywhere(p) !== 'textanywhere') throw new Error('Text Anywhere\'s tool could not be picked')
   }
   return {
     page: p,

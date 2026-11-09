@@ -164,7 +164,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
   let context, p, errors
 
   before(async () => {
-    ;({ context, p, errors } = await open(['color-by-digit.user.js', 'pen-tool-extras.user.js', 'draw-tool.user.js', SCRIPT_FILE]))
+    ;({ context, p, errors } = await open(['color-by-digit.user.js', 'pen-tool-extras.user.js', 'text-anywhere.user.js', SCRIPT_FILE]))
     await p.evaluate(() => Framework.setSetting('toolpen', true))
     await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })
   })
@@ -190,7 +190,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
 
   it('the tool buttons of the other scripts stay visible', async () => {
     assert.equal(await p.locator('#control-pen').isVisible(), true)
-    assert.equal(await p.locator('#control-draw').isVisible(), true)
+    assert.equal(await p.locator('#control-textanywhere').isVisible(), true)
   })
 
   it('the page raised no error', () => {

@@ -6,7 +6,7 @@
 // endpoint at run time into the live cache, beside the SudokuPad recording, and never committed. A copy a day old is
 // fetched again. live/README.md § The Tampermonkey test has what the test covers and needs.
 
-import { chromium } from 'playwright'
+import { chromium, errors } from 'playwright'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -140,6 +140,11 @@ export async function installScript ({ context, id }, url) {
     if (!opener.isClosed()) await opener.close()
   }
   if (!ask) throw new Error(`Tampermonkey showed no install page for ${url} in ${ASK_TRIES} tries`)
+  return clickAction(ask)
+}
+
+// Clicks the install page's action, its first button, and resolves to its label once the page has closed itself.
+async function clickAction (ask) {
   const button = ask.locator('input[type=button].install').first()
   await button.waitFor({ state: 'visible', timeout: PAGE_MS })
   const label = await button.getAttribute('value')
@@ -152,12 +157,35 @@ export async function installScript ({ context, id }, url) {
 // The dashboard's row for an installed script. Its table also holds a header row and a "<New userscript>" row,
 // which have no version.
 const INSTALLED_VERSION = 'tr.scripttr td.script_version'
+const DASHBOARD = (id) => `chrome-extension://${id}/options.html#nav=dashboard`
+// A script's "last updated" time on the dashboard, which checks that script for an update when clicked.
+const CHECK_FOR_UPDATE = 'tr.scripttr span.script_update .clickable[title="Check for updates"]'
+
+// Clicks "Check for updates" on the dashboard's one installed script, as a user does, and clicks the action of the
+// install page Tampermonkey opens for an update whose @updateURL changed. An update that keeps its address installs
+// with no page, and so does none at all, so the caller reads the dashboard for the version it expects.
+export async function checkForUpdate ({ context, id }) {
+  const page = await context.newPage()
+  try {
+    await page.goto(DASHBOARD(id))
+    const check = page.locator(CHECK_FOR_UPDATE)
+    await check.waitFor({ state: 'visible', timeout: PAGE_MS })
+    // Only the wait running out means no page opened; any other failure is thrown.
+    const shown = context.waitForEvent('page', { predicate: isAsk(id), timeout: ASK_MS })
+      .catch((error) => { if (error instanceof errors.TimeoutError) return null; throw error })
+    await check.click()
+    const ask = await shown
+    if (ask) await clickAction(ask)
+  } finally {
+    await page.close()
+  }
+}
 
 // Every script Tampermonkey's dashboard lists, as `{ name, version }`, once it lists at least one.
 export async function installedScripts ({ context, id }) {
   const page = await context.newPage()
   try {
-    await page.goto(`chrome-extension://${id}/options.html#nav=dashboard`)
+    await page.goto(DASHBOARD(id))
     await page.waitForFunction((sel) => [...document.querySelectorAll(sel)].some((td) => td.textContent.trim()), INSTALLED_VERSION, { timeout: PAGE_MS })
     return await page.locator(INSTALLED_VERSION).evaluateAll((cells) => cells
       .filter((td) => td.textContent.trim())

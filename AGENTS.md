@@ -14,11 +14,12 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   Each script's notes and pictures are in its own folder (`docs/research/<script name>/`), pictures of a whole site page in `docs/research/site/`,
   and notes about SudokuPad itself at the top.
 - **Tests**: unit tests are in `test/` (`test/<script name>.test.js`), each shared module's in `lib/<name>.test.js`, a spec's closing test in `test/specs/`, and live tests in
-  `live/<script name>/`. The six `*.user.js` stay at the root: every installed copy checks that address for updates.
+  `live/<script name>/`. Every `*.user.js` stays at the root: every installed copy checks that address for updates. Never edit `draw-tool.user.js`:
+  it is Text Anywhere's frozen handover (`GLOSSARY.md`).
 - **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live` every night at 06:17 UTC on GitHub Actions (and by hand through
   `workflow_dispatch`); `live/README.md` § The daily watch has the rule.
 - **`GLOSSARY.md`**: the vocabulary.
-- **A change to what a script shows** (its panel, buttons, dialog or drawing) updates that script's text in `site/` and retakes the site pictures that
+- **A change to what a script shows** (its panel, buttons, dialog or what it draws) updates that script's text in `site/` and retakes the site pictures that
   show it, with their scripts (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
   After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
   and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.

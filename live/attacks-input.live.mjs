@@ -9,7 +9,7 @@ import { assertNoCrash, openWithAllScripts } from './attacks.mjs'
 import { cellCentre, finishNote, gridPoint, mouseDrag, typeText, undoDepth } from './board.mjs'
 import { penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
-import * as draw from './draw-tool/draw-tool-fixtures.mjs'
+import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
 import { useBrowser } from './session.mjs'
 
 const browser = useBrowser()
@@ -42,7 +42,7 @@ describe('attacks on input', { concurrency: false }, () => {
       await interrupt?.()
       await p.mouse.move(...await gridPoint(p, [row + 0.5, 4.5]), { steps: 6 })
       await p.mouse.up()
-      await draw.frames(p)
+      await textAnywhere.frames(p)
       return (await penEntries(p)).filter((entry) => entry.startsWith(`${row},`)).map((entry) => entry.replace(/^\d+/, 'R'))
     }
     const whole = await lineOnRow(1)
@@ -53,29 +53,29 @@ describe('attacks on input', { concurrency: false }, () => {
       else assert.equal(drawn.length > 0 && drawn.length < whole.length && drawn.every((segment) => whole.includes(segment)), true, `${name} ends the line where it fell: ${JSON.stringify(drawn)}`)
     }
     assert.deepEqual(await lineOnRow(9 - 1), whole, 'an ordinary drag still draws the whole line afterward')
-    assert.equal(await draw.tool(p), 'pen', 'the pen is still the tool')
+    assert.equal(await textAnywhere.tool(p), 'pen', 'the pen is still the tool')
     await assertNoCrash(p, errors)
 
     // The note move: a drag from a note's middle by two cells with the interruption at one cell.
-    await pickTool(p, 'draw')
+    await pickTool(p, 'textanywhere')
     const [, , size] = await cellCentre(p, 0, 0)
     const notes = [['11', 1.5], ['22', 3.5], ['33', 5.5], ['44', 7.5]]
     for (const [text, row] of notes) await typeText(p, [row, 1.5], text)
     const moveNote = async ([text, row], interrupt) => {
-      const [x, y] = await draw.middleAt(p, await gridPoint(p, [row, 1.5]))
-      const before = (await draw.noteInCells(p, text))[1]
+      const [x, y] = await textAnywhere.middleAt(p, await gridPoint(p, [row, 1.5]))
+      const before = (await textAnywhere.noteInCells(p, text))[1]
       await p.mouse.move(x, y)
       await p.mouse.down()
       await p.mouse.move(x + size, y, { steps: 6 })
       await interrupt?.()
       await p.mouse.move(x + 2 * size, y, { steps: 6 })
       await p.mouse.up()
-      await draw.frames(p)
-      const moved = (await draw.noteInCells(p, text))[1] - before
+      await textAnywhere.frames(p)
+      const moved = (await textAnywhere.noteInCells(p, text))[1] - before
       // No button is held, so the note must stay put under further mouse moves.
       await p.mouse.move(x + 3 * size, y + size, { steps: 4 })
-      await draw.frames(p)
-      assert.equal(Math.abs((await draw.noteInCells(p, text))[1] - before - moved) < 0.15, true, `${text}: the note does not follow a mouse with no button held`)
+      await textAnywhere.frames(p)
+      assert.equal(Math.abs((await textAnywhere.noteInCells(p, text))[1] - before - moved) < 0.15, true, `${text}: the note does not follow a mouse with no button held`)
       return moved
     }
     const full = await moveNote(notes[0])
@@ -86,10 +86,10 @@ describe('attacks on input', { concurrency: false }, () => {
       // Ctrl is SudokuPad's temporary Centre tool, which ends the gesture; a middle click ends it as a release does. Either way the note rests where the pointer was.
       else assert.equal(moved > 0.5 && moved < 1.5, true, `${name} ends the move where it fell: moved ${moved} of ${full}`)
     }
-    assert.equal(await draw.tool(p), 'draw', 'Text Anywhere is the tool again once Ctrl is up')
-    assert.deepEqual((await draw.texts(p)).sort(), notes.map(([text]) => text).sort(), 'every note is still there once')
-    assert.equal((await draw.saved(p)).length, notes.length, 'every note is saved once')
-    assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, 'no text box is left open')
+    assert.equal(await textAnywhere.tool(p), 'textanywhere', 'Text Anywhere is the tool again once Ctrl is up')
+    assert.deepEqual((await textAnywhere.texts(p)).sort(), notes.map(([text]) => text).sort(), 'every note is still there once')
+    assert.equal((await textAnywhere.saved(p)).length, notes.length, 'every note is saved once')
+    assert.equal(await p.locator(textAnywhere.TEXT_BOX).count(), 0, 'no text box is left open')
     await assertNoCrash(p, errors)
   })
 
@@ -103,33 +103,33 @@ describe('attacks on input', { concurrency: false }, () => {
     await assertNoCrash(p, errors)
 
     // Notes: a double-click on a note opens it once, a triple-click inside keeps it one box, and Escape keeps the text; the same on empty space leaves no note.
-    await pickTool(p, 'draw')
+    await pickTool(p, 'textanywhere')
     await typeText(p, [4.5, 4.5], '15')
-    const noteAt = await draw.middleAt(p, await gridPoint(p, [4.5, 4.5]))
+    const noteAt = await textAnywhere.middleAt(p, await gridPoint(p, [4.5, 4.5]))
     await p.mouse.click(...noteAt, { clickCount: 2, delay: 0 })
-    assert.equal(await p.locator(draw.TEXT_BOX).count(), 1, 'a double-click on a note opens it')
+    assert.equal(await p.locator(textAnywhere.TEXT_BOX).count(), 1, 'a double-click on a note opens it')
     await p.mouse.click(...noteAt, { clickCount: 3, delay: 0 })
-    assert.equal(await p.locator(draw.TEXT_BOX).count(), 1, 'a triple-click inside the open note keeps it one box')
+    assert.equal(await p.locator(textAnywhere.TEXT_BOX).count(), 1, 'a triple-click inside the open note keeps it one box')
     await finishNote(p)
-    assert.deepEqual(await draw.texts(p), ['15'], 'the note keeps its text')
+    assert.deepEqual(await textAnywhere.texts(p), ['15'], 'the note keeps its text')
     for (const clickCount of [2, 3]) {
       await p.mouse.click(...await gridPoint(p, [1.5, 1.5]), { clickCount, delay: 0 })
       await finishNote(p)
-      assert.deepEqual(await draw.texts(p), ['15'], `${clickCount} clicks on empty space leave no extra note`)
-      assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, `${clickCount} clicks on empty space leave no text box`)
+      assert.deepEqual(await textAnywhere.texts(p), ['15'], `${clickCount} clicks on empty space leave no extra note`)
+      assert.equal(await p.locator(textAnywhere.TEXT_BOX).count(), 0, `${clickCount} clicks on empty space leave no text box`)
     }
-    assert.equal((await draw.saved(p)).length, 1, 'one note is saved')
+    assert.equal((await textAnywhere.saved(p)).length, 1, 'one note is saved')
     await assertNoCrash(p, errors)
 
     // Hold-to-edit buttons: fast clicks pick the color and open no picker (a hold of a second does).
-    const colorOf = () => p.evaluate((key) => Framework.getData(key), draw.COLOR_KEY)
-    const textButton = await p.locator(`${draw.KEYPAD} button[data-key="4"]`).boundingBox()
-    for (const clickCount of [2, 3]) await p.mouse.click(...draw.middleOf(textButton), { clickCount, delay: 0 })
+    const colorOf = () => p.evaluate((key) => Framework.getData(key), textAnywhere.COLOR_KEY)
+    const textButton = await p.locator(`${textAnywhere.KEYPAD} button[data-key="4"]`).boundingBox()
+    for (const clickCount of [2, 3]) await p.mouse.click(...textAnywhere.middleOf(textButton), { clickCount, delay: 0 })
     assert.equal(await settle(colorOf, 4), 4, 'fast clicks on Text Anywhere\'s color button pick it')
-    assert.equal(await p.locator(draw.PICKER).count(), 0, 'no color picker opens on Text Anywhere\'s button')
+    assert.equal(await p.locator(textAnywhere.PICKER).count(), 0, 'no color picker opens on Text Anywhere\'s button')
     await pickTool(p, 'pen')
     const penButton = await p.locator('.tool-pen button[data-key="4"]').boundingBox()
-    for (const clickCount of [2, 3]) await p.mouse.click(...draw.middleOf(penButton), { clickCount, delay: 0 })
+    for (const clickCount of [2, 3]) await p.mouse.click(...textAnywhere.middleOf(penButton), { clickCount, delay: 0 })
     assert.equal(await p.locator('.pen-tool-extras-picker').count(), 0, 'no color picker opens on the pen\'s button')
     await mouseDrag(p, [[7.5, 1.5], [7.5, 3.5]])
     assert.deepEqual([...new Set((await penEntries(p)).map((entry) => entry.split(':')[1][1]))], ['4'], 'the pen draws in the color the fast clicks picked')
@@ -148,21 +148,21 @@ describe('attacks on input', { concurrency: false }, () => {
     const cellsBefore = [await cellState(p, [row, col]), await cellState(p, [pasteRow, pasteCol])]
     const selectedBefore = await selectedCells()
     const depthBefore = await undoDepth(p)
-    await pickTool(p, 'draw')
+    await pickTool(p, 'textanywhere')
     await typeText(p, [4.5, 4.5], '15')
-    await p.mouse.dblclick(...await draw.middleAt(p, await gridPoint(p, [4.5, 4.5])))
+    await p.mouse.dblclick(...await textAnywhere.middleAt(p, await gridPoint(p, [4.5, 4.5])))
     await p.keyboard.press('Control+End')
     await p.keyboard.press('Control+a')
     await p.keyboard.press('Control+c')
     assert.equal(await clipboard(), '15', 'Ctrl+A then Ctrl+C copies the note\'s text')
     await p.keyboard.press('End')
     await p.keyboard.press('Control+v')
-    assert.deepEqual(await settle(() => p.locator(draw.TEXT_BOX).textContent(), '1515'), '1515', 'Ctrl+V pastes the copied text')
+    assert.deepEqual(await settle(() => p.locator(textAnywhere.TEXT_BOX).textContent(), '1515'), '1515', 'Ctrl+V pastes the copied text')
     await p.keyboard.press('Control+a')
     await p.keyboard.press('Control+v')
-    assert.equal(await p.locator(draw.TEXT_BOX).textContent(), '15', 'Ctrl+A then Ctrl+V replaces the whole text')
+    assert.equal(await p.locator(textAnywhere.TEXT_BOX).textContent(), '15', 'Ctrl+A then Ctrl+V replaces the whole text')
     await finishNote(p)
-    assert.deepEqual(await draw.texts(p), ['15'], 'the note keeps the text')
+    assert.deepEqual(await textAnywhere.texts(p), ['15'], 'the note keeps the text')
     assert.deepEqual([await cellState(p, [row, col]), await cellState(p, [pasteRow, pasteCol])], cellsBefore, 'the copied cell and the cell selected for the paste are as they were')
     assert.deepEqual(await selectedCells(), selectedBefore, 'the selection is as it was')
     assert.equal(await undoDepth(p), depthBefore, 'SudokuPad\'s undo stack took nothing')
@@ -170,15 +170,15 @@ describe('attacks on input', { concurrency: false }, () => {
   })
 
   it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V with notes selected, or none, change no note and no cell', async () => {
-    await pickTool(p, 'draw')
+    await pickTool(p, 'textanywhere')
     await typeText(p, [4.5, 4.5], '15')
     await typeText(p, [6.5, 6.5], '26')
     const cellsBefore = await boardState(p)
     for (const selecting of [false, true]) {
-      if (selecting) await p.mouse.click(...await draw.middleAt(p, await gridPoint(p, [4.5, 4.5])))
+      if (selecting) await p.mouse.click(...await textAnywhere.middleAt(p, await gridPoint(p, [4.5, 4.5])))
       for (const key of ['Control+a', 'Control+c', 'Control+v']) await p.keyboard.press(key)
-      assert.deepEqual((await draw.texts(p)).sort(), ['15', '26'], `${selecting ? 'with a note selected' : 'with none selected'}: both notes keep their text`)
-      assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, 'no note is left open')
+      assert.deepEqual((await textAnywhere.texts(p)).sort(), ['15', '26'], `${selecting ? 'with a note selected' : 'with none selected'}: both notes keep their text`)
+      assert.equal(await p.locator(textAnywhere.TEXT_BOX).count(), 0, 'no note is left open')
       await finishNote(p)
     }
     assert.equal(await boardState(p), cellsBefore, 'no cell changed')
@@ -207,16 +207,16 @@ describe('attacks on input', { concurrency: false }, () => {
       await p.keyboard.press('Digit1')
       await clickCell(cell)
       for (const key of keys) await press(key)
-      const state = [await cellState(p, cell), await p.evaluate((key) => Framework.getData(key), draw.COLOR_KEY)]
+      const state = [await cellState(p, cell), await p.evaluate((key) => Framework.getData(key), textAnywhere.COLOR_KEY)]
       await clickCell(probe)
       return JSON.stringify([...state, await cellState(p, probe)])
     }
     const toolAfter = async (tool, key) => {
       await pickTool(p, tool)
       await p.keyboard.press(key)
-      return draw.tool(p)
+      return textAnywhere.tool(p)
     }
-    for (const tool of ['normal', 'corner', 'centre', 'colour', 'pen', 'draw']) {
+    for (const tool of ['normal', 'corner', 'centre', 'colour', 'pen', 'textanywhere']) {
       const none = await trial(tool, [])
       const numpad = await trial(tool, ['Numpad4'])
       assert.notEqual(numpad, none, `${tool}: a number-pad 4 does something`)

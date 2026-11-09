@@ -39,8 +39,8 @@ test('no unit test builds a store that reads undefined for a missing key, and th
   assert.equal(fakeStore({ kept: 0 }).getData('kept'), 0)
 })
 
-test('placeNote, typeText, restart, boxOpen and pickDraw are each defined once under live/', () => {
-  for (const [name, owner] of [['placeNote', 'board.mjs'], ['typeText', 'board.mjs'], ['restart', 'board.mjs'], ['boxOpen', 'board.mjs'], ['pickDraw', 'draw-tool/draw-tool-fixtures.mjs']]) {
+test('placeNote, typeText, restart, boxOpen and pickTextAnywhere are each defined once under live/', () => {
+  for (const [name, owner] of [['placeNote', 'board.mjs'], ['typeText', 'board.mjs'], ['restart', 'board.mjs'], ['boxOpen', 'board.mjs'], ['pickTextAnywhere', 'text-anywhere/text-anywhere-fixtures.mjs']]) {
     assert.deepEqual(definedIn(name), [join('live', owner)], name)
   }
 })

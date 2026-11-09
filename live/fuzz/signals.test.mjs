@@ -8,7 +8,7 @@ describe('crashSignals', () => {
   })
 
   it('a page error, a console error and a skip line each count, as the lines the page collected', () => {
-    const errors = ['Error: boom', 'console.error: bad', 'console.warn: draw-tool: x skipped because SudokuPad changed: y']
+    const errors = ['Error: boom', 'console.error: bad', 'console.warn: text-anywhere: x skipped because SudokuPad changed: y']
     assert.equal(crashSignals({ errors, notices: [] }).length, 3)
     assert.match(crashSignals({ errors, notices: [] })[2], /skipped because SudokuPad changed/)
   })
@@ -24,10 +24,10 @@ describe('crashSignals', () => {
 })
 
 describe('newestErrorRecords', () => {
-  const log = JSON.stringify([1, 2, 3].map((n) => ({ script: 'draw-tool', version: '1.0.' + n, feature: 'f' + n, name: 'TypeError', message: 'm' + n })))
+  const log = JSON.stringify([1, 2, 3].map((n) => ({ script: 'text-anywhere', version: '1.0.' + n, feature: 'f' + n, name: 'TypeError', message: 'm' + n })))
 
   it('lists the newest first, at most the limit', () => {
-    assert.deepEqual(newestErrorRecords(log, 2), ['draw-tool@1.0.3: f3: TypeError: m3', 'draw-tool@1.0.2: f2: TypeError: m2'])
+    assert.deepEqual(newestErrorRecords(log, 2), ['text-anywhere@1.0.3: f3: TypeError: m3', 'text-anywhere@1.0.2: f2: TypeError: m2'])
   })
 
   it('an empty log is empty, and an unreadable one is said so', () => {

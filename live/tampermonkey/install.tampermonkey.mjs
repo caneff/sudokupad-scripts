@@ -1,15 +1,24 @@
-// `npm run test:tampermonkey`: installs every *.user.js into a real Tampermonkey, main's copy and then the checkout's
-// over it as an update, and checks each one runs on SudokuPad. live/README.md § The Tampermonkey test is the full rule.
+// `npm run test:tampermonkey`: installs every script into a real Tampermonkey, main's copy and then the checkout's
+// over it as an update, and checks each one runs on SudokuPad. Then it follows Text Anywhere's move from its old
+// address in a Tampermonkey of its own. live/README.md § The Tampermonkey test is the full rule.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { headerVersion } from '../../test/header-version.js'
+import { readFileSync } from 'node:fs'
+import { headerField, headerVersion } from '../../test/header-version.js'
 import { RAW } from '../../tag-pictures.js'
 import { newPage, gotoPuzzle, startPuzzle } from '../page.mjs'
 import { SCRIPTS } from '../scripts.mjs'
 import { SCRIPT_FILES, scriptSource } from '../session.mjs'
-import { installedScripts, installScript, launchTampermonkey, serveFiles } from './tampermonkey.mjs'
+import { settle } from '../settle.mjs'
+import { checkForUpdate, installedScripts, installScript, launchTampermonkey, serveFiles } from './tampermonkey.mjs'
 
-const headerName = (text) => /^\/\/ @name\s+(.+?)\s*$/m.exec(text)?.[1]
+const readFile = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
+// Text Anywhere's old address, kept as a frozen handover (sync-lib.js's HANDOVERS), and its new one.
+const OLD_FILE = 'draw-tool.user.js'
+const NEW_FILE = 'text-anywhere.user.js'
+// The last copy main served from the old address, before the move (#711).
+const LAST_OLD_COPY = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/fa98fe11d52325f58eac8fe72ce5fd609c1c6f23/draw-tool.user.js'
+const UPDATE_MS = 30000
 
 it('every *.user.js has a check that it ran', () => {
   assert.deepEqual(SCRIPTS.map((s) => s.file).sort(), SCRIPT_FILES)
@@ -43,7 +52,7 @@ describe('Tampermonkey', { concurrency: false }, () => {
 
   it('the dashboard lists each script once, at the checkout\'s @version', async () => {
     const byName = (a, b) => a.name.localeCompare(b.name)
-    const expected = SCRIPT_FILES.map((f) => ({ name: headerName(scriptSource(f)), version: headerVersion(scriptSource(f)) })).sort(byName)
+    const expected = SCRIPT_FILES.map((f) => ({ name: headerField(scriptSource(f), 'name'), version: headerVersion(scriptSource(f)) })).sort(byName)
     assert.deepEqual((await installedScripts(tm)).sort(byName), expected)
   })
 
@@ -62,4 +71,38 @@ describe('Tampermonkey', { concurrency: false }, () => {
       }
     })
   }
+})
+
+// Text Anywhere moved its address (#711): the copy a user installed from draw-tool.user.js updates to the frozen handover there,
+// whose header names text-anywhere.user.js, and then to the checkout's text-anywhere.user.js, in one install. Every copy is
+// served from 127.0.0.1 with its header's raw GitHub addresses pointed there, so each update fetches the checkout's file of
+// that name; test/text-anywhere.test.js holds the handover's own addresses to raw GitHub.
+describe(`${OLD_FILE} hands over to ${NEW_FILE}`, { concurrency: false }, () => {
+  let tm, served
+
+  after(async () => {
+    await served?.close()
+    await tm?.close()
+  })
+
+  it(`a copy installed from ${OLD_FILE} updates to the handover there, then to the checkout's ${NEW_FILE}`, async () => {
+    const response = await fetch(LAST_OLD_COPY)
+    assert.equal(response.ok, true, `${LAST_OLD_COPY} answered ${response.status}`)
+    const old = await response.text()
+    assert.equal(headerField(old, 'updateURL'), RAW + OLD_FILE, 'the old copy updates from the old address')
+    const files = {}
+    served = await serveFiles(files)
+    const local = (text) => text.split(RAW).join(served.url)
+    Object.assign(files, { [`old/${OLD_FILE}`]: local(old), [OLD_FILE]: local(readFile(OLD_FILE)), [NEW_FILE]: local(scriptSource(NEW_FILE)) })
+    tm = await launchTampermonkey()
+    const name = headerField(old, 'name')
+    const installed = (version) => settle(() => installedScripts(tm), [{ name, version }], UPDATE_MS, Infinity)
+
+    assert.equal(await installScript(tm, served.url + `old/${OLD_FILE}`), 'Install')
+    assert.deepEqual(await installed(headerVersion(old)), [{ name, version: headerVersion(old) }])
+    await checkForUpdate(tm)
+    assert.deepEqual(await installed(headerVersion(files[OLD_FILE])), [{ name, version: headerVersion(files[OLD_FILE]) }], 'the old copy updated to the handover')
+    await checkForUpdate(tm)
+    assert.deepEqual(await installed(headerVersion(files[NEW_FILE])), [{ name, version: headerVersion(files[NEW_FILE]) }], `the handover updated from ${NEW_FILE}`)
+  })
 })

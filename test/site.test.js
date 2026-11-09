@@ -6,6 +6,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const { RAW, pictureTags, tagOf } = require('../tag-pictures.js')
+const { scriptFiles } = require('../sync-lib.js')
 const SCRIPT_SUFFIX = '.user.js'
 const ROOT = path.join(__dirname, '..')
 const SITE_DIR = path.join(ROOT, 'site')
@@ -25,7 +26,6 @@ const plain = html => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 const targets = page => [...page.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(m => m[1])
 const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX))
 const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(t => t.slice(RAW.length).replace(/\?.*$/, ''))
-const rootScripts = () => fs.readdirSync(ROOT).filter(f => f.endsWith(SCRIPT_SUFFIX))
 // A link into the site itself: not a URL with a scheme and not a fragment. The site is served from a
 // subpath on GitHub Pages and from the root on Netlify, so these must be relative.
 const siteLinks = page => targets(page).filter(t => !/^([a-z][a-z0-9+.-]*:|#)/i.test(t))
@@ -39,7 +39,9 @@ test('every picture of a repo file on every page carries a ?v= tag matching its 
 })
 
 // #342: docs/research/ has one folder per script, and site/ for pictures of a whole page.
-const RESEARCH_FOLDERS = [...rootScripts().map(f => f.slice(0, -SCRIPT_SUFFIX.length)), 'site']
+// A script's folder is named for the script, from its @name less the SudokuPad prefix.
+const folderOf = file => fs.readFileSync(path.join(ROOT, file), 'utf8').match(/^\/\/ @name\s+SudokuPad (.+)$/m)[1].toLowerCase().replace(/ /g, '-')
+const RESEARCH_FOLDERS = [...scriptFiles().map(folderOf), 'site']
 
 test('every picture the site loads is in a script folder of docs/research/ or in docs/research/site/, and one named for a script is in its folder', () => {
   for (const name of PAGES) {
@@ -52,9 +54,10 @@ test('every picture the site loads is in a script folder of docs/research/ or in
   }
 })
 
-test('every *.user.js in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
+// A handover (draw-tool.user.js) is an old address kept so installed copies move on, and is never linked.
+test('every script in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
-  for (const s of rootScripts()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const s of scriptFiles()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
 })
 
 for (const name of PAGES) {
@@ -114,7 +117,7 @@ test(`${REDIRECT} is the one redirect page: a meta refresh and a plain link to $
 // Each details page: its script's install file and the homepage heading whose entry links to it.
 const DETAIL_PAGES = [
   { page: DETAILS, script: 'pen-tool-extras', name: 'Pen Tool Extras' },
-  { page: DRAW, script: 'draw-tool', name: 'Text Anywhere' },
+  { page: DRAW, script: 'text-anywhere', name: 'Text Anywhere' },
   { page: CBD, script: 'color-by-digit', name: 'Color by Digit' }
 ]
 
@@ -212,9 +215,9 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
   assert.equal(m[1], "Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners.")
 })
 
-// One row per script, in this order; Details only where a details page exists; a script whose file name is not its shown name gives the file name third.
+// One row per script, in this order, each script's file named for its shown name; Details only where a details page exists.
 const ROWS = [
-  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW, 'draw-tool'], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined]
+  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined]
 ]
 const rowsOf = html => html.split('<section class="row">').slice(1)
 
@@ -222,8 +225,8 @@ test(`${HOME} has one row per script in order, each with an Install button besid
   const rows = rowsOf(read(HOME))
   assert.deepEqual(rows.map(r => (r.match(/<h2>([^<]*)<\/h2>/) || [])[1]), ROWS.map(([n]) => n))
   rows.forEach((row, i) => {
-    const [name, details, file] = ROWS[i]
-    const script = (file || name.toLowerCase().replace(/ /g, '-')) + SCRIPT_SUFFIX
+    const [name, details] = ROWS[i]
+    const script = name.toLowerCase().replace(/ /g, '-') + SCRIPT_SUFFIX
     assert.match(row, new RegExp(`<p class="actions"><a class="install" href="${RAW.replace(/\./g, '\\.')}${script}">Install<span class="visually-hidden"> ${name}</span></a>${details ? `<a class="more" href="${details}">Details &rarr;</a>` : ''}</p>`), name)
   })
 })
@@ -501,7 +504,7 @@ test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated pictur
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the Text Anywhere panel section is not one picture')
   assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the Text Anywhere panel section is the intro and the picture only')
-  assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/draw-tool/draw-tool-panel-annotated.png"`))
+  assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/text-anywhere/text-anywhere-panel-annotated.png"`))
   const alt = altOf(found[0])
   for (const label of ['Color buttons', 'Background', 'Clear all', 'Settings', 'Size', 'Transparency']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
@@ -513,7 +516,7 @@ test(`${DRAW} shows one figure: the finished note, the same note open for typing
   const m = read(DRAW).match(/<h2>One note, every style<\/h2>\s*<div class="figure">([\s\S]*?)<\/div>\s*<h2>/)
   assert.ok(m, `site/${DRAW} has no figure under <h2>One note, every style</h2>`)
   const found = imgs(m[1])
-  assert.deepEqual(found.map(img => withoutTag(img).match(/src="([^"]*)"/)[1]), ['draw-tool-formatting.png', 'draw-tool-formatting-raw.png'].map(f => `${RAW}docs/research/draw-tool/${f}`))
+  assert.deepEqual(found.map(img => withoutTag(img).match(/src="([^"]*)"/)[1]), ['text-anywhere-formatting.png', 'text-anywhere-formatting-raw.png'].map(f => `${RAW}docs/research/text-anywhere/${f}`))
   for (const [i, words] of [['bold italics', 'underlined', 'struck through', 'nested bullet', 'numbered', 'ticked', 'code block', '→ ← ≠ ≤ ≥ Σ'], ['# Header one', '-# subtext', '***bold italics***', '~~struck through~~', '- [x] a ticked item', '```']].entries()) {
     for (const word of words) assert.ok(altOf(found[i]).includes(word), `the ${i ? 'second' : 'first'} picture's alt text does not name "${word}"`)
   }
@@ -528,7 +531,7 @@ test(`${DRAW} good to know says the notes stay in this browser, and what clears 
 
 test('the README has a Text Anywhere row with a Details link, and the Settings sentence is kept', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
-  assert.match(readme, /^\| Text Anywhere \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/text-anywhere\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
+  assert.match(readme, /^\| Text Anywhere \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/text-anywhere\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/text-anywhere\.user\.js\)/m)
   assert.match(readme, /Each script adds an entry to SudokuPad's settings/)
 })
 
@@ -542,11 +545,11 @@ test('the README has a Color by Digit row with the short summary and a Details l
 
 shared({
   page: DRAW,
-  script: 'draw-tool',
+  script: 'text-anywhere',
   name: 'Text Anywhere',
   summary: DRAW_SUMMARY,
   intro: 'Adds to SudokuPad a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.',
-  homePicture: 'draw-tool-slide-1-type.png'
+  homePicture: 'text-anywhere-slide-1-type.png'
 })
 
 shared({

@@ -5,11 +5,11 @@ const { readdirSync, readFileSync, existsSync } = require('node:fs')
 const { join } = require('node:path')
 const { loadLib } = require('../load-lib.js')
 const { memoryStorage } = require('../fake-page-storage.js')
-const { syncText, readLib, libNamesOnDisk } = require('../../sync-lib.js')
+const { syncText, readLib, libNamesOnDisk, scriptFiles } = require('../../sync-lib.js')
 const ROOT = join(__dirname, '..', '..')
 
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
-const SCRIPTS = readdirSync(ROOT).filter((file) => file.endsWith('.user.js')).sort()
+const SCRIPTS = scriptFiles()
 const LIB_BLOCK = /\/\/ <lib:([a-z-]+)>[\s\S]*?\/\/ <\/lib:\1>/g
 // A script's own code: its text with every block sync-lib.js pastes in taken out.
 const ownCode = (file) => read(file).replace(LIB_BLOCK, '')

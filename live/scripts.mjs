@@ -5,7 +5,7 @@ import { openScriptDialog, openSettings } from './settings.mjs'
 import { placeNote } from './board.mjs'
 import { keydownDefaults, openPenTool, PAGE_BUTTON, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
-import { DRAW_BUTTON } from './draw-tool/draw-tool-fixtures.mjs'
+import { TOOL_BUTTON } from './text-anywhere/text-anywhere-fixtures.mjs'
 
 export const BLACK = 'rgb(0, 0, 0)'
 export const DIGITS = '1234567890'
@@ -122,9 +122,9 @@ export const SCRIPTS = [
   },
   {
     name: 'Text Anywhere',
-    file: 'draw-tool.user.js',
-    ready: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'attached' }),
-    control: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' }),
+    file: 'text-anywhere.user.js',
+    ready: (p) => p.locator(TOOL_BUTTON).waitFor({ state: 'attached' }),
+    control: (p) => p.locator(TOOL_BUTTON).waitFor({ state: 'visible' }),
     act: (p) => placeNote(p, [2.5, 2.5], '15')
   }
 ]

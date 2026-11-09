@@ -1,7 +1,7 @@
 # A custom tool in SudokuPad: Draw Tool's findings (#269)
 
 SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the live recording, and run on the page in
-`live/draw-tool/draw-tool.live.mjs` (2026-11-06).
+`live/text-anywhere/text-anywhere.live.mjs` (2026-11-06).
 
 ## Registering
 
@@ -10,6 +10,11 @@ SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the
   `tool-<name>` on `.controls-main`.
 - A saved current tool (`Framework.getData('tool')`) that names a tool not yet added falls back to the first tool at
   startup, so a reload with Draw current starts on Digit.
+- SudokuPad v0.616.0 (`script.js`, read from the live recording, 2026-11-09) saves the current tool on every `changeTool`
+  that is not a temporary one (`Framework.setData('tool', this.tool)`) and reads it once, in `App.init`, which the page
+  runs during its own startup, before a userscript can add a tool. `changeTool` checks `hasTool` and turns an unknown
+  name into the first tool. So the saved tool never restores a script's tool, and renaming a tool's name (Text Anywhere's
+  `draw` to `textanywhere`, #709) loses nothing: a saved `draw` reads as Digit, as it already did.
 
 ## The button's place (#298)
 
@@ -22,10 +27,10 @@ SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the
   is another userscript's (no `replay` control or `addToolButton` call is in `framework.js` or the other scripts), which can only have joined the bar through `addToolButton` or `addControlButton` with that
   parent, both of which append. Which script it is was not found (Chris's page was not read); the live check adds a
   button both ways.
-- Draw Tool keeps its button last with one rule in its stylesheet, `.controls-tool #control-draw { order: 1 }`: the bar is a
+- Draw Tool keeps its button last with one rule in its stylesheet, `.controls-tool #control-draw { order: 1 }` (`#control-textanywhere` in Text Anywhere, #709): the bar is a
   `display: grid` (filled column by column) and the stock buttons have order 0, so the button is drawn last whenever another lands
   after it. The button stays where it was added in the page, so Tab reaches it before a later button. `app.tools` keeps its order, so
-  the tool keys are unchanged (§ Tool keys). Run in `live/draw-tool/draw-tool-order.live.mjs`, which reads the drawn order: the pen
+  the tool keys are unchanged (§ Tool keys). Run in `live/text-anywhere/text-anywhere-order.live.mjs`, which reads the drawn order: the pen
   tool on at startup (script injected at DOMContentLoaded, which gave Draw before pen in the page), the pen turned
   off and on, a later `addTool` and a later `addToolButton`, Draw still selectable, and Z X C V B on the same tools.
 
@@ -75,9 +80,9 @@ back): the entries, then `gs/6`, `sl:r1c3r1c4/0`, `cl:0/0`, `cl:1/0`, `cl:2/0`, 
 `cl:-1`, and no `Cell.clear > Invalid tool: draw` on the console or as a page error. With nothing entered, Restart
 acts nothing and both replays stay empty.
 
-## Saving the drawing (#270)
+## Saving the notes (#270)
 
-Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run in `live/draw-tool/draw-tool-saved.live.mjs`
+Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run in `live/text-anywhere/text-anywhere-saved.live.mjs`
 (2026-11-06).
 
 - **Restart**: `App.restartPuzzle` ends with `this.trigger('restarted')`, after `Puzzle.restartPuzzle`, whichever of the
@@ -108,13 +113,13 @@ Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run
 ## The Draw panel (#271)
 
 Read in `script.js`, `tool-pen.js`, `tool-pen.css` and `tool-color.js` of v0.611.0, and run in
-`live/draw-tool/draw-tool-panel.live.mjs` (2026-11-06).
+`live/text-anywhere/text-anywhere-panel.live.mjs` (2026-11-06).
 
 - **One keypad for every tool.** `.controls-input` holds rows of `button.digit` with `data-key` 1 to 9 and 0, and a
   last row of 0 and `data-control="delete"`. A tool's look is CSS on `.controls-main.tool-<name>`: `tool-pen.css`
   hides each digit (`text-indent: -999em`, transparent text on `--body-bg`) and paints a 60% swatch in `:after` from
   `--puzzle-pencolor-<key>`, and leaves the `.current` button its normal purple. Draw Tool's own `<style>` repeats those
-  rules under `.tool-draw .controls-input`, so a changed pen color variable shows on the swatches with no script.
+  rules under `.tool-draw .controls-input` (`.tool-textanywhere` in Text Anywhere, #709), so a changed pen color variable shows on the swatches with no script.
 - **Digit keys and buttons.** A keypad press (`handleButton`, `control === 'value'`) and a digit key
   (`handleKeydown` → `eventToDigit` → the button with that `data-key`) both call `doPressDigit(<data-value>)`, which
   runs the current tool's `handleToolButton` first and stops on true. The color tool's pages rewrite `data-value` and
@@ -131,7 +136,7 @@ Read in `script.js`, `tool-pen.js`, `tool-pen.css` and `tool-color.js` of v0.611
 
 ## The right button, erasing and Clear all (#272)
 
-SudokuPad v0.612.0 (`framework.js`, `script.js`, `utilities.js`), run on the page in `live/draw-tool/draw-tool-erase.live.mjs`
+SudokuPad v0.612.0 (`framework.js`, `script.js`, `utilities.js`), run on the page in `live/text-anywhere/text-anywhere-erase.live.mjs`
 in headless Chromium on Linux.
 
 - `addDownEventHandler` listens for `mousedown touchstart`, whatever the button, so a right press reaches the current
@@ -156,7 +161,7 @@ in headless Chromium on Linux.
 ## Typed text (#273)
 
 SudokuPad v0.611.0 (`script.js`, `framework.js`, `feature-*.js` in the live recording), run on the page in
-`live/draw-tool/draw-tool-text.live.mjs` and `live/draw-tool/draw-tool-erase.live.mjs` (2026-11-06).
+`live/text-anywhere/text-anywhere-text.live.mjs` and `live/text-anywhere/text-anywhere-erase.live.mjs` (2026-11-06).
 
 - **Where the keys go.** `App` listens for `keydown` on `document` in the capture phase, as do `feature-cellpaste.js`
   and `feature-compactmarks.js`; `feature-markup.js` listens on `window` in the bubble phase, and `framework.js` on
@@ -189,7 +194,7 @@ SudokuPad v0.611.0 (`script.js`, `framework.js`, `feature-*.js` in the live reco
 
 ## Test Markup
 
-SudokuPad v0.611.0 (`feature-markup.js`), run on the page in `live/draw-tool/draw-tool.live.mjs` (2026-11-07) with the Experimental
+SudokuPad v0.611.0 (`feature-markup.js`), run on the page in `live/text-anywhere/text-anywhere.live.mjs` (2026-11-07) with the Experimental
 setting "Test Markup (Press: "M")" on (`Framework.setSetting('markup', true)`). It loads `fabric-5.3.1.min.js` only once
 turned on, so the live recording turns it on too.
 

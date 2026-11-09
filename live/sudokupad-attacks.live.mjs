@@ -10,7 +10,7 @@ import { BLACK } from './scripts.mjs'
 import { gridPoint, placeNote, restart, undoDepth } from './board.mjs'
 import { draw, openPenTool, penEntries, setInputValue } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
-import { DRAW_BUTTON } from './draw-tool/draw-tool-fixtures.mjs'
+import { TOOL_BUTTON } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { addPage, useBrowser } from './session.mjs'
 
 const browser = useBrowser()
@@ -80,7 +80,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
   }))
 
   it('51 Switching every tool with the toolbar and with the hotkeys, 3 rounds, fast', () => attack(browser(), async (p) => {
-    const toolbar = [['normal', '#control-normal'], ['corner', '#control-corner'], ['centre', '#control-centre'], ['colour', '#control-colour'], ['draw', DRAW_BUTTON], ['pen', '#control-pen']]
+    const toolbar = [['normal', '#control-normal'], ['corner', '#control-corner'], ['centre', '#control-centre'], ['colour', '#control-colour'], ['textanywhere', TOOL_BUTTON], ['pen', '#control-pen']]
     const hotkeys = [['normal', 'z'], ['corner', 'x'], ['centre', 'c'], ['colour', 'v']]
     const tool = () => p.evaluate(() => Framework.app.tool)
     for (let round = 0; round < 3; round++) {
@@ -127,7 +127,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     }), selectors)
     const PANELS = [
       ['Pen Tool Extras', '#control-pen', ['.pen-tool-extras-page', '.pen-tool-extras-sliders']],
-      ['Text Anywhere', DRAW_BUTTON, ['.draw-tool-sliders', '.draw-tool-settings']]
+      ['Text Anywhere', TOOL_BUTTON, ['.text-anywhere-sliders', '.text-anywhere-settings']]
     ]
     for (const [name, button, selectors] of PANELS) {
       await p.click(button)
@@ -150,7 +150,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     }
   }))
 
-  it('54 Page zoomed in and out, then drawing and placing notes', () => attack(browser(), async (p) => {
+  it('54 Page zoomed in and out, then pen lines drawn and notes placed', () => attack(browser(), async (p) => {
     // Headless Chromium has no zoom keys: Ctrl+= and Ctrl+- change the page's CSS size and its pixel ratio, which the emulation sets.
     const cdp = await p.context().newCDPSession(p)
     for (const [cssWidth, cssHeight, ratio] of [[800, 600, 1.5], [1600, 1200, 0.75]]) {
@@ -203,14 +203,14 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
   it('56 Blocked storage: every script loads, says what it could not save, and keeps working', async () => {
     const SAVED = [
       ['color-by-digit', 'saved settings'], ['dark-page', 'saved color'], ['auto-rules-resizer', 'max size settings'], ['auto-rules-resizer', 'saved sizing'],
-      ['pen-tool-extras', 'saved settings'], ['draw-tool', 'saved notes and settings'], ['ui-tweaks', 'saved options']
+      ['pen-tool-extras', 'saved settings'], ['text-anywhere', 'saved notes and settings'], ['ui-tweaks', 'saved options']
     ]
     const said = []
     const { context, p, errors } = await openWithAllScripts(browser(), {
       expectedSkips: SAVED.map(([script, feature]) => new RegExp(`^${script}: ${feature} skipped because SudokuPad changed: SecurityError: denied$`)),
       seed: (page) => page.on('console', (m) => { if (/ skipped because SudokuPad changed: SecurityError: denied$/.test(m.text())) said.push(m.text().split(' skipped')[0]) }),
       afterStart: (p) => p.evaluate(() => {
-        const scripts = new RegExp(`^${Framework.LocalDataPrefix}_([a-z-]+-notice$|ColorByDigit_|DarkPage_|AutoRulesResizer_|DrawTool_|UiTweaks_|EdgeMarks_|PenColor_(?!pen$|colors$))`)
+        const scripts = new RegExp(`^${Framework.LocalDataPrefix}_([a-z-]+-notice$|ColorByDigit_|DarkPage_|AutoRulesResizer_|TextAnywhere_|DrawTool_|UiTweaks_|EdgeMarks_|PenColor_(?!pen$|colors$))`)
         for (const method of ['getItem', 'setItem', 'removeItem']) {
           const original = window.Storage.prototype[method]
           window.Storage.prototype[method] = function (key, ...rest) {

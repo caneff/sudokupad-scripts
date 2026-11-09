@@ -12,7 +12,7 @@ import { openPenTool, penEntries, setSlider } from './pen.mjs'
 import { closeDialogWith, openScriptDialog, ownedSettings, paste, SETTINGS_SCRIPTS } from './settings.mjs'
 import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
-import * as draw from './draw-tool/draw-tool-fixtures.mjs'
+import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
 import { addPage, openWith, useBrowser } from './session.mjs'
 
 const THICKNESS = '#pen-tool-extras-thickness'
@@ -39,7 +39,7 @@ describe('attacks on storage', { concurrency: false }, () => {
     it('attack 73: a full store (setItem throws QuotaExceededError) on the scripts\' own keys leaves every feature working in the session, tells the user in plain words and turns no saved data off', async () => {
       // Only the scripts' keys refuse: SudokuPad's own writes (its tool and progress) throw uncaught on a full store with no script installed.
       // The keys are the three scripts', as SETTINGS_SCRIPTS names them, behind the site's own prefix.
-      const owns = SETTINGS_SCRIPTS.filter((script) => ['draw-tool.user.js', 'pen-tool-extras.user.js', 'color-by-digit.user.js'].includes(script.file)).map((script) => script.owns.source)
+      const owns = SETTINGS_SCRIPTS.filter((script) => ['text-anywhere.user.js', 'pen-tool-extras.user.js', 'color-by-digit.user.js'].includes(script.file)).map((script) => script.owns.source)
       await p.evaluate((patterns) => {
         const set = Storage.prototype.setItem
         Storage.prototype.setItem = function (key, value) {
@@ -53,15 +53,15 @@ describe('attacks on storage', { concurrency: false }, () => {
         if (await ok.count() > 0) await ok.click()
       }
 
-      await pickTool(p, 'draw')
+      await pickTool(p, 'textanywhere')
       await typeText(p, [4.5, 4.5], '15')
       await dismissNotice()
-      assert.deepEqual(await draw.texts(p), ['15'], 'Text Anywhere draws the note')
+      assert.deepEqual(await textAnywhere.texts(p), ['15'], 'Text Anywhere draws the note')
 
       // With a note selected the slider changes that note; with none it saves the next note's size, a settings write.
       await p.keyboard.press('Escape')
-      if (await p.locator(draw.SELECTED).count() > 0) await p.keyboard.press('Escape')
-      await draw.slideTo(p, draw.SIZE_SLIDER, 12)
+      if (await p.locator(textAnywhere.SELECTED).count() > 0) await p.keyboard.press('Escape')
+      await textAnywhere.slideTo(p, textAnywhere.SIZE_SLIDER, 12)
       await dismissNotice()
       await setSlider(p, THICKNESS, 9)
       await mouseDrag(p, [[1.5, 1.5], [1.5, 4.5]])
@@ -131,9 +131,9 @@ describe('attacks on storage', { concurrency: false }, () => {
     const modeBefore = await labelOn(other.p)
     await other.p.click('#control-colorbydigit')
     const modeThere = await readUntil(() => labelOn(other.p), (label) => label !== modeBefore)
-    await pickTool(other.p, 'draw')
-    await draw.slideTo(other.p, draw.SIZE_SLIDER, 40)
-    const widthThere = await draw.valueOf(other.p, draw.SIZE_SLIDER)
+    await pickTool(other.p, 'textanywhere')
+    await textAnywhere.slideTo(other.p, textAnywhere.SIZE_SLIDER, 40)
+    const widthThere = await textAnywhere.valueOf(other.p, textAnywhere.SIZE_SLIDER)
     assert.equal(await stored(p, THICKNESS_KEY), OTHER_TAB_THICKNESS, 'the first tab sees the saved thickness')
 
     // This tab goes on working through the change, and a save of one setting does not put back the old value of another.
@@ -143,18 +143,18 @@ describe('attacks on storage', { concurrency: false }, () => {
     await setSlider(p, OPACITY, THIS_TAB_OPACITY)
     assert.equal(await stored(p, THICKNESS_KEY), OTHER_TAB_THICKNESS, 'the first tab\'s save of the opacity leaves the other tab\'s thickness')
     assert.equal(await stored(p, OPACITY_KEY), THIS_TAB_OPACITY, 'the opacity is saved')
-    await pickTool(p, 'draw')
+    await pickTool(p, 'textanywhere')
     await typeText(p, [4.5, 4.5], '15')
-    assert.deepEqual(await draw.texts(p), ['15'], 'the first tab makes a note')
-    assert.equal(await draw.valueOf(other.p, draw.SIZE_SLIDER), widthThere, 'the first tab\'s note does not change the other tab\'s width')
+    assert.deepEqual(await textAnywhere.texts(p), ['15'], 'the first tab makes a note')
+    assert.equal(await textAnywhere.valueOf(other.p, textAnywhere.SIZE_SLIDER), widthThere, 'the first tab\'s note does not change the other tab\'s width')
 
     await reloadWithScripts(p)
     await openPenTool(p)
     assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), THICKNESS), OTHER_TAB_THICKNESS, 'the reload shows the thickness the other tab saved')
     assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), OPACITY), THIS_TAB_OPACITY, 'the reload shows the opacity this tab saved')
     assert.equal(await labelOn(p), modeThere, 'the reload shows the mode the other tab saved')
-    await pickTool(p, 'draw')
-    assert.equal(await draw.valueOf(p, draw.SIZE_SLIDER), widthThere, 'the reload shows the width the other tab saved')
+    await pickTool(p, 'textanywhere')
+    assert.equal(await textAnywhere.valueOf(p, textAnywhere.SIZE_SLIDER), widthThere, 'the reload shows the width the other tab saved')
     await assertNoCrash(p, errors)
     await assertNoCrash(other.p, other.errors)
   })

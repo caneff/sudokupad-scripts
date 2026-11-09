@@ -31,6 +31,6 @@ describe('a skip line on a page opened with no seed', () => {
   })
 
   it('is collected when the suite declares a different one', async () => {
-    assert.deepEqual(await plant({ expectedSkips: [/^draw-tool: /] }), [`console.warn: ${SKIP}`])
+    assert.deepEqual(await plant({ expectedSkips: [/^text-anywhere: /] }), [`console.warn: ${SKIP}`])
   })
 })
