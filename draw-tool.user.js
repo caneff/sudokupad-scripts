@@ -2173,7 +2173,7 @@
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
     pickerCss(CLASS_PREFIX, TOOL_NAME),
     `#${LAYER_ID} { position: fixed; inset: 0; z-index: ${LAYER_Z}; pointer-events: none; overflow: hidden; }`,
-    // SudokuPad blurs the board by 8px under a dialog opened with `overlayBlur` (`body.overlay-visible .boardsvg > *`), which is how it hides the grid while paused.
+    // SudokuPad blurs the board under a dialog opened with `overlayBlur` (`body.overlay-visible .boardsvg > *`), which is how it hides the grid while paused.
     // The notes would give the solve away, so they blur with it and take no pointer; selection and an open note stay as they are underneath.
     `body.overlay-visible #${LAYER_ID} { filter: blur(${DIALOG_BLUR_PX}px); }`,
     `body.overlay-visible #${LAYER_ID} * { pointer-events: none !important; }`,

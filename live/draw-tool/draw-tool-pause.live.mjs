@@ -6,11 +6,10 @@ import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
-import { dialogAtRest, dialogWith } from '../puzzles.mjs'
+import { closePauseDialog, dialogAtRest, dialogWith, pauseGame, PAUSED } from '../puzzles.mjs'
 import { settle } from '../settle.mjs'
 
 const { SELECTED, TEXTS, TEXT_BOX } = draw
-const PAUSED = 'Game paused'
 const ON_BOARD = [2.5, 4.5]
 const LAYER = '#draw-tool-layer'
 
@@ -22,20 +21,19 @@ describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: fals
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const layerBlurred = () => read((s) => /blur\(8px\)/.test(window.getComputedStyle(document.querySelector(s)).filter), LAYER)
-  // Every note and handle in the layer that could take a press.
+  // The notes' layer is blurred as much as SudokuPad blurs the board's own layers.
+  const layerBlurred = () => read((s) => {
+    const filterOf = (selector) => window.getComputedStyle(document.querySelector(selector)).filter
+    return filterOf(s) !== 'none' && filterOf(s) === filterOf('.boardsvg > *')
+  }, LAYER)
   const pointerTakers = () => read((s) => [...document.querySelectorAll(`${s} *`)].filter((e) => window.getComputedStyle(e).pointerEvents !== 'none').length, LAYER)
   const places = () => read((s) => [...document.querySelectorAll(s)].map((e) => [e.textContent, ...Object.values(e.getBoundingClientRect().toJSON())]), TEXTS)
-  const pause = async () => {
-    await p.click('.timer-control')
+  // The timer button's press would take the caret and finish an open note, so the pause dialog is raised from the page, as SudokuPad does itself at the start.
+  const pauseFromPage = async () => {
+    await read(() => { Framework.app.timer.stop(); Framework.app.timer.showPauseDialog() })
     await dialogWith(p, PAUSED).waitFor({ state: 'visible' })
     await dialogAtRest(p)
   }
-  const stayPaused = async () => {
-    await dialogWith(p, PAUSED).locator('button', { hasText: 'Stay Paused' }).click()
-    await p.locator('.dialog').waitFor({ state: 'detached' })
-  }
-  const resume = () => p.click('.timer-control')
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
@@ -56,38 +54,48 @@ describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: fals
   })
   after(async () => { await context.close() })
 
-  it('pausing blurs the pinned and the fixed note and they take no pointer; staying paused and resuming bring them back sharp, clickable and in place', async () => {
+  it('pausing blurs the pinned and the fixed note and they take no pointer; resuming brings them back sharp, clickable and in place', async () => {
     assert.deepEqual(await draw.texts(p), ['r3c4 = 7', 'fixed'])
     assert.equal(await layerBlurred(), false, 'sharp while the timer runs')
     assert.notEqual(await pointerTakers(), 0, 'the notes take a press under Text Anywhere')
     const before = await places()
-    await pause()
+    await pauseGame(p)
     assert.equal(await layerBlurred(), true, 'the notes are blurred under the pause dialog')
     assert.equal(await pointerTakers(), 0, 'no note or handle takes a press while paused')
     assert.deepEqual(await places(), before, 'the blur moved no note')
-    await stayPaused()
+    await closePauseDialog(p, 'Stay Paused')
     assert.equal(await settle(layerBlurred, false), false, 'sharp again once the dialog is gone')
+    assert.equal(await read(() => Framework.app.timer.running), false, 'still paused')
+    await p.click('.timer-control')
+    assert.equal(await settle(() => read(() => Framework.app.timer.running), true), true, 'the timer runs again')
+    assert.equal(await layerBlurred(), false, 'sharp after the resume')
+    assert.notEqual(await pointerTakers(), 0, 'the notes take a press again')
     assert.deepEqual(await places(), before, 'the notes are where they were')
     await p.mouse.click(...(await draw.middleAt(p, await gridPoint(p, ON_BOARD))))
-    assert.equal(await p.locator(SELECTED).count(), 1, 'a click on the pinned note selects it again')
+    assert.equal(await p.locator(SELECTED).count(), 1, 'a click on the pinned note selects it')
     await draw.finishNote(p)
-    await resume()
-    assert.equal(await settle(() => read(() => Framework.app.timer.running), true), true, 'the timer runs again')
+  })
+
+  it('a selected note stays selected under the pause dialog', async () => {
+    await p.mouse.click(...(await draw.middleAt(p, await gridPoint(p, ON_BOARD))))
+    assert.equal(await p.locator(SELECTED).count(), 1, 'the note is selected')
+    await pauseFromPage()
+    assert.equal(await layerBlurred(), true, 'blurred')
+    assert.equal(await p.locator(SELECTED).count(), 1, 'still selected under the dialog')
+    await closePauseDialog(p, 'Resume')
+    assert.equal(await settle(layerBlurred, false), false, 'sharp after Resume')
+    await draw.finishNote(p)
   })
 
   it('an open note stays open and blurred under the pause dialog, and its text is kept after Resume', async () => {
     await draw.reopen(p, await gridPoint(p, ON_BOARD))
     await p.keyboard.type('!')
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is open')
-    // The timer button's press would take the caret and finish the note, so the pause dialog is raised from the page, as SudokuPad does itself at the start.
-    await read(() => { Framework.app.timer.stop(); Framework.app.timer.showPauseDialog() })
-    await dialogWith(p, PAUSED).waitFor({ state: 'visible' })
-    await dialogAtRest(p)
+    await pauseFromPage()
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note stays open under the pause dialog')
     assert.equal(await layerBlurred(), true, 'the open note is blurred too')
     assert.equal(await pointerTakers(), 0, 'the open note takes no press while paused')
-    await dialogWith(p, PAUSED).locator('button', { hasText: 'Resume' }).click()
-    await p.locator('.dialog').waitFor({ state: 'detached' })
+    await closePauseDialog(p, 'Resume')
     assert.equal(await settle(layerBlurred, false), false, 'sharp after Resume')
     // The click on the dialog's button takes the caret, which finishes the note as any press elsewhere does; the text is kept.
     assert.deepEqual(await draw.texts(p), ['r3c4 = 7!', 'fixed'])
