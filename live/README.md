@@ -82,18 +82,26 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **The seed picks the puzzle**: an even seed the recorded 9x9 (`live/puzzle-url.txt`), an odd one a 6x6 with 2x3 boxes (`PUZZLES` in `fuzz.mjs`).
   Without `--seed` one is drawn and printed. `--runs` ends the run after that many action lists, whichever of it and `--minutes` comes first.
 - **The actions** (`actions.mjs`) are weighted so ordinary use is the bulk: ordinary use of every script and of SudokuPad (click, digit, undo,
-  redo, a tool key, Tab, pen lines and erase, the pen page, notes placed and moved, the Color by Digit button, Pen Tool Extras' settings dialog saved or cancelled); interruptions in the middle of a
+  redo, undo back to the start, a digit entered, a tool key, Tab, pen lines and erase, the pen page, notes placed and moved, the Color by Digit button, Pen Tool Extras' settings dialog saved or cancelled); interruptions in the middle of a
   gesture (a pen drag, a held right-click erase or a note drag, each cut by Escape, Delete, a tool key, Ctrl+Z, a window resize, a second button,
   a blur, or the pointer leaving the window); and page events (blur and focus, a reload, a window resize, the Dark Page dialog saved or cancelled
   with a dark color: Dark Page has no off switch). Every action leaves the mouse up, so a shrunk list is plain steps and replays from numbers alone.
 - **A crash signal** (`signals.mjs`) after every action, and once more 200 ms after the last (fast-check issue #462, so a late error still fails and
   still shrinks): an uncaught page error, a `console.error`, a skip line, or a row in the notice bar. Each action also waits 40 ms before it is read, so
   a late error is blamed on the action that caused it: fast-check never removes the last action of a list while shrinking.
+- **The rules** (`rules.mjs`, #594) say what "working" means for each script, as pure functions over a snapshot of the page (`page-state.mjs` reads it) checked after
+  every action, and once more after the last. They are: after undoing back to the start (an empty undo stack, which a new action `undo back to the start`
+  reaches) SudokuPad's state holds nothing; Pen Tool Extras: every pen entry in the state is drawn and nothing else is; Text Anywhere: the saved notes are the
+  drawn ones, and a reload keeps them; Color by Digit: in Cell or Both mode a cell whose digit just changed (every cell when the mode just changed) has its
+  group's color; Dark Page: the page color stays dark; Auto Rules Resizer: the rules fit their pane, unless the text is already at 70% of SudokuPad's font; UI
+  Tweaks: Tab never turns the number pad to letters. Each fuzz page therefore shows long rules text and has the letter tool on. A broken rule fails the run like a
+  crash signal, named `rule broken after "<step>": <rule>: <what>`. The last two rules are read from the scripts, not from the ticket's wording: the resizer
+  promises a fit down to its smallest font, not for any length, and Tab can reach letters only while the letter tool is on.
 - **A failure** is shrunk (for 10 minutes at most) and printed with the seed, the shortest list that still fails as numbered steps, the one command that
   replays it (`npm run test:fuzz -- --seed <n> --path <path>`, which runs that one list and does not shrink) and the newest records of the shared error log
   (kept in the page's `localStorage` by the scripts' guard), or a line saying the log could not be read. The exit is 1.
 - **A page is never reused between lists**: Restart empties the board but leaves the earlier digits behind Undo (`docs/research/ui-fuzz-tools.md`).
-- **The tests**: `actions.test.mjs`, `signals.test.mjs` and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
+- **The tests**: `actions.test.mjs`, `signals.test.mjs`, `rules.test.mjs` (hand-built snapshots) and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
   seed gives the same actions, every kind is generated and runs, and a planted page error is caught, shrunk to one step and replayed.
   `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 2 minutes) is the live test: short fixed-seed runs pass on both
   puzzles, and a page error planted on Escape during a drag (`--plant-escape-error` plants the same one by hand) is caught, shrunk to the one
