@@ -79,8 +79,18 @@ manager does, and the run fails on a crash signal. It runs for 2 minutes. It is 
 npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>]
 ```
 
-- **The seed picks the puzzle**: an even seed the recorded 9x9 (`live/puzzle-url.txt`), an odd one a 6x6 with 2x3 boxes (`PUZZLES` in `fuzz.mjs`).
-  Without `--seed` one is drawn and printed. `--runs` ends the run after that many action lists, whichever of it and `--minutes` comes first.
+- **Each action list names its puzzle** (#679), drawn first from the set in `puzzle-set.mjs`, so one run covers them all and a printed `--path` replays on the
+  puzzle that failed. The set is the recorded 9x9 (`live/puzzle-url.txt`) and puzzles built in code with `puzzleData` and opened by
+  their id, which cost no request to sudokupad.app: a 6x6 with 2x3 boxes, a 4x4 (no rules text), a 9x9 with killer cages, an arrow and thermometers, a jigsaw 9x9, an empty 9x9,
+  a 9x9 with sandwich-style numbers outside the grid, a 12x12 and a 16x16 (digits past 9), a non-square 6x8, a nearly solved 9x9 with its solution (so the solved message can
+  show), and the cages puzzle again with the long rules. A puzzle says its free cells, the digit keys its pad takes (1 up to the size, 9 at most, and 0 past 9),
+  and its rules text: the long text (twenty paragraphs, which Auto Rules Resizer has to shrink), a short one, or none. A puzzle with clues outside the grid also
+  has targets out there, the cells just beyond each edge, where notes and pen lines go; a target SudokuPad's own links cover is clicked at the nearest cell of the
+  grid instead. Each page opened is checked against the set's free cells. A rule that cannot hold on some puzzle skips it in its own check, with a comment saying
+  why: `rules-fit-pane` has nothing to fit on a puzzle with no rules text. Without `--seed` one is drawn and printed. `--runs` ends the run after that many action lists, whichever of it and `--minutes` comes first.
+  A pass prints how many lists each puzzle ran. A path printed before #679 replays a different list now, since the puzzle is drawn first; a regression that must stay
+  pinned is written as a scripted list (`scriptedList` of `actions.mjs`, run by `fuzzScripted` of `fuzz.mjs`: `[kind, arg]` steps on a named puzzle, each of which must be
+  able to run) in `fuzz.smoke.mjs`, as the #668 test is.
 - **The actions** (`actions.mjs`) are weighted so ordinary use is the bulk: ordinary use of every script and of SudokuPad (click, digit, undo,
   redo, undo back to the start, a digit entered, a tool key, Tab, pen lines and erase, the pen page, notes placed and moved, the Color by Digit button, Pen Tool Extras' settings dialog saved or cancelled); interruptions in the middle of a
   gesture (a pen drag, a held right-click erase or a note drag, each cut by Escape, Delete, a tool key, Ctrl+Z, a window resize, a second button,
@@ -94,7 +104,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
   reaches) SudokuPad's state holds nothing; Pen Tool Extras: every pen entry in the state is drawn and nothing else is; Text Anywhere: the saved notes are the
   drawn ones, and a reload keeps them; Color by Digit: in Cell or Both mode a cell whose digit just changed (every cell when the mode just changed) has its
   group's color; Dark Page: the page color stays dark; Auto Rules Resizer: the rules fit their pane, unless the text is already at 70% of SudokuPad's font; UI
-  Tweaks: Tab never turns the number pad to letters. Each fuzz page therefore shows long rules text and has the letter tool on. A broken rule fails the run like a
+  Tweaks: Tab never turns the number pad to letters. Each fuzz page therefore has the letter tool on, and a puzzle with rules text shows it (the long text on most puzzles). A broken rule fails the run like a
   crash signal, named `rule broken after "<step>": <rule>: <what>`. The last two rules are read from the scripts, not from the ticket's wording: the resizer
   promises a fit down to its smallest font, not for any length, and Tab can reach letters only while the letter tool is on.
 - **Three rules check the scripts against themselves** (#677), knowing nothing of what a script should draw; each was written from what the scripts keep, and
@@ -116,8 +126,8 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **A page is never reused between lists**: Restart empties the board but leaves the earlier digits behind Undo (`docs/research/ui-fuzz-tools.md`).
 - **The tests**: `actions.test.mjs`, `signals.test.mjs`, `rules.test.mjs` (hand-built snapshots) and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
   seed gives the same actions, every kind is generated and runs, and a planted page error is caught, shrunk to one step and replayed.
-  `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 2 minutes) is the live test: short fixed-seed runs pass on both
-  puzzles, and a page error planted on Escape during a drag (`--plant-escape-error` plants the same one by hand) is caught, shrunk to the one
+  `puzzle-set.test.mjs` tests the puzzle set, and `actions.test.mjs` and `engine.test.mjs` that every puzzle is generated and a list's puzzle replays from its path.
+  `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 3 minutes) is the live test: every puzzle opens once and takes a click, a digit key and an undo, short fixed-seed runs pass, and a page error planted on Escape during a drag (`--plant-escape-error` plants the same one by hand) is caught, shrunk to the one
   interrupted step and replayed from the command it prints; a bug planted in a script (`tab-turns-pad-to-letters`) is injected, caught, shrunk to the Tab and printed with its `--plant`.
 
 Each failure the run finds is fixed in a ticket of its own, whose PR adds the shrunk list as a named fixed live test.
@@ -135,7 +145,7 @@ npm run fuzz:plants -- [--minutes <m per plant>] [--shrink-minutes <m>] [--seed 
   from disk and injected by `installAll`, so the root `*.user.js` never hold a bug. A `find` that matches anywhere but once fails the run before any page opens
   (`plants.test.mjs` checks every plant against the shipped scripts in `npm test`). `kind` is `rule` or `crash`; `expect` matches the failure message that counts as a catch (a crash plant names its own error text), so a
   failure the real scripts already have (it prints as "other failure") is not scored.
-- **The budget** is 4 minutes a plant by default, split over both puzzles (the 9x9, then the 6x6 only if the 9x9 did not catch it), plus a shrink of up to 2 minutes. All ten take about 40 minutes
+- **The budget** is 4 minutes a plant by default, 2 on each of two seeds, each over the whole puzzle set (#679; the first run in `docs/research/fuzz-planted-bugs.md` was on the 9x9 and the 6x6 only), plus a shrink of up to 2 minutes. All ten take about 40 minutes
   on one core and one Chromium; run it under `job-run`.
 - **A miss** is read for its likely reason: no rule sees it, no action reaches it, the board is too empty, or timing. Add a plant by adding an entry to `plants.mjs`.
 - **Replaying a catch**: the table prints each catch's `replay:` command, `npm run test:fuzz -- --seed <n> --path <path> --plant <id>`, which replays that one list with the plant in.

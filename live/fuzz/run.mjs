@@ -30,7 +30,8 @@ try {
   })
   const seconds = Math.round((Date.now() - started) / 1000)
   if (!r.failed) {
-    console.log(`fuzz passed: ${r.runs} action lists on the ${r.puzzle} puzzle in ${seconds} s (seed ${r.seed})`)
+    console.log(`fuzz passed: ${r.runs} action lists over ${Object.keys(r.puzzleRuns).length} puzzles in ${seconds} s (seed ${r.seed})`)
+    console.log(`lists per puzzle: ${Object.entries(r.puzzleRuns).map(([name, count]) => `${name} ${count}`).join(', ')}`)
   } else {
     console.log(`fuzz FAILED on the ${r.puzzle} puzzle (seed ${r.seed}) after ${seconds} s`)
     console.log(`error: ${r.error}`)

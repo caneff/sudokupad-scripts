@@ -1,10 +1,11 @@
 // The fuzz's action vocabulary (#590 Q6 c, #593): what a user does with the six scripts on SudokuPad, weighted so ordinary use is the bulk, then
 // interruptions in the middle of a gesture, then page-level events. Each action is one step that leaves the mouse up and no key held, so a shrunk
-// list reads as plain steps and replays from the numbers alone. Not a check itself.
+// list reads as plain steps and replays from the numbers alone. A list names its puzzle (`puzzle-set.mjs`, #679): the puzzle is the first thing a list
+// generates, so its path replays on the same puzzle, and an action reads the digit keys and the targets from the puzzle it runs on. Not a check itself.
 //
 // An action runs on an `env`, never on Playwright directly, so the unit tests drive the same code with a fake one (`fake-target.mjs`). The env is:
 //   env.page.mouse {move, down, up, click}   env.page.keyboard {press, type}      Playwright's, used as they are
-//   env.cellPoint(i) -> [x, y]               the page point at the centre of free cell `i`
+//   env.cellPoint(i) -> [x, y]               the page point at the centre of target `i` of the puzzle (a free cell, or a cell just outside the grid)
 //   env.usePen(color)                        opens the pen tool and picks its pen color 1 to 9
 //   env.useNotes()                           picks Text Anywhere's tool
 //   env.turnPenPage()  env.undo()  env.redo()  env.clickColorMode()
@@ -25,13 +26,14 @@ export const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
 const NOTE_DRAG = [70, 40]
 const OUTSIDE = [-5, -5]
 
-// The kinds. `arg(n)` is the arbitrary of an action's numbers (`n` free cells); `label(arg, at)` its readable step (no comma, which fast-check
-// joins steps with; `at(i)` names a cell); `run(env, arg, model)` does it. `check(model)` says whether it can run now.
+// The kinds. `arg(puzzle)` is the arbitrary of an action's numbers (the puzzle's targets and digit keys, `puzzle-set.mjs`); `label(arg, at)` its readable step
+// (no comma, which fast-check joins steps with; `at(i)` names a target); `run(env, arg, model)` does it. `check(model)` says whether it can run now.
 function buildKinds () {
-  const cell = (n) => fc.nat(n - 1)
+  const cell = (puzzle) => fc.nat(puzzle.cells.length - 1)
+  const digit = (puzzle) => fc.constantFrom(...puzzle.keys)
   const color = fc.integer({ min: 1, max: 9 })
   const toolKey = fc.constantFrom(...TOOL_KEYS)
-  const note = (n) => fc.tuple(fc.nat(NOTE_TEXTS.length - 1), cell(n))
+  const note = (puzzle) => fc.tuple(fc.nat(NOTE_TEXTS.length - 1), cell(puzzle))
 
   // A pen drag from cell `a` to cell `b` with the left button still down.
   async function penDragStart (env, [a, b, c]) {
@@ -45,7 +47,7 @@ function buildKinds () {
     kind,
     group: 'interruption',
     weight: 1,
-    arg: (n) => fc.tuple(cell(n), cell(n), color, extra),
+    arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color, extra),
     label: ([a, b, c, x], at) => `pen drag ${at(a)} -> ${at(b)} color ${c} then ${words(x)} then release`,
     run: async (env, arg) => {
       await penDragStart(env, arg)
@@ -66,7 +68,7 @@ function buildKinds () {
     kind,
     group: 'interruption',
     weight: 1,
-    arg: (n) => fc.tuple(cell(n), cell(n), extra),
+    arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), extra),
     label: ([a, b, x], at) => `right-click erase held ${at(a)} -> ${at(b)} then ${words(x)} then release`,
     run: async (env, arg) => {
       await eraseHoldStart(env, arg)
@@ -117,22 +119,22 @@ function buildKinds () {
       kind: 'type digit',
       group: 'ordinary',
       weight: 8,
-      arg: () => fc.integer({ min: 1, max: 9 }),
+      arg: digit,
       label: (d) => `type ${d}`,
       check: (model) => model.selected,
-      run: (env, d) => env.page.keyboard.press(String(d))
+      run: (env, d) => env.page.keyboard.press(d)
     },
     {
       kind: 'enter digit',
       group: 'ordinary',
       weight: 5,
-      arg: (n) => fc.tuple(cell(n), fc.integer({ min: 1, max: 9 })),
+      arg: (puzzle) => fc.tuple(cell(puzzle), digit(puzzle)),
       label: ([i, d], at) => `enter ${d} in ${at(i)}`,
       run: async (env, [i, d], model) => {
         // The digit tool first: any other tool would turn the same key into a mark or a color.
         await env.page.keyboard.press(TOOL_KEYS[0])
         await env.page.mouse.click(...await env.cellPoint(i))
-        await env.page.keyboard.press(String(d))
+        await env.page.keyboard.press(d)
         model.selected = true
       }
     },
@@ -145,7 +147,7 @@ function buildKinds () {
       kind: 'pen line',
       group: 'ordinary',
       weight: 4,
-      arg: (n) => fc.tuple(cell(n), cell(n), color),
+      arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color),
       label: ([a, b, c], at) => `pen line ${at(a)} -> ${at(b)} color ${c}`,
       run: async (env, arg) => {
         await penDragStart(env, arg)
@@ -210,7 +212,7 @@ function buildKinds () {
       kind: 'pen drag, leave window',
       group: 'interruption',
       weight: 1,
-      arg: (n) => fc.tuple(cell(n), cell(n), color, cell(n)),
+      arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color, cell(puzzle)),
       label: ([a, b, c, d], at) => `pen drag ${at(a)} -> ${at(b)} color ${c} then leave the window then release outside then click ${at(d)}`,
       run: async (env, arg) => {
         await penDragStart(env, arg)
@@ -250,20 +252,39 @@ const KINDS = buildKinds()
 export const KIND_NAMES = KINDS.map((k) => k.kind)
 export const KIND_GROUPS = Object.fromEntries(KINDS.map((k) => [k.kind, k.group]))
 
-// The arbitrary of one weighted action over a puzzle with free cells `cells` (`[row, col]`, 0-based): a command fast-check can run, shrink and print.
-export function actionArbitrary (cells) {
-  const at = (i) => `r${cells[i][0] + 1}c${cells[i][1] + 1}`
-  return fc.oneof(...KINDS.map((k) => ({
-    weight: k.weight,
-    arbitrary: k.arg(cells.length).map((arg) => ({
-      kind: k.kind,
-      group: k.group,
-      check: (model) => k.check ? k.check(model) : true,
-      run: async (model, real) => { await k.run(real.env, arg, model) },
-      toString: () => k.label(arg, at)
-    }))
-  })))
+// The name of target `i` of `puzzle` in a step: `r3c4`, with row 0 and a column 0 for the cells just outside the grid on its top and left.
+const nameTarget = (puzzle) => (i) => `r${puzzle.cells[i][0] + 1}c${puzzle.cells[i][1] + 1}`
+
+// One action of kind `k` with its numbers `arg`: a command fast-check can run, shrink and print.
+const commandOf = (k, puzzle, arg) => ({
+  kind: k.kind,
+  group: k.group,
+  check: (model) => k.check ? k.check(model) : true,
+  run: async (model, real) => { await k.run(real.env, arg, model) },
+  toString: () => k.label(arg, nameTarget(puzzle))
+})
+
+// The arbitrary of one weighted action over `puzzle` (`puzzle-set.mjs`).
+export function actionArbitrary (puzzle) {
+  return fc.oneof(...KINDS.map((k) => ({ weight: k.weight, arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
 }
 
-// The generator of whole action lists, at most `maxCommands` long; `replayPath` replays a shrunk list (what `String()` of a failing list prints).
-export const actionList = (cells, { maxCommands = 20, replayPath } = {}) => fc.commands([actionArbitrary(cells)], { maxCommands, size: 'max', replayPath })
+// The generator of whole lists, each `{ puzzle, commands }`: a puzzle of `puzzles`, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list
+// (what `String()` of a failing list prints); the puzzle is drawn first, so the same path gives the same puzzle. A list prints as its commands.
+export const actionList = (puzzles, { maxCommands = 20, replayPath } = {}) => fc.constantFrom(...puzzles).chain((puzzle) =>
+  fc.commands([actionArbitrary(puzzle)], { maxCommands, size: 'max', replayPath }).map((commands) => ({ puzzle, commands, toString: () => String(commands) })))
+
+// A list written out by hand, for a regression that is one known sequence: `steps` are `[kind, arg]` of the kinds above, in the shape fast-check wraps them in.
+export function scriptedList (puzzle, steps) {
+  return steps.map(([kind, arg]) => {
+    const k = KINDS.find((x) => x.kind === kind)
+    if (!k) throw new Error(`no action kind "${kind}"`)
+    const cmd = commandOf(k, puzzle, arg)
+    // fast-check skips a command whose check fails without a word; a hand-written list must run every step, so a step that cannot run fails the run instead.
+    const run = async (model, real) => {
+      if (!cmd.check(model)) throw new Error(`the scripted step "${cmd}" cannot run here: its precondition does not hold`)
+      return cmd.run(model, real)
+    }
+    return { cmd, check: () => true, run, toString: cmd.toString }
+  })
+}

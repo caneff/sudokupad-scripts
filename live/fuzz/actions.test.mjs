@@ -2,15 +2,14 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
-import { actionList, KIND_GROUPS, KIND_NAMES } from './actions.mjs'
+import { actionList, KIND_GROUPS, KIND_NAMES, scriptedList } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
+import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 
-const CELLS = Array.from({ length: 12 }, (_, i) => [Math.floor(i / 4), i % 4])
-
-// The lists a seed gives, as readable steps and kinds.
-const sample = (seed, count = 6) => fc.sample(actionList(CELLS, { maxCommands: 20 }), { seed, numRuns: count })
+// The lists a seed gives (each `{ puzzle, commands }`) over the whole puzzle set, or over `puzzles`.
+const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList(puzzles, { maxCommands: 20 }), { seed, numRuns: count })
 // fast-check wraps each generated command (`.cmd`), and prints a list only once it ran, so the steps are read from the commands.
-const actionsOf = (lists) => lists.flatMap((l) => [...l].map((wrapped) => wrapped.cmd))
+const actionsOf = (lists) => lists.flatMap((l) => [...l.commands].map((wrapped) => wrapped.cmd))
 const stepsOf = (lists) => actionsOf(lists).map(String)
 
 // Runs `action` on a fresh fake page and returns it.
@@ -86,5 +85,63 @@ describe('the action vocabulary', () => {
   it('an interruption shows its interruption in the step: Escape, a tool key, undo, a resize, a second button, leaving the window', () => {
     const steps = actionsOf(sample(6, 200)).filter((a) => a.group === 'interruption').map(String).join('\n')
     for (const word of ['Escape', 'Ctrl+Z', 'resize the window', 'right button', 'leave the window', 'blur and focus', 'Delete']) assert.ok(steps.includes(word), word)
+  })
+
+  describe('the puzzle of a list (#679)', () => {
+    it('every puzzle of the set is generated', () => {
+      const names = new Set(sample(8, 200).map((l) => l.puzzle.name))
+      assert.deepEqual(FUZZ_PUZZLES.map((p) => p.name).filter((n) => !names.has(n)), [])
+    })
+
+    it('a list over one puzzle holds only digit keys that puzzle takes: a 4x4 never types a 5, a 12x12 types the 0', () => {
+      const typed = (name) => {
+        const lists = sample(9, 80, [puzzleByName(name)])
+        return new Set(actionsOf(lists).filter((a) => /^(?:type|enter) /.test(String(a))).map((a) => /^type (\w)$|^enter (\w) in /.exec(String(a)).slice(1).find(Boolean)))
+      }
+      assert.deepEqual([...typed('4x4')].sort(), ['1', '2', '3', '4'])
+      assert.deepEqual([...typed('12x12')].sort(), ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
+      assert.deepEqual([...typed('6x8')].sort(), ['1', '2', '3', '4', '5', '6', '7', '8'])
+    })
+
+    it('a target is a cell of the puzzle, named by its row and column, and a puzzle with clues outside the grid has targets out there', () => {
+      const outside = puzzleByName('outside clues 9x9')
+      const steps = actionsOf(sample(10, 120, [outside])).map(String).join('\n')
+      assert.match(steps, /\br0c\d\b|\br\d+c0\b|\br10c\d\b|\br\d+c10\b/, 'a step names a cell outside the grid')
+      const plain = actionsOf(sample(10, 120, [puzzleByName('6x6')])).map(String).join('\n')
+      assert.doesNotMatch(plain, /\br(?:0|7)c\d|\br\d+c(?:0|7)\b/, 'a 6x6 names no cell outside its 6 by 6')
+      assert.match(plain, /\br6c\d|\br\d+c6\b/, 'and the regex reads the last row and column')
+    })
+
+    it('the actions of a list are drawn over its own puzzle: every cell and digit key a step names belongs to the puzzle the list names', () => {
+      for (const { puzzle, commands } of sample(11, 120)) {
+        for (const wrapped of commands) {
+          const step = String(wrapped.cmd)
+          for (const [, row, col] of step.matchAll(/\br(\d+)c(\d+)\b/g)) {
+            assert.ok(puzzle.cells.some(([r, c]) => r === Number(row) - 1 && c === Number(col) - 1), `${puzzle.name}: "${step}" names r${row}c${col}`)
+          }
+          const typed = /^type (\w)$|^enter (\w) in /.exec(step)?.slice(1).find(Boolean)
+          if (typed) assert.ok(puzzle.keys.includes(typed), `${puzzle.name}: "${step}" types a key the puzzle does not take`)
+        }
+      }
+    })
+
+    it('a scripted step that cannot run fails the run, not skipped: a digit before any cell is selected', async () => {
+      const puzzle = puzzleByName('recorded 9x9')
+      const [type] = scriptedList(puzzle, [['type digit', '5']])
+      const target = await fakeTargets().openTarget(puzzle)
+      await assert.rejects(type.run({ selected: false }, { env: target.env }), /cannot run here/)
+      assert.deepEqual(target.log, [])
+    })
+
+    it('a scripted list runs the kinds it names with the numbers given, and refuses a kind that does not exist', async () => {
+      const puzzle = puzzleByName('recorded 9x9')
+      const list = scriptedList(puzzle, [['click cell', 0], ['type digit', '5']])
+      assert.deepEqual(list.map(String), ['click r1c3', 'type 5'])
+      assert.deepEqual(list.map((w) => w.cmd.kind), ['click cell', 'type digit'])
+      const target = await fakeTargets().openTarget(puzzle)
+      for (const w of list) await w.run({ selected: true }, { env: target.env })
+      assert.deepEqual(target.log.filter(([n]) => n === 'keyboard.press'), [['keyboard.press', '5']])
+      assert.throws(() => scriptedList(puzzle, [['no such kind', 0]]), /no action kind "no such kind"/)
+    })
   })
 })
