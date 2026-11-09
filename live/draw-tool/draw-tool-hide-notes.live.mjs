@@ -7,7 +7,7 @@ import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
-import { readUntil } from '../settle.mjs'
+import { readUntil, stable } from '../settle.mjs'
 
 const { HIDE_BUTTON, OPACITY_SLIDER, SIZE_SLIDER, SLIDERS, TEXTS, TEXT_BOX, noteStart, texts } = draw
 const A = [1.5, 1.5]
@@ -77,6 +77,8 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
   it('the same layout holds at 1920x1080 and 1366x768', async () => {
     for (const [width, height] of [[1920, 1080], [1366, 768]]) {
       await p.setViewportSize({ width, height })
+      // The page lays the board and the panel out again on the resize; the layout holds once the panel has stopped moving.
+      await stable(() => p.locator(draw.KEYPAD).boundingBox())
       await checkLayout(p)
     }
     await p.setViewportSize({ width: 1280, height: 720 })
