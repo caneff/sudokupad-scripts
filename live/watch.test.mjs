@@ -242,7 +242,7 @@ describe('the remembered full run', () => {
 describe('the did-not-run title in the workflow', () => {
   it('is the same text watch.yml files under, so the open-issue check matches across the two', () => {
     const yml = readFileSync(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
-    assert.ok(yml.includes(`TITLE: '${didNotRunIssue('x', 'y').title}'`))
+    assert.ok(yml.includes(`title: '${didNotRunIssue('x', 'y').title}'`))
   })
 })
 
