@@ -44,7 +44,6 @@ export async function restart (page) {
   await page.locator('.dialog').waitFor({ state: 'detached' })
 }
 
-// Whether a Text Anywhere note is open for typing.
 export const boxOpen = async (page) => (await page.locator(TEXT_BOX).count()) === 1
 
 // Escape finishes the open note and leaves it selected; a second Escape ends that selection, so the next click on empty space opens a note again.

@@ -60,9 +60,9 @@ export async function openWith (browser, scripts, { contextOptions = {}, ...opti
 
 // Reloads the page and gets it past Start Puzzle with `scripts` injected at `mode` again. A script injected at `document-idle`
 // stays registered for every later load of its page, so a page opened that way reloads with no scripts named.
-export async function reloadWith (p, scripts, { mode = 'after-start', afterStart } = {}) {
+export async function reloadWith (p, scripts, { mode = 'after-start' } = {}) {
   const codes = scripts.map(codeOf)
   if (mode === 'document-idle') for (const code of codes) await injectAtIdle(p, code)
   await p.reload({ waitUntil: 'load' })
-  await startWith(p, codes, { mode, afterStart })
+  await startWith(p, codes, { mode })
 }
