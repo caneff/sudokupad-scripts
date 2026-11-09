@@ -163,9 +163,9 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
   it('turning Background on for an open note moves its handles with the padded box', async () => {
     // The handles' span and the open note's own box, measured now.
     const shape = () => p.evaluate(([handles, box]) => {
-      const lefts = [...document.querySelectorAll(handles)].map((h) => h.getBoundingClientRect())
+      const handleBoxes = [...document.querySelectorAll(handles)].map((h) => h.getBoundingClientRect())
       const note = document.querySelector(box).getBoundingClientRect()
-      return { count: lefts.length, span: Math.max(...lefts.map((r) => r.right)) - Math.min(...lefts.map((r) => r.left)), width: note.width }
+      return { count: handleBoxes.length, span: Math.max(...handleBoxes.map((r) => r.right)) - Math.min(...handleBoxes.map((r) => r.left)), width: note.width }
     }, [HANDLES, TEXT_BOX])
     await openAt(SPOTS[1])
     assert.equal(await boxFilled(), false)

@@ -7,7 +7,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedLooks } = require('../draw-tool.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -313,20 +313,22 @@ test('Copy settings leaves the colors out until they are saved', () => {
   assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY, [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false, [FONT_KEY]: 'proportional' })
 })
 
-// A row added to a copy of the table is handled by Copy, Paste, the start load, the snapshot's keys and Save's changed list, with no other edit.
+// A row added to a copy of the table is handled by Copy, Paste, the start load, the snapshot's keys and Save's changed list, with no other edit. The script's own
+// snapshotSave and Save read the real table, so these helpers are what a copy can reach; draw-tool-save-failure.live.mjs and draw-tool-settings.live.mjs cover
+// that the two use them.
 const SPIN_KEY = 'DrawTool_spin'
 const SPIN_ROW = { name: 'spin', key: SPIN_KEY, read: (saved) => (saved === 'left' ? 'left' : 'none'), dialog: true }
 const WITH_SPIN = [...LOOKS, SPIN_ROW]
 
-test('a row added to a copy of the looks table is copied, pasted, loaded, snapshotted and saved', () => {
+test('a row added to a copy of the looks table is copied, pasted and loaded, and is in the snapshot\'s keys and Save\'s changed rows', () => {
   const store = storeOf({ [SPIN_KEY]: 'left' })
   assert.equal(JSON.parse(copiedSettings(store, WITH_SPIN))[SPIN_KEY], 'left')
   assert.equal(JSON.parse(copiedSettings(storeOf({}), WITH_SPIN))[SPIN_KEY], 'none')
   assert.deepEqual(pastedSettings(JSON.stringify({ [SPIN_KEY]: 'left' }), lookReaders(WITH_SPIN)).values, { [SPIN_KEY]: 'left' })
   assert.equal(readLooks(store, WITH_SPIN).spin, 'left')
   assert.equal(readLooks(storeOf({}), WITH_SPIN).spin, 'none')
-  assert.ok(lookKeys(WITH_SPIN).includes(SPIN_KEY))
-  assert.deepEqual(changedLooks(WITH_SPIN, { ...readLooks(storeOf({}), WITH_SPIN), spin: 'left' }, readLooks(storeOf({}), WITH_SPIN)).map((row) => row.name), ['spin'])
+  assert.ok(lookKeys(WITH_SPIN).includes(SPIN_KEY), 'the snapshot\'s keys hold the added row\'s key')
+  assert.deepEqual(changedDialogLooks(WITH_SPIN, { ...readLooks(storeOf({}), WITH_SPIN), spin: 'left' }, readLooks(storeOf({}), WITH_SPIN)).map((row) => row.name), ['spin'])
 })
 
 test('the looks table is the one list behind Paste and Copy: every row reads and copies, and the paste readers match', () => {
@@ -343,13 +345,17 @@ test('a pasted size or transparency that is off its slider is skipped, and a pas
   assert.equal(readers[OPACITY_KEY]('x'), undefined)
   assert.equal(readers[OUTLINE_KEY]('nope'), DEFAULT_OUTLINE)
   assert.equal(readers[BOX_KEY]('nope'), DEFAULT_BOX)
+  assert.equal(readers[FRAME_KEY]('nope'), false)
+  assert.equal(readers[FRAME_KEY](true), true)
+  assert.equal(readers[FONT_KEY]('nope'), DEFAULT_FONT)
+  assert.equal(readers[FONT_KEY]('fixed'), 'fixed')
 })
 
-test('changedLooks lists the rows whose draft differs from the value in force', () => {
+test('changedDialogLooks lists the rows whose draft differs from the value in force', () => {
   const now = readLooks(storeOf({}))
-  assert.deepEqual(changedLooks(LOOKS, { ...now }, now), [])
-  assert.deepEqual(changedLooks(LOOKS, { ...now, frame: true, noteFont: 'fixed' }, now).map((row) => row.name), ['frame', 'noteFont'])
-  assert.deepEqual(changedLooks(LOOKS, { ...now, width: 9 }, now), [], 'the sliders are not the dialog\'s')
+  assert.deepEqual(changedDialogLooks(LOOKS, { ...now }, now), [])
+  assert.deepEqual(changedDialogLooks(LOOKS, { ...now, frame: true, noteFont: 'fixed' }, now).map((row) => row.name), ['frame', 'noteFont'])
+  assert.deepEqual(changedDialogLooks(LOOKS, { ...now, width: 9 }, now), [], 'the sliders are not the dialog\'s')
 })
 
 test('the box color setting reads a preset or a #rrggbb color and anything else as Page', () => {
@@ -1475,7 +1481,9 @@ test('noteChanged: a new note changes with any text, and not with none', () => {
   assert.equal(noteChanged({ ...fresh, color: 5 }, '', null), false, 'an empty new note is not saved however it looks')
 })
 
-test('load, edit, Restart and Undo after Restart: the notes come back from what Restart kept', () => {
+// The store's side of a Restart and its Undo, with the script's two calls made here. The script's own restartDrawing and Undo are covered live, in
+// draw-tool-saved.live.mjs's 'Undo straight after Restart brings the notes back, and they are saved'.
+test('the store over load, edit, Restart and Undo: what Restart keeps reads back as the edited notes', () => {
   const store = fakeStore({ [DRAWING_PREFIX + 'p1']: [line, sum], [INDEX_KEY]: ['p1'] })
   const loaded = loadDrawing(store, 'p1').items
   assert.deepEqual(loaded, [line, sum])

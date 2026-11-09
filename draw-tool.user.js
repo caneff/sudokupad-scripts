@@ -1159,9 +1159,11 @@
   ]
   const lookKeys = (looks) => looks.map((row) => row.key)
   const lookReaders = (looks) => Object.fromEntries(looks.map(({ key, read, validator }) => [key, validator ? (data) => validator(data) ? data : undefined : read]))
-  const readLooks = (store, looks = LOOKS) => Object.fromEntries(looks.map(({ name, key, read }) => [name, read(store.getData(key))]))
+  // Every look as `store` holds it, keyed by each row's `by` field: its name for the looks in force, its stored key for Copy.
+  const readLooks = (store, looks = LOOKS, by = 'name') => Object.fromEntries(looks.map((row) => [row[by], row.read(store.getData(row.key))]))
+  const lookRow = (name) => LOOKS.find((row) => row.name === name)
   // The dialog's rows whose draft differs from the value in force.
-  const changedLooks = (looks, draft, now) => looks.filter((row) => row.dialog && draft[row.name] !== now[row.name])
+  const changedDialogLooks = (looks, draft, now) => looks.filter((row) => row.dialog && draft[row.name] !== now[row.name])
 
   // Copy and Paste carry the colors, size, transparency, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) : undefined
@@ -1169,7 +1171,7 @@
 
   // The looks in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store, looks = LOOKS) {
-    const copied = Object.fromEntries(looks.map(({ key, read }) => [key, read(store.getData(key))]))
+    const copied = readLooks(store, looks, 'key')
     const savedColors = readDrawColors(store.getData(COLORS_KEY))
     if (savedColors) copied[COLORS_KEY] = savedColors
     return JSON.stringify(copied)
@@ -2021,7 +2023,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, LOOKS, lookReaders, lookKeys, readLooks, changedLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2433,7 +2435,7 @@
   let color = DEFAULT_COLOR
   // The looks in force, by `LOOKS` name: width and opacity are the next note's as the sliders set them, and remembered; the rest are
   // the outline and font of every note and the box color and frame of every note with a box, as the settings dialog sets them.
-  const look = Object.fromEntries(LOOKS.map(({ name, read }) => [name, read(undefined)]))
+  const look = readLooks({ getData: () => null })
   // Whether the next note is made with a background. The Background button turns it on and off, and it is remembered.
   let background = false
   // Text Anywhere's nine colors, or null until they are first copied from the pen colors.
@@ -2445,7 +2447,7 @@
 
   const unmarkColor = () => { for (const button of keypad().querySelectorAll('button.digit.current')) button.classList.remove('current') }
 
-  // The open note's own look changes. A brand-new note's color or size also becomes the next note's (`alsoNext`); an existing note's changes only itself.
+  // The open note's own look changes. A brand-new note's look also becomes the next note's (`alsoNext`); an existing note's changes only itself.
   function changeOpen (change, alsoNext) {
     editing.item = change(editing.item)
     if (editing.index === -1) alsoNext()
@@ -2467,6 +2469,12 @@
       setNext()
       showPanelValues()
     }
+  }
+
+  // The notes `lookTarget` names as a list, or null for the next note.
+  function targetNotes () {
+    const target = lookTarget(editing, selected)
+    return target === 'open' ? [editing.item] : target === 'selected' ? selectedNotes() : null
   }
 
   const pickColor = (next) => applyLook((item) => ({ ...item, color: next }), () => setColor(next))
@@ -2500,9 +2508,9 @@
     boardNotes.run(() => { if (Framework.app.puzzle.currentPuzzle) redraw() })
   }
 
-  // A look is stored and kept, then the notes are drawn again in it when it is one of the dialog's. A paste sets the sliders' as a move of the slider would.
+  // A look is stored and kept, then the notes are drawn again in it when it is one of the dialog's.
   function setLook (name, value) {
-    const row = LOOKS.find((r) => r.name === name)
+    const row = lookRow(name)
     look[name] = value
     savedData.setData(row.key, value)
     if (row.dialog) showBoxes()
@@ -2552,7 +2560,7 @@
         paletteNote = error.message
       }
     }
-    const editedLooks = () => changedLooks(LOOKS, draftLooks, look)
+    const editedLooks = () => changedDialogLooks(LOOKS, draftLooks, look)
     const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Text Anywhere',
@@ -2634,8 +2642,8 @@
 
   // The button shows the open note's own background while a note is open, the selection's (null when it is mixed) while notes are selected, and the setting for the next note otherwise.
   const backgroundShown = () => {
-    const target = lookTarget(editing, selected)
-    return target === 'open' ? Boolean(editing.item.bg) : target === 'selected' ? panelLooks(selectedNotes()).bg : background
+    const notes = targetNotes()
+    return notes ? panelLooks(notes).bg : background
   }
 
   function showBackground () {
@@ -2656,13 +2664,13 @@
   // A press turns the open note's background on or off, and the setting only when the note is a new one; with no note open it turns the selected notes' on or off
   // (on when it is mixed), and with none selected the setting.
   function pressBackground () {
-    const on = lookTarget(editing, selected) === 'open' ? !editing.item.bg : backgroundShown() !== true
+    const on = backgroundShown() !== true
     applyLook(({ bg, ...rest }) => on ? { ...rest, bg: true } : rest, () => setBackground(on))
   }
 
   const panelValues = () => {
-    const target = lookTarget(editing, selected)
-    return target === 'open' ? panelLooks([editing.item]) : target === 'selected' ? panelLooks(selectedNotes()) : { color, width: look.width, opacity: look.opacity }
+    const notes = targetNotes()
+    return notes ? panelLooks(notes) : { color, width: look.width, opacity: look.opacity }
   }
 
   function sliderRow (id, label, range, value) {
@@ -2678,18 +2686,17 @@
 
   const SIZE_KEYS = { '+': 1, '=': 1, '-': -1 }
 
-  // What each slider reads its value as, how it changes a note, and how it sets the next note.
+  // The look each slider sets, read by its row in LOOKS, and how it changes a note.
   const SLIDER_LOOKS = {
-    [SIZE_SLIDER]: { read: readWidth, change: (value) => (item) => ({ ...item, size: textSizeFor(value) }), setNext: (value) => setLook('width', value) },
-    [OPACITY_SLIDER]: { read: readOpacity, change: (value) => (item) => ({ ...item, opacity: value }), setNext: (value) => setLook('opacity', value) }
+    [SIZE_SLIDER]: { name: 'width', change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
+    [OPACITY_SLIDER]: { name: 'opacity', change: (value) => (item) => ({ ...item, opacity: value }) }
   }
 
   // A move of a slider sets the open note's look, else the selected notes', else the next note's; a new open note's also becomes the next note's.
   function slideLook (input) {
-    const { read, change: changeWith, setNext } = SLIDER_LOOKS[input.id]
-    const value = read(Number(input.value))
-    const change = changeWith(value)
-    applyLook(change, () => setNext(value))
+    const { name, change } = SLIDER_LOOKS[input.id]
+    const value = lookRow(name).read(Number(input.value))
+    applyLook(change(value), () => setLook(name, value))
   }
 
   // The + and - keys move the Size slider one step, with the same effect as a move of it; the slider follows.
@@ -3130,10 +3137,10 @@
     if (!resizing) return
     event.stopImmediatePropagation()
     flushFrame()
-    const { index, item } = resizing
+    const { index, item, cancelled } = resizing
     resizing = null
     holdCursor(null)
-    if (editing || String(drawing[index]?.box) === String(item.box)) return
+    if (cancelled || editing || String(drawing[index]?.box) === String(item.box)) return
     keepDrawnPoints([index], boardMap())
     renderDrawing()
     snapToPixels([index])
@@ -3320,17 +3327,20 @@
     return removed
   }
 
-  // The open note, a resize and a move in progress follow their notes to the places the others' removal left them. A note that went leaves the open note and its resize
-  // unsaved (-1, so closing it adds it back with what was typed) and leaves a move without it; a move left with no note is cancelled.
+  // The open note, a resize and a move in progress follow their notes to the places the others' removal left them. An open note that went is unsaved (-1, so closing
+  // it adds it back with what was typed), and so is its resize. A selected note's resize whose note went is cancelled, so its release saves nothing; a move leaves the
+  // notes that went, and a move left with none is cancelled.
   function followKept (marks) {
     if (editing) editing.index = indexAfterKeep(editing.index, marks)
-    if (resizing) resizing.index = indexAfterKeep(resizing.index, marks)
+    if (resizing) {
+      const index = indexAfterKeep(resizing.index, marks)
+      if (!editing && index === -1) resizing.cancelled = true
+      resizing.index = index
+    }
     if (!drag?.move) return
     const move = drag.move.map((entry) => ({ ...entry, index: indexAfterKeep(entry.index, marks) })).filter(({ index }) => index !== -1)
-    if (move.length === 0) {
-      clearMove(drag)
-      Object.assign(drag, { move: null, cancelled: true })
-    } else drag.move = move
+    if (move.length === 0) cancelDrag()
+    else drag.move = move
   }
 
   function deleteSelected () {

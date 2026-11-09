@@ -58,11 +58,6 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
       assert.equal(panel.partsBottom <= panel.bottom + NEAR_PX, true, `the bottom part ${panel.partsBottom} ends inside the panel's bottom ${panel.bottom}`)
     })
 
-    it('a second start adds no second panel style', async () => {
-      await p.addScriptTag({ content: draw.script })
-      assert.equal(await p.locator('style#draw-tool-style').count(), 1)
-    })
-
     it('the color buttons are short, three to a row, and Clear all, Background and the gear sit full height in the row under them, with the sliders under that', async () => {
       const rect = (selector) => p.locator(selector).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom } })
       const keys = await Promise.all(NINE.map((n) => rect(`.controls-input button[data-key="${n}"]`)))
@@ -88,6 +83,12 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
       assert.equal(await p.locator(`${SLIDERS} input[type=range]`).count(), 2)
       assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [6, 100])
       assert.equal(await p.locator('.draw-tool-shape-mode').count(), 0, 'no Shape button')
+    })
+
+    // Last, so the checks above run with one copy of the script on the page.
+    it('a second start adds no second panel style', async () => {
+      await p.addScriptTag({ content: draw.script })
+      assert.equal(await p.locator('style#draw-tool-style').count(), 1)
     })
 
     it('the page raised no error', () => { assert.deepEqual(errors, []) })
