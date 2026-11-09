@@ -47,11 +47,11 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   assert.deepEqual(draw.presetColors('sudokupad', [], null, readPen), SUDOKUPAD)
   assert.deepEqual(draw.presetColors('pen', [], null, readPen), PEN)
 
-  // Copy carries the colors, the size, transparency, outline, box color and frame (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad outline, box color or frame reads as its default).
+  // Copy carries the colors, the size, transparency, outline, box color, frame and font (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad outline, box color, frame or font reads as its default).
   const copied = JSON.parse(draw.copiedSettings(storeOf({ DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_drawing_x: [text] })))
-  assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false })
+  assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false, DrawTool_font: 'proportional' })
   const pasted = draw.pastedSettings(JSON.stringify({ ...copied, DrawTool_width: 99, PenToolExtras_x: 1 }), draw.READERS)
-  assert.deepEqual(pasted, { values: { DrawTool_colors: PEN, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false }, skipped: 1 })
+  assert.deepEqual(pasted, { values: { DrawTool_colors: PEN, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false, DrawTool_font: 'proportional' }, skipped: 1 })
   assert.throws(() => draw.pastedSettings('not settings', draw.READERS))
 
   // The site: the homepage summary and @description name the notes and the tool's own colors, the details page has a bullet for

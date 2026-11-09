@@ -441,7 +441,7 @@ test(`${HOME} describes Text Anywhere in a short summary ending in a Details lin
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes anywhere Click to type; Esc or Ctrl+Enter finishes; double-click a note to edit.',
+    'Typed notes anywhere Click to type; Esc or Ctrl+Enter finishes; Ctrl+Z and Ctrl+Y undo and redo the typing; double-click a note to edit.',
     'Formatting **bold**, *italic*, __underline__, ~~strikethrough~~ (they combine, like Discord), and lines starting - become bullets or [ ] checklist items (- [ ] and [] work too); two spaces before a dash nest it one level, and 1. starts a numbered item. A line starting # , ## or ### is a header, and -# makes small faded subtext. Typing ->, != or sum gives → ≠ Σ. `code` and a block between two lines of ``` show in monospace, with nothing else read inside.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',
@@ -449,7 +449,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
-    'Settings Color presets, halo, box color and border by sample; Copy and Paste to another browser.'
+    'Settings Color presets, font (proportional or fixed width), halo, box color and border by sample; Copy and Paste to another browser.'
   ])
   const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
   assert.ok(grid, `site/${DRAW} has no <ul class="features">`)

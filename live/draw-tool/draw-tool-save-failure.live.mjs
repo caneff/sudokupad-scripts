@@ -1,6 +1,6 @@
 // Live check that Text Anywhere's Save is all-or-nothing, on sudokupad.app in headless Chromium: a Save that throws after writing the colors
 // leaves the stored colors, and what the dialog shows on reopening, exactly as they were before Save. The throw is in the first step because every later step
-// (outline, box color, frame) runs under a guard that swallows a throw, so none can fail through to the dialog. Real mouse input.
+// (outline, box color, frame, font) runs under a guard that swallows a throw, so none can fail through to the dialog. Real mouse input.
 /* global Node */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

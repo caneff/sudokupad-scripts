@@ -108,6 +108,18 @@ export const OVERLAY_DRAG = [[4.5, 0.6], [4.5, 1.5]]
 // The open dialog whose text holds `text`.
 export const dialogWith = (p, text) => p.locator('.dialog', { hasText: text })
 
+// SudokuPad's pause dialog: opened by the timer button, closed by its Stay Paused or Resume button.
+export const PAUSED = 'Game paused'
+export async function pauseGame (p) {
+  await p.click('.timer-control')
+  await dialogWith(p, PAUSED).waitFor({ state: 'visible' })
+  await dialogAtRest(p)
+}
+export async function closePauseDialog (p, button) {
+  await dialogWith(p, PAUSED).locator('button', { hasText: button }).click()
+  await p.locator('.dialog').waitFor({ state: 'detached' })
+}
+
 // A real click on the center of the cell at `row`, `col`.
 export async function clickCell (p, row, col) {
   const [x, y] = await cellCentre(p, row, col)

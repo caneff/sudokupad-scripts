@@ -11,11 +11,10 @@ import { EDITOR as COLOR_BY_DIGIT_EDITOR } from './color-by-digit/color-by-digit
 import { SETTINGS_EDITOR, tool } from './draw-tool/draw-tool-fixtures.mjs'
 import { draw, mouseDrag, penEntries } from './pen.mjs'
 import { closeDialogWith, EXTRAS_EDITOR, openScriptDialog } from './settings.mjs'
-import { boardOf, CLASSIC_GIVENS, CLASSIC_SOLUTION, clickCell, dialogAtRest, dialogWith, installAll, OVERLAY_DRAG, openPuzzleId, placeNote, puzzleData, puzzleIdFor, resumeAfterHistory, useTool } from './puzzles.mjs'
+import { boardOf, CLASSIC_GIVENS, CLASSIC_SOLUTION, clickCell, dialogAtRest, closePauseDialog, dialogWith, installAll, OVERLAY_DRAG, openPuzzleId, PAUSED, pauseGame, placeNote, puzzleData, puzzleIdFor, resumeAfterHistory, useTool } from './puzzles.mjs'
 import { readUntil, settle } from './settle.mjs'
 
 const CONGRATS = 'Congrats'
-const PAUSED = 'Game paused'
 const OK = /^\s*OK\s*$/
 const SCRIPT_DIALOGS = [['Pen Tool Extras', EXTRAS_EDITOR], ['Color by Digit', COLOR_BY_DIGIT_EDITOR], ['Text Anywhere', SETTINGS_EDITOR], ['Dark Page', '.dialog input[type=color]'], ['Rules Resizer', '#auto-rules-resizer-max-width']]
 // The cell the color tool colors in puzzle A, and its key.
@@ -154,9 +153,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
   it('attack 66: pause the timer, then try keys and a pen drag under the pause dialog, draw, place notes and color while it stays paused, and resume', async () => {
     const running = () => p.evaluate(() => Framework.app.timer.running)
     const pause = async () => {
-      await p.click('.timer-control')
-      await dialogWith(p, PAUSED).waitFor({ state: 'visible' })
-      await dialogAtRest(p)
+      await pauseGame(p)
       assert.equal(await running(), false, 'the timer is paused')
     }
     assert.equal(await running(), true)
@@ -176,8 +173,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     assert.deepEqual(await penEntries(p), [], 'the drag drew no pen line under the dialog')
     assert.equal(await dialogWith(p, PAUSED).isVisible(), true, 'the pause dialog is still up')
     // Stay Paused: the grid shows again, the board takes input, and the timer stays stopped.
-    await dialogWith(p, PAUSED).locator('button', { hasText: 'Stay Paused' }).click()
-    await p.locator('.dialog').waitFor({ state: 'detached' })
+    await closePauseDialog(p, 'Stay Paused')
     assert.equal(await settle(gridBlurred, false), false, 'the grid shows after Stay Paused')
     const marks = await markA()
     assert.equal(await running(), false, 'still paused after the marks')
@@ -190,8 +186,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     await p.evaluate(() => Framework.app.changeTool('pen'))
     await mouseDrag(p, OVERLAY_DRAG)
     assert.deepEqual(await boardOf(p), marks, 'a drag on the overlay marked nothing')
-    await dialogWith(p, PAUSED).locator('button', { hasText: 'Resume' }).click()
-    await p.locator('.dialog').waitFor({ state: 'detached' })
+    await closePauseDialog(p, 'Resume')
     assert.equal(await settle(running, true), true, 'Resume runs the timer')
     assert.deepEqual(await boardOf(p), marks, 'the marks are still there')
   })
