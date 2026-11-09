@@ -220,6 +220,10 @@ SudokuPad (`live/page.mjs`), all six scripts injected after Start Puzzle. The co
 (runner), `live/fuzz/run.mjs` (command line) and `live/fuzz/fuzz.proof.mjs` (the proof, `npm run test:fuzz`; five minutes, so
 not in `npm run test:live`).
 
+Update (#593): the proof described below became the real run. `live/fuzz/fuzz.proof.mjs` is gone; `npm run test:fuzz` is the 2-minute random run and
+`npm run test:fuzz:smoke` the live test (`live/README.md` § The fuzz run). One more quirk found there: fast-check never removes the last action of a list
+while shrinking, so an error read only after the list keeps one stray step; the run reads the signals 40 ms after every action to blame the right one.
+
 Verdict: it works. `fc.commands` + `fc.asyncModelRun` + Playwright found a planted failure, shrank it to the
 shortest sequence and replayed it from the printed numbers.
 

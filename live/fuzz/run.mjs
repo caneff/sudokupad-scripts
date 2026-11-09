@@ -1,38 +1,51 @@
-// Runs the fuzz from the command line and prints its report; the replay command a failure prints is this file with the
-// failure's numbers. Exits 1 on a failure.
-//   node live/fuzz/run.mjs [--planted <limit>] [--late-error] [--seed <n>] [--path <p> --replay-path <r>]
+// The fuzz from the command line: `npm run test:fuzz`. Random action lists on real SudokuPad with every script installed, for 2 minutes by default;
+// a crash signal (a skip line, a page error, a console error, the notice bar) fails the run, which is shrunk to the shortest list that still fails
+// and printed with the seed and the command that replays it. Exits 1 on a failure.
+//   npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--plant-escape-error]
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright'
 import { fuzz } from './fuzz.mjs'
 
-const { values } = parseArgs({ options: { planted: { type: 'string' }, 'late-error': { type: 'boolean' }, seed: { type: 'string' }, path: { type: 'string' }, 'replay-path': { type: 'string' } } })
+const { values } = parseArgs({
+  options: { seed: { type: 'string' }, minutes: { type: 'string' }, runs: { type: 'string' }, path: { type: 'string' }, 'shrink-minutes': { type: 'string' }, 'plant-escape-error': { type: 'boolean' } }
+})
 
-// A number option, or undefined when absent; a value that is not a number stops the run, since NaN would switch the rule off.
-const number = (name) => {
-  if (values[name] == null) return undefined
+// A number option, or `fallback` when absent; a value that is not a number stops the run, since NaN would switch a limit off.
+const number = (name, fallback, { integer = false } = {}) => {
+  if (values[name] == null) return fallback
   const n = Number(values[name])
-  if (Number.isNaN(n)) throw new Error(`--${name} needs a number, got "${values[name]}"`)
+  if (Number.isNaN(n) || (integer && !Number.isInteger(n))) throw new Error(`--${name} needs ${integer ? 'a whole number' : 'a number'}, got "${values[name]}"`)
   return n
 }
 
+const seed = number('seed', Math.floor(Math.random() * 2 ** 31), { integer: true })
+const started = Date.now()
 const browser = await chromium.launch()
 try {
   const r = await fuzz({
     browser,
-    seed: number('seed'),
-    plantedLimit: number('planted'),
-    lateError: values['late-error'],
+    seed,
+    runs: number('runs'),
+    minutes: number('minutes'),
+    shrinkMinutes: number('shrink-minutes'),
     path: values.path,
-    replayPath: values['replay-path']
+    planted: values['plant-escape-error']
   })
-  console.log(`failed: ${r.failed}`)
-  console.log(`seed: ${r.seed}`)
-  if (r.failed) {
+  const seconds = Math.round((Date.now() - started) / 1000)
+  if (!r.failed) {
+    console.log(`fuzz passed: ${r.runs} action lists on the ${r.puzzle} puzzle in ${seconds} s (seed ${r.seed})`)
+  } else {
+    console.log(`fuzz FAILED on the ${r.puzzle} puzzle (seed ${r.seed}) after ${seconds} s`)
     console.log(`error: ${r.error}`)
-    console.log(`sequence: ${r.sequence.join(' | ')}`)
-    console.log(`path: ${r.path}`)
-    console.log(`replayPath: ${r.replayPath}`)
+    console.log(`shrunk to ${r.sequence.length} ${r.sequence.length === 1 ? 'step' : 'steps'}:`)
+    r.sequence.forEach((step, i) => console.log(`  ${i + 1}. ${step}`))
     console.log(`replay: ${r.replayCommand}`)
+    if (r.errorLog.length) {
+      console.log('shared error log, newest first:')
+      r.errorLog.forEach((line) => console.log(`  ${line}`))
+    } else {
+      console.log('shared error log: empty')
+    }
   }
   process.exitCode = r.failed ? 1 : 0
 } finally {

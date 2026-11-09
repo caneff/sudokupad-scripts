@@ -4,12 +4,10 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { gotoPuzzle, openPage, startPuzzle } from './page.mjs'
+import { ERROR_LOG_KEY as LOG_KEY, gotoPuzzle, openPage, startPuzzle } from './page.mjs'
 import { openScriptDialog } from './settings.mjs'
 
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
-// The key the guard writes under, read from the shared module so the test cannot drift from it.
-const LOG_KEY = /const ERROR_LOG_KEY = '([^']+)'/.exec(readFileSync(new URL('../lib/sudokupad.js', import.meta.url), 'utf8'))[1]
 const EDITOR = '#dark-page-input'
 const STATUS = '.dialog [data-role="settings-status"]'
 const actButton = (p, act) => p.locator(`.dialog button[data-act="${act}"]`)
