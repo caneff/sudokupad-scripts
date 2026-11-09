@@ -68,8 +68,8 @@ async function runList (openTarget, actions, landMs, settleMs) {
 }
 
 // Fuzzes with `seed` over a puzzle whose free cells are `cells`: until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
-// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. Returns `{ failed: false, seed, runs }` or the
-// failure: `error`, `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`, `replayPath` and `errorLog` (lines).
+// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. Returns `{ failed: false, seed, runs, huntMs }` or the
+// failure: `error`, `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`, `replayPath`, `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
 export async function runFuzz ({ openTarget, cells, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS }) {
   const property = fc.asyncProperty(actionList(cells, { replayPath }), (actions) => runList(openTarget, actions, landMs, settleMs))
   const replaying = path != null
@@ -77,8 +77,10 @@ export async function runFuzz ({ openTarget, cells, seed, runs, minutes = DEFAUL
   const upTo = (p) => Number(p.split(':')[0]) + 1
   // The hunt stops at the first failure, so the time limit never cuts a shrink short. A time limit that fires before the first list has run is
   // reported by fast-check as a failure with no counterexample: that is a run that did not get to run, not a failure.
+  const huntStarted = Date.now()
   const hunt = await fc.check(property, { seed, numRuns: replaying ? upTo(path) : runs ?? UNBOUNDED, path, endOnFailure: true, interruptAfterTimeLimit: replaying ? undefined : minutes * 60000, verbose: 0 })
-  if (!hunt.failed || hunt.counterexample === null) return { failed: false, seed: hunt.seed, runs: hunt.numRuns }
+  const huntMs = Date.now() - huntStarted
+  if (!hunt.failed || hunt.counterexample === null) return { failed: false, seed: hunt.seed, runs: hunt.numRuns, huntMs }
   let found = hunt
   if (!replaying) {
     // The same run again, from its index alone, this time shrinking; a failure that does not repeat leaves the hunt's own.
@@ -96,6 +98,7 @@ export async function runFuzz ({ openTarget, cells, seed, runs, minutes = DEFAUL
     replayPath: REPLAY_PATH.exec(shown)[1],
     errorLog: found.errorInstance?.errorLog ?? [],
     runs: hunt.numRuns,
+    huntMs,
     huntedSteps: String(hunt.counterexample[0]).replace(REPLAY_PATH, '').trim().split(',').length
   }
 }

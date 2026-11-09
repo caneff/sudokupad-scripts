@@ -24,10 +24,11 @@ const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQ
 // Tag Manager's script is answered with an empty one: the harness aborts it, and SudokuPad loads it again on a second
 // puzzle in a tab (it has saved progress by then) and leaves the abort an uncaught `Event` rejection that no script caused.
 // The two pictures of the solved dialog are answered with an empty one too: the recording never loaded the dialog, and a request it lacks fails the run.
-export async function installAll (p) {
+// `patch(file, code)` returns the text to inject for a script; the files on disk are never touched.
+export async function installAll (p, patch = (file, code) => code) {
   await p.route(/googletagmanager/, (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }))
   await p.route(/\/images\/(?:sven)?toby-icon\.png/, (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }))
-  for (const code of ALL_SCRIPTS) await injectAtIdle(p, code)
+  for (const [i, code] of ALL_SCRIPTS.entries()) await injectAtIdle(p, patch(SCRIPT_FILES[i], code))
 }
 
 // Saves Color by Digit's Odd/Even profile in Cell mode before the page loads, so odd digits take one color and even digits another.

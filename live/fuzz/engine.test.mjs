@@ -19,6 +19,18 @@ describe('the fuzz engine on a fake page', () => {
     assert.ok(targets.every((t) => t.closed))
   })
 
+  it('times the hunt: huntMs covers the lists it ran, on a pass and on a failure', async () => {
+    const slowTargets = (options) => {
+      const { openTarget } = fakeTargets(options)
+      return async () => { await new Promise((resolve) => setTimeout(resolve, 10)); return openTarget() }
+    }
+    const passed = await runFuzz({ openTarget: slowTargets(), cells: CELLS, seed: SEED, runs: 5, ...WAITS })
+    assert.ok(passed.huntMs >= 40, `5 lists of 10 ms each took ${passed.huntMs} ms`)
+    const failed = await runFuzz({ openTarget: slowTargets({ plantEscapeError: true }), cells: CELLS, seed: SEED, runs: 200, ...WAITS })
+    assert.equal(failed.failed, true)
+    assert.ok(failed.huntMs >= 10, `the hunt of a failure took ${failed.huntMs} ms`)
+  })
+
   it('stops at its time limit', async () => {
     const { openTarget } = fakeTargets()
     const started = Date.now()
