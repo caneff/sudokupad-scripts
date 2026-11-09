@@ -12,7 +12,7 @@ import { clickLeftEdge, openPenTool, PAGE_BUTTON, padValues } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const MODE_BUTTON = '.pen-tool-extras-mode'
+const LINE_MODE_BUTTON = '.pen-tool-extras-mode'
 const SETTINGS_BUTTON = '.pen-tool-extras-settings'
 const EDITOR = '#pen-tool-extras-editor'
 let browser
@@ -41,7 +41,7 @@ describe('a click on the left of a Pen Tool Extras panel button', { concurrency:
 
   it('on the line mode button changes the mode and reaches no board', async () => {
     const before = await lineMode()
-    const result = await clickLeftEdge(p, MODE_BUTTON)
+    const result = await clickLeftEdge(p, LINE_MODE_BUTTON)
     assert.equal(await settle(async () => (await lineMode()) !== before, true), true, 'the mode changed')
     assertStopped(result)
   })

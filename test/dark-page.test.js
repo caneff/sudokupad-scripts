@@ -5,7 +5,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { buildCss, BOARD, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { buildCss, PAGE, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
 const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -21,12 +21,12 @@ const rule = (selector) => rules().find((r) => r.selector === selector)
 
 test('the page background is black by default', () => {
   assert.equal(DEFAULT_COLOR, '#000000')
-  assert.deepEqual(rule(BOARD), { selector: BOARD, declarations: 'background-color: #000000 !important' })
+  assert.deepEqual(rule(PAGE), { selector: PAGE, declarations: 'background-color: #000000 !important' })
 })
 
 test('the page background is the color given', () => {
-  const given = buildCss('#336699').split('\n').find((line) => line.startsWith(`${BOARD} {`))
-  assert.equal(given, `${BOARD} { background-color: #336699 !important }`)
+  const given = buildCss('#336699').split('\n').find((line) => line.startsWith(`${PAGE} {`))
+  assert.equal(given, `${PAGE} { background-color: #336699 !important }`)
 })
 
 test('readSaved reads the saved color through the Framework, and lets a Framework it cannot read throw', () => {
@@ -50,15 +50,15 @@ test('the script runs at document-start, so the page color is there before the f
 })
 
 test('the credit line takes the text color for the page color given', () => {
-  const credit = (color) => buildCss(color).split('\n').find((line) => line.startsWith(`${BOARD} .controls-footer`))
-  assert.equal(credit('#ffffff'), `${BOARD} .controls-footer, ${BOARD} .controls-footer a { color: #000000 !important }`)
-  assert.equal(credit('#000000'), `${BOARD} .controls-footer, ${BOARD} .controls-footer a { color: #ffffff !important }`)
+  const credit = (color) => buildCss(color).split('\n').find((line) => line.startsWith(`${PAGE} .controls-footer`))
+  assert.equal(credit('#ffffff'), `${PAGE} .controls-footer, ${PAGE} .controls-footer a { color: #000000 !important }`)
+  assert.equal(credit('#000000'), `${PAGE} .controls-footer, ${PAGE} .controls-footer a { color: #ffffff !important }`)
 })
 
 test('the credit line and the replay readout reach 4.5:1 on each of these page colors, mid greys either side of where white and black swap included', () => {
   const textOf = (line) => /color: (#[0-9a-f]{6}) !important/.exec(line)[1]
   for (const color of ['#808080', '#767676', '#757575', '#747474', '#6b6b6b', '#777777', '#ffcc00', '#336699', '#000000', '#ffffff', '#0000ff']) {
-    for (const start of [`${BOARD} .controls-footer`, `${BOARD} .controls-input::after`]) {
+    for (const start of [`${PAGE} .controls-footer`, `${PAGE} .controls-input::after`]) {
       const line = buildCss(color).split('\n').find((l) => l.startsWith(start))
       assert.ok(contrastRatio(hexChannels(textOf(line)), hexChannels(color)) >= 4.5, `${start} on ${color}: ${textOf(line)}`)
     }
@@ -66,16 +66,16 @@ test('the credit line and the replay readout reach 4.5:1 on each of these page c
 })
 
 test('the replay tool\'s readout (the ::after of .controls-input) takes the text color for the page color given', () => {
-  const readout = (color) => buildCss(color).split('\n').find((line) => line.startsWith(`${BOARD} .controls-input::after`))
-  assert.equal(readout('#ffffff'), `${BOARD} .controls-input::after { color: #000000 !important }`)
-  assert.equal(readout('#000000'), `${BOARD} .controls-input::after { color: #ffffff !important }`)
-  assert.equal(readout('#ffcc00'), `${BOARD} .controls-input::after { color: #000000 !important }`)
+  const readout = (color) => buildCss(color).split('\n').find((line) => line.startsWith(`${PAGE} .controls-input::after`))
+  assert.equal(readout('#ffffff'), `${PAGE} .controls-input::after { color: #000000 !important }`)
+  assert.equal(readout('#000000'), `${PAGE} .controls-input::after { color: #ffffff !important }`)
+  assert.equal(readout('#ffcc00'), `${PAGE} .controls-input::after { color: #000000 !important }`)
 })
 
 const buttonRules = (color) => buildCss(color).split('\n').filter((line) => /button/.test(line.split(' {')[0]))
 
 test('on a dark page color the control buttons go dark gray with light purple text, and a button that is on keeps its own fill and gets a purple border', () => {
-  const scoped = (selectors) => selectors.map((selector) => `${BOARD} ${selector}`).join(', ')
+  const scoped = (selectors) => selectors.map((selector) => `${PAGE} ${selector}`).join(', ')
   const groups = ['.controls-app', '.controls-tool', '.controls-aux']
   assert.deepEqual(buttonRules('#000000'), [
     `${scoped(groups.map((g) => `${g} button:not(.selected):not(.selectedperm)`))} { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }`,
@@ -104,19 +104,19 @@ test('the buttons switch exactly where the credit text does', () => {
   }
 })
 
-test('savedColor reads a saved #rrggbb string as lowercase, and anything else as nothing saved', () => {
-  assert.equal(savedColor('#336699'), '#336699')
-  assert.equal(savedColor('#ABCDEF'), '#abcdef')
-  for (const bad of [null, undefined, '', 'red', '#fff', '#12345g', 5, {}, ['#000000']]) assert.equal(savedColor(bad), null, String(bad))
+test('pageColorOf reads a saved #rrggbb string as lowercase, and anything else as nothing saved', () => {
+  assert.equal(pageColorOf('#336699'), '#336699')
+  assert.equal(pageColorOf('#ABCDEF'), '#abcdef')
+  for (const bad of [null, undefined, '', 'red', '#fff', '#12345g', 5, {}, ['#000000']]) assert.equal(pageColorOf(bad), null, String(bad))
 })
 
 test('the board\'s own box takes SudokuPad\'s own page background, so it follows SudokuPad\'s dark mode', () => {
-  assert.deepEqual(rule(`${BOARD} #${BOARD_ID}`), { selector: `${BOARD} #${BOARD_ID}`, declarations: 'background-color: var(--body-bg) !important' })
+  assert.deepEqual(rule(`${PAGE} #${BOARD_ID}`), { selector: `${PAGE} #${BOARD_ID}`, declarations: 'background-color: var(--body-bg) !important' })
 })
 
 test('every rule applies only while a board is on the page, so a page with no board keeps its own colors', () => {
   for (const { selector } of rules()) {
-    for (const part of selector.split(',').map((s) => s.trim())) assert.ok(part.startsWith(BOARD), `${selector}: ${part}`)
+    for (const part of selector.split(',').map((s) => s.trim())) assert.ok(part.startsWith(PAGE), `${selector}: ${part}`)
   }
 })
 
@@ -134,14 +134,14 @@ test('no rule declares a theme variable, which would reach the grid through the 
 })
 
 test('no rule reaches inside the board, or sets color on body or a container of it; the one rule on the board\'s own box sets only its background', () => {
-  const boardBox = `${BOARD} #${BOARD_ID}`
+  const boardBox = `${PAGE} #${BOARD_ID}`
   for (const { selector, declarations } of rules()) {
     for (const part of selector.split(',').map((s) => s.trim())) {
       if (part === boardBox) {
         assert.ok(/^background-color: [^;]+$/.test(declarations.replace(' !important', '')), `${selector}: ${declarations}`)
         continue
       }
-      const rest = part.replace(BOARD, '').trim()
+      const rest = part.replace(PAGE, '').trim()
       assert.ok(!/svg|\.grid|\.cells|\.game|\.app|#board|\*/.test(rest), `${selector} reaches the board or a container of it: ${rest}`)
       if (/(^|[;\s])color\s*:/.test(declarations)) assert.notEqual(rest, '', selector)
     }
@@ -242,7 +242,7 @@ test('Dark Page declares each SudokuPad internal it calls, and a complete Sudoku
 })
 
 test('without one internal, only the feature that needs it is lacking', () => {
-  for (const [internal, feature] of [['getData', 'savedColor'], ['getApp', 'settings'], ['addSetting', 'settings'], ['showDialog', 'settings'], ['closeDialog', 'settings'], ['setData', 'settings'], ['removeData', 'settings']]) {
+  for (const [internal, feature] of [['getData', 'savedPageColor'], ['getApp', 'settings'], ['addSetting', 'settings'], ['showDialog', 'settings'], ['closeDialog', 'settings'], ['setData', 'settings'], ['removeData', 'settings']]) {
     const roots = completeFramework()
     delete roots.Framework[internal]
     assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[`Framework.${internal}`, [feature]]]), internal)

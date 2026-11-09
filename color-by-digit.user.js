@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.24
+// @version      0.25.25
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.24'
+  const VERSION = '0.25.25'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -177,11 +177,10 @@
     return { fogged: isFogged(cell), given: isFogged(cell) ? '' : cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
 
-  // A group is the digits that share a color. 0 counts after 9 in the order of groups; a group's own digits are listed 0 first, as the preloads save them.
+  // Groups order 0 after 9, but a group's own digits list 0 first, as the preloads save them.
   const digitRank = (digit) => (digit === '0' ? 10 : Number(digit))
   const lowestRank = (group) => Math.min(...group.digits.map(digitRank))
 
-  // Merges groups of one color, drops groups with no digits, and orders groups by their lowest digit.
   function canonicalGroups (groups) {
     const digitsOfKey = new Map()
     groups.forEach((g) => digitsOfKey.set(g.key, [...(digitsOfKey.get(g.key) || []), ...g.digits]))
@@ -191,17 +190,15 @@
       .sort((a, b) => lowestRank(a) - lowestRank(b))
   }
 
-  // A null key takes the digit out of every group.
-  function setDigitColor (groups, digit, key) {
+  function setDigitGroup (groups, digit, key) {
     const rest = groups.map((g) => ({ key: g.key, digits: g.digits.filter((d) => d !== digit) }))
     if (key === null) return canonicalGroups(rest)
     return canonicalGroups(rest.some((g) => g.key === key) ? rest.map((g) => (g.key === key ? { key, digits: [...g.digits, digit] } : g)) : [...rest, { key, digits: [digit] }])
   }
 
-  // The color a stroke starting on `digit` paints with: null (clear) when that digit already has the brush color.
   const strokeKey = (groups, digit, brush) => (keyOfDigitMap(groups)[digit] === brush ? null : brush)
 
-  const paintDigit = (groups, digit, brush) => setDigitColor(groups, digit, strokeKey(groups, digit, brush))
+  const paintDigit = (groups, digit, brush) => setDigitGroup(groups, digit, strokeKey(groups, digit, brush))
 
   const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
   function rowAfterKey (key, index, count) {
@@ -210,7 +207,6 @@
     return null
   }
 
-  // Where an arrow key moves within a grid `columns` wide: along the row or down the column to the next usable slot, null at the edge or for any other key.
   const GRID_STEP = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }
   function gridTarget (key, index, usable, columns) {
     const step = GRID_STEP[key]
@@ -274,7 +270,6 @@
 
   const cloneProfile = (profile) => ({ name: profile.name, groups: cloneGroups(profile.groups) })
 
-  // An undefined `digitActive` is synced: the digits take the cell profile.
   function makeState (profiles, active, digitActive, useDigitColors) {
     const state = { profiles, active }
     if (digitActive !== undefined) state.digitActive = digitActive
@@ -288,12 +283,10 @@
 
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
 
-  // Groups saved before profiles existed, else the preloads, stand in for profiles not saved or not readable.
   const stateFromStored = (store) => load(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
 
   const saveProfiles = (store, state) => save(store, PROFILES_KEY, state)
 
-  // Groups saved before profiles existed become the active profile.
   function stateFromLegacy (legacyGroups) {
     const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
@@ -324,17 +317,14 @@
     return withProfiles(state, [...state.profiles.map(cloneProfile), copy], state.active, state.digitActive)
   }
 
-  // A blank name keeps the old one.
   function renameProfile (state, index, name) {
     const trimmed = cleanName(name)
     if (!state.profiles[index] || trimmed === '') return state
     return withProfiles(state, state.profiles.map((p, i) => (i === index ? { name: trimmed, groups: cloneGroups(p.groups) } : cloneProfile(p))), state.active, state.digitActive)
   }
 
-  // Where a profile index lands when another profile is deleted: a deleted one falls to its neighbour.
   const indexAfterDelete = (index, deleted, count) => (deleted < index ? index - 1 : Math.min(index, count - 2))
 
-  // Where a profile index lands when the profile at `from` is dragged to `to`.
   function indexAfterMove (index, from, to) {
     if (index === from) return to
     if (from < index && index <= to) return index - 1
@@ -346,7 +336,6 @@
     if (state.profiles.length <= 1 || !state.profiles[index]) return state
     const profiles = state.profiles.filter((_, i) => i !== index).map(cloneProfile)
     const active = indexAfterDelete(state.active, index, state.profiles.length)
-    // Deleting the digit profile makes the digits follow the cell profile.
     const digitActive = isSynced(state) || index === state.digitActive ? undefined : indexAfterDelete(state.digitActive, index, state.profiles.length)
     return withProfiles(state, profiles, active, digitActive)
   }
@@ -455,7 +444,6 @@
     return keys.reduce((owner, key) => (owner === undefined || owner === null ? undefined : owner[key]), roots[root])
   }
 
-  // Each internal lacking, with the features it holds off; a feature is listed under the first of its `needs` it lacks.
   function lackingInternals (features, roots) {
     const lacking = new Map()
     Object.entries(features).forEach(([name, { needs }]) => {
@@ -502,7 +490,6 @@
     ].join('\n')).join('\n\n')
   }
 
-  // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
   function reportUrl ({ name, version, sudokupad, off }) {
     const shownVersion = sudokupad || 'unknown'
     const labels = off.map((feature) => feature.label).join(', ')
@@ -619,7 +606,6 @@
       host.append(bar)
     }
 
-    // A bar of plain words, one per text and page load; the same host as the SudokuPad-changed bar, with no report link.
     const told = new Set()
     function tell (text) {
       if (told.has(text) || !page || !page.doc.body) return
@@ -641,7 +627,6 @@
     let dialogActions = 0
     const storeFailures = new WeakSet()
 
-    // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
       const feature = {
         label,
@@ -783,10 +768,8 @@
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
 
-  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 
-  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
   function colorFunction (value) {
     const fn = COLOR_FUNCTION.exec(value)
     if (!fn) return null
@@ -805,7 +788,6 @@
     return Boolean(fn && fn.alpha <= 0)
   }
 
-  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
   // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
   function parseColor (text) {
     if (typeof text !== 'string' || isTransparent(text)) return null
@@ -870,7 +852,6 @@
     return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
 
-  // WCAG relative luminance of [r, g, b] channels.
   function wcagLuminance (rgb) {
     const [r, g, b] = rgb.map((c) => {
       const x = c / 255
@@ -892,7 +873,6 @@
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math.
   /* global parseColor, darkenColor, toOklab */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
@@ -910,7 +890,6 @@
   // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
-  // One page preset per cell color page, up to three, then SudokuPad's own colors.
   const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
   const SUDOKUPAD_PRESET = 'sudokupad'
   const PALETTE_PRESET_LABELS = {
@@ -956,7 +935,6 @@
     return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
   }
 
-  // `pages` is the palette's pages of color keys, and `readCell` reads a key's color as CSS text.
   function paletteColors (preset, pages, readCell) {
     if (preset === SUDOKUPAD_PRESET) return SUDOKUPAD_SET
     const page = paletteOptions(pages.length).indexOf(preset)
@@ -974,7 +952,6 @@
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
   }
 
-  // The pages of cell color keys of the palette in force, or none until the color tool has one.
   function palettePages () {
     const palette = colorTool()?.palette
     if (!palette) return []
@@ -1005,17 +982,15 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads PEN_COLOR_NUMBERS from palette.
   /* global PEN_COLOR_NUMBERS */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
-  // One swatch's side and the gap between swatches; a caller lining its own keys up with the grid uses the same two.
   const SWATCH_PX = 34
   const SWATCH_GAP_PX = 4
   // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
   const PICKER_INPUT_REM = 2.4
   const PICKER_COLUMNS = 3
-  // The pickers fade in from this scale over this long. They are rare, and ending edit mode takes them away at once.
+  // The pickers are rare enough to fade in; ending edit mode takes them away at once, with no fade out.
   const PICKER_ENTRY_SCALE = 0.95
   const PICKER_ENTRY_MS = 150
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
@@ -1025,7 +1000,6 @@
 
   const fillWithOpacity = (color, opacity) => opacity < 1 ? `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)` : color
 
-  // The dialog's color block: a pulldown above a grid of swatches, three to a row.
   // Free mode (no `picked`) makes each swatch a color input; palette mode makes each a button, `picked` the pressed one, and a null swatch an empty cell.
   // `options` are `{ value, label, selected, disabled }`; `beside` goes in the grid's row, after it.
   // A `fillOpacity` under 1 draws the palette swatches that strong over what is behind them; the border and the pressed ring stay whole.
@@ -1063,7 +1037,6 @@
     ].join('\n')
   }
 
-  // Edit mode's looks, for SudokuPad's tool `tool` (its panel carries `tool-<tool>`): each picker fills the grid cell of its button, whose own picture is hidden under it.
   // A picker is out of the flow, so it takes no cell from the buttons the panel places itself.
   function pickerCss (prefix, tool) {
     const panel = `.tool-${tool} .controls-input`
@@ -1083,14 +1056,11 @@
     ].join('\n')
   }
 
-  // Every open picker shows the color `colorOf(n)` gives now.
   function refreshPickers (prefix, colorOf) {
     document.querySelectorAll(`.${prefix}picker input`).forEach((input) => { input.value = colorOf(input.dataset.key) })
   }
 
-  // A hold of HOLD_TO_EDIT_MS on one of the tool's nine color buttons, with either mouse button, puts a color picker over each; a picker's input calls `save(n, value)` at once.
-  // Left Alt held with the tool current does the same until it is released, as SudokuPad's own color tool does.
-  // `guard` runs each toggle and each window listener, so a caller can report a failure its own way. `endEditMode()` ends edit mode from outside.
+  // Left Alt held opens edit mode until it is released, as SudokuPad's own color tool does.
   function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
     const toolClass = `tool-${tool}`
     const editing = `${prefix}editing`
@@ -1100,7 +1070,6 @@
     // SudokuPad keeps one panel element and swaps its `tool-<name>` class for the next tool's, so a class watcher ends edit mode when the panel stops being this tool's.
     let leaveWatch = null
     let editPanel = null
-    // Whether left Alt opened this edit mode, so its release closes only that one.
     let altOpened = false
 
     function exit () {
@@ -1142,7 +1111,6 @@
       event.stopImmediatePropagation()
       document.removeEventListener('click', swallowClick, true)
     }
-    // Pointer events carry a mouse button of either kind.
     document.addEventListener('pointerdown', (event) => {
       cancel()
       holdDone = false
@@ -1227,7 +1195,6 @@
   // SudokuPad adds this class to the page while it shows conflicting marks in red.
   const CHECK_MARKS_CLASS = '.setting-checkpencilmarks'
 
-  // No pointer events, so a click on a circle reaches the board.
   const CIRCLE_CSS = [
     `#${CIRCLES_ID} { display: none; pointer-events: none }`,
     `${CHECK_MARKS_CLASS} #${CIRCLES_ID} { display: inline }`,
@@ -1266,7 +1233,6 @@
   // A translucent white box behind the word, so it reads on Dark Page's dark button. On the normal page's #eee button it barely shows.
   const WORD_BACKGROUND = 'rgba(255,255,255,.9)'
 
-  // No pointer events, so a press on the label is a press on the button.
   function modeWordHtml (mode) {
     const on = mode !== 'off'
     return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-6px;top:-3px;padding:1px 3px;border-radius:3px;background:' + WORD_BACKGROUND + ';' +
@@ -1297,13 +1263,11 @@
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" overflow="visible" xmlns="http://www.w3.org/2000/svg">' +
     iconRun(mode, groups, colorOf, digitProfileGroups) + '</svg>' + modeWordHtml(mode) + ARROW_BOX_HTML + '</div>'
 
-  // The mode in words for the title and aria-label, which the chips' look alone does not say.
   const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
 
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // SudokuPad's bottom row of tool buttons.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
@@ -1362,7 +1326,6 @@
     return found ? found.page : 0
   }
 
-  // The lowest group's color, when some page shows it; else the first visible color of the current page, so the brush is always drawable.
   function startingBrush (groups, pages) {
     if (groups.length > 0 && layoutColors(pages).some((c) => c.key === groups[0].key)) return groups[0].key
     const page = pages.find((p) => p.current) || pages[0]
@@ -1396,7 +1359,7 @@
       case 'paint': {
         if (brush === null) return draft
         const paintKey = draft.paintKey === undefined ? strokeKey(groups, event.digit, brush) : draft.paintKey
-        const painted = withGroups(setDigitColor(groups, event.digit, paintKey))
+        const painted = withGroups(setDigitGroup(groups, event.digit, paintKey))
         return paintKey === draft.paintKey ? painted : { ...painted, paintKey }
       }
       case 'key-paint': return brush === null ? draft : withGroups(paintDigit(groups, event.digit, brush))
@@ -1421,14 +1384,13 @@
     throw new Error(`reduceDraft: no edit ${event.type}`)
   }
 
-  // A digit key shows its group's color; a color on no page of the palette gets the dashed unset look.
   function renderDigitKey (digit, key, colors) {
     const color = colors.find((c) => c.key === key)
     const look = !key ? '' : color ? ` style="background:${fillWithOpacity(escapeHtml(color.value), CELL_COLOR_OPACITY)}"` : ' class="cbd-unset"'
     return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${escapeHtml(key || '')}"${look}>${digit}</button>`
   }
 
-  // The digit keys in rows of three beside the swatch grid, and a fourth row with the 0 key under 7, where SudokuPad's own pad puts 0.
+  // The 0 key sits under 7, where SudokuPad's own pad puts 0.
   function renderPad (groups, colors) {
     const keyOfDigit = keyOfDigitMap(groups)
     const digitKey = (d) => renderDigitKey(d, keyOfDigit[d], colors)
@@ -1454,17 +1416,15 @@
     })
   }
 
-  // Each mode draws a cell the way it colors the board: the cell's fill and its digit's ink from the group color, and the run's line.
   // A group color that cannot be read keeps SudokuPad's own digit color, as the board does.
   const shadeOf = (color) => { const rgb = parseColor(color); return rgb ? darkenColor(rgb) : ENTERED_DIGIT_BLUE }
   const DIM_LINE = '#aaa'
   const CHIP_LOOKS = {
     cell: (color) => ({ fill: color || UNREADABLE_FILL, ink: ENTERED_DIGIT_BLUE, line: '#000' }),
-    digit: (color, digitColor) => ({ fill: '#fff', ink: shadeOf(digitColor), line: '#000' }),
-    both: (color, digitColor) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(digitColor), line: '#000' }),
+    digit: (color, digitGroupColor) => ({ fill: '#fff', ink: shadeOf(digitGroupColor), line: '#000' }),
+    both: (color, digitGroupColor) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(digitGroupColor), line: '#000' }),
     off: () => ({ fill: '#fff', ink: '#999', line: DIM_LINE })
   }
-  // One cell of the run, in the run's own units; the strokes stay 1 px at any size.
   const RUN_CELL = 10
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
 
@@ -1503,7 +1463,7 @@
   }
 
   const RULE_COLOR = '#e3dff0'
-  // Two columns need this much room each; the dialog's 640 px gives them two, a phone gives one.
+  // Two columns need this much room each; the dialog's 640 px gives them two.
   const COLUMN_MIN = 270
   // Wide enough for the longest of Mode, Cell and Digit, so the three pulldowns start at one edge.
   const PULLDOWN_LABEL_WIDTH = 64
@@ -1551,7 +1511,6 @@
     }
   }
 
-  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
@@ -1610,8 +1569,7 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
-  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  // The title rules travel with the row, so they are in the page exactly while the dialog is.
   function renderDialogTitle ({ prefix, name, version }) {
     return `<style>${dialogTitleCss(prefix)}</style>` +
       `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
@@ -1632,12 +1590,10 @@
     ].join('\n')
   }
 
-  // Under the footer buttons: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
   function renderErrorLogRow (prefix) {
     return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
-  // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
   function wireErrorLog (dialog, win) {
     const say = (message) => setDialogStatus(dialog, message)
     dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
@@ -1787,7 +1743,6 @@
       `<button type="button" class="cbd-text-button" data-act="new-profile"${full ? ' disabled' : ''}>+ New profile</button>`
   }
 
-  // Dense rows: the chips in a column of one width, so the names line up, and unsynced, a Cell dot and a Digit dot.
   const MENU_ROW = 'display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 6px;border-radius:6px'
   const MENU_DOT_COLUMN = 44
   const DOT_RING = '#cfc7da'
@@ -1806,8 +1761,7 @@
       'display:flex;justify-content:center;align-self:stretch;align-items:center;cursor:pointer', picks)
   }
 
-  // Rows are not focusable, so the keyboard stays with the puzzle. Synced, a row picks its profile; unsynced, its two dots pick
-  // the cell profile and the digit profile, and the row itself picks nothing.
+  // Rows are not focusable, so the keyboard stays with the puzzle.
   function renderMenu (state, colorOf) {
     const split = usesDigitColors(state) && !isSynced(state)
     const head = split
@@ -1862,7 +1816,6 @@
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
   const DIALOG = `.dialog:has(${EDITOR})`
-  // Only for someone who has not asked the system for less motion; a fading menu takes no clicks.
   const MENU_FADE_MS = 100
   const ROW_SLIDE_MS = 80
   const MOTION_CSS = [
@@ -1887,7 +1840,6 @@
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
     [`${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
     [EDITOR, 'user-select: none; -webkit-user-select: none'],
-    // The pad's columns: three digit keys; the 0 key sits under 7.
     [`${EDITOR} [data-role="paint"]`, `display: grid; gap: ${SWATCH_GAP_PX}px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}); touch-action: none`],
     [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
     [`${EDITOR} [data-act="digit"]:not([data-key=""])`, `color: ${ENTERED_DIGIT_BLUE}`],
@@ -1909,7 +1861,6 @@
     [`${EDITOR} .cbd-text-button:disabled`, 'opacity: .4; cursor: default'],
     [`${EDITOR} [data-act="delete"]`, 'flex: none; font-size: 1.1rem; line-height: 1'],
     [`${EDITOR} [data-act="new-profile"]`, 'margin: 4px 0'],
-    // Looks like the row's name until focused: no border or fill, then the box shows.
     [`${EDITOR} [data-role="profile-name"]`, `box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px ${NAME_PAD}px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text`],
     [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
     [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
@@ -1924,7 +1875,6 @@
     [`${EDITOR} [data-act="digit"]:hover`, `box-shadow: inset 0 0 0 2px ${SUDOKUPAD_PURPLE}`],
     [`${EDITOR} [data-role="swatch"]:not([data-empty]):hover`, `box-shadow: 0 0 0 2px ${SUDOKUPAD_PURPLE}`],
     [`${EDITOR} .cbd-button:active, ${EDITOR} [data-act="digit"]:active, ${EDITOR} [data-role="swatch"]:not([data-empty]):active`, PRESS_LAYER],
-    // At least 24 px each way (WCAG 2.2 SC 2.5.8).
     [`${EDITOR} [data-act="delete"], ${EDITOR} [data-role="handle"]`, `display: inline-flex; align-items: center; justify-content: center; min-width: ${MIN_TARGET_PX}px; min-height: ${MIN_TARGET_PX}px; box-sizing: border-box`],
     // The handle holds the pointer capture, so its cursor shows wherever the pointer goes; every element has its own, so it is forced.
     [`${EDITOR}.cbd-dragging *`, 'cursor: grabbing !important']
@@ -1933,8 +1883,8 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText, writeOrRestore */ // from settings-dialog.js, which every script carries beside this one
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  /* global setDialogStatus, errorText, writeOrRestore */
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -1960,9 +1910,6 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, and `apply(values)` takes what a paste kept,
-  // under `snapshot` (`writeOrRestore`'s) in a dialog action of `feature` (`runInDialog`), so a paste that fails half-way puts every key
-  // back. `readers` and `upgrade` are `pastedSettings`'.
   function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
@@ -2023,7 +1970,6 @@
   // <lib:store>
   // Generated from lib/store.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads isPlainObject from plain.
   /* global isPlainObject */
   // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
   // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
@@ -2081,9 +2027,7 @@
   // <lib:pointer-session>
   // Generated from lib/pointer-session.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // One press, from after its `pointerdown` to its release: `move` hears each `pointermove` and `end` the `pointerup` or `pointercancel`.
-  // The session listens in the capture phase, so a page handler that stops a release cannot leave it listening, and it is gone before
-  // `end` runs. The returned stop ends it with no `end`.
+  // Capture phase, so a page handler that stops a release cannot leave the session listening.
   const PRESS_END_EVENTS = ['pointerup', 'pointercancel']
   // The object form: Node's EventTarget, which the tests use, keeps a listener removed with a bare `true`.
   const CAPTURE = { capture: true }
@@ -2162,7 +2106,7 @@
   const ARROW = `${BUTTON} [data-role="menu"]`
   const PRESSED_CLASS = 'cbd-pressed'
   const DRAGGING_CLASS = 'cbd-dragging'
-  // The digit grid and the swatch grid; a slot that is no button is an empty cell of the layout.
+  // A slot that is no button is an empty cell of the layout.
   const PAINT_GRIDS = '[data-role="paint"], .cbd-swatches'
   const FOCUSABLE_SLOT = 'button'
   // The pressed look is a class, set on pointerdown: the button's `mousedown` is cancelled, and an engine may then drop `:active`.
@@ -2175,7 +2119,7 @@
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2203,7 +2147,6 @@
   }
   const loadGroups = () => activeGroups(loadState())
 
-  // A key with no visible color reads as ''.
   function readColor (key) {
     const resolved = readCellColor(key)
     return isVisibleColor(resolved) ? resolved : ''
@@ -2365,7 +2308,6 @@
     })
   }
 
-  // A circle never outlives its mark, its conflict or a mode that colors digits.
   function syncCircles () {
     const group = circlesGroup()
     if (!group) return
@@ -2406,7 +2348,6 @@
     }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'] })
   }
 
-  // Digit colors are a stylesheet, not SudokuPad state, so they are never an undo step.
   function showDigitColors () {
     writeStyle(DIGIT_STYLE_ID, colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : '')
     syncDigits()
@@ -2439,7 +2380,6 @@
 
   const modeHistory = createModeHistory()
 
-  // Runs `step`, which may color or clear cells, and records it as a mode step from `from` when it left an undo step.
   function recordingModeStep (app, from, to, step) {
     coloring.run(() => {
       const before = app.puzzle.undoStack.length
@@ -2845,7 +2785,6 @@
       if (refocus) box.querySelector(`[data-act="select"][data-index="${index}"]`).focus()
     }
     const focusDigitKey = (digit) => box.querySelector(`[data-act="digit"][data-digit="${digit}"]`)?.focus()
-    // The arrow keys move the focus within the swatch grid or the digit grid, and a typed digit paints that digit.
     box.addEventListener('keydown', (event) => {
       const grid = event.target.closest(PAINT_GRIDS)
       if (!grid || event.ctrlKey || event.altKey || event.metaKey) return
@@ -2926,7 +2865,6 @@
       Framework.closeDialog()
       setTimeout(() => editor.run(() => openDialog(app)), 0)
     })
-    // The features are independent: one that fails to install costs the others nothing.
     editor.run(() => addSettingsEntry(dialogs, { name: 'colorbydigit', content: 'Color by Digit', open: () => editor.run(() => openDialog(app)) }))
     addPreloadsOnce()
     const state = loadState()
