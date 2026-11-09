@@ -1,6 +1,6 @@
 // Takes the one annotated picture of the Text Annotation panel on site/draw-tool.html ("The Text Annotation panel"), from the real
 // draw-tool.user.js on the recorded puzzle: the panel (nine color buttons, Clear all, the Background button, the settings gear
-// and the Size and Transparency sliders) cropped close at 3x, with each part labelled on its left by a short phrase and a line from the phrase to the part:
+// the Size and Transparency sliders and the Hide all notes eye) cropped close at 3x, with each part labelled on its left by a short phrase and a line from the phrase to the part:
 //   draw-tool-panel-annotated.png
 // Labels are laid out from the parts' own boxes. The script fails when a part is missing, and writes the file only when
 // the picture is taken. The mascot is hidden.
@@ -16,6 +16,8 @@ const out = new URL('./draw-tool-panel-annotated.png', import.meta.url).pathname
 const LABEL_WIDTH = 250
 const SIDE_GAP = 36
 const PAD = 10
+// Room under the panel for the last label.
+const EXTRA_HEIGHT = 28
 const FONT = '15px system-ui, sans-serif'
 const LINE_COLOR = '#6a1b9a'
 
@@ -36,30 +38,34 @@ const opacitySlider = await box('#draw-tool-opacity')
 const clearButton = await box('.draw-tool-clear')
 const backgroundButton = await box('.draw-tool-background')
 const gearButton = await box('.draw-tool-settings')
+const hideButton = await box('.draw-tool-hide-all')
 const panelPng = (await page.screenshot({ clip: panel })).toString('base64')
 
 // Positions inside the panel picture, whose top left is (0, 0).
 const rel = (b) => ({ x: b.x - panel.x, y: b.y - panel.y, w: b.width, h: b.height, cx: b.x - panel.x + b.width / 2, cy: b.y - panel.y + b.height / 2 })
 const colorBlock = { x: Math.min(...colors.map((b) => b.x)), y: colors[0].y, width: colors[0].width, height: colors[2].y + colors[2].height - colors[0].y }
-const part = { colors: rel(colorBlock), size: rel(sizeSlider), opacity: rel(opacitySlider), clear: rel(clearButton), background: rel(backgroundButton), gear: rel(gearButton) }
+const part = { colors: rel(colorBlock), size: rel(sizeSlider), opacity: rel(opacitySlider), clear: rel(clearButton), background: rel(backgroundButton), gear: rel(gearButton), hide: rel(hideButton) }
 
 // Each label: its text, the y of its middle, and the line from the label to the part as points. Every label is on the
 // left, and its line runs from the panel's left edge into the part. The Background button's line runs in the gap above the
 // controls row, and the settings gear's in the gap below it, bent out to the left so its label clears the Size label.
 const gapY = (part.colors.y + part.colors.h + part.clear.y) / 2
 const lowGapY = part.gear.y + part.gear.h + 5
+// The eye's line runs under the sliders, in the tray's padding, and up into the eye.
+const underY = part.hide.y + part.hide.h + 6
 const labels = [
   { text: 'Click or press 1 to 9; hold to edit', y: part.colors.cy, to: [[part.colors.x + 6, part.colors.cy]] },
   { text: 'Boxes new or selected notes', y: gapY, to: [[part.background.cx, gapY], [part.background.cx, part.background.y + 8]] },
   { text: 'Deletes the selected notes, or all', y: part.clear.cy, to: [[part.clear.x + 6, part.clear.cy]] },
   { text: 'Opens the settings', y: lowGapY - 12, to: [[-14, lowGapY - 12], [-14, lowGapY], [part.gear.cx, lowGapY], [part.gear.cx, part.gear.y + part.gear.h - 8]] },
+  { text: 'Hides or shows all notes', y: underY + 14, to: [[-14, underY + 14], [-14, underY], [part.hide.cx, underY], [part.hide.cx, part.hide.y + part.hide.h - 8]] },
   { text: 'Text size, small to large', y: part.size.cy, to: [[part.size.x + 6, part.size.cy]] },
   { text: 'Transparency, faint to solid', y: part.opacity.cy, to: [[part.opacity.x + 6, part.opacity.cy]] }
 ]
 
 const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + panel.width
 const panelLeft = PAD + LABEL_WIDTH + SIDE_GAP
-const height = panel.height + 2 * PAD
+const height = panel.height + 2 * PAD + EXTRA_HEIGHT
 const html = labels.map((l) => `<div class="l" style="left:${PAD}px;top:${PAD + l.y}px">${l.text}</div>`).join('')
 const lines = labels.map((l) => {
   const points = [[PAD + LABEL_WIDTH + 6, l.y], ...l.to.map(([x, y]) => [panelLeft + x, y])].map(([x, y]) => `${x},${y + PAD}`).join(' ')

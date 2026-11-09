@@ -37,6 +37,7 @@ export const OPACITY_SLIDER = '#draw-tool-opacity'
 export const CLEAR_BUTTON = '.draw-tool-clear'
 export const SETTINGS_BUTTON = '.draw-tool-settings'
 export const BACKGROUND_BUTTON = '.draw-tool-background'
+export const HIDE_BUTTON = '.draw-tool-hide-all'
 export const PICKER = '.draw-tool-picker input'
 export const DIALOG = '.dialog'
 export const DRAWING_PREFIX = 'DrawTool_drawing_'
@@ -87,14 +88,17 @@ const SLIDER_THUMB_REM = 1.1
 // A slider's value.
 export const valueOf = (p, slider) => p.evaluate((selector) => Number(document.querySelector(selector).value), slider)
 // Presses on `slider`'s track where `value` lies and releases, with real mouse input. The thumb's centre runs from half a thumb in from each end of the track.
+// A press on the thumb drags it by the offset it was pressed at and does not jump, so when the thumb is under the target the track is first pressed at its other end.
 export async function slideTo (p, slider, value) {
-  const { box, min, max, thumb } = await p.evaluate(([selector, rem]) => {
+  const { box, min, max, thumb, now } = await p.evaluate(([selector, rem]) => {
     const input = document.querySelector(selector)
     const { x, y, width, height } = input.getBoundingClientRect()
-    return { box: { x, y, width, height }, min: Number(input.min), max: Number(input.max), thumb: rem * parseFloat(window.getComputedStyle(document.documentElement).fontSize) }
+    return { box: { x, y, width, height }, min: Number(input.min), max: Number(input.max), now: Number(input.value), thumb: rem * parseFloat(window.getComputedStyle(document.documentElement).fontSize) }
   }, [slider, SLIDER_THUMB_REM])
-  const x = box.x + thumb / 2 + (box.width - thumb) * (value - min) / (max - min)
-  await p.mouse.click(x, box.y + box.height / 2)
+  const xOf = (v) => box.x + thumb / 2 + (box.width - thumb) * (v - min) / (max - min)
+  const y = box.y + box.height / 2
+  if (Math.abs(xOf(now) - xOf(value)) < thumb && now !== value) await p.mouse.click(xOf(value <= (min + max) / 2 ? max : min), y)
+  await p.mouse.click(xOf(value), y)
 }
 
 export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS)
