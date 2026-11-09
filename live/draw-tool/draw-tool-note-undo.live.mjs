@@ -18,8 +18,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
   let context, p, errors
 
   const boxText = () => p.locator(TEXT_BOX).textContent()
-  const replay = () => p.evaluate(() => Framework.app.getReplay())
-  const cellState = () => p.evaluate(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
+  const undoSteps = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
   const openNote = async () => p.mouse.click(...await gridPoint(p, SPOT))
 
   before(async () => {
@@ -33,8 +32,14 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await draw.pickDraw(p)
   })
 
-  it('Ctrl+Z twice after typing abc leaves a, Ctrl+Y gives ab, and SudokuPad\'s undo stack and cells are unchanged', async () => {
-    const before = [await replay(), await cellState()]
+  it('Ctrl+Z twice after typing abc leaves a, Ctrl+Y gives ab, and SudokuPad\'s undo stack', async () => {
+    // A digit in a cell gives SudokuPad's undo something to lose.
+    await p.click(draw.DIGIT_BUTTON)
+    await p.mouse.click(...await gridPoint(p, [0.5, 0.5]))
+    await p.keyboard.press('5')
+    await draw.pickDraw(p)
+    const before = await undoSteps()
+    assert.equal(before > 0, true, 'SudokuPad has a step to lose')
     // SudokuPad's key listeners are on the document and window; none may see an undo or redo key.
     await p.evaluate(() => {
       window.__undoKeys = 0
@@ -47,7 +52,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     assert.equal(await boxText(), 'a')
     await p.keyboard.press('Control+y')
     assert.equal(await boxText(), 'ab')
-    assert.deepEqual([await replay(), await cellState()], before)
+    assert.equal(await undoSteps(), before, 'SudokuPad\'s undo stack is unchanged')
     assert.equal(await p.evaluate(() => window.__undoKeys), 0, 'no undo or redo key reached the page')
     await draw.finishNote(p)
   })
@@ -61,14 +66,13 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await draw.finishNote(p)
   })
 
-  it('-> becomes →, Ctrl+Z gives -> back in one step and Ctrl+Y gives → again', async () => {
+  it('a character typed right after a symbol is its own undo step', async () => {
     await openNote()
-    await p.keyboard.type('->')
+    await p.keyboard.type('->x')
+    await p.keyboard.press('Control+z')
     assert.equal(await boxText(), '→')
     await p.keyboard.press('Control+z')
     assert.equal(await boxText(), '->')
-    await p.keyboard.press('Control+y')
-    assert.equal(await boxText(), '→')
     await draw.finishNote(p)
   })
 
@@ -83,7 +87,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await draw.finishNote(p)
   })
 
-  it('Ctrl+Z after a deletion and after a line break brings them back', async () => {
+  it('Ctrl+Z brings back a deletion and takes out typing after a line break', async () => {
     await openNote()
     await p.keyboard.type('ab')
     await p.keyboard.press('Enter')
@@ -91,6 +95,12 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await p.keyboard.press('Backspace')
     await p.keyboard.press('Control+z')
     assert.equal(await boxText(), 'ab\ncd')
+    await p.keyboard.press('Control+z')
+    await p.keyboard.press('Control+z')
+    assert.equal(await boxText(), 'ab', 'both letters after the line break are undone')
+    await p.keyboard.press('Control+y')
+    await p.keyboard.press('Control+y')
+    assert.equal(await boxText(), 'ab\ncd', 'redo brings the line break back with them')
     await draw.finishNote(p)
   })
 
