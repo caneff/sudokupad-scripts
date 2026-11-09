@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.4
+// @version      0.44.9
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.4'
+  const VERSION = '0.44.9'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -37,36 +37,11 @@
   const COLORS_KEY = 'DrawTool_colors'
   // The CSS variable that holds draw color n: the items, the color buttons and the text box all read it.
   const colorVar = (n) => `--draw-tool-color-${n}`
-  // <lib:ready>
-  // Generated from lib/ready.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
-  // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
-  function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
-    return new Promise((resolve, reject) => {
-      const deadline = Date.now() + timeoutMs
-      const poll = () => {
-        let value
-        try {
-          value = check()
-        } catch (error) {
-          reject(error)
-          return
-        }
-        if (value !== null && value !== undefined && value !== false) resolve(value)
-        else if (Date.now() >= deadline) reject(new Error(`${what} not ready after ${timeoutMs} ms`))
-        else setTimeout(poll, pollMs)
-      }
-      poll()
-    })
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:ready>
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math, and whenReady from ready.
-  /* global parseColor, darkenColor, toOklab, whenReady */
+  // Reads parseColor, darkenColor and toOklab from color-math.
+  /* global parseColor, darkenColor, toOklab */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
@@ -92,7 +67,6 @@
     'page-3': 'Darker page 3',
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
-  const COLOR_TOOL_TIMEOUT_MS = 10000
 
   // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
@@ -146,11 +120,6 @@
     const tool = colorTool()
     const pages = tool?.palette?.pages
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
-  }
-
-  // Rejects once COLOR_TOOL_TIMEOUT_MS passes with no ready color tool, naming it, so the caller can skip its step and keep SudokuPad's own colors.
-  function waitForColorTool () {
-    return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
   }
 
   // The pages of cell color keys of the palette in force, or none until the color tool has one.
@@ -737,6 +706,22 @@
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
   /* eslint-enable no-unused-vars */
   // </lib:plain>
+
+  // <lib:write-style>
+  // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The page's style element `id`, added on the first call, holds `css`.
+  function writeStyle (id, css, doc = document) {
+    let style = doc.getElementById(id)
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = id
+      doc.head.appendChild(style)
+    }
+    style.textContent = css
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:write-style>
   // <lib:store>
   // Generated from lib/store.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -907,13 +892,13 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
-  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
-  function textColorFor (background) {
+  // `light` or `dark` (LIGHT_TEXT and DARK_TEXT unless given), whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
     const page = wcagLuminance(rgb) + 0.05
     const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+    return contrast(light) >= contrast(dark) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
@@ -1267,14 +1252,14 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog and formatErrorLog from sudokupad.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog */
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer. A script
+  // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
-  const FOCUS_RING = '#6a1b9a'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
   // An inset layer darkens whatever fill the control has.
@@ -1285,14 +1270,46 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
-  function snapshotStore (store, keys) {
+  // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
+  // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
+  // put back after them; the first throw then goes on. The stored values are held by reference, so a script's save must replace a value
+  // and never edit one in place.
+  function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
-    return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
+    const putMirrorBack = holdMirror()
+    return () => {
+      const failures = []
+      before.forEach(([key, value]) => {
+        try {
+          if (value == null) store.removeData(key)
+          else store.setData(key, value)
+        } catch (error) {
+          failures.push(error)
+        }
+      })
+      putMirrorBack()
+      if (failures.length > 0) throw failures[0]
+    }
   }
 
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
+
+  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
+  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
+  function writeOrRestore (snapshot, write) {
+    const restore = snapshot()
+    try {
+      write()
+    } catch (error) {
+      try {
+        restore()
+      } catch (restoreError) {
+        throw new Error(`${errorText(error)}; the earlier values could not be put back: ${errorText(restoreError)}`, { cause: error })
+      }
+      throw error
+    }
+  }
 
   // The next press ends the swallowing even when no release came (a close from the keyboard).
   function swallowRelease (win = window) {
@@ -1352,7 +1369,7 @@
     return [
       `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
       `.${prefix}error-log button { ${BARE_BUTTON} padding: 2px 0 !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; }`,
-      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 2px; }`
     ].join('\n')
   }
 
@@ -1397,7 +1414,7 @@
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
-      `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
+      `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
@@ -1423,7 +1440,7 @@
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
       `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
       `${row} button:active { ${PRESS_LAYER} !important; }`,
-      `${row} button:focus-visible { outline: 2px solid ${FOCUS_RING}; outline-offset: 2px; }`
+      `${row} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px; }`
     ].join('\n')
   }
 
@@ -1432,30 +1449,22 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
+  // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
+  // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
+    if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
-      let restore = null
       try {
-        if (failed || changed()) {
-          restore = snapshot ? snapshot() : null
-          save()
-        }
+        if (failed || changed()) feature.runInDialog(() => writeOrRestore(snapshot, save))
       } catch (error) {
         failed = true
-        let message = `Not saved: ${errorText(error)}`
-        try {
-          if (restore) restore()
-        } catch (restoreError) {
-          message += `; the earlier values could not be put back: ${errorText(restoreError)}`
-        }
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), message)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
         return
       }
       close()
@@ -1477,9 +1486,11 @@
     })
     const body = doc.getElementById(bodyId)
     if (!body) return null
+    const dialog = body.closest('.dialog')
+    wireErrorLog(dialog, win)
+    wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
-    wireErrorLog(body.closest('.dialog'), win)
-    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    const row = dialog?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
     return body
   }
@@ -1488,7 +1499,7 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText */ // from settings-dialog.js, which every script carries beside this one
+  /* global setDialogStatus, errorText, writeOrRestore */ // from settings-dialog.js, which every script carries beside this one
   // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
@@ -1515,8 +1526,10 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
-  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, and `apply(values)` takes what a paste kept,
+  // under `snapshot` (`writeOrRestore`'s) in a dialog action of `feature` (`runInDialog`), so a paste that fails half-way puts every key
+  // back. `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
@@ -1529,7 +1542,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) apply(values)
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -1542,11 +1555,12 @@
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global Framework */
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
-  // Every script's bar is the one purple, Pen Tool Extras' and the site's --accent.
-  const NOTICE_COLOR = '#6a1b9a'
+  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring, and the site's --accent.
+  const SUDOKUPAD_PURPLE = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
@@ -1625,7 +1639,7 @@
   }
 
   const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
-  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
+  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${SUDOKUPAD_PURPLE}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
   const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
   const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
 
@@ -1746,9 +1760,14 @@
       host.append(message)
     }
 
+    // While a dialog action (`runInDialog`) runs, a store write that throws goes on, marked here, through every `run` to the caller.
+    let dialogActions = 0
+    const storeFailures = new WeakSet()
+
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
       const feature = {
+        label,
         off: false,
         skip (why, installed = true) {
           if (feature.off) return
@@ -1771,22 +1790,21 @@
           try {
             return fn()
           } catch (error) {
+            if (storeFailures.has(error)) throw error
             feature.skip(error)
             return fallback()
           }
         },
-        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
-        // frees. Any other throw skips the feature as `run` does.
-        write (fn) {
-          return feature.run(() => {
-            try {
-              return fn()
-            } catch (error) {
-              if (!isRefusedWrite(error)) throw error
-              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
-              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
-            }
-          })
+        // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
+        // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
+        runInDialog (fn) {
+          if (feature.off) throw new Error(`${name} turned off its ${label}`)
+          dialogActions++
+          try {
+            return fn()
+          } finally {
+            dialogActions--
+          }
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
         // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
@@ -1834,7 +1852,42 @@
       showNotice()
     }
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
+    // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
+    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
+    // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
+    // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
+    // can save over the original.
+    function storeFor (feature) {
+      const write = (fn) => {
+        if (feature.off) return
+        try {
+          fn()
+        } catch (error) {
+          if (dialogActions > 0) {
+            if (Object(error) === error) storeFailures.add(error)
+            throw error
+          }
+          if (!isRefusedWrite(error)) return feature.skip(error)
+          console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
+          tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
+        }
+      }
+      return {
+        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        setData: (key, value) => write(() => Framework.setData(key, value)),
+        removeData: (key) => write(() => Framework.removeData(key)),
+        keep: (key, value) => feature.run(() => Framework.setData(key, value))
+      }
+    }
+
+    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
+    const dialogsFor = (feature) => ({
+      addSetting: (setting) => Framework.addSetting(setting),
+      showDialog: (options) => Framework.showDialog(options),
+      closeDialog: () => feature.run(() => Framework.closeDialog())
+    })
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
@@ -1964,16 +2017,8 @@
   const guard = createGuard({ script: 'draw-tool', name: 'Text Anywhere', version: VERSION, features: FEATURES })
   const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets, undoRestart } = guard.features
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
-  const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)
-  const writeData = (key, value) => storage.write(() => Framework.setData(key, value))
-  // `keep` is the copy of an unreadable value: a refusal there turns saving off, so nothing can overwrite the original.
-  const savedData = { getData: readData, setData: writeData, keep: (key, value) => storage.run(() => Framework.setData(key, value)), removeData: (key) => storage.run(() => Framework.removeData(key)) }
-  // What the settings dialog's shell is handed in place of Framework: its calls into SudokuPad run under the settings.
-  const dialogs = {
-    addSetting: (setting) => Framework.addSetting(setting),
-    showDialog: (options) => Framework.showDialog(options),
-    closeDialog: () => settingsUi.run(() => Framework.closeDialog())
-  }
+  const savedData = guard.storeFor(storage)
+  const dialogs = guard.dialogsFor(settingsUi)
   // A listener on the page or on one of the script's own elements runs under the feature it belongs to.
   const under = (feature, handler) => (...args) => feature.run(() => handler(...args))
   const onWindow = (feature, type, handler, options) => window.addEventListener(type, under(feature, handler), options)
@@ -2179,13 +2224,12 @@
   // <lib:panel>
   // Generated from lib/panel.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads rem from plain.
-  /* global rem */
+  // Reads rem from plain, and SUDOKUPAD_PURPLE from sudokupad. A script that copies in settings-dialog as well has a second `global` naming
+  // SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  /* global rem, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
   // A tool's purple panel: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of three controls at the full 4rem, and the sliders across the rest. A tray sits behind the last two rows; it is placed in
   // their area but takes no cell, so the buttons fill the row.
-  // SudokuPad's purple, as its own icons draw it.
-  const PANEL_COLOR = '#6a1b9a'
   const TRAY_COLOR = '#efeaf4'
   const PANEL_BUTTON_REM = 4
   const COLOR_BUTTON_REM = 2.5
@@ -2212,31 +2256,15 @@
   // A hidden slider's empty row has the same height, so the other keeps its place.
   const SLIDER_ROW_HEIGHT_REM = 1.4
   // The wedge is a data-URI picture, since a CSS gradient cannot draw a slanted edge. `preserveAspectRatio="none"` stretches it over the track.
-  const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${PANEL_COLOR}'/></svg>`
+  const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${SUDOKUPAD_PURPLE}'/></svg>`
   const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
-  const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${PANEL_COLOR} 8%, transparent), ${PANEL_COLOR})`
+  const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${SUDOKUPAD_PURPLE} 8%, transparent), ${SUDOKUPAD_PURPLE})`
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
-  const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
-
-  // A panel with no slider rows (its fourth block holds buttons) leaves `sliderRow` out, and with it every rule that styles a slider.
-  function sliderRules (sliders, sliderRow, wedgeSlider, fadeSlider) {
-    return [
-      `.${sliders} { padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
-      `.${sliderRow} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
-      `.${sliderRow} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
-      `.${sliderRow} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
-      `.${sliderRow} input::-moz-range-track { ${TRACK_SHAPE} }`,
-      `#${wedgeSlider}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
-      `#${wedgeSlider}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
-      ...(fadeSlider ? [`#${fadeSlider}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`, `#${fadeSlider}::-moz-range-track { background: ${FADE_PICTURE}; }`] : []),
-      `.${sliderRow} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${rem((SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2)}rem; ${THUMB_SHAPE} }`,
-      `.${sliderRow} input::-moz-range-thumb { ${THUMB_SHAPE} }`
-    ]
-  }
+  const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${SUDOKUPAD_PURPLE};`
 
   // The panel's rules, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
   // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
-  // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out. `pressButtons`, when given, is the selector of buttons
+  // (widening to the right) and the one drawn as a fade (faint to solid); every panel has both. `pressButtons`, when given, is the selector of buttons
   // that are not placed by the grid but press like the others.
   function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
@@ -2248,17 +2276,25 @@
       `${panel} button[data-key="0"], ${panel} button[data-control="delete"] { display: none !important; }`,
       // Each color button keeps `position: relative`, since its color line is its `::after`.
       `${panel} ${colorButton} { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
-      `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+      `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${SUDOKUPAD_PURPLE}; }`,
       `.${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
-      // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
-      `${panel}:not(:has(.${sliders})) .${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
       // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
       ...rows.flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${panel} button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
       `.${sliders} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; }`,
       `${pressable} { transition: transform ${PRESS_MS}ms ease-out; }`,
       `${pressed} { transform: scale(${PRESS_SCALE}); }`,
       `@media (prefers-reduced-motion: reduce) { ${pressable} { transition: none; } ${pressed} { transform: none; } }`,
-      ...(sliderRow ? sliderRules(sliders, sliderRow, wedgeSlider, fadeSlider) : [])
+      `.${sliders} { padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${SUDOKUPAD_PURPLE}; }`,
+      `.${sliderRow} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
+      `.${sliderRow} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
+      `.${sliderRow} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
+      `.${sliderRow} input::-moz-range-track { ${TRACK_SHAPE} }`,
+      `#${wedgeSlider}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
+      `#${wedgeSlider}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
+      `#${fadeSlider}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`,
+      `#${fadeSlider}::-moz-range-track { background: ${FADE_PICTURE}; }`,
+      `.${sliderRow} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${rem((SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2)}rem; ${THUMB_SHAPE} }`,
+      `.${sliderRow} input::-moz-range-thumb { ${THUMB_SHAPE} }`
     ]
   }
 
@@ -2274,6 +2310,12 @@
       if (focused && focused.matches(`${sliders} input`)) focused.blur()
     }, true)
   }
+
+  // A panel's settings gear: its viewBox centres its ink, measured from rendered pixels like the other control icons. The gear is Lucide's `settings` (https://lucide.dev, ISC licence). Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT);
+  // all other copyright (c) for Lucide are held by Lucide Contributors 2022. Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is
+  // hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+  const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
+  const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   const COLOR_LABEL_REM = 1.7
@@ -2287,7 +2329,7 @@
   const HIDE_ALL = `${PANEL} button.${HIDE_ALL_CLASS}`
   const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
   // Each color button shows "Aa" in its draw color, so a recolor follows.
-  const hoverShare = (percent) => `color-mix(in srgb, ${PANEL_COLOR} min(100%, calc(${percent}% / var(${NOTE_OPACITY_VAR}))), transparent)`
+  const hoverShare = (percent) => `color-mix(in srgb, ${SUDOKUPAD_PURPLE} min(100%, calc(${percent}% / var(${NOTE_OPACITY_VAR}))), transparent)`
   const hoverLook = (outlinePercent, fillPercent) => `outline: 1px solid ${hoverShare(outlinePercent)}; outline-offset: 2px; background-image: linear-gradient(${hoverShare(fillPercent)}, ${hoverShare(fillPercent)});`
   // A closed note that is not selected, under Text Anywhere: the one that shows a hover outline.
   const IDLE_NOTE = `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS})`
@@ -2301,16 +2343,16 @@
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${BACKGROUND_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every 'svg path' and the paths in a tool button's icon, which would turn the icons' lines into blobs, the tool button's note into a solid square.
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, #control-${TOOL_NAME}, ${HIDE_ALL}) :is(path, circle, rect, ellipse), .${BACKGROUND_CLASS} :is(path, circle, rect, ellipse):not(.${BACKGROUND_FILL_CLASS}) { fill: none !important; }`,
-    `:is(.${BACKGROUND_CLASS}, ${HIDE_ALL})[aria-pressed="true"] { background-color: ${TRAY_COLOR}; outline: 2px solid ${PANEL_COLOR}; }`,
+    `:is(.${BACKGROUND_CLASS}, ${HIDE_ALL})[aria-pressed="true"] { background-color: ${TRAY_COLOR}; outline: 2px solid ${SUDOKUPAD_PURPLE}; }`,
     // The eye sits at the right end of the sliders block, which is a row of the two slider rows and it, and presses like the panel's other buttons.
     `.${SLIDERS_CLASS} { flex-direction: row; align-items: center; gap: 0.4rem; }`,
     `.${SLIDER_ROWS_CLASS} { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: space-evenly; }`,
-    `${HIDE_ALL} { flex: none; display: flex; align-items: center; justify-content: center; width: ${HIDE_BUTTON_REM}rem; height: ${HIDE_BUTTON_REM}rem; min-height: 0; margin: 0; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    `${HIDE_ALL} { flex: none; display: flex; align-items: center; justify-content: center; width: ${HIDE_BUTTON_REM}rem; height: ${HIDE_BUTTON_REM}rem; min-height: 0; margin: 0; padding: 0; background-color: var(--body-bg); color: ${SUDOKUPAD_PURPLE}; }`,
     `${HIDE_ALL} svg { width: ${HIDE_ICON_REM}rem; height: ${HIDE_ICON_REM}rem; }`,
     // Hidden notes keep their layout, so they measure and come back in place; a hidden element takes no pointer, so none can be hit.
     `#${LAYER_ID}.${HIDDEN_CLASS} { visibility: hidden; }`,
     // Some selected notes have a box and some do not: a dashed ring, neither on nor off.
-    `.${BACKGROUND_CLASS}[aria-pressed="mixed"] { outline: 2px dashed ${PANEL_COLOR}; }`,
+    `.${BACKGROUND_CLASS}[aria-pressed="mixed"] { outline: 2px dashed ${SUDOKUPAD_PURPLE}; }`,
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
     pickerCss(CLASS_PREFIX, TOOL_NAME),
     `#${LAYER_ID} { position: fixed; inset: 0; z-index: ${LAYER_Z}; pointer-events: none; overflow: hidden; }`,
@@ -2350,21 +2392,18 @@
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) .${CHECK_CLASS} { cursor: pointer; }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
     // The outline is a box of its own in the layer, since a note's opacity would fade an outline drawn on the note itself.
-    `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: ${SELECTION_OUTLINE_PX}px solid ${PANEL_COLOR}; outline-offset: ${SELECTION_OFFSET_PX}px; }`,
-    `.${GUIDE_CLASS} { position: absolute; background: color-mix(in srgb, ${PANEL_COLOR} 35%, transparent); pointer-events: none; }`,
+    `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: ${SELECTION_OUTLINE_PX}px solid ${SUDOKUPAD_PURPLE}; outline-offset: ${SELECTION_OFFSET_PX}px; }`,
+    `.${GUIDE_CLASS} { position: absolute; background: color-mix(in srgb, ${SUDOKUPAD_PURPLE} 35%, transparent); pointer-events: none; }`,
     `.${SELECTION_CLASS}.${OPEN_OUTLINE_CLASS} { outline-width: 1px; outline-offset: 1px; }`,
     `.${NUDGING_CLASS} :is(.${SELECTION_CLASS}, .${HANDLE_CLASS}) { visibility: hidden; }`,
-    `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px solid ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 6%, transparent); }`,
-    `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; box-shadow: 0 0 0 1px ${PANEL_COLOR}, 0 1px 3px rgb(0 0 0 / .3); pointer-events: auto; }`,
+    `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px solid ${SUDOKUPAD_PURPLE}; background: color-mix(in srgb, ${SUDOKUPAD_PURPLE} 6%, transparent); }`,
+    `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${SUDOKUPAD_PURPLE}; border: 2px solid #fff; border-radius: 2px; box-shadow: 0 0 0 1px ${SUDOKUPAD_PURPLE}, 0 1px 3px rgb(0 0 0 / .3); pointer-events: auto; }`,
     `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; cursor: text; }`,
     // The note's color is a property of its own because the selection's `currentColor` stays the color before a recolor. The browser's blue would hide it: a selection is the note's color at low opacity behind the text, with no halo to blur it.
     `.${TEXT_BOX_CLASS}::selection { background: color-mix(in srgb, var(${NOTE_COLOR_VAR}) ${SELECTION_TINT_PERCENT}%, transparent); text-shadow: none; }`,
     // The tool bar is a grid and stock buttons have order 0, so Text Anywhere's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
-  // Pen Tool Extras' gear, at its viewBox.
-  const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
-  const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
   const SETTINGS_LABEL = 'Text Anywhere settings'
   // The panel's three control buttons draw their icon with these strokes.
   const controlIcon = (paths, viewBox = '0 0 24 24') => `<svg viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
@@ -2407,7 +2446,7 @@
 
   function setColor (next) {
     color = next
-    writeData(COLOR_KEY, color)
+    savedData.setData(COLOR_KEY, color)
   }
 
   function pickColor (next) {
@@ -2424,34 +2463,24 @@
   }
 
   function showColors () {
-    let style = document.getElementById(COLORS_STYLE_ID)
-    if (!style) {
-      style = document.createElement('style')
-      style.id = COLORS_STYLE_ID
-      document.head.appendChild(style)
-    }
-    style.textContent = colors ? colorsCss(colors) : ''
+    writeStyle(COLORS_STYLE_ID, colors ? colorsCss(colors) : '')
   }
 
-  // The colors, outline, box color, frame and font as stored and as shown, as a function that puts them all back after a Save that failed half-way.
-  function snapshotSave () {
-    const restoreStored = snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY])
-    const was = { colors, outline, boxColor, frame, noteFont }
+  // The colors, outline, box color, frame, font, size and opacity as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
+  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, WIDTH_KEY, OPACITY_KEY], () => {
+    const was = { colors, outline, boxColor, frame, noteFont, width, opacity }
     return () => {
-      try {
-        restoreStored()
-      } finally {
-        ;({ colors, outline, boxColor, frame, noteFont } = was)
-        showColors()
-        if (colors) refreshPickers(CLASS_PREFIX, (n) => colors[n])
-        showBoxes()
-      }
+      ;({ colors, outline, boxColor, frame, noteFont, width, opacity } = was)
+      showPanelValues()
+      showColors()
+      if (colors) refreshPickers(CLASS_PREFIX, (n) => colors[n])
+      showBoxes()
     }
-  }
+  })
 
   function saveColors (next) {
     colors = next
-    writeData(COLORS_KEY, colors)
+    savedData.setData(COLORS_KEY, colors)
     showColors()
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
   }
@@ -2459,12 +2488,12 @@
   // The next note's size and transparency are saved for the next visit, and a paste sets them as a move of the slider would.
   function setSize (value) {
     width = value
-    writeData(WIDTH_KEY, value)
+    savedData.setData(WIDTH_KEY, value)
   }
 
   function setOpacity (value) {
     opacity = value
-    writeData(OPACITY_KEY, value)
+    savedData.setData(OPACITY_KEY, value)
   }
 
   function showBoxes () {
@@ -2473,7 +2502,7 @@
 
   // A look setting is stored, then the notes are drawn again in it.
   function writeLook (key, value) {
-    writeData(key, value)
+    savedData.setData(key, value)
     showBoxes()
   }
 
@@ -2559,6 +2588,7 @@
       css: DIALOG_CSS,
       changed: () => Object.values(edits()).some(Boolean),
       snapshot: snapshotSave,
+      feature: settingsUi,
       save: () => {
         const edited = edits()
         if (edited.colors) saveColors(draft)
@@ -2566,6 +2596,23 @@
         if (edited.box) saveBoxColor(draftBox)
         if (edited.frame) saveFrame(draftFrame)
         if (edited.font) saveFont(draftFont)
+      },
+      copyPaste: {
+        // A copy with the saved settings off says so, rather than copy the defaults as if they were saved.
+        copied: () => storage.runInDialog(() => copiedSettings(savedData)),
+        readers: READERS,
+        apply: (values) => {
+          applyPasted(values)
+          draftOutline = outline
+          draftBox = boxColor
+          draftCustom = savedHex(boxColor) ?? draftCustom
+          draftFrame = frame
+          draftFont = noteFont
+          draft = colors ?? draft
+          chosen = null
+          colorsEdited = false
+          draw()
+        }
       }
     }), () => null)
     if (!box) return
@@ -2611,18 +2658,6 @@
       draw()
       box.querySelector(`button[data-role="${role}"][data-value="${value}"]`)?.focus()
     }))
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(savedData), readers: READERS }, under(settingsUi, (values) => {
-      applyPasted(values)
-      draftOutline = outline
-      draftBox = boxColor
-      draftCustom = savedHex(boxColor) ?? draftCustom
-      draftFrame = frame
-      draftFont = noteFont
-      draft = colors ?? draft
-      chosen = null
-      colorsEdited = false
-      draw()
-    }))
   }
 
   const BACKGROUND_ON_LABEL = 'Background: on. Click to turn off'
@@ -2645,7 +2680,7 @@
 
   function setBackground (on) {
     background = on
-    writeData(BACKGROUND_KEY, on)
+    savedData.setData(BACKGROUND_KEY, on)
   }
 
   // A press turns the open note's background on or off, and the setting only when the note is a new one; with no note open it turns the selected notes' on or off
@@ -4200,15 +4235,15 @@
   // Without getApp there is no app: the features that need one are off, and the rest start without it.
   const start = (app) => {
     guard.probe({ roots: { Framework, app }, store: Framework })
-    color = readColor(readData(COLOR_KEY))
-    width = readWidth(readData(WIDTH_KEY))
-    opacity = readOpacity(readData(OPACITY_KEY))
-    outline = readOutline(readData(OUTLINE_KEY))
-    background = readBackground(readData(BACKGROUND_KEY))
-    colors = readDrawColors(readData(COLORS_KEY))
-    boxColor = readBox(readData(BOX_KEY))
-    frame = readFrame(readData(FRAME_KEY))
-    noteFont = readFont(readData(FONT_KEY))
+    color = readColor(savedData.getData(COLOR_KEY))
+    width = readWidth(savedData.getData(WIDTH_KEY))
+    opacity = readOpacity(savedData.getData(OPACITY_KEY))
+    outline = readOutline(savedData.getData(OUTLINE_KEY))
+    background = readBackground(savedData.getData(BACKGROUND_KEY))
+    colors = readDrawColors(savedData.getData(COLORS_KEY))
+    boxColor = readBox(savedData.getData(BOX_KEY))
+    frame = readFrame(savedData.getData(FRAME_KEY))
+    noteFont = readFont(savedData.getData(FONT_KEY))
     showColors()
     // The features are independent: one that fails to install costs the others nothing.
     textTool.run(() => {

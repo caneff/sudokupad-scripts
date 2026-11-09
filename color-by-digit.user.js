@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.19
+// @version      0.25.24
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.19'
+  const VERSION = '0.25.24'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -108,7 +108,7 @@
   const modesFor = (useDigitColors) => (useDigitColors ? MODES : DIGITLESS_MODES)
   const nextMode = (mode, useDigitColors) => {
     const modes = modesFor(useDigitColors)
-    return modes[(modes.indexOf(mode) + 1) % modes.length]
+    return modes[wrapIndex(modes.indexOf(mode), 1, modes.length)]
   }
   const allowedMode = (mode, useDigitColors) => (useDigitColors ? mode : DIGITLESS_FALLBACK[mode] ?? mode)
   const colorsCells = (mode) => mode === 'cell' || mode === 'both'
@@ -206,7 +206,7 @@
   const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
   function rowAfterKey (key, index, count) {
     if (key === 'Enter' || key === ' ') return index
-    if (ARROW_STEP[key]) return (index + ARROW_STEP[key] + count) % count
+    if (ARROW_STEP[key]) return wrapIndex(index, ARROW_STEP[key], count)
     return null
   }
 
@@ -429,6 +429,345 @@
     return (best && !sameGroups(cellGroups, digitGroups) ? best : strip).map(chipOf)
   }
 
+  // <lib:sudokupad>
+  // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  /* global Framework */
+  // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
+  // alone, and a bar at the bottom of the page says so once per SudokuPad version.
+  const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
+  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring, and the site's --accent.
+  const SUDOKUPAD_PURPLE = '#6a1b9a'
+  const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
+  // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
+  const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
+  const INTERNAL_KINDS = {
+    function: (value) => typeof value === 'function',
+    array: Array.isArray,
+    integer: Number.isInteger,
+    number: (value) => typeof value === 'number',
+    object: (value) => Boolean(value) && typeof value === 'object'
+  }
+
+  // A path's first part names a root (`Framework`, `ToolPen`): SudokuPad declares them with `const`, so they are not on `window`.
+  function readInternal (roots, path) {
+    const [root, ...keys] = path.split('.')
+    return keys.reduce((owner, key) => (owner === undefined || owner === null ? undefined : owner[key]), roots[root])
+  }
+
+  // Each internal lacking, with the features it holds off; a feature is listed under the first of its `needs` it lacks.
+  function lackingInternals (features, roots) {
+    const lacking = new Map()
+    Object.entries(features).forEach(([name, { needs }]) => {
+      const missing = Object.entries(needs).find(([path, kind]) => !INTERNAL_KINDS[kind](readInternal(roots, path)))
+      if (missing) lacking.set(missing[0], [...(lacking.get(missing[0]) || []), name])
+    })
+    return lacking
+  }
+
+  function sudokupadVersion (doc) {
+    const found = PAGE_VERSION.exec(doc.documentElement.outerHTML)
+    return found ? found[1] : null
+  }
+
+  // One key for every script, so a reader finds every feature any script turned off.
+  const ERROR_LOG_KEY = 'sudokupad-scripts-error-log'
+  const ERROR_LOG_LIMIT = 50
+  // A write the browser refuses (a full localStorage) is the browser's doing, not a SudokuPad change.
+  const isRefusedWrite = (error) => Boolean(error) && error.name === 'QuotaExceededError'
+
+  // A report is a URL, and GitHub refuses a long one.
+  const REPORT_STACK_LIMIT = 1200
+
+  // Oldest first. Throws when the storage is blocked or the saved text is not a list, so a caller never mistakes either for an empty log.
+  function readErrorLog (storage) {
+    const saved = storage.getItem(ERROR_LOG_KEY)
+    if (saved === null) return []
+    const log = JSON.parse(saved)
+    if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
+    return log
+  }
+
+  // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
+  const withStack = (headline, stack) => (typeof stack !== 'string' || stack === '' ? headline : stack.startsWith(headline) ? stack : `${headline}\n${stack}`)
+
+  function formatErrorLog (log) {
+    if (log.length === 0) return 'The error log is empty.'
+    return [...log].reverse().map((record) => [
+      `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
+      `  ${record.url}`,
+      record.missing
+        ? `  SudokuPad has no ${record.missing}`
+        : withStack(record.name ? `${record.name}: ${record.message}` : record.message, record.stack).split('\n').map((line) => `  ${line}`).join('\n')
+    ].join('\n')).join('\n\n')
+  }
+
+  // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
+  function reportUrl ({ name, version, sudokupad, off }) {
+    const shownVersion = sudokupad || 'unknown'
+    const labels = off.map((feature) => feature.label).join(', ')
+    const body = [
+      `Script: ${name} ${version}`,
+      `SudokuPad version: ${shownVersion}`,
+      '',
+      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : withStack(String(why), why && why.stack).slice(0, REPORT_STACK_LIMIT)}`)
+    ].join('\n')
+    return `${REPORT_URL}?${new URLSearchParams({ title: `${name}: ${labels} off on SudokuPad ${shownVersion}`, body })}`
+  }
+
+  const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
+  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${SUDOKUPAD_PURPLE}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
+  const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
+  const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
+
+  function noticeHost (doc) {
+    let host = doc.getElementById(NOTICE_HOST_ID)
+    if (!host) {
+      host = doc.createElement('div')
+      host.id = NOTICE_HOST_ID
+      host.style.cssText = NOTICE_HOST_CSS
+      doc.body.append(host)
+    }
+    return host
+  }
+
+  function dismissButton (doc) {
+    const dismiss = doc.createElement('button')
+    dismiss.type = 'button'
+    dismiss.textContent = '×'
+    dismiss.title = 'Dismiss'
+    dismiss.setAttribute('aria-label', 'Dismiss')
+    dismiss.style.cssText = NOTICE_DISMISS_CSS
+    return dismiss
+  }
+
+  // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
+  // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
+  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  function createGuard ({ script, name, version, features }) {
+    const reasons = []
+    let page = null
+
+    const dismissKey = `${script}-notice`
+    // A dismissal is saved only under a SudokuPad version read from the page: one saved with none would match every later version that
+    // also has none. A store with no getData or setData (a SudokuPad that changed), or one that throws (a frame with storage blocked),
+    // cannot save one either. Without a save, a dismissal holds for this page load only.
+    const dismissedHere = []
+    let storeFailed = false
+    const savesDismissals = () => !storeFailed && page.sudokupad !== null && typeof page.store.getData === 'function' && typeof page.store.setData === 'function'
+    function useStore (fn) {
+      try {
+        return fn()
+      } catch (error) {
+        storeFailed = true
+        console.warn(`${script}: a dismissal of the notice bar cannot be saved, so it holds for this page load only:`, error)
+        return null
+      }
+    }
+    const dismissed = () => {
+      const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
+      return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
+    }
+
+    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page. A missing internal
+    // is the same fact on every load, so one already recorded for this script version and SudokuPad version is not recorded again: it
+    // would push the one-off throw out of the newest 50.
+    let sudokupad = null
+    let logFailed = false
+    function recordFeatureOff (label, why) {
+      if (logFailed) return
+      const fields = typeof why === 'string' ? { missing: why } : { name: why && why.name, message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
+      try {
+        const log = readErrorLog(globalThis.localStorage)
+        const same = (record) => record.script === script && record.version === version && record.sudokupad === sudokupad && record.feature === label && record.missing === fields.missing
+        if (fields.missing && log.some(same)) return
+        log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
+        globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
+      } catch (error) {
+        logFailed = true
+        console.warn(`${script}: the error log cannot be saved, so ${label} and later features turned off are not recorded:`, error)
+      }
+    }
+
+    let bar = null
+    function showNotice () {
+      if (bar) bar.remove()
+      bar = null
+      const gone = dismissed()
+      const shown = reasons.filter((reason) => !gone.includes(reason.name))
+      if (shown.length === 0 || !page.doc.body) return
+      const { doc } = page
+      const host = noticeHost(doc)
+      bar = doc.createElement('div')
+      bar.setAttribute('data-script', script)
+      bar.style.cssText = NOTICE_BAR_CSS
+      const text = doc.createElement('span')
+      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
+      const link = doc.createElement('a')
+      link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
+      link.target = '_blank'
+      link.rel = 'noopener'
+      link.textContent = 'Report'
+      link.style.cssText = NOTICE_LINK_CSS
+      const dismiss = dismissButton(doc)
+      dismiss.addEventListener('click', () => {
+        dismissedHere.push(...shown.map((reason) => reason.name))
+        if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
+        showNotice()
+      })
+      bar.append(text, link, dismiss)
+      host.append(bar)
+    }
+
+    // A bar of plain words, one per text and page load; the same host as the SudokuPad-changed bar, with no report link.
+    const told = new Set()
+    function tell (text) {
+      if (told.has(text) || !page || !page.doc.body) return
+      told.add(text)
+      const { doc } = page
+      const host = noticeHost(doc)
+      const message = doc.createElement('div')
+      message.setAttribute('data-script', script)
+      message.style.cssText = NOTICE_BAR_CSS
+      const span = doc.createElement('span')
+      span.textContent = text
+      const dismiss = dismissButton(doc)
+      dismiss.addEventListener('click', () => message.remove())
+      message.append(span, dismiss)
+      host.append(message)
+    }
+
+    // While a dialog action (`runInDialog`) runs, a store write that throws goes on, marked here, through every `run` to the caller.
+    let dialogActions = 0
+    const storeFailures = new WeakSet()
+
+    // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
+    function createFeature (featureName, { label, onSkip }) {
+      const feature = {
+        label,
+        off: false,
+        skip (why, installed = true) {
+          if (feature.off) return
+          feature.off = true
+          reasons.push({ name: featureName, label, why })
+          recordFeatureOff(label, why)
+          if (installed) {
+            console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
+            try {
+              if (onSkip) onSkip()
+            } catch (error) {
+              // Best effort: the feature is off already, and what it left behind stays until the page reloads.
+              console.warn(`${script}: could not undo ${label}:`, error)
+            }
+          }
+          if (page) showNotice()
+        },
+        run (fn, fallback = () => {}) {
+          if (feature.off) return fallback()
+          try {
+            return fn()
+          } catch (error) {
+            if (storeFailures.has(error)) throw error
+            feature.skip(error)
+            return fallback()
+          }
+        },
+        // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
+        // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
+        runInDialog (fn) {
+          if (feature.off) throw new Error(`${name} turned off its ${label}`)
+          dialogActions++
+          try {
+            return fn()
+          } finally {
+            dialogActions--
+          }
+        },
+        // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
+        // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
+        // that sends nothing (`stock.sudokupad(fn, false)`) leaves the original to run.
+        wrap (owner, method, body) {
+          const original = owner[method]
+          owner[method] = function (...args) {
+            if (feature.off) return original.apply(this, args)
+            let reached = false
+            let result
+            let failure = null
+            const sudokupad = (fn, sends = true) => {
+              if (sends) reached = true
+              try {
+                return fn()
+              } catch (error) {
+                failure = { error }
+                throw error
+              }
+            }
+            const stock = (...stockArgs) => sudokupad(() => { result = original.apply(this, stockArgs); return result })
+            stock.sudokupad = sudokupad
+            try {
+              return body.call(this, stock, ...args)
+            } catch (error) {
+              if (failure && failure.error === error) throw error
+              feature.skip(error)
+              return reached ? result : original.apply(this, args)
+            }
+          }
+        }
+      }
+      return feature
+    }
+
+    const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
+
+    function probe ({ roots, store, doc = document }) {
+      sudokupad = sudokupadVersion(doc)
+      lackingInternals(features, roots).forEach((names, missing) => {
+        names.forEach((featureName) => guarded[featureName].skip(missing, false))
+        console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
+      })
+      page = { store, doc, sudokupad }
+      showNotice()
+    }
+
+    // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
+    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
+    // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
+    // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
+    // can save over the original.
+    function storeFor (feature) {
+      const write = (fn) => {
+        if (feature.off) return
+        try {
+          fn()
+        } catch (error) {
+          if (dialogActions > 0) {
+            if (Object(error) === error) storeFailures.add(error)
+            throw error
+          }
+          if (!isRefusedWrite(error)) return feature.skip(error)
+          console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
+          tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
+        }
+      }
+      return {
+        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        setData: (key, value) => write(() => Framework.setData(key, value)),
+        removeData: (key) => write(() => Framework.removeData(key)),
+        keep: (key, value) => feature.run(() => Framework.setData(key, value))
+      }
+    }
+
+    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
+    const dialogsFor = (feature) => ({
+      addSetting: (setting) => Framework.addSetting(setting),
+      showDialog: (options) => Framework.showDialog(options),
+      closeDialog: () => feature.run(() => Framework.closeDialog())
+    })
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:sudokupad>
   // <lib:color-math>
   // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -540,46 +879,21 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
-  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
-  function textColorFor (background) {
+  // `light` or `dark` (LIGHT_TEXT and DARK_TEXT unless given), whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
     const page = wcagLuminance(rgb) + 0.05
     const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+    return contrast(light) >= contrast(dark) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
-  // <lib:ready>
-  // Generated from lib/ready.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
-  // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
-  function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
-    return new Promise((resolve, reject) => {
-      const deadline = Date.now() + timeoutMs
-      const poll = () => {
-        let value
-        try {
-          value = check()
-        } catch (error) {
-          reject(error)
-          return
-        }
-        if (value !== null && value !== undefined && value !== false) resolve(value)
-        else if (Date.now() >= deadline) reject(new Error(`${what} not ready after ${timeoutMs} ms`))
-        else setTimeout(poll, pollMs)
-      }
-      poll()
-    })
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:ready>
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math, and whenReady from ready.
-  /* global parseColor, darkenColor, toOklab, whenReady */
+  // Reads parseColor, darkenColor and toOklab from color-math.
+  /* global parseColor, darkenColor, toOklab */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
@@ -605,7 +919,6 @@
     'page-3': 'Darker page 3',
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
-  const COLOR_TOOL_TIMEOUT_MS = 10000
 
   // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
@@ -659,11 +972,6 @@
     const tool = colorTool()
     const pages = tool?.palette?.pages
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
-  }
-
-  // Rejects once COLOR_TOOL_TIMEOUT_MS passes with no ready color tool, naming it, so the caller can skip its step and keep SudokuPad's own colors.
-  function waitForColorTool () {
-    return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
   }
 
   // The pages of cell color keys of the palette in force, or none until the color tool has one.
@@ -953,7 +1261,6 @@
     return text.trim() !== '' && !isTransparent(text)
   }
 
-  const PURPLE = '#6a1b9a'
   const OFF_WORD_GREY = '#8a8299'
 
   // A translucent white box behind the word, so it reads on Dark Page's dark button. On the normal page's #eee button it barely shows.
@@ -963,7 +1270,7 @@
   function modeWordHtml (mode) {
     const on = mode !== 'off'
     return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-6px;top:-3px;padding:1px 3px;border-radius:3px;background:' + WORD_BACKGROUND + ';' +
-      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
+      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? SUDOKUPAD_PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
   // WCAG 2.2 SC 2.5.8: a target is at least this many px each way.
@@ -971,7 +1278,7 @@
   const ARROW_BOX_PX = 14
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
     'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:' + ARROW_BOX_PX + 'px;height:' + ARROW_BOX_PX + 'px;' +
-    `border:1.5px solid ${PURPLE};border-radius:3px;background:#fff;color:${PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
+    `border:1.5px solid ${SUDOKUPAD_PURPLE};border-radius:3px;background:#fff;color:${SUDOKUPAD_PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
 
   const UNREADABLE_FILL = '#ccc'
   // SudokuPad draws a cell color this strong on the board and on its own color buttons (tool-color.css, --cell-color-opacity).
@@ -1204,14 +1511,14 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog and formatErrorLog from sudokupad.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog */
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer. A script
+  // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
-  const FOCUS_RING = '#6a1b9a'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
   // An inset layer darkens whatever fill the control has.
@@ -1222,14 +1529,46 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
-  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
-  function snapshotStore (store, keys) {
+  // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
+  // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
+  // put back after them; the first throw then goes on. The stored values are held by reference, so a script's save must replace a value
+  // and never edit one in place.
+  function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
-    return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
+    const putMirrorBack = holdMirror()
+    return () => {
+      const failures = []
+      before.forEach(([key, value]) => {
+        try {
+          if (value == null) store.removeData(key)
+          else store.setData(key, value)
+        } catch (error) {
+          failures.push(error)
+        }
+      })
+      putMirrorBack()
+      if (failures.length > 0) throw failures[0]
+    }
   }
 
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
+
+  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
+  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
+  function writeOrRestore (snapshot, write) {
+    const restore = snapshot()
+    try {
+      write()
+    } catch (error) {
+      try {
+        restore()
+      } catch (restoreError) {
+        throw new Error(`${errorText(error)}; the earlier values could not be put back: ${errorText(restoreError)}`, { cause: error })
+      }
+      throw error
+    }
+  }
 
   // The next press ends the swallowing even when no release came (a close from the keyboard).
   function swallowRelease (win = window) {
@@ -1289,7 +1628,7 @@
     return [
       `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
       `.${prefix}error-log button { ${BARE_BUTTON} padding: 2px 0 !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; }`,
-      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 2px; }`
     ].join('\n')
   }
 
@@ -1334,7 +1673,7 @@
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
-      `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
+      `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
@@ -1360,7 +1699,7 @@
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
       `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
       `${row} button:active { ${PRESS_LAYER} !important; }`,
-      `${row} button:focus-visible { outline: 2px solid ${FOCUS_RING}; outline-offset: 2px; }`
+      `${row} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px; }`
     ].join('\n')
   }
 
@@ -1369,30 +1708,22 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
+  // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
+  // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
+    if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
-      let restore = null
       try {
-        if (failed || changed()) {
-          restore = snapshot ? snapshot() : null
-          save()
-        }
+        if (failed || changed()) feature.runInDialog(() => writeOrRestore(snapshot, save))
       } catch (error) {
         failed = true
-        let message = `Not saved: ${errorText(error)}`
-        try {
-          if (restore) restore()
-        } catch (restoreError) {
-          message += `; the earlier values could not be put back: ${errorText(restoreError)}`
-        }
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), message)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
         return
       }
       close()
@@ -1414,9 +1745,11 @@
     })
     const body = doc.getElementById(bodyId)
     if (!body) return null
+    const dialog = body.closest('.dialog')
+    wireErrorLog(dialog, win)
+    wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
-    wireErrorLog(body.closest('.dialog'), win)
-    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    const row = dialog?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
     return body
   }
@@ -1469,7 +1802,7 @@
     const on = index === picked
     // The whole column picks, a target 44 by 26 px; the dot is only what is drawn.
     const picks = ` data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${escapeHtml(name)}"`
-    return dotColumn('dot-column', `<span style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;border:2px solid ${on ? PURPLE : DOT_RING}${on ? `;background:radial-gradient(${PURPLE} 45%, transparent 50%)` : ''}"></span>`,
+    return dotColumn('dot-column', `<span style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;border:2px solid ${on ? SUDOKUPAD_PURPLE : DOT_RING}${on ? `;background:radial-gradient(${SUDOKUPAD_PURPLE} 45%, transparent 50%)` : ''}"></span>`,
       'display:flex;justify-content:center;align-self:stretch;align-items:center;cursor:pointer', picks)
   }
 
@@ -1581,15 +1914,15 @@
     [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
     [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
     // SudokuPad's `button:focus { outline: none }` hides the browser's ring, so the dialog draws its own, for the keyboard only.
-    [`${EDITOR} button:focus-visible, ${EDITOR} [data-role="swatch"]:focus-visible, ${EDITOR} .cbd-profile:focus-visible`, `outline: 2px solid ${FOCUS_RING}; outline-offset: 2px`],
+    [`${EDITOR} button:focus-visible, ${EDITOR} [data-role="swatch"]:focus-visible, ${EDITOR} .cbd-profile:focus-visible`, `outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px`],
     // The pressed swatch's own outline takes the property, so its focus ring is drawn beside it.
     [`${EDITOR} [data-role="swatch"][aria-pressed="true"]`, 'position: relative'],
     [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible`, 'outline: 3px solid #000; outline-offset: 0'],
-    [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible::after`, `content: ''; position: absolute; inset: -7px; border: 2px solid ${FOCUS_RING}; border-radius: 9px; pointer-events: none`],
+    [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible::after`, `content: ''; position: absolute; inset: -7px; border: 2px solid ${SUDOKUPAD_PURPLE}; border-radius: 9px; pointer-events: none`],
     [`${EDITOR} .cbd-button:hover`, `background: ${CONTROL_HOVER}`],
     [`${EDITOR} [data-act="digit"]:not([style]):hover`, `background: ${CONTROL_HOVER}`],
-    [`${EDITOR} [data-act="digit"]:hover`, `box-shadow: inset 0 0 0 2px ${PURPLE}`],
-    [`${EDITOR} [data-role="swatch"]:not([data-empty]):hover`, `box-shadow: 0 0 0 2px ${PURPLE}`],
+    [`${EDITOR} [data-act="digit"]:hover`, `box-shadow: inset 0 0 0 2px ${SUDOKUPAD_PURPLE}`],
+    [`${EDITOR} [data-role="swatch"]:not([data-empty]):hover`, `box-shadow: 0 0 0 2px ${SUDOKUPAD_PURPLE}`],
     [`${EDITOR} .cbd-button:active, ${EDITOR} [data-act="digit"]:active, ${EDITOR} [data-role="swatch"]:not([data-empty]):active`, PRESS_LAYER],
     // At least 24 px each way (WCAG 2.2 SC 2.5.8).
     [`${EDITOR} [data-act="delete"], ${EDITOR} [data-role="handle"]`, `display: inline-flex; align-items: center; justify-content: center; min-width: ${MIN_TARGET_PX}px; min-height: ${MIN_TARGET_PX}px; box-sizing: border-box`],
@@ -1600,7 +1933,7 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText */ // from settings-dialog.js, which every script carries beside this one
+  /* global setDialogStatus, errorText, writeOrRestore */ // from settings-dialog.js, which every script carries beside this one
   // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
@@ -1627,8 +1960,10 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
-  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, and `apply(values)` takes what a paste kept,
+  // under `snapshot` (`writeOrRestore`'s) in a dialog action of `feature` (`runInDialog`), so a paste that fails half-way puts every key
+  // back. `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
@@ -1641,7 +1976,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) apply(values)
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -1661,6 +1996,30 @@
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
   /* eslint-enable no-unused-vars */
   // </lib:plain>
+
+  // <lib:wrap-index>
+  // Generated from lib/wrap-index.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The index `delta` steps from `index` in a list of `count`, going round past either end.
+  const wrapIndex = (index, delta, count) => (((index + delta) % count) + count) % count
+  /* eslint-enable no-unused-vars */
+  // </lib:wrap-index>
+
+  // <lib:write-style>
+  // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The page's style element `id`, added on the first call, holds `css`.
+  function writeStyle (id, css, doc = document) {
+    let style = doc.getElementById(id)
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = id
+      doc.head.appendChild(style)
+    }
+    style.textContent = css
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:write-style>
   // <lib:store>
   // Generated from lib/store.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -1744,305 +2103,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:pointer-session>
-  // <lib:sudokupad>
-  // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
-  // alone, and a bar at the bottom of the page says so once per SudokuPad version.
-  const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
-  // Every script's bar is the one purple, Pen Tool Extras' and the site's --accent.
-  const NOTICE_COLOR = '#6a1b9a'
-  const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
-  // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
-  const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
-  const INTERNAL_KINDS = {
-    function: (value) => typeof value === 'function',
-    array: Array.isArray,
-    integer: Number.isInteger,
-    number: (value) => typeof value === 'number',
-    object: (value) => Boolean(value) && typeof value === 'object'
-  }
-
-  // A path's first part names a root (`Framework`, `ToolPen`): SudokuPad declares them with `const`, so they are not on `window`.
-  function readInternal (roots, path) {
-    const [root, ...keys] = path.split('.')
-    return keys.reduce((owner, key) => (owner === undefined || owner === null ? undefined : owner[key]), roots[root])
-  }
-
-  // Each internal lacking, with the features it holds off; a feature is listed under the first of its `needs` it lacks.
-  function lackingInternals (features, roots) {
-    const lacking = new Map()
-    Object.entries(features).forEach(([name, { needs }]) => {
-      const missing = Object.entries(needs).find(([path, kind]) => !INTERNAL_KINDS[kind](readInternal(roots, path)))
-      if (missing) lacking.set(missing[0], [...(lacking.get(missing[0]) || []), name])
-    })
-    return lacking
-  }
-
-  function sudokupadVersion (doc) {
-    const found = PAGE_VERSION.exec(doc.documentElement.outerHTML)
-    return found ? found[1] : null
-  }
-
-  // One key for every script, so a reader finds every feature any script turned off.
-  const ERROR_LOG_KEY = 'sudokupad-scripts-error-log'
-  const ERROR_LOG_LIMIT = 50
-  // A write the browser refuses (a full localStorage) is the browser's doing, not a SudokuPad change.
-  const isRefusedWrite = (error) => Boolean(error) && error.name === 'QuotaExceededError'
-
-  // A report is a URL, and GitHub refuses a long one.
-  const REPORT_STACK_LIMIT = 1200
-
-  // Oldest first. Throws when the storage is blocked or the saved text is not a list, so a caller never mistakes either for an empty log.
-  function readErrorLog (storage) {
-    const saved = storage.getItem(ERROR_LOG_KEY)
-    if (saved === null) return []
-    const log = JSON.parse(saved)
-    if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
-    return log
-  }
-
-  // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
-  const withStack = (headline, stack) => (typeof stack !== 'string' || stack === '' ? headline : stack.startsWith(headline) ? stack : `${headline}\n${stack}`)
-
-  function formatErrorLog (log) {
-    if (log.length === 0) return 'The error log is empty.'
-    return [...log].reverse().map((record) => [
-      `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
-      `  ${record.url}`,
-      record.missing
-        ? `  SudokuPad has no ${record.missing}`
-        : withStack(record.name ? `${record.name}: ${record.message}` : record.message, record.stack).split('\n').map((line) => `  ${line}`).join('\n')
-    ].join('\n')).join('\n\n')
-  }
-
-  // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
-  function reportUrl ({ name, version, sudokupad, off }) {
-    const shownVersion = sudokupad || 'unknown'
-    const labels = off.map((feature) => feature.label).join(', ')
-    const body = [
-      `Script: ${name} ${version}`,
-      `SudokuPad version: ${shownVersion}`,
-      '',
-      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : withStack(String(why), why && why.stack).slice(0, REPORT_STACK_LIMIT)}`)
-    ].join('\n')
-    return `${REPORT_URL}?${new URLSearchParams({ title: `${name}: ${labels} off on SudokuPad ${shownVersion}`, body })}`
-  }
-
-  const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
-  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
-  const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
-  const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
-
-  function noticeHost (doc) {
-    let host = doc.getElementById(NOTICE_HOST_ID)
-    if (!host) {
-      host = doc.createElement('div')
-      host.id = NOTICE_HOST_ID
-      host.style.cssText = NOTICE_HOST_CSS
-      doc.body.append(host)
-    }
-    return host
-  }
-
-  function dismissButton (doc) {
-    const dismiss = doc.createElement('button')
-    dismiss.type = 'button'
-    dismiss.textContent = '×'
-    dismiss.title = 'Dismiss'
-    dismiss.setAttribute('aria-label', 'Dismiss')
-    dismiss.style.cssText = NOTICE_DISMISS_CSS
-    return dismiss
-  }
-
-  // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
-  // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
-  function createGuard ({ script, name, version, features }) {
-    const reasons = []
-    let page = null
-
-    const dismissKey = `${script}-notice`
-    // A dismissal is saved only under a SudokuPad version read from the page: one saved with none would match every later version that
-    // also has none. A store with no getData or setData (a SudokuPad that changed), or one that throws (a frame with storage blocked),
-    // cannot save one either. Without a save, a dismissal holds for this page load only.
-    const dismissedHere = []
-    let storeFailed = false
-    const savesDismissals = () => !storeFailed && page.sudokupad !== null && typeof page.store.getData === 'function' && typeof page.store.setData === 'function'
-    function useStore (fn) {
-      try {
-        return fn()
-      } catch (error) {
-        storeFailed = true
-        console.warn(`${script}: a dismissal of the notice bar cannot be saved, so it holds for this page load only:`, error)
-        return null
-      }
-    }
-    const dismissed = () => {
-      const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
-      return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
-    }
-
-    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page. A missing internal
-    // is the same fact on every load, so one already recorded for this script version and SudokuPad version is not recorded again: it
-    // would push the one-off throw out of the newest 50.
-    let sudokupad = null
-    let logFailed = false
-    function recordFeatureOff (label, why) {
-      if (logFailed) return
-      const fields = typeof why === 'string' ? { missing: why } : { name: why && why.name, message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
-      try {
-        const log = readErrorLog(globalThis.localStorage)
-        const same = (record) => record.script === script && record.version === version && record.sudokupad === sudokupad && record.feature === label && record.missing === fields.missing
-        if (fields.missing && log.some(same)) return
-        log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
-        globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
-      } catch (error) {
-        logFailed = true
-        console.warn(`${script}: the error log cannot be saved, so ${label} and later features turned off are not recorded:`, error)
-      }
-    }
-
-    let bar = null
-    function showNotice () {
-      if (bar) bar.remove()
-      bar = null
-      const gone = dismissed()
-      const shown = reasons.filter((reason) => !gone.includes(reason.name))
-      if (shown.length === 0 || !page.doc.body) return
-      const { doc } = page
-      const host = noticeHost(doc)
-      bar = doc.createElement('div')
-      bar.setAttribute('data-script', script)
-      bar.style.cssText = NOTICE_BAR_CSS
-      const text = doc.createElement('span')
-      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
-      const link = doc.createElement('a')
-      link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
-      link.target = '_blank'
-      link.rel = 'noopener'
-      link.textContent = 'Report'
-      link.style.cssText = NOTICE_LINK_CSS
-      const dismiss = dismissButton(doc)
-      dismiss.addEventListener('click', () => {
-        dismissedHere.push(...shown.map((reason) => reason.name))
-        if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
-        showNotice()
-      })
-      bar.append(text, link, dismiss)
-      host.append(bar)
-    }
-
-    // A bar of plain words, one per text and page load; the same host as the SudokuPad-changed bar, with no report link.
-    const told = new Set()
-    function tell (text) {
-      if (told.has(text) || !page || !page.doc.body) return
-      told.add(text)
-      const { doc } = page
-      const host = noticeHost(doc)
-      const message = doc.createElement('div')
-      message.setAttribute('data-script', script)
-      message.style.cssText = NOTICE_BAR_CSS
-      const span = doc.createElement('span')
-      span.textContent = text
-      const dismiss = dismissButton(doc)
-      dismiss.addEventListener('click', () => message.remove())
-      message.append(span, dismiss)
-      host.append(message)
-    }
-
-    // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
-    function createFeature (featureName, { label, onSkip }) {
-      const feature = {
-        off: false,
-        skip (why, installed = true) {
-          if (feature.off) return
-          feature.off = true
-          reasons.push({ name: featureName, label, why })
-          recordFeatureOff(label, why)
-          if (installed) {
-            console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
-            try {
-              if (onSkip) onSkip()
-            } catch (error) {
-              // Best effort: the feature is off already, and what it left behind stays until the page reloads.
-              console.warn(`${script}: could not undo ${label}:`, error)
-            }
-          }
-          if (page) showNotice()
-        },
-        run (fn, fallback = () => {}) {
-          if (feature.off) return fallback()
-          try {
-            return fn()
-          } catch (error) {
-            feature.skip(error)
-            return fallback()
-          }
-        },
-        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
-        // frees. Any other throw skips the feature as `run` does.
-        write (fn) {
-          return feature.run(() => {
-            try {
-              return fn()
-            } catch (error) {
-              if (!isRefusedWrite(error)) throw error
-              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
-              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
-            }
-          })
-        },
-        // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
-        // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
-        // that sends nothing (`stock.sudokupad(fn, false)`) leaves the original to run.
-        wrap (owner, method, body) {
-          const original = owner[method]
-          owner[method] = function (...args) {
-            if (feature.off) return original.apply(this, args)
-            let reached = false
-            let result
-            let failure = null
-            const sudokupad = (fn, sends = true) => {
-              if (sends) reached = true
-              try {
-                return fn()
-              } catch (error) {
-                failure = { error }
-                throw error
-              }
-            }
-            const stock = (...stockArgs) => sudokupad(() => { result = original.apply(this, stockArgs); return result })
-            stock.sudokupad = sudokupad
-            try {
-              return body.call(this, stock, ...args)
-            } catch (error) {
-              if (failure && failure.error === error) throw error
-              feature.skip(error)
-              return reached ? result : original.apply(this, args)
-            }
-          }
-        }
-      }
-      return feature
-    }
-
-    const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
-
-    function probe ({ roots, store, doc = document }) {
-      sudokupad = sudokupadVersion(doc)
-      lackingInternals(features, roots).forEach((names, missing) => {
-        names.forEach((featureName) => guarded[featureName].skip(missing, false))
-        console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
-      })
-      page = { store, doc, sudokupad }
-      showNotice()
-    }
-
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:sudokupad>
   // Each feature with the SudokuPad internals it cannot work without. A path's first part is a root of `guard.probe`: `Framework`, or `app`, which is
   // what `Framework.getApp` resolves to. Not declared, because a check at startup cannot tell them from "not there yet": the cells of a puzzle not loaded
   // (`app.puzzle.cells` is an empty array until then), and the methods on each cell, which the cell coloring's own `run` covers.
@@ -2121,17 +2181,8 @@
   if (typeof Framework === 'undefined') return
 
   // The saved data is read and written only here: with no getData or setData nothing is read, so the preloads and the starting mode show, and nothing is kept.
-  const readData = (key) => storage.run(() => Framework.getData(key), () => null)
-  const writeData = (key, value) => storage.write(() => Framework.setData(key, value))
-  // What the shared store reads and writes through: the saved settings feature's guarded calls, never Framework itself.
-  // `keep` is the copy of an unreadable value: a refusal there turns saving off, so nothing can overwrite the original.
-  const savedData = { getData: readData, setData: writeData, keep: (key, value) => storage.run(() => Framework.setData(key, value)), removeData: (key) => storage.run(() => Framework.removeData(key)) }
-  // What the settings entry and the editor are handed in place of Framework: the editor's close runs under the editor when a button is pressed.
-  const dialogs = {
-    addSetting: (setting) => Framework.addSetting(setting),
-    showDialog: (options) => Framework.showDialog(options),
-    closeDialog: () => editor.run(() => Framework.closeDialog())
-  }
+  const savedData = guard.storeFor(storage)
+  const dialogs = guard.dialogsFor(editor)
 
   function readPages () {
     const tool = readyColorTool()
@@ -2143,11 +2194,11 @@
 
   function addPreloadsOnce () {
     for (const { key, names } of ADDED_PRELOADS) {
-      if (readData(key) === true) continue
+      if (savedData.getData(key) === true) continue
       const state = loadState()
       const added = withAddedPreloads(state, names)
       if (added.profiles.length !== state.profiles.length) saveState(added)
-      writeData(key, true)
+      savedData.setData(key, true)
     }
   }
   const loadGroups = () => activeGroups(loadState())
@@ -2357,13 +2408,7 @@
 
   // Digit colors are a stylesheet, not SudokuPad state, so they are never an undo step.
   function showDigitColors () {
-    let style = document.getElementById(DIGIT_STYLE_ID)
-    if (!style) {
-      style = document.createElement('style')
-      style.id = DIGIT_STYLE_ID
-      document.head.appendChild(style)
-    }
-    style.textContent = colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : ''
+    writeStyle(DIGIT_STYLE_ID, colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : '')
     syncDigits()
   }
 
@@ -2388,7 +2433,7 @@
 
   function showMode (next) {
     mode = next
-    writeData(MODE_KEY, next)
+    savedData.setData(MODE_KEY, next)
     redraw()
   }
 
@@ -2664,19 +2709,14 @@
     setMode(app, next, groupKeys([...oldGroups, ...groups]))
   }
 
-  // The profiles and the mode as stored and as shown, as a function that puts them back after a Save that failed half-way. Cells a failed Save already colored or cleared stay as they are, an undo step of their own.
-  function snapshotSave () {
-    const restoreStored = snapshotStore(savedData, [PROFILES_KEY, MODE_KEY])
+  // The profiles, the mode and the added-preload marks as stored, and the mode as shown, as a function that puts them back after a Save or Paste that failed half-way. Cells a failed Save already colored or cleared stay as they are, an undo step of their own.
+  const snapshotSave = () => snapshotStore(savedData, [PROFILES_KEY, MODE_KEY, ...ADDED_PRELOADS.map(({ key }) => key)], () => {
     const was = mode
     return () => {
-      try {
-        restoreStored()
-      } finally {
-        mode = was
-        redraw()
-      }
+      mode = was
+      redraw()
     }
-  }
+  })
 
   function openDialog (app) {
     let savedState = loadState()
@@ -2691,7 +2731,21 @@
       css: STYLE_CSS,
       changed: () => draft.mode !== mode || JSON.stringify(draft.state) !== JSON.stringify(savedState),
       snapshot: snapshotSave,
-      save: () => saveDialog(app, savedState, draft.state, draft.mode)
+      feature: editor,
+      save: () => saveDialog(app, savedState, draft.state, draft.mode),
+      copyPaste: {
+        // A copy with the saved settings off says so, rather than copy the defaults as if they were saved.
+        copied: () => storage.runInDialog(() => copiedSettings(savedData)),
+        readers: READERS,
+        upgrade: withModeFromAuto,
+        apply: (values) => {
+          ADDED_PRELOADS.forEach(({ key }) => { if (key in values) savedData.setData(key, values[key]) })
+          saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
+          savedState = loadState()
+          edit({ type: 'reload', state: savedState, mode })
+          draw()
+        }
+      }
     })
     if (!box) return
     const draw = () => {
@@ -2710,13 +2764,6 @@
       if (draft.state.profiles[draft.selected].groups !== groups) draw()
     }
     draw()
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings({ getData: readData }), readers: READERS, upgrade: withModeFromAuto }, (values) => {
-      ADDED_PRELOADS.forEach(({ key }) => { if (key in values) writeData(key, values[key]) })
-      saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
-      savedState = loadState()
-      edit({ type: 'reload', state: savedState, mode })
-      draw()
-    })
     // Typing renames the draft, its row and the pulldowns' options in place, so the name field keeps the focus.
     box.addEventListener('input', (event) => {
       if (!event.target.matches('[data-role="profile-name"]')) return
@@ -2883,7 +2930,7 @@
     editor.run(() => addSettingsEntry(dialogs, { name: 'colorbydigit', content: 'Color by Digit', open: () => editor.run(() => openDialog(app)) }))
     addPreloadsOnce()
     const state = loadState()
-    mode = allowedMode(startingMode(readData(MODE_KEY), readData(AUTO_KEY)), usesDigitColors(state))
+    mode = allowedMode(startingMode(savedData.getData(MODE_KEY), savedData.getData(AUTO_KEY)), usesDigitColors(state))
     addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
     addStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {

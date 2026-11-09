@@ -51,7 +51,7 @@ test('Pen Tool Extras holds spec 130 together', () => {
   }
 
   // The pure helpers are reachable with no Framework on the page.
-  for (const helper of ['edgeMidpoint', 'isEdgeActs', 'arrowLineOf', 'addedMark', 'penValuesOf', 'planActs', 'lineSegmentsOf', 'wrapIndex']) {
+  for (const helper of ['edgeMidpoint', 'isEdgeActs', 'arrowLineOf', 'addedMark', 'penValuesOf', 'planActs', 'lineSegmentsOf']) {
     assert.equal(typeof extras[helper], 'function', helper)
   }
 

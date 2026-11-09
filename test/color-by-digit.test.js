@@ -5,6 +5,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
+const { loadLib } = require('./load-lib.js')
+const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
@@ -1758,7 +1760,7 @@ test('iconHtml draws the run of cells in the mode\'s look with the mode word, an
     const word = /<span data-role="mode" style="([^"]*)">([^<]*)<\/span>/.exec(html)
     assert.equal(word[2], mode.toUpperCase())
     assert.match(word[1], /pointer-events:none/)
-    assert.match(word[1], mode === 'off' ? /color:#8a8299/ : /color:#6a1b9a/)
+    assert.match(word[1], mode === 'off' ? /color:#8a8299/ : new RegExp(`color:${SUDOKUPAD_PURPLE}`))
     // A translucent white rounded box behind every word, and no text-shadow, so it reads on Dark Page's dark button.
     assert.match(word[1], /background:rgba\(255,255,255,\.9\)/)
     assert.match(word[1], /border-radius:3px/)
@@ -2036,7 +2038,7 @@ test('reduceDraft reload: pasted settings replace the draft, selecting their act
 })
 
 // The dialog's focus, hover and press states, hit areas, grab cursor and keyboard.
-const RING = '#6a1b9a'
+const RING = SUDOKUPAD_PURPLE
 const cssRules = (css) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => [m[1].split(',').map((x) => x.trim()), m[2].replace(/\s+/g, ' ').trim()])
 const rulesFor = (css, selector) => cssRules(css).filter(([selectors]) => selectors.includes(selector)).map(([, d]) => d).join(' ')
 
@@ -2049,14 +2051,14 @@ test('the dialog\'s buttons, digit keys, swatches and profile rows show a 2 px r
 
 test('the pressed swatch\'s focus ring is an ::after ring, since its pressed outline covers a focus outline', () => {
   const ring = rulesFor(STYLE_CSS, '#color-by-digit-editor [data-role="swatch"][aria-pressed="true"]:focus-visible::after')
-  assert.match(ring, /border: 2px solid #6a1b9a/)
+  assert.match(ring, new RegExp(`border: 2px solid ${SUDOKUPAD_PURPLE}`))
   assert.match(ring, /position: absolute/)
 })
 
 test('Clear all, the digit keys and the swatches lighten to #f3e5f5 or ring on hover and darken 10% on press', () => {
   assert.match(rulesFor(STYLE_CSS, '#color-by-digit-editor .cbd-button:hover'), /background: #f3e5f5/)
   assert.match(rulesFor(STYLE_CSS, '#color-by-digit-editor [data-act="digit"]:not([style]):hover'), /background: #f3e5f5/)
-  assert.match(rulesFor(STYLE_CSS, '#color-by-digit-editor [data-role="swatch"]:not([data-empty]):hover'), /box-shadow: 0 0 0 2px #6a1b9a/)
+  assert.match(rulesFor(STYLE_CSS, '#color-by-digit-editor [data-role="swatch"]:not([data-empty]):hover'), new RegExp(`box-shadow: 0 0 0 2px ${SUDOKUPAD_PURPLE}`))
   for (const part of ['.cbd-button', '[data-act="digit"]', '[data-role="swatch"]:not([data-empty])']) {
     assert.match(rulesFor(STYLE_CSS, `#color-by-digit-editor ${part}:active`), /inset 0 0 0 100vmax rgb\(0 0 0 \/ \.1\)/, part)
   }
