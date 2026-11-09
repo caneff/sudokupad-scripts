@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { startPuzzle } from '../page.mjs'
 import { clickUntil, SETTLE_MS } from '../settle.mjs'
+import { gridPoint } from '../pen.mjs'
 
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
 
@@ -176,6 +177,13 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
 export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
 // Escape finishes the open note and leaves it selected; a second Escape ends that selection, so the next click on empty space opens a note again.
 export const SELECTED = '#draw-tool-layer .draw-tool-selected'
+export const clickAt = async (p, at) => p.mouse.click(...await gridPoint(p, at))
+export async function typeText (p, at, content) {
+  await clickAt(p, at)
+  await p.keyboard.type(content)
+  await finishNote(p)
+}
+
 export async function finishNote (p) {
   await p.keyboard.press('Escape')
   if (await p.locator(SELECTED).count() > 0) await p.keyboard.press('Escape')

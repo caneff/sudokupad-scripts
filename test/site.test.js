@@ -445,7 +445,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Formatting **bold**, *italic*, __underline__, ~~strikethrough~~ (they combine, like Discord), and lines starting - become bullets or [ ] checklist items (- [ ] and [] work too); two spaces before a dash nest it one level, and 1. starts a numbered item. A line starting # , ## or ### is a header, and -# makes small faded subtext. Typing ->, != or sum gives → ≠ Σ. `code` and a block between two lines of ``` show in monospace, with nothing else read inside.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',
-    'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
+    'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders. The + and - keys make the selected notes, or the next note, one Size step bigger or smaller.',
     'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
     'Hide all notes The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.',
     'Erase Right-click a note, or press Delete.',

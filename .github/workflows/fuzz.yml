@@ -1,0 +1,48 @@
+name: Fuzz SudokuPad
+
+# Nightly: `npm run fuzz:nightly` runs the random tester for 30 minutes with a fresh seed on real SudokuPad and files one `bug` issue per distinct
+# failure (a comment on the open issue when one has the title), or a "did not run" issue when it cannot reach a verdict (live/fuzz/nightly.mjs).
+# Its own workflow, not a job of watch.yml: 30 minutes must not hold up the watch, and the two have their own concurrency groups.
+# `workflow_dispatch` is the manual run.
+on:
+  schedule:
+    - cron: '47 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# Two overlapping runs could file the same failure twice.
+concurrency:
+  group: fuzz-sudokupad
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - id: fuzz
+        run: npm run fuzz:nightly
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # A step before the fuzz (npm ci, the Chromium install) failed, so live/fuzz/nightly.mjs never ran and filed nothing. Same title as
+      # nightly.mjs's own "did not run" issue, and filed only when none is open.
+      - name: File the did-not-run issue
+        if: ${{ failure() && steps.fuzz.outcome == 'skipped' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Fuzz did not run: the nightly fuzz could not be checked'
+        run: |
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[].title')
+          if printf '%s\n' "$open" | grep -qxF "$TITLE"; then exit 0; fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --label bug --title "$TITLE" \
+            --body "A step before \`npm run fuzz:nightly\` failed (npm ci or the Chromium install), so the fuzz did not run. See $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."

@@ -261,13 +261,13 @@ describe('didNotRunIssue', () => {
 describe('fileIssue once', () => {
   it('files nothing when an open issue already has the title', async () => {
     const seen = []
-    await fileIssue({ title: 'T', body: 'B', once: true }, async (cmd, args) => { seen.push(args.slice(0, 2).join(' ')); return { ok: true, output: 'other\nT\n' } })
+    await fileIssue({ title: 'T', body: 'B', once: true }, async (cmd, args) => { seen.push(args.slice(0, 2).join(' ')); return { ok: true, output: '4\tother\n7\tT\n' } })
     assert.deepEqual(seen, ['issue list'])
   })
 
   it('files it when no open issue has the title', async () => {
     const seen = []
-    await fileIssue({ title: 'T', body: 'B', once: true }, async (cmd, args) => { seen.push(args.slice(0, 2).join(' ')); return { ok: true, output: 'other\n' } })
+    await fileIssue({ title: 'T', body: 'B', once: true }, async (cmd, args) => { seen.push(args.slice(0, 2).join(' ')); return { ok: true, output: '4\tother\n' } })
     assert.deepEqual(seen, ['issue list', 'issue create'])
   })
 
