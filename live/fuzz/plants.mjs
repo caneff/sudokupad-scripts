@@ -1,6 +1,6 @@
 // The bugs the fuzz is measured against (#678): each is a find-and-replace on the text of one `*.user.js`, applied when the fuzz injects the script, so the files on
 // disk never hold a bug. `kind` is how the bug should show: a broken rule (`rules.mjs`) or a crash signal (`signals.mjs`); `expect` matches the failure message that
-// counts as catching it, so a failure the real scripts already have is not scored as a catch. Not a check itself; `plants.test.mjs` checks every find text still matches.
+// counts as catching it (a crash plant names its own error text), so a failure the real scripts already have is not scored as a catch. Not a check itself.
 
 export const PLANTS = [
   {
@@ -19,7 +19,7 @@ export const PLANTS = [
     bug: 'UI Tweaks\' Tab handler calls a misspelled method, a page error on every Tab',
     find: 'function ignoreKey (event) {\n    event.preventDefault()',
     replace: 'function ignoreKey (event) {\n    event.preventDefalt()',
-    expect: /crash signal/
+    expect: /preventDefalt/
   },
   {
     id: 'digit-five-wrong-group',
@@ -55,7 +55,7 @@ export const PLANTS = [
     bug: 'Text Anywhere logs a console.error every time it loads the saved notes',
     find: '    forgetRestarted()\n    if (!storage.off) {',
     replace: '    forgetRestarted()\n    console.error(\'draw-tool: restart cache not cleared\')\n    if (!storage.off) {',
-    expect: /crash signal/
+    expect: /restart cache not cleared/
   },
   {
     id: 'dark-page-saves-light',
@@ -91,7 +91,7 @@ export const PLANTS = [
     bug: 'Pen Tool Extras\' redraw of the pen cells calls a method that does not exist, a page error whenever it redraws',
     find: 'cell.renderContent(true)',
     replace: 'cell.renderContents(true)',
-    expect: /crash signal/
+    expect: /renderContents/
   }
 ]
 

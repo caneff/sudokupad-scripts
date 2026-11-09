@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { applyPlant, PLANTS, plantById, plantPatch } from './plants.mjs'
-import { isCatch, plantTable } from './plant-table.mjs'
+import { plantTable } from './plant-table.mjs'
 
 const ROOT = new URL('../../', import.meta.url)
 const scriptText = (file) => readFileSync(new URL(file, ROOT), 'utf8')
@@ -50,6 +50,11 @@ describe('the plants against the shipped scripts', () => {
     })
   }
 
+  it('no plant\'s expect matches a crash or a rule of some other script', () => {
+    const unrelated = 'crash signal after "click": page error or console error: TypeError: cell.somethingElse is not a function; rule broken after "undo": undo-to-start: x'
+    for (const plant of PLANTS.filter((p) => p.kind === 'crash')) assert.equal(plant.expect.test(unrelated), false, plant.id)
+  })
+
   it('no shipped script holds a replacement', () => {
     for (const plant of PLANTS) assert.equal(occurrences(scriptText(plant.file), plant.replace), 0, `${plant.id}: ${plant.file} holds the bug`)
   })
@@ -60,7 +65,7 @@ describe('plantTable', () => {
   const b = { id: 'b-bug', kind: 'crash', expect: /crash signal/ }
   const c = { id: 'c-bug', kind: 'rule', expect: /rule-c/ }
   const text = plantTable([
-    { plant: a, caught: true, puzzle: '6x6', seconds: 12, runs: 9, error: 'rule broken after "undo": rule-a: x', sequence: ['click r1c1', 'undo'] },
+    { plant: a, caught: true, puzzle: '6x6', seconds: 12, runs: 9, error: 'rule broken after "undo": rule-a: x', sequence: ['click r1c1', 'undo'], replayCommand: 'npm run test:fuzz -- --seed 7 --path 1:2@x --plant a-bug' },
     { plant: b, caught: false, seconds: 90, runs: 40 },
     { plant: c, caught: false, other: true, seconds: 30, runs: 5, error: 'rule broken after "reload": other-rule: y' }
   ])
@@ -68,6 +73,7 @@ describe('plantTable', () => {
   it('says which were caught, how fast and with what steps', () => {
     assert.match(text, /a-bug +rule +CAUGHT +6x6 +12 s/)
     assert.match(text, /a-bug: shrunk to 2 steps\n {2}1\. click r1c1\n {2}2\. undo/)
+    assert.match(text, /\n {2}replay: npm run test:fuzz -- --seed 7 --path 1:2@x --plant a-bug\n/)
     assert.match(text, /1 of 3 planted bugs caught/)
   })
 
@@ -75,10 +81,5 @@ describe('plantTable', () => {
     assert.match(text, /b-bug +crash +missed +- +90 s, 40 lists/)
     assert.match(text, /c-bug +rule +other failure/)
     assert.match(text, /c-bug: a failure that is not the plant's: rule broken after "reload": other-rule: y/)
-  })
-
-  it('isCatch reads the plant\'s expect', () => {
-    assert.equal(isCatch(a, 'rule broken after "x": rule-a: z'), true)
-    assert.equal(isCatch(a, 'rule broken after "x": rule-b: z'), false)
   })
 })

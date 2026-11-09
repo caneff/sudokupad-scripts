@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { chromium } from 'playwright'
 import { fuzz, PUZZLES, puzzleFor } from './fuzz.mjs'
+import { plantById } from './plants.mjs'
 
 const run = promisify(execFile)
 // Seeds 2 and 3 pick the 9x9 and the 6x6 (the seed picks the puzzle).
@@ -31,6 +32,16 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.equal(result.runs, 6)
     })
   }
+
+  it('a bug planted in a script is injected in its place: caught, shrunk to the Tab and printed with the plant to replay', async () => {
+    const plant = plantById('tab-turns-pad-to-letters')
+    const result = await fuzz({ browser, seed: 2, runs: 150, plant, shrinkMinutes: 5 })
+    assert.equal(result.failed, true, 'the planted bug failed the run')
+    assert.match(result.error, plant.expect)
+    assert.deepEqual(result.sequence, ['press Tab'])
+    assert.match(result.replayCommand, / --plant tab-turns-pad-to-letters$/)
+    assert.equal((await fuzz({ browser, seed: 2, runs: 20 })).failed, false, 'the same seed on the shipped script passes')
+  })
 
   it('a note open for typing at a reload is kept (#668): the recorded failing list passes', async () => {
     // note "15" at r1c3, click r1c4, type 1, reload: the note typed in is open when the page reloads, and save-as-you-type brings it back.

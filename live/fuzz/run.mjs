@@ -4,6 +4,7 @@
 //   npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--plant-escape-error] [--plant <id>]
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright'
+import { numberOption } from './cli-number.mjs'
 import { fuzz } from './fuzz.mjs'
 import { plantById } from './plants.mjs'
 
@@ -11,13 +12,7 @@ const { values } = parseArgs({
   options: { seed: { type: 'string' }, minutes: { type: 'string' }, runs: { type: 'string' }, path: { type: 'string' }, 'shrink-minutes': { type: 'string' }, 'plant-escape-error': { type: 'boolean' }, plant: { type: 'string' } }
 })
 
-// A number option, or `fallback` when absent; a value that is not a number stops the run, since NaN would switch a limit off.
-const number = (name, fallback, { integer = false } = {}) => {
-  if (values[name] == null) return fallback
-  const n = Number(values[name])
-  if (Number.isNaN(n) || (integer && !Number.isInteger(n))) throw new Error(`--${name} needs ${integer ? 'a whole number' : 'a number'}, got "${values[name]}"`)
-  return n
-}
+const number = (name, fallback, options) => numberOption(values, name, fallback, options)
 
 const seed = number('seed', Math.floor(Math.random() * 2 ** 31), { integer: true })
 const started = Date.now()

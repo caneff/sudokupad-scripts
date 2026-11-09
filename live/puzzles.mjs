@@ -24,7 +24,7 @@ const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQ
 // Tag Manager's script is answered with an empty one: the harness aborts it, and SudokuPad loads it again on a second
 // puzzle in a tab (it has saved progress by then) and leaves the abort an uncaught `Event` rejection that no script caused.
 // The two pictures of the solved dialog are answered with an empty one too: the recording never loaded the dialog, and a request it lacks fails the run.
-// `patch(file, code)` returns the text to inject for a script (the fuzz's planted bugs, `live/fuzz/plants.mjs`); the files on disk are never touched.
+// `patch(file, code)` returns the text to inject for a script; the files on disk are never touched.
 export async function installAll (p, patch = (file, code) => code) {
   await p.route(/googletagmanager/, (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }))
   await p.route(/\/images\/(?:sven)?toby-icon\.png/, (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }))
