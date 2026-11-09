@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileIssue, run } from '../watch.mjs'
-import { didNotRunIssue, failureTitle, nightly, parseFuzzOutput } from './nightly.mjs'
+import { FUZZ_MINUTES, FUZZ_TIMEOUT_MS, didNotRunIssue, failureTitle, nightly, parseFuzzOutput } from './nightly.mjs'
 
 const failedOutput = (seed, error, steps = ['click cell 3', 'digit 5']) => [
   `fuzz FAILED on the 9x9 puzzle (seed ${seed}) after 41 s`,
@@ -29,7 +29,27 @@ const fakeGh = () => {
   }
   return { open, calls, file: (issue) => fileIssue(issue, runGh) }
 }
-const night = (gh, output, ok = false) => nightly({ runFuzz: async () => ({ ok, output }), fileIssue: gh.file, seed: 1, runUrl: 'https://example/run/1' })
+// The fake clock moves only when a fuzz run ends: `outputs` are the runs' outputs in turn, and each takes an equal share of the 30 minutes, so the last one
+// ends the night. `runs` records what each run was told.
+const night = (gh, outputs, ok = false) => {
+  const list = [].concat(outputs)
+  const runs = []
+  let clock = 0
+  let seed = 0
+  const share = Math.ceil(FUZZ_MINUTES * 60000 / list.length)
+  const outcome = nightly({
+    runFuzz: async (s, limits) => {
+      runs.push({ seed: s, ...limits })
+      clock += share
+      return { ok, output: list[runs.length - 1] }
+    },
+    fileIssue: gh.file,
+    newSeed: () => ++seed,
+    now: () => clock,
+    runUrl: 'https://example/run/1'
+  })
+  return Object.assign(outcome, { runs })
+}
 const verbs = (gh) => gh.calls.map((c) => c.verb).filter((v) => v !== 'issue list')
 
 describe('a failing fuzz run', () => {
@@ -67,6 +87,67 @@ describe('a failing fuzz run', () => {
   })
 })
 
+describe('a night with several failures', () => {
+  it('files each distinct failure and keeps hunting after the first', async () => {
+    const gh = fakeGh()
+    const night2 = night(gh, [failedOutput(1, RULE), failedOutput(2, CRASH)])
+    assert.equal(await night2, 'red')
+    assert.deepEqual(verbs(gh), ['issue create', 'issue create'])
+    assert.deepEqual(gh.open.map((i) => i.title), ['Fuzz: rule broken: pen-lines-drawn', 'Fuzz: crash: page error or console error: TypeError: x is null at N'])
+    assert.equal(night2.runs.length, 2)
+  })
+
+  it('comments on an open issue for a failure it already has, and the hunt goes on to the next', async () => {
+    const gh = fakeGh()
+    gh.open.push({ number: 9, title: 'Fuzz: rule broken: pen-lines-drawn' })
+    assert.equal(await night(gh, [failedOutput(1, RULE), failedOutput(2, CRASH)]), 'red')
+    assert.deepEqual(verbs(gh), ['issue comment', 'issue create'])
+    assert.equal(gh.calls.find((c) => c.verb === 'issue comment').args[2], '9')
+  })
+
+  it('files or comments on a failure at most once in a night, even when it comes on two seeds', async () => {
+    const gh = fakeGh()
+    assert.equal(await night(gh, [failedOutput(1, RULE), failedOutput(2, RULE.replace('r1c1-r1c2', 'r2c2-r2c3')), failedOutput(3, CRASH)]), 'red')
+    assert.deepEqual(verbs(gh), ['issue create', 'issue create'])
+  })
+
+  it('does not comment again in one night on an open issue it already commented on', async () => {
+    const gh = fakeGh()
+    gh.open.push({ number: 9, title: 'Fuzz: rule broken: pen-lines-drawn' })
+    await night(gh, [failedOutput(1, RULE), failedOutput(2, RULE)])
+    assert.deepEqual(verbs(gh), ['issue comment'])
+  })
+
+  it('starts each run on a fresh seed and gives it only the time left, bounded by the night\'s timeout', async () => {
+    const gh = fakeGh()
+    const n = night(gh, [failedOutput(1, RULE), failedOutput(2, CRASH)])
+    await n
+    assert.deepEqual(n.runs.map((r) => r.seed), [1, 2])
+    assert.deepEqual(n.runs.map((r) => r.minutes), [FUZZ_MINUTES, FUZZ_MINUTES / 2])
+    assert.deepEqual(n.runs.map((r) => r.timeoutMs), [FUZZ_TIMEOUT_MS, FUZZ_TIMEOUT_MS - FUZZ_MINUTES * 30000])
+  })
+
+  it('stops hunting when the failure and its shrink used the 30 minutes', async () => {
+    const gh = fakeGh()
+    const n = night(gh, failedOutput(1, RULE))
+    assert.equal(await n, 'red')
+    assert.equal(n.runs.length, 1)
+  })
+
+  it('stays red when a later run passes', async () => {
+    const gh = fakeGh()
+    assert.equal(await night(gh, [failedOutput(1, RULE), 'fuzz passed: 90 action lists on the 9x9 puzzle in 900 s (seed 2)\n'], true), 'red')
+  })
+
+  it('files the did-not-run issue and stops when a later run has no verdict', async () => {
+    const gh = fakeGh()
+    const n = night(gh, [failedOutput(1, RULE), 'browserType.launch: Executable does not exist\n', failedOutput(3, CRASH)])
+    assert.equal(await n, 'did-not-run')
+    assert.equal(n.runs.length, 2)
+    assert.deepEqual(gh.open.map((i) => i.title), ['Fuzz: rule broken: pen-lines-drawn', didNotRunIssue('x').title])
+  })
+})
+
 describe('a run with no failure', () => {
   it('files nothing when the fuzz passed', async () => {
     const gh = fakeGh()
@@ -94,7 +175,7 @@ describe('a run with no failure', () => {
 
   it('files the did-not-run issue when the fuzz process could not start', async () => {
     const gh = fakeGh()
-    const outcome = await nightly({ runFuzz: async () => { throw new Error('spawn node ENOENT') }, fileIssue: gh.file, seed: 1 })
+    const outcome = await nightly({ runFuzz: async () => { throw new Error('spawn node ENOENT') }, fileIssue: gh.file, newSeed: () => 1, now: () => 0 })
     assert.equal(outcome, 'did-not-run')
     assert.match(gh.calls.find((c) => c.verb === 'issue create').input, /spawn node ENOENT/)
   })
