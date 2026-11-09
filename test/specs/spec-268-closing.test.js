@@ -1,13 +1,8 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { fakeStore } = require('../fake-store.js')
 const draw = require('../../draw-tool.user.js')
-
-const storeOf = (saved) => ({
-  getData: (key) => saved[key],
-  setData: (key, value) => { saved[key] = value },
-  removeData: (key) => { delete saved[key] }
-})
 
 // Spec 268's acceptance at `npm test`, through Text Anywhere's pure functions: a text and a click that opens it, the notes saved per puzzle and read back, the 51st puzzle dropping the oldest, a stored stroke
 // kept untouched, and the panel's choices read back with bad values refused. This seam is blind to real
@@ -31,8 +26,8 @@ test('spec 268 gives a solver a text tool whose notes are kept per puzzle', () =
 
   // Saved under the puzzle's key and read back the same; another puzzle keeps its own.
   const key = draw.puzzleKey(undefined, 'https://sudokupad.app/scl123')
-  const saved = {}
-  const store = storeOf(saved)
+  const store = fakeStore()
+  const saved = store.data
   draw.saveDrawingTo(store, 'other', [sum])
   draw.saveDrawingTo(store, key, drawing)
   assert.deepEqual(draw.readDrawing(JSON.parse(JSON.stringify(saved[draw.DRAWING_PREFIX + key].data))).items, drawing)

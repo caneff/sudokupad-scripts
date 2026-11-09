@@ -26,7 +26,7 @@ export const PROFILES_KEY = 'ColorByDigit_profiles'
 export const PROFILES_STORAGE_KEY = storedAt(PROFILES_KEY)
 export const LEGACY_STORAGE_KEY = storedAt('ColorByDigit_groups')
 export const ADDED_PRELOADS_STORAGE_KEY = storedAt('ColorByDigit_addedPreloads')
-export const ADDED_EACH_DIGIT_STORAGE_KEY = storedAt('ColorByDigit_addedEachDigit')
+const ADDED_EACH_DIGIT_STORAGE_KEY = storedAt('ColorByDigit_addedEachDigit')
 // Saved profiles with the one-time adds (Entropic and Modular, then Each digit) already done, so a test sees exactly the profiles it seeded.
 export const savedProfiles = (state) => ({ [PROFILES_STORAGE_KEY]: state, [ADDED_PRELOADS_STORAGE_KEY]: true, [ADDED_EACH_DIGIT_STORAGE_KEY]: true })
 // The profiles as the script reads them back: the state inside the `{ v, data }` envelope it saves, or one seeded in the shape saved
@@ -205,7 +205,7 @@ export const deleteProfileRow = async (p, n) => {
 export const keyOf = (groups, digit) => (groups.find((g) => g.digits.includes(String(digit))) || {}).key
 
 // Every cell's row, column, given, entered value and colors.
-export const cellsStateOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({ r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])] })))
+const cellsStateOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({ r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])] })))
 
 // How many cells hold a color other than their digit's group color in `groups`: a given or an entered digit takes its group's key, an empty cell none.
 export async function wrongCountOn (p, groups) {

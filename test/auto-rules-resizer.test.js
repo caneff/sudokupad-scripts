@@ -6,6 +6,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { fakeStore, quietly } = require('./fake-store.js')
+const { startScript } = require('./unit-start.js')
 const {
   VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, offsetFontPx, fitRulesPane, clearFit,
@@ -706,15 +707,13 @@ test('without one internal, only the features that need it are lacking: getApp h
 
 // Starts the script on a page with `framework` as its Framework; returns the warnings and the notice bar's text, or null for none.
 function startWith (framework) {
-  const file = require.resolve('../auto-rules-resizer.user.js')
   const inBody = []
   const element = () => {
     const el = { style: {}, children: [], textContent: '', attributes: {}, classList: { toggle () {} }, setAttribute (name, value) { el.attributes[name] = value }, addEventListener () {}, append (...kids) { el.children.push(...kids) }, appendChild (kid) { el.children.push(kid) }, remove () { el.removed = true } }
     return el
   }
   const textOf = (el) => el.textContent + el.children.map(textOf).join('')
-  const saved = { document: global.document, window: global.window, Framework: global.Framework }
-  global.document = {
+  const document = {
     createElement: element,
     head: { appendChild () {} },
     body: { append: (el) => inBody.push(el), appendChild () {}, classList: { toggle () {} } },
@@ -722,22 +721,7 @@ function startWith (framework) {
     getElementById: () => null,
     querySelector: () => null
   }
-  global.window = { addEventListener () {} }
-  global.Framework = framework
-  const warnings = []
-  const realWarn = console.warn
-  console.warn = (...args) => warnings.push(args.join(' '))
-  delete require.cache[file]
-  try {
-    require(file)
-  } finally {
-    console.warn = realWarn
-    for (const [name, value] of Object.entries(saved)) {
-      if (value === undefined) delete global[name]
-      else global[name] = value
-    }
-    delete require.cache[file]
-  }
+  const { warnings } = startScript('../auto-rules-resizer.user.js', { document, window: { addEventListener () {} }, Framework: framework })
   const [bar] = inBody.flatMap((host) => host.children).filter((el) => el.attributes['data-script'] === 'auto-rules-resizer' && !el.removed)
   return { warnings, bar: bar ? textOf(bar) : null }
 }

@@ -109,13 +109,13 @@ export async function startPuzzle (p, { beforeStart, injection } = {}) {
 
 // The scale of a computed `transform` (a `matrix(s, 0, 0, s, 0, 0)` or `none`): pen-tool-extras grows edge and corner marks
 // by a CSS scale, so a mark's width on screen is its stroke width times this.
-export const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
+const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
 
 // How long a held button gets to show its press before the read gives up: far inside the 1000 ms hold that opens edit mode on a color button.
 const PRESS_READ_MS = 500
 
 // The scale a panel button has while the real mouse holds it down, read until it is `expected` or PRESS_READ_MS passes (for `expected` 1, every reading in PRESS_READ_MS must be 1); the mouse then lets go away from the button.
-export async function scaleWhilePressed (page, selector, expected) {
+async function scaleWhilePressed (page, selector, expected) {
   const box = await page.locator(selector).boundingBox()
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()

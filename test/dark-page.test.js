@@ -5,6 +5,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
+const { startScript } = require('./unit-start.js')
 const { buildCss, PAGE, BOARD_ID, VERSION, DEFAULT_COLOR, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
 const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
@@ -154,7 +155,6 @@ test('VERSION is the @version in the script header', () => {
 // Starts the script on a page that has a document with a head and a body, with `framework` as the page's Framework, or none.
 // `appended` is what went in the head; `bar` is the text of the notice bar, or null for none.
 function startOnBoard (framework) {
-  const file = require.resolve('../dark-page.user.js')
   const appended = []
   const inBody = []
   const element = () => {
@@ -162,31 +162,14 @@ function startOnBoard (framework) {
     return el
   }
   const textOf = (el) => el.textContent + el.children.map(textOf).join('')
-  const saved = { document: global.document, window: global.window, Framework: global.Framework }
-  global.document = {
+  const document = {
     createElement: element,
     head: { appendChild: (el) => appended.push(el) },
     body: { append: (el) => inBody.push(el) },
     documentElement: { outerHTML: '<script src="/script.js?v=0.611.0"></script>' },
     getElementById: () => null
   }
-  global.window = {}
-  delete global.Framework
-  if (framework) global.Framework = framework
-  const warnings = []
-  const realWarn = console.warn
-  console.warn = (...args) => warnings.push(args.join(' '))
-  delete require.cache[file]
-  try {
-    require(file)
-  } finally {
-    console.warn = realWarn
-    for (const [name, value] of Object.entries(saved)) {
-      if (value === undefined) delete global[name]
-      else global[name] = value
-    }
-    delete require.cache[file]
-  }
+  const { warnings } = startScript('../dark-page.user.js', { document, window: {}, Framework: framework })
   const [bar] = inBody.flatMap((host) => host.children).filter((el) => el.attributes['data-script'] === 'dark-page' && !el.removed)
   return { warnings, style: appended.find((el) => el.id === 'dark-page-style'), appended, bar: bar ? textOf(bar) : null }
 }

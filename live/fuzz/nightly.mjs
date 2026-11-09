@@ -40,7 +40,7 @@ export function parseFuzzOutput (output) {
   return { failed: true, puzzle: head[1], seed: Number(head[2]), error: error.trim(), steps, replay, log }
 }
 
-export function fuzzIssue (f, { runUrl } = {}) {
+function fuzzIssue (f, { runUrl } = {}) {
   const details = [
     `Error: ${f.error}`,
     '',

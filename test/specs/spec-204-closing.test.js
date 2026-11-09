@@ -1,6 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { fakeStore } = require('../fake-store.js')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
@@ -9,11 +10,6 @@ const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const extras = require('../../pen-tool-extras.user.js')
 const byDigit = require('../../color-by-digit.user.js')
 
-const storeOf = (saved) => ({
-  getData: (key) => saved[key],
-  setData: (key, value) => { saved[key] = value },
-  removeData: (key) => { delete saved[key] }
-})
 const versionOf = (text) => /^\/\/ @version\s+(\S+)$/m.exec(text)[1]
 const inlineStyles = (html) => html.match(/\sstyle="[^"]*"/g) || []
 
@@ -67,15 +63,16 @@ test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a 
   assert.deepEqual(extras.draftWithBox({ marks: SETTINGS.marks.fallback }, 'marks.x', false).marks, { ...SETTINGS.marks.fallback, x: false }, 'a marks box writes the table\'s row')
   assert.ok(!/\blet markSettings\b/.test(pen), 'no marks variable of its own')
   const saved = { EdgeMarks_marks: { x: true, directions: true, dot: false, cornerX: true, cornerDot: false } }
-  const store = storeOf(saved)
+  const store = fakeStore(saved)
+  const kept = store.data
   const loaded = readSettings(store).marks
   // Saved before the Cell row (#479): its three boxes read as ticked.
   assert.deepEqual(loaded, { x: true, directions: true, circle: false, cornerX: true, cornerCircle: false, cellCircle: true, cellCross: true, cellDot: true })
   saveSetting(store, SETTINGS.marks, { ...loaded, circle: true, cornerCircle: true })
-  assert.equal('EdgeMarks_marks' in saved, false, 'every box ticked removes the key')
+  assert.equal('EdgeMarks_marks' in kept, false, 'every box ticked removes the key')
   assert.deepEqual(readSettings(store).marks, SETTINGS.marks.fallback)
   saveSetting(store, SETTINGS.marks, { ...SETTINGS.marks.fallback, directions: false })
-  assert.deepEqual(saved.EdgeMarks_marks, { ...SETTINGS.marks.fallback, directions: false }, 'one unticked writes the key')
+  assert.deepEqual(kept.EdgeMarks_marks, { ...SETTINGS.marks.fallback, directions: false }, 'one unticked writes the key')
 
   // Dialog stylesheets: the hand-written look helpers are gone; the Pen Tool Extras editor carries no inline style and Color by
   // Digit's editor only its swatch colors and whether each digit button's digit is in its group.

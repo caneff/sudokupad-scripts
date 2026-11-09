@@ -7,15 +7,12 @@ inputs:
   body:
     description: The issue body.
     required: true
-  token:
-    description: A token that can write issues.
-    default: ${{ github.token }}
 runs:
   using: composite
   steps:
     - shell: bash
       env:
-        GH_TOKEN: ${{ inputs.token }}
+        GH_TOKEN: ${{ github.token }}
         TITLE: ${{ inputs.title }}
         BODY: ${{ inputs.body }}
       run: bash "$GITHUB_ACTION_PATH/file-issue-once.sh"
