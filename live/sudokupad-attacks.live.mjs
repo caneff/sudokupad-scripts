@@ -203,7 +203,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
   it('56 Blocked storage: every script loads, says what it could not save, and keeps working', async () => {
     const SAVED = [
       ['color-by-digit', 'saved settings'], ['dark-page', 'saved color'], ['auto-rules-resizer', 'max size settings'], ['auto-rules-resizer', 'saved sizing'],
-      ['pen-tool-extras', 'saved settings'], ['draw-tool', 'saved notes and settings'], ['ui-tweaks', 'saved options']
+      ['pen-tool-extras', 'saved settings'], ['text-anywhere', 'saved notes and settings'], ['ui-tweaks', 'saved options']
     ]
     const said = []
     const { context, p, errors } = await openWithAllScripts(browser(), {

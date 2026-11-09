@@ -4,7 +4,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { headerVersion } from '../../test/header-version.js'
+import { headerField, headerVersion } from '../../test/header-version.js'
 import { RAW } from '../../tag-pictures.js'
 import { newPage, gotoPuzzle, startPuzzle } from '../page.mjs'
 import { SCRIPTS } from '../scripts.mjs'
@@ -12,8 +12,6 @@ import { SCRIPT_FILES, scriptSource } from '../session.mjs'
 import { settle } from '../settle.mjs'
 import { checkForUpdate, installedScripts, installScript, launchTampermonkey, serveFiles } from './tampermonkey.mjs'
 
-const headerName = (text) => /^\/\/ @name\s+(.+?)\s*$/m.exec(text)?.[1]
-const headerUpdateUrl = (text) => /^\/\/ @updateURL\s+(.+?)\s*$/m.exec(text)?.[1]
 const readFile = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
 // Text Anywhere's old address, kept as a frozen handover (sync-lib.js's HANDOVERS), and its new one.
 const OLD_FILE = 'draw-tool.user.js'
@@ -54,7 +52,7 @@ describe('Tampermonkey', { concurrency: false }, () => {
 
   it('the dashboard lists each script once, at the checkout\'s @version', async () => {
     const byName = (a, b) => a.name.localeCompare(b.name)
-    const expected = SCRIPT_FILES.map((f) => ({ name: headerName(scriptSource(f)), version: headerVersion(scriptSource(f)) })).sort(byName)
+    const expected = SCRIPT_FILES.map((f) => ({ name: headerField(scriptSource(f), 'name'), version: headerVersion(scriptSource(f)) })).sort(byName)
     assert.deepEqual((await installedScripts(tm)).sort(byName), expected)
   })
 
@@ -91,13 +89,13 @@ describe(`${OLD_FILE} hands over to ${NEW_FILE}`, { concurrency: false }, () => 
     const response = await fetch(LAST_OLD_COPY)
     assert.equal(response.ok, true, `${LAST_OLD_COPY} answered ${response.status}`)
     const old = await response.text()
-    assert.equal(headerUpdateUrl(old), RAW + OLD_FILE, 'the old copy updates from the old address')
+    assert.equal(headerField(old, 'updateURL'), RAW + OLD_FILE, 'the old copy updates from the old address')
     const files = {}
     served = await serveFiles(files)
     const local = (text) => text.split(RAW).join(served.url)
     Object.assign(files, { [`old/${OLD_FILE}`]: local(old), [OLD_FILE]: local(readFile(OLD_FILE)), [NEW_FILE]: local(scriptSource(NEW_FILE)) })
     tm = await launchTampermonkey()
-    const name = headerName(old)
+    const name = headerField(old, 'name')
     const installed = (version) => settle(() => installedScripts(tm), [{ name, version }], UPDATE_MS, Infinity)
 
     assert.equal(await installScript(tm, served.url + `old/${OLD_FILE}`), 'Install')

@@ -47,9 +47,9 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), {
-      // Only the redraw plants a break; its skip line says SudokuPad changed, any other draw-tool skip line fails the suite.
-      expectedSkips: [/^draw-tool: .* skipped because SudokuPad changed/],
-      seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /draw-tool|TextAnywhere_/.test(m.text())) warnings.push(m.text()) })
+      // Only the redraw plants a break; its skip line says SudokuPad changed, any other text-anywhere skip line fails the suite.
+      expectedSkips: [/^text-anywhere: .* skipped because SudokuPad changed/],
+      seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /text-anywhere|TextAnywhere_/.test(m.text())) warnings.push(m.text()) })
     }))
     await textAnywhere.forgetNotes(p)
   })

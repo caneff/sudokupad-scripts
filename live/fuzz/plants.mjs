@@ -54,7 +54,7 @@ export const PLANTS = [
     kind: 'crash',
     bug: 'Text Anywhere logs a console.error every time it loads the saved notes',
     find: '    forgetRestarted()\n    if (!storage.off) {',
-    replace: '    forgetRestarted()\n    console.error(\'draw-tool: restart cache not cleared\')\n    if (!storage.off) {',
+    replace: '    forgetRestarted()\n    console.error(\'text-anywhere: restart cache not cleared\')\n    if (!storage.off) {',
     expect: /restart cache not cleared/
   },
   {

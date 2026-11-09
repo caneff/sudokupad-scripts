@@ -51,9 +51,9 @@ describe('captureConsoleErrors and collectSkipLines together', () => {
     const page = fakePage()
     const errors = []
     captureConsoleErrors(page, errors)
-    collectSkipLines(page, errors, [/^draw-tool: /])
+    collectSkipLines(page, errors, [/^text-anywhere: /])
     page.say('error', 'dark-page: settings entry skipped because SudokuPad has no Framework.addSetting')
-    page.say('error', 'draw-tool: marks skipped because SudokuPad has no grid.rows')
+    page.say('error', 'text-anywhere: marks skipped because SudokuPad has no grid.rows')
     assert.deepEqual(errors, ['console.error: dark-page: settings entry skipped because SudokuPad has no Framework.addSetting'])
   })
 })
@@ -63,11 +63,11 @@ describe('collectSkipLines', () => {
     const page = fakePage()
     const errors = []
     collectSkipLines(page, errors)
-    const scripts = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'draw-tool', 'pen-tool-extras', 'ui-tweaks']
+    const scripts = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'pen-tool-extras', 'text-anywhere', 'ui-tweaks']
     const skips = scripts.map((s) => `${s}: marks skipped because SudokuPad has no grid.rows`)
     skips.push('pen-tool-extras: marks, line erase skipped because SudokuPad changed: TypeError: boom')
     for (const line of skips) page.say('warning', line)
-    for (const line of ['deprecated API in use', 'pen-tool-extras: pasted 3 settings, skipped 1', 'draw-tool: could not undo marks',
+    for (const line of ['deprecated API in use', 'pen-tool-extras: pasted 3 settings, skipped 1', 'text-anywhere: could not undo marks',
       'other-script: marks skipped because SudokuPad has no grid.rows', 'pen-tool-extras: marks skipped: SudokuPad has no grid.rows']) page.say('warning', line)
     assert.deepEqual(errors, skips.map((line) => `console.warn: ${line}`))
   })
@@ -76,8 +76,8 @@ describe('collectSkipLines', () => {
     const page = fakePage()
     const errors = []
     collectSkipLines(page, errors)
-    page.say('log', 'draw-tool: marks skipped because SudokuPad has no grid.rows')
-    assert.deepEqual(errors, ['console.log: draw-tool: marks skipped because SudokuPad has no grid.rows'])
+    page.say('log', 'text-anywhere: marks skipped because SudokuPad has no grid.rows')
+    assert.deepEqual(errors, ['console.log: text-anywhere: marks skipped because SudokuPad has no grid.rows'])
   })
 
   it('leaves out a skip line a declared pattern matches and collects the rest', () => {

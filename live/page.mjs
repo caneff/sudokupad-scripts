@@ -21,8 +21,8 @@ const FRAMEWORK_MS = 30000
 
 // A line a script logs when it turns a feature off because SudokuPad has no internal it needs or changed
 // (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`, lib/sudokupad.js).
-// The ids are the ones each script hands its guard, read from its source, so a new script is matched without an edit here; Text Anywhere's
-// is still `draw-tool`, its old file name. Built on first use: session.mjs imports this module, so SCRIPT_FILES is not yet set while this one loads.
+// The ids are the ones each script hands its guard, read from its source, so a new script is matched without an edit here.
+// Built on first use: session.mjs imports this module, so SCRIPT_FILES is not yet set while this one loads.
 let skipLine
 const isSkipLine = (text) => {
   skipLine ??= new RegExp(`^(?:${SCRIPT_FILES.map((file) => guardId(scriptSource(file))).join('|')}): .* skipped because SudokuPad (?:has no|changed)`)

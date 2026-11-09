@@ -10,8 +10,8 @@ import { openWith, useBrowser } from '../session.mjs'
 
 const { TOOL_BUTTON, SETTINGS_EDITOR: EDITOR, pickTextAnywhere, script, texts, tool } = textAnywhere
 
-const WARNING = /^draw-tool: /
-const BAR = '#sudokupad-scripts-notices [data-script="draw-tool"]'
+const WARNING = /^text-anywhere: /
+const BAR = '#sudokupad-scripts-notices [data-script="text-anywhere"]'
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
 const browser = useBrowser()
@@ -66,7 +66,7 @@ for (const kase of CASES) {
 
     it('one console warning names the feature', async () => {
       assert.equal(await settle(async () => warned.length, 1), 1, warned.join('\n'))
-      assert.equal(warned[0], `draw-tool: ${kase.off} skipped because SudokuPad has no ${kase.internal}`)
+      assert.equal(warned[0], `text-anywhere: ${kase.off} skipped because SudokuPad has no ${kase.internal}`)
     })
 
     it('the bar names the feature with a Report link, and goes when dismissed', async () => {

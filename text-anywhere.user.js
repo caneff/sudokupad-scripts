@@ -36,6 +36,9 @@
   const KEY_PREFIX = 'TextAnywhere_'
   // Every key was saved under this prefix before 0.45.0. Each is copied to its new name and kept, so a rolled-back version still finds it.
   const OLD_KEY_PREFIX = 'DrawTool_'
+  // The shared guard saves a dismissal of the notice bar under `<createGuard's script id>-notice`. The one saved under the old id is copied as the keys are.
+  const NOTICE_KEY = 'text-anywhere-notice'
+  const OLD_NOTICE_KEY = 'draw-tool-notice'
   const COLOR_KEY = KEY_PREFIX + 'color'
   const COLORS_KEY = KEY_PREFIX + 'colors'
   const colorVar = (n) => `--text-anywhere-color-${n}`
@@ -247,7 +250,7 @@
   const CLEAR_QUESTION = 'Clear all notes?'
   const OK_LABEL = 'OK'
   const NOTES_PREFIX = KEY_PREFIX + 'notes_'
-  const OLD_NOTES_PREFIX = 'DrawTool_drawing_'
+  const OLD_NOTES_PREFIX = OLD_KEY_PREFIX + 'drawing_'
   const INDEX_KEY = KEY_PREFIX + 'index'
   // The notes a Restart cleared, kept until Undo straight after it brings them back.
   const RESTARTED_PREFIX = KEY_PREFIX + 'restarted_'
@@ -641,16 +644,16 @@
   const FRAME_CHOICES = [['off', 'None'], ['on', 'Thin grey']]
   function renderSamplePicks ({ outline, box, custom, frame, textColor }) {
     const pickButton = (role, value, label, pressed, sample) =>
-      `<button type="button" class="text-anywhere-pick" data-role="${role}" data-value="${value}" aria-label="${escapeHtml(label)}" aria-pressed="${pressed}">${sample}<span class="text-anywhere-pick-label">${escapeHtml(label)}</span></button>`
-    const row = (title, note, buttons, after = '') => `<div class="text-anywhere-section-title">${title}</div><div class="text-anywhere-pick-note">${note}</div><div class="text-anywhere-pick-row">${buttons.join('')}</div>${after}`
-    const halo = (name) => `<span class="text-anywhere-sample" data-cell style="background:${HALO_CELL_COLOR};color:${escapeHtml(textColor)};font-size:26px;text-shadow:${escapeHtml(haloShadow(name, PAGE_COLOR))}">A</span>`
-    const boxed = (fill, framed) => `<span class="text-anywhere-sample" style="color:${escapeHtml(textColor)};font-size:18px"><span style="${SAMPLE_BOX_STYLE};background:${escapeHtml(fill)};box-shadow:${frameShadow(framed)}">A=B</span></span>`
+      `<button type="button" class="${CLASS_PREFIX}pick" data-role="${role}" data-value="${value}" aria-label="${escapeHtml(label)}" aria-pressed="${pressed}">${sample}<span class="${CLASS_PREFIX}pick-label">${escapeHtml(label)}</span></button>`
+    const row = (title, note, buttons, after = '') => `<div class="${CLASS_PREFIX}section-title">${title}</div><div class="${CLASS_PREFIX}pick-note">${note}</div><div class="${CLASS_PREFIX}pick-row">${buttons.join('')}</div>${after}`
+    const halo = (name) => `<span class="${CLASS_PREFIX}sample" data-cell style="background:${HALO_CELL_COLOR};color:${escapeHtml(textColor)};font-size:26px;text-shadow:${escapeHtml(haloShadow(name, PAGE_COLOR))}">A</span>`
+    const boxed = (fill, framed) => `<span class="${CLASS_PREFIX}sample" style="color:${escapeHtml(textColor)};font-size:18px"><span style="${SAMPLE_BOX_STYLE};background:${escapeHtml(fill)};box-shadow:${frameShadow(framed)}">A=B</span></span>`
     const choice = boxChoice(box)
     const fillFor = (id) => id === BOX_CUSTOM ? custom : boxFill(id, textColor)
     return row('Halo round the letters', 'For notes without a box, so they read over digits and grid lines.', OUTLINES.map((name) => pickButton('outline-pick', name, OUTLINE_LABELS[name], outline === name, halo(name)))) +
       row('Box color', 'For notes made with the Background button on.',
         [...Object.keys(BOX_PRESETS), BOX_CUSTOM].map((id) => pickButton('box-pick', id, BOX_PRESETS[id] ?? BOX_CUSTOM_LABEL, choice === id, boxed(fillFor(id), frame))),
-        choice === BOX_CUSTOM ? `<input type="color" class="text-anywhere-swatch" data-role="box-custom" value="${escapeHtml(custom)}" aria-label="Own box color" title="Own box color">` : '') +
+        choice === BOX_CUSTOM ? `<input type="color" class="${CLASS_PREFIX}swatch" data-role="box-custom" value="${escapeHtml(custom)}" aria-label="Own box color" title="Own box color">` : '') +
       row('Box border', 'The line round a note with a box.',
         FRAME_CHOICES.map(([value, label]) => pickButton('frame-pick', value, label, frame === (value === 'on'), boxed(fillFor(choice), value === 'on'))))
   }
@@ -1090,9 +1093,9 @@
   const copiedPenColors = (readPenColor) => Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hexColor(readPenColor(n)) ?? SUDOKUPAD_PEN_COLORS[n]]))
 
   function editedColor (colors, n, value) {
-    if (noteColorNumber(n) === undefined) throw new RangeError(`draw-tool: ${n} is not a color number`)
+    if (noteColorNumber(n) === undefined) throw new RangeError(`text-anywhere: ${n} is not a color number`)
     const hex = hexColor(value)
-    if (!hex) throw new RangeError(`draw-tool: ${value} is not a color`)
+    if (!hex) throw new RangeError(`text-anywhere: ${value} is not a color`)
     return { ...colors, [n]: hex }
   }
 
@@ -1215,31 +1218,36 @@
     else store.removeData(restartedKey(key))
   }
 
-  const oldKey = (key) => key.startsWith(NOTES_PREFIX) ? OLD_NOTES_PREFIX + key.slice(NOTES_PREFIX.length) : OLD_KEY_PREFIX + key.slice(KEY_PREFIX.length)
-
-  // A value is copied as it was saved, unreadable or not, so its new key's reader applies lib/store.js's rule to it; a key already saved is never written.
-  function copyOldKey (store, key) {
-    if (store.getData(key) !== null) return
-    const saved = store.getData(oldKey(key))
-    if (saved !== null) store.setData(key, saved)
+  const oldKey = (key) => {
+    if (key === NOTICE_KEY) return OLD_NOTICE_KEY
+    if (key.startsWith(NOTES_PREFIX)) return OLD_NOTES_PREFIX + key.slice(NOTES_PREFIX.length)
+    return OLD_KEY_PREFIX + key.slice(KEY_PREFIX.length)
   }
 
-  // The puzzles' notes are copied only while the new index is unsaved, and the index last, so a puzzle cleared since the copy is not
-  // brought back from its old notes. An old index that cannot be read lists no puzzles: their notes stay under the old keys only.
+  // A value is copied as it was saved, unreadable or not, so its new key's reader applies lib/store.js's rule to it; a key already saved is never written.
+  // False when the old value is still not saved under its new key: the store drops a write the browser refuses (a full localStorage).
+  function copyOldKey (store, key) {
+    if (store.getData(key) !== null) return true
+    const saved = store.getData(oldKey(key))
+    if (saved === null) return true
+    store.setData(key, saved)
+    return store.getData(key) !== null
+  }
+
+  // The puzzles' notes are copied only while the new index is unsaved, and the index last, once every puzzle's copy is saved: a puzzle cleared
+  // since the copy is not brought back from its old notes, and a copy the browser refused is tried again at the next start. An old index that
+  // cannot be read lists no puzzles: their notes stay under the old keys only.
   function copyOldKeys (store) {
-    for (const key of [COLOR_KEY, BACKGROUND_KEY, COLORS_KEY, ...lookKeys(LOOKS)]) copyOldKey(store, key)
+    for (const key of [COLOR_KEY, BACKGROUND_KEY, COLORS_KEY, NOTICE_KEY, ...lookKeys(LOOKS)]) copyOldKey(store, key)
     if (store.getData(INDEX_KEY) !== null) return
     let puzzles = []
     try {
       puzzles = readIndex(store.getData(oldKey(INDEX_KEY)))
     } catch (error) {
-      console.warn(`Text Anywhere: ${error.message}; the notes it lists stay under ${OLD_KEY_PREFIX} keys only`)
+      console.warn(`text-anywhere: ${error.message}; the notes it lists stay under ${OLD_KEY_PREFIX} keys only`)
     }
-    for (const puzzle of puzzles) {
-      copyOldKey(store, notesKey(puzzle))
-      copyOldKey(store, restartedKey(puzzle))
-    }
-    copyOldKey(store, INDEX_KEY)
+    const copied = puzzles.flatMap((puzzle) => [notesKey(puzzle), restartedKey(puzzle)]).map((key) => copyOldKey(store, key))
+    if (copied.every(Boolean)) copyOldKey(store, INDEX_KEY)
   }
 
   const newKey = (key) => key.startsWith(OLD_KEY_PREFIX) ? KEY_PREFIX + key.slice(OLD_KEY_PREFIX.length) : key
@@ -2004,14 +2012,14 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, COLOR_KEY, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
 
-  const guard = createGuard({ script: 'draw-tool', name: 'Text Anywhere', version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: 'text-anywhere', name: 'Text Anywhere', version: VERSION, features: FEATURES })
   const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets, undoRestart } = guard.features
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const savedData = guard.storeFor(storage)
@@ -2483,15 +2491,15 @@
   const DIALOG_STYLE_ID = 'text-anywhere-dialog-style'
   const CUSTOM_LABEL = 'Custom'
   const DIALOG_CSS = [
-    `#${DIALOG_ID} .text-anywhere-section-title { font-weight: 600; margin: 6px 0 0; }`,
-    `#${DIALOG_ID} .text-anywhere-pick-note { margin: 2px 0 0; font-size: 0.85em; opacity: 0.8; }`,
-    `#${DIALOG_ID} .text-anywhere-pick-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }`,
-    `#${DIALOG_ID} .text-anywhere-pick { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 4px; width: auto; height: auto; min-width: 0; margin: 0; padding: 4px 4px 6px; line-height: 1.2; border: 2px solid transparent; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }`,
-    `#${DIALOG_ID} .text-anywhere-pick[aria-pressed="true"] { border-color: #000; }`,
-    `#${DIALOG_ID} .text-anywhere-sample { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 64px; height: 44px; border-radius: 6px; font-weight: 600; line-height: 1; }`,
-    `#${DIALOG_ID} .text-anywhere-sample[data-cell] { border: 1px solid rgb(0 0 0 / .25); }`,
-    `#${DIALOG_ID} .text-anywhere-pick-label { font-size: 0.85em; }`,
-    `#${DIALOG_ID} input.text-anywhere-swatch[data-role="box-custom"] { display: block; margin: 0 0 6px; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}section-title { font-weight: 600; margin: 6px 0 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}pick-note { margin: 2px 0 0; font-size: 0.85em; opacity: 0.8; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}pick-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}pick { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 4px; width: auto; height: auto; min-width: 0; margin: 0; padding: 4px 4px 6px; line-height: 1.2; border: 2px solid transparent; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}pick[aria-pressed="true"] { border-color: #000; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}sample { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 64px; height: 44px; border-radius: 6px; font-weight: 600; line-height: 1; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}sample[data-cell] { border: 1px solid rgb(0 0 0 / .25); }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}pick-label { font-size: 0.85em; }`,
+    `#${DIALOG_ID} input.${CLASS_PREFIX}swatch[data-role="box-custom"] { display: block; margin: 0 0 6px; }`,
     colorBlockCss(CLASS_PREFIX, `#${DIALOG_ID}`),
     // The pulldowns are as wide as their longest option, not as the dialog's column (after colorBlockCss, whose rule they override).
     `#${DIALOG_ID} .${CLASS_PREFIX}color-choice { width: auto; min-width: 0; }`
@@ -2518,7 +2526,7 @@
       try {
         pages = palettePages()
       } catch (error) {
-        console.warn(`draw-tool: ${error.message}`)
+        console.warn(`text-anywhere: ${error.message}`)
         paletteNote = error.message
       }
     }
@@ -2556,10 +2564,10 @@
     if (!box) return
     const draw = () => {
       const options = [{ value: '', label: CUSTOM_LABEL, selected: !chosen }, ...presetOptions(pages.length).map((id) => ({ value: id, label: PRESET_LABELS[id], selected: id === chosen }))]
-      box.innerHTML = '<div class="text-anywhere-section-title">Colors</div>' +
+      box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
-        `<div class="text-anywhere-section-title">Font</div>${renderFontChoice(draftLooks.noteFont)}` +
+        `<div class="${CLASS_PREFIX}section-title">Font</div>${renderFontChoice(draftLooks.noteFont)}` +
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft[color] })
     }
     draw()
@@ -3199,7 +3207,7 @@
   // The solver loses work they think is kept, so each failure is shown once a page in SudokuPad's own dialog. Its
   // showDialog does nothing while another dialog is open, so the failure is shown at the next save instead.
   function report (message, id = message) {
-    console.warn(`draw-tool: ${message}`)
+    console.warn(`text-anywhere: ${message}`)
     if (reported.has(id) || document.querySelector('.dialog-overlay')) return
     reported.add(id)
     textTool.run(() => Framework.showDialog({
