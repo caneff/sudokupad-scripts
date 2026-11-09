@@ -13,7 +13,7 @@
 //   notesSeen     the same plus the text typed so far in the note open for typing, which is not yet in notesSaved
 //   colorByDigit  { mode: 'Cell' | 'Digit' | 'Both' | 'Off', groups: [{ key, digits }], cells: [{ digit, given, colours }] with `colours` the keys the cell holds }
 //   pageColor     the page's background as a computed `rgb(r, g, b)`
-//   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight }
+//   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight }; null on a puzzle with no rules text (#679)
 //   letterMode    whether the number pad shows letters
 import { readFileSync } from 'node:fs'
 
@@ -165,7 +165,8 @@ export const RULES = [
     // Auto Rules Resizer: it shrinks the text until the rules fit the pane, down to 70% of SudokuPad's font, and past that the rules scroll.
     check: ({ now }) => {
       const pane = now.page.rulesPane
-      if (rulesPaneFits(pane)) return []
+      // A puzzle with no rules text shows no pane, and there is nothing to fit.
+      if (pane === null || rulesPaneFits(pane)) return []
       return [`the rules need ${pane.scrollHeight}px in a pane of ${pane.clientHeight}px at ${pane.fontPx}px, above the smallest font ${(pane.ownFontPx * MIN_FONT_RATIO).toFixed(2)}px`]
     }
   },

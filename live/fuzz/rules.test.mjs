@@ -217,6 +217,10 @@ describe('the rules', () => {
   })
 
   describe('rules-fit-pane', () => {
+    it('a puzzle with no rules text has no pane to fit, and nothing is checked (#679)', () => {
+      assert.deepEqual(check('rules-fit-pane', { rulesPane: null }), [])
+    })
+
     const pane = (over) => ({ fontPx: 17.6, ownFontPx: 17.6, scrollHeight: 300, clientHeight: 300, ...over })
     it('holds when the rules fit', () => {
       assert.deepEqual(check('rules-fit-pane', { rulesPane: pane() }), [])

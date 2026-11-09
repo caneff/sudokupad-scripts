@@ -15,19 +15,24 @@ const COLOR_BUTTON_TITLE = /^Color by digit: (\w+)$/
 const RULES_FIT_MS = 2000
 
 // What the page holds that the rules read, in one round trip.
-const readDom = ({ texts, seenTexts, profilesKey }) => {
+const readDom = ({ texts, seenTexts, profilesKey, expectRules }) => {
   const puzzle = Framework.app.puzzle
   const strokeOf = (names) => `pen-${names[0]} pencolor-${names.slice(1)}`
   const rules = document.querySelector('.puzzle-rules')
   const controls = document.querySelector('.controls-main')
-  if (!rules || rules.offsetWidth === 0) throw new Error('the rules pane is not shown, though every fuzz page has rules')
+  // A puzzle with no rules text shows no pane; a puzzle with rules text that shows none is a crash.
+  if (expectRules && (!rules || rules.offsetWidth === 0)) throw new Error('the rules pane is not shown, though this fuzz page has rules')
+  const shown = rules && rules.offsetWidth > 0
   if (!controls) throw new Error('the number pad (.controls-main) is not on the page')
   // SudokuPad's own font for the pane, from a sibling the script has not styled.
-  const bare = document.createElement('div')
-  bare.className = 'puzzle-rules selectable'
-  rules.parentElement.appendChild(bare)
-  const ownFontPx = parseFloat(window.getComputedStyle(bare).fontSize)
-  bare.remove()
+  let ownFontPx = 0
+  if (shown) {
+    const bare = document.createElement('div')
+    bare.className = 'puzzle-rules selectable'
+    rules.parentElement.appendChild(bare)
+    ownFontPx = parseFloat(window.getComputedStyle(bare).fontSize)
+    bare.remove()
+  }
   return {
     undoDepth: puzzle.undoStack.length,
     cells: JSON.parse(puzzle.serializeState()).cells,
@@ -40,15 +45,16 @@ const readDom = ({ texts, seenTexts, profilesKey }) => {
     profiles: Framework.getData(profilesKey),
     digits: puzzle.cells.map((cell) => ({ digit: String(cell.value || ''), given: Boolean(cell.given), colours: cell.colours.map(String) })),
     pageColor: window.getComputedStyle(document.body).backgroundColor,
-    rulesPane: { fontPx: parseFloat(window.getComputedStyle(rules).fontSize), ownFontPx, scrollHeight: rules.scrollHeight, clientHeight: rules.clientHeight },
+    rulesPane: !shown ? null : { fontPx: parseFloat(window.getComputedStyle(rules).fontSize), ownFontPx, scrollHeight: rules.scrollHeight, clientHeight: rules.clientHeight },
     letterMode: controls.classList.contains('input-letter')
   }
 }
 
-export async function readPageState (p) {
-  const args = { texts: TEXTS, seenTexts: SEEN_TEXTS, profilesKey: PROFILES_KEY }
+// `rules` says whether the puzzle shows rules text: when it does not, the snapshot's `rulesPane` is null.
+export async function readPageState (p, { rules = true } = {}) {
+  const args = { texts: TEXTS, seenTexts: SEEN_TEXTS, profilesKey: PROFILES_KEY, expectRules: rules }
   let dom = await p.evaluate(readDom, args)
-  for (const deadline = Date.now() + RULES_FIT_MS; !rulesPaneFits(dom.rulesPane) && Date.now() < deadline;) {
+  for (const deadline = Date.now() + RULES_FIT_MS; dom.rulesPane !== null && !rulesPaneFits(dom.rulesPane) && Date.now() < deadline;) {
     await sleep(POLL_MS)
     dom = await p.evaluate(readDom, args)
   }

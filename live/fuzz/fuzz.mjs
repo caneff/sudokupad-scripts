@@ -1,31 +1,20 @@
 // The fuzz on real SudokuPad: opens the recorded page of `live/page.mjs` with all six scripts installed the way a userscript manager does (at
 // DOMContentLoaded of every load, so a reload keeps them), gives the engine (`engine.mjs`) a page of its own for every action list, and reads the crash
-// signals (`signals.mjs`) from it. The seed picks the puzzle. Not a check itself; `fuzz.smoke.mjs` is the test, `run.mjs` the command line.
+// signals (`signals.mjs`) from it. Each list names its puzzle (`puzzle-set.mjs`, #679). Not a check itself; `fuzz.smoke.mjs` is the test, `run.mjs` the command line.
 import { setTimeout as sleep } from 'node:timers/promises'
 import { ERROR_LOG_KEY, captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
 import { NOTICE_BAR } from '../attacks.mjs'
-import { cellCentre, openPenTool, PAGE_BUTTON, undoAll } from '../pen.mjs'
+import { cellCentre, gridPoint, openPenTool, PAGE_BUTTON, undoAll } from '../pen.mjs'
 import { closeExtrasEditorWith, openExtrasEditor, openScriptDialog } from '../settings.mjs'
 import { finishNote, pickDraw, TEXT_BOX, TEXTS } from '../draw-tool/draw-tool-fixtures.mjs'
-import { installAll, puzzleData, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
-import { runFuzz } from './engine.mjs'
+import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
+import { runFuzz, runScript } from './engine.mjs'
+import { scriptedList } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantPatch } from './plants.mjs'
+import { FUZZ_PUZZLES, rulesTextFor } from './puzzle-set.mjs'
 import { newestErrorRecords } from './signals.mjs'
 
-// A 6x6 with 2x3 boxes and six givens: a puzzle that is not a standard 9x9 (#590 Q7).
-const SIX_BY_SIX = puzzleData({ id: 'fuzz-6x6', rows: 6, cols: 6, boxRows: 2, boxCols: 3, givens: [[0, 0, 1], [1, 3, 2], [2, 1, 3], [3, 4, 4], [4, 2, 5], [5, 5, 6]], metadata: { title: 'fuzz 6x6' } })
-
-// The puzzles a seed can pick: `live/puzzle-url.txt`'s recording, and the 6x6.
-export const PUZZLES = [
-  { name: 'recorded 9x9', open: (p) => startWithTools(p) },
-  { name: '6x6', open: async (p) => openPuzzleId(p, await puzzleIdFor(p, SIX_BY_SIX)) }
-]
-export const puzzleFor = (seed) => PUZZLES[Math.abs(seed) % PUZZLES.length]
-
-// The rules text every fuzz page shows: twenty times a short paragraph, which at every fuzz window size Auto Rules Resizer has to shrink below SudokuPad's own font
-// to fit and can (the recorded puzzle has no rules of its own).
-const RULES_TEXT = Array(20).fill('Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.').join(' ')
 // A page error thrown after an Escape pressed while a mouse button is down: the planted failure the smoke test and `--plant-escape-error` use.
 const plantEscapeError = (p) => p.addInitScript(() => {
   let down = false
@@ -34,12 +23,14 @@ const plantEscapeError = (p) => p.addInitScript(() => {
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && down) setTimeout(() => { throw new Error('planted page error') }, 0) }, true)
 })
 
-// Shows the rules text the way a loaded puzzle gets it; the snapshot waits for the fit.
-async function showRules (p) {
-  await p.evaluate((rules) => {
-    Framework.app.showMetaInfoUI({ title: 'fuzz', author: 'fuzz', rules })
+// Shows the puzzle's rules text the way a loaded puzzle gets it; the snapshot waits for the fit. A puzzle with no rules text shows none.
+async function showRules (p, puzzle) {
+  const rules = rulesTextFor(puzzle)
+  if (rules === null) return
+  await p.evaluate((text) => {
+    Framework.app.showMetaInfoUI({ title: 'fuzz', author: 'fuzz', rules: text })
     Framework.app.resize()
-  }, RULES_TEXT)
+  }, rules)
 }
 
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
@@ -50,8 +41,8 @@ async function clickIn (p, selector) {
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 }
 
-// The env `actions.mjs` runs on, over a real page whose free cells are `cells`.
-function envFor (p, cells) {
+// The env `actions.mjs` runs on, over a real page showing `puzzle`.
+function envFor (p, puzzle) {
   const openPen = async () => {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
   }
@@ -60,7 +51,16 @@ function envFor (p, cells) {
   }
   return {
     page: p,
-    cellPoint: async (i) => (await cellCentre(p, ...cells[i])).slice(0, 2),
+    // A target outside the grid is where the puzzle's clues are: the middle of the cell that would be there. SudokuPad's own links sit over a corner of the board
+    // (a click there leaves the page, which no script did), so a point that is not on the board svg is the nearest cell of the grid instead.
+    cellPoint: async (i) => {
+      const [row, col] = puzzle.cells[i]
+      const inside = row >= 0 && col >= 0 && row < puzzle.rows && col < puzzle.cols
+      if (inside) return (await cellCentre(p, row, col)).slice(0, 2)
+      const point = await gridPoint(p, [row + 0.5, col + 0.5])
+      const onBoard = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('#svgrenderer')), point)
+      return onBoard ? point : (await cellCentre(p, Math.min(Math.max(row, 0), puzzle.rows - 1), Math.min(Math.max(col, 0), puzzle.cols - 1))).slice(0, 2)
+    },
     async usePen (color) {
       await openPen()
       await clickIn(p, `.tool-pen button[data-key="${color}"]`)
@@ -103,7 +103,7 @@ function envFor (p, cells) {
       // The intro dialog (Resume Puzzle) can show after the board does, which `resumeAfterHistory` alone would not wait for.
       await startPuzzle(p)
       await resumeAfterHistory(p)
-      await showRules(p)
+      await showRules(p, puzzle)
     },
     async darkPage (color, save) {
       await openScriptDialog(p, 'Dark Page', 'input[type=color]')
@@ -124,15 +124,17 @@ export async function openTarget (browser, puzzle, { planted, plant }) {
     }
   })
   try {
-    await puzzle.open(p)
+    if (puzzle.data) await openPuzzleId(p, await puzzleIdFor(p, puzzle.data))
+    else await startWithTools(p)
     // Tab must have a letter tool to switch to, and the page needs rules for Auto Rules Resizer to fit.
     await p.evaluate(() => Framework.setSetting('toolletter', true))
-    await showRules(p)
-    const cells = await freeCells(p)
+    await showRules(p, puzzle)
+    // The puzzle set says which cells are free: a page that disagrees would send every action to the wrong cell.
+    const onPage = await freeCells(p)
+    if (JSON.stringify(sortedCells(onPage)) !== JSON.stringify(sortedCells(puzzle.free))) throw new Error(`the ${puzzle.name} puzzle opened with ${onPage.length} free cells that are not the ${puzzle.free.length} of puzzle-set.mjs`)
     return {
-      env: envFor(p, cells),
-      cells,
-      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR), page: await readPageState(p) }),
+      env: envFor(p, puzzle),
+      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR), page: await readPageState(p, { rules: rulesTextFor(puzzle) !== null }) }),
       wait: (ms) => sleep(ms),
       errorLog: async () => newestErrorRecords(await p.evaluate((key) => window.localStorage.getItem(key), ERROR_LOG_KEY)),
       close: () => context.close()
@@ -145,18 +147,15 @@ export async function openTarget (browser, puzzle, { planted, plant }) {
 
 // The cells a digit can go in, as `[row, col]`.
 const freeCells = (p) => p.evaluate(() => Framework.app.puzzle.cells.filter((c) => !c.given).map((c) => [c.row, c.col]))
+const sortedCells = (cells) => [...cells].sort(([r1, c1], [r2, c2]) => r1 - r2 || c1 - c2)
 
-// Fuzzes with `seed` (a number; the puzzle is `puzzleFor(seed)`) for `minutes` or `runs` action lists, then shrinks a failure. `path` is a printed replay
-// path, `<fast-check path>@<command path>`, which replays that one failure. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug.
+// Fuzzes with `seed` (a number) for `minutes` or `runs` action lists, each on a puzzle of the set that the list names, then shrinks a failure. `path` is a printed replay
+// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug.
 export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant }) {
-  const puzzle = puzzleFor(seed)
-  const probe = await openTarget(browser, puzzle, { planted, plant })
-  const cells = probe.cells
-  await probe.close()
   const [fcPath, replayPath] = path == null ? [] : path.split('@')
   const result = await runFuzz({
-    openTarget: () => openTarget(browser, puzzle, { planted, plant }),
-    cells,
+    openTarget: (puzzle) => openTarget(browser, puzzle, { planted, plant }),
+    puzzles: FUZZ_PUZZLES,
     seed,
     runs,
     minutes,
@@ -164,7 +163,12 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
     path: fcPath,
     replayPath
   })
-  if (!result.failed) return { ...result, puzzle: puzzle.name }
+  if (!result.failed) return result
   const replayArgs = ['--seed', result.seed, '--path', `${result.path}@${result.replayPath}`, ...(planted ? ['--plant-escape-error'] : []), ...(plant ? ['--plant', plant.id] : [])]
-  return { ...result, puzzle: puzzle.name, path: `${result.path}@${result.replayPath}`, replayCommand: `npm run test:fuzz -- ${replayArgs.join(' ')}` }
+  return { ...result, path: `${result.path}@${result.replayPath}`, replayCommand: `npm run test:fuzz -- ${replayArgs.join(' ')}` }
+}
+
+// Runs one list written by hand (`steps`: `[kind, arg]`, `actions.mjs`) on `puzzle` with the checks of every run; resolves to nothing, or throws the failure.
+export function fuzzScripted ({ browser, puzzle, steps, planted = false, plant }) {
+  return runScript({ openTarget: (p) => openTarget(browser, p, { planted, plant }), puzzle, actions: scriptedList(puzzle, steps) })
 }

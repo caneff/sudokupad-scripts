@@ -1,4 +1,4 @@
-// A fake page for the fuzz's unit tests: the env of `actions.mjs` with every call recorded, and optionally a page error or a broken rule planted on an
+// A fake page for the fuzz's unit tests (`openTarget(puzzle)` keeps the puzzle it was opened for): the env of `actions.mjs` with every call recorded, and optionally a page error or a broken rule planted on an
 // interruption. Not a check itself.
 
 // A snapshot `page` (shape in `rules.mjs`) in which every rule holds: a board with nothing on it, a dark page, rules that fit and a number pad of digits.
@@ -17,13 +17,13 @@ export const quietPage = (overrides = {}) => ({
   ...overrides
 })
 
-// Opens fake targets; each has the `log` of every env and Playwright call it saw. `plantEscapeError` throws a page error when Escape is pressed
+// Opens fake targets; each has the `log` of every env and Playwright call it saw. `plantEscapeError` (true, or the name of the one puzzle it happens on) throws a page error when Escape is pressed
 // while a mouse button is down, the interruption the live smoke test plants on the real page too; it lands only after the next `wait`, as a
 // timer's error lands after the action returned, so the tests need no clock. `withNote` starts the page with a note drawn. `whitenOnBlur` turns the page
 // white when the window blurs, which breaks the Dark Page rule; `whitenOnWait` makes it so only after the next wait; `lettersOnTab` turns the number pad to letters on Tab, which breaks the Tab rule, and `lettersOnBlur` does it on a blur, which breaks no rule; `lettersOnRedo` does it on a redo, which breaks only the rule that a redo after an undo restores the page (the fake's undo stack is a count: undo takes one off, redo puts one back).
 export function fakeTargets ({ plantEscapeError = false, withNote = true, whitenOnBlur = false, whitenOnWait = false, lettersOnTab = false, lettersOnBlur = false, lettersOnRedo = false } = {}) {
   const targets = []
-  const openTarget = async () => {
+  const openTarget = async (puzzle) => {
     const log = []
     const errors = []
     const pending = []
@@ -46,7 +46,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
         press: async (key) => {
           log.push(['keyboard.press', key])
           if (lettersOnTab && key === 'Tab') letterMode = true
-          if (plantEscapeError && key === 'Escape' && down > 0) pending.push('Error: planted page error')
+          if ((plantEscapeError === true || plantEscapeError === puzzle?.name) && key === 'Escape' && down > 0) pending.push('Error: planted page error')
         }
       }
     }
@@ -70,6 +70,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
     }
     const target = {
       env,
+      puzzle,
       log,
       closed: false,
       snapshot: async () => ({ errors: [...errors], notices: [], page: quietPage({ pageColor, letterMode, undoDepth }) }),
