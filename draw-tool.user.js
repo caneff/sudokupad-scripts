@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.15
+// @version      0.45.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.15'
+  const VERSION = '0.45.0'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -33,8 +33,11 @@
   const NOTE_COLOR_COUNT = 9
   const COLOR_NUMBERS = Array.from({ length: NOTE_COLOR_COUNT }, (_, i) => i + 1)
   const DEFAULT_COLOR = 1
-  const COLOR_KEY = 'DrawTool_color'
-  const COLORS_KEY = 'DrawTool_colors'
+  const KEY_PREFIX = 'TextAnywhere_'
+  // Every key was saved under this prefix before 0.45.0. Each is copied to its new name and kept, so a rolled-back version still finds it.
+  const OLD_KEY_PREFIX = 'DrawTool_'
+  const COLOR_KEY = KEY_PREFIX + 'color'
+  const COLORS_KEY = KEY_PREFIX + 'colors'
   const colorVar = (n) => `--text-anywhere-color-${n}`
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
@@ -154,13 +157,13 @@
     ...PALETTE_PRESET_LABELS
   }
   // The next note's size is saved as a width; a text size is 2 x the width + 8.
-  const WIDTH_KEY = 'DrawTool_width'
-  const OUTLINE_KEY = 'DrawTool_outline'
-  const OPACITY_KEY = 'DrawTool_opacity'
-  const BACKGROUND_KEY = 'DrawTool_background'
-  const BOX_KEY = 'DrawTool_box'
-  const FRAME_KEY = 'DrawTool_frame'
-  const FONT_KEY = 'DrawTool_font'
+  const WIDTH_KEY = KEY_PREFIX + 'width'
+  const OUTLINE_KEY = KEY_PREFIX + 'outline'
+  const OPACITY_KEY = KEY_PREFIX + 'opacity'
+  const BACKGROUND_KEY = KEY_PREFIX + 'background'
+  const BOX_KEY = KEY_PREFIX + 'box'
+  const FRAME_KEY = KEY_PREFIX + 'frame'
+  const FONT_KEY = KEY_PREFIX + 'font'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
   const CHAR_WIDTH = 0.6
   // A line's height as a share of the text size, in the font's own spacing, so a note's box is as tall as the note drawn.
@@ -243,10 +246,11 @@
   const PANEL_STYLE_ID = 'text-anywhere-style'
   const CLEAR_QUESTION = 'Clear all notes?'
   const OK_LABEL = 'OK'
-  const NOTES_PREFIX = 'DrawTool_drawing_'
-  const INDEX_KEY = 'DrawTool_index'
+  const NOTES_PREFIX = KEY_PREFIX + 'notes_'
+  const OLD_NOTES_PREFIX = 'DrawTool_drawing_'
+  const INDEX_KEY = KEY_PREFIX + 'index'
   // The notes a Restart cleared, kept until Undo straight after it brings them back.
-  const RESTARTED_PREFIX = 'DrawTool_restarted_'
+  const RESTARTED_PREFIX = KEY_PREFIX + 'restarted_'
   const KEPT_PUZZLES = 50
   // How far, in screen pixels, past a note's drawn box a press, a hover or an erase still hits it.
   const HIT_MARGIN_PX = 4
@@ -1211,6 +1215,39 @@
     else store.removeData(restartedKey(key))
   }
 
+  const oldKey = (key) => key.startsWith(NOTES_PREFIX) ? OLD_NOTES_PREFIX + key.slice(NOTES_PREFIX.length) : OLD_KEY_PREFIX + key.slice(KEY_PREFIX.length)
+
+  // A value is copied as it was saved, unreadable or not, so its new key's reader applies lib/store.js's rule to it; a key already saved is never written.
+  function copyOldKey (store, key) {
+    if (store.getData(key) !== null) return
+    const saved = store.getData(oldKey(key))
+    if (saved !== null) store.setData(key, saved)
+  }
+
+  // The puzzles' notes are copied only while the new index is unsaved, and the index last, so a puzzle cleared since the copy is not
+  // brought back from its old notes. An old index that cannot be read lists no puzzles: their notes stay under the old keys only.
+  function copyOldKeys (store) {
+    for (const key of [COLOR_KEY, BACKGROUND_KEY, COLORS_KEY, ...lookKeys(LOOKS)]) copyOldKey(store, key)
+    if (store.getData(INDEX_KEY) !== null) return
+    let puzzles = []
+    try {
+      puzzles = readIndex(store.getData(oldKey(INDEX_KEY)))
+    } catch (error) {
+      console.warn(`Text Anywhere: ${error.message}; the notes it lists stay under ${OLD_KEY_PREFIX} keys only`)
+    }
+    for (const puzzle of puzzles) {
+      copyOldKey(store, notesKey(puzzle))
+      copyOldKey(store, restartedKey(puzzle))
+    }
+    copyOldKey(store, INDEX_KEY)
+  }
+
+  const newKey = (key) => key.startsWith(OLD_KEY_PREFIX) ? KEY_PREFIX + key.slice(OLD_KEY_PREFIX.length) : key
+  // Settings copied before 0.45.0 name the old keys; a new key beside its old twin wins.
+  const withNewKeys = (data) => Object.fromEntries(Object.entries(data)
+    .filter(([key]) => newKey(key) === key || !Object.hasOwn(data, newKey(key)))
+    .map(([key, value]) => [newKey(key), value]))
+
   // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Text Anywhere out of the
   // list while a keydown is dispatched gives it no key, and keeps every other tool's key where it is without it.
   const toolNamesFor = (names, event) => event && event.type === 'keydown' && event.eventPhase !== 0
@@ -1967,7 +2004,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, COLOR_KEY, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2504,6 +2541,7 @@
         // A copy with the saved settings off says so, rather than copy the defaults as if they were saved.
         copied: () => storage.runInDialog(() => copiedSettings(savedData)),
         readers: READERS,
+        upgrade: withNewKeys,
         apply: (values) => {
           applyPasted(values)
           draftLooks = { ...look }
@@ -4099,6 +4137,7 @@
   // Without getApp there is no app: the features that need one are off, and the rest start without it.
   const start = (app) => {
     guard.probe({ roots: { Framework, app }, store: Framework })
+    if (!storage.off) copyOldKeys(savedData)
     color = readColor(savedData.getData(COLOR_KEY))
     Object.assign(look, readLooks(savedData))
     background = readBackground(savedData.getData(BACKGROUND_KEY))

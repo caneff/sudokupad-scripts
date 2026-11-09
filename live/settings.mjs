@@ -67,7 +67,7 @@ export const SETTINGS_SCRIPTS = [
   { file: 'dark-page.user.js', owns: /^DarkPage_/, entry: 'Dark Page', editor: '#dark-page-input', key: 'DarkPage_color', saved: '#336699', asDefault: '#000000', badKey: 'DarkPage_color', bad: 'blue' },
   { file: 'auto-rules-resizer.user.js', owns: /^AutoRulesResizer_/, entry: 'Rules Resizer', editor: '#auto-rules-resizer-max-width', key: 'AutoRulesResizer_maxWidth', saved: 640, enveloped: true, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
   { file: 'color-by-digit.user.js', owns: /^ColorByDigit_/, entry: 'Color by Digit', editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, enveloped: true, badKey: 'ColorByDigit_mode', bad: 'sideways' },
-  { file: 'draw-tool.user.js', owns: /^DrawTool_/, entry: 'Text Anywhere', editor: '#text-anywhere-dialog', key: 'DrawTool_width', saved: 3.5, badKey: 'DrawTool_width', bad: 500 },
+  { file: 'draw-tool.user.js', owns: /^TextAnywhere_/, entry: 'Text Anywhere', editor: '#text-anywhere-dialog', key: 'TextAnywhere_width', saved: 3.5, badKey: 'TextAnywhere_width', bad: 500 },
   { file: 'pen-tool-extras.user.js', owns: /^(PenColor_|EdgeMarks_)/, entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 }
 ]
 

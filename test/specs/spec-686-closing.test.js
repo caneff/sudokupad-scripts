@@ -31,13 +31,13 @@ test('#693: the looks table holds every saved look once, and Copy, Paste, the st
   assert.match(SOURCE, /changedDialogLooks\(LOOKS, draftLooks, look\)/, 'Save writes the table\'s changed dialog rows')
   assert.match(SOURCE, /Object\.assign\(look, readLooks\(savedData\)\)/, 'the start load reads the table')
 
-  const spin = { name: 'spin', key: 'DrawTool_spin', read: (saved) => (saved === 'left' ? 'left' : 'none'), dialog: true }
+  const spin = { name: 'spin', key: 'TextAnywhere_spin', read: (saved) => (saved === 'left' ? 'left' : 'none'), dialog: true }
   const withSpin = [...LOOKS, spin]
-  const store = fakeStore({ DrawTool_spin: 'left' })
-  assert.equal(JSON.parse(copiedSettings(store, withSpin)).DrawTool_spin, 'left', 'Copy')
-  assert.deepEqual(pastedSettings(JSON.stringify({ DrawTool_spin: 'left' }), lookReaders(withSpin)).values, { DrawTool_spin: 'left' }, 'Paste')
+  const store = fakeStore({ TextAnywhere_spin: 'left' })
+  assert.equal(JSON.parse(copiedSettings(store, withSpin)).TextAnywhere_spin, 'left', 'Copy')
+  assert.deepEqual(pastedSettings(JSON.stringify({ TextAnywhere_spin: 'left' }), lookReaders(withSpin)).values, { TextAnywhere_spin: 'left' }, 'Paste')
   assert.equal(readLooks(store, withSpin).spin, 'left', 'the start load')
-  assert.ok(lookKeys(withSpin).includes('DrawTool_spin'), 'the snapshot\'s keys')
+  assert.ok(lookKeys(withSpin).includes('TextAnywhere_spin'), 'the snapshot\'s keys')
   const now = readLooks(fakeStore(), withSpin)
   assert.deepEqual(changedDialogLooks(withSpin, { ...now, spin: 'left' }, now).map((row) => row.name), ['spin'], 'Save\'s changed rows')
 })

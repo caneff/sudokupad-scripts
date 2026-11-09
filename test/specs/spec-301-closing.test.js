@@ -48,10 +48,10 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   assert.deepEqual(textAnywhere.presetColors('pen', [], null, readPen), PEN)
 
   // Copy carries the colors, the size, transparency, outline, box color, frame and font (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad outline, box color, frame or font reads as its default).
-  const copied = JSON.parse(textAnywhere.copiedSettings(fakeStore({ DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_drawing_x: [text] })))
-  assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false, DrawTool_font: 'proportional' })
-  const pasted = textAnywhere.pastedSettings(JSON.stringify({ ...copied, DrawTool_width: 99, PenToolExtras_x: 1 }), textAnywhere.READERS)
-  assert.deepEqual(pasted, { values: { DrawTool_colors: PEN, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false, DrawTool_font: 'proportional' }, skipped: 1 })
+  const copied = JSON.parse(textAnywhere.copiedSettings(fakeStore({ TextAnywhere_colors: PEN, TextAnywhere_width: 3.5, TextAnywhere_notes_x: [text] })))
+  assert.deepEqual(copied, { TextAnywhere_colors: PEN, TextAnywhere_width: 3.5, TextAnywhere_opacity: 100, TextAnywhere_outline: 'medium', TextAnywhere_box: 'page', TextAnywhere_frame: false, TextAnywhere_font: 'proportional' })
+  const pasted = textAnywhere.pastedSettings(JSON.stringify({ ...copied, TextAnywhere_width: 99, PenToolExtras_x: 1 }), textAnywhere.READERS)
+  assert.deepEqual(pasted, { values: { TextAnywhere_colors: PEN, TextAnywhere_opacity: 100, TextAnywhere_outline: 'medium', TextAnywhere_box: 'page', TextAnywhere_frame: false, TextAnywhere_font: 'proportional' }, skipped: 1 })
   assert.throws(() => textAnywhere.pastedSettings('not settings', textAnywhere.READERS))
 
   // The site: the homepage summary and @description name the notes and the tool's own colors, the details page has a bullet for
