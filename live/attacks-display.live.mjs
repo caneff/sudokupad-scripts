@@ -2,15 +2,15 @@
 // notes and a grid full of pen lines, with Text Anywhere, Pen Tool Extras and Color by Digit installed together, on sudokupad.app in headless
 // Chromium. Each test names its attack and asserts the crash signals (no uncaught error, console error or skip line) beside what a user expects.
 // Clicks, drags and keys are real input; the display changes are Chromium's own emulation.
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import { pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts, reloadWithScripts } from './attacks.mjs'
 import { cellCentre, finishNote, gridPoint, mouseDrag, typeText } from './board.mjs'
 import { penDrawnCount, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
+import { useBrowser } from './session.mjs'
 
 const FULLSCREEN_BUTTON = 'button[data-control="fullscreen"]'
 const WINDOW = { width: 1200, height: 900 }
@@ -23,14 +23,12 @@ const CRISP_EPSILON = 0.05
 const ACTION_BUDGET_MS = 3000
 const NOTE_COUNT = 200
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on the display and scale', { concurrency: false }, () => {
   let context, p, errors
   beforeEach(async () => {
-    ;({ context, p, errors } = await openWithAllScripts(browser))
+    ;({ context, p, errors } = await openWithAllScripts(browser()))
   })
   afterEach(async () => { await context?.close() })
 

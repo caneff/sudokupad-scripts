@@ -5,14 +5,13 @@
 // board with a different history, which shifts some antialiased line pixels by up to 8 levels.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import { captureConsoleErrors, gotoPuzzle, openPage, START, startPuzzle } from '../page.mjs'
 import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
+const script = scriptSource('dark-page.user.js')
 const { PAGE, BOARD_ID, STYLE_ID, LOCAL_DATA_KEY } = createRequire(import.meta.url)('../../dark-page.user.js')
 const DATA_KEY = 'DarkPage_color'
 
@@ -185,9 +184,7 @@ async function expectWhiteIsBoardBox (p, color) {
   assert.deepEqual(wrong, { ring: 0, corners: 0 }, 'pixels in the ring that are not the page color, and board corners that are not white')
 }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -219,7 +216,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
+    ;({ context, p, errors } = await openPage(browser()))
     await boot()
     await p.addStyleTag({ content: HIDE_PAGE_UI })
   })
@@ -452,7 +449,7 @@ describe('at document-start', { concurrency: false }, () => {
   // `saved` is put in storage before the script runs; `atLoad` is a color put in, or `null` taking it out (`false`: no change), at
   // DOMContentLoaded just before `start` (the sampler's listener is registered first, so it runs first).
   const samples = async (saved, atLoad = false) => {
-    const { context, p, errors } = await openPage(browser, {
+    const { context, p, errors } = await openPage(browser(), {
       // Two init scripts run in order at document start, before the page's own: the sampler, then the script. At that point
       // `document.documentElement` does not exist yet, as in an injector that runs the script first.
       seed: async (page, errors) => {
@@ -547,7 +544,7 @@ describe('the page color dialog', { concurrency: false }, () => {
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
+    ;({ context, p, errors } = await openPage(browser(), {
       // Records the script's CSS the moment its style first exists, before any frame paints with it.
       seed: (page) => page.addInitScript(([src, styleId]) => {
         document.addEventListener('DOMContentLoaded', () => {
@@ -647,7 +644,7 @@ describe('the page color dialog', { concurrency: false }, () => {
 // A page with no puzzle in it, such as another page of a site the script matches, is left alone.
 describe('a page with no puzzle', () => {
   it('stays as it was: white background', async () => {
-    const page = await browser.newPage()
+    const page = await browser().newPage()
     try {
       await page.setContent('<!doctype html><body style="background:#fff"><p>not a puzzle</p></body>')
       await page.addScriptTag({ content: script })
@@ -668,7 +665,7 @@ describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => 
   const WARNING = /^dark-page: /
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
+    ;({ context, p, errors } = await openPage(browser(), {
       expectedSkips: [WARNING],
       seed: (page) => {
         page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })

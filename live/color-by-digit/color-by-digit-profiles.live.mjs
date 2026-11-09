@@ -2,13 +2,12 @@
 // the button, switching profile, the button's icon, the dialog's profile list, and migration.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, keyOf, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
 const ROWS = PROFILE_ROWS
 // A row's × shows only while its row is hovered or selected, so the pointer goes onto the row first.
@@ -23,13 +22,11 @@ const FOUR_PROFILES = {
   active: 0
 }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 // A page with the script injected; `saved` maps a localStorage key to a JSON value, saved before the page loads.
 // With no mode saved the page starts in Cell; `savedOff` saves the mode Off beside `saved`.
-const openProfiles = (saved, contextOptions = {}) => openSession(browser, script, { saved, contextOptions })
+const openProfiles = (saved, contextOptions = {}) => openSession(browser(), script, { saved, contextOptions })
 const savedOff = (saved) => ({ ...saved, [MODE_STORAGE_KEY]: 'off' })
 
 const tools = (p) => {

@@ -17,10 +17,10 @@ export function scriptSource (file) {
 }
 
 // Launches one Chromium before the file's tests and closes it after them; call it at the top of a test file. Returns a
-// function that gives the browser, since it exists only once the tests start.
-export function useBrowser () {
+// function that gives the browser, since it exists only once the tests start. `launchOptions` go to Playwright's launch.
+export function useBrowser (launchOptions) {
   let browser
-  before(async () => { browser = await chromium.launch() })
+  before(async () => { browser = await chromium.launch(launchOptions) })
   after(async () => { await browser?.close() })
   return () => browser
 }

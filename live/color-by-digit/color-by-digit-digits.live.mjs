@@ -1,14 +1,13 @@
 // Live check of Color by Digit's digit colors (the Digit and Both modes) on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, PUZZLE_URL } from '../page.mjs'
 import { settle } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 const { shadeOf, shadeOn } = shadeReaders(createRequire(import.meta.url)('../../color-by-digit.user.js'))
 
 // SudokuPad's own color for a given, read off the page with no script installed.
@@ -41,9 +40,7 @@ const CONFLICT_CELLS = {
 const CONFLICTING = { corner: '#cell-pencilmarks text.cell-pencilmark.conflict', centre: '#cell-candidates tspan.conflict' }
 const STYLE = '#color-by-digit-digits'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('digit colors, saved in Digit, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, decoder, errors
@@ -143,7 +140,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: SEEDED_DIGIT }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: SEEDED_DIGIT }))
     // A blank page decodes the screenshots: the board's page may refuse a `data:` fetch.
     decoder = await context.newPage()
     await p.locator(STYLE).waitFor({ state: 'attached' })
@@ -522,7 +519,7 @@ describe('digit colors from the palette the page shows, injected after Start Puz
   let context, p, errors
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: SEEDED_DIGIT }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: SEEDED_DIGIT }))
     await p.evaluate((pink) => {
       const palette = JSON.parse(JSON.stringify(Framework.app.tools.colour.palette))
       palette.colors['4'] = pink

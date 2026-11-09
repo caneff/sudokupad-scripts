@@ -2,15 +2,14 @@
 // The letter tool is switched on through its setting after the script is in, as a player does.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
 import { keydownDefaults } from '../pen.mjs'
 import { openSettings } from '../settings.mjs'
 import { LETTER_MODE_KEY as MODE_KEY, numberPadText } from '../scripts.mjs'
 import { settle } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../ui-tweaks.user.js', import.meta.url), 'utf8')
+const script = scriptSource('ui-tweaks.user.js')
 
 const DIGITS = '1234567890'
 const LETTERS = 'ABCDEFGHIO'
@@ -18,9 +17,7 @@ const TOGGLE_BUTTON = 'button[data-control="toggleletter"]'
 const WARNING = /ui-tweaks/
 const BAR = '#sudokupad-scripts-notices [data-script="ui-tweaks"]'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -31,7 +28,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const saved = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
+    ;({ context, p, errors } = await openPage(browser()))
     await startPuzzle(p)
     await p.addScriptTag({ content: script })
     // Enable Letter Tool, switched on after the page and the script are in.
@@ -123,7 +120,7 @@ describe('the Tab binding is not found', () => {
   it('warns in the console and changes nothing', async () => {
     const warnings = []
     let warned
-    const { context, p } = await openPage(browser, {
+    const { context, p } = await openPage(browser(), {
       expectedSkips: [WARNING],
       seed: (page) => {
         page.on('console', (m) => { if (m.type() === 'warning') warnings.push(m.text()) })
@@ -158,7 +155,7 @@ describe('SudokuPad has no ToolLetter.tool.keyHandlers', { concurrency: false },
   const pad = () => numberPadText(p)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
+    ;({ context, p, errors } = await openPage(browser(), {
       expectedSkips: [WARNING],
       seed: (page) => {
         page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })
@@ -205,7 +202,7 @@ describe('SudokuPad has no Framework.getData', { concurrency: false }, () => {
   const warned = []
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
+    ;({ context, p, errors } = await openPage(browser(), {
       expectedSkips: [WARNING],
       seed: (page) => { page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) }) }
     }))
@@ -239,7 +236,7 @@ describe('SudokuPad loses Framework.app.tools after startup', { concurrency: fal
   let context, p
 
   before(async () => {
-    ;({ context, p } = await openPage(browser, { expectedSkips: [WARNING] }))
+    ;({ context, p } = await openPage(browser(), { expectedSkips: [WARNING] }))
     await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.evaluate(() => Framework.setSetting('toolletter', true))

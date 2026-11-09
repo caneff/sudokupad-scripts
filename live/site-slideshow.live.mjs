@@ -4,7 +4,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
+import { useBrowser } from './session.mjs'
 
 const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const ROOT = new URL('../', import.meta.url)
@@ -24,13 +24,12 @@ const SHOWS = [
   beforeLast: slideOf(SOURCE[show.id], -2)
 }))
 
-let browser, page
+const browser = useBrowser()
+let page
 before(async () => {
-  browser = await chromium.launch()
-  page = await (await browser.newContext()).newPage()
+  page = await (await browser().newContext()).newPage()
   await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(r.request().url().slice(RAW.length).replace(/\?.*$/, ''), ROOT)), contentType: 'image/png' }))
 })
-after(async () => { await browser?.close() })
 
 // What the slideshow under `root` shows now: the counter, the caption and the file name of the one visible picture.
 const shown = (root) => page.evaluate((root) => {

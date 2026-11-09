@@ -1,9 +1,8 @@
 // Live attacks on clashes between the scripts (#590, attacks 57-61): all of them are loaded on one page and each test sets two
 // of them against each other, then checks the crash signals (a skip line, a page error, a console error, a notice bar)
 // plus what the player expects to see.
-import { after, before, describe, it } from 'node:test'
+import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import { attack, noteCount, NOTES, rulesScroll, rulesWidth, setLongRules } from './attacks.mjs'
 import { DIGITS, BLACK, LETTER_MODE_KEY } from './scripts.mjs'
 import { gridPoint, mouseDrag, placeNote } from './board.mjs'
@@ -11,6 +10,7 @@ import { keydownDefaults, openPenTool, penEntries, setInputValue } from './pen.m
 import { settle, stable } from './settle.mjs'
 import { closeDialogWith, dialogButton, openExtrasEditor, openScriptDialog, openSettings } from './settings.mjs'
 import { pickDraw } from './draw-tool/draw-tool-fixtures.mjs'
+import { useBrowser } from './session.mjs'
 
 const DARK_STYLE = '#dark-page-style'
 const EXTRAS_EDITOR = '#pen-tool-extras-editor'
@@ -20,16 +20,14 @@ const DARK_EDITOR = '#dark-page-input'
 const RULES_EDITOR = '#auto-rules-resizer-max-width'
 const WHITE = 'rgb(255, 255, 255)'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const pageColor = (p) => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
 // The page's dark stylesheet is the script: the live suite's own off switch is its media set to `not all`.
 const darkPage = (p, on) => p.evaluate(([style, media]) => { document.querySelector(style).media = media }, [DARK_STYLE, on ? 'all' : 'not all'])
 
 describe('clashes between scripts', { concurrency: 4 }, () => {
-  it('57 Dark Page on and off with every script\'s panel and dialog open', () => attack(browser, async (p) => {
+  it('57 Dark Page on and off with every script\'s panel and dialog open', () => attack(browser(), async (p) => {
     const close = (editor) => () => closeDialogWith(p, 'Cancel', editor)
     const SURFACES = [
       ['Pen Tool Extras panel', () => openPenTool(p), '.pen-tool-extras-sliders'],
@@ -69,7 +67,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     assert.equal(await settle(() => pageColor(p), BLACK), BLACK, 'Black puts the dark page back')
   }))
 
-  it('58 Pen Tool Extras\' and Text Anywhere\'s settings dialogs asked for one after the other, the first still open', () => attack(browser, async (p) => {
+  it('58 Pen Tool Extras\' and Text Anywhere\'s settings dialogs asked for one after the other, the first still open', () => attack(browser(), async (p) => {
     // The overlay covers the board and the panels, so a second dialog can only be asked for by code: the other tool's gear is clicked as a script would.
     const PAIRS = [
       ['Pen Tool Extras then Text Anywhere', () => pickDraw(p), () => openExtrasEditor(p), EXTRAS_EDITOR, '.draw-tool-settings', TEXT_EDITOR],
@@ -92,7 +90,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     }
   }))
 
-  it('59 Tab pressed while a Text Anywhere note is open, and while a settings dialog field has focus', () => attack(browser, async (p) => {
+  it('59 Tab pressed while a Text Anywhere note is open, and while a settings dialog field has focus', () => attack(browser(), async (p) => {
     const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
     await pickDraw(p)
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
@@ -121,7 +119,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     assert.equal(await pad(), DIGITS, 'the number pad stayed on digits')
   }))
 
-  it('60 Color by Digit\'s editor open while the pen tool is current: a drag with the pen draws nothing', () => attack(browser, async (p) => {
+  it('60 Color by Digit\'s editor open while the pen tool is current: a drag with the pen draws nothing', () => attack(browser(), async (p) => {
     await openPenTool(p)
     await openScriptDialog(p, 'Color by Digit', CBD_EDITOR)
     assert.equal(await p.evaluate(() => Framework.app.tool), 'pen', 'the pen is still the tool')
@@ -135,7 +133,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     assert.equal((await settle(() => penEntries(p).then((e) => e.length > 0), true)), true, 'the pen draws once the editor is closed')
   }))
 
-  it('61 Auto Rules Resizer\'s fit run while a Text Anywhere note sits over the rules panel', () => attack(browser, async (p) => {
+  it('61 Auto Rules Resizer\'s fit run while a Text Anywhere note sits over the rules panel', () => attack(browser(), async (p) => {
     await setLongRules(p)
     assert.equal(await settle(() => rulesScroll(p), false), false, 'the long rules do not scroll')
     await placeNote(p, [2.5, 2.5], 'over the rules')

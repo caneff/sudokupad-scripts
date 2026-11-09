@@ -2,10 +2,9 @@
 // the buttons are Save then Cancel (extra buttons after them), and Save with nothing changed writes nothing.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
+import { scriptSource, useBrowser } from './session.mjs'
 
 const SCRIPTS = [
   { file: 'dark-page', entry: 'Dark Page', editor: '#dark-page-dialog', buttons: ['Save', 'Cancel'] },
@@ -15,16 +14,14 @@ const SCRIPTS = [
   { file: 'pen-tool-extras', entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', buttons: ['Save', 'Cancel', 'Restore defaults'] }
 ]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 for (const { file, entry, editor, buttons } of SCRIPTS) {
   describe(`${entry}'s dialog shell`, { concurrency: false }, () => {
     let context, p, errors
     before(async () => {
-      ({ context, p, errors } = await openPage(browser))
-      await startPuzzle(p, { injection: { mode: 'after-start', code: readFileSync(new URL(`../${file}.user.js`, import.meta.url), 'utf8') } })
+      ({ context, p, errors } = await openPage(browser()))
+      await startPuzzle(p, { injection: { mode: 'after-start', code: scriptSource(`${file}.user.js`) } })
     })
     after(async () => { await context?.close() })
 

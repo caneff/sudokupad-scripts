@@ -2,14 +2,13 @@
 // profile, so cells and digits take different profiles, on Same as cell, and on None, which turns digit coloring off.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, savedState, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 const { shadeOn } = shadeReaders(createRequire(import.meta.url)('../../color-by-digit.user.js'))
 
 const CIRCLES = '#color-by-digit-circles'
@@ -26,9 +25,7 @@ const TWO = [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_E
 const SPLIT_CELLS = [['4'], []]
 const ODD_EVEN_CELLS = [['1'], ['2']]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const tools = (p) => {
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -81,7 +78,7 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   const fill = (digit) => allFillsOn(p, 'entered', digit)
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
     t = tools(p)
     for (const key of ['1', '2', '4']) SHADE[key] = await shadeOn(p, key)
     await t.enter(0, 2, '4')
@@ -208,7 +205,7 @@ describe('the dialog\'s Cell and Digit pulldowns, saved synced in Both, injected
   const ROW = (index) => `${EDITOR} [data-role=profile-row][data-index="${index}"]`
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
     t = tools(p)
     for (const key of ['1', '2', '4']) SHADE[key] = await shadeOn(p, key)
     await t.enter(0, 2, '4')
@@ -269,7 +266,7 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
   const fill = (digit) => allFillsOn(p, 'entered', digit)
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: { ...savedProfiles({ profiles: TWO, active: 0, digitActive: 1 }), [MODE_STORAGE_KEY]: 'both' } }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0, digitActive: 1 }), [MODE_STORAGE_KEY]: 'both' } }))
     t = tools(p)
     for (const key of ['1', '2']) SHADE[key] = await shadeOn(p, key)
     await t.enter(0, 2, '4')

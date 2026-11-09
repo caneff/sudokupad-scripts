@@ -2,25 +2,23 @@
 // Text Anywhere, Pen Tool Extras and Color by Digit installed together, on sudokupad.app in headless Chromium. Each test names its attack and
 // asserts the crash signals (no uncaught error, console error or skip line) beside what a user expects. Clicks, drags and keys are real input.
 /* global Framework */
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import { boardState, cellState, emptyCell, pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts } from './attacks.mjs'
 import { cellCentre, finishNote, gridPoint, mouseDrag, typeText } from './board.mjs'
 import { penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
+import { useBrowser } from './session.mjs'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on input', { concurrency: false }, () => {
   let context, p, errors
 
   beforeEach(async () => {
-    ;({ context, p, errors } = await openWithAllScripts(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+    ;({ context, p, errors } = await openWithAllScripts(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
   })
   afterEach(async () => { await context?.close() })
 

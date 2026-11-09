@@ -3,9 +3,8 @@
 // load at DOMContentLoaded of every page load, as Tampermonkey runs them. Attack 65, the replay tool, is `live/replay-playback.live.mjs`.
 // Under SudokuPad's solved dialog its overlay swallows the mouse and a press on it dismisses the dialog, so the draw, the notes and the script
 // dialogs of attack 64 come after the dismissal, and under the dialog the attack is the keyboard and the pen tool's drag.
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import { openPage } from './page.mjs'
 import { EDITOR as COLOR_BY_DIGIT_EDITOR } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { SETTINGS_EDITOR, tool } from './draw-tool/draw-tool-fixtures.mjs'
@@ -14,6 +13,7 @@ import { draw, penEntries } from './pen.mjs'
 import { closeDialogWith, EXTRAS_EDITOR, openScriptDialog } from './settings.mjs'
 import { boardOf, CLASSIC_GIVENS, CLASSIC_SOLUTION, clickCell, closePauseDialog, dialogAtRest, dialogWith, installAll, NOTE_POINT, openPuzzleId, OVERLAY_DRAG, PAUSED, pauseGame, puzzleData, puzzleIdFor, resumeAfterHistory, useTool } from './puzzles.mjs'
 import { readUntil, settle } from './settle.mjs'
+import { useBrowser } from './session.mjs'
 
 const CONGRATS = 'Congrats'
 const OK = /^\s*OK\s*$/
@@ -21,15 +21,13 @@ const SCRIPT_DIALOGS = [['Pen Tool Extras', EXTRAS_EDITOR], ['Color by Digit', C
 // The cell the color tool colors in puzzle A, and its key.
 const COLORED = [4, 4]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on the puzzle changing under every script', { concurrency: false }, () => {
   let context, p, errors, idA, idB
 
   beforeEach(async () => {
-    ;({ context, p, errors } = await openPage(browser, { seed: (page) => installAll(page) }))
+    ;({ context, p, errors } = await openPage(browser(), { seed: (page) => installAll(page) }))
     idA = await puzzleIdFor(p, puzzleData({ id: 'live-attack-a', metadata: { title: 'puzzle A' }, givens: CLASSIC_GIVENS }))
     idB = await puzzleIdFor(p, puzzleData({ id: 'live-attack-b', metadata: { title: 'puzzle B' }, givens: [[0, 0, 1], [8, 8, 9]] }))
     await openPuzzleId(p, idA)

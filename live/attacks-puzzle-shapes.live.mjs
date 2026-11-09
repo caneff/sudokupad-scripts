@@ -2,15 +2,15 @@
 // asserts the crash signals (no page error, no skip line) beside what a user expects to see. Clicks, drags and keys are real input; the scripts load at
 // DOMContentLoaded of every page load, as Tampermonkey runs them. The puzzles are built here as data and opened by their id (`live/puzzles.mjs`).
 // Text Anywhere's snap onto the ring of cells around the board is #603 and is not checked here.
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import { openPage } from './page.mjs'
 import { TEXTS } from './draw-tool/draw-tool-fixtures.mjs'
 import { cellCentre, mouseDrag, placeNote } from './board.mjs'
 import { openPenTool, penEntries } from './pen.mjs'
 import { boardOf, CLASSIC_GIVENS, clickCell, installAll, NOTE_POINT, openPuzzleId, puzzleData, puzzleIdFor, seedOddEvenCells, useTool } from './puzzles.mjs'
 import { readUntil, settle } from './settle.mjs'
+import { useBrowser } from './session.mjs'
 
 // Long enough that the pane overflows at SudokuPad's own font in every shape here, so only Auto Rules Resizer makes it fit.
 const RULES = 'Normal sudoku rules apply. ' + 'Digits in a region may not repeat, and neither may digits in a row or a column of the grid. '.repeat(6)
@@ -24,15 +24,13 @@ const NEAR_PX = 0.6
 const ODD = 1
 const EVEN = 2
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on puzzle shapes with every script installed', { concurrency: false }, () => {
   let context, p, errors
 
   beforeEach(async () => {
-    ;({ context, p, errors } = await openPage(browser, { seed: async (page) => { await installAll(page); await seedOddEvenCells(page) } }))
+    ;({ context, p, errors } = await openPage(browser(), { seed: async (page) => { await installAll(page); await seedOddEvenCells(page) } }))
   })
   afterEach(async () => {
     try {

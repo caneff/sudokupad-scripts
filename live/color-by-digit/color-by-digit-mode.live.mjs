@@ -2,17 +2,16 @@
 // The digit shades of Digit and Both are color-by-digit-digits.live.mjs's.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, startInjected, watch, wordOn } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, MODES } from '../page.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
 /* global Replay */
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
 const { shadeOn } = shadeReaders(createRequire(import.meta.url)('../../color-by-digit.user.js'))
 
@@ -20,9 +19,7 @@ const HOLD_MS = 500
 // SudokuPad's color 3 is in no group of Odd/Even, whose keys are 1 and 2.
 const NO_GROUP_KEY = '3'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('the mode, saved Off, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -71,7 +68,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
 
   before(async () => {
-    ({ context, p, errors } = await openSession(browser, script))
+    ({ context, p, errors } = await openSession(browser(), script))
     await read(() => Framework.setSetting('multicolour', true))
   })
   after(async () => { await context.close() })
@@ -430,7 +427,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
 
 describe('the mode word on the button, injected after Start Puzzle (#509)', { concurrency: false }, () => {
   let context, p
-  before(async () => { ({ context, p } = await openSession(browser, script, { saved: savedProfiles(SEED) })) })
+  before(async () => { ({ context, p } = await openSession(browser(), script, { saved: savedProfiles(SEED) })) })
   after(async () => { await context.close() })
 
   it('shows the word of each mode as a press steps Cell, Digit, Both, Off', async () => {
@@ -464,7 +461,7 @@ for (const [what, force, label, colored] of [
     let context, p, errors
 
     before(async () => {
-      ({ context, p, errors } = await openSession(browser, script, { saved: savedProfiles(SEED), force }))
+      ({ context, p, errors } = await openSession(browser(), script, { saved: savedProfiles(SEED), force }))
     })
     after(async () => { await context.close() })
 
@@ -486,7 +483,7 @@ for (const mode of MODES) {
     let context, p, errors
 
     before(async () => {
-      ({ context, p, errors } = await openSession(browser, script, { saved: savedProfiles(SEED), force: { [AUTO_STORAGE_KEY]: true }, mode }))
+      ({ context, p, errors } = await openSession(browser(), script, { saved: savedProfiles(SEED), force: { [AUTO_STORAGE_KEY]: true }, mode }))
     })
     after(async () => { await context.close() })
 
@@ -504,7 +501,7 @@ for (const mode of MODES) {
     let context, p, errors
 
     before(async () => {
-      ({ context, p, errors } = await openSession(browser, script, { saved: { ...savedProfiles(SEED), [AUTO_STORAGE_KEY]: false }, mode }))
+      ({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles(SEED), [AUTO_STORAGE_KEY]: false }, mode }))
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
       await p.keyboard.press('4')
       // SudokuPad saves progress a moment after a change.
@@ -531,7 +528,7 @@ describe('the mode on a touch screen, injected after Start Puzzle', { concurrenc
   let context, p, errors
 
   before(async () => {
-    ({ context, p, errors } = await openSession(browser, script, { contextOptions: { hasTouch: true } }))
+    ({ context, p, errors } = await openSession(browser(), script, { contextOptions: { hasTouch: true } }))
   })
   after(async () => { await context.close() })
 
