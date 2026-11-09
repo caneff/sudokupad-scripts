@@ -762,6 +762,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await holdToOpen(4)
       const depth = await undoDepth()
       const drawn = await strokeCount()
+      const selectedBefore = await p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => `${c.row},${c.col}`))
       const [x, y] = await gridPoint(p, [4, 4])
       await p.mouse.move(x, y)
       await p.mouse.down()
@@ -770,6 +771,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await pickerCount(), 0)
       assert.equal(await undoDepth(), depth)
       assert.equal(await strokeCount(), drawn)
+      assert.deepEqual(await p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => `${c.row},${c.col}`)), selectedBefore)
     })
 
     it('a press on another color button in the panel keeps edit mode on', async () => {

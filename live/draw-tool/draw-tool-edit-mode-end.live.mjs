@@ -39,12 +39,15 @@ describe('leaving Text Anywhere\'s color edit mode', { concurrency: false }, () 
 
   it('a press on the board ends it and opens no note box', async () => {
     await enter()
+    const selected = () => p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => `${c.row},${c.col}`))
+    const selectedBefore = await selected()
     await p.mouse.click(...await gridPoint(p, [3.5, 3.5]))
     assert.equal(await settle(editModeOn, 0), 0)
     assert.equal(await pickerCount(), 0)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
     assert.deepEqual(await draw.texts(p), [])
     assert.equal(await p.locator(TEXTS).count(), 0)
+    assert.deepEqual(await selected(), selectedBefore)
   })
 
   it('a press on another color button in the panel keeps it', async () => {

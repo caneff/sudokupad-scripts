@@ -91,7 +91,7 @@
   as a snapshot: a later palette change does not touch it.
 - **edit mode** — the state of Pen Tool Extras' pen and Text Anywhere after a hold on a color button, or
   while left Alt is held: a color picker sits over each of the nine buttons. A second hold, leaving the
-  tool, Escape, a press outside the panel, the window losing focus, a Pen Tool Extras page change or
+  tool, Escape, a press outside the panel, the window losing focus, a pen page change or
   releasing the Alt that began it ends it. SudokuPad's color tool has the same state for its cell color buttons.
 - **edge mark** — a pen mark on a cell edge: SudokuPad's own X, or one of the
   marks Pen Tool Extras adds (a direction arrow or the edge circle). Each one is a single

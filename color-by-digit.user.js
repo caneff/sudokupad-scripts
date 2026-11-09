@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.15
+// @version      0.25.16
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.15'
+  const VERSION = '0.25.16'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -782,8 +782,7 @@
 
   // A hold of HOLD_TO_EDIT_MS on one of the tool's nine color buttons, with either mouse button, puts a color picker over each; a picker's input calls `save(n, value)` at once.
   // Left Alt held with the tool current does the same until it is released, as SudokuPad's own color tool does.
-  // A second hold, the panel leaving the tool, Escape, a press outside the panel (swallowed, with the click after it), the window losing focus or the caller's `endEditMode()` ends edit mode.
-  // `guard` runs each toggle and each window listener, so a caller can report a failure its own way.
+  // `guard` runs each toggle and each window listener, so a caller can report a failure its own way. `endEditMode()` ends edit mode from outside.
   function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
     const toolClass = `tool-${tool}`
     const editing = `${prefix}editing`
@@ -796,16 +795,16 @@
     // Whether left Alt opened this edit mode, so its release closes only that one.
     let altOpened = false
 
-    function exit (panel) {
+    function exit () {
       if (leaveWatch) leaveWatch.disconnect()
       leaveWatch = null
+      editPanel.classList.remove(editing)
+      editPanel.querySelectorAll(`.${pickerClass}`).forEach((el) => el.remove())
       editPanel = null
       altOpened = false
-      panel.classList.remove(editing)
-      panel.querySelectorAll(`.${pickerClass}`).forEach((el) => el.remove())
     }
 
-    const endEditMode = () => { if (editPanel) exit(editPanel) }
+    const endEditMode = () => { if (editPanel) exit() }
 
     function enter (panel) {
       // Every button is found before anything changes, so a missing one leaves no half edit mode.
@@ -821,7 +820,7 @@
         button.insertAdjacentHTML('beforebegin', `<div class="${pickerClass}" data-key="${n}"><input type="color" data-key="${n}" value="${escapeHtml(colorOf(String(n)))}"></div>`)
       })
       leaveWatch = new window.MutationObserver(() => {
-        if (!panel.classList.contains(toolClass)) exit(panel)
+        if (!panel.classList.contains(toolClass)) exit()
       })
       leaveWatch.observe(panel, { attributes: true, attributeFilter: ['class'] })
     }
@@ -843,7 +842,7 @@
       if (editPanel && !editPanel.contains(event.target)) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        document.addEventListener('click', swallowClick, true)
+        if (event.button === 0) document.addEventListener('click', swallowClick, true)
         endEditMode()
         return
       }
@@ -854,7 +853,7 @@
         timer = undefined
         holdDone = true
         if (!panel.classList.contains(toolClass)) return
-        guard(() => panel.classList.contains(editing) ? exit(panel) : enter(panel))
+        guard(() => panel.classList.contains(editing) ? exit() : enter(panel))
       }, HOLD_TO_EDIT_MS)
     }, true)
     window.addEventListener('pointerup', cancel, true)
@@ -868,10 +867,12 @@
     // On the window, in the capture phase, so it runs ahead of SudokuPad's own Alt (a temporary switch to another tool, which would take the panel away) and can stop it.
     window.addEventListener('keydown', (event) => guard(() => {
       if (event.code === 'Escape' || event.key === 'Escape') return endEditMode()
-      if (event.code !== 'AltLeft' || event.repeat || editPanel || event.target.closest('input, textarea, [contenteditable]')) return
+      if (event.code !== 'AltLeft' || event.target.closest?.('input, textarea, [contenteditable]')) return
       const panel = document.querySelector(`.${toolClass}`)
       if (!panel) return
+      // Stopped even with edit mode already open, or SudokuPad's own Alt would switch tools and take the panel away.
       event.stopImmediatePropagation()
+      if (event.repeat || editPanel) return
       enter(panel)
       altOpened = true
     }), true)
