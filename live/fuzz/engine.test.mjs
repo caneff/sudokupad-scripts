@@ -90,6 +90,16 @@ describe('the fuzz engine on a fake page', () => {
     })
   })
 
+  describe('a rule that depends on the kind of action', () => {
+    it('is told the kind: a Tab that turns the pad to letters fails the run, shrunk to the one Tab', async () => {
+      const { openTarget } = fakeTargets({ lettersOnTab: true })
+      const found = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 300, ...WAITS })
+      assert.equal(found.failed, true)
+      assert.match(found.error, /rule broken after "press Tab": tab-not-letters: Tab switched the number pad to letters/)
+      assert.deepEqual(found.sequence, ['press Tab'])
+    })
+  })
+
   describe('where a late error is read', () => {
     it('with no wait after an action, the wait after the last action still catches it', async () => {
       const { openTarget } = fakeTargets({ plantEscapeError: true })

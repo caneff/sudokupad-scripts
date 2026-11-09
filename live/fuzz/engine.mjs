@@ -26,7 +26,7 @@ function assertClean (snapshot, when) {
   if (signals.length) throw new Error(`${signals.length === 1 ? 'crash signal' : 'crash signals'} ${when}: ${signals.join('; ')}`)
 }
 
-// Throws when a rule is broken between two snapshots; `action` is the kind of action between them and `when` says after which.
+// Throws when a rule is broken between two snapshots; `action` is the kind (`actions.mjs`) of the action between them and `when` says after which.
 function assertRules (now, before, action, when) {
   const broken = ruleViolations({ now, before, action })
   if (broken.length) throw new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`)
@@ -46,7 +46,7 @@ async function runList (openTarget, actions, landMs, settleMs) {
         await target.wait(settleMs)
         const now = await target.snapshot()
         assertClean(now, `after "${action}"`)
-        assertRules(now, before, action.kind, `after "${action}"`)
+        assertRules(now, before, action.cmd.kind, `after "${action}"`)
         before = now
       }
     })
