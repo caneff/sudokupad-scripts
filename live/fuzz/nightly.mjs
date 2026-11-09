@@ -1,17 +1,18 @@
 // `npm run fuzz:nightly`: the 30-minute fuzz run of the nightly workflow. It runs `live/fuzz/run.mjs` with a fresh
 // seed and reads what it prints. A failure files one `bug` issue titled by the failing rule or error signature (the seed, the shrunk steps and the replay
 // command in the body); a failure whose title an open issue already has comments on that issue instead. After a failure the hunt starts again on a new seed
-// with the time left, so a failure is filed or commented on at most once a night and one failure cannot use the whole night. A run that could not start or print a verdict
+// with the time left, so one failure cannot use the whole night; a failure's title is filed or commented on at most once a night. A run that could not start or print a verdict
 // files one "did not run" issue and ends the night, as the daily watch does. Filing is `fileIssue` of live/watch.mjs, not a second copy.
 import { pathToFileURL } from 'node:url'
 import { fileIssue, run } from '../watch.mjs'
 
 export const FUZZ_MINUTES = 30
+export const MINUTE_MS = 60000
 const TITLE_MAX = 110
 // Less time than this left is not worth a page start.
 const MIN_RUN_MINUTES = 1
 // The whole night: the hunts, a shrink of up to 10 minutes, and the page starts; a fuzz still running after this has hung and is killed.
-export const FUZZ_TIMEOUT_MS = (FUZZ_MINUTES + 20) * 60000
+export const FUZZ_TIMEOUT_MS = (FUZZ_MINUTES + 20) * MINUTE_MS
 
 // A short, stable name for what failed, from the error line the fuzz prints (engine.mjs): the broken rules' names, or the first crash signal with its
 // numbers folded, so the same failure on another seed or step still has the same title.
@@ -56,7 +57,7 @@ export function fuzzIssue (f, { runUrl } = {}) {
     ...(f.log.length ? ['Shared error log, newest first:', '', ...f.log.map((l) => `- ${l}`), ''] : []),
     ...(runUrl ? [`Run: ${runUrl}`, ''] : [])
   ].join('\n')
-  const intro = `The nightly fuzz run (\`npm run test:fuzz -- --minutes ${FUZZ_MINUTES}\`) failed on the ${f.puzzle} puzzle, seed ${f.seed}.`
+  const intro = `The nightly fuzz run (\`npm run fuzz:nightly\`) failed on the ${f.puzzle} puzzle, seed ${f.seed}.`
   return {
     title: failureTitle(f.error),
     once: true,
@@ -81,10 +82,9 @@ export const didNotRunIssue = (why) => ({
 export async function nightly ({ runFuzz, fileIssue: file, newSeed, now = Date.now, runUrl }) {
   const start = now()
   const reported = new Set()
-  let failed = false
   while (true) {
-    const minutes = FUZZ_MINUTES - (now() - start) / 60000
-    if (failed && minutes < MIN_RUN_MINUTES) break
+    const minutes = FUZZ_MINUTES - (now() - start) / MINUTE_MS
+    if (reported.size > 0 && minutes < MIN_RUN_MINUTES) break
     let result
     try { result = await runFuzz(newSeed(), { minutes, timeoutMs: FUZZ_TIMEOUT_MS - (now() - start) }) } catch (e) {
       await file(didNotRunIssue(`the fuzz could not be started: ${e.message}`))
@@ -96,18 +96,23 @@ export async function nightly ({ runFuzz, fileIssue: file, newSeed, now = Date.n
       await file(didNotRunIssue(`it printed no verdict (exit ${result.ok ? 0 : 'non-zero'}); the tail of its output:\n\n\`\`\`\n${result.output.split('\n').slice(-15).join('\n')}\n\`\`\``))
       return 'did-not-run'
     }
-    failed = true
     const issue = fuzzIssue(parsed, { runUrl })
     if (!reported.has(issue.title)) await file(issue)
     reported.add(issue.title)
   }
-  return failed ? 'red' : 'green'
+  return reported.size > 0 ? 'red' : 'green'
+}
+
+// Each run is told its seed in the log, since a run killed for hanging prints none.
+export function fuzzProcess (seed, { minutes, timeoutMs }, runner = run) {
+  console.error(`fuzz:nightly: seed ${seed} for ${minutes} minutes`)
+  return runner('node', ['live/fuzz/run.mjs', '--seed', String(seed), '--minutes', String(minutes)], { mergeStderr: true, timeout: timeoutMs })
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const runUrl = process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : undefined
   const outcome = await nightly({
-    runFuzz: (seed, { minutes, timeoutMs }) => run('node', ['live/fuzz/run.mjs', '--seed', String(seed), '--minutes', String(minutes)], { mergeStderr: true, timeout: timeoutMs }),
+    runFuzz: fuzzProcess,
     fileIssue,
     newSeed: () => Math.floor(Math.random() * 2 ** 31),
     runUrl

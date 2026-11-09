@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileIssue, run } from '../watch.mjs'
-import { FUZZ_MINUTES, FUZZ_TIMEOUT_MS, didNotRunIssue, failureTitle, nightly, parseFuzzOutput } from './nightly.mjs'
+import { FUZZ_MINUTES, FUZZ_TIMEOUT_MS, MINUTE_MS, didNotRunIssue, failureTitle, fuzzProcess, nightly, parseFuzzOutput } from './nightly.mjs'
 
 const failedOutput = (seed, error, steps = ['click cell 3', 'digit 5']) => [
   `fuzz FAILED on the 9x9 puzzle (seed ${seed}) after 41 s`,
@@ -36,12 +36,12 @@ const night = (gh, outputs, ok = false) => {
   const runs = []
   let clock = 0
   let seed = 0
-  const share = Math.ceil(FUZZ_MINUTES * 60000 / list.length)
+  const share = Math.ceil(FUZZ_MINUTES * MINUTE_MS / list.length)
   const outcome = nightly({
     runFuzz: async (s, limits) => {
       runs.push({ seed: s, ...limits })
       clock += share
-      return { ok, output: list[runs.length - 1] }
+      return { ok, output: list[runs.length - 1] ?? 'a run started after the night was over\n' }
     },
     fileIssue: gh.file,
     newSeed: () => ++seed,
@@ -90,11 +90,11 @@ describe('a failing fuzz run', () => {
 describe('a night with several failures', () => {
   it('files each distinct failure and keeps hunting after the first', async () => {
     const gh = fakeGh()
-    const night2 = night(gh, [failedOutput(1, RULE), failedOutput(2, CRASH)])
-    assert.equal(await night2, 'red')
+    const hunt = night(gh, [failedOutput(1, RULE), failedOutput(2, CRASH)])
+    assert.equal(await hunt, 'red')
     assert.deepEqual(verbs(gh), ['issue create', 'issue create'])
     assert.deepEqual(gh.open.map((i) => i.title), ['Fuzz: rule broken: pen-lines-drawn', 'Fuzz: crash: page error or console error: TypeError: x is null at N'])
-    assert.equal(night2.runs.length, 2)
+    assert.equal(hunt.runs.length, 2)
   })
 
   it('comments on an open issue for a failure it already has, and the hunt goes on to the next', async () => {
@@ -124,7 +124,7 @@ describe('a night with several failures', () => {
     await n
     assert.deepEqual(n.runs.map((r) => r.seed), [1, 2])
     assert.deepEqual(n.runs.map((r) => r.minutes), [FUZZ_MINUTES, FUZZ_MINUTES / 2])
-    assert.deepEqual(n.runs.map((r) => r.timeoutMs), [FUZZ_TIMEOUT_MS, FUZZ_TIMEOUT_MS - FUZZ_MINUTES * 30000])
+    assert.deepEqual(n.runs.map((r) => r.timeoutMs), [FUZZ_TIMEOUT_MS, FUZZ_TIMEOUT_MS - FUZZ_MINUTES * MINUTE_MS / 2])
   })
 
   it('stops hunting when the failure and its shrink used the 30 minutes', async () => {
@@ -132,6 +132,17 @@ describe('a night with several failures', () => {
     const n = night(gh, failedOutput(1, RULE))
     assert.equal(await n, 'red')
     assert.equal(n.runs.length, 1)
+  })
+
+  it('starts no run with under a minute left, and one with a minute left', async () => {
+    const after = async (minutesUsed) => {
+      const runs = []
+      let clock = 0
+      await nightly({ runFuzz: async (seed, limits) => { runs.push(limits.minutes); clock += minutesUsed * MINUTE_MS; return { ok: false, output: failedOutput(runs.length, runs.length === 1 ? RULE : CRASH) } }, fileIssue: fakeGh().file, newSeed: () => 1, now: () => clock })
+      return runs.length
+    }
+    assert.equal(await after(29.5), 1)
+    assert.equal(await after(29), 2)
   })
 
   it('stays red when a later run passes', async () => {
@@ -213,6 +224,14 @@ describe('the did-not-run title in the workflow', () => {
   it('is the same text fuzz.yml files under, so the open-issue check matches across the two', () => {
     const yml = readFileSync(new URL('../../.github/workflows/fuzz.yml', import.meta.url), 'utf8')
     assert.match(yml, new RegExp(`title: '${didNotRunIssue('x').title}'`))
+  })
+})
+
+describe('the fuzz process', () => {
+  it('is started with the run\'s seed and minutes, and killed at the timeout it is given', async () => {
+    const calls = []
+    await fuzzProcess(7, { minutes: 12.5, timeoutMs: 99 }, async (...a) => { calls.push(a); return { ok: true, output: '' } })
+    assert.deepEqual(calls, [['node', ['live/fuzz/run.mjs', '--seed', '7', '--minutes', '12.5'], { mergeStderr: true, timeout: 99 }]])
   })
 })
 
