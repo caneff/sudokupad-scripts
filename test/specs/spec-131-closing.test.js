@@ -2,31 +2,13 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const colorByDigit = require('../../color-by-digit.user.js')
+const { startScript } = require('../unit-start.js')
 
 function warningWithoutGetApp (name) {
-  const file = require.resolve(`../../${name}.user.js`)
   const element = () => ({ style: { setProperty () {} }, setAttribute () {}, append () {}, addEventListener () {}, remove () {} })
-  const saved = { document: global.document, window: global.window }
-  global.document = { createElement: element, head: { appendChild () {} }, body: { appendChild () {}, append () {} }, documentElement: { outerHTML: '' }, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], fonts: null }
-  global.window = { MutationObserver: class { observe () {} }, addEventListener () {} }
-  global.Framework = {}
-  const warnings = []
-  const realWarn = console.warn
-  console.warn = (...args) => warnings.push(args.join(' '))
-  const cached = require.cache[file]
-  delete require.cache[file]
-  try {
-    require(file)
-  } finally {
-    console.warn = realWarn
-    delete global.Framework
-    for (const [key, value] of Object.entries(saved)) {
-      if (value === undefined) delete global[key]
-      else global[key] = value
-    }
-    require.cache[file] = cached
-  }
-  return warnings
+  const document = { createElement: element, head: { appendChild () {} }, body: { appendChild () {}, append () {} }, documentElement: { outerHTML: '' }, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], fonts: null }
+  const window = { MutationObserver: class { observe () {} }, addEventListener () {} }
+  return startScript(require.resolve(`../../${name}.user.js`), { document, window, Framework: {} }).warnings
 }
 
 // Spec 131's acceptance as one pass over its scripts that are still in the repo, at `npm test`. This seam is blind

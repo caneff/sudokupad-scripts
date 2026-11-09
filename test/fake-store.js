@@ -2,12 +2,11 @@
 
 // Framework's getData, setData and removeData over `saved` itself, so a test reads what was written there; getData reads null for a missing key, as Framework does.
 function fakeStore (saved = {}) {
-  const data = saved
   return {
-    data,
-    getData: (key) => (key in data ? data[key] : null),
-    setData: (key, value) => { data[key] = value },
-    removeData: (key) => { delete data[key] }
+    data: saved,
+    getData: (key) => (key in saved ? saved[key] : null),
+    setData: (key, value) => { saved[key] = value },
+    removeData: (key) => { delete saved[key] }
   }
 }
 

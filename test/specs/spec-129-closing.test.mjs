@@ -29,8 +29,8 @@ const FIXTURE_NAMES = ['GIVENS', 'SEED', 'ODD_EVEN', 'LOW_FIVE_HIGH', 'BUTTON', 
 
 // Spec 129's acceptance as one pass over the live harness, at `npm test`: the live files are read as text, and
 // modeFor is run for each answer the version check can give. This seam is blind to real SudokuPad, so that the live
-// files still pass through this harness is `npm run test:live`'s to show, and neither run covers a real Tampermonkey
-// install or crackingthecryptic.com.
+// files still pass through this harness is `npm run test:live`'s to show, and a real Tampermonkey
+// install is `npm run test:tampermonkey`'s.
 test('the live files share one harness, and the recording is replaced only when SudokuPad\'s version changed', () => {
   for (const [owner, names] of Object.entries(OWNED)) {
     for (const name of names) assert.deepEqual(declarers(name), [owner], name)

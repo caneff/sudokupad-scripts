@@ -100,8 +100,9 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.ok(stdout.includes(`  1. ${found.sequence[0]}\n`), stdout)
     })
 
-    it('the same seed without the planted error passes', async () => {
-      assert.equal((await fuzz({ browser: browser(), seed: PLANTED_SEED, runs: 20 })).failed, false)
+    it('the exact shrunk list, replayed without the planted error, passes', async () => {
+      const replayed = await fuzz({ browser: browser(), seed: found.seed, path: found.path })
+      assert.equal(replayed.failed, false, `${replayed.error}\n${replayed.sequence?.join('\n')}`)
     })
   })
 })

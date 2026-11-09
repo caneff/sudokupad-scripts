@@ -9,7 +9,7 @@ const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { startScript, withScript: runScript, withoutPath } = require('./unit-start.js')
+const { startScript, withScript, withoutPath } = require('./unit-start.js')
 const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 
 // The chips a profile pair draws in `style`; the digit profile is the cell profile unless given.
@@ -950,7 +950,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     closeDialog: () => {},
     app: { tools: { colour: {} } }
   }
-  await runScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async () => {
+  await withScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async () => {
     await new Promise((resolve) => setImmediate(resolve))
     const order = calls.map((c) => c[0])
     assert.ok(order.includes('setting'), `no setting in ${order}`)
@@ -965,7 +965,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
 test('entry point: a Framework without getApp turns off the features that need an app, each named once, and starts the rest', async () => {
   const calls = []
   const Framework = { getData: () => null, setData () {}, removeData () {}, addSetting: () => calls.push('setting'), showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }
-  await runScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async ({ warnings }) => {
+  await withScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async ({ warnings }) => {
     await new Promise((resolve) => setImmediate(resolve))
     assert.deepEqual(warnings, ['color-by-digit: cell coloring, mode button, redraw after the puzzle loads skipped because SudokuPad has no Framework.getApp'])
     assert.deepEqual(calls, ['setting'])
@@ -1021,7 +1021,7 @@ function mockApp (cellDefs, { single = false } = {}) {
 
 // `stored` is what Framework.getData answers besides the Odd/Even profile; nothing stored starts the mode at Cell.
 // Framework.setData writes to the same store, which the test reads as `app.stored`.
-async function withScript (app, fn, stored = {}) {
+async function startedWith (app, fn, stored = {}) {
   app.stored = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0 }, ...stored }
   const Framework = {
     getApp: () => Promise.resolve(app),
@@ -1034,7 +1034,7 @@ async function withScript (app, fn, stored = {}) {
     closeDialog: () => {},
     app: { tools: { colour: {} } }
   }
-  await runScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async () => {
+  await withScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async () => {
     await new Promise((resolve) => setImmediate(resolve))
     await fn(app)
   })
@@ -1044,7 +1044,7 @@ const select = (app, i) => app.select(app.puzzle.cells[i])
 const types = (app) => app.calls.map((c) => c.split(':')[0])
 
 test('cell coloring: a digit entry is one group with its color change inside it', async () => {
-  await withScript(mockApp([{}, {}]), async (app) => {
+  await startedWith(mockApp([{}, {}]), async (app) => {
     select(app, 0)
     app.calls.length = 0
     app.act({ type: 'value', arg: '1' })
@@ -1055,7 +1055,7 @@ test('cell coloring: a digit entry is one group with its color change inside it'
 })
 
 test('cell coloring: with Multi-color off, taking a second color off a cell that clears it still leaves the cell its group color', async () => {
-  await withScript(mockApp([{ colours: ['1', '2'] }], { single: true }), async (app) => {
+  await startedWith(mockApp([{ colours: ['1', '2'] }], { single: true }), async (app) => {
     select(app, 0)
     app.act({ type: 'value', arg: '3' })
     assert.deepEqual(app.puzzle.cells[0].colours, ['1'])
@@ -1064,7 +1064,7 @@ test('cell coloring: with Multi-color off, taking a second color off a cell that
 })
 
 test('cell coloring: an entry SudokuPad already runs in a group adds its colors to that group, never opens another', async () => {
-  await withScript(mockApp([{}]), async (app) => {
+  await startedWith(mockApp([{}]), async (app) => {
     select(app, 0)
     app.act({ type: 'groupstart' })
     app.calls.length = 0
@@ -1077,7 +1077,7 @@ test('cell coloring: an entry SudokuPad already runs in a group adds its colors 
 })
 
 test('cell coloring: anything that is not a digit or centre mark entry passes straight through', async () => {
-  await withScript(mockApp([{}]), async (app) => {
+  await startedWith(mockApp([{}]), async (app) => {
     select(app, 0)
     app.calls.length = 0
     app.act({ type: 'colour', arg: '9' })
@@ -1088,7 +1088,7 @@ test('cell coloring: anything that is not a digit or centre mark entry passes st
 })
 
 test('cell coloring: a clear with nothing to clear, and a digit on a given, open no group', async () => {
-  await withScript(mockApp([{}, { given: '5' }]), async (app) => {
+  await startedWith(mockApp([{}, { given: '5' }]), async (app) => {
     select(app, 0)
     app.calls.length = 0
     app.act({ type: 'clear', arg: 'normal' })
@@ -1100,7 +1100,7 @@ test('cell coloring: a clear with nothing to clear, and a digit on a given, open
 
 test('mode: in Off, saved or from auto mode saved off, a digit entry passes straight through and loading colors nothing', async () => {
   for (const saved of [{ ColorByDigit_mode: 'off' }, { ColorByDigit_auto: false }]) {
-    await withScript(mockApp([{}, { given: '1' }]), async (app) => {
+    await startedWith(mockApp([{}, { given: '1' }]), async (app) => {
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [[], []])
       select(app, 0)
       app.calls.length = 0
@@ -1114,7 +1114,7 @@ test('mode: in Off, saved or from auto mode saved off, a digit entry passes stra
 
 test('mode: in Cell, nothing saved or auto mode saved on, loading colors the givens', async () => {
   for (const saved of [{}, { ColorByDigit_auto: true }, { ColorByDigit_mode: 'cell', ColorByDigit_auto: false }]) {
-    await withScript(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
+    await startedWith(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], ['2']])
     }, saved)
   }
@@ -1123,7 +1123,7 @@ test('mode: in Cell, nothing saved or auto mode saved on, loading colors the giv
 test('use digit colors: saved off, a saved Both loads as Cell and colors the givens, and a saved Digit loads as Off and colors nothing', async () => {
   const profiles = { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0, useDigitColors: false }
   for (const [savedMode, label, colours] of [['both', 'Cell', [['1'], ['2']]], ['digit', 'Off', [[], []]]]) {
-    await withScript(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
+    await startedWith(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
       assert.equal(app.buttonTitle, `Color by digit: ${label}`, savedMode)
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), colours, savedMode)
     }, { ColorByDigit_profiles: profiles, ColorByDigit_mode: savedMode })
@@ -1131,7 +1131,7 @@ test('use digit colors: saved off, a saved Both loads as Cell and colors the giv
 })
 
 test('cell coloring: a restart colors the givens again', async () => {
-  await withScript(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
+  await startedWith(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
     app.handlers.restarted()
     assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], ['2']])
     assert.equal(app.puzzle.inGroup, false)
@@ -1142,7 +1142,7 @@ const UNSYNCED_BOTH = { ColorByDigit_mode: 'both', ColorByDigit_profiles: { prof
 
 test('sync: unsynced in Both, a Digits pick saves the digit profile and leaves every cell alone, hand-altered ones included, with no action', async () => {
   // Cell 0 is empty with a group color painted by hand; cell 1's group color, given at load, is then taken off by hand.
-  await withScript(mockApp([{ colours: ['1'] }, { value: '3' }]), async (app) => {
+  await startedWith(mockApp([{ colours: ['1'] }, { value: '3' }]), async (app) => {
     app.puzzle.cells[1].colours = []
     app.calls.length = 0
     pickRow('digits', 1)
@@ -1153,7 +1153,7 @@ test('sync: unsynced in Both, a Digits pick saves the digit profile and leaves e
 })
 
 test('sync: unsynced in Both, a Cells pick recolors the cells: a 6 goes from Odd/Even\'s even color to Low/5/High\'s high one', async () => {
-  await withScript(mockApp([{ value: '6' }]), async (app) => {
+  await startedWith(mockApp([{ value: '6' }]), async (app) => {
     assert.deepEqual(app.puzzle.cells[0].colours, ['2'])
     pickRow('cells', 1)
     assert.equal(app.stored.ColorByDigit_profiles.data.active, 1)
@@ -1163,7 +1163,7 @@ test('sync: unsynced in Both, a Cells pick recolors the cells: a 6 goes from Odd
 
 test('mode: leaving cell coloring keeps a hand color in no group on a cell that held a group color too, Multi-color on or off, in one undo step', async () => {
   for (const single of [false, true]) {
-    await withScript(mockApp([{ value: '1' }, { value: '4' }], { single }), async (app) => {
+    await startedWith(mockApp([{ value: '1' }, { value: '4' }], { single }), async (app) => {
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], ['2']])
       // A hand color in no group of Odd/Even, painted while Multi-color was on.
       app.puzzle.cells[0].colours = ['1', '9']
@@ -1180,7 +1180,7 @@ test('mode: leaving cell coloring keeps a hand color in no group on a cell that 
 test('Each digit: an install already offered it keeps the Each digit it has, on the first page\'s keys, and gets no second one', async () => {
   const oldEachDigit = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => ({ key: d, digits: [d] }))
   const saved = { profiles: [{ name: 'Odd/Even', groups: ODD }, { name: 'Each digit', groups: oldEachDigit }], active: 0 }
-  await withScript(mockApp([{}]), async (app) => {
+  await startedWith(mockApp([{}]), async (app) => {
     assert.deepEqual(app.stored.ColorByDigit_profiles, saved)
   }, { ColorByDigit_profiles: saved, ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true })
 })
@@ -1720,8 +1720,11 @@ test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a 
   assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]), runCells(renderChips(chipsOf(LOW), colorFor, { size: 16 })))
 })
 
-const declarationsOf = (selector) => [...STYLE_CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)]
-  .filter((m) => m[1].split(',').map((x) => x.trim()).includes(selector)).map((m) => m[2].replace(/\s+/g, ' ').trim()).join(' ')
+// The declarations of every rule in `css` whose selector list names `selector`, joined.
+const rulesFor = (css, selector) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+  .filter((m) => m[1].split(',').map((x) => x.trim()).includes(selector))
+  .map((m) => m[2].replace(/\s+/g, ' ').trim()).join(' ')
+const declarationsOf = (selector) => rulesFor(STYLE_CSS, selector)
 
 test('the bottom row is capped at 21.6rem, which live/color-by-digit-rows.live.mjs shows wraps it at five buttons a row', () => {
   assert.match(BOTTOM_ROW_CSS, /^\.controls-aux \{ max-width: 21\.6rem; \}$/)
@@ -1889,13 +1892,13 @@ test('with cell coloring off, the icon and the digit shades are drawn once the p
     closeDialog () {},
     app: { tools: { colour: {} } }
   }
-  await runScript('../color-by-digit.user.js', { document, window: pageWindow(), Framework }, async () => {
+  await withScript('../color-by-digit.user.js', { document, window: pageWindow(), Framework }, async () => {
     await new Promise((resolve) => setImmediate(resolve))
     const loaded = listeners.filter(({ type }) => type === 'progressloaded')
     assert.equal(loaded.length, 1, 'one listener waits for the load')
     assert.equal(appended.some((el) => el.id === 'color-by-digit-digits'), false, 'no digit shades before the load')
+    assert.equal(icon.outerHTML, 'old icon', 'the icon is not drawn before the load')
     cells.push({ given: '1', colours: [], propVisible: () => false, propGet: () => [] })
-    icon.outerHTML = 'old icon'
     loaded[0].fn()
     assert.match(icon.outerHTML, /^<div class="icon"/, 'the icon is drawn again')
     assert.equal(appended.some((el) => el.id === 'color-by-digit-digits'), true, 'the digit shades are added')
@@ -1994,10 +1997,6 @@ test('reduceDraft reload: pasted settings replace the draft, selecting their act
 
 // The dialog's focus, hover and press states, hit areas, grab cursor and keyboard.
 const RING = SUDOKUPAD_PURPLE
-const rulesFor = (css, selector) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
-  .filter((m) => m[1].split(',').map((x) => x.trim()).includes(selector))
-  .map((m) => m[2].replace(/\s+/g, ' ').trim()).join(' ')
-
 test('the dialog\'s buttons, digit keys, swatches and profile rows show a 2 px ring on keyboard focus only', () => {
   for (const part of ['button', '[data-role="swatch"]', '.cbd-profile']) {
     assert.match(rulesFor(STYLE_CSS, `#color-by-digit-editor ${part}:focus-visible`), new RegExp(`outline: 2px solid ${RING}`), part)

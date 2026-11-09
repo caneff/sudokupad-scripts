@@ -235,7 +235,7 @@ test('the Install button is styled once, in style.css, and shared by every page'
   for (const page of fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))) {
     const html = read(page)
     assert.doesNotMatch(html, /<style[^>]*>[^<]*\.install/, `${page} styles .install in a <style> block`)
-    assert.doesNotMatch(html, /<a [^>]*class="install"[^>]*style=/, `${page} styles an install link inline`)
+    assert.doesNotMatch(html, /<a [^>]*(?:class="install"[^>]*style=|style=[^>]*class="install")/, `${page} styles an install link inline`)
   }
 })
 
@@ -387,11 +387,23 @@ test(`${CBD} has the slideshow between the install link and "What it adds", then
   assertSectionsInOrder(CBD, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<h2>Good to know</h2>'])
 })
 
-test("Color by Digit's slide 5 says three marks repeat the given 2, and the board the slides are taken on has exactly three", async () => {
-  const { GIVEN, CORNER, CENTRE } = await import('../docs/research/color-by-digit/color-by-digit-example.mjs')
-  const repeats = [...CORNER, ...CENTRE].filter(([row, col, digits]) => digits.includes(GIVEN) && (row === 0 || col === 0))
-  assert.equal(GIVEN, '2')
-  assert.equal(repeats.length, 3)
+// SudokuPad flags a mark that repeats a given in its row, its column or its 3x3 box.
+const repeatsGiven = ([row, col, digits], given) => digits.includes(given.digit) && (row === given.row || col === given.col || (Math.floor(row / 3) === Math.floor(given.row / 3) && Math.floor(col / 3) === Math.floor(given.col / 3)))
+// What the picture script (read as data, since npm test does not run docs/research/) holds for the board its slides are taken on.
+const exampleBoard = () => {
+  const text = fs.readFileSync(path.join(ROOT, 'docs', 'research', 'color-by-digit', 'color-by-digit-example.mjs'), 'utf8')
+  const list = (name) => JSON.parse(text.match(new RegExp(`const ${name} = (\\[\\[[^;]*\\]\\])\\n`))[1].replace(/'/g, '"'))
+  return { digit: text.match(/const GIVEN = '(\d)'/)[1], marks: [...list('CORNER'), ...list('CENTRE')] }
+}
+
+test("Color by Digit's slide 5 says three marks repeat the given 2, and the board the slides are taken on has exactly three, by row, column or box", () => {
+  const { digit, marks } = exampleBoard()
+  const given = { digit, row: 0, col: 0 }
+  assert.equal(digit, '2')
+  assert.equal(marks.filter((mark) => repeatsGiven(mark, given)).length, 3)
+  // A mark that shares only the 3x3 box with the given goes red, and one that shares nothing does not.
+  assert.equal(repeatsGiven([1, 1, '2'], given), true)
+  assert.equal(repeatsGiven([1, 4, '2'], given), false)
   const alts = homeShow('Color by Digit').match(/\balt="[^"]*"/g)
   assert.match(alts[4], /three marks that repeat the given 2/)
 })
