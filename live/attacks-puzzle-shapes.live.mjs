@@ -7,8 +7,9 @@ import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { openPage } from './page.mjs'
 import { TEXTS } from './draw-tool/draw-tool-fixtures.mjs'
-import { cellCentre, mouseDrag, openPenTool, penEntries } from './pen.mjs'
-import { boardOf, CLASSIC_GIVENS, clickCell, installAll, openPuzzleId, placeNote, puzzleData, puzzleIdFor, seedOddEvenCells, useTool } from './puzzles.mjs'
+import { cellCentre, mouseDrag, placeNote } from './board.mjs'
+import { openPenTool, penEntries } from './pen.mjs'
+import { boardOf, CLASSIC_GIVENS, clickCell, installAll, NOTE_POINT, openPuzzleId, puzzleData, puzzleIdFor, seedOddEvenCells, useTool } from './puzzles.mjs'
 import { readUntil, settle } from './settle.mjs'
 
 // Long enough that the pane overflows at SudokuPad's own font in every shape here, so only Auto Rules Resizer makes it fit.
@@ -76,7 +77,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
 
   // A note '15' in the middle of the grid, dragged slowly until its outline is 2 px right of the last inner column line: the outline lies on the line with its guide.
   const snapsToLastColumnLine = async (rows, cols) => {
-    await placeNote(p, '15', [Math.min(2.5, rows - 0.5), Math.max(0.5, cols - 2.5)])
+    await placeNote(p, [Math.min(2.5, rows - 0.5), Math.max(0.5, cols - 2.5)], '15')
     const note = await p.locator(TEXTS, { hasText: '15' }).boundingBox()
     const line = await lineX(cols - 1)
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
@@ -163,7 +164,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       const shownOutsideLight = givens.filter((g) => !g.hidden && !FOG_LIT.some(([r, c]) => r === g.row && c === g.col))
       assert.deepEqual(shownOutsideLight, [], 'only lit cells show their clues')
       await penMarks(9, 9)
-      await placeNote(p, '15')
+      await placeNote(p, NOTE_POINT, '15')
       await useTool(p, '#control-normal')
       await clickCell(p, 0, 2)
       await p.keyboard.press('4')
@@ -201,7 +202,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       }
       assert.deepEqual(await readUntil(underBoard, (r) => r.count === 1), { count: 1, covers: true }, 'the image is under the board')
       await penMarks(9, 9)
-      await placeNote(p, '15')
+      await placeNote(p, NOTE_POINT, '15')
       await useTool(p, '#control-normal')
       await clickCell(p, 0, 2)
       await p.keyboard.press('4')

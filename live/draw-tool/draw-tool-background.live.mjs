@@ -3,11 +3,10 @@
 // and both the notes' boxes and the button's state survive a reload. Real mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { boxOpen, clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
 
 const { BACKGROUND_BUTTON, BACKGROUND_KEY, HANDLES, TEXT_BGS, TEXT_BOX } = draw
 // Pixels a measured edge may differ from its note's: the browser rounds both to device pixels.
@@ -15,38 +14,25 @@ const ROUNDING_PX = 1.5
 // Five spots, in cells from the grid's top left, one row apart.
 const SPOTS = [[0.5, 4.5], [2.5, 4.5], [4.5, 4.5], [6.5, 4.5], [8.5, 4.5]]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = () => draw.saved(p)
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
   const bgCount = () => p.locator(TEXT_BGS).count()
   const pressed = () => p.locator(BACKGROUND_BUTTON).getAttribute('aria-pressed')
   const storedSetting = () => read((key) => Framework.getData(key) ?? null, BACKGROUND_KEY)
   // Which saved notes have a background, by text.
   const savedBgs = async () => Object.fromEntries((await saved()).map((item) => [item.text, item.bg ?? false]))
-  const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
   // A double-click opens a note already made.
   const openAt = async (at) => draw.reopen(p, await gridPoint(p, at))
-  const typeText = async (at, content) => {
-    await clickAt(at)
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
-  }
-  const boxOpen = async () => (await p.locator(TEXT_BOX).count()) === 1
   const boxFilled = () => p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)')
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
     await read((key) => Framework.removeData(key), BACKGROUND_KEY)
     await reload()
@@ -55,7 +41,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
 
   it('Background is off by default, and a note made then has no box and no bg in storage', async () => {
     assert.equal(await pressed(), 'false')
-    await typeText(SPOTS[0], 'a')
+    await typeText(p, SPOTS[0], 'a')
     assert.equal(await bgCount(), 0)
     assert.deepEqual(await savedBgs(), { a: false })
     assert.equal('bg' in (await saved())[0], false)
@@ -70,7 +56,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
   })
 
   it('with Background on a new note has a box behind its text, and bg:true in storage', async () => {
-    await typeText(SPOTS[1], 'b')
+    await typeText(p, SPOTS[1], 'b')
     assert.equal(await bgCount(), 1)
     assert.deepEqual(await savedBgs(), { a: false, b: true })
     // The box is the note's own element, and the text's box is measured by a range over its characters.
@@ -90,7 +76,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
     assert.equal(await pressed(), 'false')
     assert.equal(await storedSetting(), false)
     assert.equal(await bgCount(), 1, 'the box stays')
-    await typeText(SPOTS[2], 'c')
+    await typeText(p, SPOTS[2], 'c')
     assert.equal(await bgCount(), 1, 'the new note has no box')
     assert.deepEqual(await savedBgs(), { a: false, b: true, c: false })
   })
@@ -113,13 +99,13 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
 
   it('while a note is open, pressing Background turns that note\'s box on, keeps the box open, and changes no other note', async () => {
     await openAt(SPOTS[0])
-    assert.equal(await boxOpen(), true)
+    assert.equal(await boxOpen(p), true)
     assert.equal(await boxFilled(), false)
     await p.click(BACKGROUND_BUTTON)
     assert.equal(await pressed(), 'true')
-    assert.equal(await boxOpen(), true, 'the text box is still open')
+    assert.equal(await boxOpen(p), true, 'the text box is still open')
     assert.equal(await boxFilled(), true, 'the open box shows the background')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await bgCount(), 2)
     assert.deepEqual(await savedBgs(), { a: true, b: true, c: false })
   })
@@ -130,7 +116,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
     await p.click(BACKGROUND_BUTTON)
     assert.equal(await pressed(), 'false')
     assert.equal(await boxFilled(), false)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await bgCount(), 1)
     assert.deepEqual(await savedBgs(), { a: false, b: true, c: false })
     assert.equal('bg' in (await saved()).find((item) => item.text === 'a'), false)
@@ -138,11 +124,11 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
 
   it('a new note opened with Background on and then toggled off is saved without a box', async () => {
     await p.click(BACKGROUND_BUTTON)
-    await clickAt(SPOTS[3])
+    await clickAt(p, SPOTS[3])
     await p.keyboard.type('d')
     assert.equal(await boxFilled(), true)
     await p.click(BACKGROUND_BUTTON)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await savedBgs(), { a: false, b: true, c: false, d: false })
     assert.equal(await bgCount(), 1)
   })
@@ -154,7 +140,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
     await p.click(BACKGROUND_BUTTON)
     assert.equal(await pressed(), 'false')
     assert.equal(await boxFilled(), false)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await savedBgs(), { a: false, b: false, c: false, d: false })
     assert.equal(await storedSetting(), false, 'the setting is unchanged')
     assert.equal(await pressed(), 'false', 'with no note open the button shows the setting')
@@ -176,7 +162,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
     const after = await shape()
     assert.equal(after.width > before.width, true, 'the padding made the note wider')
     assert.equal(Math.abs((after.span - before.span) - (after.width - before.width)) <= ROUNDING_PX, true, `the handles moved ${after.span - before.span}px for a note ${after.width - before.width}px wider`)
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('the page raised no error', () => {

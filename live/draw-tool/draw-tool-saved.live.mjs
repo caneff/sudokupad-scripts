@@ -2,13 +2,12 @@
 // saved are never drawn and stay in storage as they were.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { gotoPuzzle, injectAtIdle, newPage, openPage, startPuzzle } from '../page.mjs'
-import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { addPage, useBrowser } from '../session.mjs'
+import { finishNote, gridPoint, mouseDrag, restart, typeText } from '../board.mjs'
 
-const { DIALOG, DIGIT_BUTTON, DRAWING_PREFIX, INDEX_KEY, NOT_NOTES, RESTARTED_PREFIX, script, TEXTS } = draw
+const { DIALOG, DIGIT_BUTTON, DRAWING_PREFIX, INDEX_KEY, NOT_NOTES, RESTARTED_PREFIX, TEXTS } = draw
 
 // What an earlier version saved, planted as it wrote it.
 const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [[100, 100], [300, 200], [500, 100]] }
@@ -18,9 +17,7 @@ const EMPTY_CELL = [0, 2]
 const B_ID = 'puzzle-b-490'
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   let context, p, errors
@@ -28,11 +25,6 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const texts = () => draw.texts(p)
-  const typeText = async (at, content) => {
-    await p.mouse.click(...await gridPoint(p, at))
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
-  }
   const puzzleKey = () => draw.puzzleKey(p)
   const saved = () => draw.saved(p)
   const pickDraw = () => draw.pickDraw(p)
@@ -52,19 +44,13 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await p.keyboard.press(digit)
   }
   const digit = () => read(([row, col]) => Framework.app.grid.getCell(row, col).propGet('normal') ?? null, EMPTY_CELL)
-  const restartFromDialog = async () => {
-    await p.click('#control-restart')
-    await p.locator('.dialog button').filter({ hasText: /Restart/ }).filter({ hasNotText: /Keep Time/ }).first().click()
-    await p.locator('.dialog').waitFor({ state: 'detached' })
-  }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
+    ;({ context, p, errors } = await draw.open(browser(), {
       // Only the redraw plants a break; its skip line says SudokuPad changed, any other draw-tool skip line fails the suite.
       expectedSkips: [/^draw-tool: .* skipped because SudokuPad changed/],
       seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /draw-tool|DrawTool_/.test(m.text())) warnings.push(m.text()) })
     }))
-    await draw.boot(p)
     await draw.forgetDrawings(p)
   })
   after(async () => { await context.close() })
@@ -72,13 +58,13 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   it('getReplay() is the same with a note on the board as without one', async () => {
     const replay = await read(() => Framework.app.getReplay())
     await pickDraw()
-    await typeText([2.5, 2.5], '15')
+    await typeText(p, [2.5, 2.5], '15')
     assert.deepEqual(await texts(), ['15'])
     assert.equal(await read(() => Framework.app.getReplay()), replay)
   })
 
   it('the notes survive a page reload, note for note', async () => {
-    await typeText([5.5, 4.5], '20')
+    await typeText(p, [5.5, 4.5], '20')
     const before = await texts()
     assert.deepEqual(before, ['15', '20'])
     await reload()
@@ -105,10 +91,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   it('the notes show again when the script starts at DOMContentLoaded, before the puzzle has loaded', async () => {
     const mine = await texts()
-    const { p: early, errors: earlyErrors } = await newPage(context)
-    await injectAtIdle(early, script)
-    await gotoPuzzle(early)
-    await startPuzzle(early)
+    const { p: early, errors: earlyErrors } = await addPage(context, [draw.SCRIPT_FILE], { mode: 'document-idle' })
     const earlyTexts = () => early.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent), TEXTS)
     assert.deepEqual(await settle(earlyTexts, mine), mine)
     assert.deepEqual(earlyErrors, [])
@@ -117,7 +100,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   it('Restart empties the notes, and a reload after it shows none', async () => {
     assert.equal((await texts()).length, 2)
-    await restartFromDialog()
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     assert.equal(await saved(), null)
     await reload()
@@ -128,9 +111,9 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await draw.forgetDrawings(p)
     await reload()
     await pickDraw()
-    await typeText([2.5, 2.5], '15')
-    await typeText([5.5, 4.5], '20')
-    await restartFromDialog()
+    await typeText(p, [2.5, 2.5], '15')
+    await typeText(p, [5.5, 4.5], '20')
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     assert.equal(await saved(), null)
     await undo()
@@ -145,9 +128,9 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await draw.forgetDrawings(p)
     await reload()
     await pickDraw()
-    await typeText([2.5, 2.5], '15')
-    await typeText([5.5, 4.5], '20')
-    await restartFromDialog()
+    await typeText(p, [2.5, 2.5], '15')
+    await typeText(p, [5.5, 4.5], '20')
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     await undo()
     assert.deepEqual(await settle(texts, ['15', '20']), ['15', '20'])
@@ -159,7 +142,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   it('with a digit entered, the first Undo after Restart brings the notes back and the second the digit', async () => {
     await enterDigit('5')
     assert.equal(await settle(digit, '5'), '5')
-    await restartFromDialog()
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     assert.equal(await settle(digit, null), null)
     await undo()
@@ -171,7 +154,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   })
 
   it('an Undo of a selection made after Restart leaves the notes cleared, and the Undo after it brings them back', async () => {
-    await restartFromDialog()
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     await p.click(DIGIT_BUTTON)
     await p.mouse.click(...await gridPoint(p, EMPTY_CELL.map((v) => v + 0.5)))
@@ -184,7 +167,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   })
 
   it('a reload after Restart drops the kept notes: Undo then brings nothing back', async () => {
-    await restartFromDialog()
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     assert.notEqual(await kept(), null)
     await reload()
@@ -197,8 +180,8 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   it('kept notes that cannot be read do not come back, and the solver is told', async () => {
     await pickDraw()
-    await typeText([2.5, 2.5], '15')
-    await restartFromDialog()
+    await typeText(p, [2.5, 2.5], '15')
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     await read((k) => Framework.setData(k, 'not a drawing {'), RESTARTED_PREFIX + await puzzleKey())
     await undo()
@@ -210,12 +193,12 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   it('a note typed after Restart drops the kept notes: after a reload they stay cleared, and Undo does not bring them back', async () => {
     await pickDraw()
-    await typeText([2.5, 2.5], '15')
-    await restartFromDialog()
+    await typeText(p, [2.5, 2.5], '15')
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     assert.notEqual(await kept(), null, 'Restart keeps the notes')
     await pickDraw()
-    await typeText([7.5, 7.5], '9')
+    await typeText(p, [7.5, 7.5], '9')
     assert.equal(await kept(), null, 'the new note drops them')
     await reload()
     assert.deepEqual(await settle(texts, ['9']), ['9'])
@@ -226,10 +209,10 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   })
 
   it('a second Restart replaces the kept notes with the ones it cleared: with none, Undo brings nothing back', async () => {
-    await restartFromDialog()
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     assert.notEqual(await kept(), null, 'the first Restart kept the note')
-    await restartFromDialog()
+    await restart(p)
     assert.equal(await kept(), null, 'the second Restart cleared none')
     await undo()
     await draw.frames(p)
@@ -247,7 +230,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   it('typing, moving and erasing a note leave the stored stroke and shape as they were', async () => {
     const old = async () => (await saved()).filter((item) => item.kind !== 'text')
     await pickDraw()
-    await typeText([6.5, 6.5], '20')
+    await typeText(p, [6.5, 6.5], '20')
     assert.deepEqual(await texts(), ['15', '20'])
     assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after typing')
     await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])
@@ -283,7 +266,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await draw.plantDrawing(p, [OLD_STROKE, NOTE, OLD_SHAPE])
     await reload()
     assert.deepEqual(await settle(texts, ['15']), ['15'])
-    await restartFromDialog()
+    await restart(p)
     assert.deepEqual(await settle(texts, []), [])
     assert.deepEqual(await saved(), [OLD_STROKE, OLD_SHAPE])
   })
@@ -300,7 +283,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.match(await dialogText(), /saved notes cannot be read/, 'the solver is told at load that the notes are not saved')
     await closeDialog()
     await pickDraw()
-    await typeText([2.5, 2.5], '15')
+    await typeText(p, [2.5, 2.5], '15')
     assert.deepEqual(await texts(), ['15'])
     assert.equal(await planted(), 'not a drawing {', 'after a note')
     await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])
@@ -320,7 +303,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.match(await dialogText(), /1 of this puzzle's saved notes could not be read/, 'told at load, before any save')
     await closeDialog()
     await pickDraw()
-    await typeText([6.5, 6.5], '20')
+    await typeText(p, [6.5, 6.5], '20')
     assert.deepEqual(await texts(), ['15', '20'])
     assert.equal(await p.locator(DIALOG).count(), 0, 'told once a page')
     const after = await saved()
@@ -340,7 +323,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
       await p.keyboard.type('15')
       assert.match(await dialogText(), /could not save this puzzle's notes: .*saved index/)
       await closeDialog()
-      await draw.finishNote(p)
+      await finishNote(p)
       assert.deepEqual(await texts(), ['15'])
       assert.equal(await saved(), null)
       assert.equal(await read((k) => Framework.getData(k), INDEX_KEY), 'not an index {')
@@ -373,12 +356,12 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await plantRedrawFailure()
     const first = errors.length
     const warnedBefore = warnings.length
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual((await saved()).map((item) => item.text), ['15'], 'stored before the redraw failed')
     planted(first, warnedBefore)
     await reload()
     assert.deepEqual(await settle(texts, ['15']), ['15'])
-    await restartFromDialog()
+    await restart(p)
   })
 
   it('a recolor and a delete of a selected note are stored before the panel redraw', async () => {
@@ -398,7 +381,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await saved(), null, 'the delete is stored')
     planted(first, warnedBefore)
     await reload()
-    await restartFromDialog()
+    await restart(p)
   })
 
   it('a panel that is not on the page is not redrawn: typing a note raises no error', async () => {
@@ -406,11 +389,11 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await pickDraw()
     const first = errors.length
     await p.evaluate(([tray, sliders]) => { document.querySelector(tray).remove(); document.querySelector(sliders).remove() }, [draw.TRAY, draw.SLIDERS])
-    await typeText([2.5, 2.5], '15')
+    await typeText(p, [2.5, 2.5], '15')
     assert.deepEqual(await texts(), ['15'])
     assert.deepEqual((await saved()).map((item) => item.text), ['15'])
     assert.deepEqual(errors.slice(first), [])
-    await restartFromDialog()
+    await restart(p)
   })
 
   // Loads the puzzle on the page again through the page's own loader, as a puzzle with `id`, in place and with no reload.
@@ -432,7 +415,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await reload()
     const a = await puzzleKey()
     await pickDraw()
-    await typeText([2.5, 2.5], '15')
+    await typeText(p, [2.5, 2.5], '15')
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
     await p.keyboard.down('ArrowRight')
     // The puzzle's id is watched: the moment it becomes B's, the key goes up, before the puzzle triggers 'loaded'.

@@ -3,20 +3,17 @@
 // makes no note and opens no text box. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, DRAW_BUTTON, script, NOT_NOTES, TEXT_BOX } from './draw-tool-fixtures.mjs'
-import { openPage, startPuzzle } from '../page.mjs'
-import { gridPoint, mouseDrag } from '../pen.mjs'
+import { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, NOT_NOTES, TEXT_BOX } from './draw-tool-fixtures.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { gridPoint, mouseDrag, typeText } from '../board.mjs'
 
 // Two notes, in cells from the grid's top left: the upper one reads 15 and the lower one 20.
 const UPPER_AT = [1.5, 2.5]
 const LOWER_AT = [3.5, 2.5]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
   let context, p, errors
@@ -32,18 +29,13 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
   const texts = () => draw.texts(p)
   const textBoxCount = () => p.locator(TEXT_BOX).count()
   // A click at `at`, in cells from the grid's top left, then `content` typed and Escape.
-  const typeText = async (at, content) => {
-    await p.mouse.click(...await gridPoint(p, at))
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
-  }
   const saved = () => draw.saved(p)
   const reload = () => draw.reload(p)
   // Both notes, the lower one made first.
   const makeTwo = async () => {
     await pickDraw()
-    await typeText(LOWER_AT, '20')
-    await typeText(UPPER_AT, '15')
+    await typeText(p, LOWER_AT, '20')
+    await typeText(p, UPPER_AT, '15')
     assert.deepEqual(await texts(), ['20', '15'])
   }
   const rightDrag = (points) => mouseDrag(p, points, { button: 'right' })
@@ -86,15 +78,16 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await startPuzzle(p)
-    await p.evaluate(() => Framework.app.deselect())
-    stockRightClick = await rightClick()
-    await watchPrevented(MIDDLE_EVENTS, MIDDLE)
-    await middleClick([8.5, 1.5])
-    stockMiddleClick = await prevented()
-    await p.addScriptTag({ content: script })
-    await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
+    // The stock clicks are read past Start Puzzle, before the script goes in.
+    const readStock = async (page) => {
+      p = page
+      await p.evaluate(() => Framework.app.deselect())
+      stockRightClick = await rightClick()
+      await watchPrevented(MIDDLE_EVENTS, MIDDLE)
+      await middleClick([8.5, 1.5])
+      stockMiddleClick = await prevented()
+    }
+    ;({ context, p, errors } = await draw.open(browser(), { afterStart: readStock }))
     await draw.forgetDrawings(p)
   })
   after(async () => { await context.close() })
@@ -126,7 +119,7 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
   })
 
   it('a right click on a note, with no drag, deletes it', async () => {
-    await typeText(UPPER_AT, '15')
+    await typeText(p, UPPER_AT, '15')
     assert.deepEqual(await texts(), ['20', '15'])
     await p.mouse.click(...await gridPoint(p, UPPER_AT), { button: 'right' })
     assert.deepEqual(await texts(), ['20'])
@@ -135,7 +128,7 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
 
   // Z switches to Digit with the right button still held, so the release goes to the Digit tool and not to Text Anywhere.
   it('a right-drag cut short by a tool switch keeps what it erased, and erases nothing more when Text Anywhere is back', async () => {
-    await typeText(UPPER_AT, '15')
+    await typeText(p, UPPER_AT, '15')
     await p.mouse.move(...await gridPoint(p, [1.5, 2.2]))
     await p.mouse.down({ button: 'right' })
     await p.mouse.move(...await gridPoint(p, [1.5, 2.8]), { steps: 8 })
@@ -212,7 +205,7 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
 
   it('a middle click on a note leaves it, and a reload shows the same', async () => {
     await pickDraw()
-    await typeText(NOTE, '15')
+    await typeText(p, NOTE, '15')
     const saved0 = await saved()
     assert.deepEqual(await texts(), ['15'])
     await middleClick(NOTE)
@@ -249,8 +242,8 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
 
   it('Clear all asks "Clear all notes?", and Cancel keeps every note', async () => {
     await pickDraw()
-    await typeText(UPPER_AT, '15')
-    await typeText(LOWER_AT, '20')
+    await typeText(p, UPPER_AT, '15')
+    await typeText(p, LOWER_AT, '20')
     assert.deepEqual(await texts(), ['15', '20'])
     await openClear()
     assert.match(await p.locator(DIALOG).textContent(), /Clear all notes\?/)

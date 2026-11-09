@@ -7,8 +7,10 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, TEXT_BOX, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
 import { openPage, startPuzzle } from './page.mjs'
-import { SCRIPT_FILES, seedOddEvenCells } from './puzzles.mjs'
-import { cellCentre, goToPenPage, gridPoint, mouseDrag, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
+import { seedOddEvenCells } from './puzzles.mjs'
+import { SCRIPT_FILES } from './session.mjs'
+import { cellCentre, gridPoint, mouseDrag } from './board.mjs'
+import { goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const ROOT = new URL('../', import.meta.url)

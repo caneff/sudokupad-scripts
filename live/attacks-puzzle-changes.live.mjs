@@ -9,9 +9,10 @@ import { chromium } from 'playwright'
 import { openPage } from './page.mjs'
 import { EDITOR as COLOR_BY_DIGIT_EDITOR } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { SETTINGS_EDITOR, tool } from './draw-tool/draw-tool-fixtures.mjs'
-import { draw, mouseDrag, penEntries } from './pen.mjs'
+import { mouseDrag, placeNote } from './board.mjs'
+import { draw, penEntries } from './pen.mjs'
 import { closeDialogWith, EXTRAS_EDITOR, openScriptDialog } from './settings.mjs'
-import { boardOf, CLASSIC_GIVENS, CLASSIC_SOLUTION, clickCell, dialogAtRest, closePauseDialog, dialogWith, installAll, OVERLAY_DRAG, openPuzzleId, PAUSED, pauseGame, placeNote, puzzleData, puzzleIdFor, resumeAfterHistory, useTool } from './puzzles.mjs'
+import { boardOf, CLASSIC_GIVENS, CLASSIC_SOLUTION, clickCell, closePauseDialog, dialogAtRest, dialogWith, installAll, NOTE_POINT, openPuzzleId, OVERLAY_DRAG, PAUSED, pauseGame, puzzleData, puzzleIdFor, resumeAfterHistory, useTool } from './puzzles.mjs'
 import { readUntil, settle } from './settle.mjs'
 
 const CONGRATS = 'Congrats'
@@ -53,7 +54,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     await clickCell(p, ...COLORED)
     await p.keyboard.press('3')
     await draw(p, 6)
-    await placeNote(p, '15')
+    await placeNote(p, NOTE_POINT, '15')
     await useTool(p, '#control-normal')
     return readUntil(() => boardOf(p), (b) => b.notes.length === 1 && b.pen.length > 0 && b.entered.length === 1 && b.corner.length === 1 && b.colours.some((c) => c.startsWith(`${COLORED}:`)))
   }
@@ -131,7 +132,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     assert.deepEqual(await boardOf(p), solved, 'and changed nothing else')
     // After it every script's tool and dialog work, and the digits stay the solution.
     await draw(p, 6)
-    await placeNote(p, '15')
+    await placeNote(p, NOTE_POINT, '15')
     await openEachScriptDialog()
     const marked = await readUntil(() => boardOf(p), (x) => x.notes.length === 1 && x.pen.length > 0)
     assert.deepEqual(marked.entered, solved.entered, 'the digits are still the solution')

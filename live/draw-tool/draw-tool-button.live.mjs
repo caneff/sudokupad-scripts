@@ -2,20 +2,16 @@
 // which would turn the outlined sticky note into a solid square.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
-import { boot, DIGIT_BUTTON, DRAW_BUTTON, pickDraw } from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
+import { DIGIT_BUTTON, DRAW_BUTTON, open, pickDraw } from './draw-tool-fixtures.mjs'
+import { useBrowser } from '../session.mjs'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere tool button icon, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p
 
   before(async () => {
-    ;({ context, p } = await openPage(browser))
-    await boot(p)
+    ;({ context, p } = await open(browser()))
   })
   after(async () => { await context.close() })
 

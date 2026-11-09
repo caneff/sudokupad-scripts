@@ -4,9 +4,18 @@
 script under test injected. `AGENTS.md` § End-to-end seam says when to run it; this file is what
 you need to write or debug one.
 
+## Opening SudokuPad
+
+A suite launches no Chromium of its own: `const browser = useBrowser()` at the top of the file (`live/session.mjs`) launches one
+before its tests and closes it after them. `openWith(browser(), scripts, { mode })` opens the puzzle in a context of its own and
+gets it past Start Puzzle with `scripts` (file names from `SCRIPT_FILES`) injected at `mode`; `addPage` opens another page in the
+same context and `reloadWith` reloads one. A script's own fixtures wrap them with what shows the script is up, as Text Anywhere's
+`open` and `reload` do. `live/board.mjs` holds what every suite does to the board: where a cell is, a click and a drag there,
+Undo back to the start, Restart, and a Text Anywhere note typed (`typeText`) or placed with the tool picked first (`placeNote`).
+
 ## Injection time
 
-A script is injected after Start Puzzle by default. A case about the injection time itself runs at
+`openWith` and `reloadWith` (`live/session.mjs`) decide it. A script is injected after Start Puzzle by default. A case about the injection time itself runs at
 all three times: at `DOMContentLoaded`, after load before Start Puzzle, after Start Puzzle.
 
 - `live/startup.live.mjs` checks each script's startup that way: it loads with no page error, its

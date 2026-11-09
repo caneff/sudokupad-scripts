@@ -10,7 +10,8 @@ import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from '../settings.mjs'
-import { cellCentre, drag, openPenTool, padValues, penEntries, setSlider } from '../pen.mjs'
+import { cellCentre } from '../board.mjs'
+import { drag, openPenTool, padValues, penEntries, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
 // The sizes of an arrow line are the script's own, so the checks read them from it and a retuning moves both.

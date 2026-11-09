@@ -3,6 +3,7 @@
 // `live/**/*.live.mjs` skips it.
 
 import assert from 'node:assert/strict'
+import { cellCentre, mouseDrag } from './board.mjs'
 import { clickUntil, SETTLE_MS, settle } from './settle.mjs'
 
 // Pen Tool Extras' page button, and the values of the number pad's buttons 1 to 9 on each of its pages.
@@ -39,27 +40,6 @@ export const penValuesAt = (page, row, col) => page.evaluate(([r, c]) => Framewo
 
 // The pen entries of every cell as the strings SudokuPad holds (value and color), sorted.
 export const penStrings = (page) => page.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => String(v))).sort())
-
-// The page point at the centre of the cell at [row, col], then the cell's width.
-export const cellCentre = (page, row, col) => page.evaluate(([r, c]) => {
-  const box = Framework.app.puzzle.cells.find((cell) => cell.row === r && cell.col === c).elem.getBoundingClientRect()
-  return [box.x + box.width / 2, box.y + box.height / 2, box.width]
-}, [row, col])
-
-// A point [row, col] in cells from the grid's top left (a cell's middle is at .5), as page pixels.
-export const gridPoint = async (page, [r, c]) => {
-  const [x0, y0, size] = await cellCentre(page, 0, 0)
-  return [x0 + (c - 0.5) * size, y0 + (r - 0.5) * size]
-}
-
-// A drag along `points` with `button` held (the left one unless given), each [row, col] in cells from the grid's top left,
-// with real mouse input and a few mouse moves between each two points.
-export async function mouseDrag (page, points, { button = 'left' } = {}) {
-  await page.mouse.move(...await gridPoint(page, points[0]))
-  await page.mouse.down({ button })
-  for (const point of points.slice(1)) await page.mouse.move(...await gridPoint(page, point), { steps: 8 })
-  await page.mouse.up({ button })
-}
 
 // A drag along `points`, as `mouseDrag`, returning once the grid has changed.
 export async function drag (page, points) {
@@ -145,12 +125,3 @@ export async function clickLeftEdge (page, selector) {
 
 // How many pen strokes and marks are drawn on the board.
 export const penDrawnCount = (page) => page.evaluate(() => document.querySelectorAll('#cell-pen .cell-pen').length)
-
-// Presses Undo until the undo stack is empty, each press taking at least one step.
-export async function undoAll (page) {
-  const depth = () => page.evaluate(() => Framework.app.puzzle.undoStack.length)
-  for (let now = await depth(); now > 0; now = await depth()) {
-    await page.click('#control-undo')
-    assert.equal(await settle(async () => (await depth()) < now, true), true, 'an undo takes a step')
-  }
-}

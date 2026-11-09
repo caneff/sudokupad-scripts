@@ -2,44 +2,39 @@
 // attack tests (#590). Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { captureConsoleErrors, openPage, startPuzzle } from './page.mjs'
-import { DRAW_BUTTON, pickDraw, SCRIPTS } from './scripts.mjs'
-import { gridPoint } from './pen.mjs'
-import { settle } from './settle.mjs'
+import { pickDraw } from './draw-tool/draw-tool-fixtures.mjs'
+import { captureConsoleErrors } from './page.mjs'
+import { SCRIPTS } from './scripts.mjs'
+import { openWith, reloadWith, scriptSource } from './session.mjs'
 
 export const NOTICE_BAR = '#sudokupad-scripts-notices [data-script]'
-export { DRAW_BUTTON, pickDraw }
 export const NOTES = '#draw-tool-layer .draw-tool-text'
 
-const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
+const FILES = SCRIPTS.map((script) => script.file)
 
-// Injects all the scripts into a page past Start Puzzle.
-export async function injectScripts (p) {
-  for (const script of SCRIPTS) await p.addScriptTag({ content: source(script.file) })
-}
-
-// Injects all the scripts into a page past Start Puzzle and waits for each to be up. Pen Tool Extras' `ready` leaves the pen
-// tool current, so this ends on the normal tool, where a player starts. Picking Text Anywhere's tool first waits out the
-// moment its button's click is dead.
-export async function loadScripts (p) {
-  await injectScripts(p)
+// Waits for each script to be up. Pen Tool Extras' `ready` leaves the pen tool current, so this ends on the normal tool, where
+// a player starts. Picking Text Anywhere's tool first waits out the moment its button's click is dead.
+async function allReady (p) {
   for (const script of SCRIPTS) await script.ready(p)
   await pickDraw(p)
   await p.click('#control-normal')
 }
 
+// Injects all the scripts into a page past Start Puzzle and waits for each to be up.
+export async function loadScripts (p) {
+  for (const file of FILES) await p.addScriptTag({ content: scriptSource(file) })
+  await allReady(p)
+}
+
 // Opens the puzzle, gets past Start Puzzle and injects all the scripts, as a user with all of them installed has;
-// `errors` holds the page errors, console errors and skip lines; `expectedSkips`, `seed` and `contextOptions` go to `openPage` and `afterStart(p)` runs before the scripts go in.
-export async function openWithAllScripts (browser, { expectedSkips, seed, afterStart, contextOptions } = {}) {
-  const opened = await openPage(browser, {
-    expectedSkips,
-    contextOptions,
+// `errors` holds the page errors, console errors and skip lines. The options are `openWith`'s (live/session.mjs); `afterStart(p)`
+// runs before the scripts go in.
+export async function openWithAllScripts (browser, { seed, ...options } = {}) {
+  const opened = await openWith(browser, FILES, {
+    ...options,
     seed: async (p, errors) => { captureConsoleErrors(p, errors); if (seed) await seed(p, errors) }
   })
-  await startPuzzle(opened.p)
-  if (afterStart) await afterStart(opened.p)
-  await loadScripts(opened.p)
+  await allReady(opened.p)
   return opened
 }
 
@@ -56,9 +51,7 @@ export const rulesScroll = (p) => p.evaluate(() => { const r = document.querySel
 
 // Reloads the page and puts all the scripts back, without `ready`, which would set the pen tool on again.
 export async function reloadWithScripts (p) {
-  await p.reload({ waitUntil: 'load' })
-  await startPuzzle(p)
-  await injectScripts(p)
+  await reloadWith(p, FILES)
   await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })
 }
 
@@ -102,20 +95,3 @@ export const colorCell = (p, [row, col], color) => p.evaluate(([r, c, arg]) => {
   const a = Framework.app
   a.deselect(); a.select(a.grid.getCell(r, c)); a.act({ type: 'colour', arg }); a.deselect()
 }, [row, col, String(color)])
-
-// `point` is in cells from the grid's top left, a cell's middle at .5.
-export async function placeNote (p, point, text) {
-  const before = await noteCount(p)
-  await pickDraw(p)
-  await p.mouse.click(...await gridPoint(p, point))
-  await p.keyboard.type(text)
-  await p.keyboard.press('Escape')
-  assert.equal(await settle(() => noteCount(p), before + 1), before + 1, 'the note was placed')
-}
-
-// Restart through the confirm dialog, as a player does.
-export async function restart (p) {
-  await p.click('#control-restart')
-  await p.locator('.dialog button').filter({ hasText: /^\s*⟲ Restart/ }).first().click()
-  await p.locator('.dialog').waitFor({ state: 'detached' })
-}

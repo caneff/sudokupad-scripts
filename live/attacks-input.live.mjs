@@ -5,9 +5,10 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { boardState, cellState, emptyCell, makeNote, pickTool } from './attack-fixtures.mjs'
+import { boardState, cellState, emptyCell, pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts } from './attacks.mjs'
-import { cellCentre, gridPoint, mouseDrag, penEntries } from './pen.mjs'
+import { cellCentre, gridPoint, mouseDrag, typeText } from './board.mjs'
+import { penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
 
@@ -62,7 +63,7 @@ describe('attacks on input', { concurrency: false }, () => {
     await pickTool(p, 'draw')
     const [, , size] = await cellCentre(p, 0, 0)
     const notes = [['11', 1.5], ['22', 3.5], ['33', 5.5], ['44', 7.5]]
-    for (const [text, row] of notes) await makeNote(p, [row, 1.5], text)
+    for (const [text, row] of notes) await typeText(p, [row, 1.5], text)
     const moveNote = async ([text, row], interrupt) => {
       const [x, y] = await draw.middleAt(p, await gridPoint(p, [row, 1.5]))
       const before = (await draw.noteInCells(p, text))[1]
@@ -106,7 +107,7 @@ describe('attacks on input', { concurrency: false }, () => {
 
     // Notes: a double-click on a note opens it once, a triple-click inside keeps it one box, and Escape keeps the text; the same on empty space leaves no note.
     await pickTool(p, 'draw')
-    await makeNote(p, [4.5, 4.5], '15')
+    await typeText(p, [4.5, 4.5], '15')
     const noteAt = await draw.middleAt(p, await gridPoint(p, [4.5, 4.5]))
     await p.mouse.click(...noteAt, { clickCount: 2, delay: 0 })
     assert.equal(await p.locator(draw.TEXT_BOX).count(), 1, 'a double-click on a note opens it')
@@ -151,7 +152,7 @@ describe('attacks on input', { concurrency: false }, () => {
     const selectedBefore = await selectedCells()
     const depthBefore = await undoDepth()
     await pickTool(p, 'draw')
-    await makeNote(p, [4.5, 4.5], '15')
+    await typeText(p, [4.5, 4.5], '15')
     await p.mouse.dblclick(...await draw.middleAt(p, await gridPoint(p, [4.5, 4.5])))
     await p.keyboard.press('Control+End')
     await p.keyboard.press('Control+a')
@@ -173,8 +174,8 @@ describe('attacks on input', { concurrency: false }, () => {
 
   it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V with notes selected, or none, change no note and no cell', async () => {
     await pickTool(p, 'draw')
-    await makeNote(p, [4.5, 4.5], '15')
-    await makeNote(p, [6.5, 6.5], '26')
+    await typeText(p, [4.5, 4.5], '15')
+    await typeText(p, [6.5, 6.5], '26')
     const cellsBefore = await boardState(p)
     for (const selecting of [false, true]) {
       if (selecting) await p.mouse.click(...await draw.middleAt(p, await gridPoint(p, [4.5, 4.5])))

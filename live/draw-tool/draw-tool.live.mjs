@@ -1,16 +1,13 @@
 // Live check of draw-tool.user.js on sudokupad.app, in headless Chromium, with real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
-import { boot, finishNote, DIGIT_BUTTON, DRAW_BUTTON, noteInCells as cellsOf, NOT_NOTES, pickDraw as pick, TEXTS, texts, TOOL_KEYS, topmostAtNotes, tool as toolOf } from './draw-tool-fixtures.mjs'
+import { DIGIT_BUTTON, DRAW_BUTTON, NOT_NOTES, noteInCells as cellsOf, open, pickDraw as pick, TEXTS, texts, tool as toolOf, TOOL_KEYS, topmostAtNotes } from './draw-tool-fixtures.mjs'
 import { MARKUP_CANVAS } from '../cache.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint, mouseDrag } from '../board.mjs'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -22,8 +19,7 @@ describe('Text Anywhere, injected after Start Puzzle', { concurrency: false }, (
   const pickDraw = () => pick(p)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await boot(p)
+    ;({ context, p, errors } = await open(browser()))
   })
   after(async () => { await context.close() })
 
@@ -135,8 +131,7 @@ describe('Text Anywhere with SudokuPad\'s Test Markup turned on', { concurrency:
   const markupStrokes = () => p.evaluate(() => Framework.features.markup.fabcan.getObjects().length)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await boot(p)
+    ;({ context, p, errors } = await open(browser()))
     await p.evaluate(() => Framework.setSetting('markup', true))
     await p.locator(MARKUP_CANVAS).first().waitFor({ state: 'attached' })
   })

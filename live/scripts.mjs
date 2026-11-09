@@ -3,8 +3,10 @@
 import assert from 'node:assert/strict'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { openScriptDialog, openSettings } from './settings.mjs'
-import { gridPoint, keydownDefaults, openPenTool, penEntries } from './pen.mjs'
-import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
+import { gridPoint } from './board.mjs'
+import { keydownDefaults, openPenTool, PAGE_BUTTON, penEntries } from './pen.mjs'
+import { settle } from './settle.mjs'
+import { DRAW_BUTTON, pickDraw } from './draw-tool/draw-tool-fixtures.mjs'
 
 export const BLACK = 'rgb(0, 0, 0)'
 export const DIGITS = '1234567890'
@@ -12,11 +14,6 @@ export const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 // What the number pad's keys read: digits, or letters in letter mode.
 export const numberPadText = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
-const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
-export const DRAW_BUTTON = '#control-draw'
-
-// SudokuPad binds a new button's click a moment after it appears, so the click repeats until the tool is current.
-export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => p.evaluate(() => Framework.app.tool), 'draw', SETTLE_MS)
 
 const settingsEntry = async (p, text) => {
   const group = await openSettings(p)
@@ -110,7 +107,7 @@ export const SCRIPTS = [
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       assert.equal(await openPenTool(p), true, 'the pen tool opened')
     },
-    control: (p) => p.locator(PEN_PAGE_BUTTON).waitFor({ state: 'visible' }),
+    control: (p) => p.locator(PAGE_BUTTON).waitFor({ state: 'visible' }),
     // Two clicks on one cell edge: SudokuPad's own X, then this script's arrow 'm'.
     act: async (p) => {
       const [x0, y0, size] = await p.evaluate(() => {

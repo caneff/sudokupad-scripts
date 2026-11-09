@@ -1,42 +1,38 @@
 // Live check of the place of Text Anywhere's button among the tool buttons, on sudokupad.app in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
-import { buttonIds, finishNote, DIGIT_BUTTON, DRAW_BUTTON, SLIDERS, pickDraw, script, TOOL_KEYS, tool, texts } from './draw-tool-fixtures.mjs'
-import { injectAtIdle, openPage, startPuzzle } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, SCRIPT_FILE, SLIDERS, pickDraw, TOOL_KEYS, tool, texts } from './draw-tool-fixtures.mjs'
 import { settle } from '../settle.mjs'
+import { openWith, reloadWith, useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const lastButton = async (p) => (await buttonIds(p)).at(-1)
 const penOn = (p) => p.evaluate(() => Framework.setSetting('toolpen', true))
 const PEN_BUTTON = '#control-pen'
 
-// Leaves the pen tool saved on, then reloads with the script injected at DOMContentLoaded: Draw's button and tool are
-// added before SudokuPad restores the pen tool, so the pen's button comes after Draw's in the page.
-async function startWithSavedPen (p) {
-  await startPuzzle(p)
+// Opens the puzzle with no script, leaves the pen tool saved on, then reloads with the script injected at DOMContentLoaded: Draw's
+// button and tool are added before SudokuPad restores the pen tool, so the pen's button comes after Draw's in the page.
+async function openWithSavedPen (options) {
+  const opened = await openWith(browser(), [], options)
+  const { p } = opened
   await penOn(p)
   // SudokuPad saves its settings a moment after a change; a reload before that loses it.
   await settle(() => p.evaluate(() => /"toolpen":true/.test(window.localStorage.getItem('svencodes_settings'))), true)
-  await injectAtIdle(p, script)
-  await p.reload({ waitUntil: 'load' })
-  await startPuzzle(p)
+  await reloadWith(p, [SCRIPT_FILE], { mode: 'document-idle' })
   await p.locator(PEN_BUTTON).waitFor({ state: 'visible' })
   await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
+  return opened
 }
 
 describe('Text Anywhere: its button is the last tool button', { concurrency: false }, () => {
   let context, p, errors
 
-  before(async () => { ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } })) })
+  before(async () => { ;({ context, p, errors } = await openWithSavedPen({ contextOptions: { viewport: { width: 1280, height: 720 } } })) })
   after(async () => { await context.close() })
 
   it('with the pen tool on at startup, Draw comes after the pen button', async () => {
-    await startWithSavedPen(p)
     assert.equal(await settle(() => lastButton(p), 'control-draw'), 'control-draw')
     assert.deepEqual(await buttonIds(p), ['control-normal', 'control-corner', 'control-centre', 'control-colour', 'control-pen', 'control-draw'])
   })
@@ -77,8 +73,7 @@ describe('Text Anywhere: the pen tool on at startup and the tool keys', { concur
   let context, p
 
   before(async () => {
-    ;({ context, p } = await openPage(browser))
-    await startWithSavedPen(p)
+    ;({ context, p } = await openWithSavedPen())
   })
   after(async () => { await context.close() })
 

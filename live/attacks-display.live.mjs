@@ -5,9 +5,10 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { makeNote, pickTool } from './attack-fixtures.mjs'
+import { pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts, reloadWithScripts } from './attacks.mjs'
-import { cellCentre, gridPoint, mouseDrag, penDrawnCount, penEntries } from './pen.mjs'
+import { cellCentre, gridPoint, mouseDrag, typeText } from './board.mjs'
+import { penDrawnCount, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
 
@@ -55,7 +56,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
   it('attack 76: the page\'s devicePixelRatio changing leaves notes and pen lines where they were, and a note moved afterward lands on whole device pixels', async () => {
     const cdp = await context.newCDPSession(p)
     await pickTool(p, 'draw')
-    await makeNote(p, [4.5, 4.5], '15')
+    await typeText(p, [4.5, 4.5], '15')
     await pickTool(p, 'pen')
     await rowLine(1)
     await rowLine(7)
@@ -85,7 +86,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
 
   it('attack 77: SudokuPad\'s fullscreen on and off leaves the notes, the pen lines and the tools where they were and working', async () => {
     await pickTool(p, 'draw')
-    await makeNote(p, [4.5, 4.5], '15')
+    await typeText(p, [4.5, 4.5], '15')
     await pickTool(p, 'pen')
     await rowLine(1)
     let entries = await penEntries(p)
@@ -100,7 +101,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
       assert.deepEqual(await penEntries(p), entries, `round ${round}: the pen lines are where they were`)
       await pickTool(p, 'draw')
       assert.deepEqual(await settle(() => draw.noteInCells(p, '15'), [4.5, 4.5]), [4.5, 4.5], `round ${round}: the note is on its cell`)
-      await makeNote(p, [6.5 + round, 2.5], `f${round}`)
+      await typeText(p, [6.5 + round, 2.5], `f${round}`)
       await pickTool(p, 'pen')
       await rowLine(3 + 2 * round)
       assert.equal((await penEntries(p)).length, entries.length + 3, `round ${round}: a line can be drawn in fullscreen`)

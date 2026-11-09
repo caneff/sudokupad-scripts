@@ -7,7 +7,7 @@ import { chromium } from 'playwright'
 import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo, selectCell } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
-import { gridPoint } from '../pen.mjs'
+import { gridPoint } from '../board.mjs'
 import { flushSave } from '../attacks.mjs'
 import { startPuzzle } from '../page.mjs'
 

@@ -8,7 +8,8 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { captureConsoleErrors, drawnWidth, gotoPuzzle, openPage, startPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, effectiveOpacities, EXTRAS_EDITOR, openExtrasEditor } from '../settings.mjs'
-import { cellCentre, goToPenPage, mouseDrag, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penEntries, penValuesAt, setInputValue, undoAll } from '../pen.mjs'
+import { cellCentre, mouseDrag, undoAll } from '../board.mjs'
+import { goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penEntries, penValuesAt, setInputValue } from '../pen.mjs'
 import { readUntil, settle, stable } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')

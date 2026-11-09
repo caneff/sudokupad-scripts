@@ -2,20 +2,17 @@
 // with it and take no pointer, so a note cannot give the solve away. The selection and an open note stay as they are underneath and come back sharp on resume.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { closePauseDialog, dialogAtRest, dialogWith, pauseGame, PAUSED } from '../puzzles.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { SELECTED, TEXTS, TEXT_BOX } = draw
 const ON_BOARD = [2.5, 4.5]
 const LAYER = '#draw-tool-layer'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: false }, () => {
   let context, p, errors
@@ -36,21 +33,19 @@ describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: fals
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
     await p.mouse.click(...await gridPoint(p, ON_BOARD))
     await p.keyboard.type('r3c4 = 7')
-    await draw.finishNote(p)
+    await finishNote(p)
     const right = await read(() => {
       const controls = document.querySelector('#controls').getBoundingClientRect()
       return [Math.round((controls.right + window.innerWidth) / 2), Math.round(controls.top + controls.height / 2)]
     })
     await p.mouse.click(...right)
     await p.keyboard.type('fixed')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
   after(async () => { await context.close() })
 
@@ -73,7 +68,7 @@ describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: fals
     assert.deepEqual(await places(), before, 'the notes are where they were')
     await p.mouse.click(...(await draw.middleAt(p, await gridPoint(p, ON_BOARD))))
     assert.equal(await p.locator(SELECTED).count(), 1, 'a click on the pinned note selects it')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a selected note stays selected under the pause dialog', async () => {
@@ -84,7 +79,7 @@ describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: fals
     assert.equal(await p.locator(SELECTED).count(), 1, 'still selected under the dialog')
     await closePauseDialog(p, 'Resume')
     assert.equal(await settle(layerBlurred, false), false, 'sharp after Resume')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('an open note stays open and blurred under the pause dialog, and its text is kept after Resume', async () => {
