@@ -6,8 +6,8 @@ import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { drawnWidth, openPage, startPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, dialogButton, headerVersion, openExtrasEditor, openSettings } from '../settings.mjs'
-import { openPenTool, plantUnchecked, setSlider } from '../pen.mjs'
+import { EXTRAS_EDITOR, closeExtrasEditorWith, dialogButton, headerVersion, openExtrasEditor, openSettings } from '../settings.mjs'
+import { gridPoint, openPenTool, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -609,6 +609,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await settle(pickerCount, 0, HOLD_WAIT_MS, HOLD_QUIET_MS), 0)
       await p.mouse.up()
     }
+    const editModeOn = () => p.locator('.tool-pen.pen-tool-extras-editing').count()
     // Dispatches a cancelable contextmenu on the first element matching `selector` and says
     // whether the page left it alone (dispatchEvent returns false when preventDefault ran).
     const menuAllowed = (selector) => read((sel) => document.querySelector(sel).dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })), selector)
@@ -723,14 +724,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await setCellColorPage(2)
     })
 
-    it('open pickers follow a Restore defaults and Save made in the dialog', async () => {
+    it('a press in the settings dialog opened from the panel ends edit mode, and is swallowed, then the dialog\'s Restore defaults and Save work', async () => {
       await holdToOpen(4)
-      await openExtrasEditor(p)
+      await p.click('.pen-tool-extras-settings')
+      await p.locator(EXTRAS_EDITOR).waitFor({ state: 'visible' })
+      assert.equal(await editModeOn(), 1, 'the panel\'s own button keeps edit mode')
+      await restoreDefaults()
+      assert.equal(await settle(editModeOn, 0), 0)
+      // The press that ended edit mode and its click were swallowed, so Restore defaults has not run yet.
+      assert.equal((await saved()).preset, undefined)
       await restoreDefaults()
       await closeExtrasEditorWith(p, 'Save')
       assert.deepEqual(await saved(), INSTALLED)
-      assert.deepEqual(await settle(penPickerValues, PAGE_PENS[0]), PAGE_PENS[0])
-      await leaveEditMode()
     })
 
     it('a second hold leaves edit mode, and so does leaving the pen tool', async () => {
@@ -744,6 +749,66 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await openPenTool(p)
       assert.equal(await pickerCount(), 0)
       assert.equal(await p.locator('.tool-pen.pen-tool-extras-editing').count(), 0)
+    })
+
+    it('Escape ends edit mode', async () => {
+      await holdToOpen(4)
+      await p.keyboard.press('Escape')
+      assert.equal(await settle(editModeOn, 0), 0)
+      assert.equal(await pickerCount(), 0)
+    })
+
+    it('a press on the board ends edit mode and does nothing else: no stroke, no undo entry', async () => {
+      await holdToOpen(4)
+      const depth = await undoDepth()
+      const drawn = await strokeCount()
+      const selectedBefore = await p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => `${c.row},${c.col}`))
+      const [x, y] = await gridPoint(p, [4, 4])
+      await p.mouse.move(x, y)
+      await p.mouse.down()
+      await p.mouse.up()
+      assert.equal(await settle(editModeOn, 0), 0)
+      assert.equal(await pickerCount(), 0)
+      assert.equal(await undoDepth(), depth)
+      assert.equal(await strokeCount(), drawn)
+      assert.deepEqual(await p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => `${c.row},${c.col}`)), selectedBefore)
+    })
+
+    it('a press on another color button in the panel keeps edit mode on', async () => {
+      await holdToOpen(4)
+      const [x, y] = await centre(button(5))
+      await p.mouse.move(x, y)
+      await p.mouse.down()
+      await p.mouse.up()
+      assert.equal(await editModeOn(), 1)
+      assert.equal(await pickerCount(), 9)
+      await leaveEditMode()
+    })
+
+    it('left Alt held with the pen current is edit mode, and releasing it ends it', async () => {
+      await openPenTool(p)
+      await p.keyboard.down('Alt')
+      assert.equal(await settle(pickerCount, 9), 9)
+      await p.keyboard.up('Alt')
+      assert.equal(await settle(pickerCount, 0), 0)
+      assert.equal(await editModeOn(), 0)
+    })
+
+    it('turning the pen page ends edit mode', async () => {
+      await holdToOpen(4)
+      await p.keyboard.press('Tab')
+      assert.equal(await settle(editModeOn, 0), 0)
+      assert.equal(await pickerCount(), 0)
+      await p.keyboard.press('Tab')
+      await p.keyboard.press('Tab')
+    })
+
+    it('the window losing focus ends edit mode', async () => {
+      await holdToOpen(4)
+      // The headless page has no window to take focus away from, so the event SudokuPad's own edit mode listens for is dispatched.
+      await p.evaluate(() => window.dispatchEvent(new window.Event('blur')))
+      assert.equal(await settle(editModeOn, 0), 0)
+      assert.equal(await pickerCount(), 0)
     })
 
     // Set PEN_COLOR_SHOT to a path to save the screenshot kept in docs/research/.
