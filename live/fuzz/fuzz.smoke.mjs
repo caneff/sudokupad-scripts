@@ -32,6 +32,12 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     })
   }
 
+  it('a note open for typing at a reload is kept (#668): the recorded failing list passes', async () => {
+    // note "15" at r1c3, click r1c4, type 1, reload: the note typed in is open when the page reloads, and save-as-you-type brings it back.
+    const result = await fuzz({ browser, seed: 99196424, path: '424:2:2:4:5:5:6:5:5:5:5:5:6@KBy:F' })
+    assert.equal(result.failed, false, `${result.error}\n${result.sequence?.join('\n')}`)
+  })
+
   describe('a page error planted on Escape during a drag', () => {
     let found
 

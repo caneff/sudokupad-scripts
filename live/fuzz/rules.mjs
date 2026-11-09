@@ -10,7 +10,7 @@
 //   penDrawn      the same for every stroke on the board
 //   notesSaved    the notes Text Anywhere saved for the puzzle, as its stored items; null when none is saved
 //   notesDrawn    the text of every finished note on the board
-//   notesSeen     the same plus the text typed so far in the note open for typing, which Text Anywhere saves 500 ms after typing pauses and so is not yet in notesSaved
+//   notesSeen     the same plus the text typed so far in the note open for typing, which is not yet in notesSaved
 //   colorByDigit  { mode: 'Cell' | 'Digit' | 'Both' | 'Off', groups: [{ key, digits }], cells: [{ digit, given, colours }] with `colours` the keys the cell holds }
 //   pageColor     the page's background as a computed `rgb(r, g, b)`
 //   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight }
@@ -80,12 +80,12 @@ export const RULES = [
   },
   {
     name: 'notes-survive-reload',
-    // Compares what the player sees, so a note still open for typing counts: save-as-you-type (#631) brings it back as a finished note.
+    // Compares what the player sees, so a note still open for typing counts: Text Anywhere saves it as you type and brings it back as a finished note.
     check: ({ now, before, action }) => {
       if (action !== 'reload') return []
       return [
-        ...without(before.page.notesSeen, now.page.notesSeen).map((t) => `drawn before the reload and not after it: ${JSON.stringify(t)}`),
-        ...without(now.page.notesSeen, before.page.notesSeen).map((t) => `drawn after the reload and not before it: ${JSON.stringify(t)}`)
+        ...without(before.page.notesSeen, now.page.notesSeen).map((t) => `seen before the reload and not after it: ${JSON.stringify(t)}`),
+        ...without(now.page.notesSeen, before.page.notesSeen).map((t) => `seen after the reload and not before it: ${JSON.stringify(t)}`)
       ]
     }
   },
