@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.19
+// @version      1.31.20
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.19'
+  const VERSION = '1.31.20'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -549,6 +549,7 @@
     return LINE_PATHS[value].map(([r, c]) => [row + r, col + c])
   }
 
+  // SudokuPad's pen tool's own action queue, which arrow lines, marks and line erase send through.
   const PEN_ACTIONS = {
     'ToolPen.tool.actStart': 'function',
     'ToolPen.tool.actAdd': 'function',
@@ -1118,6 +1119,7 @@
       event.stopImmediatePropagation()
       document.removeEventListener('click', swallowClick, true)
     }
+    // Pointer events carry a mouse button of either kind.
     document.addEventListener('pointerdown', (event) => {
       cancel()
       holdDone = false
@@ -1306,6 +1308,7 @@
     const mask = swatchMask(svg)
     return `.tool-pen button[data-key="${n}"]${page === 1 ? '' : `[${PAGE_ATTRIBUTE}="${page}"]`}:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${mask}; mask: ${mask}; }`
   }
+  // The look of the pages after the first, which SudokuPad's own CSS knows nothing about.
   // A dash of 0 is a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so it scales with the slider.
   // `:root:root` outranks SudokuPad's own rules whichever stylesheet loads last.
   function buildPagesCss (thickness, dash) {
@@ -1325,7 +1328,8 @@
     return rules.join('\n')
   }
 
-  // The page dots copy SudokuPad's color tool's page button.
+  // The slant is atan(28 / 40), the rise over the run of the line the button first showed. Under the line is a dot for each enabled page with the current one
+  // filled, as SudokuPad's color tool's page button has.
   const PAGE_BUTTON_ANGLE = 35
   // The viewBox of the icon that shows each page's style (the page the button turns to), drawn 34 px on its longest side and centred on its ink: see LINE_MODE_ICON_VIEWBOX.
   const PAGE_ICON_VIEWBOX = ['0.09 -2.31 24.352 24.352', '0 -2.5 24.6 24.6', '0.12 -2.18 24.352 24.352']
@@ -1472,6 +1476,7 @@
   // The round caps take half a line width of the `stroke-dasharray` gap at each end, so the gap that shows is one line width less: this keeps it at least one, on a straight
   // and a diagonal piece alike.
   const MIN_DASH_GAP_PER_THICKNESS = 2
+  // Snapped per line so a segment holds whole dots.
   const DOT_SPACING_PER_THICKNESS = 2
 
   // With the spacing exactly `length / dots` the last dot falls on the segment's end, where the browser draws no zero-length dash, so a line's far end would have no dot;
@@ -1750,6 +1755,7 @@
     values: { circle: '5', cross: '6', dot: 'z' }
   }
   const CELL_VALUES = CELL_CYCLE.types.map((type) => CELL_CYCLE.values[type])
+  // The two of them SudokuPad's own cell click toggles.
   const STOCK_CELL_VALUES = [CELL_CYCLE.values.circle, CELL_CYCLE.values.cross]
   const CIRCLE = 'o'
   const CIRCLE_RADIUS_PER_HALF_SIZE = 0.83
@@ -1972,7 +1978,6 @@
     return queued
   }
 
-  // marksAtPoint's options for this page's grid and the corner radius at its present zoom.
   function marksAtPointNow (point, takesCorner, stockActs) {
     return marksAtPoint(point, { grid: Framework.app.grid, radius: cornerRadiusNow(), takesCorner, stockActs })
   }
@@ -2094,7 +2099,7 @@
     return withOwnProperty(tool, 'getInputRc', () => ({ r, c }), () => queuedActs(tool, () => stockClick.apply(tool, [])))
   }
 
-  // The marks held at the point as `{ cell, values }`, or null. A corner is taken only when it holds a mark, ticked or not, so a mark drawn before its box was
+  // A corner is taken only when it holds a mark, ticked or not, so a mark drawn before its box was
   // unticked still erases, and an empty corner leaves the edge or cell middle there to be found.
   function heldMarksAt (tool, stockClick, point) {
     const { marks } = marksAtPointNow(point, holdsMark, () => stockClickActsAt(tool, stockClick, point))
@@ -2940,6 +2945,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
   }
 
+  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves

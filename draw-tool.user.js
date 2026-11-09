@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.13
+// @version      0.44.14
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.13'
+  const VERSION = '0.44.14'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -1036,6 +1036,7 @@
       event.stopImmediatePropagation()
       document.removeEventListener('click', swallowClick, true)
     }
+    // Pointer events carry a mouse button of either kind.
     document.addEventListener('pointerdown', (event) => {
       cancel()
       holdDone = false
@@ -1295,6 +1296,7 @@
     }
   }
 
+  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves

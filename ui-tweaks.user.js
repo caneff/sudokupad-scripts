@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.8
+// @version      0.1.9
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Toggle Selection button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.8'
+  const VERSION = '0.1.9'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -48,6 +48,7 @@
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  // SudokuPad's bottom row of tool buttons.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
@@ -126,6 +127,7 @@
     }
   }
 
+  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves

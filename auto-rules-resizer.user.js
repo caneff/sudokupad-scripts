@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.1
+// @version      0.7.2
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.1'
+  const VERSION = '0.7.2'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -402,6 +402,7 @@
     }
   }
 
+  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
@@ -1168,7 +1169,7 @@
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
   const cornerId = (corner) => `${ID}-drag-${corner}`
 
-  const COPY_ICON = '.rules-copy'
+  const COPY_ICON = '.rules-copy' // SudokuPad's copy-rules icon
   // On the pane while it is fitted, so the fit measures the text as it will be set. A stylesheet rule, not inline, leaves a
   // reader's own text-spacing override the last word.
   const TEXT_CLASS = `${ID}-text`

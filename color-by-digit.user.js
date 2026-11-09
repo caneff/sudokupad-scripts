@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.26
+// @version      0.25.27
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.26'
+  const VERSION = '0.25.27'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1121,6 +1121,7 @@
       event.stopImmediatePropagation()
       document.removeEventListener('click', swallowClick, true)
     }
+    // Pointer events carry a mouse button of either kind.
     document.addEventListener('pointerdown', (event) => {
       cancel()
       holdDone = false
@@ -1205,6 +1206,7 @@
   // SudokuPad adds this class to the page while it shows conflicting marks in red.
   const CHECK_MARKS_CLASS = '.setting-checkpencilmarks'
 
+  // No pointer events, so a click on a circle reaches the board.
   const CIRCLE_CSS = [
     `#${CIRCLES_ID} { display: none; pointer-events: none }`,
     `${CHECK_MARKS_CLASS} #${CIRCLES_ID} { display: inline }`,
@@ -1243,6 +1245,7 @@
   // A translucent white box behind the word, so it reads on Dark Page's dark button. On the normal page's #eee button it barely shows.
   const WORD_BACKGROUND = 'rgba(255,255,255,.9)'
 
+  // No pointer events, so a press on the label is a press on the button.
   function modeWordHtml (mode) {
     const on = mode !== 'off'
     return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-6px;top:-3px;padding:1px 3px;border-radius:3px;background:' + WORD_BACKGROUND + ';' +
@@ -1277,6 +1280,7 @@
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  // SudokuPad's bottom row of tool buttons.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
@@ -1437,7 +1441,7 @@
   const RUN_CELL = 10
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
 
-  // The svg frame both runs share: `inner` is the cells and dividers, `outline` the stroke attributes of the one outline over them.
+  // The svg frame of a run of chips: `inner` is the cells and dividers, `outline` the stroke attributes of the one outline over them.
   function chipRun (count, size, x, y, inner, outline) {
     const width = count * RUN_CELL
     const place = x === undefined ? '' : ` x="${x}" y="${y}"`
@@ -1523,6 +1527,7 @@
     }
   }
 
+  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
@@ -1737,7 +1742,6 @@
   const ACTIVE_RING = '#b79be0'
   const ACTIVE_INK = '#5b2a9a'
   const HOVER_FILL = '#f6f3f9'
-  // The name field's side padding; its border is 1 px.
   const NAME_PAD = 6
   function renderProfiles (state, colorOf, selected) {
     const only = state.profiles.length <= 1
@@ -1828,6 +1832,7 @@
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
   const DIALOG = `.dialog:has(${EDITOR})`
+  // Only for someone who has not asked the system for less motion; a fading menu takes no clicks.
   const MENU_FADE_MS = 100
   const ROW_SLIDE_MS = 80
   const MOTION_CSS = [
@@ -2360,6 +2365,7 @@
     }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'] })
   }
 
+  // Digit colors are a stylesheet, not SudokuPad state, so they are never an undo step.
   function showDigitColors () {
     writeStyle(DIGIT_STYLE_ID, colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : '')
     syncDigits()
@@ -2877,6 +2883,7 @@
       Framework.closeDialog()
       setTimeout(() => editor.run(() => openDialog(app)), 0)
     })
+    // The features are independent: one that fails to install costs the others nothing.
     editor.run(() => addSettingsEntry(dialogs, { name: 'colorbydigit', content: 'Color by Digit', open: () => editor.run(() => openDialog(app)) }))
     addPreloadsOnce()
     const state = loadState()
