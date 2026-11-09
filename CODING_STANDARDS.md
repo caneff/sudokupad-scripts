@@ -62,3 +62,12 @@ seam. These come from `twitch-rules-scroller` and
 13. **A diff that changes what a `*.user.js` does raises its `@version`, and its
     `VERSION` where it has one.** Tampermonkey's update check reads `@version`;
     the tests only check the two match.
+
+## Behavior
+
+14. **A feature with a twin in another script, or in another part of its own
+    script, behaves like its twin, or a comment or doc says why not.** Text
+    Anywhere and Pen Tool Extras both have a panel with colors and sliders, a
+    right-click erase, an edit mode and a settings dialog. Each was built from its
+    own ticket, so 12 mismatches shipped that every test passed (#754–#763). A
+    reviewer names the twin and checks the diff against it.
