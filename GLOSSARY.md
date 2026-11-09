@@ -205,8 +205,8 @@
   browser under `ToolLetter_letterMode`. The button and `/` toggle it; UI Tweaks' Tab option makes Tab do nothing in play instead.
 - **UI Tweaks** — the script `ui-tweaks.user.js`. Three **options** in one settings dialog: Tab never switches to letters (on at first), Hide the Toggle Selection button and Wrap buttons (off at first).
 - **bottom row** — SudokuPad's `.controls-aux`, the row of buttons under the number pad: undo, redo, check, the Toggle Selection button (`data-control="select"`), and the buttons other scripts add (Color by Digit's). Wrap buttons caps it at five a row.
-- **Text Anywhere** — the script `draw-tool.user.js` (the file keeps its old name so installed copies keep updating), and the tool it adds to SudokuPad's tool buttons, named **Text** on the button. It takes no
-  tool key. Called Draw Tool before 0.17.0, when it also drew lines and shapes, and Text Annotation until 0.27.0.
+- **Text Anywhere** — the script `draw-tool.user.js` (the file keeps its old name so installed copies keep updating), and the tool it adds to SudokuPad's tool buttons, named **Text** on the button. `T` makes it current
+  (not with the Letter tool on, a note open, a dialog open or focus in a field); it takes none of the Z X C V B N M tool keys. Called Draw Tool before 0.17.0, when it also drew lines and shapes, and Text Annotation until 0.27.0.
 - **notes** — everything Text Anywhere has put on one puzzle: its texts, oldest first. Saved per puzzle (keyed by
   the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles noted on last, under the storage keys it always used (`DrawTool_drawing_*`, `DrawTool_index`); it is not in the replay, and Restart and Clear all empty it.
   Restart keeps the notes it cleared (`DrawTool_restarted_*`), and the Undo that finds SudokuPad's undo stack empty, the one that brings back

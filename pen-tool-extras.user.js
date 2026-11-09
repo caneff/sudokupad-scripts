@@ -51,6 +51,9 @@
   /* eslint-disable no-unused-vars */
   const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
   const rem = (value) => Math.round(value * 100) / 100
+
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:pointer-session>
@@ -1208,9 +1211,6 @@
   }
 
   const hasModifier = (event) => event.ctrlKey || event.altKey || event.metaKey || event.shiftKey
-
-  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
-  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
 
   function digitKeyPen (event, page) {
     if (hasModifier(event) || typedIntoField(event)) return null
