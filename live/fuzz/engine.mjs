@@ -27,8 +27,8 @@ function assertClean (snapshot, when) {
 }
 
 // Throws when a rule is broken between two snapshots; `action` is the kind (`actions.mjs`) of the action between them and `when` says after which.
-function assertRules (now, before, action, when) {
-  const broken = ruleViolations({ now, before, action })
+function assertRules (now, before, action, when, earlier) {
+  const broken = ruleViolations({ now, before, action, earlier })
   if (broken.length) throw new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`)
 }
 
@@ -38,6 +38,8 @@ async function runList (openTarget, actions, landMs, settleMs) {
   const target = await openTarget()
   try {
     let before = await target.snapshot()
+    // The step before the current one, for a rule that reads two steps (undo, then redo).
+    let earlier = null
     const checked = (action) => ({
       check: (model) => action.check(model),
       toString: () => action.toString(),
@@ -46,7 +48,8 @@ async function runList (openTarget, actions, landMs, settleMs) {
         await target.wait(settleMs)
         const now = await target.snapshot()
         assertClean(now, `after "${action}"`)
-        assertRules(now, before, action.cmd.kind, `after "${action}"`)
+        assertRules(now, before, action.cmd.kind, `after "${action}"`, earlier)
+        earlier = { action: action.cmd.kind, before }
         before = now
       }
     })
@@ -54,7 +57,7 @@ async function runList (openTarget, actions, landMs, settleMs) {
     await target.wait(landMs)
     const last = await target.snapshot()
     assertClean(last, 'after the last action')
-    assertRules(last, before, 'wait', 'after the last action')
+    assertRules(last, before, 'wait', 'after the last action', earlier)
   } catch (error) {
     // A log that cannot be read is said so: an empty answer would read as a page with nothing logged.
     error.errorLog = await target.errorLog().catch((e) => [`the error log could not be read: ${e.message}`])
