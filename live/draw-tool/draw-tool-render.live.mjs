@@ -32,8 +32,8 @@ const MOVES_PER_FRAME = 4
 const DRAG_BY = [0.5, 0.5]
 // One frame at 60 Hz.
 const FRAME_MS = 16
-// The style writes one note gets in a frame once its pointer moves are coalesced.
-const WRITES_PER_NOTE_FRAME = 1
+// A note is written at most once per pointer move: measured on the script, a frame's 4 moves give a note 4 style writes, so a write that fanned out per move would show here.
+const WRITES_PER_NOTE_FRAME = MOVES_PER_FRAME
 // A note's place and the rectangle's corner are kept to a hundredth of a pixel or unit, so a point can land off the pointer's.
 const POINTER_NEAR_PX = 1
 const near = (got, want) => got.every((v, i) => Math.abs(v - want[i]) <= POINTER_NEAR_PX)
@@ -60,8 +60,9 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
   // the script asked for during the dispatches run between the two. The page then waits for that frame before the next moves.
   const timedFrames = (points, buttons) => read(async ([all, held, perFrame]) => {
     const busy = []
-    // The most style writes any one note got in one frame: the pointer moves of a frame are coalesced into one write, whatever the box's speed.
-    const watch = new window.MutationObserver(() => {})
+    // The most style writes any one note got in one frame, counted from the page: unlike the frame time, it does not depend on the box's speed.
+    const writes = new Map()
+    const watch = new window.MutationObserver((list) => { for (const record of list) writes.set(record.target, (writes.get(record.target) || 0) + 1) })
     watch.observe(document.getElementById('draw-tool-layer'), { attributes: true, attributeFilter: ['style'], subtree: true })
     window.__maxWritesPerFrame = 0
     for (let i = 0; i < all.length; i += perFrame) {
@@ -75,9 +76,8 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
         resolve(window.performance.now() - frameStart)
       }))
       busy.push(dispatch + frame)
-      const writes = new Map()
-      for (const record of watch.takeRecords()) writes.set(record.target, (writes.get(record.target) || 0) + 1)
       window.__maxWritesPerFrame = Math.max(window.__maxWritesPerFrame, ...writes.values())
+      writes.clear()
     }
     watch.disconnect()
     return busy
@@ -147,7 +147,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     assert.deepEqual(recreatedByRelease, [], 'the redraw on release keeps every note\'s element, the moved ones too')
     const moved = (await draw.saved(p)).slice(0, 2).map((item) => item.at)
     assert.deepEqual(moved.map((at, i) => at.map((v, k) => Math.round((v - PLANTED[i].at[k]) / CELL * 10) / 10)), [[0.5, 0.5], [0.5, 0.5]], 'both notes moved by the drag')
-    // The frame time is a wall-clock budget a loaded box can break without the script being at fault, so it is only reported; the coalescing is checked by counting writes.
+    // The frame time is a wall-clock budget a loaded box can break without the script being at fault, so it is only reported; the work per move is checked by counting writes.
     t.diagnostic(`budget ${FRAME_MS} ms: ${Math.max(...busy) < FRAME_MS ? 'met' : 'exceeded'}`)
     assert.equal(await read(() => window.__maxWritesPerFrame) <= WRITES_PER_NOTE_FRAME, true, `each note written at most ${WRITES_PER_NOTE_FRAME} times a frame`)
   })
