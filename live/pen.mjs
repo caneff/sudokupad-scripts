@@ -9,7 +9,7 @@ export const PAGE_ONE = '123456789'
 export const PAGE_TWO = 'abcdefghi'
 export const PAGE_THREE = 'jlnprtvxz'
 // How long one press on the page button gets to turn the page before it is pressed again.
-const PAGE_TURN_MS = 500
+export const PAGE_TURN_MS = 500
 
 // How long one click on the pen button gets to show the tool: longer than the tool takes to open, since a second click
 // on the toggle closes it again.

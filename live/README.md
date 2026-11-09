@@ -120,7 +120,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
   pinned is written as a scripted list (`scriptedList` of `actions.mjs`, run by `fuzzScripted` of `fuzz.mjs`: `[kind, arg]` steps on a named puzzle, each of which must be
   able to run) in `fuzz.smoke.mjs`, as the #668 test is.
 - **The actions** (`actions.mjs`) are weighted so ordinary use is the bulk: ordinary use of every script and of SudokuPad (click, digit, undo,
-  redo, undo back to the start, a digit entered, a tool key, Tab, pen lines and erase, the pen page, notes placed and moved, the Color by Digit button, Pen Tool Extras' settings dialog saved or cancelled); interruptions in the middle of a
+  redo, undo back to the start, a digit entered, a tool key, Tab, pen lines and erase, the pen page, notes placed and moved, the Color by Digit button, Pen Tool Extras' settings dialog saved or cancelled, alone or with a changed arrow spacing, dash length and thickness (#713); the pen panel's Thickness and Opacity sliders and Text Anywhere's Size and Transparency sliders, dragged along the track or keyed; a line drawn with an arrow pen (page 3); a note with a box; Text Anywhere's Background button; and its settings dialog with a Box color picked, a preset or an Own color, then saved or cancelled); interruptions in the middle of a
   gesture (a pen drag, a held right-click erase or a note drag, each cut by Escape, Delete, a tool key, Ctrl+Z, a window resize, a second button,
   a blur, or the pointer leaving the window); and page events (blur and focus, a reload, a window resize, the Dark Page dialog saved or cancelled
   with a dark color: Dark Page has no off switch). Every action leaves the mouse up, so a shrunk list is plain steps and replays from numbers alone.
@@ -132,7 +132,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
   reaches) SudokuPad's state holds nothing; Pen Tool Extras: every pen entry in the state is drawn and nothing else is; Text Anywhere: the saved notes are the
   drawn ones, and a reload keeps them; Color by Digit: in Cell or Both mode a cell whose digit just changed (every cell when the mode just changed) has its
   group's color; Dark Page: the page color stays dark; Auto Rules Resizer: the rules fit their pane, unless the text is already at 70% of SudokuPad's font; UI
-  Tweaks: Tab never turns the number pad to letters. Each fuzz page therefore has the letter tool on, and a puzzle with rules text shows it (the long text on most puzzles). A broken rule fails the run like a
+  Tweaks: Tab never turns the number pad to letters; Text Anywhere (`note-box-color`, #713): every note with a box is filled with the box color the script has saved (`boxFill` of the stored value and the note's own color, resolved by the page). Each fuzz page therefore has the letter tool on, and a puzzle with rules text shows it (the long text on most puzzles). A broken rule fails the run like a
   crash signal, named `rule broken after "<step>": <rule>: <what>`. The last two rules are read from the scripts, not from the ticket's wording: the resizer
   promises a fit down to its smallest font, not for any length, and Tab can reach letters only while the letter tool is on.
 - **Three rules check the scripts against themselves** (#677), knowing nothing of what a script should draw; each was written from what the scripts keep, and
@@ -170,11 +170,11 @@ it, and prints a table of which plants were caught, how fast, and the shrunk ste
 npm run fuzz:plants -- [--minutes <m per plant>] [--shrink-minutes <m>] [--seed <n>] [--plant <id> ...]
 ```
 
-- **The plants** (`plants.mjs`) are about 10 one-line bugs, each `{ id, file, kind, bug, find, replace, expect }` (`bug` says it in words): `find` and `replace` are applied to the text of the script read
+- **The plants** (`plants.mjs`) are 11 one-line bugs, each `{ id, file, kind, bug, find, replace, expect }` (`bug` says it in words): `find` and `replace` are applied to the text of the script read
   from disk and injected by `installAll`, so the root `*.user.js` never hold a bug. A `find` that matches anywhere but once fails the run before any page opens
   (`plants.test.mjs` checks every plant against the shipped scripts in `npm test`). `kind` is `rule` or `crash`; `expect` matches the failure message that counts as a catch (a crash plant names its own error text), so a
   failure the real scripts already have (it prints as "other failure") is not scored.
-- **The budget** is 4 minutes a plant by default, 2 on each of two seeds, each over the whole puzzle set (#679; the first run in `docs/research/fuzz-planted-bugs.md` was on the 9x9 and the 6x6 only), plus a shrink of up to 2 minutes. All ten take about 40 minutes
+- **The budget** is 4 minutes a plant by default, 2 on each of two seeds, each over the whole puzzle set (#679; the first run in `docs/research/fuzz-planted-bugs.md` was on the 9x9 and the 6x6 only), plus a shrink of up to 2 minutes. All eleven take about 45 minutes
   on one core and one Chromium; run it under `job-run`.
 - **A miss** is read for its likely reason: no rule sees it, no action reaches it, the board is too empty, or timing. Add a plant by adding an entry to `plants.mjs`.
 - **Replaying a catch**: the table prints each catch's `replay:` command, `npm run test:fuzz -- --seed <n> --path <path> --plant <id>`, which replays that one list with the plant in.

@@ -5,9 +5,10 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { ERROR_LOG_KEY, captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
 import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
-import { openPenTool, PAGE_BUTTON } from '../pen.mjs'
-import { closeExtrasEditorWith, openExtrasEditor, openScriptDialog } from '../settings.mjs'
-import { pickTextAnywhere, TEXT_BOX, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { openPenTool, padValues, PAGE_BUTTON, PAGE_THREE, PAGE_TURN_MS, setInputValue } from '../pen.mjs'
+import { closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
+import { BACKGROUND_BUTTON, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { clickUntil, SETTLE_MS } from '../settle.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { runFuzz, runScript } from './engine.mjs'
 import { scriptedList } from './actions.mjs'
@@ -33,6 +34,16 @@ async function showRules (p, puzzle) {
   }, rules)
 }
 
+// Each slider `actions.mjs` names: its selector, and whether the pen tool or Text Anywhere's tool shows it. Pen Tool Extras' ids are typed out, as the live tests type them.
+const SLIDER_SELECTORS = {
+  'pen thickness': { selector: '#pen-tool-extras-thickness', tool: 'pen' },
+  'pen opacity': { selector: '#pen-tool-extras-opacity', tool: 'pen' },
+  'note size': { selector: NOTE_SIZE_SLIDER, tool: 'notes' },
+  'note transparency': { selector: NOTE_OPACITY_SLIDER, tool: 'notes' }
+}
+// A press on a track this far in from its end is on the track, not on the edge pixel that belongs to the next element.
+const TRACK_MARGIN_PX = 6
+
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
 // with nothing to undo) is pressed like a user presses it, and nothing happens. An element that is not there is a crash: a script lost its control.
 async function clickIn (p, selector) {
@@ -48,6 +59,13 @@ function envFor (p, puzzle) {
   }
   const pickNotes = async () => {
     if (await pickTextAnywhere(p) !== 'textanywhere') throw new Error('Text Anywhere\'s tool could not be picked')
+  }
+  // Opens the tool that shows `name`'s slider and returns the slider's locator.
+  const sliderFor = async (name) => {
+    const { selector, tool } = SLIDER_SELECTORS[name]
+    if (tool === 'pen') await openPen()
+    else await pickNotes()
+    return p.locator(selector)
   }
   return {
     page: p,
@@ -90,6 +108,37 @@ function envFor (p, puzzle) {
     async extrasDialog (save) {
       await openExtrasEditor(p)
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
+    },
+    async extrasSettings (values, save) {
+      await openExtrasEditor(p)
+      for (const [key, value] of Object.entries(values)) await setInputValue(p.locator(`${EXTRAS_EDITOR} input[data-setting="${key}"]`), value)
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
+    },
+    async sliderPoint (name, fraction) {
+      const box = await (await sliderFor(name)).boundingBox({ timeout: 2000 })
+      if (!box) throw new Error(`the ${name} slider is not on the page`)
+      return [box.x + TRACK_MARGIN_PX + (box.width - 2 * TRACK_MARGIN_PX) * fraction, box.y + box.height / 2]
+    },
+    async focusSlider (name) { await (await sliderFor(name)).focus() },
+    async leaveSlider (name) { await p.locator(SLIDER_SELECTORS[name].selector).evaluate((el) => el.blur()) },
+    async noteBoxDialog (choice, color, save) {
+      await pickNotes()
+      await p.click(SETTINGS_BUTTON)
+      await p.locator(SETTINGS_EDITOR).waitFor({ state: 'visible' })
+      await p.locator(`${SETTINGS_EDITOR} button[data-role="box-pick"][data-value="${choice}"]`).click()
+      if (choice === 'custom') await p.locator(`${SETTINGS_EDITOR} input[data-role="box-custom"]`).fill(color)
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', SETTINGS_EDITOR)
+    },
+    async setNoteBackground (on) {
+      await pickNotes()
+      if (await p.locator(BACKGROUND_BUTTON).getAttribute('aria-pressed') !== String(on)) await clickIn(p, BACKGROUND_BUTTON)
+    },
+    async useArrowPen (color) {
+      await openPen()
+      // The page button is pressed until the pad shows the arrow lines page; a pen with no such page is a crash.
+      const shown = await clickUntil(() => clickIn(p, PAGE_BUTTON), () => padValues(p), PAGE_THREE, SETTLE_MS, PAGE_TURN_MS)
+      if (shown !== PAGE_THREE) throw new Error(`the pen page button never reached the arrow lines page; the pad shows ${shown}`)
+      await clickIn(p, `.tool-pen button[data-key="${color}"]`)
     },
     resize: (size) => p.setViewportSize(size),
     blurFocus: () => p.evaluate(() => {

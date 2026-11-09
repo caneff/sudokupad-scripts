@@ -3,18 +3,19 @@
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { PROFILES_KEY } from '../color-by-digit/color-by-digit-fixtures.mjs'
-import { saved as savedNotes, SEEN_TEXTS, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { BOX_KEY, saved as savedNotes, SEEN_TEXTS, TEXT_BGS, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { POLL_MS } from '../settle.mjs'
 import { rulesPaneFits } from './rules.mjs'
 
 const { stateFromStored, activeGroups } = createRequire(import.meta.url)('../../color-by-digit.user.js')
+const { boxFill, readBoxColor } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
 const COLOR_BUTTON_TITLE = /^Color by digit: (\w+)$/
 // Auto Rules Resizer refits 100 ms after the last resize, and the rules are read once they fit or this long has passed: a wait on a condition, so a slow box
 // reads the finished fit, and a pane that never fits is still read and reported.
 const RULES_FIT_MS = 2000
 
-const readDom = ({ texts, seenTexts, profilesKey, expectRules }) => {
+const readDom = ({ texts, seenTexts, boxedTexts, boxKey, profilesKey, expectRules }) => {
   const puzzle = Framework.app.puzzle
   const strokeOf = (names) => `pen-${names[0]} pencolor-${names.slice(1)}`
   const rules = document.querySelector('.puzzle-rules')
@@ -40,6 +41,9 @@ const readDom = ({ texts, seenTexts, profilesKey, expectRules }) => {
     notesDrawn: [...document.querySelectorAll(texts)].map((e) => e.textContent),
     // What the player sees: the note open for typing too, once something is typed in it (an empty box is no text).
     notesSeen: [...document.querySelectorAll(seenTexts)].map((e) => e.textContent).filter((t) => t !== ''),
+    // A boxed note's fill and text color as computed, with the box color Text Anywhere has saved (read raw; the node side turns it into the fill it should give).
+    boxedNotes: [...document.querySelectorAll(boxedTexts)].map((e) => { const style = window.getComputedStyle(e); return { text: e.textContent, fill: style.backgroundColor, color: style.color } }),
+    savedBox: Framework.getData(boxKey) ?? null,
     buttonTitle: document.querySelector('#control-colorbydigit')?.title ?? null,
     profiles: Framework.getData(profilesKey),
     digits: puzzle.cells.map((cell) => ({ digit: String(cell.value || ''), given: Boolean(cell.given), colours: cell.colours.map(String) })),
@@ -49,9 +53,19 @@ const readDom = ({ texts, seenTexts, profilesKey, expectRules }) => {
   }
 }
 
+// Each boxed note as `{ text, fill, expected }`: `expected` is the fill of `boxFill` of the saved box color and the note's own color, as the page computes it
+// (the fill is CSS that may hold `var(--body-bg)` or `color-mix`, which only the page can resolve).
+const withExpectedFills = (p, boxedNotes, boxColor) => p.evaluate(([notes, wanted]) => notes.map(({ text, fill }, i) => {
+  const probe = document.body.appendChild(document.createElement('div'))
+  probe.style.background = wanted[i]
+  const expected = window.getComputedStyle(probe).backgroundColor
+  probe.remove()
+  return { text, fill, expected }
+}), [boxedNotes, boxedNotes.map(({ color }) => boxFill(boxColor, color))])
+
 // `expectRules` says whether the puzzle has rules text. A puzzle that does must show the pane (or the read throws); the snapshot's `rulesPane` is null when no pane is shown.
 export async function readPageState (p, { expectRules }) {
-  const args = { texts: TEXTS, seenTexts: SEEN_TEXTS, profilesKey: PROFILES_KEY, expectRules }
+  const args = { texts: TEXTS, seenTexts: SEEN_TEXTS, boxedTexts: TEXT_BGS, boxKey: BOX_KEY, profilesKey: PROFILES_KEY, expectRules }
   let dom = await p.evaluate(readDom, args)
   for (const deadline = Date.now() + RULES_FIT_MS; dom.rulesPane !== null && !rulesPaneFits(dom.rulesPane) && Date.now() < deadline;) {
     await sleep(POLL_MS)
@@ -60,6 +74,7 @@ export async function readPageState (p, { expectRules }) {
   const notesSaved = await savedNotes(p)
   const mode = COLOR_BUTTON_TITLE.exec(dom.buttonTitle ?? '')?.[1]
   if (!mode) throw new Error(`Color by Digit's button has no mode in its title: ${JSON.stringify(dom.buttonTitle)}`)
-  const { profiles, digits, buttonTitle, ...rest } = dom
-  return { ...rest, notesSaved, colorByDigit: { mode, groups: activeGroups(stateFromStored({ getData: () => profiles })), cells: digits } }
+  const { profiles, digits, buttonTitle, boxedNotes, savedBox, ...rest } = dom
+  const noteBoxes = await withExpectedFills(p, boxedNotes, readBoxColor(savedBox))
+  return { ...rest, notesSaved, noteBoxes, colorByDigit: { mode, groups: activeGroups(stateFromStored({ getData: () => profiles })), cells: digits } }
 }

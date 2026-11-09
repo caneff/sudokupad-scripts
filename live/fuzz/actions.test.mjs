@@ -85,6 +85,91 @@ describe('the action vocabulary', () => {
     for (const word of ['Escape', 'Ctrl+Z', 'resize the window', 'right button', 'leave the window', 'blur and focus', 'Delete']) assert.ok(steps.includes(word), word)
   })
 
+  describe('the sliders, the settings values and the box color (#713)', () => {
+    const kindsNamed = (pattern) => [...firstOfEachKind()].filter(([kind]) => pattern.test(kind))
+    const calls = (log, name) => log.filter(([n]) => n === name)
+
+    it('a slider drag presses the track, drags it and lets go, on each of the four sliders in turn', async () => {
+      const seen = new Set()
+      for (const a of actionsOf(sample(12, 400)).filter((x) => x.kind === 'slider drag')) {
+        const { log } = await runOn(a)
+        const points = calls(log, 'sliderPoint')
+        assert.equal(points.length, 2, `${a}: one point to press, one to drag to`)
+        seen.add(points[0][1])
+        assert.deepEqual(log.filter(([n]) => /^mouse\.(?:down|up)$/.test(n)).map(([n]) => n), ['mouse.down', 'mouse.up'])
+      }
+      assert.deepEqual([...seen].sort(), ['note size', 'note transparency', 'pen opacity', 'pen thickness'])
+    })
+
+    it('a slider key action focuses the slider, presses its keys and leaves the slider', async () => {
+      const [[, action]] = kindsNamed(/^slider keys$/)
+      const { log } = await runOn(action)
+      const names = log.map(([n]) => n)
+      assert.equal(names[0], 'focusSlider')
+      assert.equal(names.at(-1), 'leaveSlider')
+      assert.ok(calls(log, 'keyboard.press').length >= 1)
+      assert.ok(calls(log, 'keyboard.press').every(([, key]) => /^(?:Arrow(?:Left|Right|Up|Down)|Home|End)$/.test(key)))
+    })
+
+    it('the dialog action sets an arrow spacing, a dash length and a thickness inside the script\'s ranges, and saves or cancels', async () => {
+      const sets = []
+      for (const a of actionsOf(sample(13, 300)).filter((x) => x.kind === 'pen settings values')) {
+        const { log } = await runOn(a)
+        const [[, values, save]] = calls(log, 'extrasSettings')
+        sets.push(values)
+        assert.equal(typeof save, 'boolean')
+        assert.ok(values.arrowSpacing >= 3 && values.arrowSpacing <= 12 && Number.isInteger(values.arrowSpacing))
+        assert.ok(values.dash >= 0 && values.dash <= 8 && Number.isInteger(values.dash))
+        assert.ok(values.thickness >= 1 && values.thickness <= 16 && Number.isInteger(values.thickness * 2))
+      }
+      assert.ok(new Set(sets.map((v) => v.arrowSpacing)).size > 3, 'the spacing varies')
+    })
+
+    it('the box color action picks a preset or an own color, and saves or cancels', async () => {
+      const picks = new Set()
+      for (const a of actionsOf(sample(14, 400)).filter((x) => x.kind === 'note box color')) {
+        const { log } = await runOn(a)
+        const [[, choice, color, save]] = calls(log, 'noteBoxDialog')
+        picks.add(choice)
+        assert.equal(typeof save, 'boolean')
+        if (choice === 'custom') assert.match(color, /^#[0-9a-f]{6}$/)
+      }
+      assert.deepEqual([...picks].sort(), ['custom', 'page', 'tint', 'white', 'yellow'])
+    })
+
+    it('the background action sets the Background button on or off', async () => {
+      const wants = new Set()
+      for (const a of actionsOf(sample(16, 300)).filter((x) => x.kind === 'note background')) wants.add(calls((await runOn(a)).log, 'setNoteBackground')[0][1])
+      assert.deepEqual([...wants].sort(), [false, true])
+    })
+
+    it('a boxed note turns Background on first and then places the note', async () => {
+      const [[, action]] = kindsNamed(/^boxed note$/)
+      const { log } = await runOn(action)
+      assert.deepEqual(log.filter(([n]) => /^(?:setNoteBackground|placeNote)$/.test(n)).map(([n]) => n), ['setNoteBackground', 'placeNote'])
+      assert.equal(calls(log, 'setNoteBackground')[0][1], true)
+    })
+
+    it('an arrow line picks an arrow pen, then drags a line with the button up at the end', async () => {
+      const [[, action]] = kindsNamed(/^arrow line$/)
+      const { log } = await runOn(action)
+      const names = log.map(([n]) => n)
+      assert.ok(names.indexOf('useArrowPen') < names.indexOf('mouse.down'), 'the pen first')
+      assert.deepEqual(names.filter((n) => /^mouse\.(?:down|up)$/.test(n)), ['mouse.down', 'mouse.up'])
+    })
+
+    it('their steps read as plain words naming what they set', () => {
+      const steps = stepsOf(sample(15, 400))
+      assert.ok(steps.some((s) => /^drag the pen thickness slider from \d+% to \d+%$/.test(s)), 'drag')
+      assert.ok(steps.some((s) => /^press ArrowLeft 2 times on the note size slider$/.test(s) || /^press \w+ \d times on the \w+ \w+ slider$/.test(s)), 'keys')
+      assert.ok(steps.some((s) => /^Pen Tool Extras settings dialog: arrow spacing \d+ dash \d thickness [\d.]+ (?:Save|Cancel)$/.test(s)), 'values')
+      assert.ok(steps.some((s) => /^Text Anywhere box color (?:Page|White|Yellow|Tint) (?:Save|Cancel)$/.test(s)), 'preset')
+      assert.ok(steps.some((s) => /^note ".*" with a box at r\d+c\d+$/.test(s)), 'boxed note')
+      assert.ok(steps.some((s) => /^arrow line r\d+c\d+ -> r\d+c\d+ color \d$/.test(s)), 'arrow line')
+      assert.ok(steps.some((s) => /^Text Anywhere box color Own #[0-9a-f]{6} (?:Save|Cancel)$/.test(s)), 'own')
+    })
+  })
+
   describe('the puzzle of a list (#679)', () => {
     it('every puzzle of the set is generated', () => {
       const names = new Set(sample(8, 200).map((l) => l.puzzle.name))

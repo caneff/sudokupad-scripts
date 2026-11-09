@@ -11,6 +11,12 @@
 //   env.turnPenPage()  env.undo()  env.redo()  env.clickColorMode()
 //   env.undoAll()                            presses Undo until the undo stack is empty
 //   env.extrasDialog(save)                   opens Pen Tool Extras' settings dialog and presses Save or Cancel
+//   env.extrasSettings({ arrowSpacing, dash, thickness }, save)   the same, with those three values set in the dialog first
+//   env.sliderPoint(name, fraction) -> [x, y]   the page point `fraction` (0 to 1) along the track of slider `name` (`SLIDERS`), opening the tool that shows it
+//   env.focusSlider(name)  env.leaveSlider(name)   puts the keyboard focus on a slider, and takes it off
+//   env.noteBoxDialog(choice, color, save)   opens Text Anywhere's settings dialog, picks the Box color `choice` (`BOX_CHOICES`; `color` is the Own color) and presses Save or Cancel
+//   env.setNoteBackground(on)                presses Text Anywhere's Background button when it is not as `on` says
+//   env.useArrowPen(color)                   opens the pen tool, turns it to the arrow lines page (page 3) and picks its pen color 1 to 9
 //   env.placeNote(text, i)                   a note with `text` at cell `i`, finished with Escape
 //   env.noteCentre() -> [x, y] | null        the middle of the first note drawn
 //   env.resize({ width, height })  env.blurFocus()  env.reload()  env.darkPage(color, save)
@@ -22,7 +28,19 @@ const NOTE_TEXTS = ['15', 'a->b', 'sum 12', '!= 3', 'x\ny']
 // Dark colors only: Dark Page has no off switch, its page color is the setting, and a rule says it stays dark (#590).
 const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
 
+// The four sliders of the pen panel and the notes panel, by the name a step prints.
+export const SLIDERS = ['pen thickness', 'pen opacity', 'note size', 'note transparency']
+// Text Anywhere's Box color buttons, in the dialog's order; `custom` is Own.
+export const BOX_CHOICES = ['page', 'white', 'yellow', 'tint', 'custom']
+const BOX_LABELS = { page: 'Page', white: 'White', yellow: 'Yellow', tint: 'Tint', custom: 'Own' }
+const SLIDER_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End']
+// The ranges of Pen Tool Extras' settings dialog (`THICKNESS`, `DASH` and `ARROW_SPACING` in the script), typed out here: the script does not export them.
+const THICKNESS_HALVES = { min: 2, max: 32 }
+const DASH_LENGTHS = { min: 0, max: 8 }
+const ARROW_SPACINGS = { min: 3, max: 12 }
+
 const NOTE_DRAG = [70, 40]
+const ownColor = (rgb) => `#${rgb.toString(16).padStart(6, '0')}`
 const OUTSIDE = [-5, -5]
 
 // The kinds. `arg(puzzle)` is the arbitrary of an action's numbers (the puzzle's targets and digit keys, `puzzle-set.mjs`); `label(arg, at)` its readable step
@@ -164,7 +182,7 @@ function buildKinds () {
         await env.page.mouse.click(...point, { button: 'right' })
       }
     },
-    { kind: 'pen page', group: 'ordinary', weight: 1, arg: () => fc.constant(null), label: () => 'turn the pen page', run: (env) => env.turnPenPage() },
+    { kind: 'pen page', group: 'ordinary', weight: 2, arg: () => fc.constant(null), label: () => 'turn the pen page', run: (env) => env.turnPenPage() },
     {
       kind: 'place note',
       group: 'ordinary',
@@ -193,6 +211,83 @@ function buildKinds () {
       arg: () => fc.boolean(),
       label: (save) => `Pen Tool Extras settings dialog ${save ? 'Save' : 'Cancel'}`,
       run: (env, save) => env.extrasDialog(save)
+    },
+    {
+      kind: 'slider drag',
+      group: 'ordinary',
+      weight: 4,
+      arg: () => fc.tuple(fc.nat(SLIDERS.length - 1), fc.nat(10), fc.nat(10)),
+      label: ([s, from, to]) => `drag the ${SLIDERS[s]} slider from ${from * 10}% to ${to * 10}%`,
+      run: async (env, [s, from, to]) => {
+        const start = await env.sliderPoint(SLIDERS[s], from / 10)
+        const end = await env.sliderPoint(SLIDERS[s], to / 10)
+        await env.page.mouse.move(...start)
+        await env.page.mouse.down()
+        await env.page.mouse.move(...end, { steps: 8 })
+        await env.page.mouse.up()
+      }
+    },
+    {
+      kind: 'slider keys',
+      group: 'ordinary',
+      weight: 2,
+      arg: () => fc.tuple(fc.nat(SLIDERS.length - 1), fc.nat(SLIDER_KEYS.length - 1), fc.integer({ min: 1, max: 5 })),
+      label: ([s, k, times]) => `press ${SLIDER_KEYS[k]} ${times} times on the ${SLIDERS[s]} slider`,
+      run: async (env, [s, k, times]) => {
+        await env.focusSlider(SLIDERS[s])
+        for (let i = 0; i < times; i++) await env.page.keyboard.press(SLIDER_KEYS[k])
+        await env.leaveSlider(SLIDERS[s])
+      }
+    },
+    {
+      kind: 'pen settings values',
+      group: 'ordinary',
+      weight: 3,
+      arg: () => fc.tuple(fc.integer(ARROW_SPACINGS), fc.integer(DASH_LENGTHS), fc.integer(THICKNESS_HALVES), fc.boolean()),
+      label: ([spacing, dash, halves, save]) => `Pen Tool Extras settings dialog: arrow spacing ${spacing} dash ${dash} thickness ${halves / 2} ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [arrowSpacing, dash, halves, save]) => env.extrasSettings({ arrowSpacing, dash, thickness: halves / 2 }, save)
+    },
+    {
+      kind: 'note box color',
+      group: 'ordinary',
+      weight: 3,
+      arg: () => fc.tuple(fc.constantFrom(...BOX_CHOICES), fc.integer({ min: 0, max: 0xffffff }), fc.boolean()),
+      label: ([choice, rgb, save]) => `Text Anywhere box color ${BOX_LABELS[choice]}${choice === 'custom' ? ` ${ownColor(rgb)}` : ''} ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [choice, rgb, save]) => env.noteBoxDialog(choice, ownColor(rgb), save)
+    },
+    {
+      kind: 'note background',
+      group: 'ordinary',
+      weight: 2,
+      arg: () => fc.boolean(),
+      label: (on) => `turn the Text Anywhere Background button ${on ? 'on' : 'off'}`,
+      run: (env, on) => env.setNoteBackground(on)
+    },
+    {
+      kind: 'boxed note',
+      group: 'ordinary',
+      weight: 3,
+      arg: note,
+      label: ([t, a], at) => `note ${JSON.stringify(NOTE_TEXTS[t]).replace(/,/g, ';')} with a box at ${at(a)}`,
+      run: async (env, [t, a]) => {
+        await env.setNoteBackground(true)
+        await env.placeNote(NOTE_TEXTS[t], a)
+      }
+    },
+    {
+      kind: 'arrow line',
+      group: 'ordinary',
+      weight: 3,
+      arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color),
+      label: ([a, b, c], at) => `arrow line ${at(a)} -> ${at(b)} color ${c}`,
+      run: async (env, [a, b, c]) => {
+        const [from, to] = [await env.cellPoint(a), await env.cellPoint(b)]
+        await env.useArrowPen(c)
+        await env.page.mouse.move(...from)
+        await env.page.mouse.down()
+        await env.page.mouse.move(...to, { steps: 6 })
+        await env.page.mouse.up()
+      }
     },
     { kind: 'color mode', group: 'ordinary', weight: 2, arg: () => fc.constant(null), label: () => 'press the Color by Digit button', run: (env) => env.clickColorMode() },
 
