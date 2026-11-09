@@ -82,11 +82,21 @@ const box = await note.boundingBox()
 const clip = { x: box.x - PAD_LEFT, y: box.y - PAD, width: box.width + PAD_LEFT + PAD, height: box.height + 2 * PAD }
 await p.mouse.move(0, 0)
 writeFileSync(out('formatting'), await p.screenshot({ clip }))
-// The same note open for typing: typed symbols are already the symbols, and the ticked item reads [x].
+// The same note open for typing: typed symbols are already the symbols here, and the ticked item reads [x].
 await note.dblclick()
 await open.waitFor({ state: 'visible' })
 const rawText = await open.evaluate((el) => el.value ?? el.textContent)
 if (rawText !== RAW_TEXT) throw new Error(`the open note's text is not the typed text: ${JSON.stringify(rawText)}`)
+// The picture teaches what to type, so the symbols line shows the keys that make each symbol, set straight into the open note's text, as typing would turn them into the symbols again.
+const swapped = await open.evaluate((el, [shown, typed]) => {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (node.data.includes(shown)) { node.data = node.data.replace(shown, typed); return true }
+  }
+  return false
+}, [RAW_TEXT.split('\n').at(-1), LINES.at(-1)])
+if (!swapped) throw new Error('the open note does not end with the symbols line')
+if (!(await open.evaluate((el) => el.scrollHeight <= el.clientHeight + 1))) throw new Error('the open note scrolls once the symbols show as typed')
 const rawBox = await open.boundingBox()
 if (Math.abs(rawBox.width - box.width) > 2 || Math.abs(rawBox.height - box.height) > 2) throw new Error('the open note is not the finished note\'s size')
 await p.mouse.move(0, 0)
