@@ -314,8 +314,8 @@ test('Copy settings leaves the colors out until they are saved', () => {
 })
 
 // A row added to a copy of the table is handled by Copy, Paste, the start load, the snapshot's keys and Save's changed list, with no other edit. The script's own
-// snapshotSave and Save read the real table, so these helpers are what a copy can reach; draw-tool-save-failure.live.mjs and draw-tool-settings.live.mjs cover
-// that the two use them.
+// snapshotSave and Save read the real table, so these helpers are what a copy can reach. Live, settings-copy-paste.live.mjs's failed Text Anywhere paste
+// covers the snapshot's looks, and draw-tool-outline.live.mjs's 'Save applies the choice to every note' covers Save's.
 const SPIN_KEY = 'DrawTool_spin'
 const SPIN_ROW = { name: 'spin', key: SPIN_KEY, read: (saved) => (saved === 'left' ? 'left' : 'none'), dialog: true }
 const WITH_SPIN = [...LOOKS, SPIN_ROW]
