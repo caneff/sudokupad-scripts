@@ -5,9 +5,9 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { quietly } = require('./fake-store.js')
+const { quietly, fakeStore } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedLooks } = require('../draw-tool.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedLooks } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -1443,4 +1443,49 @@ test('lookTarget: the open note, else the selected notes, else the next note', (
   assert.equal(lookTarget({ item: red20 }, [0, 1]), 'open', 'an open note wins over a selection')
   assert.equal(lookTarget(null, [2]), 'selected')
   assert.equal(lookTarget(null, []), 'next')
+})
+
+test('indexAfterKeep: deleting a note before the open one moves the open index down, a later one leaves it, and the open note itself going leaves -1', () => {
+  const keep = [true, false, true, true]
+  assert.equal(indexAfterKeep(0, keep), 0)
+  assert.equal(indexAfterKeep(2, keep), 1, 'the open note follows the deletion before it')
+  assert.equal(indexAfterKeep(3, keep), 2)
+  assert.equal(indexAfterKeep(1, keep), -1, 'a deleted note has no index')
+  assert.equal(indexAfterKeep(-1, keep), -1, 'a note not saved yet stays unsaved')
+  assert.equal(indexAfterKeep(5, keep), -1, 'an index past the notes has none')
+})
+
+test('noteChanged: text, color, size, opacity, background and box each count; an untouched note does not', () => {
+  const saved = { ...textItem([0, 0], 'a', 1, 20), box: [10, 4] }
+  assert.equal(noteChanged({ ...saved }, 'a', saved), false)
+  assert.equal(noteChanged({ ...saved }, 'b', saved), true, 'text')
+  assert.equal(noteChanged({ ...saved, color: 2 }, 'a', saved), true, 'color')
+  assert.equal(noteChanged({ ...saved, size: 24 }, 'a', saved), true, 'size')
+  assert.equal(noteChanged({ ...saved, opacity: 50 }, 'a', saved), true, 'opacity')
+  assert.equal(noteChanged({ ...saved, bg: true }, 'a', saved), true, 'background')
+  assert.equal(noteChanged({ ...saved, box: [12, 4] }, 'a', saved), true, 'box')
+  assert.equal(noteChanged({ ...saved, opacity: undefined }, 'a', saved), false, 'a missing opacity reads as the default')
+  assert.equal(noteChanged({ ...saved, bg: false }, 'a', saved), false, 'no background either way')
+})
+
+test('noteChanged: a new note changes with any text, and not with none', () => {
+  const fresh = textItem([0, 0], '', 1, 20)
+  assert.equal(noteChanged(fresh, 'x', null), true)
+  assert.equal(noteChanged(fresh, '', null), false)
+  assert.equal(noteChanged({ ...fresh, color: 5 }, '', null), false, 'an empty new note is not saved however it looks')
+})
+
+test('load, edit, Restart and Undo after Restart: the notes come back from what Restart kept', () => {
+  const store = fakeStore({ [DRAWING_PREFIX + 'p1']: [line, sum], [INDEX_KEY]: ['p1'] })
+  const loaded = loadDrawing(store, 'p1').items
+  assert.deepEqual(loaded, [line, sum])
+  const edited = [loaded[0], { ...loaded[1], text: '16' }]
+  saveDrawingTo(store, 'p1', edited)
+  // Restart: the notes are kept, then the saved drawing is cleared.
+  keepRestartedTo(store, 'p1', edited)
+  saveDrawingTo(store, 'p1', [])
+  assert.equal(store.getData(DRAWING_PREFIX + 'p1'), null, 'Restart cleared the drawing')
+  assert.deepEqual(loadDrawing(store, 'p1').items, [], 'a reload after Restart draws nothing')
+  assert.deepEqual(readItems(store.getData(RESTARTED_PREFIX + 'p1')), edited, 'Undo reads the edited notes back')
+  assert.deepEqual(store.getData(INDEX_KEY), ['p1'], 'the puzzle stays indexed while its kept notes wait')
 })
