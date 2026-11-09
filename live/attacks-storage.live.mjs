@@ -49,11 +49,10 @@ describe('attacks on storage', { concurrency: false }, () => {
           return set.call(this, key, value)
         }
       }, owns)
-      // Text Anywhere tells a refused note in SudokuPad's dialog; Pen Tool Extras and Color by Digit tell in a bar.
+      // Text Anywhere tells a refused note in SudokuPad's dialog, unless another dialog is open; the other two tell in a bar.
       const dismissNotice = async () => {
-        const dialog = p.locator('.dialog').filter({ hasText: 'Text Anywhere could not save this puzzle\'s notes' })
-        await dialog.waitFor()
-        await dialog.locator('button').filter({ hasText: /^\s*OK\s*$/ }).click()
+        const ok = p.locator('.dialog button').filter({ hasText: /^\s*OK\s*$/ })
+        if (await ok.count() > 0) await ok.click()
       }
 
       await pickTool(p, 'draw')
@@ -61,6 +60,11 @@ describe('attacks on storage', { concurrency: false }, () => {
       await dismissNotice()
       assert.deepEqual(await draw.texts(p), ['15'], 'Text Anywhere draws the note')
 
+      // With a note selected the slider changes that note; with none it saves the next note's size, a settings write.
+      await p.keyboard.press('Escape')
+      if (await p.locator(draw.SELECTED).count() > 0) await p.keyboard.press('Escape')
+      await draw.slideTo(p, draw.SIZE_SLIDER, 12)
+      await dismissNotice()
       await setSlider(p, THICKNESS, 9)
       await mouseDrag(p, [[1.5, 1.5], [1.5, 4.5]])
       assert.equal((await penEntries(p)).length, 3, 'Pen Tool Extras draws the line')
@@ -73,7 +77,8 @@ describe('attacks on storage', { concurrency: false }, () => {
       const told = await p.locator(NOTICE_BAR).allTextContents()
       assert.deepEqual(told.map((text) => text.replace('×', '')).sort(), [
         'Color by Digit: the browser has no room left, so saved settings could not be saved.',
-        'Pen Tool Extras: the browser has no room left, so saved settings could not be saved.'
+        'Pen Tool Extras: the browser has no room left, so saved settings could not be saved.',
+        'Text Anywhere: the browser has no room left, so saved notes and settings could not be saved.'
       ], 'each bar names the browser, not SudokuPad')
     })
   })

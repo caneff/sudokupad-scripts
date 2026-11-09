@@ -177,12 +177,15 @@
   feature that lacks one at startup, or whose own code throws, turns off alone while the rest of the script keeps working.
 - **feature** — a part of a script declared to the **SudokuPad guard**, with the label the console warning and the **notice bar** call it and
   the SudokuPad internals it needs. Its calls into SudokuPad run under it, so one that throws turns it off; off, it acts as if the script
-  lacked it, until the page reloads.
+  lacked it, until the page reloads. A **refused write** is the exception: its saves go through `write`, which leaves the feature on.
+- **refused write** — a save the browser refuses with `QuotaExceededError` (a full `localStorage`). It is the browser's doing, not a SudokuPad change: the
+  guard warns once in the console, puts up a plain bar, and the feature keeps saving once space frees.
 - **notice bar** — the guard's bar at the bottom of the page, in the one purple every script's bar uses (Pen Tool Extras' and the site's
   accent): "<script>: <features> is/are off — SudokuPad changed.", a Report link to a new issue filled in with the script, each feature,
   its missing internal or error, and SudokuPad's version, and a × that dismisses it. A dismissal is saved per SudokuPad version, so a new
   version shows the bar again; until dismissed it shows on every page load. Where it cannot be saved (a page with no SudokuPad version, or a
-  Framework whose saved data is missing or throws) a dismissal holds for the page load only.
+  Framework whose saved data is missing or throws) a dismissal holds for the page load only. A **refused write** puts up a second, plain bar in the same
+  place: "<script>: the browser has no room left, so <feature> could not be saved.", with a × and no Report link, once per page load.
 - **error log** — the guard's permanent record of every **feature** it turns off, shown on the **notice bar** or not: one list in the page's `localStorage`
   shared by every script, the newest 50 records, each with the time, script and version, SudokuPad's version, the feature, the page address and either the
   missing internal or the error's message and stack. A missing internal already recorded for the same script version and SudokuPad version is not recorded again.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.6.2
+// @version      0.6.3
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.6.2'
+  const VERSION = '0.6.3'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -680,7 +680,7 @@
   }
 
   // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
-  // anything can save over it.
+  // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
   function load (store, { key, read }) {
     const raw = store.getData(key)
     if (raw === null) return { value: undefined }
@@ -690,7 +690,8 @@
       const unreadable = error.message || String(error) || 'its reader threw'
       const { slot, copied } = keptSlot(store, key, raw)
       if (copied) {
-        store.setData(slot, raw)
+        if (store.keep) store.keep(slot, raw)
+        else store.setData(slot, raw)
         console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
       }
       return { value: undefined, unreadable }
@@ -797,6 +798,27 @@
   const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
   const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
 
+  function noticeHost (doc) {
+    let host = doc.getElementById(NOTICE_HOST_ID)
+    if (!host) {
+      host = doc.createElement('div')
+      host.id = NOTICE_HOST_ID
+      host.style.cssText = NOTICE_HOST_CSS
+      doc.body.append(host)
+    }
+    return host
+  }
+
+  function dismissButton (doc) {
+    const dismiss = doc.createElement('button')
+    dismiss.type = 'button'
+    dismiss.textContent = '×'
+    dismiss.title = 'Dismiss'
+    dismiss.setAttribute('aria-label', 'Dismiss')
+    dismiss.style.cssText = NOTICE_DISMISS_CSS
+    return dismiss
+  }
+
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
   // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
@@ -853,13 +875,7 @@
       const shown = reasons.filter((reason) => !gone.includes(reason.name))
       if (shown.length === 0 || !page.doc.body) return
       const { doc } = page
-      let host = doc.getElementById(NOTICE_HOST_ID)
-      if (!host) {
-        host = doc.createElement('div')
-        host.id = NOTICE_HOST_ID
-        host.style.cssText = NOTICE_HOST_CSS
-        doc.body.append(host)
-      }
+      const host = noticeHost(doc)
       bar = doc.createElement('div')
       bar.setAttribute('data-script', script)
       bar.style.cssText = NOTICE_BAR_CSS
@@ -871,12 +887,7 @@
       link.rel = 'noopener'
       link.textContent = 'Report'
       link.style.cssText = NOTICE_LINK_CSS
-      const dismiss = doc.createElement('button')
-      dismiss.type = 'button'
-      dismiss.textContent = '×'
-      dismiss.title = 'Dismiss'
-      dismiss.setAttribute('aria-label', 'Dismiss')
-      dismiss.style.cssText = NOTICE_DISMISS_CSS
+      const dismiss = dismissButton(doc)
       dismiss.addEventListener('click', () => {
         dismissedHere.push(...shown.map((reason) => reason.name))
         if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
@@ -892,24 +903,13 @@
       if (told.has(text) || !page || !page.doc.body) return
       told.add(text)
       const { doc } = page
-      let host = doc.getElementById(NOTICE_HOST_ID)
-      if (!host) {
-        host = doc.createElement('div')
-        host.id = NOTICE_HOST_ID
-        host.style.cssText = NOTICE_HOST_CSS
-        doc.body.append(host)
-      }
+      const host = noticeHost(doc)
       const message = doc.createElement('div')
       message.setAttribute('data-script', script)
       message.style.cssText = NOTICE_BAR_CSS
       const span = doc.createElement('span')
       span.textContent = text
-      const dismiss = doc.createElement('button')
-      dismiss.type = 'button'
-      dismiss.textContent = '×'
-      dismiss.title = 'Dismiss'
-      dismiss.setAttribute('aria-label', 'Dismiss')
-      dismiss.style.cssText = NOTICE_DISMISS_CSS
+      const dismiss = dismissButton(doc)
       dismiss.addEventListener('click', () => message.remove())
       message.append(span, dismiss)
       host.append(message)

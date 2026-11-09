@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.10
+// @version      1.31.11
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.10'
+  const VERSION = '1.31.11'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -171,6 +171,27 @@
   const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
   const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
 
+  function noticeHost (doc) {
+    let host = doc.getElementById(NOTICE_HOST_ID)
+    if (!host) {
+      host = doc.createElement('div')
+      host.id = NOTICE_HOST_ID
+      host.style.cssText = NOTICE_HOST_CSS
+      doc.body.append(host)
+    }
+    return host
+  }
+
+  function dismissButton (doc) {
+    const dismiss = doc.createElement('button')
+    dismiss.type = 'button'
+    dismiss.textContent = '×'
+    dismiss.title = 'Dismiss'
+    dismiss.setAttribute('aria-label', 'Dismiss')
+    dismiss.style.cssText = NOTICE_DISMISS_CSS
+    return dismiss
+  }
+
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
   // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
@@ -227,13 +248,7 @@
       const shown = reasons.filter((reason) => !gone.includes(reason.name))
       if (shown.length === 0 || !page.doc.body) return
       const { doc } = page
-      let host = doc.getElementById(NOTICE_HOST_ID)
-      if (!host) {
-        host = doc.createElement('div')
-        host.id = NOTICE_HOST_ID
-        host.style.cssText = NOTICE_HOST_CSS
-        doc.body.append(host)
-      }
+      const host = noticeHost(doc)
       bar = doc.createElement('div')
       bar.setAttribute('data-script', script)
       bar.style.cssText = NOTICE_BAR_CSS
@@ -245,12 +260,7 @@
       link.rel = 'noopener'
       link.textContent = 'Report'
       link.style.cssText = NOTICE_LINK_CSS
-      const dismiss = doc.createElement('button')
-      dismiss.type = 'button'
-      dismiss.textContent = '×'
-      dismiss.title = 'Dismiss'
-      dismiss.setAttribute('aria-label', 'Dismiss')
-      dismiss.style.cssText = NOTICE_DISMISS_CSS
+      const dismiss = dismissButton(doc)
       dismiss.addEventListener('click', () => {
         dismissedHere.push(...shown.map((reason) => reason.name))
         if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
@@ -266,24 +276,13 @@
       if (told.has(text) || !page || !page.doc.body) return
       told.add(text)
       const { doc } = page
-      let host = doc.getElementById(NOTICE_HOST_ID)
-      if (!host) {
-        host = doc.createElement('div')
-        host.id = NOTICE_HOST_ID
-        host.style.cssText = NOTICE_HOST_CSS
-        doc.body.append(host)
-      }
+      const host = noticeHost(doc)
       const message = doc.createElement('div')
       message.setAttribute('data-script', script)
       message.style.cssText = NOTICE_BAR_CSS
       const span = doc.createElement('span')
       span.textContent = text
-      const dismiss = doc.createElement('button')
-      dismiss.type = 'button'
-      dismiss.textContent = '×'
-      dismiss.title = 'Dismiss'
-      dismiss.setAttribute('aria-label', 'Dismiss')
-      dismiss.style.cssText = NOTICE_DISMISS_CSS
+      const dismiss = dismissButton(doc)
       dismiss.addEventListener('click', () => message.remove())
       message.append(span, dismiss)
       host.append(message)
