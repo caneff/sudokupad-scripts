@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.40.1
+// @version      0.40.2
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.40.1'
+  const VERSION = '0.40.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -3176,7 +3176,10 @@
     element.addEventListener('input', under(textTool, (event) => {
       if (!editing || editing.element !== element) return
       // Only a typed character completes a symbol: deleting, pasting and Undo leave the text as it is.
-      if (event.inputType === 'insertText') replaceTypedSymbol()
+      if (event.inputType === 'insertText') {
+        replaceTypedSymbol()
+        splitTypingUndo()
+      }
       showEditing(boardMap())
       clearTimeout(openNoteSaveTimer)
       openNoteSaveTimer = setTimeout(under(textTool, saveOpenNote), OPEN_NOTE_SAVE_MS)
@@ -3210,6 +3213,15 @@
     document.execCommand('insertText', false, found.symbol)
     // `sum` ends before the character typed after it, which the insertion carried the caret behind.
     if (found.end - nodeStart !== anchorOffset) selection.modify('move', 'forward', 'character')
+  }
+
+  // Chromium undoes a run of typed characters as one step; putting the caret back where it is ends the run, so Ctrl+Z takes one character at a time.
+  function splitTypingUndo () {
+    const selection = window.getSelection()
+    if (!selection.rangeCount) return
+    const range = selection.getRangeAt(0)
+    selection.removeAllRanges()
+    selection.addRange(range)
   }
 
   // The focus went to a panel button (`caret` was saved then, null with no caret); the note takes it back, once.
