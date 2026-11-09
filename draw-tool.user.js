@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.40.0
+// @version      0.41.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,9 +16,10 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.40.0'
+  const VERSION = '0.41.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
+  const DIALOG_BLUR_PX = 8
   const MIN_WIDTH = 1
   const MAX_WIDTH = 16
   const WIDTH_STEP = 0.5
@@ -2172,6 +2173,10 @@
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
     pickerCss(CLASS_PREFIX, TOOL_NAME),
     `#${LAYER_ID} { position: fixed; inset: 0; z-index: ${LAYER_Z}; pointer-events: none; overflow: hidden; }`,
+    // SudokuPad blurs the board by 8px under a dialog opened with `overlayBlur` (`body.overlay-visible .boardsvg > *`), which is how it hides the grid while paused.
+    // The notes would give the solve away, so they blur with it and take no pointer; selection and an open note stay as they are underneath.
+    `body.overlay-visible #${LAYER_ID} { filter: blur(${DIALOG_BLUR_PX}px); }`,
+    `body.overlay-visible #${LAYER_ID} * { pointer-events: none !important; }`,
     // A line as tall as the hit box, so a note's background box is as tall as a digit and covers one under it.
     // SudokuPad sizes every box border-box; a note's sizes are its text's, as its hit box is, with the padding around them.
     `.${TEXT_CLASS} { position: absolute; box-sizing: content-box; line-height: ${LINE_HEIGHT}; white-space: pre-wrap; overflow-wrap: anywhere; width: max-content; max-width: ${BOX_WIDTH_EM}em; max-height: ${roundToTenth(BOX_LINES * LINE_HEIGHT)}em; overflow: hidden; }`,
