@@ -20,8 +20,8 @@ export const quietPage = (overrides = {}) => ({
 // Opens fake targets; each has the `log` of every env and Playwright call it saw. `plantEscapeError` throws a page error when Escape is pressed
 // while a mouse button is down, the interruption the live smoke test plants on the real page too; it lands only after the next `wait`, as a
 // timer's error lands after the action returned, so the tests need no clock. `withNote` starts the page with a note drawn. `whitenOnBlur` turns the page
-// white when the window blurs, which breaks the Dark Page rule; `whitenOnWait` makes it so only after the next wait; `lettersOnTab` turns the number pad to letters on Tab, which breaks the Tab rule, and `lettersOnBlur` does it on a blur, which breaks no rule.
-export function fakeTargets ({ plantEscapeError = false, withNote = true, whitenOnBlur = false, whitenOnWait = false, lettersOnTab = false, lettersOnBlur = false } = {}) {
+// white when the window blurs, which breaks the Dark Page rule; `whitenOnWait` makes it so only after the next wait; `lettersOnTab` turns the number pad to letters on Tab, which breaks the Tab rule, and `lettersOnBlur` does it on a blur, which breaks no rule; `lettersOnRedo` does it on a redo, which breaks only the rule that a redo after an undo restores the page (the fake's undo stack is a count: undo takes one off, redo puts one back).
+export function fakeTargets ({ plantEscapeError = false, withNote = true, whitenOnBlur = false, whitenOnWait = false, lettersOnTab = false, lettersOnBlur = false, lettersOnRedo = false } = {}) {
   const targets = []
   const openTarget = async () => {
     const log = []
@@ -31,6 +31,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
     let notes = withNote ? 1 : 0
     let pageColor = 'rgb(0, 0, 0)'
     let letterMode = false
+    let undoDepth = 3
     let whitenPending = false
     const rec = (name, result) => async (...args) => { log.push([name, ...args]); return result }
     const page = {
@@ -56,9 +57,9 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       usePen: rec('usePen'),
       useNotes: rec('useNotes'),
       turnPenPage: rec('turnPenPage'),
-      undo: rec('undo'),
-      redo: rec('redo'),
-      undoAll: rec('undoAll'),
+      undo: async () => { log.push(['undo']); undoDepth = Math.max(0, undoDepth - 1) },
+      redo: async () => { log.push(['redo']); undoDepth++; if (lettersOnRedo) letterMode = true },
+      undoAll: async () => { log.push(['undoAll']); undoDepth = 0 },
       clickColorMode: rec('clickColorMode'),
       placeNote: async (...a) => { log.push(['placeNote', ...a]); notes++ },
       extrasDialog: rec('extrasDialog'),
@@ -71,7 +72,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       env,
       log,
       closed: false,
-      snapshot: async () => ({ errors: [...errors], notices: [], page: quietPage({ pageColor, letterMode }) }),
+      snapshot: async () => ({ errors: [...errors], notices: [], page: quietPage({ pageColor, letterMode, undoDepth }) }),
       wait: async (ms) => {
         if (ms <= 0) return
         errors.push(...pending.splice(0))

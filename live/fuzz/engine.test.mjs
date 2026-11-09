@@ -100,6 +100,16 @@ describe('the fuzz engine on a fake page', () => {
     })
   })
 
+  describe('a rule that reads the step before', () => {
+    it('is told it: a redo that does not restore the page after an undo fails the run, shrunk to the undo and the redo', async () => {
+      const { openTarget } = fakeTargets({ lettersOnRedo: true })
+      const found = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 600, ...WAITS })
+      assert.equal(found.failed, true)
+      assert.match(found.error, /rule broken after "redo": undo-redo-restores: letterMode was false and is now true/)
+      assert.deepEqual(found.sequence, ['undo', 'redo'])
+    })
+  })
+
   describe('where a broken rule is read', () => {
     it('a rule broken only after a wait is caught by the read after the last action', async () => {
       const { openTarget } = fakeTargets({ whitenOnWait: true })

@@ -100,11 +100,15 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **Three rules check the scripts against themselves** (#677), knowing nothing of what a script should draw; each was written from what the scripts keep, and
   each leaves out what they do not:
   - `undo-redo-restores`: a redo straight after an undo gives back the whole snapshot from before the undo (the step before is passed to a rule as `earlier`).
-    Leaves out the rules pane (layout), the order strokes sit in on the page, and a redo after anything but an undo (`undo back to the start` included).
+    Read only when the undo took steps off the stack and the redo put the same number back. Leaves out an undo on an empty stack, which does nothing and leaves
+    the redo stack for the next redo; an undo that also drops SudokuPad's selection entry, which a redo does not bring back; the rules pane (layout); the order
+    strokes sit in on the page; and a redo after anything but an undo (`undo back to the start` included).
   - `reload-changes-nothing`: a reload keeps the pen strokes (state and drawn, as a set), the page color, Color by Digit's mode, groups and digits, and, in Digit
-    and Off mode, the cells and their colors. Leaves out the cell colors in Cell and Both mode, because Color by Digit colors the entered cells every time the page
-    opens, so a coloring undone before the reload returns by design; the notes, which `notes-survive-reload` counts; the undo stack depth and the letter pad,
-    which a reload does not promise to keep; and the rules pane. It found #681, a pen stroke's color that changes on reload; until that is fixed a run that reaches it fails.
+    and Off mode, the cells and their colors. Leaves out, in Cell and Both mode, every cell's colors and the serialized cells, which hold them with the pencil marks:
+    Color by Digit colors the entered cells every time the page opens, so a coloring undone before the reload returns by design, and the colors and the marks
+    sit in one serialized string that the rule does not parse. Also leaves out the notes' position and look (`notes-survive-reload` counts their text), the undo
+    stack depth and the letter pad, which a reload does not promise to keep, and the rules pane. It found #681, a pen stroke's color that changes on reload;
+    until that is fixed a run that reaches it fails.
   - `undo-to-start` also checks that no pen stroke is drawn and no cell is colored. Text Anywhere's notes ride no undo step, so they stay.
 - **A failure** is shrunk (for 10 minutes at most) and printed with the seed, the shortest list that still fails as numbered steps, the one command that
   replays it (`npm run test:fuzz -- --seed <n> --path <path>`, which runs that one list and does not shrink) and the newest records of the shared error log

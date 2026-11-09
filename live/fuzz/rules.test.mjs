@@ -7,7 +7,10 @@ import { RULES, ruleViolations } from './rules.mjs'
 const rule = (name) => RULES.find((r) => r.name === name)
 // The violations of one rule between a snapshot `before` and one `now` (page overrides), for the kind of action between them.
 // `earlier` is the step before `before` as overrides of its page: `{ action, page }`.
-const check = (name, now, { before = {}, action = 'click cell', earlier = null } = {}) => rule(name).check({ now: { page: quietPage(now) }, before: { page: quietPage(before) }, action, earlier: earlier && { action: earlier.action, before: { page: quietPage(earlier.page) } } })
+const check = (name, now, { before = {}, action = 'click cell', earlier = null } = {}) => {
+  const earlierStep = earlier && { action: earlier.action, before: { page: quietPage(earlier.page) } }
+  return rule(name).check({ now: { page: quietPage(now) }, before: { page: quietPage(before) }, action, earlier: earlierStep })
+}
 
 const colorByDigit = (mode, cells, groups = [{ key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]) => ({ mode, groups, cells: cells.map(([digit, colours = [], given = false]) => ({ digit, given, colours })) })
 
@@ -148,8 +151,15 @@ describe('the rules', () => {
     it('fails when the page differs, naming the field', () => {
       assert.deepEqual(undoThenRedo({ ...board, penDrawn: [] }), ['penDrawn was ["pen-1 pencolor-2"] and is now []'])
     })
-    it('fails when the undo stack is a different depth', () => {
-      assert.equal(undoThenRedo({ ...board, undoDepth: 3 }).length, 1)
+    it('fails when the redo puts the cells back differently', () => {
+      assert.equal(undoThenRedo({ ...board, cells: ['6///6', '', ''] }).length, 1)
+    })
+    it('says nothing when the undo found an empty stack and took nothing, so the redo gives back an older step', () => {
+      const older = { ...board, undoDepth: 11 }
+      assert.deepEqual(check('undo-redo-restores', older, { before: { ...undone, undoDepth: 0 }, action: 'redo', earlier: { action: 'undo', page: { ...undone, undoDepth: 0 } } }), [])
+    })
+    it('says nothing when the undo took two steps (SudokuPad\'s selection entry with the rest) and the redo gave one back', () => {
+      assert.deepEqual(check('undo-redo-restores', { ...board, undoDepth: 11 }, { before: { ...undone, undoDepth: 9 }, action: 'redo', earlier: { action: 'undo', page: { ...board, undoDepth: 12 } } }), [])
     })
     it('says nothing for a redo after another action, or an undo followed by another action', () => {
       assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'redo', earlier: { action: 'click cell', page: board } }), [])

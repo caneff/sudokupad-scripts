@@ -1,4 +1,4 @@
-// What "working" means for each script in a fuzz run, one rule per script (#590 Q10, #594), as pure functions over page snapshots so they are unit-tested
+// What "working" means for each script in a fuzz run, a rule or more per script, and some for every script at once (#590 Q10, #594, #677), as pure functions over page snapshots so they are unit-tested
 // with hand-built ones (`rules.test.mjs`). The engine (`engine.mjs`) checks every rule after every action; `page-state.mjs` reads a snapshot's `page`.
 // Not a check itself.
 //
@@ -46,12 +46,16 @@ const digitsChanged = (now, before) => now.cells.flatMap((cell, i) => (cell.digi
 
 // What a rule that compares two snapshots reads, leaving out `rulesPane`, which is a measure of the layout and is checked by its own rule.
 // The strokes are compared as a set: the order they sit in on the page is not something a player sees.
+const sorted = (list) => [...list].sort()
 const comparable = (page) => {
   const { rulesPane, ...rest } = page // eslint-disable-line no-unused-vars
-  return { ...rest, penState: [...page.penState].sort(), penDrawn: [...page.penDrawn].sort() }
+  return { ...rest, penState: sorted(page.penState), penDrawn: sorted(page.penDrawn) }
 }
 
-// One line per field that differs between two views of a page, naming the field and both values.
+// Whether Color by Digit colors the cells in this mode.
+const colorsCells = (mode) => mode === 'Cell' || mode === 'Both'
+
+// One line per field of `was` that differs in `now`, naming the field and both values; a field only `now` has is not compared.
 const viewDifferences = (was, now) => Object.keys(was).filter((field) => JSON.stringify(was[field]) !== JSON.stringify(now[field]))
   .map((field) => `${field} was ${JSON.stringify(was[field])} and is now ${JSON.stringify(now[field])}`)
 
@@ -60,9 +64,8 @@ const viewDifferences = (was, now) => Object.keys(was).filter((field) => JSON.st
 // (notes-survive-reload counts a note still open for typing), the undo stack depth and the letter pad, none of which a reload promises to keep.
 const reloadView = (page) => {
   const { mode, groups, cells } = page.colorByDigit
-  const { penState, penDrawn } = comparable(page)
-  const base = { penState, penDrawn, pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit) }
-  return mode === 'Cell' || mode === 'Both' ? base : { ...base, cells: page.cells, colours: cells.map((cell) => cell.colours) }
+  const base = { penState: sorted(page.penState), penDrawn: sorted(page.penDrawn), pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit) }
+  return colorsCells(mode) ? base : { ...base, cells: page.cells, colours: cells.map((cell) => cell.colours) }
 }
 
 // Whether the rules pane shows all its text, or has shrunk the text as far as Auto Rules Resizer goes.
@@ -122,8 +125,14 @@ export const RULES = [
   },
   {
     name: 'undo-redo-restores',
-    // All scripts: a redo straight after an undo puts the page back exactly as it was before the undo.
-    check: ({ now, action, earlier }) => (action === 'redo' && earlier?.action === 'undo' ? viewDifferences(comparable(earlier.before.page), comparable(now.page)) : [])
+    // All scripts: a redo straight after an undo puts the page back exactly as it was before the undo. Read only when the undo took some steps off the stack and the
+    // redo put the same number back: an undo on an empty stack does nothing and leaves the redo stack for the next redo, and an undo that also drops SudokuPad's selection
+    // entry gets back only the rest.
+    check: ({ now, before, action, earlier }) => {
+      if (action !== 'redo' || earlier?.action !== 'undo') return []
+      const took = earlier.before.page.undoDepth - before.page.undoDepth
+      return took > 0 && now.page.undoDepth - before.page.undoDepth === took ? viewDifferences(comparable(earlier.before.page), comparable(now.page)) : []
+    }
   },
   {
     name: 'digit-cells-colored',
@@ -131,7 +140,7 @@ export const RULES = [
     // mode just changed, on every cell: a color taken off by hand with the color tool is the player's, and stays.
     check: ({ now, before }) => {
       const { mode, groups, cells } = now.page.colorByDigit
-      if (mode !== 'Cell' && mode !== 'Both') return []
+      if (!colorsCells(mode)) return []
       const keyOf = (digit) => groups.find((g) => g.digits.includes(digit))?.key
       const checked = mode === before.page.colorByDigit.mode ? digitsChanged(now.page.colorByDigit, before.page.colorByDigit) : cells.map((_, i) => i)
       return checked.flatMap((i) => {
