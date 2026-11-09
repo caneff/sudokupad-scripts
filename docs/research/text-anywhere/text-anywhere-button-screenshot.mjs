@@ -5,13 +5,13 @@
 // Not part of any test.
 import { chromium } from 'playwright'
 import { writeFileSync } from 'node:fs'
-import { openDrawPage } from './text-anywhere-screenshot-page.mjs'
+import { openTextAnywherePage } from './text-anywhere-screenshot-page.mjs'
 import { TOOL_BUTTON as BUTTON } from '../../../live/text-anywhere/text-anywhere-fixtures.mjs'
 
 const out = new URL('./text-anywhere-button.png', import.meta.url).pathname
 
 const browser = await chromium.launch()
-const page = await openDrawPage(browser, 4)
+const page = await openTextAnywherePage(browser, 4)
 await page.mouse.move(5, 5)
 
 const shoot = async () => {

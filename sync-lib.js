@@ -118,11 +118,19 @@ const readLib = (name) => {
 }
 const libNamesOnDisk = () => fs.readdirSync(LIB_DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.test.js')).map((f) => f.slice(0, -3)).sort()
 // A script's old install address, which every copy installed from it still checks for updates, to its new one. The old file stays
-// frozen at one handover version whose @updateURL and @downloadURL name the new file, so those copies move there by themselves (#711).
-// It is no script of its own: nothing syncs, lists, tests or links it.
+// frozen at one handover version whose @updateURL and @downloadURL name the new file, so those copies' next update leads there (#711;
+// docs/research/tampermonkey-in-playwright.md § Driving an update check has what is known of how).
+// It is no script of its own: scriptFiles() leaves it out, so this file never syncs it.
 const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
 // The scripts: every *.user.js at the root but a handover.
 const scriptFiles = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js') && !(f in HANDOVERS)).sort()
+
+// The id a script's source hands the shared guard (lib/sudokupad.js `createGuard`), which starts each of its warnings.
+function guardId (source) {
+  const found = /createGuard\(\{ script: '([a-z-]+)'/.exec(source)
+  if (found === null) throw new Error("no createGuard({ script: '<id>' ... }) call in the script")
+  return found[1]
+}
 
 if (require.main === module) {
   let failed = false
@@ -137,4 +145,4 @@ if (require.main === module) {
   if (failed) process.exit(1)
 }
 
-module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, HANDOVERS, generatedLine, RUN }
+module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, HANDOVERS, guardId, generatedLine, RUN }

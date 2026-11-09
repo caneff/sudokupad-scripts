@@ -5,7 +5,7 @@ import { openPage, startPuzzle } from '../../../live/page.mjs'
 
 const script = readFileSync(new URL('../../../text-anywhere.user.js', import.meta.url), 'utf8')
 
-export async function openDrawPage (browser, deviceScaleFactor) {
+export async function openTextAnywherePage (browser, deviceScaleFactor) {
   const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor } })
   await startPuzzle(p)
   await p.addStyleTag({ content: '#svenpeek { display: none !important }' })

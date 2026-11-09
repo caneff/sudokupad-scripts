@@ -165,5 +165,8 @@ What a probe found (Tampermonkey 5.5.1, Playwright's Chromium, headless), buildi
 - An update that keeps its `@updateURL` installs with no page: the dashboard just shows the new version.
 - After the handover installed, the next check fetched the new `@updateURL` and updated the same row (same `@name` and
   `@namespace`): one row throughout, old version, then the handover's, then the new file's.
-- Not run: the scheduled check. Whether it also opens the "update url has changed" page for a user, or installs silently,
-  is unknown; either way the copy ends at the new address.
+- What the test runs: it clicks "Check for updates" on the dashboard, then clicks "Update" on the page a changed
+  `@updateURL` opens, as a user would. It proves the move only when someone accepts that page.
+- Not run, and not known: what Tampermonkey's own scheduled check does with a changed `@updateURL`. It may open the same
+  page, which a user must accept and may close instead, or install with no page. Until one open in a real Tampermonkey
+  settles it (the spec's closing check owes that), a copy is not known to move to the new address by itself.

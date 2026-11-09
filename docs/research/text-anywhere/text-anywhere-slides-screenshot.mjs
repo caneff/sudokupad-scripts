@@ -10,7 +10,7 @@
 //   node docs/research/text-anywhere/text-anywhere-slides-screenshot.mjs
 // Not part of any test.
 import { chromium } from 'playwright'
-import { openDrawPage } from './text-anywhere-screenshot-page.mjs'
+import { openTextAnywherePage } from './text-anywhere-screenshot-page.mjs'
 import { saved, slideTo, valueOf } from '../../../live/text-anywhere/text-anywhere-fixtures.mjs'
 
 const out = (name) => new URL(`./text-anywhere-slide-${name}.png`, import.meta.url).pathname
@@ -45,7 +45,7 @@ const browser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars']
 
 // A fresh page with Text Anywhere on and helpers working in cell units from the grid's top left.
 async function scene (origin) {
-  const p = await openDrawPage(browser, SCALE)
+  const p = await openTextAnywherePage(browser, SCALE)
   const [x0, y0, cell] = await p.evaluate(() => {
     const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
     return [box.x, box.y, box.width]

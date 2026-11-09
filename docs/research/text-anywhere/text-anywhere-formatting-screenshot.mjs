@@ -8,7 +8,7 @@
 // Not part of any test.
 import { chromium } from 'playwright'
 import { writeFileSync } from 'node:fs'
-import { openDrawPage } from './text-anywhere-screenshot-page.mjs'
+import { openTextAnywherePage } from './text-anywhere-screenshot-page.mjs'
 import { finishNote } from '../../../live/board.mjs'
 import { slideTo, valueOf, SIZE_SLIDER, BACKGROUND_BUTTON, TEXT_BOX, TEXTS, HANDLES, KEYPAD } from '../../../live/text-anywhere/text-anywhere-fixtures.mjs'
 
@@ -45,7 +45,7 @@ const TICKED = LINES.findIndex((line) => line.endsWith('a ticked item'))
 // What typing and closing the note turn the symbols into, and the ticked item's line once its box is clicked.
 const RAW_TEXT = LINES.join('\n').replace('-> <- != <= >=', '→ ← ≠ ≤ ≥').replace('sum', 'Σ').replace(LINES[TICKED], LINES[TICKED].replace('[ ]', '[x]'))
 const browser = await chromium.launch()
-const p = await openDrawPage(browser, SCALE)
+const p = await openTextAnywherePage(browser, SCALE)
 const [x0, y0, cell] = await p.evaluate(() => {
   const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
   return [box.x, box.y, box.width]

@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { LOAD_MS, puzzleUrl, routeSudokuPad, START } from './cache.mjs'
+import { guardId } from '../sync-lib.js'
 import { SCRIPT_FILES, scriptSource } from './session.mjs'
 import { settle } from './settle.mjs'
 
@@ -23,9 +24,8 @@ const FRAMEWORK_MS = 30000
 // The ids are the ones each script hands its guard, read from its source, so a new script is matched without an edit here; Text Anywhere's
 // is still `draw-tool`, its old file name. Built on first use: session.mjs imports this module, so SCRIPT_FILES is not yet set while this one loads.
 let skipLine
-const guardId = (file) => /createGuard\(\{ script: '([a-z-]+)'/.exec(scriptSource(file))[1]
 const isSkipLine = (text) => {
-  skipLine ??= new RegExp(`^(?:${SCRIPT_FILES.map(guardId).join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
+  skipLine ??= new RegExp(`^(?:${SCRIPT_FILES.map((file) => guardId(scriptSource(file))).join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
   return skipLine.test(text)
 }
 

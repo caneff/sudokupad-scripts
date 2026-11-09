@@ -8,7 +8,7 @@
 // Not part of any test.
 import { chromium } from 'playwright'
 import { writeFileSync } from 'node:fs'
-import { openDrawPage } from './text-anywhere-screenshot-page.mjs'
+import { openTextAnywherePage } from './text-anywhere-screenshot-page.mjs'
 
 const out = new URL('./text-anywhere-panel-annotated.png', import.meta.url).pathname
 
@@ -22,7 +22,7 @@ const FONT = '15px system-ui, sans-serif'
 const LINE_COLOR = '#6a1b9a'
 
 const browser = await chromium.launch()
-const page = await openDrawPage(browser, 3)
+const page = await openTextAnywherePage(browser, 3)
 await page.locator('.text-anywhere-background').waitFor({ state: 'visible' })
 await page.mouse.move(5, 5)
 

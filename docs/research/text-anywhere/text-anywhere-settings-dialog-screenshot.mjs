@@ -5,13 +5,13 @@
 // Not part of any test.
 import { chromium } from 'playwright'
 import { writeFileSync } from 'node:fs'
-import { openDrawPage } from './text-anywhere-screenshot-page.mjs'
+import { openTextAnywherePage } from './text-anywhere-screenshot-page.mjs'
 import { pickTextAnywhere, plantNotes, reload } from '../../../live/text-anywhere/text-anywhere-fixtures.mjs'
 
 const out = new URL('./text-anywhere-settings-dialog.png', import.meta.url).pathname
 
 const browser = await chromium.launch()
-const shown = await openDrawPage(browser, 1)
+const shown = await openTextAnywherePage(browser, 1)
 await shown.setViewportSize({ width: 1200, height: 900 })
 await plantNotes(shown, [{ kind: 'text', color: 4, size: 26, opacity: 100, bg: true, text: '15', at: [520, 330] }])
 await reload(shown)

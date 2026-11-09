@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { runOnBrokenSudokuPad, SudokuPadChanged } = require('./broken-sudokupad.js')
-const { scriptFiles } = require('../../sync-lib.js')
+const { guardId, scriptFiles } = require('../../sync-lib.js')
 const ROOT = join(__dirname, '..', '..')
 
 const SCRIPTS = scriptFiles()
@@ -35,7 +35,7 @@ test('no script calls SudokuPad outside a feature\'s guard: when SudokuPad chang
   for (const file of SCRIPTS) {
     const { FEATURES } = require(join(ROOT, file))
     // The id the script hands its guard, which starts each of its warnings.
-    const script = /createGuard\(\{ script: '([a-z-]+)'/.exec(readFileSync(join(ROOT, file), 'utf8'))[1]
+    const script = guardId(readFileSync(join(ROOT, file), 'utf8'))
     const run = runOnBrokenSudokuPad(join(ROOT, file), FEATURES)
     assert.deepEqual(run.startupEscaped.map(({ where, error }) => `${where}: ${error}`), [], `${file} on a working SudokuPad`)
     // A SudokuPad call outside a guard throws SudokuPad's own error, or a TypeError on a member that is gone; a stand-in value no real

@@ -27,7 +27,7 @@ SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the
   is another userscript's (no `replay` control or `addToolButton` call is in `framework.js` or the other scripts), which can only have joined the bar through `addToolButton` or `addControlButton` with that
   parent, both of which append. Which script it is was not found (Chris's page was not read); the live check adds a
   button both ways.
-- Draw Tool keeps its button last with one rule in its stylesheet, `.controls-tool #control-draw { order: 1 }`: the bar is a
+- Draw Tool keeps its button last with one rule in its stylesheet, `.controls-tool #control-draw { order: 1 }` (`#control-textanywhere` in Text Anywhere, #709): the bar is a
   `display: grid` (filled column by column) and the stock buttons have order 0, so the button is drawn last whenever another lands
   after it. The button stays where it was added in the page, so Tab reaches it before a later button. `app.tools` keeps its order, so
   the tool keys are unchanged (§ Tool keys). Run in `live/text-anywhere/text-anywhere-order.live.mjs`, which reads the drawn order: the pen
@@ -119,7 +119,7 @@ Read in `script.js`, `tool-pen.js`, `tool-pen.css` and `tool-color.js` of v0.611
   last row of 0 and `data-control="delete"`. A tool's look is CSS on `.controls-main.tool-<name>`: `tool-pen.css`
   hides each digit (`text-indent: -999em`, transparent text on `--body-bg`) and paints a 60% swatch in `:after` from
   `--puzzle-pencolor-<key>`, and leaves the `.current` button its normal purple. Draw Tool's own `<style>` repeats those
-  rules under `.tool-draw .controls-input`, so a changed pen color variable shows on the swatches with no script.
+  rules under `.tool-draw .controls-input` (`.tool-textanywhere` in Text Anywhere, #709), so a changed pen color variable shows on the swatches with no script.
 - **Digit keys and buttons.** A keypad press (`handleButton`, `control === 'value'`) and a digit key
   (`handleKeydown` → `eventToDigit` → the button with that `data-key`) both call `doPressDigit(<data-value>)`, which
   runs the current tool's `handleToolButton` first and stops on true. The color tool's pages rewrite `data-value` and
