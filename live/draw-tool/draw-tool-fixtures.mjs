@@ -28,6 +28,10 @@ export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-text
 export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
 // Every note the player sees: the finished ones and the one open for typing (a text box is a note too).
 export const SEEN_TEXTS = '#draw-tool-layer .draw-tool-text'
+// A struck run in a finished note, and the words and gaps it is drawn in, each with a line of its own.
+export const STRIKE_PIECE = '.draw-tool-strike-piece'
+export const STRIKES = `${TEXTS} .draw-tool-strike`
+export const STRIKE_PIECES = `${STRIKES} ${STRIKE_PIECE}`
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
 // The sliders under the controls, and the Size and Transparency sliders in them.
 export const SLIDERS = '.draw-tool-sliders'
