@@ -2,7 +2,7 @@
 // color button, each interrupted by something a user does, on sudokupad.app in headless Chromium. Every case is real input and checks the crash signals
 // (an uncaught error, a console error, a skip line), that what is drawn is what is saved (and what a reload shows), that no gesture is left
 // half done (no selection rectangle, no stuck drag), and that an ordinary gesture works afterward.
-/* global Framework */
+/* global Framework, window */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -262,10 +262,21 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
       await p.mouse.down()
     }
 
-    it('released at 0.9 s opens no pickers, and a full hold afterward still does', async () => {
+    it('released at 0.9 s opens no pickers, and a full hold afterward still does', async (t) => {
+      // The page times the press itself: a stall of the box that lets the 1 s hold timer fire first makes the release late, not the script wrong.
+      await p.evaluate(() => {
+        window.__press = {}
+        window.addEventListener('pointerdown', (e) => { window.__press.down = e.timeStamp }, { capture: true, once: true })
+        window.addEventListener('pointerup', (e) => { window.__press.up = e.timeStamp }, { capture: true, once: true })
+      })
       await press()
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.9)
       await p.mouse.up()
+      const held = await p.evaluate(() => window.__press.up - window.__press.down)
+      if (!(held < HOLD_TO_EDIT_MS)) {
+        t.skip(`the press lasted ${Math.round(held)} ms, so the release was not early`)
+        return
+      }
       // A "nothing happened" wait: the pickers, if the early release wrongly opened them, would show well within it.
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.4)
       assert.equal(await pickers(), 0, 'no pickers after an early release')

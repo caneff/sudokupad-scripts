@@ -68,8 +68,4 @@ describe('Color by Digit\'s editor paint drag, interrupted', { concurrency: fals
     assert.deepEqual((await savedProfiles()).profiles, SEED.profiles, 'Cancel saves nothing')
     assert.deepEqual(errors, [], 'the page shows no error afterward')
   })
-
-  it('the page shows no error', () => {
-    assert.deepEqual(errors, [])
-  })
 })

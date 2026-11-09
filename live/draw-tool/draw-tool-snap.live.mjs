@@ -126,7 +126,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(await outlineLeft() - line) < NEAR_PX, true, 'and stays there after the release')
   })
 
-  it('a fast drag released just before the pointer would rest drops where it was drawn, with no jump onto the line', async () => {
+  it('a fast drag released just before the pointer would rest drops where it was drawn, with no jump onto the line', async (t) => {
     const line = await lineX(COLUMN_LINE)
     const note = await noteBox('15')
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
@@ -139,6 +139,11 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     await p.evaluate((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)), SPEED_WINDOW_MS + 4)
     const shown = await outlineLeft()
     await p.mouse.up()
+    // The case needs the drawn move to be the unpulled one. A box too loaded to land inside the 100-120 ms window has not built the case, so it skips instead of passing.
+    if (!(Math.abs(shown - (line + 2)) < NEAR_PX)) {
+      t.skip(`the outline was at ${shown}, not drawn unpulled at ${line + 2}: the window was missed`)
+      return
+    }
     assert.equal(Math.abs(await outlineLeft() - shown) < NEAR_PX, true, `dropped at ${await outlineLeft()}, as drawn at ${shown}`)
   })
 

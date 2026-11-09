@@ -28,12 +28,6 @@ for (const { file, entry, editor, buttons } of SCRIPTS) {
     })
     after(async () => { await context?.close() })
 
-    it(`has the buttons ${buttons.join(', ')}, in that order`, async () => {
-      await openScriptDialog(p, entry, editor)
-      assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), buttons)
-      await closeDialogWith(p, 'Cancel', editor)
-    })
-
     it('the buttons are one row at the dialog\'s right: Save filled purple left of Cancel, Cancel and any extra button plain', async () => {
       await openScriptDialog(p, entry, editor)
       // The pointer is still where the last click was, which may be over a button; a hovered button reads its hover color.

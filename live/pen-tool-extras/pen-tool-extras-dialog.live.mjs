@@ -196,8 +196,8 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('at a phone width a long status message wraps beside the icons and stays clear of the title', async () => {
-    await p.setViewportSize({ width: 390, height: 800 })
+  it('at a narrow window a long status message wraps beside the icons and stays clear of the title', async () => {
+    await p.setViewportSize({ width: 500, height: 1000 })
     try {
       await openSettledEditor(p)
       await p.evaluate(() => { document.querySelector('.dialog [data-role="settings-status"]').textContent = 'Pasted 3 settings; skipped 2 that did not check out.' })
@@ -206,7 +206,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
       const copy = await p.getByRole('button', { name: 'Copy settings' }).boundingBox()
       assert.equal(status.left >= title.right - HALF_PIXEL, true, `the status (from ${status.left}) starts after the title (to ${title.right})`)
       assert.equal(status.right <= copy.x + HALF_PIXEL, true, 'and ends before the icons')
-      assert.equal((await rect('.dialog')).right <= 390 + 1, true, 'the dialog stays on the screen')
+      assert.equal((await rect('.dialog')).right <= 500 + 1, true, 'the dialog stays on the screen')
       await closeExtrasEditorWith(p, 'Cancel')
     } finally {
       await p.setViewportSize({ width: 1200, height: 1000 })
@@ -271,8 +271,8 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     }
   })
 
-  it('at a phone width the dialog does not run off the screen sideways', async () => {
-    await p.setViewportSize({ width: 390, height: 800 })
+  it('at a narrow window the dialog does not run off the screen sideways', async () => {
+    await p.setViewportSize({ width: 500, height: 1000 })
     try {
       await openSettledEditor(p)
       const fits = await p.evaluate(() => {

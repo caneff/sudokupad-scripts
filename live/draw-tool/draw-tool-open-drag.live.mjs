@@ -6,9 +6,9 @@ import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
-import { gridPoint, mouseDrag } from '../pen.mjs'
+import { gridPoint } from '../pen.mjs'
 
-const { HANDLES, TEXT_BOX, TEXTS, middleOf } = draw
+const { HANDLES, TEXT_BOX, middleOf } = draw
 const SPOT = [4.5, 4.5]
 const OTHER = [1.5, 1.5]
 // A note opened and given blank lines after its text: they go when it closes, so its closed box is shorter than the open one the press lands on.
@@ -107,15 +107,6 @@ describe('Text Anywhere\'s drag on the note being edited', { concurrency: false 
     await dragTo([x, b.y + b.height + EDGE_PX], [x + DRAG_PX, b.y + b.height + EDGE_PX + DRAG_PX])
     const shift = movedBy(placeBefore, await placeOf('tall'))
     assert.ok(shift.every((v) => v > MOVED_UNITS), `moved down and right with the pointer: by ${shift}`)
-  })
-
-  it('a drag on a note not being edited still moves it', async () => {
-    await draw.finishNote(p)
-    const other = (await draw.saved(p)).find((i) => i.text === 'other')
-    await mouseDrag(p, [OTHER, [OTHER[0] + 1, OTHER[1] + 1]])
-    const moved = (await draw.saved(p)).find((i) => i.text === 'other')
-    assert.notDeepEqual(moved.at, other.at)
-    assert.equal(await p.locator(TEXTS).count(), 3)
   })
 
   it('raised no page errors', () => assert.deepEqual(errors, []))

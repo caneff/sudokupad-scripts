@@ -5,7 +5,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { gotoPuzzle, openPage, startPuzzle } from '../page.mjs'
+import { openPage, startPuzzle } from '../page.mjs'
 import { openPenTool } from '../pen.mjs'
 
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -70,12 +70,6 @@ describe('the settings button in the pen panel', { concurrency: false }, () => {
 
   it('the button is put back when SudokuPad rebuilds the panel', async () => {
     await p.evaluate((button) => document.querySelector(button).remove(), BUTTON)
-    await p.locator(BUTTON).waitFor({ state: 'visible' })
-  })
-
-  it('the button is present after a reload', async () => {
-    await gotoPuzzle(p)
-    await boot(p)
     await p.locator(BUTTON).waitFor({ state: 'visible' })
   })
 

@@ -165,7 +165,9 @@ describe('the replay tool\'s button and key with Draw installed', { concurrency:
     await p.click(DIGIT_BUTTON)
     await settle(() => tool(p), 'normal')
     await p.keyboard.press(key)
-    return settle(() => tool(p), 'normal', KEY_SWITCHES_MS)
+    // A "nothing happened in this long" window: settle would return on its first read of 'normal', so a late switch to Draw would go unseen.
+    await p.waitForTimeout(KEY_SWITCHES_MS)
+    return tool(p)
   }
 
   before(async () => {

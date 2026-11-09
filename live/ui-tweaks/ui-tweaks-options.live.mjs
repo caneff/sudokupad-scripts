@@ -193,7 +193,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
     assert.deepEqual(ids, ['control-undo', 'control-redo', 'control-check', 'control-colorbydigit', 'control-five', 'control-six', 'control-seven'])
   })
 
-  it('the tool buttons of the other scripts stay where they were', async () => {
+  it('the tool buttons of the other scripts stay visible', async () => {
     assert.equal(await p.locator('#control-pen').isVisible(), true)
     assert.equal(await p.locator('#control-draw').isVisible(), true)
   })

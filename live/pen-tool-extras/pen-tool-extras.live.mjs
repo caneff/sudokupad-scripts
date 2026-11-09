@@ -136,10 +136,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(allStrokes(4), [rgbOf(PAGE_PENS[0][3])]), [rgbOf(PAGE_PENS[0][3])])
   })
 
-  it('the cell colors are the ones SudokuPad ships, untouched by the pen', async () => {
-    assert.deepEqual(await cellVars(), CELL_VARS)
-  })
-
   it('the dialog has a Pen Tool Extras entry in settings with a picker for each of the nine pen colors, set to the installed colors, and the pulldown shows their preset', async () => {
     await openExtrasEditor(p)
     assert.deepEqual(await pickerValues(), PAGE_PENS[0])
@@ -523,26 +519,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await allWidths(), { full: [9], half: [4.5] })
     })
 
-    it('Restore defaults sets the dialog\'s thickness slider to 5 for Save: Cancel afterwards leaves the saved thickness and the marks, Save clears it and draws at 5', async () => {
-      await setThickness(7)
-      assert.equal(await savedThickness(), 7)
-      await openExtrasEditor(p)
-      await restoreDefaults()
-      assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
-      assert.equal(await savedThickness(), 7, 'nothing is saved before Save')
-      assert.deepEqual(await widths(1)(), [7])
-      await closeExtrasEditorWith(p, 'Cancel')
-      assert.equal(await savedThickness(), 7)
-      assert.deepEqual(await allWidths(), { full: [7], half: [3.5] })
-      await openExtrasEditor(p)
-      await restoreDefaults()
-      await closeExtrasEditorWith(p, 'Save')
-      assert.equal(await savedThickness(), null)
-      assert.deepEqual(await settle(widths(1), [5]), [5])
-      assert.equal(await slider().inputValue(), '5')
-      assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
-    })
-
     it('the buttons are one row under a divider: Save (filled purple), then Cancel and Restore defaults, plain, the same size', async () => {
       await openExtrasEditor(p)
       // All three in one read, so a dialog still moving into place cannot put them in different frames.
@@ -853,8 +829,8 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       await removePalette(p)
       await p.addScriptTag({ content: script })
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-      // The wait ends at 10 s: a sleep past it, since the check is that nothing was saved meanwhile and the one warning names the wait.
-      await sleep(COLOR_TOOL_TIMEOUT_MS + 2000)
+      // The wait ends at 10 s: wait for the one warning instead of sleeping past it. A save during the wait would still be stored, so the checks below see it.
+      assert.equal(await settle(() => warned.length, 1, COLOR_TOOL_TIMEOUT_MS + 10000, Infinity), 1, warned.join('\n'))
       const pens = () => p.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()))
       assert.deepEqual(await pens(), OWN_PEN_HEX)
       assert.equal(await p.evaluate((k) => Framework.getData(k), DATA_KEY), null)

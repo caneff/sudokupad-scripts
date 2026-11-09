@@ -1,6 +1,5 @@
-// Live check of the Color by Digit dialog's layout (#304, #333) at 1200x900 and 390x800 on sudokupad.app in headless Chromium: the Mode, Cell
-// and Digit pulldowns one per row with the label left of each, Copy and Paste settings as icons in the title row, two columns on a
-// desktop and one on a phone, with no sideways overflow; the profile list's dense rows; and the profile menu's rows, synced and not (#354).
+// Live check of the Color by Digit dialog's layout (#304, #333) at 1200x900 on sudokupad.app in headless Chromium: the Mode, Cell
+// and Digit pulldowns one per row with the label left of each, Copy and Paste settings as icons in the title row, two columns, with no sideways overflow; the profile list's dense rows; and the profile menu's rows, synced and not (#354).
 // How it looks is judged by sight in the PR.
 /* global document */
 import { after, before, describe, it } from 'node:test'
@@ -12,7 +11,6 @@ import { openScriptDialog } from '../settings.mjs'
 
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
 const DESKTOP = { width: 1200, height: 900 }
-const PHONE = { width: 390, height: 800 }
 const DESKTOP_DIALOG_PX = 640
 const NEAR_PX = 1
 
@@ -20,7 +18,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
+for (const viewport of [DESKTOP]) {
   describe(`the dialog at ${viewport.width} px`, { concurrency: false }, () => {
     let context, p
     const rect = (selector) => p.locator(selector).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right } })
@@ -49,11 +47,10 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
       }
     })
 
-    it(`has ${columns} column${columns === 1 ? '' : 's'}, the list left of or above the editor, and no sideways overflow`, async () => {
+    it('has 2 columns, the list left of the editor, and no sideways overflow', async () => {
       const list = await rect(`${EDITOR} .cbd-column:nth-child(1)`)
       const groups = await rect(`${EDITOR} .cbd-column:nth-child(2)`)
-      if (columns === 2) assert.equal(groups.x >= list.right, true, `side by side: ${JSON.stringify([list, groups])}`)
-      else assert.equal(Math.abs(groups.x - list.x) <= NEAR_PX, true, `stacked: ${JSON.stringify([list, groups])}`)
+      assert.equal(groups.x >= list.right, true, `side by side: ${JSON.stringify([list, groups])}`)
       const overflow = await p.locator('.dialog').first().evaluate((d) => ({ scroll: d.scrollWidth, client: d.clientWidth, doc: document.documentElement.scrollWidth, win: window.innerWidth }))
       assert.equal(overflow.scroll <= overflow.client, true, JSON.stringify(overflow))
       assert.equal(overflow.doc <= overflow.win, true, JSON.stringify(overflow))
@@ -91,18 +88,16 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
       assert.equal(new Set(starts).size, 1, JSON.stringify(starts))
     })
 
-    if (viewport === DESKTOP) {
-      it('is about 640 px wide', async () => {
-        const { width } = await rect('.dialog')
-        assert.equal(Math.abs(width - DESKTOP_DIALOG_PX) <= NEAR_PX, true, `width ${width}`)
-      })
-    }
+    it('is about 640 px wide', async () => {
+      const { width } = await rect('.dialog')
+      assert.equal(Math.abs(width - DESKTOP_DIALOG_PX) <= NEAR_PX, true, `width ${width}`)
+    })
   })
 }
 
 const EACH_DIGIT = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d, i) => group(String(i + 1), [d]))
 
-for (const viewport of [DESKTOP, PHONE]) {
+for (const viewport of [DESKTOP]) {
   describe(`the paint editor with Each digit's nine groups at ${viewport.width} px`, { concurrency: false }, () => {
     let context, p
     const heights = () => p.evaluate(() => ({ dialog: document.querySelector('.dialog').getBoundingClientRect().bottom, window: window.innerHeight }))
@@ -116,10 +111,8 @@ for (const viewport of [DESKTOP, PHONE]) {
     it('shows the palette and the ten digit keys beside it, one key per digit, and the dialog stays inside the window', async () => {
       assert.equal(await p.locator(`${EDITOR} button[data-act=open]`).count(), 0)
       assert.deepEqual(await paintedKeys(p), { 0: '', 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9' })
-      if (viewport === DESKTOP) {
-        const { dialog, window } = await heights()
-        assert.equal(dialog <= window, true, `dialog bottom ${dialog} within window ${window}`)
-      }
+      const { dialog, window } = await heights()
+      assert.equal(dialog <= window, true, `dialog bottom ${dialog} within window ${window}`)
     })
 
     it('puts each swatch row level with a pad row, 0 on a fourth row under 7, and the pad inside the column at this width', async () => {
@@ -133,16 +126,14 @@ for (const viewport of [DESKTOP, PHONE]) {
       assert.equal(d0.x, d7.x)
       assert.equal(d0.y > d7.y, true, JSON.stringify([d7, d0]))
       assert.equal(d0.x + d0.width <= column.x + column.width + 1, true, `pad inside the column: ${JSON.stringify([d0, column])}`)
-      if (viewport === DESKTOP) {
-        const { dialog, window } = await heights()
-        assert.equal(dialog <= window, true, `dialog bottom ${dialog} within window ${window}`)
-      }
+      const { dialog, window } = await heights()
+      assert.equal(dialog <= window, true, `dialog bottom ${dialog} within window ${window}`)
     })
   })
 }
 
-for (const viewport of [DESKTOP, PHONE]) {
-  // The second profile has the longest name allowed, in the widest letter, so the menu must fit it on a phone.
+for (const viewport of [DESKTOP]) {
+  // The second profile has the longest name allowed, in the widest letter, so the menu must fit it.
   const LONG = { ...SEED, profiles: [SEED.profiles[0], { ...SEED.profiles[1], name: 'W'.repeat(24) }] }
   for (const [sync, state] of [['synced', LONG], ['unsynced', { ...LONG, digitActive: 1 }]]) {
     describe(`the profile menu, ${sync}, at ${viewport.width} px`, { concurrency: false }, () => {

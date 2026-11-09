@@ -472,11 +472,13 @@ describe('the max auto width and height', { concurrency: false }, () => {
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
+      const undoDepth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
+      const depthBefore = await undoDepth()
       await p.locator(MAX_WIDTH_INPUT).click()
       await p.keyboard.type('500')
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '500')
-      const cell = await p.evaluate(() => Framework.app.grid.getCell(0, 2).value)
-      assert.equal(cell === undefined || cell === null || cell === 0 || cell === '', true, `cell holds ${cell}`)
+      // A leaked 5-0-0 could leave the cell empty again (a repeated digit toggles off), so the board's undo history is what shows an entry.
+      assert.equal(await undoDepth(), depthBefore, 'typing in the box entered nothing on the board')
     })
 
     it('Save keeps the limits and applies them at once', async () => {
@@ -971,7 +973,9 @@ describe('the pane takes the page\'s spare height without SudokuPad shrinking th
       const now = await stable(() => pane(again.p))
       assert.equal(near(now.cssHeight, first.cssHeight, 1), true, `pane ${first.cssHeight} -> ${now.cssHeight} css px`)
       assert.equal(near(await columnScale(again.p), off[LANDSCAPE.width].scale, 0.01), true)
-      for (const f of await frames(again.p)) {
+      const seen = await frames(again.p)
+      assert.equal(seen.length > 10, true, `${seen.length} frames sampled`)
+      for (const f of seen) {
         assert.equal(near(f.scale, off[LANDSCAPE.width].scale, 0.01), true, `a frame had the column at scale ${f.scale}`)
         assert.equal(near(f.pane, now.height, 1) || near(f.pane, own.height, 1), true, `a frame had the pane ${f.pane} px tall: neither SudokuPad's ${own.height} nor the fit's ${now.height}`)
       }
