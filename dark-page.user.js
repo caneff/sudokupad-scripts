@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.7
+// @version      0.7.9
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.7'
+  const VERSION = '0.7.9'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -167,23 +167,16 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
-  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
-  function textColorFor (background) {
+  // `light` or `dark` (LIGHT_TEXT and DARK_TEXT unless given), whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
     const page = wcagLuminance(rgb) + 0.05
     const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+    return contrast(light) >= contrast(dark) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
-
-  // PAGE_LIGHT_TEXT or PAGE_DARK_TEXT, whichever contrasts more with the page color.
-  function pageTextFor (pageColor) {
-    const page = wcagLuminance(parseColor(pageColor)) + 0.05
-    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(PAGE_LIGHT_TEXT) >= contrast(PAGE_DARK_TEXT) ? PAGE_LIGHT_TEXT : PAGE_DARK_TEXT
-  }
 
   // No variable is declared: SudokuPad's theme variables sit on `:root` and color the grid too.
   // `!important` outranks SudokuPad's rules, `.setting-darkmode`'s included. The board's own box
@@ -194,7 +187,7 @@
   function buildCss (pageColor) {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     const boardRule = (selectors, ...declarations) => rule(selectors.map((selector) => `${BOARD} ${selector}`).join(', '), ...declarations)
-    const textColor = pageTextFor(pageColor)
+    const textColor = textColorFor(pageColor, PAGE_LIGHT_TEXT, PAGE_DARK_TEXT)
     const darkButtons = [
       boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
       boardRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]), `border-color: ${BUTTON_ACCENT}`),
@@ -217,14 +210,13 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog and formatErrorLog from sudokupad.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog */
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
-  const FOCUS_RING = '#6a1b9a'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
   // An inset layer darkens whatever fill the control has.
@@ -302,7 +294,7 @@
     return [
       `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
       `.${prefix}error-log button { ${BARE_BUTTON} padding: 2px 0 !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; }`,
-      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 2px; }`
     ].join('\n')
   }
 
@@ -347,7 +339,7 @@
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
-      `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
+      `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
@@ -373,7 +365,7 @@
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
       `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
       `${row} button:active { ${PRESS_LAYER} !important; }`,
-      `${row} button:focus-visible { outline: 2px solid ${FOCUS_RING}; outline-offset: 2px; }`
+      `${row} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px; }`
     ].join('\n')
   }
 
@@ -495,8 +487,8 @@
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
-  // Every script's bar is the one purple, Pen Tool Extras' and the site's --accent.
-  const NOTICE_COLOR = '#6a1b9a'
+  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring, and the site's --accent.
+  const SUDOKUPAD_PURPLE = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
@@ -575,7 +567,7 @@
   }
 
   const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
-  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
+  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${SUDOKUPAD_PURPLE}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
   const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
   const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
 

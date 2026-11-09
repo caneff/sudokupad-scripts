@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.11
+// @version      1.31.13
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.11'
+  const VERSION = '1.31.13'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -87,8 +87,8 @@
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
-  // Every script's bar is the one purple, Pen Tool Extras' and the site's --accent.
-  const NOTICE_COLOR = '#6a1b9a'
+  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring, and the site's --accent.
+  const SUDOKUPAD_PURPLE = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
@@ -167,7 +167,7 @@
   }
 
   const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
-  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
+  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${SUDOKUPAD_PURPLE}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
   const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
   const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
 
@@ -630,36 +630,11 @@
   // 2. Pen colors: the saved set, derived colors and edit mode
   // Keys saved by the scripts this one replaced, kept so their saved data still reads.
   const COLORS_KEY = 'PenColor_colors'
-  // <lib:ready>
-  // Generated from lib/ready.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
-  // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
-  function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
-    return new Promise((resolve, reject) => {
-      const deadline = Date.now() + timeoutMs
-      const poll = () => {
-        let value
-        try {
-          value = check()
-        } catch (error) {
-          reject(error)
-          return
-        }
-        if (value !== null && value !== undefined && value !== false) resolve(value)
-        else if (Date.now() >= deadline) reject(new Error(`${what} not ready after ${timeoutMs} ms`))
-        else setTimeout(poll, pollMs)
-      }
-      poll()
-    })
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:ready>
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math, and whenReady from ready.
-  /* global parseColor, darkenColor, toOklab, whenReady */
+  // Reads parseColor, darkenColor and toOklab from color-math.
+  /* global parseColor, darkenColor, toOklab */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
@@ -685,7 +660,6 @@
     'page-3': 'Darker page 3',
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
-  const COLOR_TOOL_TIMEOUT_MS = 10000
 
   // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
@@ -741,11 +715,6 @@
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
   }
 
-  // Rejects once COLOR_TOOL_TIMEOUT_MS passes with no ready color tool, naming it, so the caller can skip its step and keep SudokuPad's own colors.
-  function waitForColorTool () {
-    return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
-  }
-
   // The pages of cell color keys of the palette in force, or none until the color tool has one.
   function palettePages () {
     const palette = colorTool()?.palette
@@ -774,6 +743,33 @@
   const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
   /* eslint-enable no-unused-vars */
   // </lib:palette>
+
+  const COLOR_TOOL_TIMEOUT_MS = 10000
+  // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
+  // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
+  function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeoutMs
+      const poll = () => {
+        let value
+        try {
+          value = check()
+        } catch (error) {
+          reject(error)
+          return
+        }
+        if (value !== null && value !== undefined && value !== false) resolve(value)
+        else if (Date.now() >= deadline) reject(new Error(`${what} not ready after ${timeoutMs} ms`))
+        else setTimeout(poll, pollMs)
+      }
+      poll()
+    })
+  }
+
+  // Rejects once COLOR_TOOL_TIMEOUT_MS passes with no ready color tool, naming it, so the caller can skip its step and keep SudokuPad's own colors.
+  function waitForColorTool () {
+    return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
+  }
   // The pen color numbers as their buttons' data-key text.
   const PEN_COLOR_KEYS = PEN_COLOR_NUMBERS.map(String)
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
@@ -944,13 +940,13 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
-  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
-  function textColorFor (background) {
+  // `light` or `dark` (LIGHT_TEXT and DARK_TEXT unless given), whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
     const page = wcagLuminance(rgb) + 0.05
     const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+    return contrast(light) >= contrast(dark) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
@@ -2401,13 +2397,11 @@
   // <lib:panel>
   // Generated from lib/panel.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads rem from plain.
-  /* global rem */
+  // Reads rem from plain, and SUDOKUPAD_PURPLE from sudokupad.
+  /* global rem, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
   // A tool's purple panel: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of three controls at the full 4rem, and the sliders across the rest. A tray sits behind the last two rows; it is placed in
   // their area but takes no cell, so the buttons fill the row.
-  // SudokuPad's purple, as its own icons draw it.
-  const PANEL_COLOR = '#6a1b9a'
   const TRAY_COLOR = '#efeaf4'
   const PANEL_BUTTON_REM = 4
   const COLOR_BUTTON_REM = 2.5
@@ -2434,31 +2428,15 @@
   // A hidden slider's empty row has the same height, so the other keeps its place.
   const SLIDER_ROW_HEIGHT_REM = 1.4
   // The wedge is a data-URI picture, since a CSS gradient cannot draw a slanted edge. `preserveAspectRatio="none"` stretches it over the track.
-  const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${PANEL_COLOR}'/></svg>`
+  const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${SUDOKUPAD_PURPLE}'/></svg>`
   const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
-  const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${PANEL_COLOR} 8%, transparent), ${PANEL_COLOR})`
+  const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${SUDOKUPAD_PURPLE} 8%, transparent), ${SUDOKUPAD_PURPLE})`
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
-  const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
-
-  // A panel with no slider rows (its fourth block holds buttons) leaves `sliderRow` out, and with it every rule that styles a slider.
-  function sliderRules (sliders, sliderRow, wedgeSlider, fadeSlider) {
-    return [
-      `.${sliders} { padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
-      `.${sliderRow} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
-      `.${sliderRow} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
-      `.${sliderRow} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
-      `.${sliderRow} input::-moz-range-track { ${TRACK_SHAPE} }`,
-      `#${wedgeSlider}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
-      `#${wedgeSlider}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
-      ...(fadeSlider ? [`#${fadeSlider}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`, `#${fadeSlider}::-moz-range-track { background: ${FADE_PICTURE}; }`] : []),
-      `.${sliderRow} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${rem((SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2)}rem; ${THUMB_SHAPE} }`,
-      `.${sliderRow} input::-moz-range-thumb { ${THUMB_SHAPE} }`
-    ]
-  }
+  const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${SUDOKUPAD_PURPLE};`
 
   // The panel's rules, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
   // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
-  // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out. `pressButtons`, when given, is the selector of buttons
+  // (widening to the right) and the one drawn as a fade (faint to solid); every panel has both. `pressButtons`, when given, is the selector of buttons
   // that are not placed by the grid but press like the others.
   function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
@@ -2470,17 +2448,25 @@
       `${panel} button[data-key="0"], ${panel} button[data-control="delete"] { display: none !important; }`,
       // Each color button keeps `position: relative`, since its color line is its `::after`.
       `${panel} ${colorButton} { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
-      `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+      `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${SUDOKUPAD_PURPLE}; }`,
       `.${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
-      // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
-      `${panel}:not(:has(.${sliders})) .${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
       // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
       ...rows.flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${panel} button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
       `.${sliders} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; }`,
       `${pressable} { transition: transform ${PRESS_MS}ms ease-out; }`,
       `${pressed} { transform: scale(${PRESS_SCALE}); }`,
       `@media (prefers-reduced-motion: reduce) { ${pressable} { transition: none; } ${pressed} { transform: none; } }`,
-      ...(sliderRow ? sliderRules(sliders, sliderRow, wedgeSlider, fadeSlider) : [])
+      `.${sliders} { padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${SUDOKUPAD_PURPLE}; }`,
+      `.${sliderRow} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
+      `.${sliderRow} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
+      `.${sliderRow} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
+      `.${sliderRow} input::-moz-range-track { ${TRACK_SHAPE} }`,
+      `#${wedgeSlider}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
+      `#${wedgeSlider}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
+      `#${fadeSlider}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`,
+      `#${fadeSlider}::-moz-range-track { background: ${FADE_PICTURE}; }`,
+      `.${sliderRow} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${rem((SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2)}rem; ${THUMB_SHAPE} }`,
+      `.${sliderRow} input::-moz-range-thumb { ${THUMB_SHAPE} }`
     ]
   }
 
@@ -2952,14 +2938,13 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog and formatErrorLog from sudokupad.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog */
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
-  const FOCUS_RING = '#6a1b9a'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
   // An inset layer darkens whatever fill the control has.
@@ -3037,7 +3022,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     return [
       `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
       `.${prefix}error-log button { ${BARE_BUTTON} padding: 2px 0 !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; }`,
-      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 2px; }`
     ].join('\n')
   }
 
@@ -3082,7 +3067,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
-      `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
+      `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
@@ -3108,7 +3093,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
       `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
       `${row} button:active { ${PRESS_LAYER} !important; }`,
-      `${row} button:focus-visible { outline: 2px solid ${FOCUS_RING}; outline-offset: 2px; }`
+      `${row} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px; }`
     ].join('\n')
   }
 
@@ -3225,7 +3210,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
+    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return

@@ -79,6 +79,6 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 - A PR names as owed only what that section says the test does not cover. `crackingthecryptic.com` only redirects to
   SudokuPad now, so no PR, ticket or report names it as owed (Chris, 2026-11-07).
 
-`npm run lint` runs StandardJS over the repo, excluding `docs/research/`. Run it before you hand off a change:
-`land.testcmd` runs only the tests, and no hook runs the linter. GitHub does: `.github/workflows/ci.yml` runs `npm ci`, `npm test`
-and `npm run lint` on every push and pull request, lint even when a test fails (no Playwright browser; the live suite stays out).
+`npm run lint` runs StandardJS over the repo, excluding `docs/research/`. `land.testcmd` runs it after the tests, so a land fails on a lint error.
+Run it before you hand off a change anyway, since it also runs on every push and pull request: `.github/workflows/ci.yml` runs `npm ci`,
+`npm test` and `npm run lint`, lint even when a test fails (no Playwright browser; the live suite stays out).
