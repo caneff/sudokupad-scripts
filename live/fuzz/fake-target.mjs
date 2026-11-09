@@ -9,6 +9,7 @@ export const quietPage = (overrides = {}) => ({
   penDrawn: [],
   notesSaved: null,
   notesDrawn: [],
+  notesSeen: [],
   colorByDigit: { mode: 'Cell', groups: [{ key: '1', digits: ['1', '2'] }], cells: [{ digit: '', given: false, colours: [] }, { digit: '', given: false, colours: [] }, { digit: '', given: false, colours: [] }] },
   pageColor: 'rgb(0, 0, 0)',
   rulesPane: { fontPx: 17.6, ownFontPx: 17.6, scrollHeight: 300, clientHeight: 300 },

@@ -26,6 +26,8 @@ export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GRO
 // The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
 export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
 export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
+// Every note the player sees: the finished ones and the one open for typing (a text box is a note too).
+export const SEEN_TEXTS = '#draw-tool-layer .draw-tool-text'
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
 // The sliders under the controls, and the Size and Transparency sliders in them.
 export const SLIDERS = '.draw-tool-sliders'
