@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's Discord-style formatting in notes on sudokupad.app: a finished note shows a header, a subtext line, a two-level list, a numbered list
+// Live check of text-anywhere.user.js's Discord-style formatting in notes on sudokupad.app: a finished note shows a header, a subtext line, a two-level list, a numbered list
 // and __underline__ (computed font size, text-decoration, indent), and reopening the note shows the raw text. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

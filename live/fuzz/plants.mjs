@@ -41,7 +41,7 @@ export const PLANTS = [
   },
   {
     id: 'note-dropped-on-load',
-    file: 'draw-tool.user.js',
+    file: 'text-anywhere.user.js',
     kind: 'rule',
     bug: 'Text Anywhere drops the first saved note when it loads them',
     find: 'puzzleNotes = items\n      keptEntries = kept',
@@ -50,7 +50,7 @@ export const PLANTS = [
   },
   {
     id: 'load-logs-console-error',
-    file: 'draw-tool.user.js',
+    file: 'text-anywhere.user.js',
     kind: 'crash',
     bug: 'Text Anywhere logs a console.error every time it loads the saved notes',
     find: '    forgetRestarted()\n    if (!storage.off) {',

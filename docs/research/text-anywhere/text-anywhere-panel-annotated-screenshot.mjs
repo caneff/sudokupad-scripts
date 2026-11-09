@@ -1,5 +1,5 @@
 // Takes the one annotated picture of the Text Anywhere panel on site/text-anywhere.html ("The Text Anywhere panel"), from the real
-// draw-tool.user.js on the recorded puzzle: the panel (nine color buttons, Clear all, the Background button, the settings gear
+// text-anywhere.user.js on the recorded puzzle: the panel (nine color buttons, Clear all, the Background button, the settings gear
 // the Size and Transparency sliders and the Hide all notes eye) cropped close at 3x, with each part labelled on its left by a short phrase and a line from the phrase to the part:
 //   text-anywhere-panel-annotated.png
 // Labels are laid out from the parts' own boxes. The script fails when a part is missing, and writes the file only when

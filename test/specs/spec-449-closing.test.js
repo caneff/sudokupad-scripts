@@ -1,12 +1,13 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { readdirSync, readFileSync } = require('node:fs')
+const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { runOnBrokenSudokuPad, SudokuPadChanged } = require('./broken-sudokupad.js')
+const { scriptFiles } = require('../../sync-lib.js')
 const ROOT = join(__dirname, '..', '..')
 
-const SCRIPTS = readdirSync(ROOT).filter((file) => file.endsWith('.user.js')).sort()
+const SCRIPTS = scriptFiles()
 
 // Spec 449's acceptance at `npm test`: every script declares its features through the shared guard (lib/sudokupad.js), and none calls
 // SudokuPad outside a feature's guard. The second is run, not read: each script starts on a stand-in page, SudokuPad then changes so
@@ -33,7 +34,8 @@ test('no script calls SudokuPad outside a feature\'s guard: when SudokuPad chang
   let taken = 0
   for (const file of SCRIPTS) {
     const { FEATURES } = require(join(ROOT, file))
-    const script = file.replace('.user.js', '')
+    // The id the script hands its guard, which starts each of its warnings.
+    const script = /createGuard\(\{ script: '([a-z-]+)'/.exec(readFileSync(join(ROOT, file), 'utf8'))[1]
     const run = runOnBrokenSudokuPad(join(ROOT, file), FEATURES)
     assert.deepEqual(run.startupEscaped.map(({ where, error }) => `${where}: ${error}`), [], `${file} on a working SudokuPad`)
     // A SudokuPad call outside a guard throws SudokuPad's own error, or a TypeError on a member that is gone; a stand-in value no real

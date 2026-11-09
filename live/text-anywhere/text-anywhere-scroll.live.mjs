@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's note box on sudokupad.app: a long line wraps at 16 em, a note of more than 8 lines stops growing
+// Live check of text-anywhere.user.js's note box on sudokupad.app: a long line wraps at 16 em, a note of more than 8 lines stops growing
 // there and the wheel scrolls it without reaching SudokuPad, typing keeps the caret in view, a short note and the board keep the wheel,
 // the scroll bar shows only under the pointer, and markdown, line breaks and the halo still draw in a scrolled box. Ctrl+wheel and a dialog over a note keep
 // the wheel, a digit tool keeps the wheel's scroll while a click reaches the cell under the note, a click just under a wrapped note misses it,
@@ -11,7 +11,7 @@ import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
 
 const { DIALOG, TEXT_BOX, TEXTS } = textAnywhere
-const { BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT } = createRequire(import.meta.url)('../../draw-tool.user.js')
+const { BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 // In cells from the grid's top left: a long one-line note, a tall note, a short note, and a cell clear of them all.
 const LONG_AT = [1.5, 4.5]
 const TALL_AT = [4.5, 4.5]

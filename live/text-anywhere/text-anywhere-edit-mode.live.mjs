@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's edit mode on sudokupad.app: the color pickers over the nine color buttons leave the keypad's
+// Live check of text-anywhere.user.js's edit mode on sudokupad.app: the color pickers over the nine color buttons leave the keypad's
 // buttons in their cells, so no button edge shows around SudokuPad's undo row, at the two desktop sizes.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

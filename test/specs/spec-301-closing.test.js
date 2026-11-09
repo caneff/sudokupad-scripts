@@ -7,7 +7,7 @@ const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
 
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
-const textAnywhere = require('../../draw-tool.user.js')
+const textAnywhere = require('../../text-anywhere.user.js')
 
 // Typed out as the independent source: SudokuPad's own nine pen colors
 // (tool-pen.css) are what the "SudokuPad colors" preset sets.
@@ -58,7 +58,7 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   // each part, and the README still says every script has a settings entry.
   const summary = /Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own/
   assert.match(read('site/index.html'), summary)
-  assert.match(read('draw-tool.user.js'), summary)
+  assert.match(read('text-anywhere.user.js'), summary)
   const details = read('site/text-anywhere.html')
   for (const lead of ['Typed notes anywhere', 'Colors, size and transparency', 'Readable over digits', 'Settings']) assert.match(details, new RegExp(`<strong>${lead}</strong>`))
   assert.match(read('README.md'), /Each script adds an entry/)

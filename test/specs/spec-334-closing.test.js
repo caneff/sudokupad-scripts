@@ -11,14 +11,14 @@ const { syncText, readLib, libNamesOnDisk, RUN } = require('../../sync-lib.js')
 const COLOR_EXPORTERS = ['color-by-digit', 'pen-tool-extras'].map((script) => require(`../../${script}.user.js`))
 
 // Typed out as the independent source: which script carries which shared module, from spec #334's Implementation Decisions.
-const SETTINGS_SCRIPTS = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'draw-tool', 'pen-tool-extras']
+const SETTINGS_SCRIPTS = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'pen-tool-extras', 'text-anywhere']
 const CARRIES = {
-  'color-math': ['color-by-digit', 'dark-page', 'draw-tool', 'pen-tool-extras'],
-  palette: ['color-by-digit', 'draw-tool', 'pen-tool-extras'],
-  'color-picker': ['color-by-digit', 'draw-tool', 'pen-tool-extras'],
+  'color-math': ['color-by-digit', 'dark-page', 'pen-tool-extras', 'text-anywhere'],
+  palette: ['color-by-digit', 'pen-tool-extras', 'text-anywhere'],
+  'color-picker': ['color-by-digit', 'pen-tool-extras', 'text-anywhere'],
   'settings-dialog': SETTINGS_SCRIPTS,
   'settings-transfer': SETTINGS_SCRIPTS,
-  panel: ['draw-tool', 'pen-tool-extras']
+  panel: ['pen-tool-extras', 'text-anywhere']
 }
 // Names a module provides, which no script may define again outside its blocks.
 const MODULE_NAMES = ['parseColor', 'darkenColor', 'toHex', 'isTransparent', 'GAMUT_EDGE', 'LIGHTNESS_FACTOR', 'pastedSettings', 'pasteReport',

@@ -1,4 +1,4 @@
-// Takes Text Anywhere's settings dialog on the recorded puzzle in SudokuPad, from the real draw-tool.user.js at 1200x900, with a boxed note behind it,
+// Takes Text Anywhere's settings dialog on the recorded puzzle in SudokuPad, from the real text-anywhere.user.js at 1200x900, with a boxed note behind it,
 // Yellow saved as the Box color and Thin grey as the Box border: text-anywhere-settings-dialog.png
 // The script fails when the Halo, Box color and Box border rows do not each show their sample buttons with Yellow and Thin grey pressed.
 // Run from the repo root with Playwright's Chromium installed: node docs/research/text-anywhere/text-anywhere-settings-dialog-screenshot.mjs

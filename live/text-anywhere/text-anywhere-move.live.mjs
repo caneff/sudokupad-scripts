@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's moving on sudokupad.app: a left-drag that starts on a note moves it (following the pointer, and kept over a
+// Live check of text-anywhere.user.js's moving on sudokupad.app: a left-drag that starts on a note moves it (following the pointer, and kept over a
 // reload), a drag may drop the note on the controls but never off the window, a double-click on a note still edits it, a drag that starts off every note makes nothing, and a
 // moved note keeps its background. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'

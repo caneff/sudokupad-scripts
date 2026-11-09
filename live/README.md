@@ -243,4 +243,8 @@ served from the recording, and its representative action from `live/scripts.mjs`
 - It runs when a change touches any line of a `// ==UserScript==` header, at the controller's merge check for such a PR,
   and every night in the daily watch, after `watch:live`, so a new Tampermonkey shows up within a day. Chromium changes
   only when `package-lock.json`'s Playwright does. A red nightly run files one `bug` issue, and none while it is open.
+- In a Tampermonkey of its own, it follows Text Anywhere's move (#711): the last copy main served from `draw-tool.user.js`,
+  fetched at its commit, installs; two clicks on the dashboard's "Check for updates" take it to the handover and then to
+  the checkout's `text-anywhere.user.js`. Each copy is served from `127.0.0.1` with its raw GitHub addresses pointed
+  there, so the updates fetch the checkout's files; `test/text-anywhere.test.js` holds the handover's real addresses.
 - It does not cover the Chrome Web Store install, the browser's own prompts or Tampermonkey's scheduled update check.

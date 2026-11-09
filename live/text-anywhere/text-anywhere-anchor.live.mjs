@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's open note: its text starts at the click and typing never moves that start, a double-click puts the caret at the letter clicked
+// Live check of text-anywhere.user.js's open note: its text starts at the click and typing never moves that start, a double-click puts the caret at the letter clicked
 // without selecting a word, the caret is the note's color and follows a recolor, and selected text is tinted in the note's color. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

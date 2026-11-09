@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's ~~strikethrough~~ on sudokupad.app in headless Chromium at 1280x720: a note with no Background box shows its struck letters as whole
+// Live check of text-anywhere.user.js's ~~strikethrough~~ on sudokupad.app in headless Chromium at 1280x720: a note with no Background box shows its struck letters as whole
 // with the Halo round the letters on Thick and Thin as with None (the halo does not cover the top half of the letters), and a done checklist line reads the same.
 // The pixels of the struck text are counted from a screenshot.
 import { after, before, describe, it } from 'node:test'

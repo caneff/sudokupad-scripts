@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's code in notes on sudokupad.app: a finished note shows `inline code` and a ``` block in monospace on a tinted background with the
+// Live check of text-anywhere.user.js's code in notes on sudokupad.app: a finished note shows `inline code` and a ``` block in monospace on a tinted background with the
 // backticks hidden and a block's leading spaces kept, symbols and markup are left alone inside both, and reopening the note shows the raw text. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

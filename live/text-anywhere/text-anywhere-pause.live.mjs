@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js while SudokuPad is paused: the pause dialog blurs the grid (`body.overlay-visible`), and the notes, pinned and fixed, blur
+// Live check of text-anywhere.user.js while SudokuPad is paused: the pause dialog blurs the grid (`body.overlay-visible`), and the notes, pinned and fixed, blur
 // with it and take no pointer, so a note cannot give the solve away. The selection and an open note stay as they are underneath and come back sharp on resume.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

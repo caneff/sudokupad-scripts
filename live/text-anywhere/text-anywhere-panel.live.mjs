@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's panel on sudokupad.app: the nine colors copied from the pen colors on first use, the nine "Aa" color buttons,
+// Live check of text-anywhere.user.js's panel on sudokupad.app: the nine colors copied from the pen colors on first use, the nine "Aa" color buttons,
 // the controls row (Clear all, Background and the gear) and the Size and Transparency sliders inside the keypad's height at the two desktop sizes, the digit keys,
 // a hold that opens the color pickers and a recolor of notes already made, the choices kept over a reload, and SudokuPad's
 // own keypad back under another tool.

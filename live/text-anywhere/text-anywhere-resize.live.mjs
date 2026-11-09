@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's resize handles on sudokupad.app: the open note, and a note alone selected, show a handle on each of their four
+// Live check of text-anywhere.user.js's resize handles on sudokupad.app: the open note, and a note alone selected, show a handle on each of their four
 // corners, and several selected notes show none; dragging a handle sets the box, keeping the opposite corner and the note's focus, the text wraps and
 // scrolls to fit, and the size is saved and survives a reload; the box stops at about three characters by one line, or at a short note's own size if that is smaller; a double-click on a handle sends
 // the note back to auto size; and a drag on the note's body moves it and never resizes it. Real mouse input.
@@ -20,7 +20,7 @@ const NOTE_TEXT = 'word '.repeat(12).trim()
 // A real mouse lands on whole page pixels.
 const NEAR_PX = 1.5
 // The smallest box, in em of the note's text size.
-const { MIN_BOX_EM: MIN_EM, CORNERS: CORNER_TABLE } = createRequire(import.meta.url)('../../draw-tool.user.js')
+const { MIN_BOX_EM: MIN_EM, CORNERS: CORNER_TABLE } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 // The handles in the order of the layer: the sign on x and y of the side of the box each sits on.
 const CORNERS = Object.values(CORNER_TABLE)
 const BOTTOM_RIGHT = Object.keys(CORNER_TABLE).indexOf('bottomRight')

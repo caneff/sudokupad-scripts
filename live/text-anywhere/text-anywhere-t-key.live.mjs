@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's T key on sudokupad.app: it makes Text Anywhere current from the normal tool, and does nothing where T is typed
+// Live check of text-anywhere.user.js's T key on sudokupad.app: it makes Text Anywhere current from the normal tool, and does nothing where T is typed
 // (the Letter tool, an open note, an open dialog and a field in it) or once Text Anywhere is current. SudokuPad's Z X C V keys keep their tools. Real keyboard input.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

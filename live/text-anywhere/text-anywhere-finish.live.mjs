@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's ways to finish a note and to click, on sudokupad.app: Escape or Ctrl+Enter closes the open note and leaves it selected, Enter reopens the one
+// Live check of text-anywhere.user.js's ways to finish a note and to click, on sudokupad.app: Escape or Ctrl+Enter closes the open note and leaves it selected, Enter reopens the one
 // selected note with the caret at its end, a click that slips a few pixels still opens a note or selects one, a note of only spaces is removed and trailing
 // spaces are trimmed when it closes, Escape during a drag or a resize puts the note back, and Tab in an open note does nothing. Real mouse and keyboard
 // input throughout, at a desktop size.

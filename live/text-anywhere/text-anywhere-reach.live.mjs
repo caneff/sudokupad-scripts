@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's fixed notes on sudokupad.app: a note put right of the panel at 1200x900 stays at its own point, under the panel, when the window
+// Live check of text-anywhere.user.js's fixed notes on sudokupad.app: a note put right of the panel at 1200x900 stays at its own point, under the panel, when the window
 // widens to 1600x900, and is drawn wholly inside the window when it narrows to 1000x900, and can then be clicked and dragged. Showing it there never saves: its stored
 // point changes only when the solver moves it, so with the window restored it is back at its own place.
 import { after, before, describe, it } from 'node:test'

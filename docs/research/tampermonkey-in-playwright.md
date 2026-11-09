@@ -152,3 +152,18 @@ it only if Tampermonkey's CRX proves unreachable from Actions.
 - A local `http.Server` serving the scripts must `closeAllConnections()` before `close()` resolves: Tampermonkey keeps
   its connection open.
 - With all six installed, each script's representative action from `live/scripts.mjs` works on its own page.
+
+## Driving an update check (2026-11-09, #711)
+
+What a probe found (Tampermonkey 5.5.1, Playwright's Chromium, headless), building the test of Text Anywhere's move from
+`draw-tool.user.js` to `text-anywhere.user.js`:
+
+- Trigger: the dashboard's "last updated" time for a script is
+  `tr.scripttr span.script_update .clickable[title="Check for updates"]`; a click checks that script's `@updateURL` at once.
+- An update whose `@updateURL` changed opens `ask.html` with an "Update" button and the line "The update url has changed
+  from: '<old>' to: '<new>'". Nothing installs until the button is clicked.
+- An update that keeps its `@updateURL` installs with no page: the dashboard just shows the new version.
+- After the handover installed, the next check fetched the new `@updateURL` and updated the same row (same `@name` and
+  `@namespace`): one row throughout, old version, then the handover's, then the new file's.
+- Not run: the scheduled check. Whether it also opens the "update url has changed" page for a user, or installs silently,
+  is unknown; either way the copy ends at the new address.

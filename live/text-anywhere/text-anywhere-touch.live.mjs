@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's touches on sudokupad.app (#541): the outline and handles hide while arrow keys nudge, an open note is kept 20 px inside the
+// Live check of text-anywhere.user.js's touches on sudokupad.app (#541): the outline and handles hide while arrow keys nudge, an open note is kept 20 px inside the
 // window while typing without its stored point moving, Shift during a drag locks the move to one axis, a press on another note while one is open finishes the open
 // one and selects the other in the same press, and a note's hit area is its box plus 4 px (hover, select, drag, right-click erase). Real mouse and keyboard input throughout.
 import { after, before, beforeEach, describe, it } from 'node:test'
@@ -12,7 +12,7 @@ const { TEXTS, TEXT_BOX } = textAnywhere
 // How long the outline and handles stay hidden after the last nudge: the script's CHROME_BACK_MS, which it does not export, named here once on purpose,
 // so a change to the script's value fails the check instead of moving it along.
 const CHROME_BACK_MS = 300
-const { HIT_MARGIN_PX, WINDOW_PAD_PX } = createRequire(import.meta.url)('../../draw-tool.user.js')
+const { HIT_MARGIN_PX, WINDOW_PAD_PX } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const SELECTION = '#text-anywhere-layer .text-anywhere-selection'
 const HANDLES = '#text-anywhere-layer .text-anywhere-resize'
 const WINDOW = { width: 1200, height: 900 }

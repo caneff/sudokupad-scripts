@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's drag on a note being edited, as PowerPoint does it: a drag that starts inside the open note, on its text or on empty space, selects text and
+// Live check of text-anywhere.user.js's drag on a note being edited, as PowerPoint does it: a drag that starts inside the open note, on its text or on empty space, selects text and
 // never moves the note; a drag that starts on its edge moves it, with the move cursor there and the text cursor inside; a drag on a note not being edited still moves it.
 // Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'

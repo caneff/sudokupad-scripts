@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's Transparency on sudokupad.app: it fades a whole note (letters, outline, box and frame) as one element, and the
+// Live check of text-anywhere.user.js's Transparency on sudokupad.app: it fades a whole note (letters, outline, box and frame) as one element, and the
 // selection outline and resize handles of a faded note stay solid.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

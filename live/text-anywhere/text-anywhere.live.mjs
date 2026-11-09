@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js on sudokupad.app, in headless Chromium, with real mouse input.
+// Live check of text-anywhere.user.js on sudokupad.app, in headless Chromium, with real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { DIGIT_BUTTON, TOOL_BUTTON, NOT_NOTES, noteInCells as cellsOf, open, pickTextAnywhere as pick, TEXTS, texts, tool as toolOf, TOOL_KEYS, topmostAtNotes } from './text-anywhere-fixtures.mjs'

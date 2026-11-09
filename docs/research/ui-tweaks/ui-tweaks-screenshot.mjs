@@ -17,7 +17,7 @@ await page.waitForFunction(() => Framework.app && Framework.app.puzzle && Framew
 await page.getByRole('button', { name: /Start Puzzle|Continue|Resume/i }).first().click()
 await page.locator('#control-undo').waitFor()
 await page.addStyleTag({ content: '#svenpeek { display: none !important }' })
-for (const file of ['pen-tool-extras', 'draw-tool', 'ui-tweaks']) await page.addScriptTag({ content: read(`${file}.user.js`) })
+for (const file of ['pen-tool-extras', 'text-anywhere', 'ui-tweaks']) await page.addScriptTag({ content: read(`${file}.user.js`) })
 await page.evaluate(() => {
   Framework.setSetting('toolpen', true)
   for (const name of ['more1', 'more2', 'more3']) Framework.addControlButton({ parent: '.controls-aux', name, title: name, content: '<div class="icon">+</div>', onClick () {} })

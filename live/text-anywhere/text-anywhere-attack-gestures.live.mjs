@@ -14,7 +14,7 @@ import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, mouseDrag, typeText } from '../board.mjs'
 
 const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SELECTED, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
-const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
+const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const COLOR_BUTTON = `${KEYPAD} button[data-key="4"]`
 const RECTANGLE = '#text-anywhere-layer .text-anywhere-selection-rectangle'
 const OTHER_TOOL_KEY = 'x'

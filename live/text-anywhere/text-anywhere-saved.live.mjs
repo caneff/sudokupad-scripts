@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's saved notes on sudokupad.app: kept over a reload, per puzzle, and wiped by Restart, which Undo straight after takes back; the strokes and shapes an earlier version
+// Live check of text-anywhere.user.js's saved notes on sudokupad.app: kept over a reload, per puzzle, and wiped by Restart, which Undo straight after takes back; the strokes and shapes an earlier version
 // saved are never drawn and stay in storage as they were.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
