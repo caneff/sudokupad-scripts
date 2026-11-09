@@ -5,6 +5,7 @@
     "test": "node --test \"test/**/*.test.*\" \"lib/**/*.test.js\" \"live/**/*.test.mjs\"",
     "test:live": "node --test --test-concurrency=4 \"live/**/*.live.mjs\"",
     "test:fuzz": "node live/fuzz/run.mjs",
+    "fuzz:plants": "node live/fuzz/plants-run.mjs",
     "fuzz:nightly": "node live/fuzz/nightly.mjs",
     "test:fuzz:smoke": "node --test live/fuzz/fuzz.smoke.mjs",
     "watch:live": "node live/watch.mjs",

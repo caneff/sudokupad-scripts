@@ -15,6 +15,7 @@ describe('the fuzz engine on a fake page', () => {
     const { openTarget, targets } = fakeTargets()
     const result = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 5, ...WAITS })
     assert.deepEqual({ failed: result.failed, seed: result.seed, runs: result.runs }, { failed: false, seed: SEED, runs: 5 })
+    assert.ok(result.huntMs >= 0, `huntMs ${result.huntMs}`)
     assert.equal(targets.length, 5)
     assert.ok(targets.every((t) => t.closed))
   })

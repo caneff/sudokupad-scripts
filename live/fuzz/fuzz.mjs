@@ -10,6 +10,7 @@ import { finishNote, pickDraw, TEXT_BOX, TEXTS } from '../draw-tool/draw-tool-fi
 import { installAll, puzzleData, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { runFuzz } from './engine.mjs'
 import { readPageState } from './page-state.mjs'
+import { plantPatch } from './plants.mjs'
 import { newestErrorRecords } from './signals.mjs'
 
 // A 6x6 with 2x3 boxes and six givens: a puzzle that is not a standard 9x9 (#590 Q7).
@@ -114,12 +115,12 @@ function envFor (p, cells) {
 }
 
 // Opens a page for one action list: SudokuPad past Start Puzzle on `puzzle`, every script installed, the pen and replay tools on.
-export async function openTarget (browser, puzzle, { planted }) {
+export async function openTarget (browser, puzzle, { planted, plant }) {
   const { context, p, errors } = await openPage(browser, {
     seed: async (page, collected) => {
       captureConsoleErrors(page, collected)
       if (planted) await plantEscapeError(page)
-      await installAll(page)
+      await installAll(page, plant && plantPatch(plant))
     }
   })
   try {
@@ -146,15 +147,15 @@ export async function openTarget (browser, puzzle, { planted }) {
 const freeCells = (p) => p.evaluate(() => Framework.app.puzzle.cells.filter((c) => !c.given).map((c) => [c.row, c.col]))
 
 // Fuzzes with `seed` (a number; the puzzle is `puzzleFor(seed)`) for `minutes` or `runs` action lists, then shrinks a failure. `path` is a printed replay
-// path, `<fast-check path>@<command path>`, which replays that one failure. `planted` plants the Escape-during-drag page error.
-export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false }) {
+// path, `<fast-check path>@<command path>`, which replays that one failure. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug.
+export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant }) {
   const puzzle = puzzleFor(seed)
-  const probe = await openTarget(browser, puzzle, { planted })
+  const probe = await openTarget(browser, puzzle, { planted, plant })
   const cells = probe.cells
   await probe.close()
   const [fcPath, replayPath] = path == null ? [] : path.split('@')
   const result = await runFuzz({
-    openTarget: () => openTarget(browser, puzzle, { planted }),
+    openTarget: () => openTarget(browser, puzzle, { planted, plant }),
     cells,
     seed,
     runs,
@@ -164,6 +165,6 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
     replayPath
   })
   if (!result.failed) return { ...result, puzzle: puzzle.name }
-  const replayArgs = ['--seed', result.seed, '--path', `${result.path}@${result.replayPath}`, ...(planted ? ['--plant-escape-error'] : [])]
+  const replayArgs = ['--seed', result.seed, '--path', `${result.path}@${result.replayPath}`, ...(planted ? ['--plant-escape-error'] : []), ...(plant ? ['--plant', plant.id] : [])]
   return { ...result, puzzle: puzzle.name, path: `${result.path}@${result.replayPath}`, replayCommand: `npm run test:fuzz -- ${replayArgs.join(' ')}` }
 }

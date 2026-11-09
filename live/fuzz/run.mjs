@@ -1,13 +1,14 @@
 // The fuzz from the command line: `npm run test:fuzz`. Random action lists on real SudokuPad with every script installed, for 2 minutes by default;
 // a crash signal (a skip line, a page error, a console error, the notice bar) fails the run, which is shrunk to the shortest list that still fails
 // and printed with the seed and the command that replays it. Exits 1 on a failure.
-//   npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--plant-escape-error]
+//   npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--plant-escape-error] [--plant <id>]
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright'
 import { fuzz } from './fuzz.mjs'
+import { plantById } from './plants.mjs'
 
 const { values } = parseArgs({
-  options: { seed: { type: 'string' }, minutes: { type: 'string' }, runs: { type: 'string' }, path: { type: 'string' }, 'shrink-minutes': { type: 'string' }, 'plant-escape-error': { type: 'boolean' } }
+  options: { seed: { type: 'string' }, minutes: { type: 'string' }, runs: { type: 'string' }, path: { type: 'string' }, 'shrink-minutes': { type: 'string' }, 'plant-escape-error': { type: 'boolean' }, plant: { type: 'string' } }
 })
 
 // A number option, or `fallback` when absent; a value that is not a number stops the run, since NaN would switch a limit off.
@@ -29,7 +30,8 @@ try {
     minutes: number('minutes'),
     shrinkMinutes: number('shrink-minutes'),
     path: values.path,
-    planted: values['plant-escape-error']
+    planted: values['plant-escape-error'],
+    plant: values.plant && plantById(values.plant)
   })
   const seconds = Math.round((Date.now() - started) / 1000)
   if (!r.failed) {
