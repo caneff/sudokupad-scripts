@@ -14,7 +14,7 @@ const {
   copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
-  clickedMarks, marksAtPoint, DOT_FILL_CSS,
+  clickedMarks, marksAtPoint, holdsMark, DOT_FILL_CSS,
   PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
@@ -573,32 +573,37 @@ const markGrid = (pens = {}) => {
   const cells = Array.from({ length: 9 }, (_, row) => Array.from({ length: 9 }, (_, col) => ({ row, col, pen: (pens[`${row},${col}`] || []).map((value) => [value, 'r']) })))
   return { rows: 9, cols: 9, getCell: (row, col) => cells[row][col] }
 }
-const marksFor = (point, corners, settings, grid = markGrid()) => {
+const marksFor = (point, takesCorner, grid = markGrid()) => {
   const stockAt = []
   const stockActs = (at) => { stockAt.push(at); return [{ type: 'select', arg: [grid.getCell(4, 4)] }, { type: 'pen', arg: '5' }] }
-  const found = marksAtPoint(point, { grid, radius: CORNER_RADIUS, corners, settings, stockActs })
+  const found = marksAtPoint(point, { grid, radius: CORNER_RADIUS, takesCorner, stockActs })
   return { ...found, stockAt, grid }
 }
 
-test('marksAtPoint for the erase takes a corner holding a mark even with both corner boxes unticked', () => {
-  const { marks, queued, stockAt, grid } = marksFor({ r: 3, c: 3 }, 'held', NONE, markGrid({ '2,2': ['u'] }))
-  assert.deepEqual([marks.cell, marks.values, queued, stockAt], [grid.getCell(2, 2), ['u', 'x'], null, []])
+test('marksAtPoint for the erase takes a corner holding a mark, whatever is ticked', () => {
+  const { marks, corner, queued, stockAt, grid } = marksFor({ r: 3, c: 3 }, holdsMark, markGrid({ '2,2': ['u'] }))
+  assert.deepEqual([marks.cell, marks.values, corner, queued, stockAt], [grid.getCell(2, 2), ['u', 'x'], true, null, []])
 })
 
 test('marksAtPoint for the erase passes an empty corner to SudokuPad\'s own click, as what that click hit', () => {
-  const { marks, queued, stockAt, grid } = marksFor({ r: 3, c: 3 }, 'held', ALL)
-  assert.deepEqual([marks.cell, marks.values, queued.length, stockAt], [grid.getCell(4, 4), ['5', '6', 'z'], 2, [{ r: 3, c: 3 }]])
+  const { marks, corner, queued, stockAt, grid } = marksFor({ r: 3, c: 3 }, holdsMark)
+  assert.deepEqual([marks.cell, marks.values, corner, queued.length, stockAt], [grid.getCell(4, 4), ['5', '6', 'z'], false, 2, [{ r: 3, c: 3 }]])
 })
 
-test('marksAtPoint for the click takes an empty corner while a corner mark is ticked, and steps it through the corner cycle', () => {
-  const { marks, queued, stockAt, grid } = marksFor({ r: 3, c: 3 }, 'ticked', { ...NONE, cornerCircle: true })
-  assert.deepEqual([marks.cell, marks.values, queued, stockAt], [grid.getCell(2, 2), ['u', 'x'], null, []])
+test('marksAtPoint takes an empty corner its predicate takes, and steps it through the corner cycle', () => {
+  const { marks, corner, queued, stockAt, grid } = marksFor({ r: 3, c: 3 }, () => true)
+  assert.deepEqual([marks.cell, marks.values, corner, queued, stockAt], [grid.getCell(2, 2), ['u', 'x'], true, null, []])
   assert.deepEqual(marks.plan([], ALL), { remove: [], add: 'u' })
 })
 
-test('marksAtPoint for the click leaves every corner to SudokuPad\'s own click while both corner boxes are unticked, a held mark too', () => {
-  const { marks, stockAt, grid } = marksFor({ r: 3, c: 3 }, 'ticked', { ...ALL, cornerX: false, cornerCircle: false }, markGrid({ '2,2': ['u'] }))
-  assert.deepEqual([marks.cell, stockAt], [grid.getCell(4, 4), [{ r: 3, c: 3 }]])
+test('marksAtPoint leaves a corner its predicate refuses to SudokuPad\'s own click, a held mark too', () => {
+  const { marks, corner, stockAt, grid } = marksFor({ r: 3, c: 3 }, () => false, markGrid({ '2,2': ['u'] }))
+  assert.deepEqual([marks.cell, corner, stockAt], [grid.getCell(4, 4), false, [{ r: 3, c: 3 }]])
+})
+
+test('marksAtPoint for a click away from every corner asks no predicate and runs SudokuPad\'s own click', () => {
+  const { marks, corner, stockAt, grid } = marksFor({ r: 4.5, c: 4.5 }, () => { throw new Error('asked') })
+  assert.deepEqual([marks.cell, corner, stockAt], [grid.getCell(4, 4), false, [{ r: 4.5, c: 4.5 }]])
 })
 
 function allCorners (rows, cols) {
