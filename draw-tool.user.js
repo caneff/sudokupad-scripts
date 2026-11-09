@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.41.0
+// @version      0.41.3
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.41.0'
+  const VERSION = '0.41.3'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -982,7 +982,9 @@
   }
 
   // A hold of HOLD_TO_EDIT_MS on one of the tool's nine color buttons, with either mouse button, puts a color picker over each; a picker's input calls `save(n, value)` at once.
-  // A second hold, or the panel leaving the tool, ends edit mode. `guard` runs each toggle, so a caller can report a failure its own way.
+  // Left Alt held with the tool current does the same until it is released, as SudokuPad's own color tool does.
+  // A second hold, the panel leaving the tool, Escape, a press outside the panel (swallowed, with the click after it), the window losing focus or the caller's `endEditMode()` ends edit mode.
+  // `guard` runs each toggle and each window listener, so a caller can report a failure its own way.
   function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
     const toolClass = `tool-${tool}`
     const editing = `${prefix}editing`
@@ -991,13 +993,20 @@
     const targets = `.${toolClass} .controls-input button[data-key], .${toolClass} .${pickerClass} input`
     // SudokuPad keeps one panel element and swaps its `tool-<name>` class for the next tool's, so a class watcher ends edit mode when the panel stops being this tool's.
     let leaveWatch = null
+    let editPanel = null
+    // Whether left Alt opened this edit mode, so its release closes only that one.
+    let altOpened = false
 
     function exit (panel) {
       if (leaveWatch) leaveWatch.disconnect()
       leaveWatch = null
+      editPanel = null
+      altOpened = false
       panel.classList.remove(editing)
       panel.querySelectorAll(`.${pickerClass}`).forEach((el) => el.remove())
     }
+
+    const endEditMode = () => { if (editPanel) exit(editPanel) }
 
     function enter (panel) {
       // Every button is found before anything changes, so a missing one leaves no half edit mode.
@@ -1007,6 +1016,7 @@
         return button
       })
       panel.classList.add(editing)
+      editPanel = panel
       buttons.forEach((button, i) => {
         const n = PEN_COLOR_NUMBERS[i]
         button.insertAdjacentHTML('beforebegin', `<div class="${pickerClass}" data-key="${n}"><input type="color" data-key="${n}" value="${escapeHtml(colorOf(String(n)))}"></div>`)
@@ -1020,10 +1030,24 @@
     let timer
     let holdDone = false
     const cancel = () => { clearTimeout(timer); timer = undefined }
+    // A press outside the panel only ends edit mode, so the click it ends with is dropped as well; the next press clears the trap.
+    const swallowClick = (event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      document.removeEventListener('click', swallowClick, true)
+    }
     // Pointer events carry a mouse button of either kind.
     document.addEventListener('pointerdown', (event) => {
       cancel()
       holdDone = false
+      document.removeEventListener('click', swallowClick, true)
+      if (editPanel && !editPanel.contains(event.target)) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        document.addEventListener('click', swallowClick, true)
+        endEditMode()
+        return
+      }
       const target = event.target.closest(targets)
       if (!target) return
       const panel = target.closest(`.${toolClass}`)
@@ -1042,10 +1066,25 @@
     document.addEventListener('contextmenu', (event) => {
       if ((timer !== undefined || holdDone) && event.target.closest(targets)) event.preventDefault()
     }, true)
+    // On the window, in the capture phase, so it runs ahead of SudokuPad's own Alt (a temporary switch to another tool, which would take the panel away) and can stop it.
+    window.addEventListener('keydown', (event) => guard(() => {
+      if (event.code === 'Escape' || event.key === 'Escape') return endEditMode()
+      if (event.code !== 'AltLeft' || event.repeat || editPanel || event.target.closest('input, textarea, [contenteditable]')) return
+      const panel = document.querySelector(`.${toolClass}`)
+      if (!panel) return
+      event.stopImmediatePropagation()
+      enter(panel)
+      altOpened = true
+    }), true)
+    window.addEventListener('keyup', (event) => guard(() => {
+      if (event.code === 'AltLeft' && altOpened) endEditMode()
+    }), true)
+    window.addEventListener('blur', () => guard(endEditMode))
     document.addEventListener('input', (event) => {
       const input = event.target
       if (input.matches(`.${pickerClass} input`)) save(input.dataset.key, input.value)
     })
+    return { endEditMode }
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-picker>
@@ -2576,7 +2615,7 @@
 
   // A hold on a color button toggles a color picker over each, and a picker recolors its color number at once: every note in it reads the variable.
   function installColorPickers () {
-    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value)) })
+    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value)), guard: (toggle) => textTool.run(toggle) })
   }
 
   // A left press in progress: `start` is the index of the note it began on, or -1 for none; `points` its points on the screen, and `pending` those its
