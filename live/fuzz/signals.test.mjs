@@ -15,7 +15,8 @@ describe('crashSignals', () => {
   })
 
   it('a snapshot missing a field is refused, not read as clean', () => {
-    assert.throws(() => crashSignals({ errors: [] }))
+    assert.throws(() => crashSignals({ errors: [] }), TypeError)
+    assert.throws(() => crashSignals({ notices: [] }), TypeError)
   })
 
   it('the notice bar counts, with the script\'s own words', () => {

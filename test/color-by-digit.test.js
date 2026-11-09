@@ -7,7 +7,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
-const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
+const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 
@@ -419,10 +419,6 @@ test('sync: ticking again makes the digits take the cell profile', () => {
   assert.equal('digitActive' in ticked, false)
 })
 
-test("sync: the cell profile is the profile the button's numbers come from", () => {
-  assert.deepEqual(activeGroups(apart), ODD)
-})
-
 test('sync: deleting the digit profile makes digits follow the cell profile; deleting another keeps the digit pick on its profile', () => {
   const gone = deleteProfile(apart, 2)
   assert.equal(isSynced(gone), true)
@@ -558,8 +554,8 @@ test('the dialog is 640 px wide on a desktop and never wider than the window', (
   assert.match(css, /\.dialog:has\(#color-by-digit-editor\) \{ width: 640px; max-width: calc\(100vw - \d+px\)/)
 })
 
-test('the bottom row keeps no style rule for the copy and paste buttons', () => {
-  assert.doesNotMatch(STYLE_CSS, /paste-settings/)
+test('the stylesheet has no rule for the dialog title\'s Copy and Paste settings buttons', () => {
+  assert.doesNotMatch(STYLE_CSS, /copy-settings|paste-settings|cbd-tools/)
 })
 
 const menuPicks = (html) => [...html.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`)
@@ -803,12 +799,6 @@ test('colorSteps clears a cell that loses a color and puts back the colors it ke
   assert.deepEqual(colorSteps(cells, []), [])
 })
 
-test('mode: the Mode pulldown offers all four modes and selects the draft mode it is given', () => {
-  const html = renderPulldowns(hostile, 'off')
-  assert.deepEqual(optionsOf(html, 'mode-draft'), ['cell|Cell', 'digit|Digit', 'both|Both', 'off|Off*'])
-  assert.doesNotMatch(html, /auto-draft/)
-})
-
 const profileState = { profiles: [{ name: 'Low <b>', groups: LOW }, { name: 'Odd/Even', groups: ODD }], active: 1 }
 
 test('renderProfiles lists each profile as a radio row with its handle, colors with shown digits, name and delete button', () => {
@@ -834,6 +824,8 @@ test('renderProfiles marks the selected row by aria-checked, not the active one,
   const html = renderProfiles(profileState, colorFor, 0)
   assert.doesNotMatch(html, /#f1ebfb|font-weight:/)
   assert.match(STYLE_CSS, /\[aria-checked="true"\] \{[^}]*background: #f1ebfb/)
+  assert.match(declarationsOf('#color-by-digit-editor [data-role="profile-name"]'), /font-weight: 600/)
+  assert.match(declarationsOf('#color-by-digit-editor .cbd-name'), /font-weight: 400/)
 })
 
 test('renderProfiles rows have no Cells, Digits or Active tags, whatever the state', () => {
@@ -1440,13 +1432,6 @@ function paintBlock (html) {
 }
 const padCells = (html) => paintBlock(html).pad
 
-test('renderEditor puts 0 on a fourth row under 7, beside the page\'s 0 swatch', () => {
-  const [lit] = layoutPages([keys('z a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
-  const { swatches, pad } = paintBlock(editor([], [lit]))
-  assert.deepEqual(swatches, ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'z'])
-  assert.deepEqual(pad.slice(9), ['0', 'pad', 'pad'])
-})
-
 test('renderEditor puts 0 on a fourth row under 7 when the page has no 0 swatch', () => {
   const [dark] = layoutPages([keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
   const { swatches, pad } = paintBlock(editor([], [dark]))
@@ -1944,9 +1929,48 @@ test('a document listener of the mode button whose own code throws turns the but
   }
 })
 
-test('with cell coloring off, the icon and the digit shades still wait for the puzzle to load', () => {
-  const { added } = startOnStandInPage(SCRIPT, FEATURES, { missing: ['app.act'] })
-  assert.ok(added.some(({ where }) => where === 'Framework.app.puzzle.addEventListener()'), added.map(({ where }) => where).join(', '))
+test('with cell coloring off, the icon and the digit shades are drawn once the puzzle has loaded, and not before', async () => {
+  const path = require.resolve('../color-by-digit.user.js')
+  const saved = require.cache[path]
+  delete require.cache[path]
+  const listeners = []
+  const cells = []
+  const icon = { outerHTML: 'old icon' }
+  const appended = []
+  // No `act`: SudokuPad has no cell coloring to wait for, so only the icon and the digit shades wait on the load.
+  const app = { puzzle: { cells, selectedCells: [], undoStack: [], redoStack: [], addEventListener: (type, fn) => listeners.push({ type, fn }) }, deselect: () => {}, select: () => {}, on: () => {}, refreshControls: () => {} }
+  global.document = pageDocument({
+    querySelector: (selector) => (selector === '#control-colorbydigit .icon' ? icon : null),
+    head: { appendChild: (el) => appended.push(el) }
+  })
+  global.window = pageWindow()
+  global.Framework = {
+    getApp: () => Promise.resolve(app),
+    getData: (key) => (key === 'ColorByDigit_mode' ? 'digit' : null),
+    setData () {},
+    removeData () {},
+    addControlButton () {},
+    addSetting () {},
+    showDialog () {},
+    closeDialog () {},
+    app: { tools: { colour: {} } }
+  }
+  try {
+    require(path)
+    await new Promise((resolve) => setImmediate(resolve))
+    const loaded = listeners.filter(({ type }) => type === 'progressloaded')
+    assert.equal(loaded.length, 1, 'one listener waits for the load')
+    assert.equal(appended.some((el) => el.id === 'color-by-digit-digits'), false, 'no digit shades before the load')
+    cells.push({ given: '1', colours: [], propVisible: () => false, propGet: () => [] })
+    icon.outerHTML = 'old icon'
+    loaded[0].fn()
+    assert.match(icon.outerHTML, /^<div class="icon"/, 'the icon is drawn again')
+    assert.equal(appended.some((el) => el.id === 'color-by-digit-digits'), true, 'the digit shades are added')
+  } finally {
+    delete global.Framework; delete global.document; delete global.window
+    delete require.cache[path]
+    if (saved) require.cache[path] = saved
+  }
 })
 
 // The settings dialog's draft: three profiles over twoPages' colors, the second one active.

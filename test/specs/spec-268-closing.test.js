@@ -12,7 +12,7 @@ const storeOf = (saved) => ({
 // Spec 268's acceptance at `npm test`, through Text Anywhere's pure functions: a text and a click that opens it, the notes saved per puzzle and read back, the 51st puzzle dropping the oldest, a stored stroke
 // kept untouched, and the panel's choices read back with bad values refused. This seam is blind to real
 // SudokuPad: the Text button, the mouse and keys, a later click finding its note (the browser's own hit test), the notes on the board, the text box, the dialogs, Restart and the
-// reload are `npm run test:live`'s. Neither run covers a real Tampermonkey install, touch, a
+// reload are `npm run test:live`'s. A real Tampermonkey install is `npm run test:tampermonkey`'s; neither run covers touch, a
 // stylus or Windows (where the browser opens its menu on the right button's release).
 test('spec 268 gives a solver a text tool whose notes are kept per puzzle', () => {
   const { TOOL_NAME, textItem, isClick } = draw

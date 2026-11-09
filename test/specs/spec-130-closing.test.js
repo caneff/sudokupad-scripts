@@ -24,8 +24,8 @@ const swept = ['.', 'test', 'test/specs', 'live', ...liveFolders, 'site'].flatMa
 const ownFiles = swept.filter((file) => /pen-tool-extras/.test(file))
 
 // Spec 130's acceptance as one pass over the script's exports and its text, at `npm test`. This seam is blind to real
-// SudokuPad (`npm run test:live` covers the `Framework` calls, rendering and undo there), and to a real Tampermonkey
-// install and crackingthecryptic.com, which no automated run reaches.
+// SudokuPad (`npm run test:live` covers the `Framework` calls, rendering and undo there), and to saved settings from an older version.
+// `npm run test:tampermonkey` installs each script into a real Tampermonkey.
 test('Pen Tool Extras holds spec 130 together', () => {
   const { SETTINGS, settingDefaults, readSettings, saveSetting, changedSettings } = extras
   const saved = {}

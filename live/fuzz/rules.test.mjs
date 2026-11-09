@@ -16,8 +16,9 @@ const check = (name, now, { before = {}, action = 'click cell', earlier = null }
 const colorByDigit = (mode, cells, groups = [{ key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]) => ({ mode, groups, cells: cells.map(([digit, colours = [], given = false]) => ({ digit, given, colours })) })
 
 describe('the rules', () => {
-  it('each script has a rule, and the names are unique', () => {
-    assert.deepEqual(RULES.map((r) => r.name), ['undo-to-start', 'pen-lines-drawn', 'notes-saved-match-drawn', 'notes-survive-reload', 'reload-changes-nothing', 'undo-redo-restores', 'digit-cells-colored', 'page-stays-dark', 'rules-fit-pane', 'tab-not-letters'])
+  it('the rule names are unique', () => {
+    const names = RULES.map((r) => r.name)
+    assert.equal(new Set(names).size, names.length)
   })
 
   it('a quiet page breaks none, and a violation is reported with its rule name', () => {

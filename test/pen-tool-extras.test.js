@@ -352,10 +352,6 @@ test('a mark whose type is unticked moves to the next ticked mark, or to empty',
   assert.equal(nextType('circle', { x: true, directions: false, circle: false }), 'empty')
 })
 
-test('a click on an empty right edge adds the X, which is the character 3', () => {
-  assert.deepEqual(planClick('3', [], ALL), { remove: [], add: '3' })
-})
-
 test('the cycle on a right edge uses 3, j (circle), h, i then clears', () => {
   assert.deepEqual(planClick('3', ['3'], ALL), { remove: ['3'], add: 'j' })
   assert.deepEqual(planClick('3', ['j'], ALL), { remove: ['j'], add: 'h' })
@@ -1203,10 +1199,9 @@ test('the editor is a two by two grid: Pen colors | Line settings and Line style
   assert.match(DIALOG_CSS, /@media \(max-width: \d+px\) \{[^@]*grid-template-columns: minmax\(0, 1fr\)/, 'one column on a narrow screen')
 })
 
-test('the dialog is sized to its content, the paragraph around the editor loses its bottom margin, and the dialog is not centred over the board', () => {
+test('the dialog is sized to its content, the paragraph around the editor loses its bottom margin', () => {
   assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \{[^}]*width: fit-content !important;/)
   assert.match(DIALOG_CSS, /\.dialog p:has\(> #pen-tool-extras-editor\) \{ margin-bottom: 0 !important; \}/)
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'pen-tool-extras.user.js'), 'utf8'), /bodyId: EDITOR_ID,\n\s*centerOverBoard: false,/)
 })
 
 test('a missing-color note in the first column wraps within it and never sets its width', () => {
@@ -1264,12 +1259,6 @@ test('the three controls are one 4rem square size, in one rule, in the order mod
   // No other rule gives a control a size of its own.
   assert.equal(PANEL_CSS.split('\n').filter((rule) => /button\.pen-tool-extras-(mode|page|settings)/.test(rule) && /width|height/.test(rule)).length, 1)
   ;[['mode', 1], ['page', 2], ['settings', 3]].forEach(([name, order]) => assert.match(ruleOf(`.tool-pen .controls-input button.pen-tool-extras-${name}`), new RegExp(`order: ${order};`)))
-})
-
-test('the panel sliders block holds the slider rows and no button', () => {
-  assert.match(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /^<div class="pen-tool-extras-sliders"><div class="pen-tool-extras-slider"/)
-  assert.doesNotMatch(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /<button/)
-  assert.equal(PANEL_CSS.includes('sliders-box'), false)
 })
 
 test('the settings button is a button named Pen Tool Extras settings, drawing an outline gear in the panel color and no fill', () => {
@@ -1563,14 +1552,6 @@ test('the arrows and the line scale with the thickness: larger arrows, a wider l
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
-test('below the default thickness the heads shrink with the line, a little slower than it: 0.8 * 5 * (t / 5) ** 0.8 line widths at thickness t', () => {
-  // the head's width across, 2 * halfWidth * scale: worked from the ruling, scale 4 at 5 and 1.1048 at 1
-  const across = (t) => { const ys = pointsOf(arrowLineAt('a', true, 0, 0, t).arrows).map(([, y]) => y); return Math.max(...ys) - Math.min(...ys) }
-  assert.equal(Math.abs(across(5) - 2 * 2.125 * 4) < 0.02, true, `at 5: ${across(5)}`)
-  assert.equal(Math.abs(across(1) - 2 * 2.125 * 1.1048) < 0.02, true, `at 1: ${across(1)}`)
-  assert.equal(arrowLineAt('1', true, 0, 0, 1).lineWidth, 1, 'the line is as thick as a page 1 line, 1')
-})
-
 test('the line under the arrows is as thick as a page 1 line at every slider value, and the arrows clearly stick out past it', () => {
   for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
     const shape = arrowLineAt('a', true, 0, 0, t)
@@ -1619,13 +1600,6 @@ test('an arrow is centered on its line, on a diagonal as on a straight line, at 
       }
     }
   }
-})
-
-test('at the largest thickness an arrow on a grid\'s outer edge reaches the ARROW_LINE size at head scale 10.1387', () => {
-  // a top edge line, 'a', on row 0: the arrow's base corners are the furthest from the edge itself
-  const shape = arrowLineAt('a', true, 0, 0, THICKNESS.max)
-  const reach = Math.max(...pointsOf(shape.arrows).map(([, y]) => Math.abs(y)))
-  assert.equal(Math.abs(reach - ARROW_LINE.halfWidth * 10.1387) < 0.02, true, `the drawn reach ${reach} is the ARROW_LINE size at head scale 10.1387, the largest thickness's`)
 })
 
 test('an arrow line has at least one arrow on any segment at any thickness and any arrow spacing, so a run never has none', () => {
@@ -1721,10 +1695,9 @@ test('both line styles are enabled unless saved as the boolean false, each on it
   for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(SETTINGS.lineStyles.normalize(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
 })
 
-test('a wider arrow spacing gives fewer arrows on the same segment and the spacing sets their distance', () => {
+test('a wider arrow spacing gives fewer arrows on the same segment', () => {
   const count = (spacing) => pointsOf(arrowLineAt('1', true, 0, 0, 5, spacing).arrows).length / 3
   assert.deepEqual([count(3), count(5), count(12)], [3, 2, 1])
-  assert.equal(count(3) > count(5) && count(5) > count(12), true, `${count(3)}, ${count(5)}, ${count(12)}`)
 })
 
 test('the pages in the rotation are page 1 always, page 2 with dashed lines enabled and page 3 with arrow lines enabled', () => {

@@ -1397,7 +1397,7 @@ test('a locked move keeps the axis of greater movement and zeroes the other; a t
   assert.deepEqual(axisLocked([5, -12], false), [5, -12], 'unlocked moves freely')
 })
 
-test('lockedAxis is the axis of lesser movement, and x on a tie', () => {
+test('lockedAxis is the axis of lesser movement, and y on a tie, so x keeps moving', () => {
   assert.equal(lockedAxis([30, -12]), 1)
   assert.equal(lockedAxis([5, -12]), 0)
   assert.equal(lockedAxis([7, 7]), 1)
