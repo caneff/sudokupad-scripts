@@ -5,6 +5,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
+const { fakeStore } = require('./fake-store.js')
+const { startScript } = require('./unit-start.js')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const {
@@ -1904,28 +1906,23 @@ test('the table holds each setting\'s saved key and default', () => {
   })
 })
 
-// A store that keeps what is saved, as SudokuPad's own does between a save and the next read.
-function memoryStore (saved = {}) {
-  return { saved, getData: (key) => saved[key], setData: (key, value) => { saved[key] = value }, removeData: (key) => { delete saved[key] } }
-}
-
 test('the marks a save writes read back the same, and so do marks saved under the old circle names', () => {
   const unticked = { ...ALL, circle: false, cornerCircle: false }
-  const store = memoryStore()
+  const store = fakeStore()
   const current = settingDefaults()
   saveChangedSettings(store, { ...current, marks: unticked }, current)
   assert.deepEqual(readSettings(store).marks, unticked)
-  const oldSave = memoryStore({ EdgeMarks_marks: { x: true, directions: true, dot: false, cornerX: true, cornerDot: false } })
+  const oldSave = fakeStore({ EdgeMarks_marks: { x: true, directions: true, dot: false, cornerX: true, cornerDot: false } })
   assert.deepEqual(readSettings(oldSave).marks, unticked)
 })
 
 test('saving one mark unticked writes the key, and saving every box ticked removes it so the next read is all ticked', () => {
-  const store = memoryStore()
+  const store = fakeStore()
   const current = settingDefaults()
   assert.deepEqual(saveChangedSettings(store, { ...current, marks: { ...ALL, directions: false } }, current), ['marks'])
-  assert.deepEqual(store.saved, { EdgeMarks_marks: { ...ALL, directions: false } })
+  assert.deepEqual(store.data, { EdgeMarks_marks: { ...ALL, directions: false } })
   assert.deepEqual(saveChangedSettings(store, { ...current, marks: ALL }, current), ['marks'])
-  assert.deepEqual(store.saved, {})
+  assert.deepEqual(store.data, {})
   assert.deepEqual(readSettings(store).marks, ALL)
 })
 
@@ -1987,7 +1984,7 @@ test('flags decode each name on its own: only a saved false is off, a non-object
 
 test('readSettings normalizes what is saved under each key and falls back for the rest', () => {
   const saved = { PenColor_thickness: 9, PenColor_opacity: 57, PenColor_outline: false, PenColor_sliders: { opacity: false } }
-  const read = readSettings({ getData: (key) => saved[key] })
+  const read = readSettings(fakeStore(saved))
   assert.deepEqual(read, {
     ...settingDefaults(),
     thickness: 9,
@@ -2172,20 +2169,7 @@ test('without a pen tool, every step that needs it is reported under the first i
 
 // The startup guard: a page with no Framework is not SudokuPad and stays silent; a Framework without getApp holds every install step off, which the probe reports.
 function loadWithFramework (framework) {
-  const file = require.resolve('../pen-tool-extras.user.js')
-  const warnings = []
-  const warn = console.warn
-  console.warn = (...args) => warnings.push(args.join(' '))
-  if (framework !== undefined) global.Framework = framework
-  delete require.cache[file]
-  try {
-    require(file)
-  } finally {
-    console.warn = warn
-    delete global.Framework
-    delete require.cache[file]
-  }
-  return warnings
+  return startScript('../pen-tool-extras.user.js', { Framework: framework }).warnings
 }
 
 // Runs `fn` on a page with a document and a window that take every call the startup makes and find none of SudokuPad's own elements.
@@ -2242,7 +2226,7 @@ test('copiedSettings: every setting at the value in force, the pen colors once s
     ToolPen_linemode: 'edgeonly',
     ColorByDigit_auto: true
   }
-  const copied = JSON.parse(copiedSettings({ getData: (key) => saved[key] ?? null }))
+  const copied = JSON.parse(copiedSettings(fakeStore(saved)))
   assert.deepEqual(Object.keys(copied).sort(), [...Object.values(SETTINGS).map((row) => row.key), 'PenColor_colors'].sort())
   assert.equal(copied.PenColor_thickness, 9)
   assert.equal(copied.PenColor_opacity, SETTINGS.opacity.fallback)

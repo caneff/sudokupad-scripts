@@ -9,6 +9,7 @@ const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
+const { startScript, withScript: runScript, withoutPath } = require('./unit-start.js')
 const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 
 // The chips a profile pair draws in `style`; the digit profile is the cell profile unless given.
@@ -205,11 +206,11 @@ test('a fresh install returns copies, so editing one never edits the preloads', 
 })
 
 test('saved groups equal to a preload make that preload the active profile, beside the other preloads', () => {
-  const state = fromStored(null, cloneOf(ODD))
+  const state = fromStored(null, structuredClone(ODD))
   assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
   assert.equal(state.active, 1)
-  assert.deepEqual(activeGroups(fromStored(undefined, cloneOf(LOW))), LOW)
-  assert.equal(fromStored(undefined, cloneOf(LOW)).active, 0)
+  assert.deepEqual(activeGroups(fromStored(undefined, structuredClone(LOW))), LOW)
+  assert.equal(fromStored(undefined, structuredClone(LOW)).active, 0)
 })
 
 test('saved groups that equal no preload become the active profile named Custom, first, beside the five preloads, even when empty', () => {
@@ -230,7 +231,7 @@ test('saved groups that are not a list of groups, and no profiles, fall back to 
 
 test('saved profiles win over saved groups, keeping their order and active one', () => {
   const saved = { profiles: [{ name: 'A', groups: [] }, { name: 'B', groups: LOW }], active: 1 }
-  assert.deepEqual(fromStored(saved, cloneOf(ODD)), saved)
+  assert.deepEqual(fromStored(saved, structuredClone(ODD)), saved)
 })
 
 test('saved profiles are untrusted: any unusable profile, or more than six, falls back to a fresh install', () => {
@@ -243,9 +244,9 @@ test('saved profiles are untrusted: any unusable profile, or more than six, fall
 
 test('one unusable saved profile refuses the whole state, as a paste of it is refused: the groups saved before profiles stand in, and the state is kept under _unreadable', () => {
   const saved = { profiles: [{ name: 'A', groups: [] }, { name: '', groups: [] }, { name: 'C', groups: LOW }], active: 2 }
-  const store = fakeStore({ [PROFILES]: saved, [LEGACY]: cloneOf(ODD) })
+  const store = fakeStore({ [PROFILES]: saved, [LEGACY]: structuredClone(ODD) })
   const { result } = quietly(() => stateFromStored(store))
-  assert.deepEqual(result, fromStored(null, cloneOf(ODD)))
+  assert.deepEqual(result, fromStored(null, structuredClone(ODD)))
   assert.deepEqual(store.data[`${PROFILES}_unreadable`], saved)
   assert.deepEqual(readPaste(JSON.stringify({ [PROFILES]: saved })), { values: {}, skipped: 1 })
 })
@@ -267,26 +268,24 @@ test('withAddedPreloads appends the named preloads after the saved profiles and 
 })
 
 test('withAddedPreloads skips a preload whose groups a profile already has, whatever its name', () => {
-  const saved = { profiles: [{ name: 'Mine', groups: cloneOf(MODULAR) }, { name: 'Custom', groups: [] }, { name: 'Odd/Even', groups: ODD }, { name: 'Z', groups: [] }], active: 3 }
+  const saved = { profiles: [{ name: 'Mine', groups: structuredClone(MODULAR) }, { name: 'Custom', groups: [] }, { name: 'Odd/Even', groups: ODD }, { name: 'Z', groups: [] }], active: 3 }
   const next = withAddedPreloads(saved, ['Entropic', 'Modular'])
   assert.deepEqual(names(next), ['Mine', 'Custom', 'Odd/Even', 'Z', 'Entropic'])
   assert.equal(next.active, 3)
   assert.deepEqual(withAddedPreloads(next, ['Entropic', 'Modular']), next)
-  const digits = { profiles: [{ name: 'Nine', groups: cloneOf(EACH_DIGIT) }], active: 0 }
+  const digits = { profiles: [{ name: 'Nine', groups: structuredClone(EACH_DIGIT) }], active: 0 }
   assert.deepEqual(withAddedPreloads(digits, ['Each digit']), digits)
 })
 
 test('withAddedPreloads stops at the profile limit and never changes the state it is given', () => {
   const full = { profiles: ['a', 'b', 'c', 'd', 'e'].map((name) => ({ name, groups: [] })), active: 0 }
-  const before = cloneOf(full)
+  const before = structuredClone(full)
   assert.deepEqual(names(withAddedPreloads(full, ['Entropic', 'Modular'])), ['a', 'b', 'c', 'd', 'e', 'Entropic'])
   assert.deepEqual(full, before)
   const next = withAddedPreloads(full, ['Entropic', 'Modular'])
   next.profiles[5].groups[0].digits.push('x')
   assert.deepEqual(PRELOADS.Entropic[0].digits, ['0', '1', '2', '3'])
 })
-
-function cloneOf (value) { return JSON.parse(JSON.stringify(value)) }
 
 const three = { profiles: [{ name: 'A', groups: LOW }, { name: 'B', groups: ODD }, { name: 'C', groups: [] }], active: 1 }
 
@@ -337,7 +336,7 @@ test('indexAfterDelete and indexAfterMove: a chosen index follows its own profil
 })
 
 test('edits never change the state they are given', () => {
-  const before = cloneOf(three)
+  const before = structuredClone(three)
   copyProfile(three, 0); renameProfile(three, 0, 'Z'); deleteProfile(three, 0); moveProfile(three, 0, 2); setActive(three, 0); setProfileGroups(three, 0, [])
   assert.deepEqual(three, before)
 })
@@ -934,9 +933,6 @@ const pickRow = (target, index) => {
 const pageWindow = () => ({ getComputedStyle: () => ({ getPropertyValue: () => '#3e63dd', color: 'rgb(62, 99, 221)' }), addEventListener: () => {}, MutationObserver: class { observe () {} } })
 
 test('entry point: wires the settings entry, the button, refreshControls, and a press on the button steps the mode', async () => {
-  const path = require.resolve('../color-by-digit.user.js')
-  const saved = require.cache[path]
-  delete require.cache[path]
   const calls = []
   const app = {
     puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [], undoStack: [], redoStack: [], addEventListener: () => {} },
@@ -946,9 +942,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     on: () => {},
     refreshControls: () => calls.push(['refresh'])
   }
-  global.document = pageDocument()
-  global.window = pageWindow()
-  global.Framework = {
+  const Framework = {
     getApp: () => Promise.resolve(app),
     getData: () => null,
     setData: (key, value) => calls.push(['save', key, value]),
@@ -959,8 +953,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     closeDialog: () => {},
     app: { tools: { colour: {} } }
   }
-  try {
-    require(path)
+  await runScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async () => {
     await new Promise((resolve) => setImmediate(resolve))
     const order = calls.map((c) => c[0])
     assert.ok(order.includes('setting'), `no setting in ${order}`)
@@ -969,52 +962,21 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     assert.deepEqual(savedModes(), [])
     press()
     assert.deepEqual(savedModes(), ['digit'])
-  } finally {
-    delete global.Framework; delete global.document; delete global.window
-    delete require.cache[path]
-    if (saved) require.cache[path] = saved
-  }
+  })
 })
 
 test('entry point: a Framework without getApp turns off the features that need an app, each named once, and starts the rest', async () => {
-  const path = require.resolve('../color-by-digit.user.js')
-  const saved = require.cache[path]
-  delete require.cache[path]
-  const warnings = []
-  const warn = console.warn
-  console.warn = (...args) => warnings.push(args.join(' '))
   const calls = []
-  global.document = pageDocument()
-  global.window = pageWindow()
-  global.Framework = { getData: () => null, setData () {}, removeData () {}, addSetting: () => calls.push('setting'), showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }
-  try {
-    require(path)
+  const Framework = { getData: () => null, setData () {}, removeData () {}, addSetting: () => calls.push('setting'), showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }
+  await runScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async ({ warnings }) => {
     await new Promise((resolve) => setImmediate(resolve))
     assert.deepEqual(warnings, ['color-by-digit: cell coloring, mode button, redraw after the puzzle loads skipped because SudokuPad has no Framework.getApp'])
     assert.deepEqual(calls, ['setting'])
-  } finally {
-    console.warn = warn
-    delete global.Framework; delete global.document; delete global.window
-    delete require.cache[path]
-    if (saved) require.cache[path] = saved
-  }
+  })
 })
 
 test('entry point: no Framework at all is left alone without a warning', () => {
-  const path = require.resolve('../color-by-digit.user.js')
-  const saved = require.cache[path]
-  delete require.cache[path]
-  const warnings = []
-  const warn = console.warn
-  console.warn = (...args) => warnings.push(args.join(' '))
-  try {
-    require(path)
-    assert.deepEqual(warnings, [])
-  } finally {
-    console.warn = warn
-    delete require.cache[path]
-    if (saved) require.cache[path] = saved
-  }
+  assert.deepEqual(startScript('../color-by-digit.user.js', { Framework: undefined }).warnings, [])
 })
 
 // A SudokuPad stand-in for the cell coloring wrapper: cells hold a digit and colors, `act` applies
@@ -1063,13 +1025,8 @@ function mockApp (cellDefs, { single = false } = {}) {
 // `stored` is what Framework.getData answers besides the Odd/Even profile; nothing stored starts the mode at Cell.
 // Framework.setData writes to the same store, which the test reads as `app.stored`.
 async function withScript (app, fn, stored = {}) {
-  const path = require.resolve('../color-by-digit.user.js')
-  const saved = require.cache[path]
-  delete require.cache[path]
   app.stored = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0 }, ...stored }
-  global.document = pageDocument()
-  global.window = pageWindow()
-  global.Framework = {
+  const Framework = {
     getApp: () => Promise.resolve(app),
     getData: (key) => app.stored[key] ?? null,
     setData: (key, value) => { app.stored[key] = value },
@@ -1080,15 +1037,10 @@ async function withScript (app, fn, stored = {}) {
     closeDialog: () => {},
     app: { tools: { colour: {} } }
   }
-  try {
-    require(path)
+  await runScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async () => {
     await new Promise((resolve) => setImmediate(resolve))
     await fn(app)
-  } finally {
-    delete global.Framework; delete global.document; delete global.window
-    delete require.cache[path]
-    if (saved) require.cache[path] = saved
-  }
+  })
 }
 
 const select = (app, i) => app.select(app.puzzle.cells[i])
@@ -1352,7 +1304,7 @@ test('every preload comes out of canonicalGroups unchanged', () => {
 
 test('canonicalGroups and the paint operations do not change the list they were given', () => {
   const before = [g('a', ['2']), g('b', ['1']), g('a', ['3'])]
-  const copy = JSON.parse(JSON.stringify(before))
+  const copy = structuredClone(before)
   canonicalGroups(before)
   paintDigit(before, '2', 'b')
   setDigitGroup(before, '1', null)
@@ -1515,10 +1467,10 @@ test('rowAfterKey: Enter and Space stay, the arrows step and wrap at both ends, 
 test('copiedSettings: the profiles and the mode in force, groups saved before profiles included, and no auto mode', () => {
   const saved = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups }], active: 0 }, ColorByDigit_mode: 'digit', ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, ColorByDigit_groups: [{ key: 'z', digits: ['1'] }], ColorByDigit_auto: true, Other_key: 1 }
   const { ColorByDigit_groups: _legacy, ColorByDigit_auto: _auto, Other_key: _other, ...ours } = saved
-  assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => saved[key] ?? null })), JSON.parse(JSON.stringify(ours)))
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore(saved))), structuredClone(ours))
   const legacyOnly = { ColorByDigit_groups: [{ key: '3', digits: ['1', '2'] }] }
-  const copied = JSON.parse(copiedSettings({ getData: (key) => legacyOnly[key] ?? null }))
-  assert.deepEqual(copied.ColorByDigit_profiles, JSON.parse(JSON.stringify(fromStored(null, legacyOnly.ColorByDigit_groups))))
+  const copied = JSON.parse(copiedSettings(fakeStore(legacyOnly)))
+  assert.deepEqual(copied.ColorByDigit_profiles, structuredClone(fromStored(null, legacyOnly.ColorByDigit_groups)))
   assert.equal(copied.ColorByDigit_profiles.profiles[copied.ColorByDigit_profiles.active].groups[0].key, '3')
   assert.equal(copied.ColorByDigit_mode, 'cell')
   assert.equal('ColorByDigit_auto' in copied, false)
@@ -1546,7 +1498,7 @@ test('pastedSettings: settings copied before the mode, with auto mode and no mod
 
 test('copiedSettings and pastedSettings carry the digit pick and "Use digit colors", and settings without them paste as synced and on', () => {
   const saved = { ColorByDigit_profiles: { profiles: [{ name: 'A', groups }, { name: 'B', groups: [] }], active: 0, digitActive: 1, useDigitColors: false } }
-  const copied = copiedSettings({ getData: (key) => saved[key] ?? null })
+  const copied = copiedSettings(fakeStore(saved))
   assert.deepEqual(JSON.parse(copied).ColorByDigit_profiles, saved.ColorByDigit_profiles)
   const pasted = readPaste(copied).values.ColorByDigit_profiles
   assert.equal(pasted.digitActive, 1)
@@ -1893,12 +1845,6 @@ const completeRoots = () => {
   const app = { act () {}, select () {}, deselect () {}, on () {}, refreshControls () {}, puzzle: { cells: [], selectedCells: [], undoStack: [], redoStack: [], addEventListener () {} } }
   return { Framework: { getApp () {}, getData () {}, setData () {}, removeData () {}, addControlButton () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }, app }
 }
-const withoutPath = (roots, internal) => {
-  const [root, ...keys] = internal.split('.')
-  const last = keys.pop()
-  delete keys.reduce((owner, key) => owner[key], roots[root])[last]
-  return roots
-}
 
 test('Color by Digit declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
   assert.deepEqual(lackingInternals(FEATURES, completeRoots()), new Map())
@@ -1930,21 +1876,17 @@ test('a document listener of the mode button whose own code throws turns the but
 })
 
 test('with cell coloring off, the icon and the digit shades are drawn once the puzzle has loaded, and not before', async () => {
-  const path = require.resolve('../color-by-digit.user.js')
-  const saved = require.cache[path]
-  delete require.cache[path]
   const listeners = []
   const cells = []
   const icon = { outerHTML: 'old icon' }
   const appended = []
   // No `act`: SudokuPad has no cell coloring to wait for, so only the icon and the digit shades wait on the load.
   const app = { puzzle: { cells, selectedCells: [], undoStack: [], redoStack: [], addEventListener: (type, fn) => listeners.push({ type, fn }) }, deselect: () => {}, select: () => {}, on: () => {}, refreshControls: () => {} }
-  global.document = pageDocument({
+  const document = pageDocument({
     querySelector: (selector) => (selector === '#control-colorbydigit .icon' ? icon : null),
     head: { appendChild: (el) => appended.push(el) }
   })
-  global.window = pageWindow()
-  global.Framework = {
+  const Framework = {
     getApp: () => Promise.resolve(app),
     getData: (key) => (key === 'ColorByDigit_mode' ? 'digit' : null),
     setData () {},
@@ -1955,8 +1897,7 @@ test('with cell coloring off, the icon and the digit shades are drawn once the p
     closeDialog () {},
     app: { tools: { colour: {} } }
   }
-  try {
-    require(path)
+  await runScript('../color-by-digit.user.js', { document, window: pageWindow(), Framework }, async () => {
     await new Promise((resolve) => setImmediate(resolve))
     const loaded = listeners.filter(({ type }) => type === 'progressloaded')
     assert.equal(loaded.length, 1, 'one listener waits for the load')
@@ -1966,11 +1907,7 @@ test('with cell coloring off, the icon and the digit shades are drawn once the p
     loaded[0].fn()
     assert.match(icon.outerHTML, /^<div class="icon"/, 'the icon is drawn again')
     assert.equal(appended.some((el) => el.id === 'color-by-digit-digits'), true, 'the digit shades are added')
-  } finally {
-    delete global.Framework; delete global.document; delete global.window
-    delete require.cache[path]
-    if (saved) require.cache[path] = saved
-  }
+  })
 })
 
 // The settings dialog's draft: three profiles over twoPages' colors, the second one active.
@@ -2066,8 +2003,9 @@ test('reduceDraft reload: pasted settings replace the draft, selecting their act
 
 // The dialog's focus, hover and press states, hit areas, grab cursor and keyboard.
 const RING = SUDOKUPAD_PURPLE
-const cssRules = (css) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => [m[1].split(',').map((x) => x.trim()), m[2].replace(/\s+/g, ' ').trim()])
-const rulesFor = (css, selector) => cssRules(css).filter(([selectors]) => selectors.includes(selector)).map(([, d]) => d).join(' ')
+const rulesFor = (css, selector) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+  .filter((m) => m[1].split(',').map((x) => x.trim()).includes(selector))
+  .map((m) => m[2].replace(/\s+/g, ' ').trim()).join(' ')
 
 test('the dialog\'s buttons, digit keys, swatches and profile rows show a 2 px ring on keyboard focus only', () => {
   for (const part of ['button', '[data-role="swatch"]', '.cbd-profile']) {
