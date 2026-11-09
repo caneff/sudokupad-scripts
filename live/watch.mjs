@@ -118,16 +118,18 @@ export async function watch ({ liveVersion, lastVersion, lastFullRun, now, runSu
   return ok ? 'green' : 'red'
 }
 
-export const run = (command, args, { env = process.env, input } = {}) => new Promise((resolve, reject) => {
-  const child = spawn(command, args, { cwd: ROOT, env, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'inherit'] })
+// `mergeStderr` also captures stderr into the output (a crash before any verdict prints only there); `timeout` kills a child still running after that many ms.
+export const run = (command, args, { env = process.env, input, mergeStderr = false, timeout } = {}) => new Promise((resolve, reject) => {
+  const child = spawn(command, args, { cwd: ROOT, env, timeout, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', mergeStderr ? 'pipe' : 'inherit'] })
   let output = ''
   child.stdout.on('data', (d) => { output += d; process.stdout.write(d) })
+  child.stderr?.on('data', (d) => { output += d; process.stderr.write(d) })
   child.on('error', reject)
   child.on('close', (code) => resolve({ ok: code === 0, output }))
   if (input !== undefined) child.stdin.end(input)
 })
 
-// `once`: file only when no open issue has the title. `comment` (with `once`): comment on that open issue instead of doing nothing.
+// `comment`, with `once`: the text to comment on the open issue that has the title, instead of doing nothing.
 export async function fileIssue ({ title, body, once, comment }, runGh = run) {
   if (once) {
     const list = await runGh('gh', ['issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '200', '--json', 'number,title', '--jq', '.[] | "\\(.number)\t\\(.title)"'])

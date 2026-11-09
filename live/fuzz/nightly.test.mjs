@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { fileIssue } from '../watch.mjs'
+import { fileIssue, run } from '../watch.mjs'
 import { didNotRunIssue, failureTitle, nightly, parseFuzzOutput } from './nightly.mjs'
 
 const failedOutput = (seed, error, steps = ['click cell 3', 'digit 5']) => [
@@ -47,12 +47,15 @@ describe('a failing fuzz run', () => {
 
   it('comments on the open issue when a second identical failure comes, filing nothing', async () => {
     const gh = fakeGh()
+    await night(gh, failedOutput(76, CRASH))
     await night(gh, failedOutput(77, RULE))
     await night(gh, failedOutput(78, RULE.replace('r1c1-r1c2', 'r2c2-r2c3')))
-    assert.deepEqual(verbs(gh), ['issue create', 'issue comment'])
+    assert.deepEqual(verbs(gh), ['issue create', 'issue create', 'issue comment'])
     const comment = gh.calls.find((c) => c.verb === 'issue comment')
-    assert.equal(comment.args[2], '1')
-    assert.match(comment.input, /seed 78/)
+    assert.equal(comment.args[2], '2')
+    assert.match(comment.input, /^The same failure again, seed 78/)
+    assert.doesNotMatch(comment.input, /Filed by/)
+    assert.match(comment.input, /r2c2-r2c3/)
   })
 
   it('files a second issue for a different failure', async () => {
@@ -69,6 +72,16 @@ describe('a run with no failure', () => {
     const gh = fakeGh()
     assert.equal(await night(gh, 'fuzz passed: 900 action lists on the 9x9 puzzle in 1800 s (seed 5)\n', true), 'green')
     assert.deepEqual(gh.calls, [])
+  })
+
+  it('files the did-not-run issue when the exit is non-zero even though "fuzz passed" was printed', async () => {
+    const gh = fakeGh()
+    assert.equal(await night(gh, 'fuzz passed: 900 action lists on the 9x9 puzzle in 1800 s (seed 5)\n', false), 'did-not-run')
+  })
+
+  it('files the did-not-run issue when no action list ran, which is not a pass', async () => {
+    const gh = fakeGh()
+    assert.equal(await night(gh, 'fuzz passed: 0 action lists on the 9x9 puzzle in 1 s (seed 5)\n', true), 'did-not-run')
   })
 
   it('files one did-not-run issue, and no second while it is open, when the fuzz printed no verdict', async () => {
@@ -91,6 +104,17 @@ describe('failureTitle', () => {
   it('names the broken rules once each, whatever the step and detail', () => {
     assert.equal(failureTitle('rules broken after "a": undo-to-start: x; pen-lines-drawn: y; undo-to-start: z'), 'Fuzz: rule broken: undo-to-start, pen-lines-drawn')
   })
+  it('gives an error caught after the last action the same title as one caught after a named action', () => {
+    const detail = 'page-stays-dark: the page color rgb(255, 255, 255) is not dark'
+    assert.equal(failureTitle(`rule broken after the last action: ${detail}`), failureTitle(`rule broken after "blur": ${detail}`))
+    assert.match(failureTitle('crash signal after the last action: page error or console error: boom'), /^Fuzz: crash: /)
+  })
+  it('never ends in a space, which a stored title would lose', () => {
+    for (let n = 100; n < 125; n++) {
+      const title = failureTitle(`crash signal after "s": ${'a'.repeat(n - 30)} ${'b'.repeat(40)}`)
+      assert.equal(title, title.trimEnd())
+    }
+  })
   it('folds numbers in a crash signal, so another seed has the same title', () => {
     assert.equal(failureTitle('crash signal after "s": page error or console error: boom 12'), failureTitle('crash signal after "t": page error or console error: boom 99'))
   })
@@ -107,6 +131,20 @@ describe('parseFuzzOutput', () => {
 describe('the did-not-run title in the workflow', () => {
   it('is the same text fuzz.yml files under, so the open-issue check matches across the two', () => {
     const yml = readFileSync(new URL('../../.github/workflows/fuzz.yml', import.meta.url), 'utf8')
-    assert.ok(yml.includes(`TITLE: '${didNotRunIssue('x').title}'`))
+    assert.match(yml, new RegExp(`TITLE: '${didNotRunIssue('x').title}'`))
+  })
+})
+
+describe('the real run', () => {
+  it('captures what a crashing child prints on stderr, so a did-not-run issue holds the cause', async () => {
+    const r = await run('node', ['-e', 'console.error("no chromium here"); process.exit(1)'], { mergeStderr: true })
+    assert.equal(r.ok, false)
+    assert.match(r.output, /no chromium here/)
+  })
+
+  it('kills a child still running after the timeout, which then has no verdict', async () => {
+    const r = await run('node', ['-e', 'setTimeout(() => {}, 60000)'], { timeout: 200 })
+    assert.equal(r.ok, false)
+    assert.equal(parseFuzzOutput(r.output), null)
   })
 })

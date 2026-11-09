@@ -119,7 +119,7 @@ in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `
   `Fuzz: crash: <first signal>` (numbers folded to `N`) for a crash signal. The body has the seed, the puzzle, the shrunk steps, the replay command, the shared
   error log and the run's link. When an open issue already has that title, the run comments on it with the same details and files nothing. Closing the issue
   is what makes the next occurrence file a new one.
-- **A "did not run" issue.** A run that ends with neither verdict (no Chromium, a crash before the first list, the process not starting) files
+- **A "did not run" issue.** A run that ends with neither verdict (no Chromium, a crash before the first list, the process not starting, a hang killed after 50 minutes, a pass that ran no action list) files
   "Fuzz did not run: the nightly fuzz could not be checked", once while it is open. A workflow step before the fuzz that fails (`npm ci`, the Chromium
   install) files the same issue from the workflow.
 - **Shared code.** Filing is `fileIssue` of `live/watch.mjs` (its `comment` option makes a duplicate a comment). `live/fuzz/nightly.test.mjs` tests it in
