@@ -1,3 +1,4 @@
+// Not a check itself, so `live/**/*.live.mjs` skips it.
 /* global Framework */
 import assert from 'node:assert/strict'
 import { openPenTool } from './pen.mjs'

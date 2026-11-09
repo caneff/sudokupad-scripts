@@ -1,3 +1,4 @@
+// Not a check itself, so `live/**/*.live.mjs` skips it.
 /* global Framework, loadFPuzzle */
 import assert from 'node:assert/strict'
 import { LOAD_MS } from './cache.mjs'

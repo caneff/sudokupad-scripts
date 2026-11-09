@@ -37,6 +37,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
   const rowNames = () => p.$$eval(PROFILE_ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label')))
   const pulldownNames = () => p.$$eval(`${EDITOR} select[data-role=cell-profile] option`, (es) => es.map((e) => e.textContent))
   const wrongCount = (groups) => wrongCountOn(p, groups)
+  // A given ignores the key.
   const enter = async (r, c, key) => {
     await selectCell(p, r, c)
     await p.keyboard.press(key)
@@ -170,6 +171,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     await closeEditor('Save')
     assert.deepEqual((await getState()).profiles.map((x) => x.name), names)
     await openEditor()
+    // The last profile cannot be deleted, so the loop stops at one.
     for (let left = MAX_PROFILES; left > 1; left--) {
       await deleteProfileRow(p, 1)
       assert.equal(await settle(async () => (await rowNames()).length, left - 1), left - 1, 'a delete removes one row')

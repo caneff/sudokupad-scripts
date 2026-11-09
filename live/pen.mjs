@@ -1,3 +1,4 @@
+// Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { cellCentre, mouseDrag } from './board.mjs'
 import { clickUntil, SETTLE_MS, settle } from './settle.mjs'

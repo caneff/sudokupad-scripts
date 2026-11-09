@@ -1,3 +1,4 @@
+// Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { pickDraw } from './draw-tool/draw-tool-fixtures.mjs'
 import { captureConsoleErrors } from './page.mjs'

@@ -1,5 +1,5 @@
 /* global Framework */
-// The `page` shape is documented in rules.mjs.
+// The `page` shape is documented in rules.mjs. Not a check itself, so `live/**/*.live.mjs` skips it.
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { PROFILES_KEY } from '../color-by-digit/color-by-digit-fixtures.mjs'
