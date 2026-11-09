@@ -3,7 +3,7 @@
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { PROFILES_KEY } from '../color-by-digit/color-by-digit-fixtures.mjs'
-import { saved as savedNotes, SEEN_TEXTS, TEXTS } from '../draw-tool/draw-tool-fixtures.mjs'
+import { saved as savedNotes, SEEN_TEXTS, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { POLL_MS } from '../settle.mjs'
 import { rulesPaneFits } from './rules.mjs'
 

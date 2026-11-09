@@ -3,7 +3,7 @@
 // Replay under a real Tampermonkey install and on crackingthecryptic.com stays untested.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { buttonIds, DIGIT_BUTTON, pickDraw, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
+import { buttonIds, DIGIT_BUTTON, pickTextAnywhere, TOOL_KEYS, texts as noteTexts, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { seedOddEvenCells } from './puzzles.mjs'
 import { openWith, SCRIPT_FILES, useBrowser } from './session.mjs'
 import { cellCentre, mouseDrag, placeNote } from './board.mjs'
@@ -57,7 +57,7 @@ for (const [order, files] of INSTALL_ORDERS) {
       actions: await read(() => Framework.app.puzzle.replayStack.length),
       pen: await penStrings(p),
       penDrawn: await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => e.outerHTML)),
-      draw: { texts: await drawTexts(p) }
+      notes: { texts: await noteTexts(p) }
     })
 
     before(async () => { ;({ context, p, errors } = await openSolver(files)) })
@@ -95,7 +95,7 @@ for (const [order, files] of INSTALL_ORDERS) {
       assert.equal(await settle(async () => (await penStrings(p)).length > count, true), true, 'an edge mark appeared')
       // Text Anywhere: a note
       await placeNote(p, [6.2, 6.25], '15')
-      assert.deepEqual(await drawTexts(p), ['15'])
+      assert.deepEqual(await noteTexts(p), ['15'])
       await useTool(DIGIT_BUTTON)
       solved = await board()
     })
@@ -111,7 +111,7 @@ for (const [order, files] of INSTALL_ORDERS) {
       // a solid line over two cells, a dashed one, an arrow line, and an X on a cell's right edge
       assert.deepEqual([...solved.pen].sort(), ['11', '11', '1a', '1a', '1j', '1j', '31'])
       assert.equal(solved.penDrawn.length, 7)
-      assert.deepEqual(solved.draw.texts, ['15'])
+      assert.deepEqual(solved.notes.texts, ['15'])
     })
 
     it('the replay button opens the tool, and its Start button rewinds the digits, marks and pen lines', async () => {
@@ -138,61 +138,61 @@ for (const [order, files] of INSTALL_ORDERS) {
       // Color by Digit only adds a color that is missing, so a coloring of its own during playback ends on the same colors;
       // the replay's action count shows it, since it would add actions.
       assert.equal(played.actions, solved.actions, 'playback adds no action beyond what the replay holds')
-      assert.deepEqual(played.draw, solved.draw, 'the Text Anywhere notes are not part of the replay, and playback leaves it')
+      assert.deepEqual(played.notes, solved.notes, 'the Text Anywhere notes are not part of the replay, and playback leaves it')
     })
 
     it('no page error', () => { assert.deepEqual(errors, []) })
   })
 }
 
-describe('the replay tool\'s button and key with Draw installed', { concurrency: false }, () => {
-  let withDraw, without
+describe('the replay tool\'s button and key with Text Anywhere installed', { concurrency: false }, () => {
+  let withTextAnywhere, without
   const keyTool = async (p, key) => {
     await p.click(DIGIT_BUTTON)
     await settle(() => tool(p), 'normal')
     await p.keyboard.press(key)
-    // A "nothing happened in this long" window: settle would return on its first read of 'normal', so a late switch to Draw would go unseen.
+    // A "nothing happened in this long" window: settle would return on its first read of 'normal', so a late switch to Text Anywhere would go unseen.
     await p.waitForTimeout(KEY_SWITCHES_MS)
     return tool(p)
   }
 
   before(async () => {
-    withDraw = await openSolver(SCRIPT_FILES)
+    withTextAnywhere = await openSolver(SCRIPT_FILES)
     without = await openSolver(SCRIPT_FILES.filter((f) => f !== 'draw-tool.user.js'))
   })
   after(async () => {
-    await withDraw?.context.close()
+    await withTextAnywhere?.context.close()
     await without?.context.close()
   })
 
-  it('the key that selects the replay tool is the same with Draw as without it, and no key selects Draw', async () => {
+  it('the key that selects the replay tool is the same with Text Anywhere as without it, and no key selects Text Anywhere', async () => {
     const names = (page) => page.evaluate(() => Framework.app.getToolNames())
     const replayAt = (await names(without.p)).indexOf('replay')
     assert.notEqual(replayAt, -1, 'the replay tool is installed')
     assert.equal(replayAt < TOOL_KEYS.length, true, 'it has a key')
-    assert.equal((await names(withDraw.p)).includes('draw'), true, 'Draw is installed')
+    assert.equal((await names(withTextAnywhere.p)).includes('textanywhere'), true, 'Text Anywhere is installed')
     assert.equal(await keyTool(without.p, TOOL_KEYS[replayAt]), 'replay')
-    assert.equal(await keyTool(withDraw.p, TOOL_KEYS[replayAt]), 'replay')
+    assert.equal(await keyTool(withTextAnywhere.p, TOOL_KEYS[replayAt]), 'replay')
     const reached = []
-    for (const key of TOOL_KEYS) reached.push(await keyTool(withDraw.p, key))
-    assert.equal(reached.includes('draw'), false, `the keys reach ${reached.join()}`)
+    for (const key of TOOL_KEYS) reached.push(await keyTool(withTextAnywhere.p, key))
+    assert.equal(reached.includes('textanywhere'), false, `the keys reach ${reached.join()}`)
   })
 
-  it('the replay button selects the tool with Draw installed, and Draw\'s button still selects Draw', async () => {
-    const { p } = withDraw
+  it('the replay button selects the tool with Text Anywhere installed, and Text Anywhere\'s button still selects Text Anywhere', async () => {
+    const { p } = withTextAnywhere
     await p.click(DIGIT_BUTTON)
     assert.equal(await clickUntil(() => p.click(REPLAY_BUTTON), () => tool(p), 'replay', SETTLE_MS), 'replay')
-    assert.equal(await pickDraw(p), 'draw')
+    assert.equal(await pickTextAnywhere(p), 'textanywhere')
   })
 
   it('the replay button comes before Text Anywhere\'s among the tool buttons on screen, as it does without it', async () => {
-    const [withIds, withoutIds] = [await buttonIds(withDraw.p), await buttonIds(without.p)]
-    assert.equal(withIds.indexOf('control-replay') < withIds.indexOf('control-draw'), true, withIds.join())
-    assert.deepEqual(withIds.filter((id) => id !== 'control-draw'), withoutIds)
+    const [withIds, withoutIds] = [await buttonIds(withTextAnywhere.p), await buttonIds(without.p)]
+    assert.equal(withIds.indexOf('control-replay') < withIds.indexOf('control-textanywhere'), true, withIds.join())
+    assert.deepEqual(withIds.filter((id) => id !== 'control-textanywhere'), withoutIds)
   })
 
   it('no page error', () => {
-    assert.deepEqual(withDraw.errors, [])
+    assert.deepEqual(withTextAnywhere.errors, [])
     assert.deepEqual(without.errors, [])
   })
 })

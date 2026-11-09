@@ -95,7 +95,7 @@ drawing code with its live test; L is bigger. None of them stores a new pen valu
 `site/pen-tool-extras.html`; `docs/research/sudokupad-pen-tool.md`, `sudokupad-pen-line-mode.md`,
 `sudokupad-pen-edge-marks.md`, `puzzle-ui-pen-tools.md`, `large-puzzle-ui-right-drag.md`;
 `docs/research/pen-tool-extras/pen-line-join-nub.md`, `pen-tool-extras-redraw-cost.md`, `pen-tool-extras-feature-cost.md`,
-`pen-tool-extras-opacity.md`; `docs/research/draw-tool/drag-feedback-other-apps.md`. The pictures in `site/` were not
+`pen-tool-extras-opacity.md`; `docs/research/text-anywhere/drag-feedback-other-apps.md`. The pictures in `site/` were not
 opened; the text of the page was. Issues: the two searches the brief names (titles), plus searches for hover, preview,
 cursor, undo, highlight, keyboard, focus, animation and snap; bodies read for #530, #535, #356, #243, #248.
 

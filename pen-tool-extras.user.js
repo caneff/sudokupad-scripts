@@ -2007,7 +2007,7 @@
     })
   }
 
-  // Wrapped after the line erase and the arrow lines, so a mark's click and drawing come first and the marks layer stays on top of an arrow line.
+  // Wrapped after the line erase and the arrow lines, so a mark's click and its rendering come first and the marks layer stays on top of an arrow line.
   function installMarks (app, tool, sudokupadClick) {
     wrapRenderPenMarks(app.svgRenderer)
     wrapClickCell(tool, sudokupadClick)

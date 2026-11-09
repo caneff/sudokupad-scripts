@@ -3,14 +3,14 @@
 import assert from 'node:assert/strict'
 import { openPenTool } from './pen.mjs'
 import { settle } from './settle.mjs'
-import * as draw from './draw-tool/draw-tool-fixtures.mjs'
+import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
 
 export const pickTool = async (p, name) => {
   if (name === 'pen') await openPenTool(p)
-  else if (name === 'draw') await draw.pickDraw(p)
+  else if (name === 'textanywhere') await textAnywhere.pickTextAnywhere(p)
   else {
     await p.click(`#control-${name}`)
-    assert.equal(await settle(() => draw.tool(p), name), name, `${name} is the current tool`)
+    assert.equal(await settle(() => textAnywhere.tool(p), name), name, `${name} is the current tool`)
   }
 }
 

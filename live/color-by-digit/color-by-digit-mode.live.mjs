@@ -88,7 +88,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     await read(() => { window.__replay = Framework.app.getReplay() })
   })
 
-  it('a press steps to Cell, drawing the chips filled with blue digits, saves it, and colors the givens, the entered digits and centre marks', async () => {
+  it('a press steps to Cell, showing the chips filled with blue digits, saves it, and colors the givens, the entered digits and centre marks', async () => {
     await selectCell(p, 8, 5); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3'); await p.click('#control-normal')
     assert.equal(await settle(() => marks(8, 5), '13'), '13')
     assert.equal(await coloredCount(), 0)
@@ -118,7 +118,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.equal(await settle(coloredCount, GIVEN_COUNT + 3), GIVEN_COUNT + 3)
   })
 
-  it('a press steps to Digit, drawing the chips white with shaded digits, and takes every group color off every cell in one undo step; a hand-placed color in no group stays', async () => {
+  it('a press steps to Digit, showing the chips white with shaded digits, and takes every group color off every cell in one undo step; a hand-placed color in no group stays', async () => {
     await paint(0, 0, NO_GROUP_KEY) // on a given that holds its group color
     await paint(1, 1, NO_GROUP_KEY) // on an empty cell
     await paint(1, 2, '2') // a group color by hand on an empty cell
@@ -149,7 +149,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.equal(await settle(() => valueAt(0, 6), ''), '')
   })
 
-  it('a press steps to Both, drawing the chips filled with shaded digits, which colors cells as Cell does and leaves a group color painted by hand on an empty cell with no marks', async () => {
+  it('a press steps to Both, showing the chips filled with shaded digits, which colors cells as Cell does and leaves a group color painted by hand on an empty cell with no marks', async () => {
     await paint(1, 1, '2')
     assert.deepEqual(await settle(() => colorsAt(1, 1), ['2']), ['2'])
     await pressTo(p, 'Both')
@@ -168,7 +168,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await settle(async () => [await valueAt(0, 6), await colorsAt(0, 6)], ['', []]), ['', []])
   })
 
-  it('a press steps Both to Off, drawing the chips white and grey, and takes every group color off in one undo step, keeping a hand color in no group with Multi-color off', async () => {
+  it('a press steps Both to Off, showing the chips white and grey, and takes every group color off in one undo step, keeping a hand color in no group with Multi-color off', async () => {
     await paint(0, 0, NO_GROUP_KEY) // beside the given's group color, while Multi-color is on
     assert.deepEqual(await settle(() => sortedColorsAt(0, 0), ['1', NO_GROUP_KEY]), ['1', NO_GROUP_KEY])
     await read(() => Framework.setSetting('multicolour', false))

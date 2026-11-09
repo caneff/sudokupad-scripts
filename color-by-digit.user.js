@@ -2348,7 +2348,7 @@
     syncCircles()
   }
 
-  // A mark's `class` change is how it enters or leaves `conflict`. Stamping `DIGIT_ATTR` and drawing
+  // A mark's `class` change is how it enters or leaves `conflict`. Stamping `DIGIT_ATTR` and adding
   // circles must trigger nothing.
   function isBoardChange (record) {
     if (record.target.closest && record.target.closest(`#${CIRCLES_ID}`)) return false

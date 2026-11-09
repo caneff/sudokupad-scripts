@@ -1,8 +1,8 @@
 // Takes the Pen Tool Extras pictures in docs/research/pen-tool-extras/, the mascot hidden:
 //                                    marks (X, arrows, circle) in several pen colors, at the defaults
 //   pen-tool-extras-dialog.png       the merged settings dialog, its thickness slider at the default 5
-//   pen-tool-extras-thin.png         the same drawing at thickness 2
-//   pen-tool-extras-thick.png        the same drawing at thickness 11
+//   pen-tool-extras-thin.png         the same lines at thickness 2
+//   pen-tool-extras-thick.png        the same lines at thickness 11
 // The thin and thick pictures are the dialog's live preview, taken before Cancel.
 // Run from the repo root: node docs/research/pen-tool-extras/pen-tool-extras-screenshot.mjs
 import { chromium } from 'playwright'

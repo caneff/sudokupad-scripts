@@ -310,10 +310,10 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
   })
 
-  // The circles' own redraw must not queue another redraw. Drawing is counted as childList records
+  // The circles' own redraw must not queue another redraw. Adding them is counted as childList records
   // on the group over 20 frames; the page clock may cause one honest redraw (two records) in that
   // window, and a loop would cause one every frame.
-  it('drawing the circles does not retrigger the drawing', async () => {
+  it('adding the circles does not trigger another redraw', async () => {
     const records = await read(async ([circles]) => {
       let count = 0
       const observer = new window.MutationObserver((list) => { count += list.length })

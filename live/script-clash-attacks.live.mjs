@@ -10,7 +10,7 @@ import { keydownDefaults, openPenTool, penEntries, setInputValue } from './pen.m
 import { settle, stable } from './settle.mjs'
 import { closeDialogWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog, openSettings } from './settings.mjs'
 import { EDITOR as CBD_EDITOR } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { pickDraw, SETTINGS_EDITOR as TEXT_EDITOR } from './draw-tool/draw-tool-fixtures.mjs'
+import { pickTextAnywhere, SETTINGS_EDITOR as TEXT_EDITOR } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { useBrowser } from './session.mjs'
 
 const DARK_STYLE = '#dark-page-style'
@@ -29,7 +29,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     const close = (editor) => () => closeDialogWith(p, 'Cancel', editor)
     const SURFACES = [
       ['Pen Tool Extras panel', () => openPenTool(p), '.pen-tool-extras-sliders'],
-      ['Text Anywhere panel', () => pickDraw(p), '.draw-tool-sliders'],
+      ['Text Anywhere panel', () => pickTextAnywhere(p), '.text-anywhere-sliders'],
       ['SudokuPad settings dialog', () => openSettings(p), '.dialog', () => p.keyboard.press('Escape')],
       ['Pen Tool Extras dialog', () => openExtrasEditor(p), EXTRAS_EDITOR, close(EXTRAS_EDITOR)],
       ['Text Anywhere dialog', () => openScriptDialog(p, 'Text Anywhere', TEXT_EDITOR), TEXT_EDITOR, close(TEXT_EDITOR)],
@@ -68,7 +68,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
   it('58 Pen Tool Extras\' and Text Anywhere\'s settings dialogs asked for one after the other, the first still open', () => attack(browser(), async (p) => {
     // The overlay covers the board and the panels, so a second dialog can only be asked for by code: the other tool's gear is clicked as a script would.
     const PAIRS = [
-      ['Pen Tool Extras then Text Anywhere', () => pickDraw(p), () => openExtrasEditor(p), EXTRAS_EDITOR, '.draw-tool-settings', TEXT_EDITOR],
+      ['Pen Tool Extras then Text Anywhere', () => pickTextAnywhere(p), () => openExtrasEditor(p), EXTRAS_EDITOR, '.text-anywhere-settings', TEXT_EDITOR],
       ['Text Anywhere then Pen Tool Extras', () => openPenTool(p), () => openScriptDialog(p, 'Text Anywhere', TEXT_EDITOR), TEXT_EDITOR, '.pen-tool-extras-settings', EXTRAS_EDITOR]
     ]
     for (const [name, pickTool, openFirst, first, gear, second] of PAIRS) {
@@ -90,11 +90,11 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
 
   it('59 Tab pressed while a Text Anywhere note is open, and while a settings dialog field has focus', () => attack(browser(), async (p) => {
     const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
-    await pickDraw(p)
+    await pickTextAnywhere(p)
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
-    await p.locator('#draw-tool-layer .draw-tool-textbox').waitFor({ state: 'attached' })
+    await p.locator('#text-anywhere-layer .text-anywhere-textbox').waitFor({ state: 'attached' })
     await p.keyboard.type('ab')
-    const box = '#draw-tool-layer .draw-tool-textbox'
+    const box = '#text-anywhere-layer .text-anywhere-textbox'
     // The note's box takes its keys before SudokuPad's handlers, so UI Tweaks' Tab option never sees this Tab; the note must be the one to keep it.
     await p.keyboard.press('Tab')
     assert.equal(await p.locator(box).count(), 1, 'the note is still open')

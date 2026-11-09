@@ -9,7 +9,7 @@ import { assertNoCrash, openWithAllScripts, reloadWithScripts } from './attacks.
 import { cellCentre, finishNote, gridPoint, mouseDrag, typeText } from './board.mjs'
 import { penDrawnCount, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
-import * as draw from './draw-tool/draw-tool-fixtures.mjs'
+import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
 import { useBrowser } from './session.mjs'
 
 const FULLSCREEN_BUTTON = 'button[data-control="fullscreen"]'
@@ -38,17 +38,17 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
     await p.mouse.down()
     await p.mouse.move(x1, y1, { steps: 6 })
     await p.mouse.up()
-    await draw.frames(p)
+    await textAnywhere.frames(p)
   }
   const offGrid = () => p.evaluate((selector) => {
     const box = document.querySelector(selector).getBoundingClientRect()
     return [box.left, box.top].map((side) => Math.abs(side * window.devicePixelRatio - Math.round(side * window.devicePixelRatio)))
-  }, draw.TEXTS)
+  }, textAnywhere.TEXTS)
   const emulate = (cdp, deviceScaleFactor, size = WINDOW) => cdp.send('Emulation.setDeviceMetricsOverride', { ...size, deviceScaleFactor, mobile: false })
 
   it('attack 76: the page\'s devicePixelRatio changing leaves notes and pen lines where they were, and a note moved afterward lands on whole device pixels', async () => {
     const cdp = await context.newCDPSession(p)
-    await pickTool(p, 'draw')
+    await pickTool(p, 'textanywhere')
     await typeText(p, [4.5, 4.5], '15')
     await pickTool(p, 'pen')
     await rowLine(1)
@@ -62,10 +62,10 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
       assert.equal(await settle(() => p.evaluate(() => window.devicePixelRatio), ratio), ratio, `the page runs at ratio ${ratio}`)
       assert.deepEqual(await penEntries(p), entries, `${ratio}: the pen lines are where they were`)
       assert.deepEqual(await penBoxes(), boxes, `${ratio}: every pen line is drawn where it was, at the same size`)
-      await pickTool(p, 'draw')
-      assert.deepEqual(await draw.noteInCells(p, '15'), [4.5, 4.5], `${ratio}: the note is where it was`)
+      await pickTool(p, 'textanywhere')
+      assert.deepEqual(await textAnywhere.noteInCells(p, '15'), [4.5, 4.5], `${ratio}: the note is where it was`)
       // A note at rest is where its click put it, on a fraction of a pixel at any ratio, ratio 1 too; a note moved at this ratio lands on whole device pixels of it, and moves back to its place.
-      const there = await draw.middleAt(p, await gridPoint(p, [4.5, 4.5]))
+      const there = await textAnywhere.middleAt(p, await gridPoint(p, [4.5, 4.5]))
       const away = [there[0] + 37, there[1] + 23]
       for (const [from, to] of [[there, away], [away, there]]) {
         await dragBetween(from, to)
@@ -78,7 +78,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
   })
 
   it('attack 77: SudokuPad\'s fullscreen on and off leaves the notes, the pen lines and the tools where they were and working', async () => {
-    await pickTool(p, 'draw')
+    await pickTool(p, 'textanywhere')
     await typeText(p, [4.5, 4.5], '15')
     await pickTool(p, 'pen')
     await rowLine(1)
@@ -92,8 +92,8 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
       // Chromium's headless fullscreen keeps the window as it is, so the screen's size is emulated.
       await emulate(cdp, 1, SCREEN)
       assert.deepEqual(await penEntries(p), entries, `round ${round}: the pen lines are where they were`)
-      await pickTool(p, 'draw')
-      assert.deepEqual(await settle(() => draw.noteInCells(p, '15'), [4.5, 4.5]), [4.5, 4.5], `round ${round}: the note is on its cell`)
+      await pickTool(p, 'textanywhere')
+      assert.deepEqual(await settle(() => textAnywhere.noteInCells(p, '15'), [4.5, 4.5]), [4.5, 4.5], `round ${round}: the note is on its cell`)
       await typeText(p, [6.5 + round, 2.5], `f${round}`)
       await pickTool(p, 'pen')
       await rowLine(3 + 2 * round)
@@ -103,21 +103,21 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
       await p.click(FULLSCREEN_BUTTON)
       assert.equal(await settle(inFullscreen, false), false, `round ${round}: fullscreen is off`)
       await emulate(cdp, 1, WINDOW)
-      await pickTool(p, 'draw')
-      assert.deepEqual(await settle(() => draw.noteInCells(p, '15'), [4.5, 4.5]), [4.5, 4.5], `round ${round}: the note is on its cell again`)
-      assert.deepEqual((await draw.texts(p)).sort(), ['15', ...Array.from({ length: round + 1 }, (_, i) => `f${i}`)].sort(), `round ${round}: every note is there once`)
+      await pickTool(p, 'textanywhere')
+      assert.deepEqual(await settle(() => textAnywhere.noteInCells(p, '15'), [4.5, 4.5]), [4.5, 4.5], `round ${round}: the note is on its cell again`)
+      assert.deepEqual((await textAnywhere.texts(p)).sort(), ['15', ...Array.from({ length: round + 1 }, (_, i) => `f${i}`)].sort(), `round ${round}: every note is there once`)
       await pickTool(p, 'pen')
     }
-    assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, 'no text box is left open')
+    assert.equal(await p.locator(textAnywhere.TEXT_BOX).count(), 0, 'no text box is left open')
     await assertNoCrash(p, errors)
   })
 
-  it('attack 78: 200 notes and a grid full of pen lines: drawing, moving and undoing each stay inside the time budget', async (t) => {
-    // 200 notes in a grid of 20 across and 10 down, in board units, planted as a saved drawing and shown by a reload.
-    await draw.plantDrawing(p, Array.from({ length: NOTE_COUNT }, (_, i) => ({ kind: 'text', color: 1 + (i % 9), size: 14, opacity: 100, text: `n${i}`, at: [10 + (i % 20) * 27, 10 + Math.floor(i / 20) * 54] })))
+  it('attack 78: 200 notes and a grid full of pen lines: a line drawn, a note moved and an undo each stay inside the time budget', async (t) => {
+    // 200 notes in a grid of 20 across and 10 down, in board units, planted as saved notes and shown by a reload.
+    await textAnywhere.plantNotes(p, Array.from({ length: NOTE_COUNT }, (_, i) => ({ kind: 'text', color: 1 + (i % 9), size: 14, opacity: 100, text: `n${i}`, at: [10 + (i % 20) * 27, 10 + Math.floor(i / 20) * 54] })))
     await reloadWithScripts(p)
-    await pickTool(p, 'draw')
-    assert.equal((await draw.texts(p)).length, NOTE_COUNT, `${NOTE_COUNT} notes are drawn`)
+    await pickTool(p, 'textanywhere')
+    assert.equal((await textAnywhere.texts(p)).length, NOTE_COUNT, `${NOTE_COUNT} notes are drawn`)
 
     // A grid full of pen lines: a line along every row and every column, the first segment of each pen page's color.
     await pickTool(p, 'pen')
@@ -143,16 +143,16 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
     await timed('undo the pen line', () => p.click('#control-undo'), async () => (await penEntries(p)).length === entriesBefore)
 
     // Draw a note among the 200, and move one by a cell.
-    await pickTool(p, 'draw')
+    await pickTool(p, 'textanywhere')
     await timed('draw a note', async () => {
       await p.mouse.click(...await gridPoint(p, [8.8, 0.3]))
       await p.keyboard.type('new')
       await finishNote(p)
-    }, async () => (await draw.texts(p)).length === NOTE_COUNT + 1)
+    }, async () => (await textAnywhere.texts(p)).length === NOTE_COUNT + 1)
     const [, , size] = await cellCentre(p, 0, 0)
-    const moved = async () => (await draw.saved(p)).find((item) => item.text === 'n105').at.join()
+    const moved = async () => (await textAnywhere.saved(p)).find((item) => item.text === 'n105').at.join()
     const placed = await moved()
-    const [x, y] = await draw.noteStart(p, 'n105')
+    const [x, y] = await textAnywhere.noteStart(p, 'n105')
     await timed('move a note', async () => {
       await p.mouse.move(x + 6, y)
       await p.mouse.down()

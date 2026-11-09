@@ -181,7 +181,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const arrows = document.querySelector(heads)
       return { dash: getComputedStyle(el).strokeDasharray, width: getComputedStyle(el).strokeWidth, headsD: arrows ? arrows.getAttribute('d') : null, headsLayer: arrows ? arrows.parentNode.id : null, headsFill: arrows ? getComputedStyle(arrows).fill : null, linePen: /pencolor-(\S+)/.exec(el.getAttribute('class'))[1] }
     }, HEADS)
-    // Presses at the first point and drags through the rest, moving on in small steps until SudokuPad has drawn its hint (a puzzle still redrawing misses the first moves).
+    // Presses at the first point and drags through the rest, moving on in small steps until SudokuPad has drawn its hint (a puzzle still being redrawn misses the first moves).
     const holdDrag = async (points) => {
       await p.mouse.click(5, 5) // a click off the grid, or a drag started right after a release or a button press draws nothing
       await moveTo(points[0])
