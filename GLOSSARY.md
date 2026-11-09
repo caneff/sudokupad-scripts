@@ -260,6 +260,13 @@
 - **halo** — the outline in the page's color round each letter of a Text Anywhere note, a ring of 16 zero-blur `text-shadow`s (a stroke joins with miters and grows spikes on A, V, W, M and 4), so a note reads over digits, pencil marks and colored cells. Its reach is the **Outline setting**. A note with a background box has none, since the box is that color already.
 - **unreadable value** — a saved value its script's reader refuses (`lib/store.js`), as a later version's shape would be after a downgrade. The script
   goes on with its defaults (Text Anywhere shows no notes and saves none on that puzzle until Clear all or Restart), and the value as it was is copied under the same key with `_unreadable` added (`_unreadable2` and on for a second,
-  different one) before any save can write over it; a kept copy is never replaced. Color by Digit's profiles, Auto Rules Resizer's two limits and Text Anywhere's drawings are
+  different one) before any save can write over it; a kept copy is never replaced. Color by Digit's profiles, Auto Rules Resizer's two limits and **sizings**, and Text Anywhere's drawings are
   read this way, saved as `{ v, data }` (a value saved before that is version 0, and a version above the script's own is unreadable), and Color by
   Digit's dialog shows one line saying saved profiles could not be read and are kept, for as long as a copy is kept.
+- **font offset** — the px Auto Rules Resizer's f+ and f- add to or take from the automatic font size, one a press, the font kept between 70% and 150% of
+  SudokuPad's own. A press the floor or the cap cancels is not kept, so an offset stopped at either can be a fraction of a px. Not Text Anywhere's **nudge**.
+- **sizing** — a puzzle's own size of the rules pane in Auto Rules Resizer: its **font offset** and its dragged box (how far the two drag corners grew or
+  shrank the pane, and moved the controls column). It is saved under `AutoRulesResizer_sizing_<puzzle>` (the puzzle's id, else its page URL) as
+  `{ nudgePx, box }`, `nudgePx` being the font offset's stored name, and only f+, f-, a corner drag or Restore defaults changes it: a window too small
+  for all of it, or an automatic size already at the cap, applies less of it and leaves what is saved alone. A puzzle never resized has no key and starts
+  at the default, no offset and no drag. Restore defaults in the Rules Resizer dialog clears the current puzzle's.

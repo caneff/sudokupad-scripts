@@ -146,7 +146,7 @@ describe('a sideways corner drag keeps the pane\'s height and never raises its f
       }
     }
   }
-  it('dl wider after an f- press still holds the nudged pane\'s height and font', async () => {
+  it('dl wider after an f- press still holds the smaller font\'s pane height and font', async () => {
     const { context, p, errors } = await rulesPage(LANDSCAPE)
     try {
       await inject(p)
@@ -986,15 +986,17 @@ describe('the pane takes the page\'s spare height without SudokuPad shrinking th
   })
 })
 
-// A puzzle's sizing (the f+/f- nudge and the dragged pane) is kept under its own key and read back when the script starts, as after a reload.
+// A puzzle's sizing (its font offset from f+ and f-, and its dragged pane) is kept under its own key and read back when the script starts, as
+// after a reload, or when the puzzle is opened again. It is stored as `{ nudgePx, box }`.
 describe('sizing kept per puzzle', { concurrency: false }, () => {
   const sizingKey = (p) => p.evaluate(() => 'AutoRulesResizer_sizing_' + String(Framework.app.puzzle.puzzleId || window.location.href))
+  const savedSizing = async (p) => p.evaluate((key) => Framework.getData(key), await sizingKey(p))
   const seedSizing = (value) => async (p) => {
     const key = await sizingKey(p)
     await p.evaluate(([key, value]) => Framework.setData(key, value), [key, value])
   }
-  const startedFont = async (seed) => {
-    const opened = await rulesPage(LANDSCAPE, seed, FILLING_RULES)
+  const startedFont = async (seed, rules = FILLING_RULES) => {
+    const opened = await rulesPage(LANDSCAPE, seed, rules)
     try {
       await inject(opened.p)
       const font = await settle(async () => (await pane(opened.p)).inlineFont !== '', true).then(() => fontPx(opened.p))
@@ -1004,24 +1006,104 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
       throw error
     }
   }
+  // The puzzle at `source` (the page's first path, which a load in place changes) loaded in place as a puzzle with `id`, the way SudokuPad's
+  // own loadRemoteCTCPuzzle does it (the id first, then the puzzle), and FILLING_RULES shown on it: another puzzle in the same tab, with no
+  // reload. SudokuPad loads Tag Manager again on a second puzzle in a tab; it is answered with an empty script, as `live/puzzles.mjs` does.
+  const openInPlace = async (p, source, id) => {
+    await p.route(/googletagmanager/, (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }))
+    await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
+    await p.evaluate(async ([key, as]) => {
+      const { parsePuzzleData, fetchPuzzle } = window.pageLoader
+      const data = await parsePuzzleData(await fetchPuzzle(key))
+      Framework.app.puzzle.puzzleId = as
+      await Framework.app.loadCTCPuzzle(data)
+    }, [source, id])
+    await p.evaluate((rules) => {
+      Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
+      Framework.app.resize()
+    }, FILLING_RULES)
+    await settle(async () => (await pane(p)).inlineFont !== '', true)
+    return stable(() => pane(p))
+  }
+  const geometry = ({ left, right, top, bottom, font }) => ({ left, right, top, bottom, font })
 
-  it('f+ saves the nudge under the puzzle\'s key, and a page that starts with it saved fits one px larger', async () => {
+  it('f+ saves the font offset under the puzzle\'s key, and a page that starts with it saved fits one px larger', async () => {
     const plain = await startedFont(null)
     try {
-      assert.equal(await plain.p.evaluate((key) => Framework.getData(key), await sizingKey(plain.p)), null, 'a puzzle never resized saves nothing')
+      assert.equal(await savedSizing(plain.p), null, 'a puzzle never resized saves nothing')
       await clickFont(plain.p, 'f+')
       assert.equal(await settle(() => fontPx(plain.p), plain.font + 1), plain.font + 1, 'f+')
-      const saved = await plain.p.evaluate((key) => Framework.getData(key), await sizingKey(plain.p))
+      const saved = await savedSizing(plain.p)
       assert.deepEqual(saved, { v: 0, data: { nudgePx: 1, box: { w: 0, h: 0, x: 0, y: 0 } } })
       const again = await startedFont(seedSizing(saved))
       try {
-        assert.equal(again.font, plain.font + 1, 'the reloaded puzzle keeps its nudge')
+        assert.equal(again.font, plain.font + 1, 'the reloaded puzzle keeps its font offset')
         assert.deepEqual(again.errors, [])
       } finally {
         await again.context.close()
       }
     } finally {
       await plain.context.close()
+    }
+  })
+
+  it('a dragged pane is saved, and a page that starts with it saved shows the pane and the controls where the drag left them', async () => {
+    const plain = await startedFont(null)
+    try {
+      await stable(() => pane(plain.p))
+      await dragCorner(plain.p, 'ur', 0, -60)
+      await dragCorner(plain.p, 'dl', -120, 0)
+      const dragged = await stable(() => pane(plain.p))
+      const moved = await controlsMoved(plain.p)
+      const saved = await savedSizing(plain.p)
+      assert.equal(saved.data.box.w > 0 && saved.data.box.h > 0, true, `a drag up and left is saved: ${JSON.stringify(saved)}`)
+      const again = await startedFont(seedSizing(saved))
+      try {
+        assert.deepEqual(geometry(await stable(() => pane(again.p))), geometry(dragged))
+        assert.equal(await controlsMoved(again.p), moved)
+        assert.deepEqual(await savedSizing(again.p), saved, 'the start wrote nothing over it')
+        assert.deepEqual(again.errors, [])
+      } finally {
+        await again.context.close()
+      }
+    } finally {
+      await plain.context.close()
+    }
+  })
+
+  // Saved in a larger window: the drag runs past the board here, and the automatic font of short rules is at the 150% cap, so neither
+  // the drag nor the font offset applies in full.
+  it('a fit that applies less of a saved sizing than was saved leaves the saved sizing as it was', async () => {
+    const saved = { v: 0, data: { nudgePx: 2, box: { w: 900, h: 0, x: -900, y: 0 } } }
+    const opened = await startedFont(seedSizing(saved), RULES)
+    try {
+      const now = await stable(() => pane(opened.p))
+      assert.equal(now.left >= Math.floor(await boardRight(opened.p)), true, `the drag stopped at the board: pane left ${now.left}`)
+      assert.equal(Math.abs(now.font - MAX_FONT_PX) < 0.01, true, `the font stopped at the cap: ${now.font}`)
+      assert.deepEqual(await savedSizing(opened.p), saved)
+      assert.deepEqual(opened.errors, [])
+    } finally {
+      await opened.context.close()
+    }
+  })
+
+  it('a puzzle resized, then another opened in the same tab: the other starts at the default, and the first gets its sizing back', async () => {
+    const opened = await startedFont(null)
+    const { p } = opened
+    try {
+      const source = new URL(p.url()).pathname.slice(1)
+      const fitted = await openInPlace(p, source, 'resizer-sizing-a')
+      await clickFont(p, 'f+')
+      assert.equal(await settle(() => fontPx(p), fitted.font + 1), fitted.font + 1, 'f+ on A')
+      await dragCorner(p, 'dl', -120, 0)
+      const resized = await stable(() => pane(p))
+      assert.equal(resized.left < fitted.left, true, `A dragged wider: left ${fitted.left} -> ${resized.left}`)
+      assert.deepEqual(geometry(await openInPlace(p, source, 'resizer-sizing-b')), geometry(fitted), 'B at the default')
+      assert.equal(await savedSizing(p), null, 'nothing is saved under B')
+      assert.deepEqual(geometry(await openInPlace(p, source, 'resizer-sizing-a')), geometry(resized), 'A as it was resized')
+      assert.deepEqual(opened.errors, [])
+    } finally {
+      await opened.context.close()
     }
   })
 
@@ -1044,10 +1126,10 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
     const { p } = opened
     try {
       await clickFont(p, 'f+')
-      await settle(async () => (await p.evaluate((key) => Framework.getData(key), await sizingKey(p))) !== null, true)
+      await settle(async () => (await savedSizing(p)) !== null, true)
       await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
       await p.getByRole('button', { name: 'Restore defaults' }).click()
-      assert.equal(await settle(async () => (await p.evaluate((key) => Framework.getData(key), await sizingKey(p))) === null, true), true, 'the key is gone')
+      assert.equal(await settle(async () => (await savedSizing(p)) === null, true), true, 'the key is gone')
       assert.equal(await settle(() => fontPx(p), opened.font), opened.font, 'back at the automatic size')
     } finally {
       await opened.context.close()

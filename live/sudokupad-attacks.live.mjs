@@ -206,7 +206,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
   // (including `PenColor_pen` and `PenColor_colors`, which Pen Tool Extras only reads) do not.
   it('56 Blocked storage: every script loads, says what it could not save, and keeps working', async () => {
     const SAVED = [
-      ['color-by-digit', 'saved settings'], ['dark-page', 'saved color'], ['auto-rules-resizer', 'max size settings'],
+      ['color-by-digit', 'saved settings'], ['dark-page', 'saved color'], ['auto-rules-resizer', 'max size settings'], ['auto-rules-resizer', 'saved sizing'],
       ['pen-tool-extras', 'saved settings'], ['draw-tool', 'saved notes and settings'], ['ui-tweaks', 'saved options']
     ]
     const said = []
@@ -225,10 +225,10 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       })
     })
     try {
-      // Each of the six scripts says so once and puts up its own bar.
-      const scripts = SAVED.map(([script]) => script).sort()
+      // Each feature that saves says so once, and each of the six scripts puts up its own bar.
+      const scripts = [...new Set(SAVED.map(([script]) => script))].sort()
       assert.deepEqual(await settle(() => p.locator(NOTICE_BAR).evaluateAll((bars) => bars.map((b) => b.dataset.script).sort()), scripts), scripts)
-      assert.deepEqual(said.map((line) => line.split(': ')[0]).sort(), scripts, 'one declared skip line each')
+      assert.deepEqual(said.sort(), SAVED.map(([script, feature]) => `${script}: ${feature}`).sort(), 'one declared skip line per feature')
       assert.deepEqual(errors, [], 'no other skip line, page error or console error')
       assert.equal(await p.evaluate(() => window.getComputedStyle(document.body).backgroundColor), BLACK, 'Dark Page paints its default')
       assert.equal(await p.evaluate(() => { const r = document.querySelector('.puzzle-rules'); return r.scrollHeight > r.clientHeight }), false, 'the rules still fit')
