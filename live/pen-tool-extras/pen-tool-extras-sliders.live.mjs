@@ -1,32 +1,21 @@
 // Live check of Pen Tool Extras' Thickness and Opacity sliders in the pen panel, on sudokupad.app in headless Chromium at 1280x720:
 // SudokuPad cancels every mouse move on the page, which stops the browser dragging a thumb unless the script keeps the move from it.
 import { after, before, describe, it } from 'node:test'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from '../page.mjs'
-import { openPenTool } from '../pen.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
 import { readUntil } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const SLIDERS = '.pen-tool-extras-sliders'
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Pen Tool Extras\' sliders drag from the track', { concurrency: false }, () => {
   let context, p
 
   before(async () => {
-    ;({ context, p } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } }))
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await p.evaluate(() => Framework.setSetting('toolpen', true))
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await openPenTool(p)
+    ;({ context, p } = await extras.open(browser(), { contextOptions: { viewport: { width: 1280, height: 720 } } }))
     await p.locator(SLIDERS).waitFor({ state: 'visible' })
   })
   after(async () => { await context.close() })

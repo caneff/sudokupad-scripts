@@ -7,17 +7,15 @@
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { chromium } from 'playwright'
-import { gotoPuzzle, newPage, openPage, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
 import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
 import { cellCentre } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_ONE, PAGE_THREE, PAGE_TWO, padValues, penStrings, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { addPage, openWith, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const uiTweaks = readFileSync(new URL('../../ui-tweaks.user.js', import.meta.url), 'utf8')
+const UI_TWEAKS_FILE = 'ui-tweaks.user.js'
 
 const PEN_KEY = 'PenColor_pen'
 const COLORS_KEY = 'PenColor_colors'
@@ -25,9 +23,7 @@ const DASH_KEY = 'PenColor_dash'
 const THICKNESS_KEY = 'PenColor_thickness'
 const LINE_STYLES_KEY = 'PenColor_linestyles'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 function group (title, extra = []) {
   describe(title, { concurrency: false }, () => {
@@ -66,19 +62,12 @@ function group (title, extra = []) {
       await p.mouse.wheel(0, deltaY)
     }
 
-    const boot = async () => {
-      await startPuzzle(p)
-      for (const src of [script, ...extra]) await p.addScriptTag({ content: src })
-      await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-      await read(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolletter', true) })
-      await p.locator('#control-pen').waitFor({ state: 'visible' })
-      await openToolAndPageButton()
-    }
-    const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
+    const scripts = [extras.SCRIPT_FILE, ...extra]
+    const settings = { toolpen: true, toolletter: true }
+    const reload = () => extras.reload(p, { scripts, settings })
 
     before(async () => {
-      ;({ context, p, errors } = await openPage(browser))
-      await boot()
+      ;({ context, p, errors } = await extras.open(browser(), { scripts, settings }))
       await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, LINE_STYLES_KEY, 'ToolPen_color', 'ToolLetter_letterMode'])
       await press(1)
     })
@@ -489,9 +478,7 @@ function group (title, extra = []) {
     })
 
     it('with the script gone, stock SudokuPad opens the pen tool on the saved digit with no error', async () => {
-      const { p: bare, errors: bareErrors } = await newPage(context)
-      await gotoPuzzle(bare)
-      await startPuzzle(bare)
+      const { p: bare, errors: bareErrors } = await addPage(context, [])
       await bare.evaluate(() => Framework.setSetting('toolpen', true))
       await bare.locator('#control-pen').waitFor({ state: 'visible' })
       await openPenTool(bare)
@@ -516,15 +503,14 @@ function group (title, extra = []) {
 }
 
 group('injected after Start Puzzle')
-group('injected after Start Puzzle, with UI Tweaks installed too', [uiTweaks])
+group('injected after Start Puzzle, with UI Tweaks installed too', [UI_TWEAKS_FILE])
 
 // The script installed while the pen tool is already on, with SudokuPad's own selection of pen 3 read from storage
 // as the number 3: the first page turn must keep color number 3.
 describe('injected after the pen tool is already on', { concurrency: false }, () => {
   let context, p, errors
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await startPuzzle(p)
+    ;({ context, p, errors } = await openWith(browser(), []))
     await p.evaluate(() => { Framework.setData('ToolPen_color', '3'); Framework.setSetting('toolpen', true) })
     await p.locator('#control-pen').waitFor({ state: 'visible' })
     await openPenTool(p)
@@ -536,7 +522,7 @@ describe('injected after the pen tool is already on', { concurrency: false }, ()
 
   it('the first Tab selects pen c, the dashed version of the pen already selected, and ToolPen_color stays 3', async () => {
     assert.equal(await p.evaluate(() => ToolPen.tool.selectedColor), 3)
-    await p.addScriptTag({ content: script })
+    await p.addScriptTag({ content: extras.script })
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
     await p.keyboard.press('Tab')
     assert.equal(await settle(() => p.evaluate(() => ToolPen.tool.selectedColor), 'c'), 'c')

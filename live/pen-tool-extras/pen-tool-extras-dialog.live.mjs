@@ -2,21 +2,16 @@
 // line meets the title line and the footer line, the Line settings / Line styles divider starting at the vertical line, the pen colors filling their
 // column, the five sliders one column and 96px long, the marks table's headings over their boxes, the title row's icon buttons and status, the dialog
 // centred in the window, one column on a narrow screen, and the button row (Save, Cancel, Restore defaults). A touch screen stays untested. Every click is real input.
-/* global Framework */
 import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
+import { useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const SLIDERS = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth']
 const HALF_PIXEL = 0.5
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('the settings dialog layout', { concurrency: false }, () => {
   let context, p, errors
@@ -25,11 +20,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await p.evaluate(() => Framework.setSetting('toolpen', true))
+    ;({ context, p, errors } = await extras.open(browser(), { contextOptions: { viewport: { width: 1200, height: 1000 } }, penTool: false }))
   })
   after(async () => { await context.close() })
 

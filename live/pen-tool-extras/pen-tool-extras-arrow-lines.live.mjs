@@ -5,31 +5,24 @@
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
-import { captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from '../settings.mjs'
-import { cellCentre } from '../board.mjs'
-import { drag, openPenTool, padValues, penEntries, setSlider } from '../pen.mjs'
+import { cellCentre, undoAll } from '../board.mjs'
+import { drag, goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, padValues, penEntries, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
 
 // The sizes of an arrow line are the script's own, so the checks read them from it and a retuning moves both.
-const { ARROW_LINE, ARROW_SPACING } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
+const { ARROW_LINE, ARROW_SPACING } = extras.scriptExports
 
 const PEN_KEY = 'PenColor_pen'
 const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
 const OPACITY_KEY = 'PenColor_opacity'
 const ARROW_SPACING_KEY = 'PenColor_arrowspacing'
-const PAGE_BUTTON = '.pen-tool-extras-page'
-const PAGE_THREE = 'jlnprtvxz'
-const PAGE_ONE = '123456789'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 // The way each arrow of a group points, as a compass point, read from its drawn path: wing, tip, wing; the tip's offset from
 // the middle of the wings is the way. y grows downward, so S is down the screen.
@@ -61,36 +54,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
   const selectArrowLinePen = async (key) => {
     await openPenTool(p)
-    await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
-    if ((await padValues(p)) !== PAGE_THREE) {
-      const turns = (await padValues(p)) === PAGE_ONE ? 2 : 1
-      for (let i = 0; i < turns; i++) await p.locator(PAGE_BUTTON).click()
-    }
-    assert.equal(await settle(() => padValues(p), PAGE_THREE), PAGE_THREE)
+    await goToPenPage(p, PAGE_THREE)
     await press(key)
   }
   const undo = () => p.click('#control-undo')
-  const undoAll = async () => { while ((await read(() => Framework.app.puzzle.undoStack.length)) > 0) await undo() }
   const eraseDrag = async (points) => {
     // A press exactly on a stroke starts no drag in SudokuPad, so an erase drag starts a little off the line.
     await drag(p, points.map(([r, c]) => [r + 0.1, c + 0.1]))
   }
 
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await read(() => { Framework.setSetting('toolpen', true) })
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await openPenTool(p)
-    await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
-  }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
+  const reload = () => extras.reload(p)
 
   before(async () => {
     // the script reports a drag it could not read the ways of with console.error and sends it unsplit, which no check would see
-    ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
-    await boot()
+    ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors }))
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, THICKNESS_KEY, OPACITY_KEY, ARROW_SPACING_KEY, 'ToolPen_color'])
     await selectArrowLinePen(3)
   })
@@ -207,7 +184,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const values = await penEntries(p)
     const groups = await arrowLineGroups()
     const replay = await read(() => Framework.app.getReplay())
-    await undoAll()
+    await undoAll(p)
     assert.equal(await settle(strokeCount, 0), 0)
     await read((r) => Framework.app.loadReplay(r), replay)
     assert.deepEqual(await settle(() => penEntries(p), values), values)
@@ -367,7 +344,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const drawn = await nine()
     assert.deepEqual(drawn, [['cell-pen pen-1 pencolor-0', 'W'], ['cell-pen pen-1 pencolor-0', 'W'], ['cell-pen pen-1 pencolor-z', 'E'], ['cell-pen pen-1 pencolor-z', 'E']])
     const replay = await read(() => Framework.app.getReplay())
-    await undoAll()
+    await undoAll(p)
     assert.equal(await settle(strokeCount, 0), 0)
     await read((r) => Framework.app.loadReplay(r), replay)
     assert.deepEqual(await settle(async () => (await penEntries(p)).filter((v) => /:1[z0]$/.test(v)), want), want)
@@ -377,8 +354,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('page 1 pens still draw plain lines beside the arrow lines', async () => {
-    await p.locator(PAGE_BUTTON).click()
-    assert.equal(await settle(() => padValues(p), PAGE_ONE), PAGE_ONE)
+    await goToPenPage(p, PAGE_ONE)
     await press(2)
     await drag(p, [[8.5, 0.5], [8.5, 2.5]])
     assert.deepEqual((await penEntries(p)).filter((v) => v.startsWith('8,0:')), ['8,0:12'])

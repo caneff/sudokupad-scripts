@@ -4,35 +4,30 @@
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
-import { assertPressState, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { assertPressState, restartPuzzle } from '../page.mjs'
 import { cellCentre, gridPoint } from '../board.mjs'
 import { drag, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
 
 const { HOLD_TO_EDIT_MS, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const MARKS_KEY = 'EdgeMarks_marks'
 const PICKERS = '.tool-pen .pen-tool-extras-picker'
 const PANEL_BUTTONS = { 'a color button': '.tool-pen button[data-key="2"]', 'the line mode button': '.pen-tool-extras-mode', 'the page button': '.pen-tool-extras-page', 'the settings button': '.pen-tool-extras-settings' }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
-const boot = async (p) => {
-  await startPuzzle(p)
-  await plantUnchecked(p, MARKS_KEY, JSON.stringify({ x: true, directions: false, circle: true, cornerX: true, cornerCircle: true }))
-  await p.addScriptTag({ content: script })
-  await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-  await p.evaluate(() => Framework.setSetting('toolpen', true))
-  await p.locator('#control-pen').waitFor({ state: 'visible' })
-  await openPenTool(p)
-  await p.locator('.pen-tool-extras-page').waitFor({ state: 'visible' })
-  await p.locator('.tool-pen button[data-key="1"]').click()
+// Opens the page with the marks planted before the script reads them, and pen color 1 picked.
+const open = async (options = {}) => {
+  const opened = await extras.open(browser(), {
+    ...options,
+    afterStart: (p) => plantUnchecked(p, MARKS_KEY, JSON.stringify({ x: true, directions: false, circle: true, cornerX: true, cornerCircle: true }))
+  })
+  await opened.p.locator('.tool-pen button[data-key="1"]').click()
+  return opened
 }
 
 // From now until `stopWatchingCopies`, the SVG elements that join the page, whatever their class, except in SudokuPad's own cell highlights, which the click redraws: an erase only takes strokes away,
@@ -54,8 +49,7 @@ for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced
     let context, p
     const undoDepth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
     before(async () => {
-      ;({ context, p } = await openPage(browser, { contextOptions }))
-      await boot(p)
+      ;({ context, p } = await open({ contextOptions }))
     })
     after(async () => { await context.close() })
 
@@ -132,8 +126,7 @@ describe('Pen Tool Extras: the cursor over the grid', { concurrency: false }, ()
     return p.evaluate(([px, py]) => window.getComputedStyle(document.elementFromPoint(px, py)).cursor, [x, y])
   }
   before(async () => {
-    ;({ context, p } = await openPage(browser))
-    await boot(p)
+    ;({ context, p } = await open())
   })
   after(async () => { await context.close() })
 
@@ -158,8 +151,7 @@ describe('Pen Tool Extras: the hit floor on a grid with small cells', { concurre
   }
 
   before(async () => {
-    ;({ context, p } = await openPage(browser))
-    await boot(p)
+    ;({ context, p } = await open())
     await drag(p, [[0.5, 1.5], [0.5, 4.5]])
     await p.evaluate((scale) => { document.querySelector('#svgrenderer').parentElement.style.cssText = `transform: scale(${scale}); transform-origin: top left` }, SCALE)
     cellPx = (await settle(async () => (await cellCentre(p, 0, 0))[2], 35.3, 3000)) // the scaled cell, 70.6 px * 0.5

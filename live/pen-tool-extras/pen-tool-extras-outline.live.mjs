@@ -5,15 +5,12 @@
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
 import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
 import { cellCentre } from '../board.mjs'
-import { draw as drawLine, openPenTool } from '../pen.mjs'
+import { draw as drawLine, openPenTool, setInputValue } from '../pen.mjs'
 import { settle } from '../settle.mjs'
-
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
+import { useBrowser } from '../session.mjs'
 
 const OUTLINE_KEY = 'PenColor_outline'
 const OPACITY_KEY = 'PenColor_opacity'
@@ -27,9 +24,7 @@ const CLEAR_UNITS = 14
 const OUTLINE_WIDTH_KEY = 'PenColor_outlinewidth'
 const DASH_KEY = 'PenColor_dash'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, reader, errors
@@ -87,23 +82,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }, png.toString('base64'))
   }
 
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await read(() => Framework.setSetting('toolpen', true))
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await openPenTool(p)
-  }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
+  const reload = () => extras.reload(p)
   const clearSaved = () => read((keys) => keys.forEach((k) => Framework.removeData(k)), [OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY, THICKNESS_KEY, DASH_KEY])
   const widthSlider = () => editor().locator('input[data-setting="outlineWidth"]')
-  const setWidth = (value) => widthSlider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+  const setWidth = (value) => setInputValue(widthSlider(), value)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
+    ;({ context, p, errors } = await extras.open(browser()))
     reader = await context.newPage()
-    await boot()
     await clearSaved()
     await drawCenterOnlyLine()
   })
