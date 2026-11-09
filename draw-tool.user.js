@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.43.0
+// @version      0.43.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.43.0'
+  const VERSION = '0.43.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -2164,10 +2164,11 @@
 
   // The panel's rules, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
   // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
-  // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out.
-  function panelCss ({ panel, colorButton, controlButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
+  // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out. `pressButtons`, when given, is the selector of buttons
+  // that are not placed by the grid but press like the others.
+  function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
-    const pressable = `${panel} ${colorButton}, ${controlButtons}`
+    const pressable = [`${panel} ${colorButton}`, controlButtons, ...(pressButtons ? [pressButtons] : [])].join(', ')
     const pressed = `:is(${pressable}):active`
     return [
       `${panel} { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; position: relative; }`,
@@ -2219,7 +2220,7 @@
   // A closed note that is not selected, under Text Anywhere: the one that shows a hover outline.
   const IDLE_NOTE = `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS})`
   const PANEL_CSS = [
-    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
+    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, pressButtons: HIDE_ALL, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
     `${PANEL} button.digit::after { content: "Aa"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-indent: 0; font-size: ${COLOR_LABEL_REM}rem; font-weight: 600; line-height: 1; }`,
@@ -2227,16 +2228,13 @@
     ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${BACKGROUND_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every 'svg path' and the paths in a tool button's icon, which would turn the icons' lines into blobs, the tool button's note into a solid square.
-    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, #control-${TOOL_NAME}) :is(path, circle, rect, ellipse), .${BACKGROUND_CLASS} :is(path, circle, rect, ellipse):not(.${BACKGROUND_FILL_CLASS}) { fill: none !important; }`,
+    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, #control-${TOOL_NAME}, ${HIDE_ALL}) :is(path, circle, rect, ellipse), .${BACKGROUND_CLASS} :is(path, circle, rect, ellipse):not(.${BACKGROUND_FILL_CLASS}) { fill: none !important; }`,
     `:is(.${BACKGROUND_CLASS}, ${HIDE_ALL})[aria-pressed="true"] { background-color: ${TRAY_COLOR}; outline: 2px solid ${PANEL_COLOR}; }`,
     // The eye sits at the right end of the sliders block, which is a row of the two slider rows and it, and presses like the panel's other buttons.
     `.${SLIDERS_CLASS} { flex-direction: row; align-items: center; gap: 0.4rem; }`,
     `.${SLIDER_ROWS_CLASS} { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: space-evenly; }`,
-    `${HIDE_ALL} { flex: none; display: flex; align-items: center; justify-content: center; width: ${HIDE_BUTTON_REM}rem; height: ${HIDE_BUTTON_REM}rem; min-height: 0; margin: 0; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; transition: transform ${PRESS_MS}ms ease-out; }`,
-    `${HIDE_ALL}:active { transform: scale(${PRESS_SCALE}); }`,
-    `@media (prefers-reduced-motion: reduce) { ${HIDE_ALL} { transition: none; } ${HIDE_ALL}:active { transform: none; } }`,
+    `${HIDE_ALL} { flex: none; display: flex; align-items: center; justify-content: center; width: ${HIDE_BUTTON_REM}rem; height: ${HIDE_BUTTON_REM}rem; min-height: 0; margin: 0; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
     `${HIDE_ALL} svg { width: ${HIDE_ICON_REM}rem; height: ${HIDE_ICON_REM}rem; }`,
-    `${HIDE_ALL} :is(path, circle) { fill: none !important; }`,
     // Hidden notes keep their layout, so they measure and come back in place; a hidden element takes no pointer, so none can be hit.
     `#${LAYER_ID}.${HIDDEN_CLASS} { visibility: hidden; }`,
     // Some selected notes have a box and some do not: a dashed ring, neither on nor off.
@@ -2628,7 +2626,11 @@
     const clear = document.createElement('button')
     clear.className = CLEAR_CLASS
     clear.innerHTML = controlIcon(CLEAR_ICON)
-    clear.addEventListener('click', under(textTool, () => selected.length ? deleteSelected() : confirmClear()))
+    clear.addEventListener('click', under(textTool, () => {
+      setNotesHidden(false)
+      if (selected.length) deleteSelected()
+      else confirmClear()
+    }))
     const settings = document.createElement('button')
     settings.className = SETTINGS_CLASS
     settings.title = SETTINGS_LABEL
@@ -2653,7 +2655,7 @@
     sliders.addEventListener('input', under(textTool, (event) => slideLook(event.target)))
     panelParts = [tray, clear, backgroundButton, ...(settingsUi.off ? [] : [settings]), sliders]
     keypad().append(...panelParts)
-    showHideButton()
+    showHideAllLook()
     showPanelValues()
   }
 
@@ -3082,7 +3084,7 @@
   // Whether the notes are hidden by the eye. Not saved, so a reload shows them, and not an undo step.
   let notesHidden = false
 
-  function showHideButton () {
+  function showHideAllLook () {
     const button = document.querySelector(`.${HIDE_ALL_CLASS}`)
     if (!button) return
     const label = notesHidden ? SHOW_LABEL : HIDE_LABEL
@@ -3100,7 +3102,7 @@
     drawingLayer().classList.toggle(HIDDEN_CLASS, hide)
     if (hide) select([])
     else redraw()
-    showHideButton()
+    showHideAllLook()
   }
 
   // The note an event's target is in, or null; only while Text Anywhere is current is a note ever the target.

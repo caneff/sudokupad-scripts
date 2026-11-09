@@ -56,10 +56,11 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
   })
   after(async () => { await context.close() })
 
-  it('the eye is an open eye at the right of the sliders block, level with both sliders and clear of them, inside the panel', async () => {
-    assert.equal(await pressed(), 'false')
-    assert.equal(await eye().getAttribute('title'), 'Hide all notes')
-    const rect = (selector) => p.locator(selector).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.x, right: r.right, y: r.y, bottom: r.bottom } })
+  // The eye and both sliders in the block, on `page`: the eye to the right of both, level with them and centered on the two, nothing overlapping, all inside the panel.
+  const checkLayout = async (page) => {
+    assert.equal(await page.locator(HIDE_BUTTON).getAttribute('aria-pressed'), 'false')
+    assert.equal(await page.locator(HIDE_BUTTON).getAttribute('title'), 'Hide all notes')
+    const rect = (selector) => page.locator(selector).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.x, right: r.right, y: r.y, bottom: r.bottom } })
     const [button, size, opacity, block, panel] = await Promise.all([HIDE_BUTTON, SIZE_SLIDER, OPACITY_SLIDER, SLIDERS, draw.KEYPAD].map(rect))
     assert.ok(size.right <= button.x && opacity.right <= button.x, 'either slider ends before the eye starts')
     assert.ok(button.y < size.bottom && button.bottom > opacity.y, 'the eye is level with both slider rows')
@@ -67,6 +68,18 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
     assert.ok(size.bottom <= opacity.y + 1, 'the sliders do not overlap')
     assert.ok(Math.min(size.x, opacity.x) >= block.x && button.right <= block.right && block.right <= panel.right, 'all fit the block, inside the panel')
     assert.ok(size.right - size.x > 60, 'a slider keeps room to drag')
+  }
+
+  it('the eye is an open eye at the right of the sliders block, level with both sliders and clear of them, inside the panel', async () => {
+    await checkLayout(p)
+  })
+
+  it('the same layout holds at 1920x1080 and 1366x768', async () => {
+    for (const [width, height] of [[1920, 1080], [1366, 768]]) {
+      await p.setViewportSize({ width, height })
+      await checkLayout(p)
+    }
+    await p.setViewportSize({ width: 1280, height: 720 })
   })
 
   it('a click hides every note, none can be hit, the selection is cleared and the eye closes', async () => {
@@ -152,6 +165,37 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
     assert.deepEqual(await readUntil(() => texts(p), (t) => t.length === 3), ['one', 'two', 'three'])
     assert.equal(await pressed(), 'false')
     assert.equal(await painted(), 3)
+  })
+
+  it('Clear all while hidden shows the notes first, then asks', async () => {
+    await eye().click()
+    assert.equal(await painted(), 0)
+    await p.click(draw.CLEAR_BUTTON)
+    await p.locator(draw.DIALOG).waitFor()
+    assert.equal(await pressed(), 'false')
+    assert.equal(await painted(), (await texts(p)).length)
+    await p.locator(`${draw.DIALOG} button`).filter({ hasText: 'Cancel' }).click()
+    await p.locator(draw.DIALOG).waitFor({ state: 'detached' })
+    assert.deepEqual(await texts(p), ['one', 'two', 'three'])
+  })
+
+  // Loads the puzzle on the page again through the page's own loader, as a puzzle with `id`, in place and with no reload.
+  it('loading another puzzle in place shows its notes though the last one\'s were hidden', async () => {
+    const other = 'puzzle-hide-637'
+    await p.evaluate(([key, note]) => Framework.setData(key, [note]), [`${draw.DRAWING_PREFIX}${other}`, { kind: 'text', color: 1, size: 20, opacity: 100, text: 'elsewhere', at: [160, 160] }])
+    await eye().click()
+    assert.equal(await pressed(), 'true')
+    await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
+    await p.evaluate(async ([key, as]) => {
+      const { parsePuzzleData, fetchPuzzle } = window.pageLoader
+      const data = await parsePuzzleData(await fetchPuzzle(key))
+      data.id = as
+      await Framework.app.loadCTCPuzzle(data)
+    }, [new URL(p.url()).pathname.slice(1), other])
+    await p.waitForFunction((as) => Framework.app.puzzle.puzzleId === as, other)
+    assert.deepEqual(await readUntil(() => texts(p), (t) => t.length === 1), ['elsewhere'])
+    assert.equal(await pressed(), 'false')
+    assert.equal(await painted(), 1)
   })
 
   it('a reload after hiding shows the notes', async () => {
