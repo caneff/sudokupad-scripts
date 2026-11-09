@@ -56,7 +56,6 @@ jobs:
         if: ${{ failure() && steps.watch.outcome == 'skipped' }}
         uses: ./.github/actions/file-issue-once
         with:
-          token: ${{ github.token }}
           title: 'Watch did not run: the live suite could not be checked'
           body: "A step before `npm run watch:live` failed (npm ci, the Chromium install or the cache restore), so the live suite was not checked. Nothing was remembered. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
       # After the save, so Tampermonkey is never in the cache and each night fetches the current one: a new Tampermonkey
@@ -70,6 +69,5 @@ jobs:
         if: ${{ failure() && steps.tampermonkey.outcome == 'failure' }}
         uses: ./.github/actions/file-issue-once
         with:
-          token: ${{ github.token }}
           title: 'Tampermonkey test fails: a script does not install or run in real Tampermonkey'
           body: "`npm run test:tampermonkey` failed in the nightly watch. A new Tampermonkey, or an outage at tampermonkey.net, raw.githubusercontent.com or Google's CRX endpoint, fails it too. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."

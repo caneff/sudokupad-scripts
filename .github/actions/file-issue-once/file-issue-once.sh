@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Files a `bug` issue titled $TITLE with body $BODY, unless an open issue already has exactly that title.
+# Shell and `gh` only: this runs when `npm ci` failed, so it cannot share live/watch.mjs's fileIssue.
 # A failed list stops the script: filing blind could duplicate.
 set -euo pipefail
 open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[].title')

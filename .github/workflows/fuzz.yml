@@ -40,6 +40,5 @@ jobs:
         if: ${{ failure() && steps.fuzz.outcome == 'skipped' }}
         uses: ./.github/actions/file-issue-once
         with:
-          token: ${{ github.token }}
           title: 'Fuzz did not run: the nightly fuzz could not be checked'
           body: "A step before `npm run fuzz:nightly` failed (npm ci or the Chromium install), so the fuzz did not run. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."

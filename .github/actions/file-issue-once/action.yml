@@ -9,7 +9,7 @@ inputs:
     required: true
   token:
     description: A token that can write issues.
-    required: true
+    default: ${{ github.token }}
 runs:
   using: composite
   steps:
