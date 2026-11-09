@@ -323,6 +323,31 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     assert.equal(await read((s) => document.querySelector(s).scrollTop, TEXTS), scrolled)
   })
 
+  // The note is the only one, so a resize left on its old index would reach past the notes.
+  it('Delete while a selected note\'s handle is held deletes the note, and its release saves nothing back and leaves the Text tool on', async () => {
+    await draw.finishNote(p)
+    await draw.forgetDrawings(p)
+    await draw.reload(p)
+    await draw.pickDraw(p)
+    await draw.typeText(p, NOTE_AT, NOTE_TEXT)
+    await draw.finishNote(p)
+    await p.mouse.click(...await middleOfNote())
+    await dragHandle(40, 20)
+    assert.equal((await saved())[0].box !== undefined, true, 'the note has a box')
+    const [x, y] = await handleMiddle()
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.move(x + 30, y + 10, { steps: 6 })
+    await draw.frames(p)
+    await p.keyboard.press('Delete')
+    await draw.frames(p)
+    await p.mouse.up()
+    await draw.frames(p)
+    assert.equal(await p.locator(draw.DRAW_BUTTON).count(), 1, 'the Text tool is still on')
+    assert.equal(await saved(), null, 'no note is left saved')
+    assert.deepEqual(await draw.texts(p), [])
+  })
+
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
   })

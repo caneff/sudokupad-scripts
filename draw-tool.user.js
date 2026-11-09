@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.9
+// @version      0.44.12
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.9'
+  const VERSION = '0.44.12'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -695,6 +695,17 @@
     return { color: shared(items.map((item) => item.color)), width: widthFor(items[0].size), opacity: itemOpacity(items[0]), bg: shared(items.map((item) => Boolean(item.bg))) }
   }
 
+  // Whether closing the open note `item` with `text` changes the saved note `before` (null for a new note, which began empty): its text, or its color, size,
+  // opacity, background or box.
+  const noteChanged = (item, text, before) => text !== (before?.text ?? '') ||
+    (before !== null && (item.color !== before.color || item.size !== before.size || itemOpacity(item) !== itemOpacity(before) || Boolean(item.bg) !== Boolean(before.bg) || String(item.box) !== String(before.box)))
+
+  // Where the note at index `index` sits after the notes `keep` marks false went, or -1 when it went (or was never saved, as a new note's -1).
+  const indexAfterKeep = (index, keep) => index < 0 || !keep[index] ? -1 : keep.slice(0, index).filter(Boolean).length
+
+  // Which notes a change of color, size, transparency or Background reaches: the open note, else the selected ones, else the next one typed.
+  const lookTarget = (editing, selected) => editing ? 'open' : selected.length ? 'selected' : 'next'
+
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
@@ -1135,22 +1146,32 @@
     return { ...paletteColors(preset, pages, readCell).colors }
   }
 
+  // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `validator` a pasted value must pass or be skipped.
+  // `dialog` marks the looks the settings dialog sets and the notes are drawn again in; the others are the panel's sliders.
+  // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
+  const LOOKS = [
+    { name: 'width', key: WIDTH_KEY, read: readWidth, validator: isWidth },
+    { name: 'opacity', key: OPACITY_KEY, read: readOpacity, validator: isOpacity },
+    { name: 'outline', key: OUTLINE_KEY, read: readOutline, dialog: true },
+    { name: 'boxColor', key: BOX_KEY, read: readBox, dialog: true },
+    { name: 'frame', key: FRAME_KEY, read: readFrame, dialog: true },
+    { name: 'noteFont', key: FONT_KEY, read: readFont, dialog: true }
+  ]
+  const lookKeys = (looks) => looks.map((row) => row.key)
+  const lookReaders = (looks) => Object.fromEntries(looks.map(({ key, read, validator }) => [key, validator ? (data) => validator(data) ? data : undefined : read]))
+  // Every look as `store` holds it, keyed by each row's `by` field: its name for the looks in force, its stored key for Copy.
+  const readLooks = (store, looks = LOOKS, by = 'name') => Object.fromEntries(looks.map((row) => [row[by], row.read(store.getData(row.key))]))
+  const lookRow = (name) => LOOKS.find((row) => row.name === name)
+  // The dialog's rows whose draft differs from the value in force.
+  const changedDialogLooks = (looks, draft, now) => looks.filter((row) => row.dialog && draft[row.name] !== now[row.name])
+
   // Copy and Paste carry the colors, size, transparency, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) : undefined
-  const READERS = {
-    [COLORS_KEY]: readPastedColors,
-    [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
-    [OPACITY_KEY]: (data) => isOpacity(data) ? data : undefined,
-    // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
-    [OUTLINE_KEY]: readOutline,
-    [BOX_KEY]: readBox,
-    [FRAME_KEY]: readFrame,
-    [FONT_KEY]: readFont
-  }
+  const READERS = { [COLORS_KEY]: readPastedColors, ...lookReaders(LOOKS) }
 
-  // The size, transparency, outline, box color, frame and font in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
-  function copiedSettings (store) {
-    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [OPACITY_KEY]: readOpacity(store.getData(OPACITY_KEY)), [OUTLINE_KEY]: readOutline(store.getData(OUTLINE_KEY)), [BOX_KEY]: readBox(store.getData(BOX_KEY)), [FRAME_KEY]: readFrame(store.getData(FRAME_KEY)), [FONT_KEY]: readFont(store.getData(FONT_KEY)) }
+  // The looks in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
+  function copiedSettings (store, looks = LOOKS) {
+    const copied = readLooks(store, looks, 'key')
     const savedColors = readDrawColors(store.getData(COLORS_KEY))
     if (savedColors) copied[COLORS_KEY] = savedColors
     return JSON.stringify(copied)
@@ -1903,20 +1924,16 @@
       label: 'notes on the board',
       needs: BOARD,
       onSkip () {
-        const layer = document.getElementById(LAYER_ID)
-        if (layer) layer.remove()
+        document.getElementById(LAYER_ID)?.remove()
       }
     },
     tool: {
       label: 'Text tool',
       needs: { ...BOARD, 'Framework.addTool': 'function', 'Framework.showDialog': 'function', 'app.getToolNames': 'function', 'Framework.app.grid.rows': 'integer', 'Framework.app.grid.cols': 'integer' },
       onSkip () {
-        const button = document.getElementById(`control-${TOOL_NAME}`)
-        if (button) button.remove()
-        const layer = document.getElementById(LAYER_ID)
-        if (layer) layer.classList.remove(ACTIVE_CLASS)
-        const style = document.getElementById(PANEL_STYLE_ID)
-        if (style) style.remove()
+        document.getElementById(`control-${TOOL_NAME}`)?.remove()
+        document.getElementById(LAYER_ID)?.classList.remove(ACTIVE_CLASS)
+        document.getElementById(PANEL_STYLE_ID)?.remove()
         hidePanel()
       }
     },
@@ -1924,8 +1941,7 @@
       label: 'settings',
       needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' },
       onSkip () {
-        const gear = document.querySelector(`.${SETTINGS_CLASS}`)
-        if (gear) gear.remove()
+        document.querySelector(`.${SETTINGS_CLASS}`)?.remove()
         Framework.closeDialog()
       }
     },
@@ -2007,7 +2023,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2084,7 +2100,7 @@
     const px = (units) => `${roundToTenth(units * scale)}px`
     const [width, height] = item.box ? item.box.map(px) : ['', '']
     const limit = item.box ? 'none' : ''
-    const pad = notePadding(item, outline)
+    const pad = notePadding(item, look.outline)
     const [padX, padY] = pad.map(px)
     return {
       left: `${roundToHundredth(x - pad[0] * scale)}px`,
@@ -2099,9 +2115,9 @@
       opacity: String(noteOpacity(item)),
       [NOTE_OPACITY_VAR]: String(noteOpacity(item)),
       [NOTE_COLOR_VAR]: itemColor(item.color),
-      backgroundColor: item.bg ? boxFill(boxColor, itemColor(item.color)) : 'transparent',
-      boxShadow: item.bg ? frameShadow(frame) : 'none',
-      textShadow: item.bg ? 'none' : haloShadow(outline, PAGE_COLOR),
+      backgroundColor: item.bg ? boxFill(look.boxColor, itemColor(item.color)) : 'transparent',
+      boxShadow: item.bg ? frameShadow(look.frame) : 'none',
+      textShadow: item.bg ? 'none' : haloShadow(look.outline, PAGE_COLOR),
       padding: `${padY} ${padX}`,
       borderRadius: item.bg ? px(BACKGROUND_RADIUS * item.size) : '0'
     }
@@ -2417,16 +2433,11 @@
   const EYE_SHUT_ICON = '<path d="M2 9C6 17 18 17 22 9"/><path d="M4.3 12.1L3.2 14.5M8.5 14.5L7.8 17M15.5 14.5L16.2 17M19.7 12.1L20.8 14.5"/>'
   const CLEAR_ICON = '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'
   let color = DEFAULT_COLOR
-  let width = DEFAULT_WIDTH
-  // The transparency of the next note, as the Transparency slider sets it, and remembered.
-  let opacity = DEFAULT_OPACITY
+  // The looks in force, by `LOOKS` name: width and opacity are the next note's as the sliders set them, and remembered; the rest are
+  // the outline and font of every note and the box color and frame of every note with a box, as the settings dialog sets them.
+  const look = readLooks({ getData: () => null })
   // Whether the next note is made with a background. The Background button turns it on and off, and it is remembered.
   let background = false
-  // The outline and font of every note and the box color and frame of every note with a box, as the settings dialog sets them.
-  let outline = DEFAULT_OUTLINE
-  let boxColor = DEFAULT_BOX
-  let frame = false
-  let noteFont = DEFAULT_FONT
   // Text Anywhere's nine colors, or null until they are first copied from the pen colors.
   let colors = null
   // The elements the panel adds to SudokuPad's keypad while Text Anywhere is current.
@@ -2436,7 +2447,7 @@
 
   const unmarkColor = () => { for (const button of keypad().querySelectorAll('button.digit.current')) button.classList.remove('current') }
 
-  // The open note's own look changes. A brand-new note's color or size also becomes the next note's (`alsoNext`); an existing note's changes only itself.
+  // The open note's own look changes. A brand-new note's look also becomes the next note's (`alsoNext`); an existing note's changes only itself.
   function changeOpen (change, alsoNext) {
     editing.item = change(editing.item)
     if (editing.index === -1) alsoNext()
@@ -2449,28 +2460,36 @@
     savedData.setData(COLOR_KEY, color)
   }
 
-  function pickColor (next) {
-    if (editing) {
-      changeOpen((item) => ({ ...item, color: next }), () => setColor(next))
-      return
+  // Applies `change` to the notes `lookTarget` names; a new open note's look also becomes the next note's (`setNext`).
+  function applyLook (change, setNext) {
+    const target = lookTarget(editing, selected)
+    if (target === 'open') changeOpen(change, setNext)
+    else if (target === 'selected') changeSelected(change)
+    else {
+      setNext()
+      showPanelValues()
     }
-    if (selected.length) {
-      changeSelected((item) => ({ ...item, color: next }))
-      return
-    }
-    setColor(next)
-    showPanelValues()
   }
+
+  // The notes `lookTarget` names as a list, or null for the next note.
+  function targetNotes () {
+    const target = lookTarget(editing, selected)
+    return target === 'open' ? [editing.item] : target === 'selected' ? selectedNotes() : null
+  }
+
+  const pickColor = (next) => applyLook((item) => ({ ...item, color: next }), () => setColor(next))
 
   function showColors () {
     writeStyle(COLORS_STYLE_ID, colors ? colorsCss(colors) : '')
   }
 
-  // The colors, outline, box color, frame, font, size and opacity as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
-  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, WIDTH_KEY, OPACITY_KEY], () => {
-    const was = { colors, outline, boxColor, frame, noteFont, width, opacity }
+  // The colors and every look as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
+  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...lookKeys(LOOKS)], () => {
+    const wasColors = colors
+    const wasLooks = { ...look }
     return () => {
-      ;({ colors, outline, boxColor, frame, noteFont, width, opacity } = was)
+      colors = wasColors
+      Object.assign(look, wasLooks)
       showPanelValues()
       showColors()
       if (colors) refreshPickers(CLASS_PREFIX, (n) => colors[n])
@@ -2485,45 +2504,16 @@
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
   }
 
-  // The next note's size and transparency are saved for the next visit, and a paste sets them as a move of the slider would.
-  function setSize (value) {
-    width = value
-    savedData.setData(WIDTH_KEY, value)
-  }
-
-  function setOpacity (value) {
-    opacity = value
-    savedData.setData(OPACITY_KEY, value)
-  }
-
   function showBoxes () {
     boardNotes.run(() => { if (Framework.app.puzzle.currentPuzzle) redraw() })
   }
 
-  // A look setting is stored, then the notes are drawn again in it.
-  function writeLook (key, value) {
-    savedData.setData(key, value)
-    showBoxes()
-  }
-
-  function saveOutline (next) {
-    outline = next
-    writeLook(OUTLINE_KEY, next)
-  }
-
-  function saveBoxColor (next) {
-    boxColor = next
-    writeLook(BOX_KEY, next)
-  }
-
-  function saveFrame (on) {
-    frame = on
-    writeLook(FRAME_KEY, on)
-  }
-
-  function saveFont (next) {
-    noteFont = next
-    writeLook(FONT_KEY, next)
+  // A look is stored and kept, then the notes are drawn again in it when it is one of the dialog's.
+  function setLook (name, value) {
+    const row = lookRow(name)
+    look[name] = value
+    savedData.setData(row.key, value)
+    if (row.dialog) showBoxes()
   }
 
   // The settings dialog: nine color pickers and a preset list, the font, the outline, the box color and the frame, which fill a draft Save writes, and Copy and Paste settings, which act at once.
@@ -2547,14 +2537,9 @@
 
   // A pasted value is saved and shown at once, whether or not Text Anywhere is current.
   function applyPasted (values) {
-    if (WIDTH_KEY in values) setSize(values[WIDTH_KEY])
-    if (OPACITY_KEY in values) setOpacity(values[OPACITY_KEY])
-    showPanelValues()
     if (COLORS_KEY in values) saveColors(values[COLORS_KEY])
-    if (OUTLINE_KEY in values) saveOutline(values[OUTLINE_KEY])
-    if (BOX_KEY in values) saveBoxColor(values[BOX_KEY])
-    if (FRAME_KEY in values) saveFrame(values[FRAME_KEY])
-    if (FONT_KEY in values) saveFont(values[FONT_KEY])
+    for (const { name, key } of LOOKS) if (key in values) setLook(name, values[key])
+    showPanelValues()
   }
 
   function openDialog () {
@@ -2562,11 +2547,8 @@
     let draft = colors ?? copiedPenColors(readPenColor)
     let chosen = null
     let colorsEdited = false
-    let draftOutline = outline
-    let draftBox = boxColor
-    let draftCustom = savedHex(boxColor) ?? BOX_WHITE
-    let draftFrame = frame
-    let draftFont = noteFont
+    let draftLooks = { ...look }
+    let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
     let pages = []
     let paletteNote = ''
     // A palette of a shape the script does not know is the dialog's own note, and does not turn the presets off.
@@ -2578,7 +2560,7 @@
         paletteNote = error.message
       }
     }
-    const edits = () => ({ colors: colorsEdited, outline: draftOutline !== outline, box: draftBox !== boxColor, frame: draftFrame !== frame, font: draftFont !== noteFont })
+    const editedLooks = () => changedDialogLooks(LOOKS, draftLooks, look)
     const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Text Anywhere',
@@ -2586,16 +2568,12 @@
       bodyId: DIALOG_ID,
       styleId: DIALOG_STYLE_ID,
       css: DIALOG_CSS,
-      changed: () => Object.values(edits()).some(Boolean),
+      changed: () => colorsEdited || editedLooks().length > 0,
       snapshot: snapshotSave,
       feature: settingsUi,
       save: () => {
-        const edited = edits()
-        if (edited.colors) saveColors(draft)
-        if (edited.outline) saveOutline(draftOutline)
-        if (edited.box) saveBoxColor(draftBox)
-        if (edited.frame) saveFrame(draftFrame)
-        if (edited.font) saveFont(draftFont)
+        if (colorsEdited) saveColors(draft)
+        for (const { name } of editedLooks()) setLook(name, draftLooks[name])
       },
       copyPaste: {
         // A copy with the saved settings off says so, rather than copy the defaults as if they were saved.
@@ -2603,11 +2581,8 @@
         readers: READERS,
         apply: (values) => {
           applyPasted(values)
-          draftOutline = outline
-          draftBox = boxColor
-          draftCustom = savedHex(boxColor) ?? draftCustom
-          draftFrame = frame
-          draftFont = noteFont
+          draftLooks = { ...look }
+          draftCustom = savedHex(look.boxColor) ?? draftCustom
           draft = colors ?? draft
           chosen = null
           colorsEdited = false
@@ -2621,8 +2596,8 @@
       box.innerHTML = '<div class="draw-tool-section-title">Colors</div>' +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
-        `<div class="draw-tool-section-title">Font</div>${renderFontChoice(draftFont)}` +
-        renderSamplePicks({ outline: draftOutline, box: draftBox, custom: draftCustom, frame: draftFrame, textColor: draft[color] })
+        `<div class="draw-tool-section-title">Font</div>${renderFontChoice(draftLooks.noteFont)}` +
+        renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft[color] })
     }
     draw()
     box.addEventListener('change', under(settingsUi, (event) => {
@@ -2635,10 +2610,10 @@
         }
         draw()
       } else if (target.matches('[data-role="font-choice"]')) {
-        draftFont = readFont(target.value)
+        draftLooks.noteFont = readFont(target.value)
         draw()
       } else if (target.matches('[data-role="box-custom"]')) {
-        draftCustom = draftBox = hexColor(target.value)
+        draftCustom = draftLooks.boxColor = hexColor(target.value)
         draw()
       } else if (target.matches('input[data-role="swatch"]')) {
         draft = editedColor(draft, Number(target.dataset.key), target.value)
@@ -2651,9 +2626,9 @@
       const button = event.target.closest('button[data-role$="-pick"]')
       if (!button) return
       const { role, value } = button.dataset
-      if (role === 'outline-pick') draftOutline = readOutline(value)
-      else if (role === 'box-pick') draftBox = value === BOX_CUSTOM ? draftCustom : value
-      else if (role === 'frame-pick') draftFrame = value === 'on'
+      if (role === 'outline-pick') draftLooks.outline = readOutline(value)
+      else if (role === 'box-pick') draftLooks.boxColor = value === BOX_CUSTOM ? draftCustom : value
+      else if (role === 'frame-pick') draftLooks.frame = value === 'on'
       else return
       draw()
       box.querySelector(`button[data-role="${role}"][data-value="${value}"]`)?.focus()
@@ -2666,7 +2641,10 @@
   const BACKGROUND_ICON = `<rect class="${BACKGROUND_FILL_CLASS}" x="3" y="5" width="18" height="14" rx="3" fill="currentColor" fill-opacity=".22"/><rect x="3" y="5" width="18" height="14" rx="3" stroke-dasharray="3 3"/>${TEXT_GLYPH}`
 
   // The button shows the open note's own background while a note is open, the selection's (null when it is mixed) while notes are selected, and the setting for the next note otherwise.
-  const backgroundShown = () => editing ? Boolean(editing.item.bg) : selected.length ? panelLooks(selectedNotes()).bg : background
+  const backgroundShown = () => {
+    const notes = targetNotes()
+    return notes ? panelLooks(notes).bg : background
+  }
 
   function showBackground () {
     const button = document.querySelector(`.${BACKGROUND_CLASS}`)
@@ -2686,23 +2664,14 @@
   // A press turns the open note's background on or off, and the setting only when the note is a new one; with no note open it turns the selected notes' on or off
   // (on when it is mixed), and with none selected the setting.
   function pressBackground () {
-    if (!editing && selected.length) {
-      const on = backgroundShown() !== true
-      changeSelected(({ bg, ...rest }) => on ? { ...rest, bg: true } : rest)
-      return
-    }
-    if (!editing) setBackground(!background)
-    else {
-      const on = !editing.item.bg
-      const { bg, ...rest } = editing.item
-      editing.item = on ? { ...rest, bg: true } : rest
-      styleNote(editing.element, editing.item, boardMap())
-      if (editing.index === -1) setBackground(on)
-    }
-    showBackground()
+    const on = backgroundShown() !== true
+    applyLook(({ bg, ...rest }) => on ? { ...rest, bg: true } : rest, () => setBackground(on))
   }
 
-  const panelValues = () => editing ? panelLooks([editing.item]) : selected.length ? panelLooks(selectedNotes()) : { color, width, opacity }
+  const panelValues = () => {
+    const notes = targetNotes()
+    return notes ? panelLooks(notes) : { color, width: look.width, opacity: look.opacity }
+  }
 
   function sliderRow (id, label, range, value) {
     const row = document.createElement('div')
@@ -2717,20 +2686,17 @@
 
   const SIZE_KEYS = { '+': 1, '=': 1, '-': -1 }
 
-  // What each slider reads its value as, how it changes a note, and how it sets the next note.
+  // The look each slider sets, read by its row in LOOKS, and how it changes a note.
   const SLIDER_LOOKS = {
-    [SIZE_SLIDER]: { read: readWidth, change: (value) => (item) => ({ ...item, size: textSizeFor(value) }), setNext: setSize },
-    [OPACITY_SLIDER]: { read: readOpacity, change: (value) => (item) => ({ ...item, opacity: value }), setNext: setOpacity }
+    [SIZE_SLIDER]: { name: 'width', change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
+    [OPACITY_SLIDER]: { name: 'opacity', change: (value) => (item) => ({ ...item, opacity: value }) }
   }
 
   // A move of a slider sets the open note's look, else the selected notes', else the next note's; a new open note's also becomes the next note's.
   function slideLook (input) {
-    const { read, change: changeWith, setNext } = SLIDER_LOOKS[input.id]
-    const value = read(Number(input.value))
-    const change = changeWith(value)
-    if (editing) changeOpen(change, () => setNext(value))
-    else if (selected.length) changeSelected(change)
-    else setNext(value)
+    const { name, change } = SLIDER_LOOKS[input.id]
+    const value = lookRow(name).read(Number(input.value))
+    applyLook(change(value), () => setLook(name, value))
   }
 
   // The + and - keys move the Size slider one step, with the same effect as a move of it; the slider follows.
@@ -2767,7 +2733,7 @@
     hideAll.addEventListener('click', under(textTool, () => setNotesHidden(!notesHidden)))
     const sliderRows = document.createElement('div')
     sliderRows.className = SLIDER_ROWS_CLASS
-    sliderRows.append(sliderRow(SIZE_SLIDER, SIZE_LABEL, { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width), sliderRow(OPACITY_SLIDER, OPACITY_LABEL, { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }, opacity))
+    sliderRows.append(sliderRow(SIZE_SLIDER, SIZE_LABEL, { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, look.width), sliderRow(OPACITY_SLIDER, OPACITY_LABEL, { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }, look.opacity))
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
     sliders.append(sliderRows, hideAll)
@@ -2939,7 +2905,7 @@
   }
 
   // A note's size depends on these, on the layer's font, and on the board's scale for a fixed note, which is drawn in screen pixels.
-  const measuredFor = (item, map) => JSON.stringify([item.text, item.size, item.box, Boolean(item.bg), outline, layerFont, item.fixed ? map.scale : null])
+  const measuredFor = (item, map) => JSON.stringify([item.text, item.size, item.box, Boolean(item.bg), look.outline, layerFont, item.fixed ? map.scale : null])
 
   // Measures the notes whose size may have changed, every read before every write: whether its text runs past its box, then, with its scroll bar's
   // room settled, its text's size in board units.
@@ -2962,7 +2928,7 @@
     watchBoard(svg)
     const map = boardMap()
     lastLayout = layoutKey(map)
-    const font = noteFontFamily(noteFont, window.getComputedStyle(svg).fontFamily)
+    const font = noteFontFamily(look.noteFont, window.getComputedStyle(svg).fontFamily)
     if (font !== layerFont) layer.style.fontFamily = layerFont = font
     noteGroups(layer)
     placeBoardGroup(map)
@@ -3003,11 +2969,11 @@
 
   // The nearest point to a fixed note's own at which its box lies inside the window.
   function reachOf (item, map) {
-    const { left, right, top, bottom } = noteScreenBox(item, map, outline)
+    const { left, right, top, bottom } = noteScreenBox(item, map, look.outline)
     const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
     // The box is where the note is drawn now, which may not be its stored point, so the middle is taken from the stored point by the box's own offset from the drawn one.
     const drawn = drawnPoint(item)
-    const toMiddle = noteMiddle(item, map, outline).map((v, i) => v - drawn[i])
+    const toMiddle = noteMiddle(item, map, look.outline).map((v, i) => v - drawn[i])
     const reached = reachablePoint(item.fixed.map((v, i) => v + toMiddle[i]), [right - left, bottom - top], win)
     return roundPoint(reached.map((v, i) => v - toMiddle[i]))
   }
@@ -3034,7 +3000,7 @@
   const cornerPoint = (box, corner, opposite = false) => [0, 1].map((i) => (corner[i] < 0) !== opposite ? [box.left, box.top][i] : [box.right, box.bottom][i])
 
   // The screen box of the one selected note, or null when no note or several are selected.
-  const selectedBox = (map) => selected.length === 1 ? noteScreenBox(drawing[selected[0]], map, outline) : null
+  const selectedBox = (map) => selected.length === 1 ? noteScreenBox(drawing[selected[0]], map, look.outline) : null
 
   // Puts `element` over screen box `box`, moved by `offset`.
   function placeOver (element, { left, top, right, bottom }, offset = [0, 0]) {
@@ -3043,7 +3009,7 @@
 
   // An outline for each selected note, moved by `offset` screen pixels while the selection is dragged, or for the open note, in its color, in place of the selection.
   function showSelection (map, offset = [0, 0]) {
-    const outlines = editing ? [{ box: editing.box, color: itemColor(editing.item.color) }] : selected.map((index) => ({ box: noteScreenBox(drawing[index], map, outline) }))
+    const outlines = editing ? [{ box: editing.box, color: itemColor(editing.item.color) }] : selected.map((index) => ({ box: noteScreenBox(drawing[index], map, look.outline) }))
     const layer = drawingLayer()
     const shown = [...layer.querySelectorAll(`.${SELECTION_CLASS}`)]
     for (const element of shown.slice(outlines.length)) element.remove()
@@ -3171,10 +3137,10 @@
     if (!resizing) return
     event.stopImmediatePropagation()
     flushFrame()
-    const { index, item } = resizing
+    const { index, item, cancelled } = resizing
     resizing = null
     holdCursor(null)
-    if (editing || String(drawing[index]?.box) === String(item.box)) return
+    if (cancelled || editing || String(drawing[index]?.box) === String(item.box)) return
     keepDrawnPoints([index], boardMap())
     renderDrawing()
     snapToPixels([index])
@@ -3243,7 +3209,7 @@
     const map = boardMap()
     const drawn = drawing.filter((item) => item.kind === TEXT_KIND && item[NOTE_ELEMENT]?.isConnected)
     const onTop = [...drawn.filter((item) => !item.fixed), ...drawn.filter((item) => item.fixed)]
-    return onTop[noteAtPoint(onTop.map((item) => noteScreenBox(item, map, outline)), point, margin)]?.[NOTE_ELEMENT] ?? null
+    return onTop[noteAtPoint(onTop.map((item) => noteScreenBox(item, map, look.outline)), point, margin)]?.[NOTE_ELEMENT] ?? null
   }
 
   // The note a press hits: the one under the pointer, else the topmost within HIT_MARGIN_PX of it.
@@ -3348,15 +3314,33 @@
   function keepItems (keep) {
     const kept = []
     const stillSelected = []
+    const marks = drawing.map((item, i) => keep(item, i))
     drawing.forEach((item, i) => {
-      if (!keep(item, i)) return
+      if (!marks[i]) return
       if (selected.includes(i)) stillSelected.push(kept.length)
       kept.push(item)
     })
     const removed = kept.length !== drawing.length
     drawing = kept
     selected = stillSelected
+    if (removed) followKept(marks)
     return removed
+  }
+
+  // The open note, a resize and a move in progress follow their notes to the places the others' removal left them. An open note that went is unsaved (-1, so closing
+  // it adds it back with what was typed), and so is its resize. A selected note's resize whose note went is cancelled, so its release saves nothing; a move leaves the
+  // notes that went, and a move left with none is cancelled.
+  function followKept (marks) {
+    if (editing) editing.index = indexAfterKeep(editing.index, marks)
+    if (resizing) {
+      const index = indexAfterKeep(resizing.index, marks)
+      if (!editing && index === -1) resizing.cancelled = true
+      resizing.index = index
+    }
+    if (!drag?.move) return
+    const move = drag.move.map((entry) => ({ ...entry, index: indexAfterKeep(entry.index, marks) })).filter(({ index }) => index !== -1)
+    if (move.length === 0) cancelDrag()
+    else drag.move = move
   }
 
   function deleteSelected () {
@@ -3369,8 +3353,8 @@
   // A new note starts at screen point `point`: its first line's middle is on the point, so its stored point is a half line up. Whether it is pinned to the board or fixed on the
   // screen is decided by the point clicked.
   function newNote (point, map) {
-    const size = textSizeFor(width)
-    const placed = placedItem(textItem(map.toBoard(point), '', color, size, background, opacity), point, map)
+    const size = textSizeFor(look.width)
+    const placed = placedItem(textItem(map.toBoard(point), '', color, size, background, look.opacity), point, map)
     const halfLine = LINE_HEIGHT * size / 2
     return placed.fixed
       ? { ...placed, fixed: roundPoint([placed.fixed[0], placed.fixed[1] - halfLine * map.scale]) }
@@ -3538,11 +3522,10 @@
   function finishText () {
     const open = closeEditing()
     const { index, item, saved } = open
-    const before = index === -1 ? '' : drawing[index].text
     const text = closingText(open)
     const resized = index !== -1 && String(item.box) !== String(drawing[index].box)
     let left = index
-    const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || itemOpacity(item) !== itemOpacity(drawing[index]) || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
+    const changed = noteChanged(item, text, index === -1 ? null : drawing[index])
     if (changed) {
       if (text === '') {
         drawing.splice(index, 1)
@@ -3659,14 +3642,19 @@
     if (d.move) d.settle = setTimeout(() => { if (drag === d) inFrame('drag', dragMoves) }, SPEED_WINDOW_MS + SETTLE_SLACK_MS)
   }
 
+  // What every end of a drag takes down: its settle timer, then `between` (the cursor, for the ends that release it), then its selection rectangle.
+  function clearDrag (d, between = () => {}) {
+    clearTimeout(d.settle)
+    between()
+    d.rectangle?.remove()
+  }
+
   // A drag ends its move or its selection rectangle on its release; a press that never moved does nothing more, unless `click` is given to run it.
   // A drag Escape cancelled does nothing on its release. A small rectangle that selects nothing is a click that slipped.
   function endDrag (click = () => {}) {
     const ended = drag
     drag = null
-    clearTimeout(ended.settle)
-    holdCursor(null)
-    if (ended.rectangle) ended.rectangle.remove()
+    clearDrag(ended, () => holdCursor(null))
     if (ended.cancelled) return
     if (isClick(ended.points)) click(ended)
     else if (ended.move) endMove(ended)
@@ -3676,9 +3664,8 @@
   // Cancelling a drag puts the notes back where they were at the press. The press stays the tool's until its release, which then does nothing.
   function cancelDrag () {
     const d = drag
-    if (d.rectangle) d.rectangle.remove()
     if (d.move) clearMove(d)
-    clearTimeout(d.settle)
+    clearDrag(d)
     Object.assign(d, { move: null, rectangle: null, pending: [], cancelled: true })
     redraw()
   }
@@ -3768,8 +3755,8 @@
     if (!item) return { offset: raw, guides: [] }
     const reach = SELECTION_OFFSET_PX + SELECTION_OUTLINE_PX / 2
     const lines = (axis) => gridLines(Framework.app.grid[axis === 0 ? 'cols' : 'rows'], (k) => map.toScreen(axis === 0 ? [k * CELL_UNITS, 0] : [0, k * CELL_UNITS])[axis])
-    const box = noteScreenBox(item, map, outline)
-    const others = drawing.filter((other, i) => other.kind === TEXT_KIND && !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, outline))
+    const box = noteScreenBox(item, map, look.outline)
+    const others = drawing.filter((other, i) => other.kind === TEXT_KIND && !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, look.outline))
     const snaps = [['left', 'right'], ['top', 'bottom']].map(([near, far], axis) => snapAxis(box[near] + raw[axis], box[far] + raw[axis], {
       lines: lines(axis), reach, others: others.map((other) => ({ lo: other[near], hi: other[far] }))
     }))
@@ -3824,7 +3811,7 @@
   // `middle` is where the note's middle then is, which is what has to stay reachable.
   const movedBy = (moves, [dx, dy], map) => moves.map(({ index, item }) => {
     const [x, y] = screenPoint(item, map.toScreen)
-    const [middleX, middleY] = noteMiddle(item, map, outline)
+    const [middleX, middleY] = noteMiddle(item, map, look.outline)
     return { index, item, point: [x + dx, y + dy], middle: [middleX + dx, middleY + dy] }
   })
 
@@ -3957,9 +3944,8 @@
   }
 
   function cancelInput () {
-    if (drag?.rectangle) drag.rectangle.remove()
     if (drag?.move) clearMove(drag)
-    if (drag) clearTimeout(drag.settle)
+    if (drag) clearDrag(drag)
     drag = null
     showChrome()
     erasing = null
@@ -4050,7 +4036,7 @@
   // Deletes, whole, every note the drag from `from` to `to`, in board units, passes through or within HIT_MARGIN_PX of. Whether any went.
   function eraseAlong (from, to, map) {
     const [a, b] = [from, to].map(map.toScreen)
-    if (!keepItems((item) => item.kind !== TEXT_KIND || !touchesBox(grownBox(noteScreenBox(item, map, outline), HIT_MARGIN_PX), a, b))) return false
+    if (!keepItems((item) => item.kind !== TEXT_KIND || !touchesBox(grownBox(noteScreenBox(item, map, look.outline), HIT_MARGIN_PX), a, b))) return false
     erasing.erased = true
     return true
   }
@@ -4236,21 +4222,13 @@
   const start = (app) => {
     guard.probe({ roots: { Framework, app }, store: Framework })
     color = readColor(savedData.getData(COLOR_KEY))
-    width = readWidth(savedData.getData(WIDTH_KEY))
-    opacity = readOpacity(savedData.getData(OPACITY_KEY))
-    outline = readOutline(savedData.getData(OUTLINE_KEY))
+    Object.assign(look, readLooks(savedData))
     background = readBackground(savedData.getData(BACKGROUND_KEY))
     colors = readDrawColors(savedData.getData(COLORS_KEY))
-    boxColor = readBox(savedData.getData(BOX_KEY))
-    frame = readFrame(savedData.getData(FRAME_KEY))
-    noteFont = readFont(savedData.getData(FONT_KEY))
     showColors()
     // The features are independent: one that fails to install costs the others nothing.
     textTool.run(() => {
-      const style = document.createElement('style')
-      style.id = PANEL_STYLE_ID
-      style.textContent = PANEL_CSS
-      document.head.appendChild(style)
+      addStyleOnce(PANEL_STYLE_ID, PANEL_CSS)
       textTool.wrap(app, 'getToolNames', function (stock) { return toolNamesFor(stock(), this.currentEvent) })
       Framework.addTool({
         button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },

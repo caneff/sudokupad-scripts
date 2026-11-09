@@ -85,6 +85,12 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
       assert.equal(await p.locator('.draw-tool-shape-mode').count(), 0, 'no Shape button')
     })
 
+    // Last, so the checks above run with one copy of the script on the page.
+    it('a second start adds no second panel style', async () => {
+      await p.addScriptTag({ content: draw.script })
+      assert.equal(await p.locator('style#draw-tool-style').count(), 1)
+    })
+
     it('the page raised no error', () => { assert.deepEqual(errors, []) })
   })
 }
