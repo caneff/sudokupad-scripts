@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { fakeStore } = require('./fake-store.js')
-const { VERSION, OPTIONS, DEFAULT_OPTIONS, KEYS, savedOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES } = require('../ui-tweaks.user.js')
+const { VERSION, OPTIONS, DEFAULT_OPTIONS, savedOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES } = require('../ui-tweaks.user.js')
 
 test('VERSION matches the @version header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'ui-tweaks.user.js'), 'utf8')))
@@ -21,13 +21,13 @@ test('savedOptions: nothing saved reads as the defaults', () => {
 })
 
 test('savedOptions: each saved boolean wins over its default, the others keep theirs', () => {
-  assert.deepEqual(savedOptions(fakeStore({ [KEYS.tab]: false })), { tab: false, hideSelect: false, wrapButtons: false })
-  assert.deepEqual(savedOptions(fakeStore({ [KEYS.hideSelect]: true })), { tab: true, hideSelect: true, wrapButtons: false })
-  assert.deepEqual(savedOptions(fakeStore({ [KEYS.wrapButtons]: true })), { tab: true, hideSelect: false, wrapButtons: true })
+  assert.deepEqual(savedOptions(fakeStore({ UiTweaks_tab: false })), { tab: false, hideSelect: false, wrapButtons: false })
+  assert.deepEqual(savedOptions(fakeStore({ UiTweaks_hideSelect: true })), { tab: true, hideSelect: true, wrapButtons: false })
+  assert.deepEqual(savedOptions(fakeStore({ UiTweaks_wrapButtons: true })), { tab: true, hideSelect: false, wrapButtons: true })
 })
 
 test('savedOptions: a saved value that is not a boolean reads as the default', () => {
-  const store = fakeStore({ [KEYS.tab]: 'no', [KEYS.hideSelect]: 1, [KEYS.wrapButtons]: null })
+  const store = fakeStore({ UiTweaks_tab: 'no', UiTweaks_hideSelect: 1, UiTweaks_wrapButtons: null })
   assert.deepEqual(savedOptions(store), DEFAULT_OPTIONS)
 })
 
@@ -35,21 +35,21 @@ test('saveOptions keeps every option as a boolean under its own key, and savedOp
   const store = fakeStore()
   const chosen = { tab: false, hideSelect: true, wrapButtons: true }
   saveOptions(store, chosen)
-  assert.deepEqual(store.data, { [KEYS.tab]: false, [KEYS.hideSelect]: true, [KEYS.wrapButtons]: true })
+  assert.deepEqual(store.data, { UiTweaks_tab: false, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true })
   assert.deepEqual(savedOptions(store), chosen)
 })
 
 test('the storage keys are UiTweaks_ names', () => {
-  assert.deepEqual(KEYS, { tab: 'UiTweaks_tab', hideSelect: 'UiTweaks_hideSelect', wrapButtons: 'UiTweaks_wrapButtons' })
+  assert.deepEqual(Object.fromEntries(OPTIONS.map((option) => [option.id, option.key])), { tab: 'UiTweaks_tab', hideSelect: 'UiTweaks_hideSelect', wrapButtons: 'UiTweaks_wrapButtons' })
 })
 
 test('copiedSettings: the options in force, defaults included', () => {
-  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [KEYS.hideSelect]: true, Other_key: 1 }))), { [KEYS.tab]: true, [KEYS.hideSelect]: true, [KEYS.wrapButtons]: false })
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ UiTweaks_hideSelect: true, Other_key: 1 }))), { UiTweaks_tab: true, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: false })
 })
 
 test('a paste keeps booleans under this script\'s keys and skips the rest', () => {
-  const pasted = pastedSettings(JSON.stringify({ [KEYS.tab]: false, [KEYS.hideSelect]: 'yes', Other_key: 1 }), READERS)
-  assert.deepEqual(pasted, { values: { [KEYS.tab]: false }, skipped: 1 })
+  const pasted = pastedSettings(JSON.stringify({ UiTweaks_tab: false, UiTweaks_hideSelect: 'yes', Other_key: 1 }), READERS)
+  assert.deepEqual(pasted, { values: { UiTweaks_tab: false }, skipped: 1 })
 })
 
 test('buildCss: the defaults add no rule', () => {
@@ -73,8 +73,8 @@ test('buildCss: both rules together; Tab adds none', () => {
 
 test('pastedOptions changes only the pasted options, whatever else is ticked in the dialog', () => {
   const saved = { tab: true, hideSelect: false, wrapButtons: false }
-  assert.deepEqual(pastedOptions(saved, { [KEYS.tab]: false }), { tab: false, hideSelect: false, wrapButtons: false })
-  assert.deepEqual(pastedOptions(saved, { [KEYS.hideSelect]: true, [KEYS.wrapButtons]: true }), { tab: true, hideSelect: true, wrapButtons: true })
+  assert.deepEqual(pastedOptions(saved, { UiTweaks_tab: false }), { tab: false, hideSelect: false, wrapButtons: false })
+  assert.deepEqual(pastedOptions(saved, { UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true }), { tab: true, hideSelect: true, wrapButtons: true })
   assert.deepEqual(pastedOptions(saved, {}), saved)
   assert.deepEqual(saved, { tab: true, hideSelect: false, wrapButtons: false }, 'the options given are left as they were')
 })

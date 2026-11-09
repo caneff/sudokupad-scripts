@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.16
+// @version      1.31.17
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.16'
+  const VERSION = '1.31.17'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -83,9 +83,7 @@
   // <lib:pointer-session>
   // Generated from lib/pointer-session.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // One press, from after its `pointerdown` to its release: `move` hears each `pointermove` and `end` the `pointerup` or `pointercancel`.
-  // The session listens in the capture phase, so a page handler that stops a release cannot leave it listening, and it is gone before
-  // `end` runs. The returned stop ends it with no `end`.
+  // Capture phase, so a page handler that stops a release cannot leave the session listening.
   const PRESS_END_EVENTS = ['pointerup', 'pointercancel']
   // The object form: Node's EventTarget, which the tests use, keeps a listener removed with a bare `true`.
   const CAPTURE = { capture: true }
@@ -131,7 +129,6 @@
     return keys.reduce((owner, key) => (owner === undefined || owner === null ? undefined : owner[key]), roots[root])
   }
 
-  // Each internal lacking, with the features it holds off; a feature is listed under the first of its `needs` it lacks.
   function lackingInternals (features, roots) {
     const lacking = new Map()
     Object.entries(features).forEach(([name, { needs }]) => {
@@ -178,7 +175,6 @@
     ].join('\n')).join('\n\n')
   }
 
-  // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
   function reportUrl ({ name, version, sudokupad, off }) {
     const shownVersion = sudokupad || 'unknown'
     const labels = off.map((feature) => feature.label).join(', ')
@@ -295,7 +291,6 @@
       host.append(bar)
     }
 
-    // A bar of plain words, one per text and page load; the same host as the SudokuPad-changed bar, with no report link.
     const told = new Set()
     function tell (text) {
       if (told.has(text) || !page || !page.doc.body) return
@@ -317,7 +312,6 @@
     let dialogActions = 0
     const storeFailures = new WeakSet()
 
-    // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
       const feature = {
         label,
@@ -551,12 +545,10 @@
     g: [[0, 0], [1, 1]]
   }
 
-  // Two segments are joined when they share a point: a cell's middle for a center or diagonal line, a cell corner for an edge line.
   function linePoints (value, row, col) {
     return LINE_PATHS[value].map(([r, c]) => [row + r, col + c])
   }
 
-  // SudokuPad's pen tool's own action queue, which arrow lines, marks and line erase send through.
   const PEN_ACTIONS = {
     'ToolPen.tool.actStart': 'function',
     'ToolPen.tool.actAdd': 'function',
@@ -568,11 +560,8 @@
   const CELLS = { 'Framework.app.puzzle.cells': 'array' }
   // Each install step starts once `Framework.getApp` says the app is ready, so without it every one is off.
   const APP = { 'Framework.getApp': 'function' }
-  // Each install step and the saved data and settings dialog, with the SudokuPad internals each cannot work without.
   const FEATURES = {
-    // Without these the settings and pen colors start from their defaults and nothing is kept.
     saved: { label: 'saved settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' } },
-    // The dialog opens from SudokuPad's settings and from the pen panel's settings button.
     settings: { label: 'settings dialog', needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' } },
     // The press on the settings dialog's overlay is held back on its own, so a throw installing it costs the dialog nothing; the overlay is SudokuPad's dialog's.
     overlay: { label: 'dialog overlay', needs: { 'Framework.showDialog': 'function' } },
@@ -661,7 +650,6 @@
     ].join('\n'))
   }
 
-  // The effects run with every new value in place, and the style is written once.
   function saveSettings (draft) {
     const changed = saveChangedSettings(savedData, draft, inForce)
     if (!changed.length) return
@@ -687,7 +675,6 @@
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math.
   /* global parseColor, darkenColor, toOklab */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
@@ -705,7 +692,6 @@
   // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
-  // One page preset per cell color page, up to three, then SudokuPad's own colors.
   const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
   const SUDOKUPAD_PRESET = 'sudokupad'
   const PALETTE_PRESET_LABELS = {
@@ -751,7 +737,6 @@
     return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
   }
 
-  // `pages` is the palette's pages of color keys, and `readCell` reads a key's color as CSS text.
   function paletteColors (preset, pages, readCell) {
     if (preset === SUDOKUPAD_PRESET) return SUDOKUPAD_SET
     const page = paletteOptions(pages.length).indexOf(preset)
@@ -769,7 +754,6 @@
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
   }
 
-  // The pages of cell color keys of the palette in force, or none until the color tool has one.
   function palettePages () {
     const palette = colorTool()?.palette
     if (!palette) return []
@@ -824,7 +808,6 @@
   function waitForColorTool () {
     return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
   }
-  // The pen color numbers as their buttons' data-key text.
   const PEN_COLOR_KEYS = PEN_COLOR_NUMBERS.map(String)
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
   // A pen color preset's id is saved beside the colors under `preset`; a set with none, or one not in SAVED_PRESETS, is Custom. UNSAVED is SudokuPad's own colors before the install save, never saved.
@@ -838,7 +821,7 @@
   }
   const isHexColor = (value) => typeof value === 'string' && HEX_COLOR.test(value)
 
-  // null when nothing usable is saved, which means the install save is still owed. A bad entry beside a usable one keeps SudokuPad's own color.
+  // null means the install save is still owed.
   function readPenColors (data) {
     if (!isPlainObject(data) || !PEN_COLOR_KEYS.some((n) => isHexColor(data[n]))) return null
     const colors = Object.fromEntries(PEN_COLOR_KEYS.map((n) => [n, isHexColor(data[n]) ? data[n].toLowerCase() : SUDOKUPAD_PEN_COLORS[n]]))
@@ -898,10 +881,8 @@
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
 
-  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 
-  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
   function colorFunction (value) {
     const fn = COLOR_FUNCTION.exec(value)
     if (!fn) return null
@@ -920,7 +901,6 @@
     return Boolean(fn && fn.alpha <= 0)
   }
 
-  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
   // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
   function parseColor (text) {
     if (typeof text !== 'string' || isTransparent(text)) return null
@@ -985,7 +965,6 @@
     return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
 
-  // WCAG relative luminance of [r, g, b] channels.
   function wcagLuminance (rgb) {
     const [r, g, b] = rgb.map((c) => {
       const x = c / 255
@@ -1007,17 +986,15 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads PEN_COLOR_NUMBERS from palette.
   /* global PEN_COLOR_NUMBERS */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
-  // One swatch's side and the gap between swatches; a caller lining its own keys up with the grid uses the same two.
   const SWATCH_PX = 34
   const SWATCH_GAP_PX = 4
   // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
   const PICKER_INPUT_REM = 2.4
   const PICKER_COLUMNS = 3
-  // The pickers fade in from this scale over this long. They are rare, and ending edit mode takes them away at once.
+  // The pickers are rare enough to fade in; ending edit mode takes them away at once, with no fade out.
   const PICKER_ENTRY_SCALE = 0.95
   const PICKER_ENTRY_MS = 150
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
@@ -1027,7 +1004,6 @@
 
   const fillWithOpacity = (color, opacity) => opacity < 1 ? `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)` : color
 
-  // The dialog's color block: a pulldown above a grid of swatches, three to a row.
   // Free mode (no `picked`) makes each swatch a color input; palette mode makes each a button, `picked` the pressed one, and a null swatch an empty cell.
   // `options` are `{ value, label, selected, disabled }`; `beside` goes in the grid's row, after it.
   // A `fillOpacity` under 1 draws the palette swatches that strong over what is behind them; the border and the pressed ring stay whole.
@@ -1065,7 +1041,6 @@
     ].join('\n')
   }
 
-  // Edit mode's looks, for SudokuPad's tool `tool` (its panel carries `tool-<tool>`): each picker fills the grid cell of its button, whose own picture is hidden under it.
   // A picker is out of the flow, so it takes no cell from the buttons the panel places itself.
   function pickerCss (prefix, tool) {
     const panel = `.tool-${tool} .controls-input`
@@ -1085,14 +1060,11 @@
     ].join('\n')
   }
 
-  // Every open picker shows the color `colorOf(n)` gives now.
   function refreshPickers (prefix, colorOf) {
     document.querySelectorAll(`.${prefix}picker input`).forEach((input) => { input.value = colorOf(input.dataset.key) })
   }
 
-  // A hold of HOLD_TO_EDIT_MS on one of the tool's nine color buttons, with either mouse button, puts a color picker over each; a picker's input calls `save(n, value)` at once.
-  // Left Alt held with the tool current does the same until it is released, as SudokuPad's own color tool does.
-  // `guard` runs each toggle and each window listener, so a caller can report a failure its own way. `endEditMode()` ends edit mode from outside.
+  // Left Alt held opens edit mode until it is released, as SudokuPad's own color tool does.
   function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
     const toolClass = `tool-${tool}`
     const editing = `${prefix}editing`
@@ -1102,7 +1074,6 @@
     // SudokuPad keeps one panel element and swaps its `tool-<name>` class for the next tool's, so a class watcher ends edit mode when the panel stops being this tool's.
     let leaveWatch = null
     let editPanel = null
-    // Whether left Alt opened this edit mode, so its release closes only that one.
     let altOpened = false
 
     function exit () {
@@ -1144,7 +1115,6 @@
       event.stopImmediatePropagation()
       document.removeEventListener('click', swallowClick, true)
     }
-    // Pointer events carry a mouse button of either kind.
     document.addEventListener('pointerdown', (event) => {
       cancel()
       holdDone = false
@@ -1213,7 +1183,6 @@
   // The page preset the set in force came from: a hand edit in the dialog makes the set Custom and keeps its missing pens, whose page the note still names.
   let activePickedPreset = active.preset
 
-  // The page presets the palette in force offers, and SudokuPad's own colors, which need no color tool.
   const availablePresets = () => {
     const tool = steps.colors.off ? null : readyColorTool()
     return paletteOptions(tool ? tool.palette.pages.length : 0)
@@ -1231,7 +1200,6 @@
     adoptColors(set, pickedPreset)
   }
 
-  // The saved pen colors and settings with the state mirroring them, as a function that puts them all back after a Save or Paste that failed half-way.
   const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...SETTING_NAMES.map((name) => SETTINGS[name].key)], () => {
     const wasActive = active
     const wasPicked = activePickedPreset
@@ -1249,8 +1217,7 @@
     saveColors({ colors: editedColors(active.colors, pen, value), preset: CUSTOM, missing: [] })
   }
 
-  // A hold on a pen button toggles a color picker over each, and a picker recolors its pen at once.
-  // Replaced when the pickers are installed; a page change before then has no edit mode to end.
+  // A page change before the pickers are installed has no edit mode to end.
   let endPenEditMode = () => {}
   function installPenPickers () {
     endPenEditMode = installHoldToEdit({ prefix: CLASS_PREFIX, tool: 'pen', colorOf: (n) => active.colors[n], save: savePenColor, guard: (toggle) => steps.colors.run(toggle) }).endEditMode
@@ -1325,7 +1292,6 @@
     return next
   }
 
-  // A pen on a page that Save turns off goes back to its page 1 pen, whose character is its pen number.
   function pageAfterSave (pen, styles) {
     const page = penPageOf(pen)
     return page === -1 || enabledPages(styles).includes(page) ? pen : penNumber(pen)
@@ -1337,9 +1303,8 @@
     const mask = swatchMask(svg)
     return `.tool-pen button[data-key="${n}"]${page === 1 ? '' : `[${PAGE_ATTRIBUTE}="${page}"]`}:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${mask}; mask: ${mask}; }`
   }
-  // The look of the pages after the first, which SudokuPad's own CSS knows nothing about, and the pen buttons' line swatches of every page: each pen character strokes in the color of its partner on the first page. A dash of 0
-  // is a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so it scales with the slider. `:root:root` outranks SudokuPad's own rules whichever
-  // stylesheet loads last.
+  // A dash of 0 is a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so it scales with the slider.
+  // `:root:root` outranks SudokuPad's own rules whichever stylesheet loads last.
   function buildPagesCss (thickness, dash) {
     const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_KEYS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
     PEN_PAGES.forEach((page, index) => {
@@ -1357,9 +1322,9 @@
     return rules.join('\n')
   }
 
-  // The slant is atan(28 / 40), the rise over the run of the line the button first showed. Under the line is a dot for each enabled page with the current one filled, as SudokuPad's color tool's page button has.
+  // The page dots copy SudokuPad's color tool's page button.
   const PAGE_BUTTON_ANGLE = 35
-  // The viewBox of the icon that shows each page's style (the page the button turns to), drawn 34 px on its longest side and centred on its ink: see MODE_ICON_VIEWBOX.
+  // The viewBox of the icon that shows each page's style (the page the button turns to), drawn 34 px on its longest side and centred on its ink: see LINE_MODE_ICON_VIEWBOX.
   const PAGE_ICON_VIEWBOX = ['0.09 -2.31 24.352 24.352', '0 -2.5 24.6 24.6', '0.12 -2.18 24.352 24.352']
   function renderPageIcon (current, dash, styles) {
     const next = stepEnabledPage(current, 1, styles)
@@ -1412,12 +1377,12 @@
   }
 
   // The picture is only rewritten when what it shows changed, so the page's mutation watcher does not loop on it.
-  function syncPageButton (mode) {
+  function syncPageButton (pulldown) {
     steps.pages.run(() => {
       if (!hasPageToTurnTo()) return removePageButtons()
       let button = document.querySelector(`.${PAGE_BUTTON}`)
       if (!button) {
-        mode.insertAdjacentHTML('afterend', `<button class="${PAGE_BUTTON}" data-control="penpage" title="Next pen page"></button>`)
+        pulldown.insertAdjacentHTML('afterend', `<button class="${PAGE_BUTTON}" data-control="penpage" title="Next pen page"></button>`)
         button = document.querySelector(`.${PAGE_BUTTON}`)
       }
       const shown = `${currentPage()}:${inForce.dash}:${enabledPages(inForce.lineStyles)}`
@@ -1429,7 +1394,6 @@
 
   const hasPageToTurnTo = () => enabledPages(inForce.lineStyles).length > 1
 
-  // A page turn keeps the color and changes how it draws, and a pen is always selected on the page showing.
   function turnPage (delta) {
     const number = penNumber(selectedPen()) || PEN_COLOR_KEYS[0]
     ToolPen.tool.setSelectedColor(penCharOn(stepEnabledPage(currentPage(), delta, inForce.lineStyles), number))
@@ -1505,7 +1469,6 @@
   // The round caps take half a line width of the `stroke-dasharray` gap at each end, so the gap that shows is one line width less: this keeps it at least one, on a straight
   // and a diagonal piece alike.
   const MIN_DASH_GAP_PER_THICKNESS = 2
-  // Snapped per line so a segment holds whole dots.
   const DOT_SPACING_PER_THICKNESS = 2
 
   // With the spacing exactly `length / dots` the last dot falls on the segment's end, where the browser draws no zero-length dash, so a line's far end would have no dot;
@@ -1536,7 +1499,7 @@
   // The dash layout was worked out at width 2. The width 3 round caps add 0.5 to each end of a dash, so each dash is 1 shorter and each gap 1 longer to show the same gaps, and
   // the offset moves by half of that to keep each dash centred. A dot (a dash of 0) cannot be shorter.
   const SWATCH_PATTERN_WIDTH = 2
-  // Two heads a quarter and three quarters along the line, at the scale that sticks out 2.4 past the width 3 line, whatever the arrow spacing.
+  // The scale at which a head sticks out 2.4 past the width 3 line, whatever the arrow spacing.
   const SWATCH_ARROW_SCALE = 0.4588
   function swatchDashes (dash) {
     const { on, gap } = dashPattern(SWATCH_PATTERN_WIDTH, dash, SWATCH_LINE.to - SWATCH_LINE.from)
@@ -1625,12 +1588,10 @@
 
   const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
 
-  // The heads shrink with the line, a little slower than it (0.8 times the thickness at the default thickness); the gap between arrows grows with it more slowly still.
   const arrowHeadScaleOf = (thickness) => 0.8 * THICKNESS.fallback * (thickness / THICKNESS.fallback) ** 0.8
   const arrowGapOf = (thickness, spacing) => spacing * 8 * (thickness / THICKNESS.fallback) ** 0.2
 
-  // Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join. `shrink` draws a line of
-  // `thickness` at that fraction of its size (the swatch).
+  // Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join.
   function arrowRun (from, to, thickness, spacing, shrink = 1) {
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
@@ -1703,7 +1664,6 @@
   const FADED_OPACITY = 0.3
   const FADED_CLASS = 'pen-tool-extras-faded'
   const FADED_GROUP_CLASS = 'pen-tool-extras-faded-group'
-  // The layer, beside the pen layer, that holds the faded copies of what an erase will take.
   const PREVIEW_LAYER_ID = 'pen-tool-extras-erase-preview'
 
   // `Cell.renderPropPen` keeps each stroke's element in `childElems` under the class it was drawn with (docs/research/sudokupad-pen-tool.md). A stroke with no element throws,
@@ -1723,7 +1683,6 @@
   // What the faded group shows: the faded opacity under the pen layer's own, which the group, being beside the layer, does not get from it.
   const fadedOpacity = () => FADED_OPACITY * inForce.opacity / 100
 
-  // A group of copies of `elements`, in `className`.
   function copiesOf (className, elements) {
     const group = document.createElementNS(SVG_NAMESPACE, 'g')
     group.setAttribute('class', className)
@@ -1748,10 +1707,8 @@
     layer.appendChild(fadedGroup)
   }
 
-  // Whether `event` is over the grid in the pen tool.
   const overGridInPenTool = (app, event) => app.tool === 'pen' && Boolean(event.target.closest && event.target.closest(GRID_SELECTOR))
 
-  // A handler that runs under `step` and puts `fallback` in place of a failure.
   const guardedBy = (step, fallback) => (handler) => (event) => step.run(() => handler(event), fallback)
 
   // Every edge mark, grid-corner mark and cell circle, cross and dot is drawn here, last in the pen layer: SudokuPad adds a cell's strokes in cell order, so a later
@@ -1769,7 +1726,6 @@
   }
   const EDGE_X = Object.keys(EDGES)
   const ADDED_ORDER = ['dirA', 'dirB', 'circle']
-  // `directions` is the one checkbox for dirA and dirB.
   const EDGE_CYCLE = {
     types: ['x', 'circle', 'dirA', 'dirB'],
     setting: { x: 'x', dirA: 'directions', dirB: 'directions', circle: 'circle' }
@@ -1779,7 +1735,6 @@
     types: ['x', 'circle'],
     setting: { x: 'cornerX', circle: 'cornerCircle' }
   }
-  // The names older saves hold the two circle boxes under.
   const OLD_MARK_NAMES = { circle: 'dot', cornerCircle: 'cornerDot' }
   // An edge's midpoint is 0.5 from its corners and a cell's middle 0.71, so neither comes near 0.2, which is a circle about 12 px across at a cell 60 px wide. It takes the corner end
   // of an edge click (SudokuPad's edge zone reaches 0.57 along the side from the midpoint).
@@ -1800,7 +1755,6 @@
     values: { circle: '5', cross: '6', dot: 'z' }
   }
   const CELL_VALUES = CELL_CYCLE.types.map((type) => CELL_CYCLE.values[type])
-  // The two of them SudokuPad's own cell click toggles.
   const STOCK_CELL_VALUES = [CELL_CYCLE.values.circle, CELL_CYCLE.values.cross]
   const CIRCLE = 'o'
   const CIRCLE_RADIUS_PER_HALF_SIZE = 0.83
@@ -1810,7 +1764,6 @@
   // A pen stroke has no fill, so the dot is filled in its pen's color by the color character it was stored with, on every page.
   const DOT_FILL_CSS = PEN_PAGES.flatMap((page) => page.chars.flatMap((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])]
     .map((c) => `:root:root .cell-pen.pen-${CELL_CYCLE.values.dot}.pencolor-${c} { fill: var(--puzzle-pencolor-${PEN_COLOR_KEYS[i]}); }`))).join('\n')
-  // Each pen value this script draws, to its `edge`, corner `kind` or `cell`, its type in its cycle, and its shape.
   const ADDED_MARKS = new Map([
     ...Object.entries(EDGES).flatMap(([edge, { added, arrows }]) =>
       ADDED_ORDER.map((type, i) => [added[i], { edge, type, shape: type === 'circle' ? CIRCLE : arrows[i] }])),
@@ -1818,7 +1771,6 @@
       CORNER_CYCLE.types.map((type, i) => [values[i], { kind, type, shape: type === 'x' ? 'x' : CIRCLE }])),
     [CELL_CYCLE.values.dot, { cell: true, type: 'dot', shape: DOT }]
   ])
-  // The marks that grow with thickness: the edge X marks and every mark this script adds.
   const GROWING_MARKS = [...EDGE_X, ...ADDED_MARKS.keys()]
   const MARK_VALUES = [...EDGE_X, '5', '6', ...ADDED_MARKS.keys()]
 
@@ -1989,7 +1941,6 @@
     })
   }
 
-  // `fn` runs with `owner[name]` replaced by `value` as an own property, and the owner as it was after.
   function withOwnProperty (owner, name, value, fn) {
     const hadOwn = Object.prototype.hasOwnProperty.call(owner, name)
     const ownValue = owner[name]
@@ -2021,14 +1972,12 @@
     return cornerAt(r, c, rows, cols, cornerRadiusNow())
   }
 
-  // The cell that stores a corner's marks, and the kind of corner it stores.
   function cornerCellOf (corner) {
     const { rows, cols } = Framework.app.grid
     const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
     return { kind, cell: Framework.app.grid.getCell(row, col) }
   }
 
-  // The cell a click on `corner` steps, and the plan of that step, as actions.
   function cornerActs (corner) {
     const { kind, cell } = cornerCellOf(corner)
     return planActs(cell, planCornerClick(kind, penValuesOf(cell), inForce.marks))
@@ -2105,7 +2054,6 @@
     return best
   }
 
-  // A segment of another pen stops the line, and a branch is joined.
   function connectedLine (segments, start) {
     const pen = lineIdentityOf(start.color)
     const key = (point) => point.join(',')
@@ -2176,7 +2124,6 @@
     return clicked === null ? null : held(clicked.cell, clicked.values)
   }
 
-  // A press or a drag with the right button gathers everything it crosses, and the release erases it as one undo step. At each point a line wins over a mark.
   function startErase (firstPoint) {
     return { segments: lineSegmentsOf(Framework.app.puzzle.cells), lines: new Set(), marks: new Map(), at: firstPoint }
   }
@@ -2204,7 +2151,6 @@
     erase.at = to
   }
 
-  // The element of each stroke `erase` has gathered: its segments, and every stroke of a gathered mark's values.
   function erasedElements (erase) {
     const lines = [...erase.lines].map(({ value, row, col, color }) => strokeElementOf(Framework.app.grid.getCell(row, col), value + color))
     const marks = [...erase.marks].flatMap(([cell, values]) => cell.pen.filter((valueColor) => values.has(valueColor[0])).map((valueColor) => strokeElementOf(cell, valueColor)))
@@ -2328,8 +2274,7 @@
   const HINT_ERASE_OPACITY = 0.5
   const HINT_ARROWS_CLASS = 'pen-tool-extras-hint-arrows'
 
-  // The faded strokes, which are `.cell-pen`s (hidden: their copies in one group show the fade), the hint layer's opacity (the layer fades the hint and its arrowheads as one picture),
-  // and the drag hint in the pen's style: a dashed page's dashes, laid out for the hint's width as a line's are for its own, and the fill of the arrowheads beside an arrow page's hint. `:root:root` outranks SudokuPad's rules whichever stylesheet loads last.
+  // `:root:root` outranks SudokuPad's own rules whichever stylesheet loads last.
   function buildFeedbackCss (dash) {
     const colorsOf = (pages) => pages.flatMap((page) => page.chars.map((char, i) => [char, PEN_COLOR_KEYS[i]]))
     const dashed = PEN_PAGES.filter((page) => page.dashed).flatMap((page) => page.chars)
@@ -2412,7 +2357,6 @@
     hintArrows = null
   }
 
-  // One run of arrows to each segment of the drag, pointing the way it went; `path` holds `{ r, c }` points in cell units.
   function hintArrowsPath (path, spacing) {
     return path.slice(1).map((to, i) => arrowRun([path[i].c * CELL_UNITS, path[i].r * CELL_UNITS], [to.c * CELL_UNITS, to.r * CELL_UNITS], HINT_WIDTH, spacing)).join('')
   }
@@ -2434,7 +2378,7 @@
   const SLIDERS = 'pen-tool-extras-sliders'
   const SLIDER_ROW = 'pen-tool-extras-slider'
   // SudokuPad's line mode pulldown (hidden here, stepped by the panel's line mode button), the key it saves the mode under, and its three values with SudokuPad's labels.
-  const LINE_MODE_BOX = '.tool-pen .penlinemode'
+  const LINE_MODE_PULLDOWN = '.tool-pen .penlinemode'
   const LINE_MODE_KEY = 'ToolPen_linemode'
   const LINE_MODES = [['both', 'Center & Edge'], ['centeronly', 'Center only'], ['edgeonly', 'Edge only']]
 
@@ -2468,7 +2412,6 @@
   // A pressed button shrinks to this scale over this long, so a click shows before it lets go; SudokuPad's own buttons have no pressed look.
   const PRESS_SCALE = 0.97
   const PRESS_MS = 120
-  // The tray reaches this far past the color block on each side, and holds its buttons this far from its edge on every side, so the margin of a button and the reach make up most of it.
   const TRAY_REACH_REM = 0.25
   const TRAY_PADDING_REM = 0.4
   const TRAY_TOP_REM = rem(CONTROLS_GAP_REM + PANEL_BUTTON_MARGIN_REM - TRAY_PADDING_REM)
@@ -2484,10 +2427,7 @@
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${SUDOKUPAD_PURPLE};`
 
-  // The panel's rules, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
-  // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
-  // (widening to the right) and the one drawn as a fade (faint to solid); every panel has both. `pressButtons`, when given, is the selector of buttons
-  // that are not placed by the grid but press like the others.
+  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders` and `sliderRow` are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
   function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
     const pressable = [`${panel} ${colorButton}`, controlButtons, ...(pressButtons ? [pressButtons] : [])].join(', ')
@@ -2546,31 +2486,30 @@
   const savedData = guard.storeFor(steps.saved)
   const dialogs = guard.dialogsFor(steps.settings)
   const openSettings = () => steps.settings.run(openDialog)
-  const MODE_BUTTON = 'pen-tool-extras-mode'
+  const LINE_MODE_BUTTON = 'pen-tool-extras-mode'
   const SETTINGS_BUTTON = 'pen-tool-extras-settings'
   const SETTINGS_LABEL = 'Pen Tool Extras settings'
   const TRAY = 'pen-tool-extras-tray'
   // The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
-  const CONTROL_BUTTONS = [MODE_BUTTON, PAGE_BUTTON, SETTINGS_BUTTON]
+  const CONTROL_BUTTONS = [LINE_MODE_BUTTON, PAGE_BUTTON, SETTINGS_BUTTON]
   const controlButtons = CONTROL_BUTTONS.map((name) => `.tool-pen .controls-input button.${name}`).join(', ')
   const PANEL_CSS = [
-    `${LINE_MODE_BOX} { display: none; }`,
+    `${LINE_MODE_PULLDOWN} { display: none; }`,
     ...panelCss({ panel: '.tool-pen .controls-input', colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
     ...CONTROL_BUTTONS.map((name, i) => `.tool-pen .controls-input button.${name} { order: ${i + 1}; }`),
-    `.${MODE_BUTTON} svg, .${PAGE_BUTTON} svg, .${SETTINGS_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
+    `.${LINE_MODE_BUTTON} svg, .${PAGE_BUTTON} svg, .${SETTINGS_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
-    `.${MODE_BUTTON} path, .${SETTINGS_BUTTON} path, .${SETTINGS_BUTTON} circle { fill: none !important; }`
+    `.${LINE_MODE_BUTTON} path, .${SETTINGS_BUTTON} path, .${SETTINGS_BUTTON} circle { fill: none !important; }`
   ].join('\n')
 
-  // A 2x2 cell grid, faint, with the center line (through the cell centers) and the edge line (along the cell edges) drawn over it.
-  const MODE_ICON_LINES = {
+  const LINE_MODE_ICON_LINES = {
     center: '<path data-line="center" d="M7.5 7.5H16.5V16.5"/>',
     edge: '<path data-line="edge" d="M3 12H12V21"/>'
   }
   // Each icon is drawn at one size, 34 px on the longest side of its visible ink, centred on its ink, at 1200x900 (docs/research/pen-tool-extras/pen-tool-extras-panel-redesign-mockup.png). The
   // corrections were measured from rendered pixels, one for each picture an icon can show, and live in its viewBox (live/pen-tool-extras/pen-tool-extras-panel-layout.live.mjs measures them again).
-  const MODE_ICON_VIEWBOX = { both: '-0.62 -0.8 25.059 25.059', centeronly: '0.25 -0.57 24 24', edgeonly: '-0.54 -0.7 24.882 24.882' }
-  const MODE_ICON_SHOWS = { both: ['center', 'edge'], centeronly: ['center'], edgeonly: ['edge'] }
+  const LINE_MODE_ICON_VIEWBOX = { both: '-0.62 -0.8 25.059 25.059', centeronly: '0.25 -0.57 24 24', edgeonly: '-0.54 -0.7 24.882 24.882' }
+  const LINE_MODE_ICON_SHOWS = { both: ['center', 'edge'], centeronly: ['center'], edgeonly: ['edge'] }
 
   function nextLineMode (lineMode) {
     const values = LINE_MODES.map(([value]) => value)
@@ -2581,9 +2520,9 @@
   function renderLineModeButton (lineMode) {
     const mode = normalizeLineMode(lineMode)
     const label = LINE_MODES.find(([value]) => value === mode)[1].replace('&', '&amp;')
-    return `<button class="${MODE_BUTTON}" data-control="penlinemode-step" data-mode="${mode}" title="${label}" aria-label="${label}">` +
-      `<svg viewBox="${MODE_ICON_VIEWBOX[mode]}" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.55" stroke-width="1"/>` +
-      `<g stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${MODE_ICON_SHOWS[mode].map((name) => MODE_ICON_LINES[name]).join('')}</g></svg></button>`
+    return `<button class="${LINE_MODE_BUTTON}" data-control="penlinemode-step" data-mode="${mode}" title="${label}" aria-label="${label}">` +
+      `<svg viewBox="${LINE_MODE_ICON_VIEWBOX[mode]}" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.55" stroke-width="1"/>` +
+      `<g stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${LINE_MODE_ICON_SHOWS[mode].map((name) => LINE_MODE_ICON_LINES[name]).join('')}</g></svg></button>`
   }
 
   // A hidden slider keeps an empty row so the other keeps its place. Neither slider takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
@@ -2611,23 +2550,23 @@
   }
 
   // The button is rewritten only when the mode it shows changed, so the page's mutation watcher does not loop on it.
-  function syncModeButton (mode) {
+  function syncLineModeButton (pulldown) {
     const lineMode = currentLineMode()
-    const button = document.querySelector(`.${MODE_BUTTON}`)
+    const button = document.querySelector(`.${LINE_MODE_BUTTON}`)
     if (button && button.dataset.mode === lineMode) return
     if (button) button.remove()
-    mode.insertAdjacentHTML('afterend', renderLineModeButton(lineMode))
+    pulldown.insertAdjacentHTML('afterend', renderLineModeButton(lineMode))
   }
 
-  function syncPart (mode, selector, markup) {
-    if (!document.querySelector(selector)) mode.insertAdjacentHTML('afterend', markup)
+  function syncPart (pulldown, selector, markup) {
+    if (!document.querySelector(selector)) pulldown.insertAdjacentHTML('afterend', markup)
   }
 
   // Saved where SudokuPad saves it, so its hidden pulldown, when the pen tool is on, shows it too.
   function applyLineMode (lineMode) {
     ToolPen.tool.lineMode = lineMode
     savedData.setData(LINE_MODE_KEY, lineMode)
-    const select = document.querySelector(`${LINE_MODE_BOX} select`)
+    const select = document.querySelector(`${LINE_MODE_PULLDOWN} select`)
     if (select) select.value = lineMode
     syncPenPanel()
   }
@@ -2653,7 +2592,7 @@
 
   // A panel with no pulldown, whose row the controls take, means SudokuPad renamed the element, so the row is not ours. One look is not enough: the panel is
   // checked again after PANEL_CHECK_MS, and the step is skipped only when the pen tool is still current and the pulldown is still missing on PANEL_MISSES looks in a row.
-  const panelWithoutPulldown = () => Framework.app.tool === 'pen' && Boolean(document.querySelector(PEN_PANEL)) && !document.querySelector(LINE_MODE_BOX)
+  const panelWithoutPulldown = () => Framework.app.tool === 'pen' && Boolean(document.querySelector(PEN_PANEL)) && !document.querySelector(LINE_MODE_PULLDOWN)
   function checkPanelRow (misses = 0) {
     if (panelCheck !== null || !document.querySelector(PEN_PANEL)) return
     panelCheck = setTimeout(() => {
@@ -2668,24 +2607,24 @@
   // not removed, so SudokuPad's own handlers keep their element) and taken away with it. Safe to run any number of times.
   function syncPenPanel () {
     steps.penPanel.run(() => {
-      const mode = document.querySelector(LINE_MODE_BOX)
-      if (!mode) {
+      const pulldown = document.querySelector(LINE_MODE_PULLDOWN)
+      if (!pulldown) {
         checkPanelRow()
         return removePanelParts()
       }
       const markup = renderPanelSliders(inForce.thickness, inForce.opacity, inForce.show)
       const sliders = document.querySelector(`.${SLIDERS}`)
       if (!markup && sliders) sliders.remove()
-      if (markup) syncPart(mode, `.${SLIDERS}`, markup)
-      syncPart(mode, `.${TRAY}`, `<div class="${TRAY}"></div>`)
-      syncPart(mode, `.${SETTINGS_BUTTON}`, renderSettingsButton())
-      syncModeButton(mode)
-      syncPageButton(mode)
+      if (markup) syncPart(pulldown, `.${SLIDERS}`, markup)
+      syncPart(pulldown, `.${TRAY}`, `<div class="${TRAY}"></div>`)
+      syncPart(pulldown, `.${SETTINGS_BUTTON}`, renderSettingsButton())
+      syncLineModeButton(pulldown)
+      syncPageButton(pulldown)
     }, removePanelParts)
   }
 
   function removePanelParts () {
-    document.querySelectorAll(`.${SLIDERS}, .${MODE_BUTTON}, .${SETTINGS_BUTTON}, .${TRAY}`).forEach((el) => el.remove())
+    document.querySelectorAll(`.${SLIDERS}, .${LINE_MODE_BUTTON}, .${SETTINGS_BUTTON}, .${TRAY}`).forEach((el) => el.remove())
     removePageButtons()
   }
 
@@ -2696,7 +2635,7 @@
     // SudokuPad cancels the touch events on its panel buttons, which keeps the browser from sending the click after a tap, so a tap acts at `touchstart`. The click a
     // browser may still send after that tap must not act a second time.
     let tappedAt = -Infinity
-    const actions = [[MODE_BUTTON, () => steps.penPanel.run(() => applyLineMode(nextLineMode(currentLineMode())))], [SETTINGS_BUTTON, openSettings]]
+    const actions = [[LINE_MODE_BUTTON, () => steps.penPanel.run(() => applyLineMode(nextLineMode(currentLineMode())))], [SETTINGS_BUTTON, openSettings]]
     // SudokuPad stops `mousedown` on the buttons it knew at startup, so a press on them never reaches its board; the panel's own buttons come later and need the same stop.
     document.addEventListener('mousedown', (event) => {
       if (event.target.closest(controlButtons)) event.stopPropagation()
@@ -2738,7 +2677,6 @@
   const MARKS_LINE_COLOR = '#eee'
   const INDENTED_COLOR = '#444'
   const INDENT_EM = 1.2
-  // The gap between the two columns, either side of the vertical line, and the slider's length, shared by all five sliders.
   const COLUMN_GAP_PX = 24
   const SLIDER_PX = 96
   const MARK_CELL_PX = 28
@@ -2779,7 +2717,6 @@
 
   // Scoped by the editor's id, so SudokuPad's other dialogs are left alone; `:has` reaches the dialog and its buttons from the editor, so they are styled from the first frame.
   const OPTIONS = `.dialog:has(${EDITOR}) .dialog-options`
-  // A slider row under a checkbox shows only while that checkbox is ticked.
   const hiddenRowCss = (name) => `${EDITOR}:not(:has(input[data-box="${SETTINGS[name].dialog.under}"]:checked)) [data-row="${name}"] { display: none; }`
   const DIALOG_CSS = [
     // Sized to its content and centred in the window; the paragraph around the editor loses SudokuPad's bottom margin so the vertical line meets the footer's line.
@@ -2814,7 +2751,6 @@
     `${EDITOR} .pen-tool-extras-mark input { margin: 0; }`,
     `${EDITOR} .pen-tool-extras-mark-head { color: ${INDENTED_COLOR}; }`,
     `${EDITOR} .pen-tool-extras-mark-head svg { stroke-width: 2.6; overflow: visible; }`,
-    // Below ONE_COLUMN_BELOW_PX the cells stack in one column, in their order in the markup.
     `@media (max-width: ${ONE_COLUMN_BELOW_PX}px) {
 ${EDITOR} .pen-tool-extras-layout { grid-template-columns: minmax(0, 1fr); }
 ${EDITOR} .${CELL}:nth-child(n) { border-left: none; padding: 10px 0; }
@@ -2901,7 +2837,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       draw()
       return Boolean(picked)
     }
-    // SudokuPad's own colors when page 1 cannot be read, as before the presets.
+    // SudokuPad's own colors when page 1 cannot be read.
     const restoreDefaults = () => {
       // The sliders and boxes are drafts like the colors: Cancel leaves what is in force. The mark boxes keep their draft: Restore defaults has never reset the edge and corner cycles.
       draft = { ...settingDefaults(), marks: draft.marks }
@@ -3024,7 +2960,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
   }
 
-  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
@@ -3083,8 +3018,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
-  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  // The title rules travel with the row, so they are in the page exactly while the dialog is.
   function renderDialogTitle ({ prefix, name, version }) {
     return `<style>${dialogTitleCss(prefix)}</style>` +
       `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
@@ -3105,12 +3039,10 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     ].join('\n')
   }
 
-  // Under the footer buttons: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
   function renderErrorLogRow (prefix) {
     return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
-  // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
   function wireErrorLog (dialog, win) {
     const say = (message) => setDialogStatus(dialog, message)
     dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
@@ -3231,8 +3163,8 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText, writeOrRestore */ // from settings-dialog.js, which every script carries beside this one
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  /* global setDialogStatus, errorText, writeOrRestore */
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -3258,9 +3190,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, and `apply(values)` takes what a paste kept,
-  // under `snapshot` (`writeOrRestore`'s) in a dialog action of `feature` (`runInDialog`), so a paste that fails half-way puts every key
-  // back. `readers` and `upgrade` are `pastedSettings`'.
   function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {

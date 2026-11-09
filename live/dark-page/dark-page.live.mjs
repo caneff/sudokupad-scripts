@@ -13,7 +13,7 @@ import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
-const { BOARD, BOARD_ID, STYLE_ID, LOCAL_DATA_KEY } = createRequire(import.meta.url)('../../dark-page.user.js')
+const { PAGE, BOARD_ID, STYLE_ID, LOCAL_DATA_KEY } = createRequire(import.meta.url)('../../dark-page.user.js')
 const { contrastRatio } = createRequire(import.meta.url)('../../test/contrast.js')
 const DATA_KEY = 'DarkPage_color'
 
@@ -457,7 +457,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 // `@run-at document-start`: the script runs before any of the page's own, so the page is never SudokuPad's white. A frame
 // sampler, installed before the script, records the body's color at every frame the board exists in; a white one is the
 // flash. (A frame between the body and the board, while the parser waits on SudokuPad's blocking scripts, is outside
-// `BOARD` by design and is not sampled: docs/research/dark-page/load-flash.md.) Framework does not exist yet, so the
+// `PAGE` by design and is not sampled: docs/research/dark-page/load-flash.md.) Framework does not exist yet, so the
 // saved color is read from localStorage, and `start` corrects it through Framework at DOMContentLoaded.
 describe('at document-start', { concurrency: false }, () => {
   // `saved` is put in storage before the script runs; `atLoad` is a color put in, or `null` taking it out (`false`: no change), at
@@ -587,7 +587,7 @@ describe('the page color dialog', { concurrency: false }, () => {
   it('the stylesheet the script first writes after a reload already holds the saved color, never black', async () => {
     await load()
     const firstCss = await p.evaluate(() => window.__firstCss)
-    assert.ok(firstCss.includes(`${BOARD} { background-color: #ffcc00 !important }`), firstCss)
+    assert.ok(firstCss.includes(`${PAGE} { background-color: #ffcc00 !important }`), firstCss)
     assert.doesNotMatch(firstCss, /background-color: #000000/)
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
     await openDialog()

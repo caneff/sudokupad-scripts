@@ -9,7 +9,7 @@ const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -1360,14 +1360,14 @@ test('canonicalGroups and the paint operations do not change the list they were 
   const copy = JSON.parse(JSON.stringify(before))
   canonicalGroups(before)
   paintDigit(before, '2', 'b')
-  setDigitColor(before, '1', null)
+  setDigitGroup(before, '1', null)
   assert.deepEqual(before, copy)
 })
 
-test('setDigitColor sets a digit\'s color or, given null, clears it', () => {
-  assert.deepEqual(setDigitColor([g('a', ['1', '2'])], '2', 'b'), [g('a', ['1']), g('b', ['2'])])
-  assert.deepEqual(setDigitColor([g('a', ['1', '2'])], '2', null), [g('a', ['1'])])
-  assert.deepEqual(setDigitColor([g('a', ['1', '2'])], '2', 'a'), [g('a', ['1', '2'])])
+test('setDigitGroup sets a digit\'s color or, given null, clears it', () => {
+  assert.deepEqual(setDigitGroup([g('a', ['1', '2'])], '2', 'b'), [g('a', ['1']), g('b', ['2'])])
+  assert.deepEqual(setDigitGroup([g('a', ['1', '2'])], '2', null), [g('a', ['1'])])
+  assert.deepEqual(setDigitGroup([g('a', ['1', '2'])], '2', 'a'), [g('a', ['1', '2'])])
 })
 
 test('strokeKey is the brush color to paint with, or null to clear, from the digit a stroke starts on', () => {
