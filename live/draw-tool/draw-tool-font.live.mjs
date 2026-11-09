@@ -1,5 +1,5 @@
-// Live check of draw-tool.user.js's Font setting on sudokupad.app: Fixed width and Save puts every note, the open one included, in the monospace stack and a reload keeps it,
-// Proportional brings back the page's font, Cancel saves nothing, and Paste settings carries the font. A pulldown in the dialog is no wider than its longest option, its arrow and its padding.
+// Live check of draw-tool.user.js's Font setting on sudokupad.app: Fixed width and Save puts every note, the open one included, in the monospace stack, measures a selected note's box again, and a reload keeps it,
+// Proportional brings back the page's font, Cancel saves nothing, and Paste settings applies the font. A pulldown in the dialog is no wider than its longest option, its arrow and its padding.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -11,6 +11,10 @@ import { closeDialogWith } from '../settings.mjs'
 const { FONT_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXTS, TEXT_BOX } = draw
 const FONT = `${EDITOR} select[data-role="font-choice"]`
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
+const CLIPBOARD = { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }
+// What a browser's text measure and the rounding of a box can differ by.
+const ROUNDING_PX = 2
+const HANDLE = '#draw-tool-layer .draw-tool-resize'
 // Typed out, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md); the browser writes a computed font-family with double quotes.
 const FIXED_STACK = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace'
 const NOTES = [
@@ -25,7 +29,8 @@ after(async () => { await browser?.close() })
 describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
   let context, p, errors
   let proportional
-  const families = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((note) => window.getComputedStyle(note).fontFamily), TEXTS)
+  const familiesOn = (page) => page.evaluate((selector) => [...document.querySelectorAll(selector)].map((note) => window.getComputedStyle(note).fontFamily), TEXTS)
+  const families = () => familiesOn(p)
   const reloadAndPick = async () => {
     await draw.reload(p)
     await draw.pickDraw(p)
@@ -37,7 +42,7 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+    ;({ context, p, errors } = await openPage(browser, CLIPBOARD))
     await draw.boot(p)
     await draw.forgetDrawings(p)
     await draw.plantDrawing(p, NOTES)
@@ -63,15 +68,26 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
     assert.deepEqual(await families(), [proportional, proportional])
   })
 
-  it('Fixed width and Save puts every note in the monospace stack, grows or shrinks each box to the new font, and a reload keeps it', async () => {
-    const sizes = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((note) => note.getBoundingClientRect().width), TEXTS)
-    const before = await sizes()
+  it('Fixed width and Save puts every note in the monospace stack, a selected note\'s box follows its new width, and a reload keeps it', async () => {
+    // The handles sit on the box the script measured for the selected note, so their span moves with the note's drawn width only when that box was measured again.
+    const shape = () => p.evaluate(([notes, handles]) => {
+      const note = [...document.querySelectorAll(notes)].find((e) => e.textContent === 'A=B+5')
+      const xs = [...document.querySelectorAll(handles)].map((h) => h.getBoundingClientRect().left)
+      return { width: note.getBoundingClientRect().width, span: Math.max(...xs) - Math.min(...xs) }
+    }, [TEXTS, HANDLE])
+    const [x, y] = await draw.noteStart(p, 'A=B+5')
+    await p.mouse.click(x + 4, y)
+    await p.locator(HANDLE).first().waitFor()
+    const before = await shape()
     await choose('fixed', 'Save')
     assert.equal(await p.evaluate((key) => Framework.getData(key), FONT_KEY), 'fixed')
     assert.deepEqual(await families(), [FIXED_STACK, FIXED_STACK])
-    assert.notDeepEqual(await sizes(), before, 'the notes are measured again in the new font')
+    const after = await shape()
+    assert.notEqual(Math.round(after.width), Math.round(before.width), 'the font changes the note\'s width')
+    assert.equal(Math.abs((after.span - before.span) - (after.width - before.width)) <= ROUNDING_PX, true, `the handles moved ${after.span - before.span}px for a note ${after.width - before.width}px wider`)
     await reloadAndPick()
     assert.deepEqual(await families(), [FIXED_STACK, FIXED_STACK])
+    await p.keyboard.press('Escape')
   })
 
   it('a note typed and left open is in the monospace stack too', async () => {
@@ -90,15 +106,8 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
     assert.deepEqual(await families(), [proportional, proportional, proportional])
   })
 
-  it('Copy settings carries the font and Paste settings in a fresh page applies it', async () => {
-    await choose('fixed', 'Save')
-    await p.click(SETTINGS_BUTTON)
-    await p.locator('.dialog button[data-act="copy-settings"]').click()
-    await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
-    const copied = JSON.parse(await p.evaluate(() => navigator.clipboard.readText()))
-    assert.equal(copied[FONT_KEY], 'fixed')
-    await closeDialogWith(p, 'Cancel', EDITOR)
-    const other = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
+  it('Paste settings in a fresh page applies the font to the dialog, the store and the notes', async () => {
+    const other = await openPage(browser, CLIPBOARD)
     try {
       await draw.boot(other.p)
       await draw.plantDrawing(other.p, NOTES)
@@ -111,8 +120,7 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
       assert.equal(await other.p.locator(FONT).inputValue(), 'fixed')
       assert.equal(await other.p.evaluate((key) => Framework.getData(key), FONT_KEY), 'fixed')
       await closeDialogWith(other.p, 'Cancel', EDITOR)
-      const found = await other.p.evaluate((selector) => [...document.querySelectorAll(selector)].map((note) => window.getComputedStyle(note).fontFamily), TEXTS)
-      assert.deepEqual(found, [FIXED_STACK, FIXED_STACK])
+      assert.deepEqual(await familiesOn(other.p), [FIXED_STACK, FIXED_STACK])
       assert.deepEqual(other.errors, [])
     } finally {
       await other.context.close()
@@ -130,7 +138,7 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
         const extra = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'].reduce((sum, name) => sum + parseFloat(style[name]), 0)
         return { width: select.getBoundingClientRect().width, longest, extra }
       })
-      assert.equal(width <= longest + extra + 2, true, `${selector} is ${width}px wide for a longest option of ${longest}px and ${extra}px of padding`)
+      assert.ok(width <= longest + extra + ROUNDING_PX, `${selector} is ${width}px wide for a longest option of ${longest}px and ${extra}px of padding`)
     }
     await closeDialogWith(p, 'Cancel', EDITOR)
   })

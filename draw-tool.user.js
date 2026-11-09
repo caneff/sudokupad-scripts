@@ -675,15 +675,16 @@
   const readFrame = readFlag
   const frameShadow = (on) => on ? `0 0 0 var(${PIXEL_VAR}, 1px) ${FRAME_COLOR}` : 'none'
   // Every note's font: the page's own, or a monospace stack. Code spans and blocks use the stack either way.
-  const FONTS = { proportional: 'Proportional', fixed: 'Fixed width' }
-  const DEFAULT_FONT = 'proportional'
+  const FONT_PROPORTIONAL = 'proportional'
+  const FONT_FIXED = 'fixed'
+  const FONTS = { [FONT_PROPORTIONAL]: 'Proportional', [FONT_FIXED]: 'Fixed width' }
+  const DEFAULT_FONT = FONT_PROPORTIONAL
   const FIXED_FONT_STACK = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"
   const readFont = (saved) => Object.hasOwn(FONTS, saved) ? saved : DEFAULT_FONT
-  // `pageFont` is the font the board's svg computes.
-  const noteFontFamily = (font, pageFont) => font === 'fixed' ? FIXED_FONT_STACK : pageFont
+  const noteFontFamily = (font, boardFont) => font === FONT_FIXED ? FIXED_FONT_STACK : boardFont
+  // Classed as the color pulldown, whose look the dialog's stylesheet already gives (colorBlockCss); a copy of that rule would drift from it.
   const renderFontChoice = (font) =>
-    // Wrapped and classed as the color pulldown, whose look the dialog's stylesheet already gives (colorBlockCss).
-    `<div class="draw-tool-color-block"><select class="draw-tool-color-choice" data-role="font-choice" aria-label="Font">${Object.entries(FONTS).map(([value, label]) => `<option value="${value}"${value === font ? ' selected' : ''}>${label}</option>`).join('')}</select></div>`
+    `<div class="${CLASS_PREFIX}color-block"><select class="${CLASS_PREFIX}color-choice" data-role="font-choice" aria-label="Font">${Object.entries(FONTS).map(([value, label]) => `<option value="${value}"${value === font ? ' selected' : ''}>${label}</option>`).join('')}</select></div>`
   // The settings dialog's three rows of samples: the halo, the box color and the box border, each button a picture of its result in the current text color.
   const HALO_CELL_COLOR = '#8fb8e8'
   const SAMPLE_BOX_STYLE = 'display:inline-block;padding:0.15em 0.35em;border-radius:0.3em'
@@ -1099,20 +1100,20 @@
     return { ...paletteColors(preset, pages, readCell).colors }
   }
 
-  // Copy and Paste carry the colors, size, transparency, outline, box color and frame, and not the notes, the color picked or the background button.
+  // Copy and Paste carry the colors, size, transparency, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) : undefined
   const READERS = {
     [COLORS_KEY]: readPastedColors,
     [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
     [OPACITY_KEY]: (data) => isOpacity(data) ? data : undefined,
-    // The ticket reads an invalid pasted outline as Thick, box color as Page, frame as off and font as Proportional, so none is counted as skipped.
+    // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
     [OUTLINE_KEY]: readOutline,
     [BOX_KEY]: readBox,
     [FRAME_KEY]: readFrame,
     [FONT_KEY]: readFont
   }
 
-  // The size, transparency, outline, box color and frame in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
+  // The size, transparency, outline, box color, frame and font in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store) {
     const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [OPACITY_KEY]: readOpacity(store.getData(OPACITY_KEY)), [OUTLINE_KEY]: readOutline(store.getData(OUTLINE_KEY)), [BOX_KEY]: readBox(store.getData(BOX_KEY)), [FRAME_KEY]: readFrame(store.getData(FRAME_KEY)), [FONT_KEY]: readFont(store.getData(FONT_KEY)) }
     const savedColors = readDrawColors(store.getData(COLORS_KEY))
@@ -2245,7 +2246,7 @@
   let opacity = DEFAULT_OPACITY
   // Whether the next note is made with a background. The Background button turns it on and off, and it is remembered.
   let background = false
-  // The outline of every note and the box color and frame of every note with a box, as the settings dialog sets them.
+  // The outline and font of every note and the box color and frame of every note with a box, as the settings dialog sets them.
   let outline = DEFAULT_OUTLINE
   let boxColor = DEFAULT_BOX
   let frame = false
@@ -2295,7 +2296,7 @@
     style.textContent = colors ? colorsCss(colors) : ''
   }
 
-  // The colors, outline, box color and frame as stored and as shown, as a function that puts them all back after a Save that failed half-way.
+  // The colors, outline, box color, frame and font as stored and as shown, as a function that puts them all back after a Save that failed half-way.
   function snapshotSave () {
     const restoreStored = snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY])
     const was = { colors, outline, boxColor, frame, noteFont }
@@ -2333,28 +2334,30 @@
     boardNotes.run(() => { if (Framework.app.puzzle.currentPuzzle) redraw() })
   }
 
+  // A look setting is stored, then the notes are drawn again in it.
+  function writeLook (key, value) {
+    writeData(key, value)
+    showBoxes()
+  }
+
   function saveOutline (next) {
     outline = next
-    writeData(OUTLINE_KEY, next)
-    showBoxes()
+    writeLook(OUTLINE_KEY, next)
   }
 
   function saveBoxColor (next) {
     boxColor = next
-    writeData(BOX_KEY, next)
-    showBoxes()
+    writeLook(BOX_KEY, next)
   }
 
   function saveFrame (on) {
     frame = on
-    writeData(FRAME_KEY, on)
-    showBoxes()
+    writeLook(FRAME_KEY, on)
   }
 
   function saveFont (next) {
     noteFont = next
-    writeData(FONT_KEY, next)
-    showBoxes()
+    writeLook(FONT_KEY, next)
   }
 
   // The settings dialog: nine color pickers and a preset list, the font, the outline, the box color and the frame, which fill a draft Save writes, and Copy and Paste settings, which act at once.
@@ -2373,7 +2376,7 @@
     `#${DIALOG_ID} input.draw-tool-swatch[data-role="box-custom"] { display: block; margin: 0 0 6px; }`,
     colorBlockCss(CLASS_PREFIX, `#${DIALOG_ID}`),
     // The pulldowns are as wide as their longest option, not as the dialog's column (after colorBlockCss, whose rule they override).
-    `#${DIALOG_ID} .draw-tool-color-choice { width: auto; min-width: 0; }`
+    `#${DIALOG_ID} .${CLASS_PREFIX}color-choice { width: auto; min-width: 0; }`
   ].join('\n')
 
   // A pasted value is saved and shown at once, whether or not Text Anywhere is current.
