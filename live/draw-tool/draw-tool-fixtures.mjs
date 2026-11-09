@@ -47,6 +47,7 @@ export const OUTLINE_KEY = 'DrawTool_outline'
 export const OPACITY_KEY = 'DrawTool_opacity'
 export const BOX_KEY = 'DrawTool_box'
 export const FRAME_KEY = 'DrawTool_frame'
+export const FONT_KEY = 'DrawTool_font'
 
 // The pickers appear only when the hold timer fires.
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000

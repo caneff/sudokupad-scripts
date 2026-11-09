@@ -8,7 +8,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '../settings.mjs'
 
-const { BOX_KEY, COLORS_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, SIZE_SLIDER, WIDTH_KEY, pickDraw, script, valueOf } = draw
+const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, SIZE_SLIDER, WIDTH_KEY, pickDraw, script, valueOf } = draw
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const SUDOKUPAD_COLORS = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000' }
 
@@ -89,13 +89,13 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     assert.deepEqual(await savedColors(p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
   })
 
-  it('Copy settings then Paste settings in a fresh page restores the colors, size, transparency, outline, box color and frame, and carries nothing else', async () => {
+  it('Copy settings then Paste settings in a fresh page restores the colors, size, transparency, outline, box color, frame and font, and carries nothing else', async () => {
     await read(p, (values) => Object.entries(values).forEach(([key, value]) => Framework.setData(key, value)), { [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin' })
     await p.click(SETTINGS_BUTTON)
     await p.locator('.dialog button[data-act="copy-settings"]').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
     const copied = await p.evaluate(() => navigator.clipboard.readText())
-    assert.deepEqual(Object.keys(JSON.parse(copied)).sort(), [BOX_KEY, COLORS_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, WIDTH_KEY], 'colors, size, transparency, outline, box color and frame only')
+    assert.deepEqual(Object.keys(JSON.parse(copied)).sort(), [BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, WIDTH_KEY], 'colors, size, transparency, outline, box color, frame and font only')
     await closeDialogWith(p, 'Cancel', EDITOR)
 
     const other = await open()
@@ -105,7 +105,7 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
       await other.p.evaluate((t) => navigator.clipboard.writeText(t), copied)
       await other.p.click(SETTINGS_BUTTON)
       await other.p.locator('.dialog button[data-act="paste-settings"]').click()
-      await other.p.locator(STATUS).filter({ hasText: 'Pasted 6 settings.' }).waitFor()
+      await other.p.locator(STATUS).filter({ hasText: 'Pasted 7 settings.' }).waitFor()
       assert.deepEqual(await savedColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
       assert.deepEqual(await dialogColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
       // A size of 3.5 is off the old menu's six sizes, and is kept as it is.
