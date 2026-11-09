@@ -138,7 +138,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.deepEqual(await savedTexts(), ['quick'])
   })
 
-  it('attack 21c: the saves while typing add no SudokuPad undo step and leave the note\'s own Undo whole', async () => {
+  it('attack 21c: the saves while typing add no SudokuPad undo step and leave the note\'s own Undo working a character at a time', async () => {
     const undoSteps = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
     const before = await undoSteps()
     await clickAt(SPOT)
@@ -146,7 +146,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.deepEqual(await settle(savedTexts, ['abcdef'], SETTLE_MS, SAVE_QUIET_MS), ['abcdef'], 'the save while typing ran')
     assert.equal(await undoSteps(), before, 'the saves added no undo step')
     await p.keyboard.press('Control+z')
-    assert.equal(await boxText(), '', 'one Undo in the note removes everything typed')
+    assert.equal(await boxText(), 'abcde', 'one Undo in the note removes the last character typed')
     await draw.finishNote(p)
   })
 
