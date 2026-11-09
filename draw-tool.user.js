@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.41.4
+// @version      0.42.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.41.4'
+  const VERSION = '0.42.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -197,6 +197,7 @@
   const BACKGROUND_KEY = 'DrawTool_background'
   const BOX_KEY = 'DrawTool_box'
   const FRAME_KEY = 'DrawTool_frame'
+  const FONT_KEY = 'DrawTool_font'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
   const CHAR_WIDTH = 0.6
   // A line's height as a share of the text size, in the font's own spacing, so a note's box is as tall as the note drawn.
@@ -673,6 +674,17 @@
   const FRAME_COLOR = '#c4c4c4'
   const readFrame = readFlag
   const frameShadow = (on) => on ? `0 0 0 var(${PIXEL_VAR}, 1px) ${FRAME_COLOR}` : 'none'
+  // Every note's font: the page's own, or a monospace stack. Code spans and blocks use the stack either way.
+  const FONT_PROPORTIONAL = 'proportional'
+  const FONT_FIXED = 'fixed'
+  const FONTS = { [FONT_PROPORTIONAL]: 'Proportional', [FONT_FIXED]: 'Fixed width' }
+  const DEFAULT_FONT = FONT_PROPORTIONAL
+  const FIXED_FONT_STACK = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"
+  const readFont = (saved) => Object.hasOwn(FONTS, saved) ? saved : DEFAULT_FONT
+  const noteFontFamily = (font, boardFont) => font === FONT_FIXED ? FIXED_FONT_STACK : boardFont
+  // Classed as the color pulldown, whose look the dialog's stylesheet already gives (colorBlockCss); a copy of that rule would drift from it.
+  const renderFontChoice = (font) =>
+    `<div class="${CLASS_PREFIX}color-block"><select class="${CLASS_PREFIX}color-choice" data-role="font-choice" aria-label="Font">${Object.entries(FONTS).map(([value, label]) => `<option value="${value}"${value === font ? ' selected' : ''}>${label}</option>`).join('')}</select></div>`
   // The settings dialog's three rows of samples: the halo, the box color and the box border, each button a picture of its result in the current text color.
   const HALO_CELL_COLOR = '#8fb8e8'
   const SAMPLE_BOX_STYLE = 'display:inline-block;padding:0.15em 0.35em;border-radius:0.3em'
@@ -1128,21 +1140,22 @@
     return { ...paletteColors(preset, pages, readCell).colors }
   }
 
-  // Copy and Paste carry the colors, size, transparency, outline, box color and frame, and not the notes, the color picked or the background button.
+  // Copy and Paste carry the colors, size, transparency, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) : undefined
   const READERS = {
     [COLORS_KEY]: readPastedColors,
     [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
     [OPACITY_KEY]: (data) => isOpacity(data) ? data : undefined,
-    // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped.
+    // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
     [OUTLINE_KEY]: readOutline,
     [BOX_KEY]: readBox,
-    [FRAME_KEY]: readFrame
+    [FRAME_KEY]: readFrame,
+    [FONT_KEY]: readFont
   }
 
-  // The size, transparency, outline, box color and frame in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
+  // The size, transparency, outline, box color, frame and font in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store) {
-    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [OPACITY_KEY]: readOpacity(store.getData(OPACITY_KEY)), [OUTLINE_KEY]: readOutline(store.getData(OUTLINE_KEY)), [BOX_KEY]: readBox(store.getData(BOX_KEY)), [FRAME_KEY]: readFrame(store.getData(FRAME_KEY)) }
+    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [OPACITY_KEY]: readOpacity(store.getData(OPACITY_KEY)), [OUTLINE_KEY]: readOutline(store.getData(OUTLINE_KEY)), [BOX_KEY]: readBox(store.getData(BOX_KEY)), [FRAME_KEY]: readFrame(store.getData(FRAME_KEY)), [FONT_KEY]: readFont(store.getData(FONT_KEY)) }
     const savedColors = readDrawColors(store.getData(COLORS_KEY))
     if (savedColors) copied[COLORS_KEY] = savedColors
     return JSON.stringify(copied)
@@ -1878,7 +1891,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2239,7 +2252,7 @@
     '}',
     `.${HANDLE_CLASS}.${ENTERING_CLASS} { opacity: 0; }`,
     `.${CHECK_CLASS} { display: inline-block; box-sizing: border-box; width: 0.8em; height: 0.8em; border: 2px solid currentColor; border-radius: 3px; vertical-align: -0.05em; position: relative; }`,
-    `.${CODE_CLASS} { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 0.9em; background: color-mix(in srgb, currentColor 15%, transparent); border-radius: 0.25em; padding: 0.05em 0.25em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }`,
+    `.${CODE_CLASS} { font-family: ${FIXED_FONT_STACK}; font-size: 0.9em; background: color-mix(in srgb, currentColor 15%, transparent); border-radius: 0.25em; padding: 0.05em 0.25em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }`,
     `.${CODE_BLOCK_CLASS} { display: block; padding: 0.15em 0.35em; border-radius: 0.3em; }`,
     `.${CHECK_DONE_CLASS}::after { content: ''; position: absolute; left: 0.2em; top: -0.1em; width: 0.25em; height: 0.5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) .${CHECK_CLASS} { cursor: pointer; }`,
@@ -2273,10 +2286,11 @@
   let opacity = DEFAULT_OPACITY
   // Whether the next note is made with a background. The Background button turns it on and off, and it is remembered.
   let background = false
-  // The outline of every note and the box color and frame of every note with a box, as the settings dialog sets them.
+  // The outline and font of every note and the box color and frame of every note with a box, as the settings dialog sets them.
   let outline = DEFAULT_OUTLINE
   let boxColor = DEFAULT_BOX
   let frame = false
+  let noteFont = DEFAULT_FONT
   // Text Anywhere's nine colors, or null until they are first copied from the pen colors.
   let colors = null
   // The elements the panel adds to SudokuPad's keypad while Text Anywhere is current.
@@ -2322,15 +2336,15 @@
     style.textContent = colors ? colorsCss(colors) : ''
   }
 
-  // The colors, outline, box color and frame as stored and as shown, as a function that puts them all back after a Save that failed half-way.
+  // The colors, outline, box color, frame and font as stored and as shown, as a function that puts them all back after a Save that failed half-way.
   function snapshotSave () {
-    const restoreStored = snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY])
-    const was = { colors, outline, boxColor, frame }
+    const restoreStored = snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY])
+    const was = { colors, outline, boxColor, frame, noteFont }
     return () => {
       try {
         restoreStored()
       } finally {
-        ;({ colors, outline, boxColor, frame } = was)
+        ;({ colors, outline, boxColor, frame, noteFont } = was)
         showColors()
         if (colors) refreshPickers(CLASS_PREFIX, (n) => colors[n])
         showBoxes()
@@ -2360,25 +2374,33 @@
     boardNotes.run(() => { if (Framework.app.puzzle.currentPuzzle) redraw() })
   }
 
+  // A look setting is stored, then the notes are drawn again in it.
+  function writeLook (key, value) {
+    writeData(key, value)
+    showBoxes()
+  }
+
   function saveOutline (next) {
     outline = next
-    writeData(OUTLINE_KEY, next)
-    showBoxes()
+    writeLook(OUTLINE_KEY, next)
   }
 
   function saveBoxColor (next) {
     boxColor = next
-    writeData(BOX_KEY, next)
-    showBoxes()
+    writeLook(BOX_KEY, next)
   }
 
   function saveFrame (on) {
     frame = on
-    writeData(FRAME_KEY, on)
-    showBoxes()
+    writeLook(FRAME_KEY, on)
   }
 
-  // The settings dialog: nine color pickers and a preset list, the outline, the box color and the frame, which fill a draft Save writes, and Copy and Paste settings, which act at once.
+  function saveFont (next) {
+    noteFont = next
+    writeLook(FONT_KEY, next)
+  }
+
+  // The settings dialog: nine color pickers and a preset list, the font, the outline, the box color and the frame, which fill a draft Save writes, and Copy and Paste settings, which act at once.
   const DIALOG_ID = 'draw-tool-dialog'
   const DIALOG_STYLE_ID = 'draw-tool-dialog-style'
   const CUSTOM_LABEL = 'Custom'
@@ -2392,7 +2414,9 @@
     `#${DIALOG_ID} .draw-tool-sample[data-cell] { border: 1px solid rgb(0 0 0 / .25); }`,
     `#${DIALOG_ID} .draw-tool-pick-label { font-size: 0.85em; }`,
     `#${DIALOG_ID} input.draw-tool-swatch[data-role="box-custom"] { display: block; margin: 0 0 6px; }`,
-    colorBlockCss(CLASS_PREFIX, `#${DIALOG_ID}`)
+    colorBlockCss(CLASS_PREFIX, `#${DIALOG_ID}`),
+    // The pulldowns are as wide as their longest option, not as the dialog's column (after colorBlockCss, whose rule they override).
+    `#${DIALOG_ID} .${CLASS_PREFIX}color-choice { width: auto; min-width: 0; }`
   ].join('\n')
 
   // A pasted value is saved and shown at once, whether or not Text Anywhere is current.
@@ -2404,6 +2428,7 @@
     if (OUTLINE_KEY in values) saveOutline(values[OUTLINE_KEY])
     if (BOX_KEY in values) saveBoxColor(values[BOX_KEY])
     if (FRAME_KEY in values) saveFrame(values[FRAME_KEY])
+    if (FONT_KEY in values) saveFont(values[FONT_KEY])
   }
 
   function openDialog () {
@@ -2415,6 +2440,7 @@
     let draftBox = boxColor
     let draftCustom = savedHex(boxColor) ?? BOX_WHITE
     let draftFrame = frame
+    let draftFont = noteFont
     let pages = []
     let paletteNote = ''
     // A palette of a shape the script does not know is the dialog's own note, and does not turn the presets off.
@@ -2426,7 +2452,7 @@
         paletteNote = error.message
       }
     }
-    const edits = () => ({ colors: colorsEdited, outline: draftOutline !== outline, box: draftBox !== boxColor, frame: draftFrame !== frame })
+    const edits = () => ({ colors: colorsEdited, outline: draftOutline !== outline, box: draftBox !== boxColor, frame: draftFrame !== frame, font: draftFont !== noteFont })
     const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Text Anywhere',
@@ -2442,6 +2468,7 @@
         if (edited.outline) saveOutline(draftOutline)
         if (edited.box) saveBoxColor(draftBox)
         if (edited.frame) saveFrame(draftFrame)
+        if (edited.font) saveFont(draftFont)
       }
     }), () => null)
     if (!box) return
@@ -2450,6 +2477,7 @@
       box.innerHTML = '<div class="draw-tool-section-title">Colors</div>' +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
+        `<div class="draw-tool-section-title">Font</div>${renderFontChoice(draftFont)}` +
         renderSamplePicks({ outline: draftOutline, box: draftBox, custom: draftCustom, frame: draftFrame, textColor: draft[color] })
     }
     draw()
@@ -2461,6 +2489,9 @@
           draft = presetColors(chosen, pages, readCellColor, readPenColor)
           colorsEdited = true
         }
+        draw()
+      } else if (target.matches('[data-role="font-choice"]')) {
+        draftFont = readFont(target.value)
         draw()
       } else if (target.matches('[data-role="box-custom"]')) {
         draftCustom = draftBox = hexColor(target.value)
@@ -2489,6 +2520,7 @@
       draftBox = boxColor
       draftCustom = savedHex(boxColor) ?? draftCustom
       draftFrame = frame
+      draftFont = noteFont
       draft = colors ?? draft
       chosen = null
       colorsEdited = false
@@ -2777,7 +2809,7 @@
     watchBoard(svg)
     const map = boardMap()
     lastLayout = layoutKey(map)
-    const font = window.getComputedStyle(svg).fontFamily
+    const font = noteFontFamily(noteFont, window.getComputedStyle(svg).fontFamily)
     if (font !== layerFont) layer.style.fontFamily = layerFont = font
     noteGroups(layer)
     placeBoardGroup(map)
@@ -4010,6 +4042,7 @@
     colors = readDrawColors(readData(COLORS_KEY))
     boxColor = readBox(readData(BOX_KEY))
     frame = readFrame(readData(FRAME_KEY))
+    noteFont = readFont(readData(FONT_KEY))
     showColors()
     // The features are independent: one that fails to install costs the others nothing.
     textTool.run(() => {

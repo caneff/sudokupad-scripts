@@ -7,7 +7,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -272,13 +272,13 @@ test('a Darker page preset the palette lacks, or an unknown one, throws', () => 
   assert.throws(() => presetColors('nope', [], () => undefined, () => undefined), /not a preset/)
 })
 
-test('Copy settings holds the colors, size, transparency, outline, box color and frame, defaults included, and no notes, color pick or background', () => {
-  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, DrawTool_color: 4, DrawTool_drawing_x: [] })))
-  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true })
+test('Copy settings holds the colors, size, transparency, outline, box color, frame and font, defaults included, and no notes, color pick or background', () => {
+  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed', DrawTool_color: 4, DrawTool_drawing_x: [] })))
+  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' })
 })
 
 test('Copy settings leaves the colors out until they are saved', () => {
-  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY, [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false })
+  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY, [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false, [FONT_KEY]: 'proportional' })
 })
 
 test('the box color setting reads a preset or a #rrggbb color and anything else as Page', () => {
@@ -1340,4 +1340,29 @@ test('viewShift moves a box in from the window edge so it stays WINDOW_PAD_PX in
 test('viewShift puts a box too big for the window at the middle', () => {
   const [dx] = viewShift({ left: -50, top: 300, right: 1100, bottom: 330 }, WIN)
   assert.equal((-50 + 1100) / 2 + dx, 500, 'centred on the window')
+})
+
+test('the font setting is Proportional by default, Fixed width when saved so, and anything else reads as Proportional', () => {
+  assert.equal(DEFAULT_FONT, 'proportional')
+  assert.deepEqual(FONTS, { proportional: 'Proportional', fixed: 'Fixed width' })
+  assert.deepEqual(['proportional', 'fixed'].map(readFont), ['proportional', 'fixed'])
+  for (const bad of [undefined, null, 5, true, {}, 'Fixed', 'monospace', 'toString', '__proto__']) assert.equal(readFont(bad), 'proportional', String(bad))
+})
+
+test('Proportional leaves the page\'s font to the notes and Fixed width is a monospace stack', () => {
+  assert.equal(noteFontFamily('proportional', 'Roboto, sans-serif'), 'Roboto, sans-serif')
+  assert.equal(noteFontFamily('fixed', 'Roboto, sans-serif'), FIXED_FONT_STACK)
+  assert.match(FIXED_FONT_STACK, /^ui-monospace, .*monospace$/)
+})
+
+test('Paste settings returns the font, and an invalid one reads as Proportional without counting as skipped', () => {
+  assert.deepEqual(readPaste(JSON.stringify({ [FONT_KEY]: 'fixed' })), { values: { [FONT_KEY]: 'fixed' }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ [FONT_KEY]: 'comic' })), { values: { [FONT_KEY]: 'proportional' }, skipped: 0 })
+})
+
+test('the font pulldown lists Proportional then Fixed width and selects the one in force', () => {
+  const options = (font) => [...renderFontChoice(font).matchAll(/<option value="([^"]*)"( selected)?>([^<]*)<\/option>/g)].map(([, value, selected, label]) => [value, label, Boolean(selected)])
+  assert.deepEqual(options('proportional'), [['proportional', 'Proportional', true], ['fixed', 'Fixed width', false]])
+  assert.deepEqual(options('fixed'), [['proportional', 'Proportional', false], ['fixed', 'Fixed width', true]])
+  assert.match(renderFontChoice('fixed'), /data-role="font-choice"/)
 })
