@@ -481,7 +481,7 @@ test(`${DRAW} shows one figure: the finished note, the same note open for typing
   assert.ok(m, `site/${DRAW} has no figure under <h2>One note, every style</h2>`)
   const found = imgs(m[1])
   assert.deepEqual(found.map(img => withoutTag(img).match(/src="([^"]*)"/)[1]), ['draw-tool-formatting.png', 'draw-tool-formatting-raw.png'].map(f => `${RAW}docs/research/draw-tool/${f}`))
-  for (const [i, [, words]] of [['rendered', ['bold italics', 'underlined', 'struck through', 'nested bullet', 'numbered', 'ticked', 'code block', '→ ≠ Σ']], ['raw text', ['# Header one', '-# subtext', '***bold italics***', '~~struck through~~', '- [x] a ticked item', '```']]].entries()) {
+  for (const [i, words] of [['bold italics', 'underlined', 'struck through', 'nested bullet', 'numbered', 'ticked', 'code block', '→ ← ≠ ≤ ≥ Σ'], ['# Header one', '-# subtext', '***bold italics***', '~~struck through~~', '- [x] a ticked item', '```']].entries()) {
     for (const word of words) assert.ok(altOf(found[i]).includes(word), `the ${i ? 'second' : 'first'} picture's alt text does not name "${word}"`)
   }
   assert.match(m[1], /<p class="caption">[^<]+<\/p>/)
