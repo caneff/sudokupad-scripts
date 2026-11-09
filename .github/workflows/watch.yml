@@ -54,14 +54,10 @@ jobs:
       # filed nothing. Same title as watch.mjs's own "did not run" issue, and filed only when none is open.
       - name: File the did-not-run issue
         if: ${{ failure() && steps.watch.outcome == 'skipped' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TITLE: 'Watch did not run: the live suite could not be checked'
-        run: |
-          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[].title')
-          if printf '%s\n' "$open" | grep -qxF "$TITLE"; then exit 0; fi
-          gh issue create --repo "$GITHUB_REPOSITORY" --label bug --title "$TITLE" \
-            --body "A step before \`npm run watch:live\` failed (npm ci, the Chromium install or the cache restore), so the live suite was not checked. Nothing was remembered. See $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+        uses: ./.github/actions/file-issue-once
+        with:
+          title: 'Watch did not run: the live suite could not be checked'
+          body: "A step before `npm run watch:live` failed (npm ci, the Chromium install or the cache restore), so the live suite was not checked. Nothing was remembered. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
       # After the save, so Tampermonkey is never in the cache and each night fetches the current one: a new Tampermonkey
       # shows up within a day. It runs after a red watch too, but not when the watch never ran, which the did-not-run
       # issue already covers (live/README.md § The Tampermonkey test).
@@ -71,11 +67,7 @@ jobs:
       # A red Tampermonkey test files one issue, and only when none is open, so a red that lasts several nights files once.
       - name: File the Tampermonkey issue
         if: ${{ failure() && steps.tampermonkey.outcome == 'failure' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TITLE: 'Tampermonkey test fails: a script does not install or run in real Tampermonkey'
-        run: |
-          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[].title')
-          if printf '%s\n' "$open" | grep -qxF "$TITLE"; then exit 0; fi
-          gh issue create --repo "$GITHUB_REPOSITORY" --label bug --title "$TITLE" \
-            --body "\`npm run test:tampermonkey\` failed in the nightly watch. A new Tampermonkey, or an outage at tampermonkey.net, raw.githubusercontent.com or Google's CRX endpoint, fails it too. See $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+        uses: ./.github/actions/file-issue-once
+        with:
+          title: 'Tampermonkey test fails: a script does not install or run in real Tampermonkey'
+          body: "`npm run test:tampermonkey` failed in the nightly watch. A new Tampermonkey, or an outage at tampermonkey.net, raw.githubusercontent.com or Google's CRX endpoint, fails it too. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."

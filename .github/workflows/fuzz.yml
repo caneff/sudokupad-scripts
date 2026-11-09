@@ -38,11 +38,7 @@ jobs:
       # nightly.mjs's own "did not run" issue, and filed only when none is open.
       - name: File the did-not-run issue
         if: ${{ failure() && steps.fuzz.outcome == 'skipped' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TITLE: 'Fuzz did not run: the nightly fuzz could not be checked'
-        run: |
-          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[].title')
-          if printf '%s\n' "$open" | grep -qxF "$TITLE"; then exit 0; fi
-          gh issue create --repo "$GITHUB_REPOSITORY" --label bug --title "$TITLE" \
-            --body "A step before \`npm run fuzz:nightly\` failed (npm ci or the Chromium install), so the fuzz did not run. See $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+        uses: ./.github/actions/file-issue-once
+        with:
+          title: 'Fuzz did not run: the nightly fuzz could not be checked'
+          body: "A step before `npm run fuzz:nightly` failed (npm ci or the Chromium install), so the fuzz did not run. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."

@@ -131,7 +131,7 @@ describe('parseFuzzOutput', () => {
 describe('the did-not-run title in the workflow', () => {
   it('is the same text fuzz.yml files under, so the open-issue check matches across the two', () => {
     const yml = readFileSync(new URL('../../.github/workflows/fuzz.yml', import.meta.url), 'utf8')
-    assert.match(yml, new RegExp(`TITLE: '${didNotRunIssue('x').title}'`))
+    assert.match(yml, new RegExp(`title: '${didNotRunIssue('x').title}'`))
   })
 })
 
