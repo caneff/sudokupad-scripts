@@ -108,7 +108,29 @@ describe('the action vocabulary', () => {
       const steps = actionsOf(sample(10, 120, [outside])).map(String).join('\n')
       assert.match(steps, /\br0c\d\b|\br\d+c0\b|\br10c\d\b|\br\d+c10\b/, 'a step names a cell outside the grid')
       const plain = actionsOf(sample(10, 120, [puzzleByName('6x6')])).map(String).join('\n')
-      assert.doesNotMatch(plain, /\br0c|\bc0\b|\br7c|\bc7\b/, 'a 6x6 names no cell outside its 6 by 6')
+      assert.doesNotMatch(plain, /\br(?:0|7)c\d|\br\d+c(?:0|7)\b/, 'a 6x6 names no cell outside its 6 by 6')
+      assert.match(plain, /\br6c\d|\br\d+c6\b/, 'and the regex reads the last row and column')
+    })
+
+    it('the actions of a list are drawn over its own puzzle: every cell and digit key a step names belongs to the puzzle the list names', () => {
+      for (const { puzzle, commands } of sample(11, 120)) {
+        for (const wrapped of commands) {
+          const step = String(wrapped.cmd)
+          for (const [, row, col] of step.matchAll(/\br(\d+)c(\d+)\b/g)) {
+            assert.ok(puzzle.cells.some(([r, c]) => r === Number(row) - 1 && c === Number(col) - 1), `${puzzle.name}: "${step}" names r${row}c${col}`)
+          }
+          const typed = /^type (\w)$|^enter (\w) in /.exec(step)?.slice(1).find(Boolean)
+          if (typed) assert.ok(puzzle.keys.includes(typed), `${puzzle.name}: "${step}" types a key the puzzle does not take`)
+        }
+      }
+    })
+
+    it('a scripted step that cannot run fails the run, not skipped: a digit before any cell is selected', async () => {
+      const puzzle = puzzleByName('recorded 9x9')
+      const [type] = scriptedList(puzzle, [['type digit', '5']])
+      const target = await fakeTargets().openTarget(puzzle)
+      await assert.rejects(type.run({ selected: false }, { env: target.env }), /cannot run here/)
+      assert.deepEqual(target.log, [])
     })
 
     it('a scripted list runs the kinds it names with the numbers given, and refuses a kind that does not exist', async () => {

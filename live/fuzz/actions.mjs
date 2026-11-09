@@ -280,6 +280,11 @@ export function scriptedList (puzzle, steps) {
     const k = KINDS.find((x) => x.kind === kind)
     if (!k) throw new Error(`no action kind "${kind}"`)
     const cmd = commandOf(k, puzzle, arg)
-    return { cmd, check: (model) => cmd.check(model), run: (model, real) => cmd.run(model, real), toString: () => cmd.toString() }
+    // fast-check skips a command whose check fails without a word; a hand-written list must run every step, so a step that cannot run fails the run instead.
+    const run = async (model, real) => {
+      if (!cmd.check(model)) throw new Error(`the scripted step "${cmd}" cannot run here: its precondition does not hold`)
+      return cmd.run(model, real)
+    }
+    return { cmd, check: () => true, run, toString: cmd.toString }
   })
 }

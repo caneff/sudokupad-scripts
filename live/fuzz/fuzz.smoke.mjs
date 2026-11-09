@@ -7,13 +7,16 @@ import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { chromium } from 'playwright'
-import { fuzz, fuzzScripted } from './fuzz.mjs'
+import { fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
+import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 
 const run = promisify(execFile)
 const PASSING_SEEDS = [2, 3]
 const PLANTED_SEED = 3
+// The seed the planted Tab bug is caught on before the failure #681 (a pen color that reload changes) is reached.
+const TAB_PLANT_SEED = 4
 const ROOT = new URL('../../', import.meta.url)
 const INTERRUPTED_BY_ESCAPE = /^(?:pen drag|right-click erase held|note drag).* then Escape then release$/
 
@@ -37,6 +40,21 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser, puzzle, steps })
   })
 
+  it('a page that does not show the puzzle set\'s free cells is refused, not fuzzed on the wrong cells', async () => {
+    const wrong = { ...puzzleByName('4x4'), free: [[0, 1]] }
+    await assert.rejects(openTarget(browser, wrong, {}), /opened with \d+ free cells that are not the 1 of puzzle-set\.mjs/)
+  })
+
+  it('a puzzle that has rules text but shows no pane is a failure, and one with no rules text is read with no pane', async () => {
+    const target = await openTarget(browser, puzzleByName('4x4'), {})
+    try {
+      await assert.rejects(readPageState(target.env.page, { expectRules: true }), /rules pane is not shown/)
+      assert.equal((await readPageState(target.env.page, { expectRules: false })).rulesPane, null)
+    } finally {
+      await target.close()
+    }
+  })
+
   for (const seed of PASSING_SEEDS) {
     it(`a short run with seed ${seed} passes, each list on the puzzle it names`, async () => {
       const result = await fuzz({ browser, seed, runs: 6 })
@@ -48,12 +66,12 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
   it('a bug planted in a script is injected in its place: caught, shrunk to the Tab and printed with the plant to replay', async () => {
     const plant = plantById('tab-turns-pad-to-letters')
-    const result = await fuzz({ browser, seed: 4, runs: 150, plant, shrinkMinutes: 5 })
+    const result = await fuzz({ browser, seed: TAB_PLANT_SEED, runs: 150, plant, shrinkMinutes: 5 })
     assert.equal(result.failed, true, 'the planted bug failed the run')
     assert.match(result.error, plant.expect)
     assert.deepEqual(result.sequence, ['press Tab'])
     assert.match(result.replayCommand, / --plant tab-turns-pad-to-letters$/)
-    assert.equal((await fuzz({ browser, seed: 4, runs: 20 })).failed, false, 'the same seed on the shipped script passes')
+    assert.equal((await fuzz({ browser, seed: TAB_PLANT_SEED, runs: 20 })).failed, false, 'the same seed on the shipped script passes')
   })
 
   it('a note open for typing at a reload is kept (#668): the recorded failing list passes', async () => {

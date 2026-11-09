@@ -50,9 +50,9 @@ const readDom = ({ texts, seenTexts, profilesKey, expectRules }) => {
   }
 }
 
-// `rules` says whether the puzzle shows rules text: when it does not, the snapshot's `rulesPane` is null.
-export async function readPageState (p, { rules = true } = {}) {
-  const args = { texts: TEXTS, seenTexts: SEEN_TEXTS, profilesKey: PROFILES_KEY, expectRules: rules }
+// `expectRules` says whether the puzzle has rules text. A puzzle that does must show the pane (or the read throws); the snapshot's `rulesPane` is null when no pane is shown.
+export async function readPageState (p, { expectRules }) {
+  const args = { texts: TEXTS, seenTexts: SEEN_TEXTS, profilesKey: PROFILES_KEY, expectRules }
   let dom = await p.evaluate(readDom, args)
   for (const deadline = Date.now() + RULES_FIT_MS; dom.rulesPane !== null && !rulesPaneFits(dom.rulesPane) && Date.now() < deadline;) {
     await sleep(POLL_MS)

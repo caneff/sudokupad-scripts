@@ -15,7 +15,6 @@ const SHORT_RULES = 'Normal sudoku rules apply. Cages sum to their clue.'
 // The rules text a puzzle's page shows, or null when it shows none.
 export const rulesTextFor = (puzzle) => ({ long: RULES_TEXT, short: SHORT_RULES, none: null })[puzzle.rules]
 
-const cell = ([r, c]) => [r, c]
 const clue = (row, col, text) => ({ center: [row, col], width: 0.8, height: 0.6, text, fontSize: 18, color: '#000000' })
 
 // A 9x9 cut into nine connected regions of nine cells that are not boxes: the cells in a serpentine along two-column strips, nine to a region.
@@ -33,7 +32,8 @@ function jigsawRegions () {
 }
 
 // Cells holding a given.
-const givensOf = (solution, keep) => [...solution].flatMap((d, i) => (keep(i) ? [[Math.floor(i / 9), i % 9, Number(d)]] : []))
+const SIDE = 9
+const givensOf = (solution, keep) => [...solution].flatMap((d, i) => (keep(i) ? [[Math.floor(i / SIDE), i % SIDE, Number(d)]] : []))
 
 const THERMO = { thickness: 12, color: '#cccccc' }
 const bulb = (r, c) => ({ center: [r, c], width: 0.7, height: 0.7, rounded: true, backgroundColor: '#cccccc', borderColor: '#cccccc', borderThickness: 1 })
@@ -68,15 +68,18 @@ const SIX = puzzleData({ id: 'fuzz-6x6', rows: 6, cols: 6, boxRows: 2, boxCols: 
 const FOUR = puzzleData({ id: 'fuzz-4x4', rows: 4, cols: 4, boxRows: 2, boxCols: 2, givens: [[0, 0, 1], [1, 2, 3], [2, 1, 2], [3, 3, 4]], metadata: { title: 'fuzz 4x4' } })
 const TWELVE = puzzleData({ id: 'fuzz-12x12', rows: 12, cols: 12, boxRows: 3, boxCols: 4, givens: [[0, 0, 1], [2, 5, 7], [5, 3, 10], [7, 8, 12], [11, 11, 3]], metadata: { title: 'fuzz 12x12' } })
 const SIX_BY_EIGHT = puzzleData({ id: 'fuzz-6x8', rows: 6, cols: 8, boxRows: 2, boxCols: 4, givens: [[0, 0, 1], [1, 5, 3], [3, 2, 8], [5, 7, 4]], metadata: { title: 'fuzz 6x8' } })
+const SIXTEEN = puzzleData({ id: 'fuzz-16x16', rows: 16, cols: 16, boxRows: 4, boxCols: 4, givens: [[0, 0, 1], [5, 5, 3], [2, 3, 2], [9, 9, 12], [15, 15, 16]], metadata: { title: 'fuzz 16x16' } })
+const EMPTY = puzzleData({ id: 'fuzz-empty', metadata: { title: 'fuzz empty 9x9' } })
 const JIGSAW = puzzleData({ id: 'fuzz-jigsaw', givens: givensOf(CLASSIC_SOLUTION, (i) => i % 5 === 0), regions: jigsawRegions(), metadata: { title: 'fuzz jigsaw' } })
 
 // The digit keys SudokuPad's pad takes on a grid this big: 1 up to the size (9 at most), and 0 for the digits past 9.
 const keysFor = (size) => [...Array.from({ length: Math.min(size, 9) }, (_, i) => String(i + 1)), ...(size > 9 ? ['0'] : [])]
 
-function describePuzzle ({ name, data, rules, margin = false, rows = data.cells.length, cols = data.cells[0].length, givens = data ? [] : CLASSIC_GIVENS }) {
+function describePuzzle ({ name, data, rules, margin = false, rows = data ? data.cells.length : SIDE, cols = data ? data.cells[0].length : SIDE }) {
+  const givens = data ? [] : CLASSIC_GIVENS
   const fromData = data ? data.cells.flatMap((row, r) => row.flatMap((c, i) => (c.value ? [`${r},${i}`] : []))) : []
   const given = new Set([...givens.map(([r, c]) => `${r},${c}`), ...fromData])
-  const free = Array.from({ length: rows * cols }, (_, i) => [Math.floor(i / cols), i % cols]).filter(([r, c]) => !given.has(`${r},${c}`)).map(cell)
+  const free = Array.from({ length: rows * cols }, (_, i) => [Math.floor(i / cols), i % cols]).filter(([r, c]) => !given.has(`${r},${c}`))
   const around = [
     ...Array.from({ length: cols }, (_, c) => [-1, c]), ...Array.from({ length: cols }, (_, c) => [rows, c]),
     ...Array.from({ length: rows }, (_, r) => [r, -1]), ...Array.from({ length: rows }, (_, r) => [r, cols])
@@ -85,17 +88,22 @@ function describePuzzle ({ name, data, rules, margin = false, rows = data.cells.
 }
 
 export const FUZZ_PUZZLES = [
-  describePuzzle({ name: 'recorded 9x9', data: null, rows: 9, cols: 9, rules: 'long' }),
+  describePuzzle({ name: 'recorded 9x9', data: null, rules: 'long' }),
   describePuzzle({ name: '6x6', data: SIX, rules: 'long' }),
   describePuzzle({ name: '4x4', data: FOUR, rules: 'none' }),
   describePuzzle({ name: 'cages 9x9', data: CAGES, rules: 'short' }),
-  describePuzzle({ name: 'jigsaw 9x9', data: JIGSAW, rules: 'short' }),
+  describePuzzle({ name: 'jigsaw 9x9', data: JIGSAW, rules: 'long' }),
   describePuzzle({ name: 'outside clues 9x9', data: OUTSIDE, rules: 'short', margin: true }),
-  describePuzzle({ name: '12x12', data: TWELVE, rules: 'short' }),
+  describePuzzle({ name: '12x12', data: TWELVE, rules: 'long' }),
+  describePuzzle({ name: '16x16', data: SIXTEEN, rules: 'long' }),
   describePuzzle({ name: '6x8', data: SIX_BY_EIGHT, rules: 'short' }),
   describePuzzle({ name: 'nearly solved 9x9', data: NEARLY_SOLVED, rules: 'short' }),
+  describePuzzle({ name: 'empty 9x9', data: EMPTY, rules: 'short' }),
   describePuzzle({ name: 'cages 9x9, long rules', data: { ...CAGES, id: 'fuzz-cages-long' }, rules: 'long' })
 ]
+
+// Whether a target `[row, col]` of `puzzle` is a cell of the grid, not one just outside it.
+export const insideGrid = (puzzle, [row, col]) => row >= 0 && col >= 0 && row < puzzle.rows && col < puzzle.cols
 
 export const puzzleByName = (name) => {
   const puzzle = FUZZ_PUZZLES.find((p) => p.name === name)

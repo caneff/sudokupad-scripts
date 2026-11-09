@@ -1,4 +1,4 @@
-// The fuzz on real SudokuPad: opens the recorded page of `live/page.mjs` with all six scripts installed the way a userscript manager does (at
+// The fuzz on real SudokuPad: opens a page of `live/page.mjs` (on the puzzle a list names) with all six scripts installed the way a userscript manager does (at
 // DOMContentLoaded of every load, so a reload keeps them), gives the engine (`engine.mjs`) a page of its own for every action list, and reads the crash
 // signals (`signals.mjs`) from it. Each list names its puzzle (`puzzle-set.mjs`, #679). Not a check itself; `fuzz.smoke.mjs` is the test, `run.mjs` the command line.
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -12,7 +12,7 @@ import { runFuzz, runScript } from './engine.mjs'
 import { scriptedList } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantPatch } from './plants.mjs'
-import { FUZZ_PUZZLES, rulesTextFor } from './puzzle-set.mjs'
+import { FUZZ_PUZZLES, insideGrid, rulesTextFor } from './puzzle-set.mjs'
 import { newestErrorRecords } from './signals.mjs'
 
 // A page error thrown after an Escape pressed while a mouse button is down: the planted failure the smoke test and `--plant-escape-error` use.
@@ -52,14 +52,13 @@ function envFor (p, puzzle) {
   return {
     page: p,
     // A target outside the grid is where the puzzle's clues are: the middle of the cell that would be there. SudokuPad's own links sit over a corner of the board
-    // (a click there leaves the page, which no script did), so a point that is not on the board svg is the nearest cell of the grid instead.
+    // (a click there leaves the page, which no script did), so a point under a link is the nearest cell of the grid instead.
     cellPoint: async (i) => {
       const [row, col] = puzzle.cells[i]
-      const inside = row >= 0 && col >= 0 && row < puzzle.rows && col < puzzle.cols
-      if (inside) return (await cellCentre(p, row, col)).slice(0, 2)
+      if (insideGrid(puzzle, [row, col])) return (await cellCentre(p, row, col)).slice(0, 2)
       const point = await gridPoint(p, [row + 0.5, col + 0.5])
-      const onBoard = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('#svgrenderer')), point)
-      return onBoard ? point : (await cellCentre(p, Math.min(Math.max(row, 0), puzzle.rows - 1), Math.min(Math.max(col, 0), puzzle.cols - 1))).slice(0, 2)
+      const onLink = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('a')), point)
+      return !onLink ? point : (await cellCentre(p, Math.min(Math.max(row, 0), puzzle.rows - 1), Math.min(Math.max(col, 0), puzzle.cols - 1))).slice(0, 2)
     },
     async usePen (color) {
       await openPen()
@@ -126,7 +125,7 @@ export async function openTarget (browser, puzzle, { planted, plant }) {
   try {
     if (puzzle.data) await openPuzzleId(p, await puzzleIdFor(p, puzzle.data))
     else await startWithTools(p)
-    // Tab must have a letter tool to switch to, and the page needs rules for Auto Rules Resizer to fit.
+    // Tab must have a letter tool to switch to, and a puzzle with rules text shows it for Auto Rules Resizer to fit.
     await p.evaluate(() => Framework.setSetting('toolletter', true))
     await showRules(p, puzzle)
     // The puzzle set says which cells are free: a page that disagrees would send every action to the wrong cell.
@@ -134,7 +133,7 @@ export async function openTarget (browser, puzzle, { planted, plant }) {
     if (JSON.stringify(sortedCells(onPage)) !== JSON.stringify(sortedCells(puzzle.free))) throw new Error(`the ${puzzle.name} puzzle opened with ${onPage.length} free cells that are not the ${puzzle.free.length} of puzzle-set.mjs`)
     return {
       env: envFor(p, puzzle),
-      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR), page: await readPageState(p, { rules: rulesTextFor(puzzle) !== null }) }),
+      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR), page: await readPageState(p, { expectRules: rulesTextFor(puzzle) !== null }) }),
       wait: (ms) => sleep(ms),
       errorLog: async () => newestErrorRecords(await p.evaluate((key) => window.localStorage.getItem(key), ERROR_LOG_KEY)),
       close: () => context.close()
@@ -169,6 +168,6 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
 }
 
 // Runs one list written by hand (`steps`: `[kind, arg]`, `actions.mjs`) on `puzzle` with the checks of every run; resolves to nothing, or throws the failure.
-export function fuzzScripted ({ browser, puzzle, steps, planted = false, plant }) {
-  return runScript({ openTarget: (p) => openTarget(browser, p, { planted, plant }), puzzle, actions: scriptedList(puzzle, steps) })
+export function fuzzScripted ({ browser, puzzle, steps }) {
+  return runScript({ openTarget: (p) => openTarget(browser, p, { planted: false }), puzzle, actions: scriptedList(puzzle, steps) })
 }

@@ -69,16 +69,17 @@ async function runList (openTarget, actions, landMs, settleMs) {
 }
 
 // Runs a list written by hand (`scriptedList` of `actions.mjs`) on a page of its own for `puzzle`, with the checks of every fuzz run; throws what a failing run throws.
-export const runScript = ({ openTarget, puzzle, actions, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS }) => runList(() => openTarget(puzzle), actions, landMs, settleMs)
+export const runScript = ({ openTarget, puzzle, actions }) => runList(() => openTarget(puzzle), actions, ERRORS_LAND_MS, ACTION_SETTLE_MS)
 
 // Fuzzes with `seed` over `puzzles` (each list picks one): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
 // most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
 // each puzzle ran, by name) or the failure: `error`, `puzzle` (its name), `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`,
 // `replayPath`, `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
 export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS }) {
-  const puzzleRuns = Object.fromEntries(puzzles.map((p) => [p.name, 0]))
+  // The puzzle of every list started, in order: the hunt's lists are the first `hunt.numRuns` (a list the time limit cut off, and the shrink's, come after).
+  const started = []
   const property = fc.asyncProperty(actionList(puzzles, { replayPath }), ({ puzzle, commands }) => {
-    puzzleRuns[puzzle.name]++
+    started.push(puzzle.name)
     return runList(() => openTarget(puzzle), commands, landMs, settleMs)
   })
   const replaying = path != null
@@ -89,8 +90,7 @@ export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFA
   const huntStarted = Date.now()
   const hunt = await fc.check(property, { seed, numRuns: replaying ? upTo(path) : runs ?? UNBOUNDED, path, endOnFailure: true, interruptAfterTimeLimit: replaying ? undefined : minutes * 60000, verbose: 0 })
   const huntMs = Date.now() - huntStarted
-  // The lists of the hunt alone: the shrink runs more.
-  const huntRuns = { ...puzzleRuns }
+  const huntRuns = Object.fromEntries(puzzles.map((p) => [p.name, started.slice(0, hunt.numRuns).filter((n) => n === p.name).length]))
   if (!hunt.failed || hunt.counterexample === null) return { failed: false, seed: hunt.seed, runs: hunt.numRuns, huntMs, puzzleRuns: huntRuns }
   let found = hunt
   if (!replaying) {

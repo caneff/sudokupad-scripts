@@ -44,6 +44,13 @@ describe('the fuzz engine on a fake page', () => {
       assert.deepEqual(targets.map((t) => t.puzzle.name).sort(), Object.entries(result.puzzleRuns).flatMap(([name, count]) => Array(count).fill(name)).sort())
     })
 
+    it('the lists counted per puzzle are the lists the run reports, also when the time limit cuts the last one off', async () => {
+      const { openTarget } = fakeTargets()
+      const slow = async (puzzle) => { await new Promise((resolve) => setTimeout(resolve, 5)); return openTarget(puzzle) }
+      const result = await runFuzz({ openTarget: slow, puzzles: FUZZ_PUZZLES, seed: SEED, minutes: 0.01, ...WAITS })
+      assert.equal(Object.values(result.puzzleRuns).reduce((a, b) => a + b, 0), result.runs)
+    })
+
     it('a failure names its puzzle, and its path replays on that puzzle, not the first', async () => {
       const name = FUZZ_PUZZLES[4].name
       const { openTarget } = fakeTargets({ plantEscapeError: name })
