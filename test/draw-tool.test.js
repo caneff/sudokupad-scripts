@@ -25,7 +25,7 @@ test('toolNamesFor keeps Text Anywhere for anything else: a keydown already disp
 })
 
 const TKEY = { key: 't', ctrlKey: false, altKey: false, metaKey: false, isComposing: false }
-const PLAIN = { tool: 'normal', letterMode: false, noteOpen: false, dialogOpen: false, inField: false }
+const PLAIN = { tool: 'normal', letterMode: false, dialogOpen: false, inField: false }
 
 test('wantsTextTool: T, with or without Shift, makes Text Anywhere current from another tool', () => {
   assert.equal(wantsTextTool(TKEY, PLAIN), true)
@@ -37,12 +37,12 @@ test('wantsTextTool: not for another key, a Ctrl, Alt or Meta chord, or composin
   assert.equal(wantsTextTool({ ...TKEY, key: 'z' }, PLAIN), false)
   for (const mod of ['ctrlKey', 'altKey', 'metaKey']) assert.equal(wantsTextTool({ ...TKEY, [mod]: true }, PLAIN), false, mod)
   assert.equal(wantsTextTool({ ...TKEY, isComposing: true }, PLAIN), false)
+  assert.equal(wantsTextTool({}, PLAIN), false, 'a keydown with no key')
 })
 
-test('wantsTextTool: not with the Letter tool on, Text Anywhere already current, a note open, a dialog open or focus in a field', () => {
+test('wantsTextTool: not with the Letter tool on, Text Anywhere already current, a dialog open or focus in a field', () => {
   assert.equal(wantsTextTool(TKEY, { ...PLAIN, letterMode: true }), false)
   assert.equal(wantsTextTool(TKEY, { ...PLAIN, tool: TOOL_NAME }), false)
-  assert.equal(wantsTextTool(TKEY, { ...PLAIN, noteOpen: true }), false)
   assert.equal(wantsTextTool(TKEY, { ...PLAIN, dialogOpen: true }), false)
   assert.equal(wantsTextTool(TKEY, { ...PLAIN, inField: true }), false)
 })

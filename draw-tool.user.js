@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.0
+// @version      0.44.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.0'
+  const VERSION = '0.44.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -727,6 +727,9 @@
   /* eslint-disable no-unused-vars */
   const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
   const rem = (value) => Math.round(value * 100) / 100
+
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:store>
@@ -1250,10 +1253,10 @@
   const LETTER_MODE_CLASS = 'input-letter'
   const TEXT_KEY = 't'
 
-  // T makes Text Anywhere current, except where T is typed: the Letter tool, an open note, a dialog or any field.
-  const wantsTextTool = (event, { tool, letterMode, noteOpen, dialogOpen, inField }) =>
-    event.key.toLowerCase() === TEXT_KEY && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing &&
-    tool !== TOOL_NAME && !letterMode && !noteOpen && !dialogOpen && !inField
+  // T makes Text Anywhere current, except where T is typed. An open note needs no test: only Text Anywhere opens one.
+  const wantsTextTool = (event, { tool, letterMode, dialogOpen, inField }) =>
+    typeof event.key === 'string' && event.key.toLowerCase() === TEXT_KEY && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing &&
+    tool !== TOOL_NAME && !letterMode && !dialogOpen && !inField
 
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
@@ -3432,9 +3435,8 @@
     const state = {
       tool: Framework.app.tool,
       letterMode: document.querySelector('.controls-main')?.classList.contains(LETTER_MODE_CLASS) === true,
-      noteOpen: editing !== null,
       dialogOpen: document.querySelector('.dialog') !== null,
-      inField: Boolean(event.target.closest?.('input, textarea, select, [contenteditable]'))
+      inField: typedIntoField(event)
     }
     if (!wantsTextTool(event, state)) return
     event.preventDefault()

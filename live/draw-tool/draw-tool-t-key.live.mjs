@@ -47,6 +47,19 @@ describe('Text Anywhere\'s T key', { concurrency: false }, () => {
     assert.equal(await settle(() => tool(p), 'draw'), 'draw')
   })
 
+  it('with focus in a field and no dialog open, T types into the field and the tool stays', async () => {
+    await p.evaluate(() => {
+      const input = document.createElement('input')
+      input.id = 'live-t-page-field'
+      document.body.appendChild(input)
+      input.focus()
+    })
+    await p.keyboard.press('t')
+    assert.equal(await p.locator('#live-t-page-field').inputValue(), 't')
+    assert.equal(await tool(p), 'normal')
+    await p.evaluate(() => document.getElementById('live-t-page-field').remove())
+  })
+
   it('Ctrl+T and Alt+T leave the tool alone', async () => {
     for (const chord of ['Control+t', 'Alt+t']) {
       await p.keyboard.press(chord)
@@ -54,7 +67,7 @@ describe('Text Anywhere\'s T key', { concurrency: false }, () => {
     }
   })
 
-  it('with the Letter tool current and a cell selected, T enters the letter and the tool stays Letter', async () => {
+  it('with the Letter tool current and a cell selected, T enters the letter and Letter mode stays on', async () => {
     // Enable Letter Tool, switched on after the page and the script are in, as a player does.
     await p.evaluate(() => Framework.setSetting('toolletter', true))
     await p.click('button[data-control="toggleletter"]')
@@ -62,6 +75,7 @@ describe('Text Anywhere\'s T key', { concurrency: false }, () => {
     await selectCell()
     await p.keyboard.press('t')
     assert.equal(await tool(p), 'normal')
+    assert.equal(await p.locator(`${MAIN}.input-letter`).count(), 1, 'Letter mode is still on')
     assert.equal(await cellText(), 't')
   })
 
@@ -89,7 +103,7 @@ describe('Text Anywhere\'s T key', { concurrency: false }, () => {
     await closeDialogWith(p, 'Cancel', SETTINGS_EDITOR)
   })
 
-  it('Z X C V still select SudokuPad\'s tools, and no key but T reaches Text Anywhere', async () => {
+  it('Z X C V still select SudokuPad\'s tools', async () => {
     const names = await p.evaluate(() => Framework.app.getToolNames())
     assert.deepEqual(names.slice(0, 4), ['normal', 'corner', 'centre', 'colour'])
     // Z is the first tool's key, so from another tool it returns to normal; X C V take the next three.
