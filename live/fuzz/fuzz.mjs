@@ -22,12 +22,9 @@ export const PUZZLES = [
 ]
 export const puzzleFor = (seed) => PUZZLES[Math.abs(seed) % PUZZLES.length]
 
-// The rules text every fuzz page shows: eight times a short paragraph, too long for SudokuPad's own pane at its own font in a small window, so Auto Rules Resizer
-// has to widen the pane and shrink the text, and short enough that it can (the recorded puzzle has no rules of its own).
-const RULES_TEXT = Array(8).fill('Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.').join(' ')
-// Auto Rules Resizer refits the pane 100 ms after the last resize; a "nothing happened in N ms" wait, so a rule reads the fit and not the step before it.
-const REFIT_WAIT_MS = 150
-
+// The rules text every fuzz page shows: twenty times a short paragraph, which at every fuzz window size Auto Rules Resizer has to shrink below SudokuPad's own font
+// to fit and can (the recorded puzzle has no rules of its own).
+const RULES_TEXT = Array(20).fill('Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.').join(' ')
 // A page error thrown after an Escape pressed while a mouse button is down: the planted failure the smoke test and `--plant-escape-error` use.
 const plantEscapeError = (p) => p.addInitScript(() => {
   let down = false
@@ -36,13 +33,12 @@ const plantEscapeError = (p) => p.addInitScript(() => {
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && down) setTimeout(() => { throw new Error('planted page error') }, 0) }, true)
 })
 
-// Shows the rules text the way a loaded puzzle gets it, and waits out the refit.
+// Shows the rules text the way a loaded puzzle gets it; the snapshot waits for the fit.
 async function showRules (p) {
   await p.evaluate((rules) => {
     Framework.app.showMetaInfoUI({ title: 'fuzz', author: 'fuzz', rules })
     Framework.app.resize()
   }, RULES_TEXT)
-  await sleep(REFIT_WAIT_MS)
 }
 
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
@@ -95,10 +91,7 @@ function envFor (p, cells) {
       await openExtrasEditor(p)
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
-    async resize (size) {
-      await p.setViewportSize(size)
-      await sleep(REFIT_WAIT_MS)
-    },
+    resize: (size) => p.setViewportSize(size),
     blurFocus: () => p.evaluate(() => {
       window.dispatchEvent(new Event('blur'))
       document.dispatchEvent(new Event('visibilitychange'))

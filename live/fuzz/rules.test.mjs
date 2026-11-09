@@ -12,7 +12,7 @@ const colorByDigit = (mode, cells, groups = [{ key: '5', digits: ['5'] }, { key:
 
 describe('the rules', () => {
   it('each script has a rule, and the names are unique', () => {
-    assert.deepEqual(RULES.map((r) => r.name), ['undo-to-start', 'pen-lines-drawn', 'notes-saved-match-drawn', 'notes-survive-reload', 'digit-cells-colored', 'page-stays-dark', 'rules-fit-panel', 'tab-not-letters'])
+    assert.deepEqual(RULES.map((r) => r.name), ['undo-to-start', 'pen-lines-drawn', 'notes-saved-match-drawn', 'notes-survive-reload', 'digit-cells-colored', 'page-stays-dark', 'rules-fit-pane', 'tab-not-letters'])
   })
 
   it('a quiet page breaks none, and a violation is reported with its rule name', () => {
@@ -59,6 +59,9 @@ describe('the rules', () => {
     it('fails for a note drawn and not saved', () => {
       assert.deepEqual(check('notes-saved-match-drawn', { notesSaved: null, notesDrawn: ['15'] }), ['drawn but not saved: "15"'])
     })
+    it('ignores a saved item that is not a note', () => {
+      assert.deepEqual(check('notes-saved-match-drawn', { notesSaved: [{ kind: 'stroke' }, { kind: 'text', text: '15' }], notesDrawn: ['15'] }), [])
+    })
     it('fails for a note whose saved text differs from the drawn one', () => {
       assert.equal(check('notes-saved-match-drawn', { notesSaved: items('15'), notesDrawn: ['51'] }).length, 2)
     })
@@ -69,7 +72,7 @@ describe('the rules', () => {
       assert.deepEqual(check('notes-survive-reload', { notesDrawn: ['b', 'a'] }, { before: { notesDrawn: ['a', 'b'] }, action: 'reload' }), [])
     })
     it('fails when a reload loses a note', () => {
-      assert.deepEqual(check('notes-survive-reload', { notesDrawn: ['a'] }, { before: { notesDrawn: ['a', 'b'] }, action: 'reload' }), ['the notes before the reload were ["a","b"] and after it ["a"]'])
+      assert.deepEqual(check('notes-survive-reload', { notesDrawn: ['a'] }, { before: { notesDrawn: ['a', 'b'] }, action: 'reload' }), ['drawn before the reload and not after it: "b"'])
     })
     it('fails when a reload adds a note', () => {
       assert.equal(check('notes-survive-reload', { notesDrawn: ['a', 'a'] }, { before: { notesDrawn: ['a'] }, action: 'reload' }).length, 1)
@@ -116,27 +119,26 @@ describe('the rules', () => {
       for (const color of ['rgb(255, 255, 255)', 'rgb(200, 200, 200)', 'rgba(0, 0, 0, 0)']) assert.equal(check('page-stays-dark', { pageColor: color }).length, 1, color)
     })
     it('fails for a color it cannot read, so a changed format is not read as dark', () => {
-      assert.deepEqual(check('page-stays-dark', { pageColor: 'oklch(0 0 0)' }), ['the page color "oklch(0 0 0)" is not an rgb color'])
+      assert.deepEqual(check('page-stays-dark', { pageColor: 'oklch(0 0 0)' }), ['the page color "oklch(0 0 0)" is not an opaque rgb color'])
     })
   })
 
-  describe('rules-fit-panel', () => {
+  describe('rules-fit-pane', () => {
     const pane = (over) => ({ fontPx: 17.6, ownFontPx: 17.6, scrollHeight: 300, clientHeight: 300, ...over })
-    it('holds with no rules, and when the rules fit', () => {
-      assert.deepEqual(check('rules-fit-panel', { rulesPane: null }), [])
-      assert.deepEqual(check('rules-fit-panel', { rulesPane: pane() }), [])
+    it('holds when the rules fit', () => {
+      assert.deepEqual(check('rules-fit-pane', { rulesPane: pane() }), [])
     })
     it('holds when a pixel of rounding is all that overflows', () => {
-      assert.deepEqual(check('rules-fit-panel', { rulesPane: pane({ scrollHeight: 301 }) }), [])
+      assert.deepEqual(check('rules-fit-pane', { rulesPane: pane({ scrollHeight: 301 }) }), [])
     })
     it('fails when the rules scroll above the smallest font', () => {
-      assert.deepEqual(check('rules-fit-panel', { rulesPane: pane({ scrollHeight: 400, fontPx: 20 }) }), ['the rules need 400px in a pane of 300px at 20px, above the smallest font 12.32px'])
+      assert.deepEqual(check('rules-fit-pane', { rulesPane: pane({ scrollHeight: 400, fontPx: 20 }) }), ['the rules need 400px in a pane of 300px at 20px, above the smallest font 12.32px'])
     })
     it('holds when the rules scroll at the smallest font, which is as far as the script shrinks them', () => {
-      assert.deepEqual(check('rules-fit-panel', { rulesPane: pane({ scrollHeight: 1000, fontPx: 12.32 }) }), [])
+      assert.deepEqual(check('rules-fit-pane', { rulesPane: pane({ scrollHeight: 1000, fontPx: 12.32 }) }), [])
     })
     it('fails when the rules scroll one step above the smallest font', () => {
-      assert.equal(check('rules-fit-panel', { rulesPane: pane({ scrollHeight: 1000, fontPx: 13 }) }).length, 1)
+      assert.equal(check('rules-fit-pane', { rulesPane: pane({ scrollHeight: 1000, fontPx: 13 }) }).length, 1)
     })
   })
 

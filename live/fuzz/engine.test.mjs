@@ -100,6 +100,22 @@ describe('the fuzz engine on a fake page', () => {
     })
   })
 
+  describe('where a broken rule is read', () => {
+    it('a rule broken only after a wait is caught by the read after the last action', async () => {
+      const { openTarget } = fakeTargets({ whitenOnWait: true })
+      const found = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 200, landMs: 1, settleMs: 0 })
+      assert.equal(found.failed, true)
+      assert.match(found.error, /rule broken after the last action: page-stays-dark/)
+    })
+
+    it('each rule compares an action with the snapshot just before it, not the one at the start of the list', async () => {
+      // Letters from a blur on are no Tab's doing: a Tab after it sees letters before and after.
+      const { openTarget } = fakeTargets({ lettersOnBlur: true })
+      const result = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 300, ...WAITS })
+      assert.equal(result.failed, false, result.error)
+    })
+  })
+
   describe('where a late error is read', () => {
     it('with no wait after an action, the wait after the last action still catches it', async () => {
       const { openTarget } = fakeTargets({ plantEscapeError: true })

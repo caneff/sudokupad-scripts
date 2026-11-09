@@ -12,18 +12,22 @@
 //   notesDrawn    the text of every note on the board
 //   colorByDigit  { mode: 'Cell' | 'Digit' | 'Both' | 'Off', groups: [{ key, digits }], cells: [{ digit, given, colours }] with `colours` the keys the cell holds }
 //   pageColor     the page's background as a computed `rgb(r, g, b)`
-//   rulesPane     the puzzle's rules text: null when there is none, else { fontPx, ownFontPx, scrollHeight, clientHeight }
+//   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight }
 //   letterMode    whether the number pad shows letters
+import { readFileSync } from 'node:fs'
+
+// The shared color module is pasted text for the scripts, not a module, so it is evaluated here as its own test does.
+const { parseColor, wcagLuminance } = new Function(`${readFileSync(new URL('../../lib/color-math.js', import.meta.url), 'utf8')}\nreturn { parseColor, wcagLuminance }`)() // eslint-disable-line no-new-func
 
 // The Dark Page rule: a page color this light or lighter is not dark. WCAG relative luminance, 0 black to 1 white; the fuzz's dark colors are under 0.02.
-export const DARK_PAGE_MAX_LUMINANCE = 0.2
-// Auto Rules Resizer shrinks the text to this share of SudokuPad's own font at the least (`MIN_FONT_RATIO` in auto-rules-resizer.user.js); rules too long
-// for that are left to scroll.
-export const MIN_FONT_RATIO = 0.7
+const DARK_PAGE_MAX_LUMINANCE = 0.2
+// Auto Rules Resizer shrinks the text to this share of SudokuPad's own font at the least (`MIN_FONT_RATIO` in auto-rules-resizer.user.js, typed out here
+// because the script does not export it and exporting it would raise its version); rules too long for that are left to scroll.
+const MIN_FONT_RATIO = 0.7
 // A scrollHeight and clientHeight are rounded to whole pixels, so one pixel of difference is no overflow.
 const SCROLL_TOLERANCE_PX = 1
-
-const sorted = (list) => [...list].sort()
+// A computed font size is a float: this much above the smallest font is the smallest font.
+const FONT_TOLERANCE_PX = 0.01
 
 // The lines in `a` and not in `b`, counting repeats: [x, x] against [x] leaves one x.
 function without (a, b) {
@@ -36,23 +40,19 @@ function without (a, b) {
   })
 }
 
-function luminance (rgb) {
-  const [r, g, b] = rgb.map((channel) => {
-    const c = channel / 255
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-const RGB = /^rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?\)$/
-
 // Every digit that changed in a cell between two snapshots: a cell entered, replaced, erased, or one an undo, a redo or a reload put back.
 const digitsChanged = (now, before) => now.cells.flatMap((cell, i) => (cell.digit === before.cells[i]?.digit ? [] : [i]))
+
+// Whether the rules pane shows all its text, or has shrunk the text as far as Auto Rules Resizer goes.
+export function rulesPaneFits (pane) {
+  return pane.scrollHeight - pane.clientHeight <= SCROLL_TOLERANCE_PX || pane.fontPx <= pane.ownFontPx * MIN_FONT_RATIO + FONT_TOLERANCE_PX
+}
 
 export const RULES = [
   {
     name: 'undo-to-start',
-    // All scripts: SudokuPad's own start is a board with nothing but its givens, which its serialized state leaves out.
+    // All scripts: SudokuPad's own start is a board with nothing but its givens, which its serialized state leaves out. Not the first snapshot of the list: Color by
+    // Digit's coloring of the board when the page opens is an undo step of its own, so undoing back to the start undoes it too.
     check: ({ now }) => {
       if (now.page.undoDepth !== 0) return []
       return now.page.cells.flatMap((cell, i) => (cell === '' ? [] : [`the undo stack is empty but cell ${i} still holds ${JSON.stringify(cell)}`]))
@@ -81,9 +81,10 @@ export const RULES = [
     name: 'notes-survive-reload',
     check: ({ now, before, action }) => {
       if (action !== 'reload') return []
-      const [was, is] = [sorted(before.page.notesDrawn), sorted(now.page.notesDrawn)]
-      if (JSON.stringify(was) === JSON.stringify(is)) return []
-      return [`the notes before the reload were ${JSON.stringify(was)} and after it ${JSON.stringify(is)}`]
+      return [
+        ...without(before.page.notesDrawn, now.page.notesDrawn).map((t) => `drawn before the reload and not after it: ${JSON.stringify(t)}`),
+        ...without(now.page.notesDrawn, before.page.notesDrawn).map((t) => `drawn after the reload and not before it: ${JSON.stringify(t)}`)
+      ]
     }
   },
   {
@@ -107,22 +108,17 @@ export const RULES = [
     name: 'page-stays-dark',
     // Dark Page: the page color is the setting, and every color the fuzz can choose is dark.
     check: ({ now }) => {
-      const match = RGB.exec(now.page.pageColor)
-      if (!match) return [`the page color ${JSON.stringify(now.page.pageColor)} is not an rgb color`]
-      const alpha = match[4] === undefined ? 1 : Number(match[4])
-      const value = luminance(match.slice(1, 4).map(Number))
-      return alpha === 0 || value >= DARK_PAGE_MAX_LUMINANCE ? [`the page color ${now.page.pageColor} is not dark`] : []
+      const rgb = parseColor(now.page.pageColor)
+      if (!rgb) return [`the page color ${JSON.stringify(now.page.pageColor)} is not an opaque rgb color`]
+      return wcagLuminance(rgb) >= DARK_PAGE_MAX_LUMINANCE ? [`the page color ${now.page.pageColor} is not dark`] : []
     }
   },
   {
-    name: 'rules-fit-panel',
+    name: 'rules-fit-pane',
     // Auto Rules Resizer: it shrinks the text until the rules fit the pane, down to 70% of SudokuPad's font, and past that the rules scroll.
     check: ({ now }) => {
       const pane = now.page.rulesPane
-      if (!pane) return []
-      const overflow = pane.scrollHeight - pane.clientHeight
-      if (overflow <= SCROLL_TOLERANCE_PX) return []
-      if (pane.fontPx <= pane.ownFontPx * MIN_FONT_RATIO + 0.01) return []
+      if (rulesPaneFits(pane)) return []
       return [`the rules need ${pane.scrollHeight}px in a pane of ${pane.clientHeight}px at ${pane.fontPx}px, above the smallest font ${(pane.ownFontPx * MIN_FONT_RATIO).toFixed(2)}px`]
     }
   },

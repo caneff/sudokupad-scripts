@@ -19,8 +19,8 @@ export const quietPage = (overrides = {}) => ({
 // Opens fake targets; each has the `log` of every env and Playwright call it saw. `plantEscapeError` throws a page error when Escape is pressed
 // while a mouse button is down, the interruption the live smoke test plants on the real page too; it lands only after the next `wait`, as a
 // timer's error lands after the action returned, so the tests need no clock. `withNote` starts the page with a note drawn. `whitenOnBlur` turns the page
-// white when the window blurs, which breaks the Dark Page rule; `lettersOnTab` turns the number pad to letters on Tab, which breaks the Tab rule.
-export function fakeTargets ({ plantEscapeError = false, withNote = true, whitenOnBlur = false, lettersOnTab = false } = {}) {
+// white when the window blurs, which breaks the Dark Page rule; `whitenOnWait` makes it so only after the next wait; `lettersOnTab` turns the number pad to letters on Tab, which breaks the Tab rule, and `lettersOnBlur` does it on a blur, which breaks no rule.
+export function fakeTargets ({ plantEscapeError = false, withNote = true, whitenOnBlur = false, whitenOnWait = false, lettersOnTab = false, lettersOnBlur = false } = {}) {
   const targets = []
   const openTarget = async () => {
     const log = []
@@ -30,6 +30,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
     let notes = withNote ? 1 : 0
     let pageColor = 'rgb(0, 0, 0)'
     let letterMode = false
+    let whitenPending = false
     const rec = (name, result) => async (...args) => { log.push([name, ...args]); return result }
     const page = {
       mouse: {
@@ -61,7 +62,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       placeNote: async (...a) => { log.push(['placeNote', ...a]); notes++ },
       extrasDialog: rec('extrasDialog'),
       resize: rec('resize'),
-      blurFocus: async (...a) => { log.push(['blurFocus', ...a]); if (whitenOnBlur) pageColor = 'rgb(255, 255, 255)' },
+      blurFocus: async (...a) => { log.push(['blurFocus', ...a]); if (whitenOnBlur) pageColor = 'rgb(255, 255, 255)'; if (whitenOnWait) whitenPending = true; if (lettersOnBlur) letterMode = true },
       reload: rec('reload'),
       darkPage: rec('darkPage')
     }
@@ -70,7 +71,11 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       log,
       closed: false,
       snapshot: async () => ({ errors: [...errors], notices: [], page: quietPage({ pageColor, letterMode }) }),
-      wait: async (ms) => { if (ms > 0) errors.push(...pending.splice(0)) },
+      wait: async (ms) => {
+        if (ms <= 0) return
+        errors.push(...pending.splice(0))
+        if (whitenPending) pageColor = 'rgb(255, 255, 255)'
+      },
       errorLog: async () => ['dark-page@1.0.0: saved color: TypeError: planted'],
       close: async () => { target.closed = true }
     }
