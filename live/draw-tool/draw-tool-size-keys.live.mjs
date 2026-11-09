@@ -1,5 +1,6 @@
 // Live check of draw-tool.user.js's + and - keys on sudokupad.app: they change the selected notes' size one slider step (the slider follows, - after + returns the size),
 // or the next note's with nothing selected, type as text inside an open note, and leave SudokuPad's own - (a centre-mark range under the centre tool) alone. Real keyboard input.
+// Owed: SudokuPad's compact-marks range itself (1-5 giving 1 to 5) did not run in headless Chromium even with the setting on, with or without this script, so only that - is left untouched is checked.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -75,12 +76,16 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.equal(await valueOf(p, SIZE_SLIDER), 6)
   })
 
-  it('under the centre tool, 1-5 still enters a centre-mark range', async () => {
+  it('under the centre tool, - is not taken: it reaches SudokuPad unprevented and the next note\'s size stays', async () => {
     await p.click(CENTRE_BUTTON)
     await p.mouse.click(...await gridPoint(p, A))
-    await p.keyboard.type('1-5')
-    const centre = await p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => c.propGet('centre')))
-    assert.deepEqual(centre, [[1, 2, 3, 4, 5]])
+    await p.evaluate(() => {
+      window.seenMinus = []
+      document.addEventListener('keydown', (event) => { if (event.key === '-') window.seenMinus.push(event.defaultPrevented) }, true)
+    })
+    await p.keyboard.press('-')
+    assert.deepEqual(await p.evaluate(() => window.seenMinus), [false])
+    assert.equal(await p.evaluate((k) => Framework.getData(k) ?? null, WIDTH_KEY), null)
   })
 
   it('raised no page error', () => assert.deepEqual(errors, []))
