@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.2
+// @version      0.44.3
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.2'
+  const VERSION = '0.44.3'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -765,7 +765,7 @@
   }
 
   // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
-  // anything can save over it.
+  // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
   function load (store, { key, read }) {
     const raw = store.getData(key)
     if (raw === null) return { value: undefined }
@@ -775,7 +775,8 @@
       const unreadable = error.message || String(error) || 'its reader threw'
       const { slot, copied } = keptSlot(store, key, raw)
       if (copied) {
-        store.setData(slot, raw)
+        if (store.keep) store.keep(slot, raw)
+        else store.setData(slot, raw)
         console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
       }
       return { value: undefined, unreadable }
@@ -1579,6 +1580,9 @@
   // One key for every script, so a reader finds every feature any script turned off.
   const ERROR_LOG_KEY = 'sudokupad-scripts-error-log'
   const ERROR_LOG_LIMIT = 50
+  // A write the browser refuses (a full localStorage) is the browser's doing, not a SudokuPad change.
+  const isRefusedWrite = (error) => Boolean(error) && error.name === 'QuotaExceededError'
+
   // A report is a URL, and GitHub refuses a long one.
   const REPORT_STACK_LIMIT = 1200
 
@@ -1622,6 +1626,27 @@
   const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
   const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
   const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
+
+  function noticeHost (doc) {
+    let host = doc.getElementById(NOTICE_HOST_ID)
+    if (!host) {
+      host = doc.createElement('div')
+      host.id = NOTICE_HOST_ID
+      host.style.cssText = NOTICE_HOST_CSS
+      doc.body.append(host)
+    }
+    return host
+  }
+
+  function dismissButton (doc) {
+    const dismiss = doc.createElement('button')
+    dismiss.type = 'button'
+    dismiss.textContent = '×'
+    dismiss.title = 'Dismiss'
+    dismiss.setAttribute('aria-label', 'Dismiss')
+    dismiss.style.cssText = NOTICE_DISMISS_CSS
+    return dismiss
+  }
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
@@ -1679,13 +1704,7 @@
       const shown = reasons.filter((reason) => !gone.includes(reason.name))
       if (shown.length === 0 || !page.doc.body) return
       const { doc } = page
-      let host = doc.getElementById(NOTICE_HOST_ID)
-      if (!host) {
-        host = doc.createElement('div')
-        host.id = NOTICE_HOST_ID
-        host.style.cssText = NOTICE_HOST_CSS
-        doc.body.append(host)
-      }
+      const host = noticeHost(doc)
       bar = doc.createElement('div')
       bar.setAttribute('data-script', script)
       bar.style.cssText = NOTICE_BAR_CSS
@@ -1697,12 +1716,7 @@
       link.rel = 'noopener'
       link.textContent = 'Report'
       link.style.cssText = NOTICE_LINK_CSS
-      const dismiss = doc.createElement('button')
-      dismiss.type = 'button'
-      dismiss.textContent = '×'
-      dismiss.title = 'Dismiss'
-      dismiss.setAttribute('aria-label', 'Dismiss')
-      dismiss.style.cssText = NOTICE_DISMISS_CSS
+      const dismiss = dismissButton(doc)
       dismiss.addEventListener('click', () => {
         dismissedHere.push(...shown.map((reason) => reason.name))
         if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
@@ -1710,6 +1724,24 @@
       })
       bar.append(text, link, dismiss)
       host.append(bar)
+    }
+
+    // A bar of plain words, one per text and page load; the same host as the SudokuPad-changed bar, with no report link.
+    const told = new Set()
+    function tell (text) {
+      if (told.has(text) || !page || !page.doc.body) return
+      told.add(text)
+      const { doc } = page
+      const host = noticeHost(doc)
+      const message = doc.createElement('div')
+      message.setAttribute('data-script', script)
+      message.style.cssText = NOTICE_BAR_CSS
+      const span = doc.createElement('span')
+      span.textContent = text
+      const dismiss = dismissButton(doc)
+      dismiss.addEventListener('click', () => message.remove())
+      message.append(span, dismiss)
+      host.append(message)
     }
 
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
@@ -1740,6 +1772,19 @@
             feature.skip(error)
             return fallback()
           }
+        },
+        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
+        // frees. Any other throw skips the feature as `run` does.
+        write (fn) {
+          return feature.run(() => {
+            try {
+              return fn()
+            } catch (error) {
+              if (!isRefusedWrite(error)) throw error
+              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
+              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
+            }
+          })
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
         // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
@@ -1918,8 +1963,9 @@
   const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets, undoRestart } = guard.features
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)
-  const writeData = (key, value) => storage.run(() => Framework.setData(key, value))
-  const savedData = { getData: readData, setData: writeData, removeData: (key) => storage.run(() => Framework.removeData(key)) }
+  const writeData = (key, value) => storage.write(() => Framework.setData(key, value))
+  // `keep` is the copy of an unreadable value: a refusal there turns saving off, so nothing can overwrite the original.
+  const savedData = { getData: readData, setData: writeData, keep: (key, value) => storage.run(() => Framework.setData(key, value)), removeData: (key) => storage.run(() => Framework.removeData(key)) }
   // What the settings dialog's shell is handed in place of Framework: its calls into SudokuPad run under the settings.
   const dialogs = {
     addSetting: (setting) => Framework.addSetting(setting),

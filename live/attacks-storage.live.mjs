@@ -6,16 +6,13 @@ import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { makeNote, pickTool } from './attack-fixtures.mjs'
-import { assertNoCrash, loadScripts, reloadWithScripts, openWithAllScripts } from './attacks.mjs'
+import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllScripts } from './attacks.mjs'
 import { captureConsoleErrors, gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
 import { mouseDrag, openPenTool, penEntries, setSlider } from './pen.mjs'
 import { closeDialogWith, code, openScriptDialog, paste, SETTINGS_SCRIPTS } from './settings.mjs'
 import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
-
-// The bug tickets of the attacks that fail on main (todo until fixed).
-const FULL_STORE_BUG = '#634'
 
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
@@ -41,7 +38,7 @@ describe('attacks on storage', { concurrency: false }, () => {
       ;({ context, p, errors } = await openWithAllScripts(browser))
     })
 
-    it('attack 73: a full store (setItem throws QuotaExceededError) on the scripts\' own keys leaves every feature working in the session, with no uncaught error or skip line', { todo: `${FULL_STORE_BUG}: a refused write is read as SudokuPad having changed, and the script's saved data goes off` }, async () => {
+    it('attack 73: a full store (setItem throws QuotaExceededError) on the scripts\' own keys leaves every feature working in the session, tells the user in plain words and turns no saved data off', async () => {
       // Only the scripts' keys refuse: SudokuPad's own writes (its tool and progress) throw uncaught on a full store with no script installed.
       // The keys are the three scripts', as SETTINGS_SCRIPTS names them, behind the site's own prefix.
       const owns = SETTINGS_SCRIPTS.filter((script) => ['draw-tool.user.js', 'pen-tool-extras.user.js', 'color-by-digit.user.js'].includes(script.file)).map((script) => script.owns.source)
@@ -52,6 +49,7 @@ describe('attacks on storage', { concurrency: false }, () => {
           return set.call(this, key, value)
         }
       }, owns)
+      // Text Anywhere tells a refused note in SudokuPad's dialog, unless another dialog is open; the other two tell in a bar.
       const dismissNotice = async () => {
         const ok = p.locator('.dialog button').filter({ hasText: /^\s*OK\s*$/ })
         if (await ok.count() > 0) await ok.click()
@@ -62,6 +60,11 @@ describe('attacks on storage', { concurrency: false }, () => {
       await dismissNotice()
       assert.deepEqual(await draw.texts(p), ['15'], 'Text Anywhere draws the note')
 
+      // With a note selected the slider changes that note; with none it saves the next note's size, a settings write.
+      await p.keyboard.press('Escape')
+      if (await p.locator(draw.SELECTED).count() > 0) await p.keyboard.press('Escape')
+      await draw.slideTo(p, draw.SIZE_SLIDER, 12)
+      await dismissNotice()
       await setSlider(p, THICKNESS, 9)
       await mouseDrag(p, [[1.5, 1.5], [1.5, 4.5]])
       assert.equal((await penEntries(p)).length, 3, 'Pen Tool Extras draws the line')
@@ -70,7 +73,13 @@ describe('attacks on storage', { concurrency: false }, () => {
       await p.click('#control-colorbydigit')
       assert.notEqual(await readUntil(() => labelOn(p), (label) => label !== before), before, 'Color by Digit changes its mode')
 
-      await assertNoCrash(p, errors)
+      assert.deepEqual(errors, [])
+      const told = await p.locator(NOTICE_BAR).allTextContents()
+      assert.deepEqual(told.map((text) => text.replace('×', '')).sort(), [
+        'Color by Digit: the browser has no room left, so saved settings could not be saved.',
+        'Pen Tool Extras: the browser has no room left, so saved settings could not be saved.',
+        'Text Anywhere: the browser has no room left, so saved notes and settings could not be saved.'
+      ], 'each bar names the browser, not SudokuPad')
     })
   })
 
