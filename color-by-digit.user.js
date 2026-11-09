@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.25
+// @version      0.25.26
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.25'
+  const VERSION = '0.25.26'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -279,7 +279,12 @@
 
   const isSynced = (state) => state.digitActive === undefined
   const usesDigitColors = (state) => state.useDigitColors !== false
-  const withProfiles = (state, profiles, active, digitActive) => makeState(profiles, active, digitActive, usesDigitColors(state))
+  // `changes` names the fields that change (profiles, active, digitActive, useDigitColors); the rest carry over, profiles as copies.
+  // A `digitActive` of undefined is a change: it syncs the digit pick to the cell profile.
+  function editState (state, changes) {
+    const next = { profiles: state.profiles.map(cloneProfile), active: state.active, digitActive: state.digitActive, useDigitColors: usesDigitColors(state), ...changes }
+    return makeState(next.profiles, next.active, next.digitActive, next.useDigitColors)
+  }
 
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
 
@@ -302,7 +307,7 @@
       const groups = PRELOADS[name]
       if (profiles.length < MAX_PROFILES && !profiles.some((p) => sameGroups(p.groups, groups))) profiles.push({ name, groups: cloneGroups(groups) })
     }
-    return withProfiles(state, profiles, state.active, state.digitActive)
+    return editState(state, { profiles })
   }
 
   const activeGroups = (state) => state.profiles[state.active].groups
@@ -314,13 +319,13 @@
     const source = state.profiles[index]
     if (!source || state.profiles.length >= MAX_PROFILES) return state
     const copy = { name: cleanName(source.name + NEW_PROFILE_SUFFIX), groups: cloneGroups(source.groups) }
-    return withProfiles(state, [...state.profiles.map(cloneProfile), copy], state.active, state.digitActive)
+    return editState(state, { profiles: [...state.profiles.map(cloneProfile), copy] })
   }
 
   function renameProfile (state, index, name) {
     const trimmed = cleanName(name)
     if (!state.profiles[index] || trimmed === '') return state
-    return withProfiles(state, state.profiles.map((p, i) => (i === index ? { name: trimmed, groups: cloneGroups(p.groups) } : cloneProfile(p))), state.active, state.digitActive)
+    return editState(state, { profiles: state.profiles.map((p, i) => (i === index ? { name: trimmed, groups: cloneGroups(p.groups) } : cloneProfile(p))) })
   }
 
   const indexAfterDelete = (index, deleted, count) => (deleted < index ? index - 1 : Math.min(index, count - 2))
@@ -337,28 +342,28 @@
     const profiles = state.profiles.filter((_, i) => i !== index).map(cloneProfile)
     const active = indexAfterDelete(state.active, index, state.profiles.length)
     const digitActive = isSynced(state) || index === state.digitActive ? undefined : indexAfterDelete(state.digitActive, index, state.profiles.length)
-    return withProfiles(state, profiles, active, digitActive)
+    return editState(state, { profiles, active, digitActive })
   }
 
   function moveProfile (state, from, to) {
     if (from === to) return state
     const order = state.profiles.map((_, i) => i)
     order.splice(to, 0, ...order.splice(from, 1))
-    return withProfiles(state, order.map((i) => cloneProfile(state.profiles[i])), order.indexOf(state.active), isSynced(state) ? undefined : order.indexOf(state.digitActive))
+    return editState(state, { profiles: order.map((i) => cloneProfile(state.profiles[i])), active: order.indexOf(state.active), digitActive: isSynced(state) ? undefined : order.indexOf(state.digitActive) })
   }
 
   function setActive (state, index) {
-    return state.profiles[index] ? withProfiles(state, state.profiles.map(cloneProfile), index, state.digitActive) : state
+    return state.profiles[index] ? editState(state, { active: index }) : state
   }
 
   function setDigitActive (state, index) {
-    return state.profiles[index] ? withProfiles(state, state.profiles.map(cloneProfile), state.active, index) : state
+    return state.profiles[index] ? editState(state, { digitActive: index }) : state
   }
 
   // Unticking starts the digit pick at the cell profile, so no color changes until another is picked.
-  const setSync = (state, synced) => withProfiles(state, state.profiles.map(cloneProfile), state.active, synced ? undefined : (state.digitActive ?? state.active))
+  const setSync = (state, synced) => editState(state, { digitActive: synced ? undefined : (state.digitActive ?? state.active) })
 
-  const setUseDigitColors = (state, on) => makeState(state.profiles.map(cloneProfile), state.active, state.digitActive, on)
+  const setUseDigitColors = (state, on) => editState(state, { useDigitColors: on })
 
   const digitChoice = (state) => (!usesDigitColors(state) ? 'none' : isSynced(state) ? 'same' : String(state.digitActive))
 
@@ -369,7 +374,7 @@
   }
 
   function setProfileGroups (state, index, groups) {
-    return withProfiles(state, state.profiles.map((p, i) => (i === index ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))), state.active, state.digitActive)
+    return editState(state, { profiles: state.profiles.map((p, i) => (i === index ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))) })
   }
 
   const dropIndex = (mids, from, y) => mids.filter((mid, i) => i !== from && mid < y).length
@@ -1253,15 +1258,14 @@
   // The icon is drawn in 100 by 100 units. A run of three cells reaches a little past its sides, into the button's margin,
   // and stays above the arrow box in the lower right.
   const ICON_CELL = 38
-  function iconRun (mode, groups, colorOf, digitProfileGroups) {
-    const chips = shownChips(mode, groups, digitProfileGroups ?? groups)
-    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, chips, x: 50 - (chips.length || CHIP_MAX_GROUPS) * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
+  function iconRun (mode, chips, colorOf) {
+    return renderChips(chips, colorOf, { size: ICON_CELL, style: mode, x: 50 - (chips.length || CHIP_MAX_GROUPS) * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
   }
 
   // SudokuPad's own app buttons put their icon in <div class="icon">.
-  const iconHtml = (mode, groups, colorOf, digitProfileGroups) =>
+  const iconHtml = (mode, chips, colorOf) =>
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" overflow="visible" xmlns="http://www.w3.org/2000/svg">' +
-    iconRun(mode, groups, colorOf, digitProfileGroups) + '</svg>' + modeWordHtml(mode) + ARROW_BOX_HTML + '</div>'
+    iconRun(mode, chips, colorOf) + '</svg>' + modeWordHtml(mode) + ARROW_BOX_HTML + '</div>'
 
   const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
 
@@ -1279,8 +1283,8 @@
   // SudokuPad binds button handlers only to buttons present when the controls were built, so a
   // button added later needs refreshControls. Its onClick is left empty: listenForButton takes every
   // press before SudokuPad sees it.
-  function installButton (framework, app, mode, groups, colorOf, digitProfileGroups) {
-    framework.addControlButton({ parent: BOTTOM_ROW, name: 'colorbydigit', title: buttonLabel(mode), content: iconHtml(mode, groups, colorOf, digitProfileGroups), onClick () {} })
+  function installButton (framework, app, mode, chips, colorOf) {
+    framework.addControlButton({ parent: BOTTOM_ROW, name: 'colorbydigit', title: buttonLabel(mode), content: iconHtml(mode, chips, colorOf), onClick () {} })
     app.refreshControls()
   }
 
@@ -1428,38 +1432,41 @@
   const RUN_CELL = 10
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
 
-  // A profile with no groups shows three blank cells, dashed like a color on no page, so the run does not read as broken.
-  function renderBlankChips (size, x, y) {
-    const width = CHIP_MAX_GROUPS * RUN_CELL
-    const dash = `stroke="${DIM_LINE}" stroke-dasharray="2 2"`
-    const cells = Array.from({ length: CHIP_MAX_GROUPS }, (_, i) => `<rect data-role="blank-chip" x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="#fff"/>`).join('')
-    const dividers = Array.from({ length: CHIP_MAX_GROUPS - 1 }, (_, i) => `<line x1="${(i + 1) * RUN_CELL}" y1="0" x2="${(i + 1) * RUN_CELL}" y2="${RUN_CELL}" ${dash} ${STROKE}/>`).join('')
+  // The svg frame both runs share: `inner` is the cells and dividers, `outline` the stroke attributes of the one outline over them.
+  function chipRun (count, size, x, y, inner, outline) {
+    const width = count * RUN_CELL
     const place = x === undefined ? '' : ` x="${x}" y="${y}"`
-    return `<svg data-role="chips" width="${CHIP_MAX_GROUPS * size}" height="${size}"${place} viewBox="0 0 ${width} ${RUN_CELL}" overflow="visible" aria-hidden="true">` +
-      `${cells}${dividers}<rect x="0" y="0" width="${width}" height="${RUN_CELL}" fill="none" ${dash} ${STROKE}/></svg>`
+    return `<svg data-role="chips" width="${count * size}" height="${size}"${place} viewBox="0 0 ${width} ${RUN_CELL}" overflow="visible" aria-hidden="true">` +
+      `${inner}<rect x="0" y="0" width="${width}" height="${RUN_CELL}" fill="none" ${outline} ${STROKE}/></svg>`
   }
 
-  // A run of joined cells, one per shown chip (`chips` when given, else the mode's own pick): fills first, then single dividers and one outline over them, so no line is doubled.
+  const verticalLine = (i, attrs) => `<line x1="${i * RUN_CELL}" y1="0" x2="${i * RUN_CELL}" y2="${RUN_CELL}" ${attrs} ${STROKE}/>`
+
+  // A profile with no groups shows three blank cells, dashed like a color on no page, so the run does not read as broken.
+  function renderBlankChips (size, x, y) {
+    const dash = `stroke="${DIM_LINE}" stroke-dasharray="2 2"`
+    const cells = Array.from({ length: CHIP_MAX_GROUPS }, (_, i) => `<rect data-role="blank-chip" x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="#fff"/>`).join('')
+    const dividers = Array.from({ length: CHIP_MAX_GROUPS - 1 }, (_, i) => verticalLine(i + 1, dash)).join('')
+    return chipRun(CHIP_MAX_GROUPS, size, x, y, cells + dividers, dash)
+  }
+
+  // A run of joined cells, one per chip: fills first, then single dividers and one outline over them, so no line is doubled.
   // `size` is one cell's width, in pixels or in the units of an enclosing SVG, which `x` and `y` place it in.
-  function renderChips (groups, colorOf, { size, style = 'cell', x, y, digitProfileGroups = groups, chips = shownChips(style, groups, digitProfileGroups) }) {
-    const shown = chips
-    if (shown.length === 0) return renderBlankChips(size, x, y)
-    const width = shown.length * RUN_CELL
+  function renderChips (chips, colorOf, { size, style = 'cell', x, y }) {
+    if (chips.length === 0) return renderBlankChips(size, x, y)
     const { line } = CHIP_LOOKS[style]('')
-    const cells = shown.map(({ digit, cellKey, digitKey }, i) => {
+    const cells = chips.map(({ digit, cellKey, digitKey }, i) => {
       const key = style === 'digit' ? digitKey : cellKey
       const look = CHIP_LOOKS[style](cellKey === undefined ? '' : colorOf(cellKey), digitKey === undefined ? '' : colorOf(digitKey))
       // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
       const fill = cellKey === undefined ? '#fff' : look.fill
-      const ink = look.ink
       const tint = cellKey !== undefined && (style === 'cell' || style === 'both') ? ` fill-opacity="${CELL_COLOR_OPACITY}"` : ''
       return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"${tint}/>` +
-        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(ink)}">${escapeHtml(digit)}</text></g>`
+        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(look.ink)}">${escapeHtml(digit)}</text></g>`
     }).join('')
-    const dividers = shown.slice(1).map((_, i) => `<line x1="${(i + 1) * RUN_CELL}" y1="0" x2="${(i + 1) * RUN_CELL}" y2="${RUN_CELL}" stroke="${line}" ${STROKE}/>`).join('')
-    const place = x === undefined ? '' : ` x="${x}" y="${y}"`
-    return `<svg data-role="chips" width="${shown.length * size}" height="${size}"${place} viewBox="0 0 ${width} ${RUN_CELL}" overflow="visible" aria-hidden="true">` +
-      `${cells}${dividers}<rect x="0" y="0" width="${width}" height="${RUN_CELL}" fill="none" stroke="${line}" ${STROKE}/></svg>`
+    const stroke = `stroke="${line}"`
+    const dividers = chips.slice(1).map((_, i) => verticalLine(i + 1, stroke)).join('')
+    return chipRun(chips.length, size, x, y, cells + dividers, stroke)
   }
 
   const RULE_COLOR = '#e3dff0'
@@ -1733,7 +1740,7 @@
       const chosen = i === selected
       return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
-        `<span class="cbd-chips">${renderChips(profile.groups, colorOf, { size: CHIP_PX })}</span>` +
+        `<span class="cbd-chips">${renderChips(shownChips('cell', profile.groups, profile.groups), colorOf, { size: CHIP_PX })}</span>` +
         (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${escapeHtml(profile.name)}</span>`) +
         `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
@@ -1747,7 +1754,7 @@
   const MENU_DOT_COLUMN = 44
   const DOT_RING = '#cfc7da'
   const chipColumn = (groups, colorOf) =>
-    `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(groups, colorOf, { size: CHIP_PX })}</span>`
+    `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(shownChips('cell', groups, groups), colorOf, { size: CHIP_PX })}</span>`
   // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
   const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
   const dotColumn = (role, html, align, attributes = '') => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}"${attributes}>${html}</span>`
@@ -2366,7 +2373,7 @@
     modeButton.run(() => {
       const icon = document.querySelector(`${BUTTON} .icon`)
       const state = loadState()
-      if (icon) icon.outerHTML = iconHtml(mode, activeGroups(state), readColor, digitGroups(state))
+      if (icon) icon.outerHTML = iconHtml(mode, shownChips(mode, activeGroups(state), digitGroups(state)), readColor)
       labelButton()
     })
     digitColors.run(showDigitColors)
@@ -2872,7 +2879,7 @@
     addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
     addStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {
-      installButton(Framework, app, mode, activeGroups(state), readColor, digitGroups(state))
+      installButton(Framework, app, mode, shownChips(mode, activeGroups(state), digitGroups(state)), readColor)
       labelButton()
     })
     installCellColoring(app)
