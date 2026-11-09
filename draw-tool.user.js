@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.6
+// @version      0.44.7
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.6'
+  const VERSION = '0.44.7'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -1262,6 +1262,22 @@
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
+  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
+  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
+  function writeOrRestore (snapshot, write) {
+    const restore = snapshot()
+    try {
+      write()
+    } catch (error) {
+      try {
+        restore()
+      } catch (restoreError) {
+        throw new Error(`${errorText(error)}; the earlier values could not be put back: ${errorText(restoreError)}`, { cause: error })
+      }
+      throw error
+    }
+  }
+
   // The next press ends the swallowing even when no release came (a close from the keyboard).
   function swallowRelease (win = window) {
     const swallow = (event) => event.stopImmediatePropagation()
@@ -1400,30 +1416,21 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  // `snapshot` is `writeOrRestore`'s, and Save writes under it; the script hands the same one to `wireCopyPaste`.
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
+    if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
-      let restore = null
       try {
-        if (failed || changed()) {
-          restore = snapshot ? snapshot() : null
-          save()
-        }
+        if (failed || changed()) writeOrRestore(snapshot, save)
       } catch (error) {
         failed = true
-        let message = `Not saved: ${errorText(error)}`
-        try {
-          if (restore) restore()
-        } catch (restoreError) {
-          message += `; the earlier values could not be put back: ${errorText(restoreError)}`
-        }
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), message)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
         return
       }
       close()
@@ -1456,7 +1463,7 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText */ // from settings-dialog.js, which every script carries beside this one
+  /* global setDialogStatus, errorText, writeOrRestore */ // from settings-dialog.js, which every script carries beside this one
   // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
@@ -1483,8 +1490,10 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
-  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept, under the
+  // dialog's own `snapshot` (`writeOrRestore`'s), so a paste that fails half-way puts every key back; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade, snapshot }, apply) {
+    if (typeof snapshot !== 'function') throw new Error('Paste settings needs a snapshot')
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
@@ -1497,7 +1506,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) apply(values)
+          if (Object.keys(values).length > 0) writeOrRestore(snapshot, () => apply(values))
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -2391,15 +2400,16 @@
     style.textContent = colors ? colorsCss(colors) : ''
   }
 
-  // The colors, outline, box color, frame and font as stored and as shown, as a function that puts them all back after a Save that failed half-way.
+  // The colors, outline, box color, frame, font, size and opacity as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
   function snapshotSave () {
-    const restoreStored = snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY])
-    const was = { colors, outline, boxColor, frame, noteFont }
+    const restoreStored = snapshotStore(savedData, [COLORS_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, WIDTH_KEY, OPACITY_KEY])
+    const was = { colors, outline, boxColor, frame, noteFont, width, opacity }
     return () => {
       try {
         restoreStored()
       } finally {
-        ;({ colors, outline, boxColor, frame, noteFont } = was)
+        ;({ colors, outline, boxColor, frame, noteFont, width, opacity } = was)
+        showPanelValues()
         showColors()
         if (colors) refreshPickers(CLASS_PREFIX, (n) => colors[n])
         showBoxes()
@@ -2569,7 +2579,9 @@
       draw()
       box.querySelector(`button[data-role="${role}"][data-value="${value}"]`)?.focus()
     }))
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(savedData), readers: READERS }, under(settingsUi, (values) => {
+    // A failed paste turns the settings off, as a throw in any listener does, and throws on so the snapshot puts every key back.
+    const settingsOff = () => { throw new Error(`the ${FEATURES.settings.label} are off`) }
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(savedData), readers: READERS, snapshot: snapshotSave }, (values) => settingsUi.run(() => {
       applyPasted(values)
       draftOutline = outline
       draftBox = boxColor
@@ -2580,7 +2592,7 @@
       chosen = null
       colorsEdited = false
       draw()
-    }))
+    }, settingsOff))
   }
 
   const BACKGROUND_ON_LABEL = 'Background: on. Click to turn off'

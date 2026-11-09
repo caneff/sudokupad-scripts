@@ -1,10 +1,10 @@
 // Live check of the Copy settings and Paste settings buttons of the five scripts with a settings dialog, on sudokupad.app in
 // headless Chromium: Copy puts the saved keys on the real clipboard, Paste reads them back through the same dialog.
-import { after, before, describe, it } from 'node:test'
+import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
-import { actButton, code, openScriptDialog, paste, SETTINGS_SCRIPTS, STATUS } from './settings.mjs'
+import { actButton, code, dialogButton, openScriptDialog, paste, SETTINGS_SCRIPTS, STATUS } from './settings.mjs'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -64,3 +64,41 @@ for (const script of SETTINGS_SCRIPTS) {
     it('had no page error', () => assert.deepEqual(errors, []))
   })
 }
+
+// A throw planted on the height key's write: the width, written just before it, is put back by the dialog's snapshot. Each case
+// has its own page, since the failure turns the max size settings off.
+describe('auto-rules-resizer.user.js: a failed Save or Paste leaves the width unsaved', { concurrency: false }, () => {
+  const WIDTH_KEY = 'AutoRulesResizer_maxWidth'
+  const HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
+  let context, p, errors
+  const openWithHeightWriteThrowing = async () => {
+    ({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] }, expectedSkips: [/max size settings skipped/] }))
+    await startPuzzle(p, { injection: { mode: 'after-start', code: code('auto-rules-resizer.user.js') } })
+    await openScriptDialog(p, 'Rules Resizer', '#auto-rules-resizer-max-width')
+    await p.evaluate((key) => {
+      const setData = Framework.setData
+      Framework.setData = function (name, value) {
+        if (name === key) throw new Error('planted height write failure')
+        return setData.call(this, name, value)
+      }
+    }, HEIGHT_KEY)
+  }
+  afterEach(async () => { await context?.close() })
+
+  it('Paste: says the paste failed and the width key is still unsaved', async () => {
+    await openWithHeightWriteThrowing()
+    assert.equal(await paste(p, JSON.stringify({ [WIDTH_KEY]: 640, [HEIGHT_KEY]: 480 })), 'Could not paste: the max size settings are off')
+    assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), null)
+    assert.deepEqual(errors, [])
+  })
+
+  it('Save: says it was not saved and the width key is still unsaved', async () => {
+    await openWithHeightWriteThrowing()
+    await p.fill('#auto-rules-resizer-max-width', '640')
+    await p.fill('#auto-rules-resizer-max-height', '480')
+    await dialogButton(p, 'Save').click()
+    await p.locator(STATUS).filter({ hasText: 'Not saved: the max size settings are off' }).waitFor()
+    assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), null)
+    assert.deepEqual(errors, [])
+  })
+})
