@@ -1,16 +1,15 @@
-// Text Anywhere's live fixtures: the script, its storage keys and selectors, the puzzle key rule, and the helpers that boot
-// it after Start Puzzle, reload it and pick Text Anywhere. Not a check itself, so `live/**/*.live.mjs` skips it.
+// Text Anywhere's live fixtures: the script, its storage keys and selectors, the puzzle key rule, and the helpers that open
+// SudokuPad with it, reload it and pick Text Anywhere. Not a check itself, so `live/**/*.live.mjs` skips it.
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { startPuzzle } from '../page.mjs'
+import { openWith, reloadWith, scriptSource } from '../session.mjs'
 import { clickUntil, SETTLE_MS } from '../settle.mjs'
-import { gridPoint } from '../pen.mjs'
 
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
 
-export const script = readFileSync(new URL('../../draw-tool.user.js', import.meta.url), 'utf8')
+export const SCRIPT_FILE = 'draw-tool.user.js'
+export const script = scriptSource(SCRIPT_FILE)
 
 // SudokuPad's tool keys, App.toolHotkeys.
 export const TOOL_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm']
@@ -105,6 +104,7 @@ export async function slideTo (p, slider, value) {
   await p.mouse.click(xOf(value), y)
 }
 
+// SudokuPad binds a new button's click a moment after it appears, so the click repeats until the tool is current.
 export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS)
 
 // The puzzle's key, as the script keys its drawing: its id, or the page URL when it has none, as the recorded puzzle does.
@@ -181,19 +181,8 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
 
 // Two frames: the pointer's work waits for the next one.
 export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
-// Escape finishes the open note and leaves it selected; a second Escape ends that selection, so the next click on empty space opens a note again.
+// A finished note stays selected until a second Escape or a click elsewhere.
 export const SELECTED = '#draw-tool-layer .draw-tool-selected'
-export const clickAt = async (p, at) => p.mouse.click(...await gridPoint(p, at))
-export async function typeText (p, at, content) {
-  await clickAt(p, at)
-  await p.keyboard.type(content)
-  await finishNote(p)
-}
-
-export async function finishNote (p) {
-  await p.keyboard.press('Escape')
-  if (await p.locator(SELECTED).count() > 0) await p.keyboard.press('Escape')
-}
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
 // Removes every saved drawing, every set of notes a Restart kept, and the index.
@@ -202,15 +191,26 @@ export const forgetDrawings = (p) => p.evaluate(([prefixes, index]) => {
   Framework.removeData(index)
 }, [[DRAWING_PREFIX, RESTARTED_PREFIX], INDEX_KEY])
 
-export async function boot (p) {
-  await startPuzzle(p)
-  await p.addScriptTag({ content: script })
-  await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
+const ready = (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
+
+// Opens SudokuPad with Text Anywhere injected (after Start Puzzle unless `mode` says otherwise) and returns `{ context, p, errors }`
+// once its button shows. The options are `openWith`'s (live/session.mjs).
+export async function open (browser, options) {
+  const opened = await openWith(browser, [SCRIPT_FILE], options)
+  await ready(opened.p)
+  return opened
 }
 
+// Reloads the page with Text Anywhere injected after Start Puzzle again.
 export async function reload (p) {
-  await p.reload({ waitUntil: 'load' })
-  await boot(p)
+  await reloadWith(p, [SCRIPT_FILE])
+  await ready(p)
+}
+
+// Reloads, then picks Text Anywhere, where most cases start.
+export async function reloadOnDraw (p) {
+  await reload(p)
+  await pickDraw(p)
 }
 
 // Plants `items` as the saved drawing of the puzzle on the page, so the next load reads them.

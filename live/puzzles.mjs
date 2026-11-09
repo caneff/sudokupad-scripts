@@ -2,18 +2,16 @@
 // Shared by the live attacks that build their own puzzles: every script installed the way a userscript manager does, puzzles other than
 // `live/puzzle-url.txt` built as data and opened by their id, the board read back, and the steps those attacks repeat. Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
 import { LOAD_MS } from './cache.mjs'
 import { GIVENS, MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { DRAW_BUTTON, TEXT_BOX, texts, tool } from './draw-tool/draw-tool-fixtures.mjs'
+import { texts, tool } from './draw-tool/draw-tool-fixtures.mjs'
 import { injectAtIdle, startPuzzle, START } from './page.mjs'
-import { cellCentre, gridPoint } from './pen.mjs'
+import { cellCentre } from './board.mjs'
 import { clickUntil, SETTLE_MS } from './settle.mjs'
+import { SCRIPT_FILES, scriptSource } from './session.mjs'
 import { animationsDone } from './settings.mjs'
 
-const ROOT = new URL('../', import.meta.url)
-export const SCRIPT_FILES = readdirSync(ROOT).filter((f) => f.endsWith('.user.js')).sort()
-const ALL_SCRIPTS = SCRIPT_FILES.map((f) => readFileSync(new URL(f, ROOT), 'utf8'))
+const ALL_SCRIPTS = SCRIPT_FILES.map(scriptSource)
 
 const SUDOKUPAD = 'https://sudokupad.app/'
 
@@ -131,15 +129,6 @@ export async function clickCell (p, row, col) {
 export async function useTool (p, button) {
   const name = button.replace('#control-', '')
   assert.equal(await clickUntil(() => p.click(button), () => tool(p), name, SETTLE_MS), name)
-}
-
-// Text Anywhere: a note `text` at `point`, finished with Escape.
-export async function placeNote (p, text, point = NOTE_POINT) {
-  await useTool(p, DRAW_BUTTON)
-  await p.mouse.click(...await gridPoint(p, point))
-  await p.locator(TEXT_BOX).waitFor({ state: 'attached' })
-  await p.keyboard.type(text)
-  await p.keyboard.press('Escape')
 }
 
 // Returns once the page after a Back or a Forward shows its puzzle, pressing Start Puzzle (or Continue) when the page asks for it.

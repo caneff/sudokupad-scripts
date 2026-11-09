@@ -2,9 +2,10 @@
 // and that a press on a real control (a tool button, the rules text, the timer) still does not. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openWithAllScripts, rulesWidth, setLongRules } from '../attacks.mjs'
+import { useBrowser } from '../session.mjs'
+import { boxOpen } from '../board.mjs'
 
 const { SLIDERS, TEXT_BOX, pickDraw } = draw
 const WINDOW = { width: 1920, height: 1080 }
@@ -12,14 +13,11 @@ const WINDOW = { width: 1920, height: 1080 }
 const SUDOKUPAD_RULES_PX = 224
 const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { concurrency: false }, () => {
   let context, p, errors
 
-  const boxOpen = async () => (await p.locator(TEXT_BOX).count()) === 1
   const closeBox = async () => { await p.keyboard.press('Escape'); await p.locator(TEXT_BOX).waitFor({ state: 'detached' }) }
   const centerOf = (selector) => p.locator(selector).first().evaluate((e) => {
     const b = e.getBoundingClientRect()
@@ -44,7 +42,7 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
   }, TRANSPARENT)
 
   before(async () => {
-    ;({ context, p, errors } = await openWithAllScripts(browser, { contextOptions: { viewport: WINDOW, permissions: ['clipboard-write'] } }))
+    ;({ context, p, errors } = await openWithAllScripts(browser(), { contextOptions: { viewport: WINDOW, permissions: ['clipboard-write'] } }))
     await setLongRules(p)
     await pickDraw(p)
   })
@@ -63,7 +61,7 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     for (const target of targets) {
       const { at } = spots.find((s) => s.target === target)
       await p.mouse.click(...at)
-      if (!(await boxOpen())) failed.push(`${target} at ${at}`)
+      if (!(await boxOpen(p))) failed.push(`${target} at ${at}`)
       else await closeBox()
     }
     assert.deepEqual(failed, [], 'presses on these empty targets started no note')
@@ -73,7 +71,7 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     const [x, y] = await p.locator('.puzzle-rules').evaluate((e) => { const b = e.getBoundingClientRect(); return [b.x + b.width / 2, b.bottom + 1] })
     assert.ok((await p.evaluate(([px, py]) => document.elementFromPoint(px, py).closest('#controls') !== null, [x, y])), 'the point is inside the controls box')
     await p.mouse.click(x, y)
-    assert.equal(await boxOpen(), true, 'a note opened below the rules')
+    assert.equal(await boxOpen(p), true, 'a note opened below the rules')
     await closeBox()
   })
 
@@ -88,7 +86,7 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     })
     assert.notEqual(at, null, 'the sliders have a spot of their own')
     await p.mouse.click(...at)
-    assert.equal(await boxOpen(), false, 'the panel opened a note')
+    assert.equal(await boxOpen(p), false, 'the panel opened a note')
   })
 
   it('a press on the copy-rules icon\'s own div, which has only a picture, does not open a note', async () => {
@@ -101,14 +99,14 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     })
     assert.notEqual(at, null, 'the icon\'s div has a spot of its own')
     await p.mouse.click(...at)
-    assert.equal(await boxOpen(), false, 'the copy-rules icon opened a note')
+    assert.equal(await boxOpen(p), false, 'the copy-rules icon opened a note')
   })
 
   it('a press on a tool button, the rules text or the timer (which pauses with its own dialog) does not open a note', async () => {
     // The footer is a transparent div with text: a control.
     for (const selector of ['#control-draw', '.puzzle-rules', '.controls-footer', '.timer']) {
       await p.mouse.click(...await centerOf(selector))
-      assert.equal(await boxOpen(), false, `${selector} opened a note`)
+      assert.equal(await boxOpen(p), false, `${selector} opened a note`)
     }
   })
 

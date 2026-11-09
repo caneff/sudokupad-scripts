@@ -16,7 +16,9 @@ const OWNED = {
   'page.mjs': ['openPage', 'startPuzzle', 'waitForFramework', 'gotoPuzzle', 'newPage', 'captureConsoleErrors'],
   'settings.mjs': ['openScriptDialog', 'closeDialogWith'],
   'settle.mjs': ['clickUntil', 'POLL_MS', 'SETTLE_MS'],
-  'pen.mjs': ['openPenTool', 'padValues', 'penEntries', 'penValuesNoColor', 'penValuesAt', 'penStrings', 'cellCentre', 'gridPoint', 'mouseDrag', 'drag', 'draw', 'setSlider', 'plantSaved', 'plantUnchecked', 'keydownDefaults']
+  'pen.mjs': ['openPenTool', 'padValues', 'penEntries', 'penValuesNoColor', 'penValuesAt', 'penStrings', 'drag', 'draw', 'setSlider', 'plantSaved', 'plantUnchecked', 'keydownDefaults'],
+  'board.mjs': ['cellCentre', 'gridPoint', 'mouseDrag', 'restart', 'boxOpen', 'finishNote', 'typeText', 'placeNote'],
+  'session.mjs': ['SCRIPT_FILES', 'scriptSource', 'useBrowser', 'addPage', 'openWith', 'reloadWith']
 }
 // The names the spec removed: their job is now a shared module's.
 const REMOVED = ['closeWith', 'pressUntil', 'sleep', 'selectPen']
@@ -37,10 +39,11 @@ test('the live files share one harness, and the recording is replaced only when 
   for (const name of REMOVED) assert.deepEqual(declarers(name), [], name)
   assert.deepEqual(moduleNames.filter((file) => /Start Puzzle\|Continue/.test(source(file))), ['cache.mjs'])
 
-  // The site's own live file opens site/ from disk and never loads SudokuPad. The attack files boot through attacks.mjs, which boots through page.mjs.
+  // The site's own live file opens site/ from disk and never loads SudokuPad. The attack files boot through attacks.mjs, and Text Anywhere's through
+  // draw-tool-fixtures.mjs, which boot through session.mjs and page.mjs.
   for (const file of liveNames.filter((name) => name !== 'site-slideshow.live.mjs')) {
     const text = source(file)
-    assert.match(text, /from '\.\.?\/(page|color-by-digit-fixtures|attacks)\.mjs'/, `${file} boots through the shared modules`)
+    assert.match(text, /from '\.\.?\/(page|session|draw-tool-fixtures|color-by-digit-fixtures|attacks)\.mjs'/, `${file} boots through the shared modules`)
     assert.doesNotMatch(text, OWN_BOOT, `${file} boots through page.mjs`)
   }
 

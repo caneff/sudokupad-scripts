@@ -5,10 +5,11 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { makeNote, pickTool } from './attack-fixtures.mjs'
+import { pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllScripts } from './attacks.mjs'
 import { captureConsoleErrors, gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
-import { mouseDrag, openPenTool, penEntries, setSlider } from './pen.mjs'
+import { mouseDrag, typeText } from './board.mjs'
+import { openPenTool, penEntries, setSlider } from './pen.mjs'
 import { closeDialogWith, code, openScriptDialog, paste, SETTINGS_SCRIPTS } from './settings.mjs'
 import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
@@ -56,7 +57,7 @@ describe('attacks on storage', { concurrency: false }, () => {
       }
 
       await pickTool(p, 'draw')
-      await makeNote(p, [4.5, 4.5], '15')
+      await typeText(p, [4.5, 4.5], '15')
       await dismissNotice()
       assert.deepEqual(await draw.texts(p), ['15'], 'Text Anywhere draws the note')
 
@@ -152,7 +153,7 @@ describe('attacks on storage', { concurrency: false }, () => {
     assert.equal(await stored(p, THICKNESS_KEY), OTHER_TAB_THICKNESS, 'the first tab\'s save of the opacity leaves the other tab\'s thickness')
     assert.equal(await stored(p, OPACITY_KEY), THIS_TAB_OPACITY, 'the opacity is saved')
     await pickTool(p, 'draw')
-    await makeNote(p, [4.5, 4.5], '15')
+    await typeText(p, [4.5, 4.5], '15')
     assert.deepEqual(await draw.texts(p), ['15'], 'the first tab makes a note')
     assert.equal(await draw.valueOf(other.p, draw.SIZE_SLIDER), widthThere, 'the first tab\'s note does not change the other tab\'s width')
 

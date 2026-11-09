@@ -6,12 +6,12 @@
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { captureConsoleErrors, openPage } from '../page.mjs'
-import { gridPoint, mouseDrag } from '../pen.mjs'
+import { captureConsoleErrors } from '../page.mjs'
 import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { settle, stable } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint, mouseDrag, typeText } from '../board.mjs'
 
 const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SELECTED, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = draw
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
@@ -29,9 +29,7 @@ const NOTE_TEXT = '15'
 const IDLE_NEAR_PX = 1.5
 const SMALLER_WINDOW = { width: 1100, height: 800 }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () => {
   let context, p, errors
@@ -53,11 +51,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     const [x, y] = [note.x + note.width / 2, note.y + note.height / 2]
     return { x, y, width: note.width, height: note.height, inWindow: note.left >= 0 && note.top >= 0 && note.right <= window.innerWidth && note.bottom <= window.innerHeight, overControls: x >= controls.left && x <= controls.right && y >= controls.top && y <= controls.bottom }
   }, TEXTS)
-  const makeNote = async (at = NOTE_AT, text = NOTE_TEXT) => {
-    await p.mouse.click(...await gridPoint(p, at))
-    await p.keyboard.type(text)
-    await draw.finishNote(p)
-  }
+  const makeNote = (at = NOTE_AT, text = NOTE_TEXT) => typeText(p, at, text)
   const pickText = async () => {
     await draw.pickDraw(p)
     assert.equal(await tool(), 'draw')
@@ -93,7 +87,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
   }
   // An ordinary move drag still moves the note, and a new note can still be made.
   const assertWorks = async (why) => {
-    await draw.finishNote(p)
+    await finishNote(p)
     await pickText()
     const before = JSON.stringify((await noteItems())[0])
     // A drag from the note's own middle, leftward, since the attack may have left the note at the window's right edge.
@@ -104,15 +98,14 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await p.mouse.up()
     const moved = await settle(async () => JSON.stringify((await noteItems())[0]) !== before, true)
     assert.equal(moved, true, `${why}: an ordinary drag still moves the note`)
-    await draw.finishNote(p)
+    await finishNote(p)
     await makeNote(EMPTY_AT, 'new')
     assert.deepEqual((await draw.texts(p)).sort(), [NOTE_TEXT, 'new'].sort(), `${why}: a new note can still be made`)
     assert.deepEqual(errors, [], `${why}: the page shows no error afterward`)
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { seed: captureConsoleErrors }))
   })
   after(async () => { await context.close() })
   beforeEach(async () => { await fresh() })

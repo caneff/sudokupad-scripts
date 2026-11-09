@@ -4,11 +4,10 @@
 // tool keeps the selection right, and Clear all, Delete and Backspace delete only the selection. Real mouse and keyboard input throughout, at a desktop size.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { clickAt, finishNote, gridPoint, mouseDrag, typeText } from '../board.mjs'
 
 const { BACKGROUND_BUTTON, CLEAR_BUTTON, COLOR_KEY, DIALOG, DIGIT_BUTTON, KEYPAD, TEXT_BOX, TEXTS, WIDTH_KEY } = draw
 const SELECTED = '#draw-tool-layer .draw-tool-selected'
@@ -26,9 +25,7 @@ const shifted = ([r, c]) => [r + MOVE_BY[0], c + MOVE_BY[1]]
 const CELL = 64
 const NEAR_UNITS = 4
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   let context, p, errors
@@ -36,7 +33,6 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   const saved = () => draw.saved(p)
   const savedNote = async (text) => (await saved()).find((item) => item.text === text)
   const selectedTexts = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent).sort(), SELECTED)
-  const clickAt = async (at, options) => p.mouse.click(...await gridPoint(p, at), options)
   // A press on the note that starts at cell spot `at` lands in its middle, and a drag keeps the offset between that and the spot.
   const noteAt = async (at) => draw.middleAt(p, await gridPoint(p, at))
   const clickNote = async (at) => p.mouse.click(...await noteAt(at))
@@ -52,15 +48,10 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   const shiftClickAt = async (at) => {
     await p.keyboard.down('Shift')
     try {
-      await clickAt(at)
+      await clickAt(p, at)
     } finally {
       await p.keyboard.up('Shift')
     }
-  }
-  const typeText = async (at, content) => {
-    await clickAt(at)
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
   }
   // A rectangle over A, B and C, where they are before the group move, or after it when `moved`.
   const selectThree = async (moved = false) => {
@@ -70,39 +61,35 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   // The color button marked current, or null for none.
   const markedColor = () => p.evaluate((keypad) => document.querySelector(`${keypad} button.digit.current`)?.dataset.key ?? null, KEYPAD)
   const backgroundPressed = () => p.locator(BACKGROUND_BUTTON).getAttribute('aria-pressed')
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 } } }))
     await draw.forgetDrawings(p)
     await reload()
-    for (const [text, at] of Object.entries(NOTES)) await typeText(at, text)
+    for (const [text, at] of Object.entries(NOTES)) await typeText(p, at, text)
     assert.deepEqual(await draw.texts(p), ['A', 'B', 'C', 'D'])
   })
   after(async () => { await context.close() })
 
   it('a click on a note selects it without opening the text box, and a double-click opens it', async () => {
-    await clickAt(NOTES.A)
+    await clickAt(p, NOTES.A)
     assert.deepEqual(await selectedTexts(), ['A'])
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
     await draw.reopen(p, await gridPoint(p, NOTES.B))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'B', 'the double-click opened the note')
     assert.deepEqual(await selectedTexts(), [], 'opening the note ended the selection its first click made')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
   })
 
   it('a click on empty space with a selection only ends it, and starts no note; Escape ends it too', async () => {
-    await clickAt(NOTES.A)
-    await clickAt(EMPTY)
+    await clickAt(p, NOTES.A)
+    await clickAt(p, EMPTY)
     assert.deepEqual(await selectedTexts(), [])
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
-    await clickAt(NOTES.A)
-    await draw.finishNote(p)
+    await clickAt(p, NOTES.A)
+    await finishNote(p)
     assert.deepEqual(await selectedTexts(), [])
     assert.deepEqual(await draw.texts(p), ['A', 'B', 'C', 'D'])
   })
@@ -126,7 +113,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
       await p.keyboard.up('Shift')
     }
     assert.deepEqual(await selectedTexts(), ['A', 'B', 'C', 'D'])
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a color picked with three notes selected recolors only those three, and the next new note takes the earlier next-note color', async () => {
@@ -136,9 +123,9 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => (await savedNote(t)).color)), [6, 6, 6, 1])
     assert.equal(await markedColor(), '6', 'the panel shows the selection\'s color')
     assert.equal(await p.evaluate((key) => Framework.getData(key), COLOR_KEY), nextColor, 'the next-note color is unchanged')
-    await clickAt(EMPTY)
+    await clickAt(p, EMPTY)
     assert.equal(await markedColor(), String(nextColor ?? 1), 'with nothing selected the panel shows the next-note color')
-    await typeText(EMPTY, 'E')
+    await typeText(p, EMPTY, 'E')
     assert.equal((await savedNote('E')).color, nextColor ?? 1)
   })
 
@@ -160,7 +147,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     await p.click(BACKGROUND_BUTTON)
     assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => Boolean((await savedNote(t)).bg))), [true, true, true, true])
     assert.equal(await backgroundPressed(), 'true')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await backgroundPressed(), 'false', 'with nothing selected the button shows the next-note setting')
   })
 
@@ -219,13 +206,13 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
 
   it('a right-click erase keeps the rest selected, a group move keeps every note in the window, leaving the tool ends the selection, and Backspace deletes it', async () => {
     const [F, G] = [[EMPTY[0], 4.5], [EMPTY[0], 6.5]]
-    await typeText(F, 'F')
-    await typeText(G, 'G')
-    await clickAt(EMPTY)
+    await typeText(p, F, 'F')
+    await typeText(p, G, 'G')
+    await clickAt(p, EMPTY)
     await shiftClickAt(F)
     await shiftClickAt(G)
     assert.deepEqual(await selectedTexts(), ['E', 'F', 'G'])
-    await clickAt(F, { button: 'right' })
+    await clickAt(p, F, { button: 'right' })
     assert.deepEqual(await selectedTexts(), ['E', 'G'])
     await p.click(`${KEYPAD} button[data-key="2"]`)
     assert.deepEqual(await Promise.all(['E', 'G'].map(async (t) => (await savedNote(t)).color)), [2, 2])

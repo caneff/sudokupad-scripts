@@ -8,7 +8,8 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { assertPressState, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
-import { cellCentre, drag, gridPoint, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../pen.mjs'
+import { cellCentre, gridPoint } from '../board.mjs'
+import { drag, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
 const { HOLD_TO_EDIT_MS, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')

@@ -6,11 +6,10 @@
 // The pointer moves are dispatched from the page, so each one's work can be timed; the presses are real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { readUntil } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { TEXTS, TEXT_BOX } = draw
 // SudokuPad's board draws a cell 64 units wide from (0, 0).
@@ -38,9 +37,7 @@ const WRITES_PER_NOTE_FRAME = MOVES_PER_FRAME
 const POINTER_NEAR_PX = 1
 const near = (got, want) => got.every((v, i) => Math.abs(v - want[i]) <= POINTER_NEAR_PX)
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere renders less', { concurrency: false }, () => {
   let context, p, errors
@@ -115,8 +112,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
   const hovered = () => read((selector) => [...document.querySelectorAll(`${selector}:hover`)].map((note) => note.textContent), TEXTS)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
     await draw.plantDrawing(p, PLANTED)
     await reload()
@@ -180,7 +176,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     await p.mouse.click(...await gridPoint(p, atCell(9)))
     const selected = await read(() => [...document.querySelectorAll('#draw-tool-layer .draw-tool-selected')].map((note) => note.textContent))
     // The pointer leaves the notes and the selection ends, so the board checks below see no hover or selection change of their own.
-    await draw.finishNote(p)
+    await finishNote(p)
     await p.mouse.move(1, 899)
     assert.deepEqual({ selected, measures: await noteMeasures() }, { selected: [NOTE_TEXT(9)], measures: 0 })
   })
@@ -262,7 +258,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
       return [right, bottom]
     })
     await p.mouse.up()
-    await draw.finishNote(p)
+    await finishNote(p)
     const [right, bottom] = [handle.x + handle.width, handle.y + handle.height]
     assert.deepEqual(look.straightAfter.map(Math.round), [right, bottom].map(Math.round))
     assert.deepEqual(look.afterFrame.map(Math.round), [right + 30, bottom + 15].map(Math.round))

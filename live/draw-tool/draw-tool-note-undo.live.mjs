@@ -2,17 +2,14 @@
 // never reach SudokuPad, and last only while the note is open. Real keyboard input throughout.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { TEXT_BOX } = draw
 const SPOT = [3.5, 3.5]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, () => {
   let context, p, errors
@@ -22,14 +19,12 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
   const openNote = async () => p.mouse.click(...await gridPoint(p, SPOT))
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
   })
   after(async () => { await context.close() })
   beforeEach(async () => {
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
   })
 
   it('Ctrl+Z twice after typing abc leaves a, Ctrl+Y gives ab, and SudokuPad\'s undo stack', async () => {
@@ -54,7 +49,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     assert.equal(await boxText(), 'ab')
     assert.equal(await undoSteps(), before, 'SudokuPad\'s undo stack is unchanged')
     assert.equal(await p.evaluate(() => window.__undoKeys), 0, 'no undo or redo key reached the page')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('Ctrl+Shift+Z redoes as Ctrl+Y does', async () => {
@@ -63,7 +58,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await p.keyboard.press('Control+z')
     await p.keyboard.press('Control+Shift+z')
     assert.equal(await boxText(), 'abc')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a character typed right after a symbol is its own undo step', async () => {
@@ -73,7 +68,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     assert.equal(await boxText(), '→')
     await p.keyboard.press('Control+z')
     assert.equal(await boxText(), '->')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('Ctrl+Z after a paste removes the whole paste', async () => {
@@ -84,7 +79,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     assert.equal(await boxText(), 'xpasted\ntext')
     await p.keyboard.press('Control+z')
     assert.equal(await boxText(), 'x')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('Ctrl+Z brings back a deletion and takes out typing after a line break', async () => {
@@ -101,18 +96,18 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await p.keyboard.press('Control+y')
     await p.keyboard.press('Control+y')
     assert.equal(await boxText(), 'ab\ncd', 'redo brings the line break back with them')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a reopened note has a fresh history: Ctrl+Z does nothing to its text', async () => {
     await openNote()
     await p.keyboard.type('abc')
-    await draw.finishNote(p)
+    await finishNote(p)
     await draw.reopen(p, await gridPoint(p, SPOT))
     assert.equal(await boxText(), 'abc')
     await p.keyboard.press('Control+z')
     assert.equal(await boxText(), 'abc')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('leaves no page error', () => assert.deepEqual(errors, []))

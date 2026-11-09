@@ -10,7 +10,8 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { gotoPuzzle, newPage, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, dialogButton, effectiveOpacities, openExtrasEditor, openSettings } from '../settings.mjs'
-import { cellCentre, openPenTool, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
+import { cellCentre } from '../board.mjs'
+import { openPenTool, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')

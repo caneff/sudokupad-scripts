@@ -4,10 +4,9 @@
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { gridPoint } from '../board.mjs'
 
 const { TEXTS, TEXT_BOX } = draw
 // The script's CHROME_BACK_MS, which it does not export.
@@ -24,9 +23,7 @@ const A_AT = [2.5, 2.5]
 const B_AT = [6.5, 2.5]
 const C_AT = [4.5, 6.5]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   let context, p, errors
@@ -52,16 +49,14 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   }, point)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: WINDOW } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: WINDOW } }))
   })
   after(async () => { await context.close() })
 
   // Three notes apart from each other, Text Anywhere current and nothing selected.
   beforeEach(async () => {
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
     await typeNote(A_AT, 'AA')
     await typeNote(B_AT, 'BB')
     await typeNote(C_AT, 'CC')

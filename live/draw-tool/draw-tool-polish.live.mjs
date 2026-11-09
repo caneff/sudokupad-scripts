@@ -2,10 +2,9 @@
 // on a checklist box ticks it and saves the note without opening it, and a note being moved is drawn at 60% of its own opacity. Real mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
 const SYMBOLS_AT = [1.5, 1.5]
@@ -14,17 +13,12 @@ const MOVED_AT = [7.5, 6.5]
 const BY = [1, 2]
 const CHECK_BOX = `${TEXTS} .draw-tool-check`
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s polish', { concurrency: false }, () => {
   let context, p, errors
 
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
   const boxText = () => p.locator(TEXT_BOX).textContent()
   // The caret's offset in the open box's text, or null when it is not a collapsed caret in the box.
   const caret = () => p.evaluate(() => {
@@ -39,8 +33,7 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
   const opacityOf = () => p.locator(TEXTS).evaluate((e) => Number(window.getComputedStyle(e).opacity))
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
     await reload()
   })
@@ -76,7 +69,7 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     assert.equal(await boxText(), 'a->', 'Undo undid the replacement and gave back the typed characters')
     await p.keyboard.press('Control+A')
     await p.keyboard.type('1<=2')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await savedTexts(), ['1≤2'])
   })
 
@@ -90,7 +83,7 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     await p.keyboard.press('Control+A')
     await p.keyboard.type('r5 sum')
     assert.equal(await boxText(), 'r5 sum', 'sum waits for the character after it')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await savedTexts(), ['1≤2', 'r5 Σ'])
   })
 
@@ -115,7 +108,7 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     await typeInto(SYMBOLS_AT, '[] milk')
     await p.keyboard.press('Enter')
     await p.keyboard.type('- [ ] ')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await savedTexts(), ['[] milk\n- [ ]'])
     assert.equal(await p.locator(CHECK_BOX).count(), 2)
     await p.locator(CHECK_BOX).nth(1).click()

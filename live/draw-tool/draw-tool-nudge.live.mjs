@@ -3,11 +3,10 @@
 // note's "- " lines show as bullets with inline markup inside, kept over a reload. Real mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { TEXTS } = draw
 // In cells from the grid's top left: the note nudged, and a note of bullets.
@@ -19,9 +18,7 @@ const BULLET_TEXT = '- one\n- **two**'
 const NEAR_PX = 0.6
 const NEAR_UNITS = 1.5
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
   let context, p, errors
@@ -36,24 +33,20 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     await p.mouse.click(...await gridPoint(p, at))
     await draw.pickDraw(p)
   }
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 } } }))
     await draw.forgetDrawings(p)
     await reload()
     await p.mouse.click(...await gridPoint(p, NOTE_AT))
     await p.keyboard.type('N')
-    await draw.finishNote(p)
+    await finishNote(p)
     await p.mouse.click(...await gridPoint(p, BULLETS_AT))
     await p.keyboard.type(BULLET_TEXT.split('\n')[0])
     await p.keyboard.press('Shift+Enter')
     await p.keyboard.type(BULLET_TEXT.split('\n')[1])
-    await draw.finishNote(p)
+    await finishNote(p)
   })
   after(async () => { await context.close() })
 
@@ -91,7 +84,7 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
   it('each arrow key moves the note its own way, and a note stops where it would leave the window', async () => {
     await p.mouse.click(...await gridPoint(p, EDGE_AT))
     await p.keyboard.type('E')
-    await draw.finishNote(p)
+    await finishNote(p)
     await p.mouse.click(...await gridPoint(p, EDGE_AT))
     const moved = async (key) => {
       const before = await noteBox('E')
@@ -178,7 +171,7 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     await p.keyboard.down('ArrowRight')
     try {
       assert.equal(await settle(async () => (await noteBox('N')).x - x0 > HELD_FAR_PX, true), true, 'the held key moved the note')
-      await draw.finishNote(p)
+      await finishNote(p)
       // A timer left running would move the note again as soon as it is selected.
       await selectNote('N')
       const stopped = (await noteBox('N')).x
@@ -208,7 +201,7 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     assert.deepEqual(await settle(lines, [want]), want)
     await draw.reopen(p, await gridPoint(p, BULLETS_AT))
     assert.equal(await p.locator(draw.TEXT_BOX).textContent(), BULLET_TEXT, 'the open note shows the raw markers')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(errors, [])
   })
 })

@@ -3,43 +3,36 @@
 // Owed: SudokuPad's compact-marks range itself (1-5 giving 1 to 5) did not run in headless Chromium even with the setting on, with or without this script, so only that - is left untouched is checked.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
 
 const { SIZE_SLIDER, TEXT_BOX, WIDTH_KEY, valueOf } = draw
 const A = [1.5, 1.5]
 const B = [5.5, 5.5]
 const CENTRE_BUTTON = '#control-centre'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
   let context, p, errors
 
   const savedSize = async (text) => (await draw.saved(p)).find((item) => item.text === text).size
-  const clickAt = (at) => draw.clickAt(p, at)
-  const typeText = (at, content) => draw.typeText(p, at, content)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: { width: 1280, height: 720 } } }))
   })
   after(async () => { await context.close() })
   beforeEach(async () => {
     await draw.forgetDrawings(p)
     await p.evaluate((key) => Framework.removeData(key), WIDTH_KEY)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
   })
 
   it('with a note selected, + twice and - once make it one step (1 text size) bigger, the slider follows, and - after + gives the size back', async () => {
-    await typeText(A, 'A')
+    await typeText(p, A, 'A')
     assert.equal(await savedSize('A'), 20)
-    await clickAt(A)
+    await clickAt(p, A)
     await p.keyboard.press('+')
     assert.deepEqual([await savedSize('A'), await valueOf(p, SIZE_SLIDER)], [21, 6.5])
     await p.keyboard.press('-')
@@ -56,8 +49,8 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
   })
 
   it('with Ctrl or Alt held the keys leave the size alone', async () => {
-    await typeText(A, 'A')
-    await clickAt(A)
+    await typeText(p, A, 'A')
+    await clickAt(p, A)
     await p.keyboard.press('+')
     for (const chord of ['Control+-', 'Alt+=', 'Control+Shift+=']) {
       await p.keyboard.press(chord)
@@ -66,8 +59,8 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
   })
 
   it('a + pressed in the middle of a move of the note changes nothing, and the size stays what the drop leaves', async () => {
-    await typeText(A, 'A')
-    await clickAt(A)
+    await typeText(p, A, 'A')
+    await clickAt(p, A)
     const [x, y] = await gridPoint(p, A)
     await p.mouse.move(x, y)
     await p.mouse.down()
@@ -78,18 +71,18 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
   })
 
   it('with nothing selected, + moves the slider and the next note\'s size, not a note already made', async () => {
-    await typeText(A, 'A')
+    await typeText(p, A, 'A')
     await p.keyboard.press('+')
     assert.deepEqual([await valueOf(p, SIZE_SLIDER), await p.evaluate((k) => Framework.getData(k), WIDTH_KEY)], [6.5, 6.5])
-    await typeText(B, 'B')
+    await typeText(p, B, 'B')
     assert.deepEqual([await savedSize('A'), await savedSize('B')], [20, 21])
   })
 
   it('inside an open note, + and - type as text and change no size', async () => {
-    await clickAt(A)
+    await clickAt(p, A)
     await p.keyboard.type('1+2-3')
     assert.equal(await p.locator(TEXT_BOX).textContent(), '1+2-3')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await savedSize('1+2-3'), 20)
     assert.equal(await valueOf(p, SIZE_SLIDER), 6)
   })

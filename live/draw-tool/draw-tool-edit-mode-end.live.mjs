@@ -2,18 +2,15 @@
 // the panel (which does nothing else), left Alt held, and the window losing focus; a press on another color button stays in it.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { gridPoint } from '../board.mjs'
 
 const { KEYPAD, PICKER, TEXTS, TEXT_BOX } = draw
 const EDITING = '.tool-draw.draw-tool-editing'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('leaving Text Anywhere\'s color edit mode', { concurrency: false }, () => {
   let context, p
@@ -22,8 +19,7 @@ describe('leaving Text Anywhere\'s color edit mode', { concurrency: false }, () 
   const enter = () => draw.holdForPickers(p, `${KEYPAD} button[data-key="4"]`, 'left', 'visible')
 
   before(async () => {
-    ;({ context, p } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p } = await draw.open(browser()))
     await draw.pickDraw(p)
     await p.locator(draw.SLIDERS).waitFor({ state: 'visible' })
   })

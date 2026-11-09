@@ -2,10 +2,9 @@
 // selection outline and resize handles of a faded note stay solid.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { FRAME_KEY, TEXTS, pickDraw } = draw
 const SELECTION = '#draw-tool-layer .draw-tool-selection'
@@ -16,9 +15,7 @@ const ITEMS = [
   { kind: 'text', color: 1, size: 20, opacity: 100, bg: true, text: 'solid', at: [96, 288] }
 ]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: false }, () => {
   let context, p
@@ -35,11 +32,9 @@ describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: fa
     return Math.round(product * 1000) / 1000
   }, selector)
 
+  // The handles' fade in has its own live check; here they are read as soon as they appear.
   before(async () => {
-    ;({ context, p } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
-    // The handles' fade in has its own live check; here they are read as soon as they appear.
-    await p.emulateMedia({ reducedMotion: 'reduce' })
-    await draw.boot(p)
+    ;({ context, p } = await draw.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 }, reducedMotion: 'reduce' } }))
     await draw.forgetDrawings(p)
     await p.evaluate((key) => Framework.setData(key, true), FRAME_KEY)
     await draw.plantDrawing(p, ITEMS)
@@ -87,12 +82,12 @@ describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: fa
   })
 
   it('the dashed outline of a faded note open for typing stays solid too', async () => {
-    await draw.finishNote(p)
+    await finishNote(p)
     await draw.reopen(p, await gridPoint(p, [1.5, 1.5]))
     await p.locator(draw.TEXT_BOX).waitFor()
     assert.equal(await p.locator(SELECTION).count(), 1, 'one outline round the open note')
     assert.equal(await drawnOpacity(SELECTION), 1)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await p.locator(SELECTION).count(), 0)
   })
 
@@ -105,7 +100,7 @@ describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: fa
       await p.keyboard.up('Shift')
     }
     assert.equal(await p.locator(SELECTION).count(), 2)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await p.locator(SELECTION).count(), 0)
   })
 })

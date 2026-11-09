@@ -13,7 +13,8 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
-import { drag, gridPoint, openPenTool, padValues, penEntries } from '../pen.mjs'
+import { gridPoint } from '../board.mjs'
+import { drag, openPenTool, padValues, penEntries } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')

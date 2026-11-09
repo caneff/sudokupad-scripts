@@ -2,18 +2,15 @@
 // and __underline__ (computed font size, text-decoration, indent), and reopening the note shows the raw text. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
 const AT = [1.5, 1.5]
 const NOTE_TEXT = '## Head\n-# small\n- top\n  - deep\n1. one\n  2. two\n10. ten\nplain __under__ and **__both__**'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s Discord formatting in notes', { concurrency: false }, () => {
   let context, p, errors
@@ -32,8 +29,7 @@ describe('Text Anywhere\'s Discord formatting in notes', { concurrency: false },
   }, [TEXTS, text])
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
     await draw.pickDraw(p)
   })
@@ -42,7 +38,7 @@ describe('Text Anywhere\'s Discord formatting in notes', { concurrency: false },
   it('a finished note shows a header bigger and bold, and subtext smaller and faded', async () => {
     await p.mouse.click(...await gridPoint(p, AT))
     await p.keyboard.type(NOTE_TEXT)
-    await draw.finishNote(p)
+    await finishNote(p)
     const header = await lineLook('Head')
     assert.equal(header.text, 'Head', 'the hashes are hidden')
     assert.ok(Math.abs(header.size / header.noteSize - 1.25) < 0.01, `a level 2 header is 1.25x, got ${header.size / header.noteSize}`)
@@ -74,7 +70,7 @@ describe('Text Anywhere\'s Discord formatting in notes', { concurrency: false },
   it('reopening the note shows the raw text', async () => {
     await draw.reopen(p, await gridPoint(p, AT))
     assert.equal(await p.locator(TEXT_BOX).textContent(), NOTE_TEXT)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(errors, [])
   })
 })

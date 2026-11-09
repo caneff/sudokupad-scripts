@@ -2,10 +2,9 @@
 // backticks hidden and a block's leading spaces kept, symbols and markup are left alone inside both, and reopening the note shows the raw text. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
 const CODE_AT = [1.5, 1.5]
@@ -17,9 +16,7 @@ const TYPED_TEXT = NOTE_TEXT.replace('after -> z', 'after → z')
 const BLOCK_TEXT = '  - [ ] k ->\n**b** sum\n    z=1 <='
 const MID_AT = [3.5, 3.5]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s code in notes', { concurrency: false }, () => {
   let context, p, errors
@@ -35,8 +32,7 @@ describe('Text Anywhere\'s code in notes', { concurrency: false }, () => {
   }, [TEXTS, INLINE, BLOCK])
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
     await draw.pickDraw(p)
   })
@@ -46,7 +42,7 @@ describe('Text Anywhere\'s code in notes', { concurrency: false }, () => {
     await p.mouse.click(...await gridPoint(p, CODE_AT))
     await p.keyboard.type(NOTE_TEXT)
     assert.equal(await p.locator(TEXT_BOX).textContent(), TYPED_TEXT)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual((await draw.saved(p)).map((item) => item.text), [TYPED_TEXT])
   })
 
@@ -60,7 +56,7 @@ describe('Text Anywhere\'s code in notes', { concurrency: false }, () => {
     await p.keyboard.press('Control+A')
     await p.keyboard.type('`sum` `x')
     assert.equal(await p.locator(TEXT_BOX).textContent(), '`sum` `x')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('the finished note shows monospace on a tinted background, hides the backticks and keeps a block\'s spaces', async () => {
@@ -90,9 +86,8 @@ describe('Text Anywhere\'s code in notes', { concurrency: false }, () => {
   it('reopening the note shows the raw text, backticks and all, and a reload keeps the code', async () => {
     await draw.reopen(p, await gridPoint(p, CODE_AT))
     assert.equal(await p.locator(TEXT_BOX).textContent(), TYPED_TEXT)
-    await draw.finishNote(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await finishNote(p)
+    await draw.reloadOnDraw(p)
     assert.deepEqual((await looks()).blocks.map((e) => e.text), [BLOCK_TEXT])
     assert.deepEqual(errors, [])
   })

@@ -2,20 +2,17 @@
 // (the Letter tool, an open note, an open dialog and a field in it) or once Text Anywhere is current. SudokuPad's Z X C V keys keep their tools. Real keyboard input.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { useBrowser } from '../session.mjs'
+import { clickAt, gridPoint } from '../board.mjs'
 
 const { DIGIT_BUTTON, SETTINGS_EDITOR, TEXT_BOX, tool } = draw
 const A = [1.5, 1.5]
 const MAIN = '.controls-main'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s T key', { concurrency: false }, () => {
   let context, p, errors
@@ -24,8 +21,7 @@ describe('Text Anywhere\'s T key', { concurrency: false }, () => {
   const cellText = () => p.evaluate(() => String(Framework.app.grid.getCell(1, 1).value || ''))
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
   })
   after(async () => { await context.close() })
   beforeEach(async () => {
@@ -81,7 +77,7 @@ describe('Text Anywhere\'s T key', { concurrency: false }, () => {
 
   it('with a note open T types "t" into it, and the tool stays Text Anywhere', async () => {
     await draw.pickDraw(p)
-    await draw.clickAt(p, A)
+    await clickAt(p, A)
     await p.keyboard.press('t')
     assert.equal(await p.locator(TEXT_BOX).textContent(), 't')
     assert.equal(await tool(p), 'draw')

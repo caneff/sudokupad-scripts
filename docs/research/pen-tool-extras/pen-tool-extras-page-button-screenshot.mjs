@@ -4,7 +4,8 @@
 /* global Framework */
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
-import { drag, gridPoint, openPenTool, padValues } from '../../../live/pen.mjs'
+import { gridPoint } from '../../../live/board.mjs'
+import { drag, openPenTool, padValues } from '../../../live/pen.mjs'
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const [label, scriptPath = 'pen-tool-extras.user.js'] = process.argv.slice(2)

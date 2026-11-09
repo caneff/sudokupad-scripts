@@ -16,7 +16,7 @@ export const ERROR_LOG_KEY = /const ERROR_LOG_KEY = '([^']+)'/.exec(readFileSync
 // The injection times a check can ask for: a script that waits on SudokuPad's own startup behaves differently at each.
 export const MODES = ['document-idle', 'before-start', 'after-start']
 
-const VIEWPORT = { width: 1200, height: 900 }
+export const VIEWPORT = { width: 1200, height: 900 }
 const FRAMEWORK_MS = 30000
 
 // A line a script logs when it turns a feature off because SudokuPad has no internal it needs or changed

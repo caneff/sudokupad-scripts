@@ -4,12 +4,14 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { assertNoCrash, attack, cellsState, colorCell, DRAW_BUTTON, emptyCells, flushSave, loadScripts, NOTES, rulesScroll, rulesWidth, setLongRules, NOTICE_BAR, noteCount, openWithAllScripts, placeNote, reloadWithScripts, restart, rowCol, typeDigits } from './attacks.mjs'
+import { assertNoCrash, attack, cellsState, colorCell, emptyCells, flushSave, loadScripts, noteCount, NOTES, NOTICE_BAR, openWithAllScripts, reloadWithScripts, rowCol, rulesScroll, rulesWidth, setLongRules, typeDigits } from './attacks.mjs'
 import { BUTTON as CBD_BUTTON, labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { captureConsoleErrors, gotoPuzzle, newPage, startPuzzle } from './page.mjs'
 import { BLACK } from './scripts.mjs'
-import { draw, gridPoint, openPenTool, penEntries, setInputValue } from './pen.mjs'
+import { gridPoint, placeNote, restart } from './board.mjs'
+import { draw, openPenTool, penEntries, setInputValue } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
+import { DRAW_BUTTON } from './draw-tool/draw-tool-fixtures.mjs'
 
 let browser
 before(async () => { browser = await chromium.launch() })

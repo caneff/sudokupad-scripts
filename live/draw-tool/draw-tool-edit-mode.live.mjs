@@ -2,25 +2,21 @@
 // buttons in their cells, so no button edge shows around SudokuPad's undo row, at the two desktop sizes.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
+import { useBrowser } from '../session.mjs'
 
 const { KEYPAD, NEAR_PX, NINE, PICKER_BOX, SLIDERS } = draw
 // The tray behind the controls reaches past the keypad's sides on purpose.
 const TRAY = '.draw-tool-tray'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 for (const viewport of [{ width: 1280, height: 720 }, { width: 1600, height: 900 }]) {
   describe(`Text Anywhere's edit mode at ${viewport.width}x${viewport.height}`, { concurrency: false }, () => {
     let context, p
 
     before(async () => {
-      ;({ context, p } = await openPage(browser, { contextOptions: { viewport } }))
-      await draw.boot(p)
+      ;({ context, p } = await draw.open(browser(), { contextOptions: { viewport } }))
       await draw.pickDraw(p)
       await p.locator(SLIDERS).waitFor({ state: 'visible' })
       await draw.holdForPickers(p, `${KEYPAD} button[data-key="4"]`, 'left', 'visible')
