@@ -122,6 +122,20 @@ function buildKinds () {
       check: (model) => model.selected,
       run: (env, d) => env.page.keyboard.press(String(d))
     },
+    {
+      kind: 'enter digit',
+      group: 'ordinary',
+      weight: 5,
+      arg: (n) => fc.tuple(cell(n), fc.integer({ min: 1, max: 9 })),
+      label: ([i, d], at) => `enter ${d} in ${at(i)}`,
+      run: async (env, [i, d], model) => {
+        // The digit tool first: any other tool would turn the same key into a mark or a color.
+        await env.page.keyboard.press(TOOL_KEYS[0])
+        await env.page.mouse.click(...await env.cellPoint(i))
+        await env.page.keyboard.press(String(d))
+        model.selected = true
+      }
+    },
     { kind: 'undo', group: 'ordinary', weight: 3, arg: () => fc.constant(null), label: () => 'undo', run: (env) => env.undo() },
     { kind: 'undo all', group: 'ordinary', weight: 1, arg: () => fc.constant(null), label: () => 'undo back to the start', run: (env) => env.undoAll() },
     { kind: 'redo', group: 'ordinary', weight: 2, arg: () => fc.constant(null), label: () => 'redo', run: (env) => env.redo() },

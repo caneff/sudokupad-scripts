@@ -6,7 +6,7 @@ import { runFuzz } from './engine.mjs'
 import { fakeTargets } from './fake-target.mjs'
 
 const CELLS = Array.from({ length: 12 }, (_, i) => [Math.floor(i / 4), i % 4])
-const SEED = 5
+const SEED = 7
 // The fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const WAITS = { landMs: 1, settleMs: 1 }
 
