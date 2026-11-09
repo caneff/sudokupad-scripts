@@ -3,21 +3,18 @@
 // The snippet runs ahead of the script's own startup check and puts the internal back after it, so SudokuPad's own code still runs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { BUTTON, coloredCountOn, EDITOR, GIVEN_COUNT, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, savedProfiles, SEEDED_OFF } from './color-by-digit-fixtures.mjs'
 import { openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
 const WARNING = /^color-by-digit: /
 const BAR = '#sudokupad-scripts-notices [data-script="color-by-digit"]'
 const DIGIT_STYLE = 'color-by-digit-digits'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const missingBefore = (owner, name) => `;Framework.getApp().then(() => {
   const owner = ${owner}
@@ -68,7 +65,7 @@ for (const kase of CASES) {
     const warned = []
 
     before(async () => {
-      ;({ context, p, errors } = await openSession(browser, `${missingBefore(kase.owner, kase.name)}${script}`, {
+      ;({ context, p, errors } = await openSession(browser(), `${missingBefore(kase.owner, kase.name)}${script}`, {
         saved: kase.saved,
         buttonExpected: kase.buttonExpected,
         expectedSkips: [WARNING],

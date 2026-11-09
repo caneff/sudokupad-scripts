@@ -2,19 +2,17 @@
 // headless Chromium: Copy puts the saved keys on the real clipboard, Paste reads them back through the same dialog.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { actButton, closeDialogWith, code, dialogButton, openScriptDialog, paste, SETTINGS_SCRIPTS, STATUS } from './settings.mjs'
+import { useBrowser } from './session.mjs'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 for (const script of SETTINGS_SCRIPTS) {
   describe(`${script.file}: Copy settings and Paste settings`, { concurrency: false }, () => {
     let context, p, errors
     before(async () => {
-      ({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+      ({ context, p, errors } = await openPage(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await startPuzzle(p, { injection: { mode: 'after-start', code: code(script.file) } })
       await openScriptDialog(p, script.entry, script.editor)
     })
@@ -143,7 +141,7 @@ for (const failedPaste of FAILED_PASTES) {
     after(async () => { await context?.close() })
 
     it('says the paste failed, and the keys, the open dialog and the dialog opened again all show what they did before', async () => {
-      ({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+      ({ context, p, errors } = await openPage(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await startPuzzle(p, { injection: { mode: 'after-start', code: code(failedPaste.file) } })
       await openScriptDialog(p, failedPaste.entry, failedPaste.editor)
       const keys = Object.keys(failedPaste.pasted)
@@ -165,7 +163,7 @@ describe('auto-rules-resizer.user.js: a Save whose height write throws', { concu
   after(async () => { await context?.close() })
 
   it('says it was not saved, the width key is still unsaved and the max size settings stay on', async () => {
-    ({ context, p, errors } = await openPage(browser))
+    ({ context, p, errors } = await openPage(browser()))
     await startPuzzle(p, { injection: { mode: 'after-start', code: code('auto-rules-resizer.user.js') } })
     await openScriptDialog(p, 'Rules Resizer', '#auto-rules-resizer-max-width')
     await failNextWriteOf(p, 'AutoRulesResizer_maxHeight', 'planted height write failure')

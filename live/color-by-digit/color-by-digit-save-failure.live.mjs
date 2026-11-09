@@ -3,22 +3,19 @@
 // so the mode restore has no failing step to witness it.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { EDITOR, MODE_KEY, openSession, PROFILES_KEY, savedProfiles, SEED } from './color-by-digit-fixtures.mjs'
 import { dialogButton, openScriptDialog } from '../settings.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 const ROWS = `${EDITOR} [data-role=profile-row]`
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Color by Digit\'s Save is all-or-nothing', { concurrency: false }, () => {
   let context, p
   before(async () => {
-    ;({ context, p } = await openSession(browser, script, { saved: savedProfiles(SEED) }))
+    ;({ context, p } = await openSession(browser(), script, { saved: savedProfiles(SEED) }))
   })
   after(async () => { await context.close() })
 

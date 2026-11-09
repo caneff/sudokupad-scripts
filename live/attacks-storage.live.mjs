@@ -2,9 +2,8 @@
 // sudokupad.app in headless Chromium. Each test names its attack and asserts the crash signals (no uncaught error, console error or
 // skip line) beside what a user expects. Clicks, drags and keys are real input.
 /* global Framework, Storage */
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import { pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllScripts } from './attacks.mjs'
 import { captureConsoleErrors, gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
@@ -14,6 +13,7 @@ import { closeDialogWith, code, openScriptDialog, paste, SETTINGS_SCRIPTS } from
 import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
+import { useBrowser } from './session.mjs'
 
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
@@ -26,9 +26,7 @@ const THIS_TAB_OPACITY = 60
 const PASTE_BUDGET_MS = 5000
 const MEGABYTE = 1024 * 1024
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on storage', { concurrency: false }, () => {
   let context, p, errors
@@ -36,7 +34,7 @@ describe('attacks on storage', { concurrency: false }, () => {
 
   describe('with the three scripts installed', () => {
     beforeEach(async () => {
-      ;({ context, p, errors } = await openWithAllScripts(browser))
+      ;({ context, p, errors } = await openWithAllScripts(browser()))
     })
 
     it('attack 73: a full store (setItem throws QuotaExceededError) on the scripts\' own keys leaves every feature working in the session, tells the user in plain words and turns no saved data off', async () => {
@@ -86,7 +84,7 @@ describe('attacks on storage', { concurrency: false }, () => {
 
   it('attack 74: settings pasted as malformed text, from an older version and a megabyte large change nothing they should not, and answer in time', async () => {
     for (const script of SETTINGS_SCRIPTS) {
-      ;({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+      ;({ context, p, errors } = await openPage(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await startPuzzle(p, { injection: { mode: 'after-start', code: code(script.file) } })
       await openScriptDialog(p, script.entry, script.editor)
       // Everything the script owns in the store, as saved strings.
@@ -127,7 +125,7 @@ describe('attacks on storage', { concurrency: false }, () => {
   })
 
   it('attack 75: settings changed in one tab while another tab has the puzzle open leave that tab working, keep the other settings, and show up on its reload', async () => {
-    ;({ context, p, errors } = await openWithAllScripts(browser))
+    ;({ context, p, errors } = await openWithAllScripts(browser()))
     const other = await newPage(context)
     captureConsoleErrors(other.p, other.errors)
     await gotoPuzzle(other.p)

@@ -3,12 +3,12 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { gotoPuzzle, openPage, startPuzzle } from '../page.mjs'
 import { numberPadText } from '../scripts.mjs'
 import { keydownDefaults } from '../pen.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
 
 const source = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
 const script = source('ui-tweaks.user.js')
@@ -22,9 +22,7 @@ const LETTERS = 'ABCDEFGHIO'
 // Stand-ins for the buttons other scripts add to the bottom row: with SudokuPad's own four, seven in all.
 const EXTRA_BUTTONS = ['five', 'six', 'seven']
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const box = (p, id) => p.locator(`${DIALOG} input[data-option="${id}"]`)
 const openDialog = (p) => openScriptDialog(p, 'UI Tweaks', DIALOG)
@@ -57,7 +55,7 @@ describe('the options dialog', { concurrency: false }, () => {
   const pad = () => numberPadText(p)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
+    ;({ context, p, errors } = await openPage(browser()))
     await startPage(p)
   })
   after(async () => { await context.close() })
@@ -137,7 +135,7 @@ describe('the choices survive a reload', { concurrency: false }, () => {
   let context, p, errors
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
+    ;({ context, p, errors } = await openPage(browser()))
     await startPage(p)
     await chooseAndSave(p, { tab: false, hideSelect: true, wrapButtons: true })
     await gotoPuzzle(p)
@@ -168,7 +166,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
   let context, p, errors
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
+    ;({ context, p, errors } = await openPage(browser()))
     await startPage(p, { scripts: ['color-by-digit.user.js', 'pen-tool-extras.user.js', 'draw-tool.user.js', 'ui-tweaks.user.js'].map(source) })
     await p.evaluate(() => Framework.setSetting('toolpen', true))
     await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })

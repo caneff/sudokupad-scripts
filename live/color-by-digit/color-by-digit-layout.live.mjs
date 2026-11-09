@@ -4,26 +4,23 @@
 /* global document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { ARROW, EDITOR, group, MENU, openSession, paintedKeys, savedProfiles, SEED, SEEDED_OFF, MODE_STORAGE_KEY } from './color-by-digit-fixtures.mjs'
 import { openScriptDialog } from '../settings.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 const DESKTOP = { width: 1200, height: 900 }
 const DESKTOP_DIALOG_PX = 640
 const NEAR_PX = 1
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 for (const viewport of [DESKTOP]) {
   describe(`the dialog at ${viewport.width} px`, { concurrency: false }, () => {
     let context, p
     const rect = (selector) => p.locator(selector).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right } })
     before(async () => {
-      ;({ context, p } = await openSession(browser, script, { contextOptions: { viewport } }))
+      ;({ context, p } = await openSession(browser(), script, { contextOptions: { viewport } }))
       await openScriptDialog(p, 'Color by Digit', EDITOR)
     })
     after(async () => { await context?.close() })
@@ -103,7 +100,7 @@ for (const viewport of [DESKTOP]) {
     const heights = () => p.evaluate(() => ({ dialog: document.querySelector('.dialog').getBoundingClientRect().bottom, window: window.innerHeight }))
     before(async () => {
       const saved = { ...SEEDED_OFF, ...savedProfiles({ profiles: [{ name: 'Each digit', groups: EACH_DIGIT }], active: 0 }), [MODE_STORAGE_KEY]: 'off' }
-      ;({ context, p } = await openSession(browser, script, { saved, contextOptions: { viewport } }))
+      ;({ context, p } = await openSession(browser(), script, { saved, contextOptions: { viewport } }))
       await openScriptDialog(p, 'Color by Digit', EDITOR)
     })
     after(async () => { await context?.close() })
@@ -139,7 +136,7 @@ for (const viewport of [DESKTOP]) {
     describe(`the profile menu, ${sync}, at ${viewport.width} px`, { concurrency: false }, () => {
       let context, p
       before(async () => {
-        ;({ context, p } = await openSession(browser, script, { saved: { ...SEEDED_OFF, ...savedProfiles(state) }, contextOptions: { viewport } }))
+        ;({ context, p } = await openSession(browser(), script, { saved: { ...SEEDED_OFF, ...savedProfiles(state) }, contextOptions: { viewport } }))
         await p.click(ARROW)
         await p.locator(MENU).waitFor({ state: 'visible' })
       })
@@ -176,7 +173,7 @@ for (const viewport of [DESKTOP]) {
 
 describe('the dialog at 1280x720', { concurrency: false }, () => {
   it('is styled from SudokuPad\'s own elements: no class is stamped on them, it is 640 px wide, and its button row is flex with a purple Save', async () => {
-    const { context, p } = await openSession(browser, script, { contextOptions: { viewport: { width: 1280, height: 720 } } })
+    const { context, p } = await openSession(browser(), script, { contextOptions: { viewport: { width: 1280, height: 720 } } })
     try {
       await openScriptDialog(p, 'Color by Digit', EDITOR)
       await p.mouse.move(0, 0)

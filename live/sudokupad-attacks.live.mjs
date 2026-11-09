@@ -1,9 +1,8 @@
 // Live attacks on SudokuPad itself with all the scripts loaded (#590, attacks 49-56): each test tries to break the scripts
 // with something a player does to SudokuPad, and checks the crash signals (a skip line, a page error, a console error, a
 // notice bar) plus what the player expects to see.
-import { after, before, describe, it } from 'node:test'
+import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import { assertNoCrash, attack, cellsState, colorCell, emptyCells, flushSave, loadScripts, noteCount, NOTES, NOTICE_BAR, openWithAllScripts, reloadWithScripts, rowCol, rulesScroll, rulesWidth, setLongRules, typeDigits } from './attacks.mjs'
 import { BUTTON as CBD_BUTTON, labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { captureConsoleErrors, gotoPuzzle, newPage, startPuzzle } from './page.mjs'
@@ -12,10 +11,9 @@ import { gridPoint, placeNote, restart } from './board.mjs'
 import { draw, openPenTool, penEntries, setInputValue } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
 import { DRAW_BUTTON } from './draw-tool/draw-tool-fixtures.mjs'
+import { useBrowser } from './session.mjs'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 // Something of every kind the scripts and SudokuPad keep: a digit, a pen line, a colored cell and a note.
 async function fillBoard (p, start) {
@@ -27,7 +25,7 @@ async function fillBoard (p, start) {
 }
 
 describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
-  it('49 Restart with notes, pen lines and colors present clears them all', () => attack(browser, async (p) => {
+  it('49 Restart with notes, pen lines and colors present clears them all', () => attack(browser(), async (p) => {
     const start = await cellsState(p)
     assert.notDeepEqual(await fillBoard(p, start), start)
     await flushSave(p)
@@ -38,7 +36,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     assert.equal(await labelOn(p), 'Cell', 'Color by Digit stayed in its mode')
   }))
 
-  it('49 Undo after Restart brings the note back', () => attack(browser, async (p) => {
+  it('49 Undo after Restart brings the note back', () => attack(browser(), async (p) => {
     await fillBoard(p, await cellsState(p))
     await flushSave(p)
     await restart(p)
@@ -47,7 +45,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     assert.equal(await settle(() => noteCount(p), 1), 1, 'Undo brought the note back')
   }))
 
-  it('49 Undo after Restart leaves Color by Digit in its mode', () => attack(browser, async (p) => {
+  it('49 Undo after Restart leaves Color by Digit in its mode', () => attack(browser(), async (p) => {
     const start = await cellsState(p)
     await fillBoard(p, start)
     await flushSave(p)
@@ -56,7 +54,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     assert.equal(await settle(() => labelOn(p), 'Cell'), 'Cell', 'Color by Digit was switched by the Undo')
   }))
 
-  it('50 Undo past the start 100 times, then redo 100 times', () => attack(browser, async (p) => {
+  it('50 Undo past the start 100 times, then redo 100 times', () => attack(browser(), async (p) => {
     const filled = await fillBoard(p, await cellsState(p))
     const penBefore = await penEntries(p)
     const depth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
@@ -75,14 +73,14 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
 
   // #590's rule: after undoing back to the start, the puzzle state equals the starting state. Color by Digit's Cell colors are
   // part of the history, so the givens are left uncolored while the button still reads Cell.
-  it('50 Undo back to the start gives the starting state', { todo: '#606' }, () => attack(browser, async (p) => {
+  it('50 Undo back to the start gives the starting state', { todo: '#606' }, () => attack(browser(), async (p) => {
     const start = await cellsState(p)
     await fillBoard(p, start)
     for (let i = 0; i < 100; i++) await p.keyboard.press('Control+z')
     assert.deepEqual(await settle(() => cellsState(p), start), start)
   }))
 
-  it('51 Switching every tool with the toolbar and with the hotkeys, 3 rounds, fast', () => attack(browser, async (p) => {
+  it('51 Switching every tool with the toolbar and with the hotkeys, 3 rounds, fast', () => attack(browser(), async (p) => {
     const toolbar = [['normal', '#control-normal'], ['corner', '#control-corner'], ['centre', '#control-centre'], ['colour', '#control-colour'], ['draw', DRAW_BUTTON], ['pen', '#control-pen']]
     const hotkeys = [['normal', 'z'], ['corner', 'x'], ['centre', 'c'], ['colour', 'v']]
     const tool = () => p.evaluate(() => Framework.app.tool)
@@ -103,7 +101,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     assert.equal(await noteCount(p), 1)
   }))
 
-  it('52 Toggling the SudokuPad settings the scripts depend on, then reload', () => attack(browser, async (p) => {
+  it('52 Toggling the SudokuPad settings the scripts depend on, then reload', () => attack(browser(), async (p) => {
     const read = ['flipkeypad', 'checkpencilmarks', 'toolpen', 'toolletter']
     const values = () => p.evaluate((keys) => keys.map((k) => !!Framework.getSetting(k)), read)
     const flip = () => p.evaluate((keys) => keys.forEach((k) => Framework.setSetting(k, !Framework.getSetting(k))), read)
@@ -122,7 +120,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     assert.equal((await penEntries(p)).length > 0, true, 'a pen line was drawn')
   }))
 
-  it('53 Window resized to the minimum desktop size and back, with each script\'s panel open', () => attack(browser, async (p) => {
+  it('53 Window resized to the minimum desktop size and back, with each script\'s panel open', () => attack(browser(), async (p) => {
     await setLongRules(p)
     const boxes = (selectors) => p.evaluate((list) => list.map((sel) => {
       const r = document.querySelector(sel).getBoundingClientRect()
@@ -153,7 +151,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     }
   }))
 
-  it('54 Page zoomed in and out, then drawing and placing notes', () => attack(browser, async (p) => {
+  it('54 Page zoomed in and out, then drawing and placing notes', () => attack(browser(), async (p) => {
     // Headless Chromium has no zoom keys: Ctrl+= and Ctrl+- change the page's CSS size and its pixel ratio, which the emulation sets.
     const cdp = await p.context().newCDPSession(p)
     for (const [cssWidth, cssHeight, ratio] of [[800, 600, 1.5], [1600, 1200, 0.75]]) {
@@ -174,7 +172,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
   }))
 
   it('55 Two tabs of the same puzzle: change settings in one, reload the other', async () => {
-    const { context, p: tabA, errors: errorsA } = await openWithAllScripts(browser)
+    const { context, p: tabA, errors: errorsA } = await openWithAllScripts(browser())
     try {
       const { p: tabB, errors: errorsB } = await newPage(context)
       captureConsoleErrors(tabB, errorsB)
@@ -212,7 +210,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       ['pen-tool-extras', 'saved settings'], ['draw-tool', 'saved notes and settings'], ['ui-tweaks', 'saved options']
     ]
     const said = []
-    const { context, p, errors } = await openWithAllScripts(browser, {
+    const { context, p, errors } = await openWithAllScripts(browser(), {
       expectedSkips: SAVED.map(([script, feature]) => new RegExp(`^${script}: ${feature} skipped because SudokuPad changed: SecurityError: denied$`)),
       seed: (page) => page.on('console', (m) => { if (/ skipped because SudokuPad changed: SecurityError: denied$/.test(m.text())) said.push(m.text().split(' skipped')[0]) }),
       afterStart: (p) => p.evaluate(() => {

@@ -2,20 +2,17 @@
 // the button and the board must agree after either.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo, selectCell } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
 import { flushSave } from '../attacks.mjs'
 import { startPuzzle } from '../page.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Undo and Redo after a mode change', { concurrency: false }, () => {
   let context, p
@@ -26,7 +23,7 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
   const label = () => labelOn(p)
 
   before(async () => {
-    ({ context, p } = await openSession(browser, script))
+    ({ context, p } = await openSession(browser(), script))
   })
   after(async () => { await context.close() })
 
@@ -98,7 +95,7 @@ describe('Undo after a Restart', { concurrency: false }, () => {
   const label = () => labelOn(p)
 
   before(async () => {
-    ({ context, p } = await openSession(browser, script))
+    ({ context, p } = await openSession(browser(), script))
   })
   after(async () => { await context.close() })
 
@@ -130,7 +127,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
   const label = () => labelOn(p)
 
   before(async () => {
-    ({ context, p } = await openSession(browser, script))
+    ({ context, p } = await openSession(browser(), script))
   })
   after(async () => { await context.close() })
 
@@ -160,7 +157,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
 
 describe('Redo after the Undos that took back a Restart', { concurrency: false }, () => {
   it('Restart, Undo, Undo, Redo leaves the mode on Cell with the givens colored, as a plain Restart does', async () => {
-    const { context, p } = await openSession(browser, script)
+    const { context, p } = await openSession(browser(), script)
     const undo = () => p.click('#control-undo')
     const redo = () => p.click('#control-redo')
     const digitAt = () => p.evaluate(() => Framework.app.grid.getCell(0, 2).propGet('normal') ?? null)
@@ -188,7 +185,7 @@ describe('Redo after the Undos that took back a Restart', { concurrency: false }
 describe('The first Undo after a Restart, saved', { concurrency: false }, () => {
   // Color by Digit colors again when the page loads, so the saved actions are read by a page without the script: SudokuPad's color tool toggles, and a coloring saved twice reads as none.
   it('saves the givens colored once: a reload without the script shows them colored', async () => {
-    const { context, p } = await openSession(browser, script)
+    const { context, p } = await openSession(browser(), script)
     try {
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
       await pressTo(p, 'Cell')
@@ -209,7 +206,7 @@ describe('The first Undo after a Restart, saved', { concurrency: false }, () => 
 
 describe('The first Undo after a Restart, with Text Anywhere loaded', { concurrency: false }, () => {
   it('brings its note back too', async () => {
-    const both = await openSession(browser, script)
+    const both = await openSession(browser(), script)
     try {
       const q = both.p
       await pressTo(q, 'Cell')

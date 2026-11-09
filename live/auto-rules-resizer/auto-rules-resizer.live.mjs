@@ -3,14 +3,13 @@
 // script is injected.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
+import { scriptSource, useBrowser } from '../session.mjs'
 import { openPage, startPuzzle } from '../page.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 
-const script = readFileSync(new URL('../../auto-rules-resizer.user.js', import.meta.url), 'utf8')
+const script = scriptSource('auto-rules-resizer.user.js')
 
 // Three lines at SudokuPad's own width in a 1920 x 1080 window, well under its 14rem cap: short rules.
 const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.'
@@ -39,13 +38,11 @@ const FONT_BAR = '#auto-rules-resizer-font'
 const WARNING = /^auto-rules-resizer: /
 const CORNER = (corner) => `#auto-rules-resizer-drag-${corner}`
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 // A page in a `viewport` window with the puzzle started and RULES shown. `seed()` runs before the script goes in.
 async function rulesPage (viewport, seed, rules = RULES, { expectedSkips } = {}) {
-  const opened = await openPage(browser, { contextOptions: { viewport }, expectedSkips })
+  const opened = await openPage(browser(), { contextOptions: { viewport }, expectedSkips })
   await startPuzzle(opened.p)
   await opened.p.evaluate((rules) => {
     Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
@@ -602,9 +599,7 @@ describe('the text of the fitted pane', { concurrency: false }, () => {
 })
 
 describe('the scrollbar track (a classic scrollbar, as Windows Chrome draws)', { concurrency: false }, () => {
-  let classic
-  before(async () => { classic = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] }) })
-  after(async () => { await classic?.close() })
+  const classic = useBrowser({ ignoreDefaultArgs: ['--hide-scrollbars'] })
 
   const trackWidth = (p) => p.evaluate(() => {
     const rules = document.querySelector('.puzzle-rules')
@@ -612,7 +607,7 @@ describe('the scrollbar track (a classic scrollbar, as Windows Chrome draws)', {
   })
 
   async function classicPage (rules) {
-    const opened = await openPage(classic, { contextOptions: { viewport: LANDSCAPE } })
+    const opened = await openPage(classic(), { contextOptions: { viewport: LANDSCAPE } })
     await startPuzzle(opened.p)
     await opened.p.evaluate((text) => {
       Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules: text })
@@ -744,7 +739,7 @@ describe('rules with blank lines (SudokuPad sets each newline as a break)', { co
 
 describe('the first paint of the fit (#542, row 10)', { concurrency: false }, () => {
   it('never shows SudokuPad\'s size once the script is in: the fit runs in the same task as the layout', async () => {
-    const { context, p, errors } = await openPage(browser, { contextOptions: { viewport: LANDSCAPE } })
+    const { context, p, errors } = await openPage(browser(), { contextOptions: { viewport: LANDSCAPE } })
     try {
       await startPuzzle(p)
       await inject(p)

@@ -3,13 +3,12 @@
 // during a drag, and no motion when the system asks for less.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { ARROW, BUTTON, EDITOR, MENU, openSession, savedProfiles, SEED } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
 const ROWS = `${EDITOR} [data-role=profile-row]`
 const THREE = { profiles: [...SEED.profiles, { name: 'Third', groups: [{ key: '9', digits: ['1', '2', '3'] }] }], active: 0 }
@@ -20,9 +19,7 @@ const GONE_WITHIN_MS = 1000
 // How far a drag goes past the last row's middle.
 const PAST_LAST_ROW_PX = 8
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const alphaOf = (color) => Number(/(?:,|\/)\s*([\d.]+)\)$/.exec(color)[1])
 
@@ -54,7 +51,7 @@ describe('chips, swatches and digit keys at 60%, an empty profile\'s blank cells
   let context, p, errors
 
   before(async () => {
-    ({ context, p, errors } = await openSession(browser, script, { saved: savedProfiles({ ...THREE, active: 1 }) }))
+    ({ context, p, errors } = await openSession(browser(), script, { saved: savedProfiles({ ...THREE, active: 1 }) }))
     await openScriptDialog(p, 'Color by Digit', EDITOR)
   })
   after(async () => { await context.close() })
@@ -90,7 +87,7 @@ describe('the profile menu\'s fade after a pick, injected after Start Puzzle', {
   let context, p, errors
 
   before(async () => {
-    ({ context, p, errors } = await openSession(browser, script, { saved: savedProfiles(THREE) }))
+    ({ context, p, errors } = await openSession(browser(), script, { saved: savedProfiles(THREE) }))
     await watchMenu(p)
   })
   after(async () => { await context.close() })
@@ -146,7 +143,7 @@ describe('the profile rows sliding aside during a drag, injected after Start Puz
   let context, p, errors
 
   before(async () => {
-    ({ context, p, errors } = await openSession(browser, script, { saved: savedProfiles(THREE) }))
+    ({ context, p, errors } = await openSession(browser(), script, { saved: savedProfiles(THREE) }))
     await openScriptDialog(p, 'Color by Digit', EDITOR)
   })
   after(async () => { await context.close() })
@@ -186,7 +183,7 @@ describe('reduced motion, injected after Start Puzzle', { concurrency: false }, 
   let context, p, errors
 
   before(async () => {
-    ({ context, p, errors } = await openSession(browser, script, { saved: savedProfiles(THREE), contextOptions: { reducedMotion: 'reduce' } }))
+    ({ context, p, errors } = await openSession(browser(), script, { saved: savedProfiles(THREE), contextOptions: { reducedMotion: 'reduce' } }))
     await watchMenu(p)
   })
   after(async () => { await context.close() })

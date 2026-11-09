@@ -2,16 +2,15 @@
 // crash signals (no page error, no console error, no skip line) beside what a user expects to see. Clicks, drags and key presses are real input; the
 // harness selects a cell, restarts the puzzle and reads state from the page.
 /* global Framework */
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { captureConsoleErrors, gotoPuzzle, restartPuzzle } from '../page.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, savedState, selectCell, startInjected, typeProfileName, wrongCountOn } from './color-by-digit-fixtures.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
 const NEW_PROFILE = `${EDITOR} button[data-act=new-profile]`
 // The script's limits on profiles and on a name's length.
@@ -22,9 +21,7 @@ const MODE_CYCLE = ['Cell', 'Digit', 'Both', 'Off']
 const ROW = 8
 const EMPTY_COLS = [0, 1, 2, 3, 5, 6]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on Color by Digit', { concurrency: false }, () => {
   let context, p, errors
@@ -57,7 +54,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
 
   // Every attack gets its own page with the profiles Odd/Even and Low/5/High saved, in Cell mode, and ends with the crash signals clean.
   beforeEach(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { seed: captureConsoleErrors }))
+    ;({ context, p, errors } = await openSession(browser(), script, { seed: captureConsoleErrors }))
     await pressTo(p, 'Cell')
     await settle(() => wrongCount(ODD_EVEN), 0)
   })

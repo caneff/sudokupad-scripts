@@ -1,15 +1,14 @@
 // Live check of color-by-digit.user.js on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { chromium } from 'playwright'
 import { startPuzzle } from '../page.mjs'
 import { BUTTON, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, savedState, SEED, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
 const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 // Two entered digits sit on empty cells: r1c3 = 4, r1c4 = 7.
@@ -22,9 +21,7 @@ const FIT_SLACK_PX = 1
 // How many stand-in buttons another script's row gets in the wrap test; enough to fill a second row.
 const OTHER_BUTTONS = 8
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -71,7 +68,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script))
+    ;({ context, p, errors } = await openSession(browser(), script))
   })
   after(async () => { await context.close() })
 

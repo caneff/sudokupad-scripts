@@ -4,11 +4,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, TEXT_BOX, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
 import { openPage, startPuzzle } from './page.mjs'
 import { seedOddEvenCells } from './puzzles.mjs'
-import { SCRIPT_FILES } from './session.mjs'
+import { SCRIPT_FILES, useBrowser } from './session.mjs'
 import { cellCentre, gridPoint, mouseDrag } from './board.mjs'
 import { goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
@@ -23,13 +22,11 @@ const PLAYBACK_MS = 60000
 // "Nothing happened" is not what these wait for: how long a tool key gets to switch the tool before the tool is read as unchanged.
 const KEY_SWITCHES_MS = 700
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 // A page with `files` injected after Start Puzzle, Color by Digit saved in Cell mode, and the pen and replay tools on.
 async function openSolver (files) {
-  const opened = await openPage(browser, { seed: seedOddEvenCells })
+  const opened = await openPage(browser(), { seed: seedOddEvenCells })
   await startPuzzle(opened.p)
   for (const file of files) await opened.p.addScriptTag({ content: readFileSync(new URL(file, ROOT), 'utf8') })
   await opened.p.evaluate(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolreplay', true) })
