@@ -1256,7 +1256,7 @@ test('the three controls are one 4rem square size, in one rule, in the order mod
   ;[['mode', 1], ['page', 2], ['settings', 3]].forEach(([name, order]) => assert.match(ruleOf(`.tool-pen .controls-input button.pen-tool-extras-${name}`), new RegExp(`order: ${order};`)))
 })
 
-test('the settings button is a button named Pen Tool Extras settings, drawing an outline gear in the panel color and no fill', () => {
+test('the settings button is a button named Pen Tool Extras settings, showing an outline gear in the panel color and no fill', () => {
   const html = renderSettingsButton()
   assert.match(html, /^<button class="pen-tool-extras-settings" data-control="penextras-settings" title="Pen Tool Extras settings" aria-label="Pen Tool Extras settings">/)
   assert.match(html, /<svg viewBox="[^"]+" fill="none" stroke="currentColor"/)

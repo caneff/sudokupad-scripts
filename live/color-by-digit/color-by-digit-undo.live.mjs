@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo, selectCell } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
-import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
+import * as textAnywhere from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
 import { flushSave } from '../attacks.mjs'
 import { reloadWith, scriptSource, useBrowser } from '../session.mjs'
@@ -204,19 +204,19 @@ describe('The first Undo after a Restart, saved', { concurrency: false }, () => 
 
 describe('The first Undo after a Restart, with Text Anywhere loaded', { concurrency: false }, () => {
   it('brings its note back too', async () => {
-    const both = await openSession(browser(), script, { also: [draw.script] })
+    const both = await openSession(browser(), script, { also: [textAnywhere.script] })
     try {
       const q = both.p
       await pressTo(q, 'Cell')
-      await q.locator(draw.DRAW_BUTTON).waitFor({ state: 'visible' })
-      await draw.pickDraw(q)
+      await q.locator(textAnywhere.TOOL_BUTTON).waitFor({ state: 'visible' })
+      await textAnywhere.pickTextAnywhere(q)
       await q.mouse.click(...await gridPoint(q, [2.5, 2.5]))
       await q.keyboard.type('15')
       await finishNote(q)
       await q.evaluate(() => Framework.app.restartPuzzle())
-      assert.deepEqual(await settle(() => draw.texts(q), []), [])
+      assert.deepEqual(await settle(() => textAnywhere.texts(q), []), [])
       await q.click('#control-undo')
-      assert.deepEqual(await settle(() => draw.texts(q), ['15']), ['15'])
+      assert.deepEqual(await settle(() => textAnywhere.texts(q), ['15']), ['15'])
     } finally {
       await both.context.close()
     }

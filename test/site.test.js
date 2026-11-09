@@ -39,7 +39,9 @@ test('every picture of a repo file on every page carries a ?v= tag matching its 
 })
 
 // #342: docs/research/ has one folder per script, and site/ for pictures of a whole page.
-const RESEARCH_FOLDERS = [...rootScripts().map(f => f.slice(0, -SCRIPT_SUFFIX.length)), 'site']
+// A script's folder is named for the script, from its @name less the SudokuPad prefix, not for its file, which keeps the address installed copies update from.
+const folderOf = file => fs.readFileSync(path.join(ROOT, file), 'utf8').match(/^\/\/ @name\s+SudokuPad (.+)$/m)[1].toLowerCase().replace(/ /g, '-')
+const RESEARCH_FOLDERS = [...rootScripts().map(folderOf), 'site']
 
 test('every picture the site loads is in a script folder of docs/research/ or in docs/research/site/, and one named for a script is in its folder', () => {
   for (const name of PAGES) {
@@ -501,7 +503,7 @@ test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated pictur
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the Text Anywhere panel section is not one picture')
   assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the Text Anywhere panel section is the intro and the picture only')
-  assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/draw-tool/draw-tool-panel-annotated.png"`))
+  assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/text-anywhere/text-anywhere-panel-annotated.png"`))
   const alt = altOf(found[0])
   for (const label of ['Color buttons', 'Background', 'Clear all', 'Settings', 'Size', 'Transparency']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
@@ -513,7 +515,7 @@ test(`${DRAW} shows one figure: the finished note, the same note open for typing
   const m = read(DRAW).match(/<h2>One note, every style<\/h2>\s*<div class="figure">([\s\S]*?)<\/div>\s*<h2>/)
   assert.ok(m, `site/${DRAW} has no figure under <h2>One note, every style</h2>`)
   const found = imgs(m[1])
-  assert.deepEqual(found.map(img => withoutTag(img).match(/src="([^"]*)"/)[1]), ['draw-tool-formatting.png', 'draw-tool-formatting-raw.png'].map(f => `${RAW}docs/research/draw-tool/${f}`))
+  assert.deepEqual(found.map(img => withoutTag(img).match(/src="([^"]*)"/)[1]), ['text-anywhere-formatting.png', 'text-anywhere-formatting-raw.png'].map(f => `${RAW}docs/research/text-anywhere/${f}`))
   for (const [i, words] of [['bold italics', 'underlined', 'struck through', 'nested bullet', 'numbered', 'ticked', 'code block', '→ ← ≠ ≤ ≥ Σ'], ['# Header one', '-# subtext', '***bold italics***', '~~struck through~~', '- [x] a ticked item', '```']].entries()) {
     for (const word of words) assert.ok(altOf(found[i]).includes(word), `the ${i ? 'second' : 'first'} picture's alt text does not name "${word}"`)
   }
@@ -546,7 +548,7 @@ shared({
   name: 'Text Anywhere',
   summary: DRAW_SUMMARY,
   intro: 'Adds to SudokuPad a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.',
-  homePicture: 'draw-tool-slide-1-type.png'
+  homePicture: 'text-anywhere-slide-1-type.png'
 })
 
 shared({

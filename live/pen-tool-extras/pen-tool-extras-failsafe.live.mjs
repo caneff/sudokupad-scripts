@@ -282,7 +282,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         assert.equal(pulldown, kase.pulldown || 'hidden', 'SudokuPad\'s line mode pulldown')
       })
 
-      // A dragged line is SudokuPad's own drawing; it needs the drag highlight, which one case removes.
+      // A dragged line is SudokuPad's own stroke; it needs the drag highlight, which one case removes.
       if (!kase.noDrag) {
         it('SudokuPad\'s own dragged line still draws', async () => {
           await undoAll(p)

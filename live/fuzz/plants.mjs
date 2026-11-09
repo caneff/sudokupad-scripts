@@ -44,8 +44,8 @@ export const PLANTS = [
     file: 'draw-tool.user.js',
     kind: 'rule',
     bug: 'Text Anywhere drops the first saved note when it loads them',
-    find: 'drawing = items\n      keptEntries = kept',
-    replace: 'drawing = items.slice(1)\n      keptEntries = kept',
+    find: 'puzzleNotes = items\n      keptEntries = kept',
+    replace: 'puzzleNotes = items.slice(1)\n      keptEntries = kept',
     expect: /notes-survive-reload|notes-saved-match-drawn/
   },
   {

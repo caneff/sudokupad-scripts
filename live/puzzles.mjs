@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { LOAD_MS } from './cache.mjs'
 import { GIVENS, MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { texts, tool } from './draw-tool/draw-tool-fixtures.mjs'
+import { texts, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { startPuzzle, START } from './page.mjs'
 import { cellCentre } from './board.mjs'
 import { clickUntil, SETTLE_MS } from './settle.mjs'
@@ -42,7 +42,7 @@ async function enableTools (p) {
   await p.evaluate(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolreplay', true) })
   await p.locator('#control-pen').waitFor({ state: 'visible' })
   await p.locator('#control-replay').waitFor({ state: 'visible' })
-  await p.locator('#control-draw').waitFor({ state: 'visible' })
+  await p.locator('#control-textanywhere').waitFor({ state: 'visible' })
   await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })
 }
 

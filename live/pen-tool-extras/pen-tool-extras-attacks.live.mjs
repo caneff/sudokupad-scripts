@@ -113,7 +113,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
     assert.equal(await settle(() => penDrawnCount(p), 0), 0)
   })
 
-  it('attack 38: change the line mode through all three mid-solve, drawing after each', async () => {
+  it('attack 38: change the line mode through all three mid-solve, with a line drawn after each', async () => {
     await goToPenPage(p, PAGE_ONE)
     await p.locator('.tool-pen button[data-key="1"]').click()
     // Center lines run from cell middle to cell middle; edge lines run along the middles of cell sides.
@@ -140,7 +140,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
     await drawIn([[6.5, 0.5], [6.5, 2.5]])
   })
 
-  it('attack 39: Thickness and Opacity at their limits, drawing marks and lines at each', async () => {
+  it('attack 39: Thickness and Opacity at their limits, with marks and lines drawn at each', async () => {
     const strokeWidths = async () => (await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((g) => { const st = window.getComputedStyle(g); return { strokeWidth: st.strokeWidth, transform: st.transform } }))).map(drawnWidth)
     const widest = {}
     for (const [name, thickness, opacity] of [['min', THICKNESS_LIMITS.min, OPACITY_LIMITS.min], ['max', THICKNESS_LIMITS.max, OPACITY_LIMITS.max]]) {

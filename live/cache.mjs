@@ -274,7 +274,7 @@ export async function ensureRecording ({ env, home, ppid, record, checkVersion, 
 }
 
 // Every URL a replay aborted for want of a recording. The process exits 1 naming them, so a recording with
-// gaps fails the run instead of drawing a page with a font or an image missing.
+// gaps fails the run instead of showing a page with a font or an image missing.
 export const misses = new Set()
 process.on('exit', () => {
   if (misses.size === 0) return

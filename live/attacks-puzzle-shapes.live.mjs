@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { openPage } from './page.mjs'
-import { TEXTS } from './draw-tool/draw-tool-fixtures.mjs'
+import { TEXTS } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { cellCentre, mouseDrag, placeNote } from './board.mjs'
 import { openPenTool, penEntries } from './pen.mjs'
 import { boardOf, CLASSIC_GIVENS, clickCell, installAll, NOTE_POINT, openPuzzleId, puzzleData, puzzleIdFor, seedOddEvenCells, useTool } from './puzzles.mjs'
@@ -14,8 +14,8 @@ import { useBrowser } from './session.mjs'
 
 // Long enough that the pane overflows at SudokuPad's own font in every shape here, so only Auto Rules Resizer makes it fit.
 const RULES = 'Normal sudoku rules apply. ' + 'Digits in a region may not repeat, and neither may digits in a row or a column of the grid. '.repeat(6)
-const NOTE_GUIDE_X = '#draw-tool-layer .draw-tool-snap-guide[data-axis="x"]'
-const NOTE_OUTLINE = '#draw-tool-layer .draw-tool-selection'
+const NOTE_GUIDE_X = '#text-anywhere-layer .text-anywhere-snap-guide[data-axis="x"]'
+const NOTE_OUTLINE = '#text-anywhere-layer .text-anywhere-selection'
 // The selection outline's line is 2 px wide, 2 px outside the note's box: its middle is 3 px out.
 const OUTLINE_MIDDLE_PX = 3
 const NEAR_PX = 0.6

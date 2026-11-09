@@ -1,7 +1,7 @@
 // Shared by the live checks: where a cell is on the screen, a click and a drag there with the real mouse, Undo back to the start,
 // Restart, and a Text Anywhere note placed. Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { pickDraw, SELECTED, TEXT_BOX, TEXTS } from './draw-tool/draw-tool-fixtures.mjs'
+import { pickTextAnywhere, SELECTED, TEXT_BOX, TEXTS } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { settle } from './settle.mjs'
 
 // The page point at the centre of the cell at [row, col], then the cell's width.
@@ -71,7 +71,7 @@ export async function typeText (page, at, text) {
 export async function placeNote (page, at, text) {
   const count = () => page.locator(TEXTS).count()
   const before = await count()
-  await pickDraw(page)
+  await pickTextAnywhere(page)
   await typeText(page, at, text)
   assert.equal(await settle(count, before + 1), before + 1, 'the note was placed')
 }

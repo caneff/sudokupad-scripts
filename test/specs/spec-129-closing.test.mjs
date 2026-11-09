@@ -39,10 +39,10 @@ test('the live files share one harness, and the recording is replaced only when 
   assert.deepEqual(moduleNames.filter((file) => /Start Puzzle\|Continue/.test(source(file))), ['cache.mjs'])
 
   // The site's own live file opens site/ from disk and never loads SudokuPad. The attack files boot through attacks.mjs, and Text Anywhere's through
-  // draw-tool-fixtures.mjs, which boot through session.mjs and page.mjs.
+  // text-anywhere-fixtures.mjs, which boot through session.mjs and page.mjs.
   for (const file of liveNames.filter((name) => name !== 'site-slideshow.live.mjs')) {
     const text = source(file)
-    assert.match(text, /from '\.\.?\/(page|session|draw-tool-fixtures|color-by-digit-fixtures|attacks)\.mjs'/, `${file} boots through the shared modules`)
+    assert.match(text, /from '\.\.?\/(page|session|text-anywhere-fixtures|color-by-digit-fixtures|attacks)\.mjs'/, `${file} boots through the shared modules`)
     assert.doesNotMatch(text, OWN_BOOT, `${file} boots through page.mjs`)
   }
 

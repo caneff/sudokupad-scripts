@@ -117,7 +117,7 @@ const FAILED_PASTES = [
   {
     file: 'draw-tool.user.js',
     entry: 'Text Anywhere',
-    editor: '#draw-tool-dialog',
+    editor: '#text-anywhere-dialog',
     pasted: { DrawTool_width: 3.5, DrawTool_opacity: 50, DrawTool_frame: true, DrawTool_font: 'fixed' },
     failing: 'DrawTool_font',
     shows: ['button[data-role="frame-pick"][data-value="on"]', 'select[data-role="font-choice"]']

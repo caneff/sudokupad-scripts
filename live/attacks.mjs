@@ -1,12 +1,12 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { pickDraw } from './draw-tool/draw-tool-fixtures.mjs'
+import { pickTextAnywhere } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { captureConsoleErrors } from './page.mjs'
 import { SCRIPTS } from './scripts.mjs'
 import { addScripts, openWith, reloadWith } from './session.mjs'
 
 export const NOTICE_BAR = '#sudokupad-scripts-notices [data-script]'
-export const NOTES = '#draw-tool-layer .draw-tool-text'
+export const NOTES = '#text-anywhere-layer .text-anywhere-text'
 
 const FILES = SCRIPTS.map((script) => script.file)
 
@@ -14,7 +14,7 @@ const FILES = SCRIPTS.map((script) => script.file)
 // a player starts. Picking Text Anywhere's tool first waits out the moment its button's click is dead.
 async function allReady (p) {
   for (const script of SCRIPTS) await script.ready(p)
-  await pickDraw(p)
+  await pickTextAnywhere(p)
   await p.click('#control-normal')
 }
 

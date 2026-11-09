@@ -190,7 +190,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
 
   it('the tool buttons of the other scripts stay visible', async () => {
     assert.equal(await p.locator('#control-pen').isVisible(), true)
-    assert.equal(await p.locator('#control-draw').isVisible(), true)
+    assert.equal(await p.locator('#control-textanywhere').isVisible(), true)
   })
 
   it('the page raised no error', () => {
