@@ -18,7 +18,7 @@ const HANDLE = '#draw-tool-layer .draw-tool-resize'
 // Typed out, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md); the browser writes a computed font-family with double quotes.
 const FIXED_STACK = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace'
 const NOTES = [
-  { kind: 'text', color: 4, size: 26, opacity: 100, text: 'A=B+5', at: [200, 200] },
+  { kind: 'text', color: 4, size: 26, opacity: 100, text: 'iiiiii WWW', at: [200, 200] },
   { kind: 'text', color: 6, size: 20, opacity: 100, text: '- one\n- two', at: [200, 400] }
 ]
 
@@ -71,11 +71,11 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
   it('Fixed width and Save puts every note in the monospace stack, a selected note\'s box follows its new width, and a reload keeps it', async () => {
     // The handles sit on the box the script measured for the selected note, so their span moves with the note's drawn width only when that box was measured again.
     const shape = () => p.evaluate(([notes, handles]) => {
-      const note = [...document.querySelectorAll(notes)].find((e) => e.textContent === 'A=B+5')
+      const note = [...document.querySelectorAll(notes)].find((e) => e.textContent === 'iiiiii WWW')
       const xs = [...document.querySelectorAll(handles)].map((h) => h.getBoundingClientRect().left)
       return { width: note.getBoundingClientRect().width, span: Math.max(...xs) - Math.min(...xs) }
     }, [TEXTS, HANDLE])
-    const [x, y] = await draw.noteStart(p, 'A=B+5')
+    const [x, y] = await draw.noteStart(p, 'iiiiii WWW')
     await p.mouse.click(x + 4, y)
     await p.locator(HANDLE).first().waitFor()
     const before = await shape()
