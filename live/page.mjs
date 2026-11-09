@@ -2,13 +2,16 @@
 // injected at any of the three times a userscript can load. Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import assert from 'node:assert/strict'
-import { readdirSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { LOAD_MS, puzzleUrl, routeSudokuPad, START } from './cache.mjs'
 import { settle } from './settle.mjs'
 
 export { START }
 
 export const PUZZLE_URL = puzzleUrl()
+
+// The key the scripts' guard keeps the shared error log under, read from the shared module so a test cannot drift from it.
+export const ERROR_LOG_KEY = /const ERROR_LOG_KEY = '([^']+)'/.exec(readFileSync(new URL('../lib/sudokupad.js', import.meta.url), 'utf8'))[1]
 
 // The injection times a check can ask for: a script that waits on SudokuPad's own startup behaves differently at each.
 export const MODES = ['document-idle', 'before-start', 'after-start']
