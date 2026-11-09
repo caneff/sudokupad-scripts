@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { PROFILES_KEY } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { saved as savedNotes, TEXTS } from '../draw-tool/draw-tool-fixtures.mjs'
+import { POLL_MS } from '../settle.mjs'
 import { rulesPaneFits } from './rules.mjs'
 
 const { stateFromStored, activeGroups } = createRequire(import.meta.url)('../../color-by-digit.user.js')
@@ -12,7 +13,6 @@ const COLOR_BUTTON_TITLE = /^Color by digit: (\w+)$/
 // Auto Rules Resizer refits 100 ms after the last resize, and the rules are read once they fit or this long has passed: a wait on a condition, so a slow box
 // reads the finished fit, and a pane that never fits is still read and reported.
 const RULES_FIT_MS = 2000
-const POLL_MS = 50
 
 // What the page holds that the rules read, in one round trip.
 const readDom = ({ texts, profilesKey }) => {
