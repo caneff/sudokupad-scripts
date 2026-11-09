@@ -1,8 +1,9 @@
-// The fuzz engine: fast-check generates action lists (`actions.mjs`), each list runs on a page of its own, the crash signals are read after every
-// action and once more 200 ms after the last, and a failing list is shrunk and reported with the numbers that replay it. It knows no browser: the
+// The fuzz engine: fast-check generates action lists (`actions.mjs`), each list runs on a page of its own, the crash signals and the rules (`rules.mjs`) are
+// read after every action and once more 200 ms after the last, and a failing list is shrunk and reported with the numbers that replay it. It knows no browser: the
 // page comes from `openTarget` (`fuzz.mjs` opens real SudokuPad, `fake-target.mjs` a fake one for the unit tests). Not a check itself.
 import fc from 'fast-check'
 import { actionList } from './actions.mjs'
+import { ruleViolations } from './rules.mjs'
 import { crashSignals } from './signals.mjs'
 
 // fast-check issue #462: errors can land after the last action returns, so the property waits this long and then reads them, inside the same
@@ -25,23 +26,35 @@ function assertClean (snapshot, when) {
   if (signals.length) throw new Error(`${signals.length === 1 ? 'crash signal' : 'crash signals'} ${when}: ${signals.join('; ')}`)
 }
 
+// Throws when a rule is broken between two snapshots; `action` is the kind (`actions.mjs`) of the action between them and `when` says after which.
+function assertRules (now, before, action, when) {
+  const broken = ruleViolations({ now, before, action })
+  if (broken.length) throw new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`)
+}
+
 // Runs one generated list on a page of its own. A page is never reused between runs: Restart empties the replay but leaves the earlier digits
 // behind Undo, which would make a run depend on the runs before it and break replay (docs/research/ui-fuzz-tools.md).
 async function runList (openTarget, actions, landMs, settleMs) {
   const target = await openTarget()
   try {
+    let before = await target.snapshot()
     const checked = (action) => ({
       check: (model) => action.check(model),
       toString: () => action.toString(),
       async run (model, real) {
         await action.run(model, real)
         await target.wait(settleMs)
-        assertClean(await target.snapshot(), `after "${action}"`)
+        const now = await target.snapshot()
+        assertClean(now, `after "${action}"`)
+        assertRules(now, before, action.cmd.kind, `after "${action}"`)
+        before = now
       }
     })
     await fc.asyncModelRun(() => ({ model: { selected: false }, real: { env: target.env } }), [...actions].map(checked))
     await target.wait(landMs)
-    assertClean(await target.snapshot(), 'after the last action')
+    const last = await target.snapshot()
+    assertClean(last, 'after the last action')
+    assertRules(last, before, 'wait', 'after the last action')
   } catch (error) {
     // A log that cannot be read is said so: an empty answer would read as a page with nothing logged.
     error.errorLog = await target.errorLog().catch((e) => [`the error log could not be read: ${e.message}`])

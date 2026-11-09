@@ -6,7 +6,7 @@ import { runFuzz } from './engine.mjs'
 import { fakeTargets } from './fake-target.mjs'
 
 const CELLS = Array.from({ length: 12 }, (_, i) => [Math.floor(i / 4), i % 4])
-const SEED = 5
+const SEED = 7
 // The fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const WAITS = { landMs: 1, settleMs: 1 }
 
@@ -71,6 +71,48 @@ describe('the fuzz engine on a fake page', () => {
     it('the same seed without the planted error passes', async () => {
       const { openTarget } = fakeTargets()
       assert.equal((await runFuzz({ openTarget, cells: CELLS, seed: found.seed, runs: 40, ...WAITS })).failed, false)
+    })
+  })
+
+  describe('a rule broken by a blur', () => {
+    it('fails the run naming the rule and the step, and is shrunk to the one blur', async () => {
+      const { openTarget } = fakeTargets({ whitenOnBlur: true })
+      const found = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 200, ...WAITS })
+      assert.equal(found.failed, true)
+      assert.match(found.error, /rule broken after ".*blur.*": page-stays-dark: the page color rgb\(255, 255, 255\) is not dark/)
+      assert.equal(found.sequence.length, 1, found.sequence.join(' | '))
+      assert.match(found.sequence[0], /blur/)
+    })
+
+    it('the same seed with the page left dark passes', async () => {
+      const { openTarget } = fakeTargets()
+      assert.equal((await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 100, ...WAITS })).failed, false)
+    })
+  })
+
+  describe('a rule that depends on the kind of action', () => {
+    it('is told the kind: a Tab that turns the pad to letters fails the run, shrunk to the one Tab', async () => {
+      const { openTarget } = fakeTargets({ lettersOnTab: true })
+      const found = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 300, ...WAITS })
+      assert.equal(found.failed, true)
+      assert.match(found.error, /rule broken after "press Tab": tab-not-letters: Tab switched the number pad to letters/)
+      assert.deepEqual(found.sequence, ['press Tab'])
+    })
+  })
+
+  describe('where a broken rule is read', () => {
+    it('a rule broken only after a wait is caught by the read after the last action', async () => {
+      const { openTarget } = fakeTargets({ whitenOnWait: true })
+      const found = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 200, landMs: 1, settleMs: 0 })
+      assert.equal(found.failed, true)
+      assert.match(found.error, /rule broken after the last action: page-stays-dark/)
+    })
+
+    it('each rule compares an action with the snapshot just before it, not the one at the start of the list', async () => {
+      // Letters from a blur on are no Tab's doing: a Tab after it sees letters before and after.
+      const { openTarget } = fakeTargets({ lettersOnBlur: true })
+      const result = await runFuzz({ openTarget, cells: CELLS, seed: SEED, runs: 300, ...WAITS })
+      assert.equal(result.failed, false, result.error)
     })
   })
 

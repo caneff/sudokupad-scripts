@@ -4,11 +4,12 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { ERROR_LOG_KEY, captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
 import { NOTICE_BAR } from '../attacks.mjs'
-import { cellCentre, openPenTool, PAGE_BUTTON } from '../pen.mjs'
+import { cellCentre, openPenTool, PAGE_BUTTON, undoAll } from '../pen.mjs'
 import { closeExtrasEditorWith, openExtrasEditor, openScriptDialog } from '../settings.mjs'
 import { finishNote, pickDraw, TEXT_BOX, TEXTS } from '../draw-tool/draw-tool-fixtures.mjs'
 import { installAll, puzzleData, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { runFuzz } from './engine.mjs'
+import { readPageState } from './page-state.mjs'
 import { newestErrorRecords } from './signals.mjs'
 
 // A 6x6 with 2x3 boxes and six givens: a puzzle that is not a standard 9x9 (#590 Q7).
@@ -21,6 +22,9 @@ export const PUZZLES = [
 ]
 export const puzzleFor = (seed) => PUZZLES[Math.abs(seed) % PUZZLES.length]
 
+// The rules text every fuzz page shows: twenty times a short paragraph, which at every fuzz window size Auto Rules Resizer has to shrink below SudokuPad's own font
+// to fit and can (the recorded puzzle has no rules of its own).
+const RULES_TEXT = Array(20).fill('Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.').join(' ')
 // A page error thrown after an Escape pressed while a mouse button is down: the planted failure the smoke test and `--plant-escape-error` use.
 const plantEscapeError = (p) => p.addInitScript(() => {
   let down = false
@@ -28,6 +32,14 @@ const plantEscapeError = (p) => p.addInitScript(() => {
   window.addEventListener('mouseup', () => { down = false }, true)
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && down) setTimeout(() => { throw new Error('planted page error') }, 0) }, true)
 })
+
+// Shows the rules text the way a loaded puzzle gets it; the snapshot waits for the fit.
+async function showRules (p) {
+  await p.evaluate((rules) => {
+    Framework.app.showMetaInfoUI({ title: 'fuzz', author: 'fuzz', rules })
+    Framework.app.resize()
+  }, RULES_TEXT)
+}
 
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
 // with nothing to undo) is pressed like a user presses it, and nothing happens. An element that is not there is a crash: a script lost its control.
@@ -59,6 +71,7 @@ function envFor (p, cells) {
     },
     undo: () => clickIn(p, '#control-undo'),
     redo: () => clickIn(p, '#control-redo'),
+    undoAll: () => undoAll(p),
     clickColorMode: () => clickIn(p, '#control-colorbydigit'),
     async placeNote (text, i) {
       await pickNotes()
@@ -89,6 +102,7 @@ function envFor (p, cells) {
       // The intro dialog (Resume Puzzle) can show after the board does, which `resumeAfterHistory` alone would not wait for.
       await startPuzzle(p)
       await resumeAfterHistory(p)
+      await showRules(p)
     },
     async darkPage (color, save) {
       await openScriptDialog(p, 'Dark Page', 'input[type=color]')
@@ -110,11 +124,14 @@ export async function openTarget (browser, puzzle, { planted }) {
   })
   try {
     await puzzle.open(p)
+    // Tab must have a letter tool to switch to, and the page needs rules for Auto Rules Resizer to fit.
+    await p.evaluate(() => Framework.setSetting('toolletter', true))
+    await showRules(p)
     const cells = await freeCells(p)
     return {
       env: envFor(p, cells),
       cells,
-      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR) }),
+      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR), page: await readPageState(p) }),
       wait: (ms) => sleep(ms),
       errorLog: async () => newestErrorRecords(await p.evaluate((key) => window.localStorage.getItem(key), ERROR_LOG_KEY)),
       close: () => context.close()
