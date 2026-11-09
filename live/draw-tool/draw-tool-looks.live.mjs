@@ -3,10 +3,9 @@
 // border and a purple ring; a selected note's outline and the selection rectangle are solid. Real mouse input, computed styles read off the page.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { DIGIT_BUTTON, TEXT_BOX, TEXTS, pickDraw } = draw
 const SELECTION = '#draw-tool-layer .draw-tool-selection'
@@ -23,9 +22,7 @@ const ITEMS = [
   { kind: 'text', color: 1, size: 20, opacity: 40, bg: true, text: 'F', at: [288, 480] }
 ]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s looks', { concurrency: false }, () => {
   let context, p, errors
@@ -34,7 +31,6 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     await p.mouse.move(...await draw.middleAt(p, await gridPoint(p, at)))
     await draw.frames(p)
   }
-  // The computed values of `props` on the first element matching `selector` whose text is `text`, or the first at all.
   const styleOf = (selector, props, text) => p.evaluate(([s, names, t]) => {
     const found = [...document.querySelectorAll(s)].find((e) => t === undefined || e.textContent === t)
     const style = window.getComputedStyle(found)
@@ -48,11 +44,9 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
   const PURPLE = [0x6a, 0x1b, 0x9a].map((v) => v / 255)
   const nearPurple = (color) => channelsOf(color).every((v, i) => Math.abs(v - PURPLE[i]) < 0.01)
 
+  // The fade in has its own live check; here the outline is read as soon as the pointer is over the note.
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
-    // The fade in has its own live check; here the outline is read as soon as the pointer is over the note.
-    await p.emulateMedia({ reducedMotion: 'reduce' })
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 }, reducedMotion: 'reduce' } }))
     await draw.forgetDrawings(p)
     await draw.plantDrawing(p, ITEMS)
     await draw.reload(p)
@@ -95,14 +89,14 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     await moveTo(A)
     assert.equal((await noteStyle('A', ['outlineStyle'])).outlineStyle, 'none', 'the selected note has no hover outline')
     assert.equal(await p.locator(SELECTION).count(), 1)
-    await draw.finishNote(p)
+    await finishNote(p)
     await draw.reopen(p, await gridPoint(p, A))
     await p.locator(TEXT_BOX).waitFor()
     await moveTo(A)
     const open = await styleOf(TEXT_BOX, ['outlineStyle', 'backgroundImage'])
     assert.notEqual(open.outlineStyle, 'solid', 'the open note has no hover outline')
     assert.equal(open.backgroundImage, 'none', 'and no hover fill')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('the cursor is move on a closed note and text in the open one', async () => {
@@ -111,7 +105,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     await draw.reopen(p, await gridPoint(p, B))
     await p.locator(TEXT_BOX).waitFor()
     assert.equal((await styleOf(TEXT_BOX, ['cursor'])).cursor, 'text')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('the resize handles are 11 px squares with a 2 px white border, a purple ring and a shadow', async () => {
@@ -134,7 +128,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
   it('a selected note\'s outline is solid and 2 px', async () => {
     const outline = await styleOf(SELECTION, ['outlineStyle', 'outlineWidth'])
     assert.deepEqual(outline, { outlineStyle: 'solid', outlineWidth: '2px' })
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('the selection rectangle is a solid 1 px line with a faint fill', async () => {

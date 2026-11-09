@@ -3,20 +3,17 @@
 // the colors and the size.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '../settings.mjs'
+import { STATUS, actButton, closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '../settings.mjs'
+import { useBrowser } from '../session.mjs'
 
-const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, SIZE_SLIDER, WIDTH_KEY, pickDraw, script, valueOf } = draw
+const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SIZE_SLIDER, WIDTH_KEY, pickDraw, script, valueOf } = draw
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const SUDOKUPAD_COLORS = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000' }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
-const open = () => openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
+const open = () => draw.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
 const read = (p, fn, arg) => p.evaluate(fn, arg)
 const savedColors = (p) => read(p, (key) => Framework.getData(key) ?? null, COLORS_KEY)
 const dialogColors = (p) => p.locator(`${EDITOR} input[type=color]`).evaluateAll((inputs) => Object.fromEntries(inputs.map((i) => [i.dataset.key, i.value])))
@@ -25,7 +22,6 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
   let context, p, errors
   before(async () => {
     ;({ context, p, errors } = await open())
-    await draw.boot(p)
   })
   after(async () => { await context.close() })
 
@@ -92,7 +88,7 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
   it('Copy settings then Paste settings in a fresh page restores the colors, size, transparency, outline, box color, frame and font, and carries nothing else', async () => {
     await read(p, (values) => Object.entries(values).forEach(([key, value]) => Framework.setData(key, value)), { [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' })
     await p.click(SETTINGS_BUTTON)
-    await p.locator('.dialog button[data-act="copy-settings"]').click()
+    await actButton(p, 'copy-settings').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
     const copied = await p.evaluate(() => navigator.clipboard.readText())
     assert.deepEqual(Object.keys(JSON.parse(copied)).sort(), [BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, WIDTH_KEY], 'colors, size, transparency, outline, box color, frame and font only')
@@ -100,11 +96,10 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
 
     const other = await open()
     try {
-      await draw.boot(other.p)
       await pickDraw(other.p)
       await other.p.evaluate((t) => navigator.clipboard.writeText(t), copied)
       await other.p.click(SETTINGS_BUTTON)
-      await other.p.locator('.dialog button[data-act="paste-settings"]').click()
+      await actButton(other.p, 'paste-settings').click()
       await other.p.locator(STATUS).filter({ hasText: 'Pasted 7 settings.' }).waitFor()
       assert.deepEqual(await savedColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
       assert.deepEqual(await dialogColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
@@ -139,7 +134,6 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     const bad = { 1: 'red', 4: '#123456' }
     const other = await open()
     try {
-      await draw.boot(other.p)
       await read(other.p, ([key, value]) => Framework.setData(key, value), [COLORS_KEY, bad])
       await draw.reload(other.p)
       await pickDraw(other.p)

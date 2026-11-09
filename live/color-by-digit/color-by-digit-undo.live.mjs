@@ -2,20 +2,16 @@
 // the button and the board must agree after either.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo, selectCell } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
-import { gridPoint } from '../pen.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 import { flushSave } from '../attacks.mjs'
-import { startPuzzle } from '../page.mjs'
+import { reloadWith, scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Undo and Redo after a mode change', { concurrency: false }, () => {
   let context, p
@@ -26,7 +22,7 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
   const label = () => labelOn(p)
 
   before(async () => {
-    ({ context, p } = await openSession(browser, script))
+    ({ context, p } = await openSession(browser(), script))
   })
   after(async () => { await context.close() })
 
@@ -98,7 +94,7 @@ describe('Undo after a Restart', { concurrency: false }, () => {
   const label = () => labelOn(p)
 
   before(async () => {
-    ({ context, p } = await openSession(browser, script))
+    ({ context, p } = await openSession(browser(), script))
   })
   after(async () => { await context.close() })
 
@@ -107,7 +103,8 @@ describe('Undo after a Restart', { concurrency: false }, () => {
     await pressTo(p, 'Cell')
     assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
     await p.evaluate(() => Framework.app.restartPuzzle())
-    await settle(async () => (await coloredCount()) > 0, true)
+    assert.equal(await settle(async () => (await coloredCount()) > 0, true), true, 'the Restart leaves the board colored')
+    assert.equal(await label(), 'Cell')
     // Whatever each Undo takes back, a colored board means Cell and an uncolored one means Off.
     const agree = async () => (await label()) === ((await coloredCount()) > 0 ? 'Cell' : 'Off')
     let undos = 0
@@ -116,6 +113,7 @@ describe('Undo after a Restart', { concurrency: false }, () => {
       undos++
       assert.equal(await settle(agree, true), true, `after Undo ${undos}: ${await label()}, ${await coloredCount()} colored`)
     }
+    assert.equal(undos > 0, true, 'at least one Undo was checked')
     assert.deepEqual([await label(), await coloredCount()], ['Off', 0])
   })
 })
@@ -128,7 +126,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
   const label = () => labelOn(p)
 
   before(async () => {
-    ({ context, p } = await openSession(browser, script))
+    ({ context, p } = await openSession(browser(), script))
   })
   after(async () => { await context.close() })
 
@@ -158,7 +156,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
 
 describe('Redo after the Undos that took back a Restart', { concurrency: false }, () => {
   it('Restart, Undo, Undo, Redo leaves the mode on Cell with the givens colored, as a plain Restart does', async () => {
-    const { context, p } = await openSession(browser, script)
+    const { context, p } = await openSession(browser(), script)
     const undo = () => p.click('#control-undo')
     const redo = () => p.click('#control-redo')
     const digitAt = () => p.evaluate(() => Framework.app.grid.getCell(0, 2).propGet('normal') ?? null)
@@ -186,18 +184,18 @@ describe('Redo after the Undos that took back a Restart', { concurrency: false }
 describe('The first Undo after a Restart, saved', { concurrency: false }, () => {
   // Color by Digit colors again when the page loads, so the saved actions are read by a page without the script: SudokuPad's color tool toggles, and a coloring saved twice reads as none.
   it('saves the givens colored once: a reload without the script shows them colored', async () => {
-    const { context, p } = await openSession(browser, script)
+    const { context, p } = await openSession(browser(), script)
     try {
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
       await pressTo(p, 'Cell')
       await p.evaluate(() => Framework.app.restartPuzzle())
-      const givens = await settle(() => givensColoredOn(p), 30)
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
       await p.click('#control-undo')
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT, 'the givens are colored after the Undo')
       assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined), true), true)
       await flushSave(p)
-      await p.reload({ waitUntil: 'load' })
-      await startPuzzle(p)
-      assert.equal(await settle(() => givensColoredOn(p), givens), givens)
+      await reloadWith(p, [])
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT, 'a reload without the script shows them colored')
     } finally {
       await context.close()
     }
@@ -206,16 +204,15 @@ describe('The first Undo after a Restart, saved', { concurrency: false }, () => 
 
 describe('The first Undo after a Restart, with Text Anywhere loaded', { concurrency: false }, () => {
   it('brings its note back too', async () => {
-    const both = await openSession(browser, script)
+    const both = await openSession(browser(), script, { also: [draw.script] })
     try {
       const q = both.p
       await pressTo(q, 'Cell')
-      await q.addScriptTag({ content: draw.script })
       await q.locator(draw.DRAW_BUTTON).waitFor({ state: 'visible' })
       await draw.pickDraw(q)
       await q.mouse.click(...await gridPoint(q, [2.5, 2.5]))
       await q.keyboard.type('15')
-      await draw.finishNote(q)
+      await finishNote(q)
       await q.evaluate(() => Framework.app.restartPuzzle())
       assert.deepEqual(await settle(() => draw.texts(q), []), [])
       await q.click('#control-undo')

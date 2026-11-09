@@ -35,8 +35,8 @@ const outsideBlocks = (source) => source.split('\n').filter(((inside) => (line) 
 // names and in step with lib/ (the sync check, naming its command), no script keeping its own copy of a module's names, one
 // parseColor for every color format, each script still one file with no @require, sync-lib.js at the root and out of site/,
 // and the rules that state the scheme. This seam is blind to real SudokuPad: the shared picker's hold and palette modes, the
-// dialogs' title rows and Copy/Paste icons, the sliders' drag and the panels' look are `npm run test:live`'s, and neither run
-// covers a real Tampermonkey install.
+// dialogs' title rows and Copy/Paste icons, the sliders' drag and the panels' look are `npm run test:live`'s, and a real
+// Tampermonkey install is `npm run test:tampermonkey`'s.
 test('spec 334: shared lib/ modules copied into each script, kept in sync by node sync-lib.js', () => {
   // Every module exists, with its own test.
   for (const name of Object.keys(CARRIES)) {

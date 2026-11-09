@@ -3,10 +3,10 @@
 // point changes only when the solver moves it, so with the window restored it is back at its own place.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
 import { settle, stable } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote } from '../board.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
 const WIDE = { width: 1600, height: 900 }
@@ -16,9 +16,7 @@ const HOME = { width: 1200, height: 900 }
 const RIGHT_OF_PANEL = [1143, 541]
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: 'fixed', fixed: RIGHT_OF_PANEL }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s fixed note after the window changes', { concurrency: false }, () => {
   let context, p, errors
@@ -38,10 +36,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
   })
   const overPanel = ({ note, panel }) => note.right > panel.left && note.left < panel.right && note.bottom > panel.top && note.top < panel.bottom
   const insideWindow = ({ note, window: [w, h] }) => note.left >= 0 && note.top >= 0 && note.right <= w && note.bottom <= h
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
   const start = async () => {
     await resizeTo(HOME)
     await draw.plantDrawing(p, [NOTE])
@@ -50,13 +45,11 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
   })
   after(async () => { await context.close() })
 
-  // The note's text starts back on its own point, and its stored point is that point.
   const atHome = async () => {
     const point = await settle(async () => (await boxes()).point.map(Math.round), RIGHT_OF_PANEL)
     assert.deepEqual(point, RIGHT_OF_PANEL, 'drawn at its own point')
@@ -70,7 +63,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     await atHome()
     await p.mouse.dblclick(...draw.middleOf((await boxes()).note))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click on the note over the panel opens it')
-    await draw.finishNote(p)
+    await finishNote(p)
     await atHome()
     await reload()
     assert.equal(overPanel(await boxes()), true, 'still under the panel over a reload')
@@ -92,7 +85,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     assert.deepEqual((await boxes()).point.map(Math.round), under, 'drawn at its own point')
     await p.mouse.dblclick(...draw.middleOf((await boxes()).note))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click on the note over the top bar opens it')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual((await saved())[0].fixed, under, 'stored at its own point')
   })
 

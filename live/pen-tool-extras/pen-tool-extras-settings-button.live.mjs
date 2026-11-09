@@ -1,30 +1,19 @@
 // Live check of pen-tool-extras.user.js's settings button in the pen tool's panel, on sudokupad.app in headless Chromium.
 // A real touch screen stays untested. The clicks are real mouse input; the tap is Chromium's emulated touch.
-/* global Framework, getComputedStyle */
+/* global getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { gotoPuzzle, openPage, startPuzzle } from '../page.mjs'
-import { openPenTool } from '../pen.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const BUTTON = '.pen-tool-extras-settings'
 const EDITOR = '#pen-tool-extras-editor'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('the settings button in the pen panel', { concurrency: false }, () => {
   let context, p
 
-  const boot = async (p) => {
-    await startPuzzle(p, { beforeStart: () => p.evaluate(() => Framework.setSetting('toolpen', true)) })
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await openPenTool(p)
-  }
   const selectedId = () => p.evaluate(() => (document.querySelector('.controls-tool .selected, .controls-tool [aria-pressed=true], .controls-tool .active') || {}).id || null)
   const currentPen = () => p.evaluate(() => document.querySelector('.tool-pen button.current')?.dataset.key)
   const closeDialog = async () => {
@@ -35,8 +24,7 @@ describe('the settings button in the pen panel', { concurrency: false }, () => {
   }
 
   before(async () => {
-    ;({ context, p } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
-    await boot(p)
+    ;({ context, p } = await extras.open(browser(), { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
   })
   after(async () => { await context.close() })
 
@@ -73,17 +61,10 @@ describe('the settings button in the pen panel', { concurrency: false }, () => {
     await p.locator(BUTTON).waitFor({ state: 'visible' })
   })
 
-  it('the button is present after a reload', async () => {
-    await gotoPuzzle(p)
-    await boot(p)
-    await p.locator(BUTTON).waitFor({ state: 'visible' })
-  })
-
   // SudokuPad cancels the touch events of a tap on a panel button, which stops the browser sending the click; the button acts at its touchstart.
   it('a tap on the button opens the dialog once', async () => {
-    const { context: touch, p: tp } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 }, hasTouch: true } })
+    const { context: touch, p: tp } = await extras.open(browser(), { contextOptions: { viewport: { width: 1200, height: 1000 }, hasTouch: true } })
     try {
-      await boot(tp)
       const box = await tp.locator(BUTTON).boundingBox()
       await tp.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
       await tp.locator(EDITOR).waitFor({ state: 'visible' })

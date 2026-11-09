@@ -4,22 +4,18 @@
 // as before.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { EDITOR, openSession, paintedKeys, PROFILES_KEY, SEED, savedState } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { captureConsoleErrors } from '../page.mjs'
 import { settle } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
-// The digit keys of a drag across the first row of the pad, and of one across the second.
 const FIRST_ROW = ['1', '2', '3']
 const SECOND_ROW = ['4', '5', '6']
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Color by Digit\'s editor paint drag, interrupted', { concurrency: false }, () => {
   let context, p, errors
@@ -31,7 +27,7 @@ describe('Color by Digit\'s editor paint drag, interrupted', { concurrency: fals
   const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { seed: captureConsoleErrors }))
+    ;({ context, p, errors } = await openSession(browser(), script, { seed: captureConsoleErrors }))
   })
   after(async () => { await context.close() })
 
@@ -67,9 +63,5 @@ describe('Color by Digit\'s editor paint drag, interrupted', { concurrency: fals
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual((await savedProfiles()).profiles, SEED.profiles, 'Cancel saves nothing')
     assert.deepEqual(errors, [], 'the page shows no error afterward')
-  })
-
-  it('the page shows no error', () => {
-    assert.deepEqual(errors, [])
   })
 })

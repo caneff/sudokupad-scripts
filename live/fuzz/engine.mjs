@@ -9,25 +9,23 @@ import { crashSignals } from './signals.mjs'
 
 // fast-check issue #462: errors can land after the last action returns, so the property waits this long and then reads them, inside the same
 // property, so a late error still fails and still shrinks.
-export const ERRORS_LAND_MS = 200
+const ERRORS_LAND_MS = 200
 // And after every action, this long before its signals are read, so an error that lands a moment later (a timer, a frame) is blamed on the action that
 // caused it. fast-check never removes the last action of a list in a shrink, so an error read only after the list would keep one stray step.
-export const ACTION_SETTLE_MS = 40
+const ACTION_SETTLE_MS = 40
 // No number of runs: the time limit or `runs` ends the hunt.
 const UNBOUNDED = 1000000
-export const DEFAULT_MINUTES = 2
+const DEFAULT_MINUTES = 2
 // A failure is shrunk for at most this long; a list shrunk that far is reported as it stands.
-export const DEFAULT_SHRINK_MINUTES = 10
+const DEFAULT_SHRINK_MINUTES = 10
 
 const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
 
-// Throws when the snapshot holds a crash signal; `when` says after which action.
 function assertClean (snapshot, when) {
   const signals = crashSignals(snapshot)
   if (signals.length) throw new Error(`${signals.length === 1 ? 'crash signal' : 'crash signals'} ${when}: ${signals.join('; ')}`)
 }
 
-// Throws when a rule is broken between two snapshots; `action` is the kind (`actions.mjs`) of the action between them and `when` says after which.
 function assertRules (now, before, action, when, earlier) {
   const broken = ruleViolations({ now, before, action, earlier })
   if (broken.length) throw new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`)

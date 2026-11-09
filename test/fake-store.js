@@ -1,17 +1,15 @@
 'use strict'
 
-// Framework's getData, setData and removeData over a plain object; getData reads null for a missing key, as Framework does.
+// Framework's getData, setData and removeData over `saved` itself, so a test reads what was written there; getData reads null for a missing key, as Framework does.
 function fakeStore (saved = {}) {
-  const data = { ...saved }
   return {
-    data,
-    getData: (key) => (key in data ? data[key] : null),
-    setData: (key, value) => { data[key] = value },
-    removeData: (key) => { delete data[key] }
+    data: saved,
+    getData: (key) => (key in saved ? saved[key] : null),
+    setData: (key, value) => { saved[key] = value },
+    removeData: (key) => { delete saved[key] }
   }
 }
 
-// Runs `run` with console.warn caught, so a test can read what an unreadable value logged.
 function quietly (run) {
   const warn = console.warn
   const warnings = []

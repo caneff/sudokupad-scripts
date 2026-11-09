@@ -4,12 +4,11 @@
 /* global document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { ARROW, BUTTON, labelOn, MENU, openSession, pressTo } from './color-by-digit-fixtures.mjs'
 import { stable } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 const ROW = '.controls-aux'
 const PER_ROW = 5
 const VIEWPORTS = [{ width: 1280, height: 720 }, { width: 1600, height: 900 }]
@@ -23,11 +22,8 @@ const addStandIns = `
 `
 const addStandInsAfter = (p) => p.evaluate(`(() => { ${addStandIns}; Framework.app.refreshControls() })()`)
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
-// The row's buttons grouped into visual rows by their top edge, as the ids in each, and every control button's box.
 const layout = (p) => p.evaluate((row) => {
   const boxes = [...document.querySelectorAll('#controls button')].map((b) => { const r = b.getBoundingClientRect(); return { id: b.id, left: r.left, top: r.top, right: r.right, bottom: r.bottom, view: { width: window.innerWidth, height: window.innerHeight } } })
   const inRow = [...document.querySelectorAll(`${row} > button`)].map((b) => ({ id: b.id, top: Math.round(b.getBoundingClientRect().top) }))
@@ -43,7 +39,7 @@ for (const viewport of VIEWPORTS) {
     describe(`with two other buttons added ${order.name} Color by Digit's, at ${viewport.width}x${viewport.height}`, { concurrency: false }, () => {
       let context, p
       before(async () => {
-        ({ context, p } = await openSession(browser, (order.after ? script : addStandIns + script), { contextOptions: { viewport } }))
+        ({ context, p } = await openSession(browser(), (order.after ? script : addStandIns + script), { contextOptions: { viewport } }))
         if (order.after) await addStandInsAfter(p)
       })
       after(async () => { await context?.close() })

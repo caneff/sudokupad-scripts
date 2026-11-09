@@ -1,21 +1,15 @@
-// Live check of the Copy settings and Paste settings buttons of the scripts with a settings dialog, on sudokupad.app in
-// headless Chromium: Copy puts the saved keys on the real clipboard, Paste reads them back through the same dialog.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from './page.mjs'
-import { actButton, closeDialogWith, code, dialogButton, openScriptDialog, paste, SETTINGS_SCRIPTS, STATUS } from './settings.mjs'
+import { actButton, closeDialogWith, dialogButton, openScriptDialog, ownedSettings, paste, SETTINGS_SCRIPTS, STATUS } from './settings.mjs'
+import { openWith, useBrowser } from './session.mjs'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 for (const script of SETTINGS_SCRIPTS) {
   describe(`${script.file}: Copy settings and Paste settings`, { concurrency: false }, () => {
     let context, p, errors
     before(async () => {
-      ({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
-      await startPuzzle(p, { injection: { mode: 'after-start', code: code(script.file) } })
+      ({ context, p, errors } = await openWith(browser(), [script.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await openScriptDialog(p, script.entry, script.editor)
     })
     after(async () => { await context?.close() })
@@ -58,7 +52,10 @@ for (const script of SETTINGS_SCRIPTS) {
     })
 
     it('reports text that is not settings, and saves nothing', async () => {
+      await p.evaluate(([key, value]) => Framework.setData(key, value), [script.key, script.saved])
+      const before = await ownedSettings(p, script)
       assert.equal(await paste(p, 'not json'), 'Could not paste: the clipboard text is not JSON')
+      assert.deepEqual(await ownedSettings(p, script), before)
     })
 
     it('had no page error', () => assert.deepEqual(errors, []))
@@ -141,8 +138,7 @@ for (const failedPaste of FAILED_PASTES) {
     after(async () => { await context?.close() })
 
     it('says the paste failed, and the keys, the open dialog and the dialog opened again all show what they did before', async () => {
-      ({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
-      await startPuzzle(p, { injection: { mode: 'after-start', code: code(failedPaste.file) } })
+      ({ context, p, errors } = await openWith(browser(), [failedPaste.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await openScriptDialog(p, failedPaste.entry, failedPaste.editor)
       const keys = Object.keys(failedPaste.pasted)
       const before = { stored: await stored(p, keys), shown: await shown(p, failedPaste.shows) }
@@ -163,8 +159,7 @@ describe('auto-rules-resizer.user.js: a Save whose height write throws', { concu
   after(async () => { await context?.close() })
 
   it('says it was not saved, the width key is still unsaved and the max size settings stay on', async () => {
-    ({ context, p, errors } = await openPage(browser))
-    await startPuzzle(p, { injection: { mode: 'after-start', code: code('auto-rules-resizer.user.js') } })
+    ({ context, p, errors } = await openWith(browser(), ['auto-rules-resizer.user.js']))
     await openScriptDialog(p, 'Rules Resizer', '#auto-rules-resizer-max-width')
     await failNextWriteOf(p, 'AutoRulesResizer_maxHeight', 'planted height write failure')
     await p.fill('#auto-rules-resizer-max-width', '640')

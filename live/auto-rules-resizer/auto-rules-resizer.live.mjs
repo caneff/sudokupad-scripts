@@ -3,14 +3,14 @@
 // script is injected.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from '../page.mjs'
+import { addScripts, openWith, scriptSource, useBrowser } from '../session.mjs'
+import { undoDepth } from '../board.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 
-const script = readFileSync(new URL('../../auto-rules-resizer.user.js', import.meta.url), 'utf8')
+const SCRIPT_FILE = 'auto-rules-resizer.user.js'
+const script = scriptSource(SCRIPT_FILE)
 
 // Three lines at SudokuPad's own width in a 1920 x 1080 window, well under its 14rem cap: short rules.
 const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.'
@@ -30,8 +30,8 @@ const MAX_WIDTH_INPUT = '#auto-rules-resizer-max-width'
 const MAX_HEIGHT_INPUT = '#auto-rules-resizer-max-height'
 // SudokuPad's own rules font (1.1rem), and the gap the script keeps to the window's right edge.
 const SUDOKUPAD_FONT_PX = 17.6
-const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7 // the smallest the fit goes
-const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5 // the largest
+const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7
+const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5
 const EDGE_PX = 8
 const PORTRAIT = { width: 800, height: 1100 }
 const STYLE = '#auto-rules-resizer-style'
@@ -39,14 +39,11 @@ const FONT_BAR = '#auto-rules-resizer-font'
 const WARNING = /^auto-rules-resizer: /
 const CORNER = (corner) => `#auto-rules-resizer-drag-${corner}`
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
-// A page in a `viewport` window with the puzzle started and RULES shown. `seed()` runs before the script goes in.
+// A page in a `viewport` window with the puzzle started and RULES shown, and no script yet: `inject` adds it. `seed()` runs before the script goes in.
 async function rulesPage (viewport, seed, rules = RULES, { expectedSkips } = {}) {
-  const opened = await openPage(browser, { contextOptions: { viewport }, expectedSkips })
-  await startPuzzle(opened.p)
+  const opened = await openWith(browser(), [], { contextOptions: { viewport }, expectedSkips })
   await opened.p.evaluate((rules) => {
     Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
     Framework.app.resize()
@@ -55,8 +52,9 @@ async function rulesPage (viewport, seed, rules = RULES, { expectedSkips } = {})
   return opened
 }
 
-const inject = async (p) => {
-  await p.addScriptTag({ content: script })
+// Adds the script (or `scripts`, such as it with a break planted) to a page `rulesPage` opened, and waits for its style.
+const inject = async (p, scripts = [SCRIPT_FILE]) => {
+  await addScripts(p, scripts)
   await p.locator(STYLE).waitFor({ state: 'attached' })
 }
 
@@ -80,7 +78,6 @@ const pane = (p) => p.evaluate(() => {
 })
 const fontPx = async (p) => (await pane(p)).font
 const controlsMoved = (p) => p.evaluate(() => document.getElementById('controls').style.translate)
-// The controls column's top and bottom, in visual px.
 const column = (p) => p.evaluate(() => {
   const r = document.getElementById('controls').getBoundingClientRect()
   return { top: Math.round(r.top), bottom: Math.round(r.bottom) }
@@ -113,7 +110,6 @@ async function dragCorner (p, corner, dx, dy, midDrag) {
   await p.mouse.up()
 }
 
-// A sideways drag changes the pane's width only: its height stays and its font never rises above where the fit had them.
 describe('a sideways corner drag keeps the pane\'s height and never raises its font', { concurrency: false }, () => {
   const SIDEWAYS = [
     { corner: 'ur', name: 'wider', dx: 120 },
@@ -232,7 +228,7 @@ describe('a landscape window, rules that fill the pane at SudokuPad\'s width', {
   })
 
   it('the font bar shows only while the pointer is over the pane or the bar, and stays shown on the way up to it', async () => {
-    await p.mouse.move(200, 500) // over the board
+    await p.mouse.move(200, 500)
     assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), false), false, 'pointer on the board')
     await hoverPane(p)
     assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), true, 'pointer on the pane')
@@ -250,7 +246,7 @@ describe('a landscape window, rules that fill the pane at SudokuPad\'s width', {
 
   it('the drag corners show only while the pointer is over the rules pane', async () => {
     const shown = () => Promise.all(['ur', 'dl'].map((c) => p.locator(CORNER(c)).isVisible()))
-    await p.mouse.move(200, 500) // over the board
+    await p.mouse.move(200, 500)
     assert.deepEqual(await settle(shown, [false, false]), [false, false], 'pointer on the board')
     const now = await pane(p)
     await p.mouse.move((now.left + now.right) / 2, (now.top + now.bottom) / 2)
@@ -472,11 +468,12 @@ describe('the max auto width and height', { concurrency: false }, () => {
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
+      const depthBefore = await undoDepth(p)
       await p.locator(MAX_WIDTH_INPUT).click()
       await p.keyboard.type('500')
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '500')
-      const cell = await p.evaluate(() => Framework.app.grid.getCell(0, 2).value)
-      assert.equal(cell === undefined || cell === null || cell === 0 || cell === '', true, `cell holds ${cell}`)
+      // A leaked 5-0-0 could leave the cell empty again (a repeated digit toggles off), so the board's undo history is what shows an entry.
+      assert.equal(await undoDepth(p), depthBefore, 'typing in the box entered nothing on the board')
     })
 
     it('Save keeps the limits and applies them at once', async () => {
@@ -524,7 +521,6 @@ describe('the max auto width and height', { concurrency: false }, () => {
 const READABLE_CHARS = 90
 const COPY_ICON = '.rules-copy'
 
-// Characters a line on average and the line height in css px, from the pane's text and its laid-out height.
 const lineStats = (p) => p.evaluate(() => {
   const rules = document.querySelector('.puzzle-rules')
   const style = window.getComputedStyle(rules)
@@ -600,9 +596,7 @@ describe('the text of the fitted pane', { concurrency: false }, () => {
 })
 
 describe('the scrollbar track (a classic scrollbar, as Windows Chrome draws)', { concurrency: false }, () => {
-  let classic
-  before(async () => { classic = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] }) })
-  after(async () => { await classic?.close() })
+  const classic = useBrowser({ ignoreDefaultArgs: ['--hide-scrollbars'] })
 
   const trackWidth = (p) => p.evaluate(() => {
     const rules = document.querySelector('.puzzle-rules')
@@ -610,8 +604,7 @@ describe('the scrollbar track (a classic scrollbar, as Windows Chrome draws)', {
   })
 
   async function classicPage (rules) {
-    const opened = await openPage(classic, { contextOptions: { viewport: LANDSCAPE } })
-    await startPuzzle(opened.p)
+    const opened = await openWith(classic(), [], { contextOptions: { viewport: LANDSCAPE } })
     await opened.p.evaluate((text) => {
       Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules: text })
       Framework.app.resize()
@@ -742,9 +735,8 @@ describe('rules with blank lines (SudokuPad sets each newline as a break)', { co
 
 describe('the first paint of the fit (#542, row 10)', { concurrency: false }, () => {
   it('never shows SudokuPad\'s size once the script is in: the fit runs in the same task as the layout', async () => {
-    const { context, p, errors } = await openPage(browser, { contextOptions: { viewport: LANDSCAPE } })
+    const { context, p, errors } = await openWith(browser(), [], { contextOptions: { viewport: LANDSCAPE } })
     try {
-      await startPuzzle(p)
       await inject(p)
       await p.evaluate(() => {
         window.__frames = []
@@ -845,8 +837,7 @@ for (const kase of MISSING) {
         const original = owner.${kase.name}
         owner.${kase.name} = undefined
         Framework.getApp().then(() => { owner.${kase.name} = original })`
-      await p.addScriptTag({ content: `;Framework.getApp().then(() => { ${breaks} });\n${script}` })
-      await p.locator(STYLE).waitFor({ state: 'attached' })
+      await inject(p, [{ code: `;Framework.getApp().then(() => { ${breaks} });\n${script}` }])
     })
     after(async () => { await context.close() })
 
@@ -883,7 +874,6 @@ const columnScale = (p) => p.evaluate(() => {
   const controls = document.getElementById('controls')
   return controls.getBoundingClientRect().width / controls.offsetWidth
 })
-// Reads the column's scale, the column's bottom, the pane's height and the window's size on every frame from now on, into window.__frames.
 const logFrames = (p) => p.evaluate(() => {
   window.__frames = []
   const sample = () => {
@@ -971,7 +961,9 @@ describe('the pane takes the page\'s spare height without SudokuPad shrinking th
       const now = await stable(() => pane(again.p))
       assert.equal(near(now.cssHeight, first.cssHeight, 1), true, `pane ${first.cssHeight} -> ${now.cssHeight} css px`)
       assert.equal(near(await columnScale(again.p), off[LANDSCAPE.width].scale, 0.01), true)
-      for (const f of await frames(again.p)) {
+      const seen = await frames(again.p)
+      assert.equal(seen.length > 10, true, `${seen.length} frames sampled`)
+      for (const f of seen) {
         assert.equal(near(f.scale, off[LANDSCAPE.width].scale, 0.01), true, `a frame had the column at scale ${f.scale}`)
         assert.equal(near(f.pane, now.height, 1) || near(f.pane, own.height, 1), true, `a frame had the pane ${f.pane} px tall: neither SudokuPad's ${own.height} nor the fit's ${now.height}`)
       }

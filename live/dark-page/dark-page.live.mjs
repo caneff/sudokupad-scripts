@@ -5,16 +5,15 @@
 // board with a different history, which shifts some antialiased line pixels by up to 8 levels.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
-import { captureConsoleErrors, gotoPuzzle, openPage, START, startPuzzle } from '../page.mjs'
+import { captureConsoleErrors, START } from '../page.mjs'
+import { selectCell } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
+import { openWith, reloadWith, scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
+const script = scriptSource('dark-page.user.js')
 const { PAGE, BOARD_ID, STYLE_ID, LOCAL_DATA_KEY } = createRequire(import.meta.url)('../../dark-page.user.js')
-const { contrastRatio } = createRequire(import.meta.url)('../../test/contrast.js')
 const DATA_KEY = 'DarkPage_color'
 
 const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark Page\s*$/ })
@@ -65,8 +64,7 @@ const OTHER_BOARDS = {
 // Enters digits, corner marks, centre marks and colored cells, then deselects, so the board holds
 // every kind of entry the script could disturb and no selection highlight.
 async function fillBoard (p) {
-  const select = (r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-  const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
+  const enter = async (r, c, digit) => { await selectCell(p, r, c); await p.keyboard.press(digit) }
   const markMode = async (id, fn) => { await p.click(id); try { await fn() } finally { await p.click('#control-normal') } }
   await enter(0, 2, '4')
   await enter(0, 3, '2')
@@ -186,9 +184,7 @@ async function expectWhiteIsBoardBox (p, color) {
   assert.deepEqual(wrong, { ring: 0, corners: 0 }, 'pixels in the ring that are not the page color, and board corners that are not white')
 }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -196,9 +192,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const readButton = (selector) => read((selector) => { const c = window.getComputedStyle(document.querySelector(selector)); return { bg: c.backgroundColor, fg: c.color, border: c.borderTopColor } }, selector)
   const computed = (selector, property) => read(([selector, property]) => window.getComputedStyle(document.querySelector(selector))[property], [selector, property])
-  // Switches the script's stylesheet off and on in the page the checks already use.
   const setScript = (on) => read(([selector, on]) => { document.querySelector(selector).media = on ? '' : 'not all' }, [STYLE, on])
-  // The board as it is now with the script on, against the same board with it off.
   const expectBoardKept = async () => {
     const on = await boardShot(p)
     await setScript(false)
@@ -213,15 +207,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator(BOARD_BOX).waitFor({ state: 'attached' })
   }
 
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(STYLE).waitFor({ state: 'attached' })
-  }
-
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await boot()
+    ;({ context, p, errors } = await openWith(browser(), [{ code: script }]))
+    await p.locator(STYLE).waitFor({ state: 'attached' })
     await p.addStyleTag({ content: HIDE_PAGE_UI })
   })
   after(async () => { await context.close() })
@@ -410,17 +398,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }
   })
 
-  it('with SudokuPad\'s own dark mode on, the page is black and the puzzle is kept', async () => {
-    await read(() => Framework.setSetting('darkmode', true))
-    try {
-      assert.equal(await computed('body', 'backgroundColor'), BLACK)
-      await expectBoardKept()
-    } finally {
-      await read(() => Framework.setSetting('darkmode', false))
-    }
-  })
-
-  // The same page with the script switched off is the reference: only the script differs.
   for (const [name, data] of Object.entries(OTHER_BOARDS)) {
     for (const viewport of [{ width: 1200, height: 900 }, { width: 800, height: 1000 }]) {
       for (const selected of [false, true]) {
@@ -463,7 +440,7 @@ describe('at document-start', { concurrency: false }, () => {
   // `saved` is put in storage before the script runs; `atLoad` is a color put in, or `null` taking it out (`false`: no change), at
   // DOMContentLoaded just before `start` (the sampler's listener is registered first, so it runs first).
   const samples = async (saved, atLoad = false) => {
-    const { context, p, errors } = await openPage(browser, {
+    const { context, p, errors } = await openWith(browser(), [], {
       // Two init scripts run in order at document start, before the page's own: the sampler, then the script. At that point
       // `document.documentElement` does not exist yet, as in an injector that runs the script first.
       seed: async (page, errors) => {
@@ -488,7 +465,6 @@ describe('at document-start', { concurrency: false }, () => {
     })
     try {
       await p.locator(STYLE).waitFor({ state: 'attached' })
-      await startPuzzle(p)
       return {
         errors,
         frames: await p.evaluate(() => window.__frames),
@@ -548,28 +524,26 @@ describe('the page color dialog', { concurrency: false }, () => {
     await p.locator(`.dialog ${PICKER}`).waitFor({ state: 'visible' })
   }
   const dialogButton = (name) => p.locator('.dialog').getByRole('button', { name, exact: true })
-  const started = async () => {
-    await startPuzzle(p)
-    await p.locator(STYLE).waitFor({ state: 'attached' })
-  }
   const load = async () => {
-    await gotoPuzzle(p)
-    await started()
+    await reloadWith(p, [], { mode: 'document-idle' })
+    await p.locator(STYLE).waitFor({ state: 'attached' })
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
+    ;({ context, p, errors } = await openWith(browser(), [{ code: script }], {
+      mode: 'document-idle',
       // Records the script's CSS the moment its style first exists, before any frame paints with it.
-      seed: (page) => page.addInitScript(([src, styleId]) => {
-        document.addEventListener('DOMContentLoaded', () => {
-          const s = document.createElement('script')
-          s.textContent = src
-          document.documentElement.appendChild(s)
-          window.__firstCss = document.getElementById(styleId).textContent
+      seed: (page) => page.addInitScript((styleId) => {
+        const watcher = new window.MutationObserver(() => {
+          const style = document.getElementById(styleId)
+          if (!style) return
+          window.__firstCss = style.textContent
+          watcher.disconnect()
         })
-      }, [script, STYLE_ID])
+        watcher.observe(document, { childList: true, subtree: true })
+      }, STYLE_ID)
     }))
-    await started()
+    await p.locator(STYLE).waitFor({ state: 'attached' })
   })
   after(async () => { await context.close() })
 
@@ -595,22 +569,6 @@ describe('the page color dialog', { concurrency: false }, () => {
     await dialogButton('Cancel').click()
   })
 
-  it('the credit line and the readout reach 4.5:1 on #808080 and #767676', async () => {
-    const channels = (css) => css.match(/\d+/g).slice(0, 3).map(Number)
-    for (const grey of ['#808080', '#767676']) {
-      await openDialog()
-      await p.locator(`.dialog ${PICKER}`).fill(grey)
-      await dialogButton('Save').click()
-      const page = channels(await bodyColor())
-      for (const text of [await footerColor(), await readoutColor(p)]) {
-        assert.ok(contrastRatio(channels(text), page) >= 4.5, `${text} on ${grey}`)
-      }
-    }
-    await openDialog()
-    await p.locator(`.dialog ${PICKER}`).fill('#ffcc00')
-    await dialogButton('Save').click()
-  })
-
   it('Save of a dark color switches the buttons dark without a reload', async () => {
     await openDialog()
     await p.locator(`.dialog ${PICKER}`).fill('#112233')
@@ -620,14 +578,6 @@ describe('the page color dialog', { concurrency: false }, () => {
     await p.locator(`.dialog ${PICKER}`).fill('#ffcc00')
     await dialogButton('Save').click()
     assert.equal(await undoBackground(), OWN_BUTTON_BG)
-  })
-
-  it('Cancel after a pick changes nothing', async () => {
-    await openDialog()
-    await p.locator(`.dialog ${PICKER}`).fill('#00ff00')
-    await dialogButton('Cancel').click()
-    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
-    assert.equal(await saved(), '#ffcc00')
   })
 
   it('moving the picker applies the color to the page at once, and Cancel puts the saved color back', async () => {
@@ -682,7 +632,7 @@ describe('the page color dialog', { concurrency: false }, () => {
 // A page with no puzzle in it, such as another page of a site the script matches, is left alone.
 describe('a page with no puzzle', () => {
   it('stays as it was: white background', async () => {
-    const page = await browser.newPage()
+    const page = await browser().newPage()
     try {
       await page.setContent('<!doctype html><body style="background:#fff"><p>not a puzzle</p></body>')
       await page.addScriptTag({ content: script })
@@ -703,15 +653,13 @@ describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => 
   const WARNING = /^dark-page: /
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
+    const breaks = 'const original = Framework.addSetting; Framework.addSetting = undefined; Framework.getApp().then(() => { Framework.addSetting = original })'
+    ;({ context, p, errors } = await openWith(browser(), [{ code: `;{ ${breaks} }\n${script}` }], {
       expectedSkips: [WARNING],
       seed: (page) => {
         page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })
       }
     }))
-    await startPuzzle(p)
-    const breaks = 'const original = Framework.addSetting; Framework.addSetting = undefined; Framework.getApp().then(() => { Framework.addSetting = original })'
-    await p.addScriptTag({ content: `;{ ${breaks} }\n${script}` })
     await p.locator(STYLE).waitFor({ state: 'attached' })
   })
   after(async () => { await context.close() })

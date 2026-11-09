@@ -2,21 +2,21 @@
 // sudokupad.app in headless Chromium. Each test names its attack and asserts the crash signals (no uncaught error, console error or
 // skip line) beside what a user expects. Clicks, drags and keys are real input.
 /* global Framework, Storage */
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
-import { makeNote, pickTool } from './attack-fixtures.mjs'
+import { pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllScripts } from './attacks.mjs'
-import { captureConsoleErrors, gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
-import { mouseDrag, openPenTool, penEntries, setSlider } from './pen.mjs'
-import { closeDialogWith, code, openScriptDialog, paste, SETTINGS_SCRIPTS } from './settings.mjs'
+import { captureConsoleErrors } from './page.mjs'
+import { mouseDrag, typeText } from './board.mjs'
+import { openPenTool, penEntries, setSlider } from './pen.mjs'
+import { closeDialogWith, openScriptDialog, ownedSettings, paste, SETTINGS_SCRIPTS } from './settings.mjs'
 import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
+import { addPage, openWith, useBrowser } from './session.mjs'
 
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
-// The pen settings attack 75 saves, with the keys and values it expects back.
 const THICKNESS_KEY = 'PenColor_thickness'
 const OPACITY_KEY = 'PenColor_opacity'
 const OTHER_TAB_THICKNESS = 9
@@ -25,9 +25,7 @@ const THIS_TAB_OPACITY = 60
 const PASTE_BUDGET_MS = 5000
 const MEGABYTE = 1024 * 1024
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on storage', { concurrency: false }, () => {
   let context, p, errors
@@ -35,7 +33,7 @@ describe('attacks on storage', { concurrency: false }, () => {
 
   describe('with the three scripts installed', () => {
     beforeEach(async () => {
-      ;({ context, p, errors } = await openWithAllScripts(browser))
+      ;({ context, p, errors } = await openWithAllScripts(browser()))
     })
 
     it('attack 73: a full store (setItem throws QuotaExceededError) on the scripts\' own keys leaves every feature working in the session, tells the user in plain words and turns no saved data off', async () => {
@@ -56,7 +54,7 @@ describe('attacks on storage', { concurrency: false }, () => {
       }
 
       await pickTool(p, 'draw')
-      await makeNote(p, [4.5, 4.5], '15')
+      await typeText(p, [4.5, 4.5], '15')
       await dismissNotice()
       assert.deepEqual(await draw.texts(p), ['15'], 'Text Anywhere draws the note')
 
@@ -85,11 +83,9 @@ describe('attacks on storage', { concurrency: false }, () => {
 
   it('attack 74: settings pasted as malformed text, from an older version and a megabyte large change nothing they should not, and answer in time', async () => {
     for (const script of SETTINGS_SCRIPTS) {
-      ;({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
-      await startPuzzle(p, { injection: { mode: 'after-start', code: code(script.file) } })
+      ;({ context, p, errors } = await openWith(browser(), [script.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await openScriptDialog(p, script.entry, script.editor)
-      // Everything the script owns in the store, as saved strings.
-      const owned = () => p.evaluate((pattern) => Object.fromEntries(Object.keys(window.localStorage).filter((k) => new RegExp(pattern).test(k.replace(/^svencodes_/, ''))).sort().map((k) => [k, window.localStorage.getItem(k)])), script.owns.source)
+      const owned = () => ownedSettings(p, script)
       const timed = async (text) => {
         const started = Date.now()
         const status = await paste(p, text)
@@ -105,7 +101,6 @@ describe('attacks on storage', { concurrency: false }, () => {
       assert.equal(await p.evaluate(() => ({}).polluted), undefined, `${script.file}: a pasted __proto__ pollutes nothing`)
       assert.deepEqual(await owned(), savedBefore, `${script.file}: malformed text saved nothing`)
 
-      // A megabyte of text that is not JSON, and a megabyte under a key the script's reader refuses.
       assert.equal(await timed('x'.repeat(MEGABYTE)), 'Could not paste: the clipboard text is not JSON', `${script.file}: a megabyte of text is refused`)
       assert.equal(await timed(JSON.stringify({ [script.badKey]: 'x'.repeat(MEGABYTE) })), 'Pasted 0 settings; skipped 1 that did not check out.', `${script.file}: a megabyte value is skipped`)
       assert.deepEqual(await owned(), savedBefore, `${script.file}: a megabyte saved nothing`)
@@ -126,11 +121,8 @@ describe('attacks on storage', { concurrency: false }, () => {
   })
 
   it('attack 75: settings changed in one tab while another tab has the puzzle open leave that tab working, keep the other settings, and show up on its reload', async () => {
-    ;({ context, p, errors } = await openWithAllScripts(browser))
-    const other = await newPage(context)
-    captureConsoleErrors(other.p, other.errors)
-    await gotoPuzzle(other.p)
-    await startPuzzle(other.p)
+    ;({ context, p, errors } = await openWithAllScripts(browser()))
+    const other = await addPage(context, [], { seed: captureConsoleErrors })
     await loadScripts(other.p)
     const stored = (page, key) => page.evaluate((k) => Framework.getData(k), key)
 
@@ -152,11 +144,10 @@ describe('attacks on storage', { concurrency: false }, () => {
     assert.equal(await stored(p, THICKNESS_KEY), OTHER_TAB_THICKNESS, 'the first tab\'s save of the opacity leaves the other tab\'s thickness')
     assert.equal(await stored(p, OPACITY_KEY), THIS_TAB_OPACITY, 'the opacity is saved')
     await pickTool(p, 'draw')
-    await makeNote(p, [4.5, 4.5], '15')
+    await typeText(p, [4.5, 4.5], '15')
     assert.deepEqual(await draw.texts(p), ['15'], 'the first tab makes a note')
     assert.equal(await draw.valueOf(other.p, draw.SIZE_SLIDER), widthThere, 'the first tab\'s note does not change the other tab\'s width')
 
-    // A reload shows the other tab's settings and this tab's own.
     await reloadWithScripts(p)
     await openPenTool(p)
     assert.equal(await p.evaluate((selector) => Number(document.querySelector(selector).value), THICKNESS), OTHER_TAB_THICKNESS, 'the reload shows the thickness the other tab saved')

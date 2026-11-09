@@ -1,4 +1,3 @@
-// Unit tests of the fuzz's action vocabulary with a fake page: a seed always gives the same actions, every kind is generated, every kind runs.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
@@ -12,7 +11,6 @@ const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList
 const actionsOf = (lists) => lists.flatMap((l) => [...l.commands].map((wrapped) => wrapped.cmd))
 const stepsOf = (lists) => actionsOf(lists).map(String)
 
-// Runs `action` on a fresh fake page and returns it.
 const runOn = async (action, options) => {
   const target = await fakeTargets(options).openTarget()
   await action.run({ selected: true }, { env: target.env })

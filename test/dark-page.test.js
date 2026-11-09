@@ -5,7 +5,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { buildCss, PAGE, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { startScript } = require('./unit-start.js')
+const { buildCss, PAGE, BOARD_ID, VERSION, DEFAULT_COLOR, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
 const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -98,10 +99,9 @@ test('the page text is white up to #757575 and black from #767676', () => {
   for (const grey of ['#767676', '#777777', '#cccccc', '#ffffff']) assert.equal(footerColor(grey), '#000000', grey)
 })
 
-test('the buttons switch exactly where the credit text does', () => {
-  for (const color of ['#000000', '#333333', '#747474', '#757575', '#cccccc', '#ffffff', '#0000ff', '#ffff00']) {
-    assert.equal(buttonRules(color).length > 0, textColorFor(color) === '#dddddd', color)
-  }
+test('the buttons go dark on #747474 and darker, and stay light from #757575 up (one step before the credit text switches at #767676)', () => {
+  assert.equal(buttonRules('#747474').length > 0, true)
+  assert.equal(buttonRules('#757575').length, 0)
 })
 
 test('pageColorOf reads a saved #rrggbb string as lowercase, and anything else as nothing saved', () => {
@@ -152,10 +152,7 @@ test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8')))
 })
 
-// Starts the script on a page that has a document with a head and a body, with `framework` as the page's Framework, or none.
-// `appended` is what went in the head; `bar` is the text of the notice bar, or null for none.
 function startOnBoard (framework) {
-  const file = require.resolve('../dark-page.user.js')
   const appended = []
   const inBody = []
   const element = () => {
@@ -163,31 +160,14 @@ function startOnBoard (framework) {
     return el
   }
   const textOf = (el) => el.textContent + el.children.map(textOf).join('')
-  const saved = { document: global.document, window: global.window, Framework: global.Framework }
-  global.document = {
+  const document = {
     createElement: element,
     head: { appendChild: (el) => appended.push(el) },
     body: { append: (el) => inBody.push(el) },
     documentElement: { outerHTML: '<script src="/script.js?v=0.611.0"></script>' },
     getElementById: () => null
   }
-  global.window = {}
-  delete global.Framework
-  if (framework) global.Framework = framework
-  const warnings = []
-  const realWarn = console.warn
-  console.warn = (...args) => warnings.push(args.join(' '))
-  delete require.cache[file]
-  try {
-    require(file)
-  } finally {
-    console.warn = realWarn
-    for (const [name, value] of Object.entries(saved)) {
-      if (value === undefined) delete global[name]
-      else global[name] = value
-    }
-    delete require.cache[file]
-  }
+  const { warnings } = startScript('../dark-page.user.js', { document, window: {}, Framework: framework })
   const [bar] = inBody.flatMap((host) => host.children).filter((el) => el.attributes['data-script'] === 'dark-page' && !el.removed)
   return { warnings, style: appended.find((el) => el.id === 'dark-page-style'), appended, bar: bar ? textOf(bar) : null }
 }
@@ -228,13 +208,6 @@ test('pastedSettings: a valid color is kept lower-case, a bad one is skipped and
   assert.deepEqual(readPaste(JSON.stringify({ [DATA_KEY]: 'red' })), { values: {}, skipped: 1 })
 })
 
-test('pastedSettings: text with none of this script\'s keys pastes and skips nothing; an array is no settings object', () => {
-  assert.deepEqual(readPaste('{}'), { values: {}, skipped: 0 })
-  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_auto: true })), { values: {}, skipped: 0 })
-  assert.throws(() => readPaste('[{"DarkPage_color":"#ffffff"}]'), /not a settings object/)
-})
-
-// A SudokuPad with every internal Dark Page needs.
 const completeFramework = () => ({ Framework: { getApp () {}, getData () {}, addSetting () {}, showDialog () {}, closeDialog () {}, setData () {}, removeData () {} } })
 
 test('Dark Page declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {

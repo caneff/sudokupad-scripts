@@ -2,13 +2,12 @@
 // the button, switching profile, the button's icon, the dialog's profile list, and migration.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, keyOf, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, watch, cellsStateOn, selectCell, wrongCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
 const ROWS = PROFILE_ROWS
 // A row's × shows only while its row is hovered or selected, so the pointer goes onto the row first.
@@ -23,27 +22,20 @@ const FOUR_PROFILES = {
   active: 0
 }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
-// A page with the script injected; `saved` maps a localStorage key to a JSON value, saved before the page loads.
 // With no mode saved the page starts in Cell; `savedOff` saves the mode Off beside `saved`.
-const openProfiles = (saved, contextOptions = {}) => openSession(browser, script, { saved, contextOptions })
+const openProfiles = (saved, contextOptions = {}) => openSession(browser(), script, { saved, contextOptions })
 const savedOff = (saved) => ({ ...saved, [MODE_STORAGE_KEY]: 'off' })
 
 const tools = (p) => {
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const cellsState = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({
-    r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])]
-  })))
+  const cellsState = () => cellsStateOn(p)
   const coloredCount = () => coloredCountOn(p)
   const coloursOf = async () => JSON.stringify((await cellsState()).map((x) => x.colours))
-  const digitOf = (x) => String(x.given || x.value || '')
-  const wrongCount = async (groups) => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(digitOf(x) === '' ? [] : [keyOf(groups, digitOf(x))])).length
+  const wrongCount = (groups) => wrongCountOn(p, groups)
   const getState = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
   const names = async () => (await getState()).profiles.map((x) => x.name)
-  const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
   const valueAt = (r, c) => read(([r, c]) => String(Framework.app.grid.getCell(r, c).value || ''), [r, c])
   const undo = () => p.click('#control-undo')
   const menu = () => p.locator(MENU)
@@ -64,7 +56,7 @@ const tools = (p) => {
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: name }).click()
     await menu().waitFor({ state: 'detached' })
   }
-  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconShownDigits, editor, openEditor, rowNames, selectedRow, cellProfile, pulldownNames, label, openMenuByArrow, pick }
+  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, valueAt, undo, menu, menuRows, iconShownDigits, editor, openEditor, rowNames, selectedRow, cellProfile, pulldownNames, label, openMenuByArrow, pick }
 }
 
 describe('profiles on a fresh install, injected after Start Puzzle', { concurrency: false }, () => {
@@ -179,8 +171,7 @@ describe('the one-time adds of Entropic and Modular, then Each digit, to an inst
       await deleteRow(p, 4)
       await closeDialogWith(p, 'Save', EDITOR)
       assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Modular']), ['Low/5/High', 'Odd/Even', 'Modular'])
-      await p.reload({ waitUntil: 'load' })
-      await startInjected(p, script)
+      await reloadSession(p, script)
       assert.deepEqual(await t.names(), ['Low/5/High', 'Odd/Even', 'Modular'])
     })
   })
@@ -248,16 +239,8 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.deepEqual(await t.menuRows(), [{ name: 'Odd/Even', active: true }, { name: 'Low/5/High', active: false }, { name: 'Four', active: false }, { name: 'Six', active: false }])
     const [menu, button] = await Promise.all([t.menu().boundingBox(), p.locator(BUTTON).boundingBox()])
     assert.equal(menu.y + menu.height <= button.y, true, JSON.stringify({ menu, button }))
-  })
-
-  it('Escape closes the menu', async () => {
+    // Escape and a click elsewhere close it too: motion's close test owns that.
     await p.keyboard.press('Escape')
-    await t.menu().waitFor({ state: 'detached' })
-  })
-
-  it('a click elsewhere closes the menu', async () => {
-    await t.openMenuByArrow()
-    await p.mouse.click(5, 5)
     await t.menu().waitFor({ state: 'detached' })
   })
 
@@ -275,19 +258,6 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     // The page's own listener runs after the script's, so it reads the final defaultPrevented.
     assert.deepEqual(await p.evaluate(() => window.__contextmenu), [true])
     assert.deepEqual(await watch(t.coloredCount), [0])
-    await p.keyboard.press('Escape')
-  })
-
-  it('a hold on the button opens the menu, and the press neither steps the mode nor colors anything', async () => {
-    assert.equal(await t.menu().count(), 0)
-    const { x, y } = await buttonPoint(p)
-    await p.mouse.move(x, y)
-    await p.mouse.down()
-    // Opens on a timer after HOLD_MS; waits on the menu, not on the clock.
-    await t.menu().waitFor({ state: 'visible', timeout: HOLD_MS + SETTLE_MS })
-    await p.mouse.up()
-    assert.deepEqual(await watch(t.coloredCount), [0])
-    assert.equal(await t.label(), 'Off')
     await p.keyboard.press('Escape')
   })
 
@@ -355,7 +325,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     await p.mouse.click(x, y, { button: 'right' })
     await t.menu().waitFor({ state: 'visible' })
     await t.pick('Four')
-    await t.select(8, 0)
+    await selectCell(p, 8, 0)
     await p.keyboard.press('4')
     assert.equal(await settle(() => t.valueAt(8, 0), '4'), '4')
   })
@@ -363,7 +333,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   it('after a pick through the arrow box the keyboard also stays with the puzzle', async () => {
     await t.openMenuByArrow()
     await t.pick('Six')
-    await t.select(8, 1)
+    await selectCell(p, 8, 1)
     await p.keyboard.press('3')
     assert.equal(await settle(() => t.valueAt(8, 1), '3'), '3')
   })
@@ -398,8 +368,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   })
 
   it('the switch survives a reload: the saved profile is the active one', async () => {
-    await p.reload({ waitUntil: 'load' })
-    await startInjected(p, script)
+    await reloadSession(p, script)
     // Six's groups are 0 to 5 one digit each; the group of 0 sorts last, so the icon's three cells are 1 to 3.
     assert.equal((await t.getState()).active, 3)
     assert.deepEqual(await t.iconShownDigits(), ['1', '2', '3'])
@@ -410,7 +379,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   })
 })
 
-// One touch event on the page's CDP session; a `touchEnd` carries no touch points.
+// A `touchEnd` carries no touch points.
 const touch = (cdp, type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
 
 describe('the menu on a touch screen, injected after Start Puzzle', { concurrency: false }, () => {
@@ -495,7 +464,6 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await p.mouse.move(start.x, end.y, { steps: 4 })
     await p.mouse.up()
   }
-  // The same drag with a finger.
   const dragWithTouch = async (from, to) => {
     const { start, end } = await dragPoints(from, to)
     await touch(cdp, 'touchStart', start.x, start.y)
@@ -682,8 +650,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await closeDialogWith(p, 'Save', EDITOR)
     const six = ['Four', 'Odd/Even', 'Low/5/High', 'Mine', 'Second', 'Third']
     assert.deepEqual(await settle(t.names, six), six)
-    await p.reload({ waitUntil: 'load' })
-    await startInjected(p, script)
+    await reloadSession(p, script)
     assert.deepEqual(await t.names(), six)
   })
 

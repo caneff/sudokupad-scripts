@@ -3,20 +3,17 @@
 // open, and a saved size off the old menu's six that is kept. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { readUntil } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
 
 const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, SLIDERS, TEXT_BOX, WIDTH_KEY, slideTo, valueOf } = draw
 const A = [1.5, 1.5]
 const B = [1.5, 3.5]
 const C = [5.5, 5.5]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false }, () => {
   let context, p, errors
@@ -24,21 +21,11 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
   const saved = () => draw.saved(p)
   const savedNote = async (text) => (await saved()).find((item) => item.text === text)
   const stored = (name) => p.evaluate((k) => Framework.getData(k) ?? null, name)
-  const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
-  const typeText = async (at, content) => {
-    await clickAt(at)
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
-  }
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
   const focusedSlider = () => p.evaluate((s) => document.activeElement?.matches(`${s} input`) === true, SLIDERS)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: { width: 1280, height: 720 } } }))
     await draw.forgetDrawings(p)
     await p.evaluate((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, OPACITY_KEY])
     await reload()
@@ -80,29 +67,29 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
   })
 
   it('a move with nothing selected sets the next note only, is saved, and survives a reload', async () => {
-    await typeText(A, 'A')
+    await typeText(p, A, 'A')
     assert.deepEqual([(await savedNote('A')).size, (await savedNote('A')).opacity], [20, 100])
     await slideTo(p, SIZE_SLIDER, 12)
     await slideTo(p, OPACITY_SLIDER, 60)
     assert.deepEqual([await stored(WIDTH_KEY), await stored(OPACITY_KEY)], [12, 60])
     assert.deepEqual([(await savedNote('A')).size, (await savedNote('A')).opacity], [20, 100], 'the earlier note keeps its look')
-    await typeText(B, 'B')
+    await typeText(p, B, 'B')
     assert.deepEqual([(await savedNote('B')).size, (await savedNote('B')).opacity], [32, 60])
     await reload()
     assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [12, 60])
   })
 
   it('with notes selected the sliders show the first note\'s values, and a move changes only those notes, is saved and leaves the next-note values', async () => {
-    await clickAt(A)
+    await clickAt(p, A)
     assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [6, 100])
     await p.keyboard.down('Shift')
-    await clickAt(B)
+    await clickAt(p, B)
     await p.keyboard.up('Shift')
     assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [6, 100], 'a mixed selection shows the first note\'s')
     await slideTo(p, SIZE_SLIDER, 3)
     await slideTo(p, OPACITY_SLIDER, 40)
-    await draw.finishNote(p)
-    await typeText(C, 'C')
+    await finishNote(p)
+    await typeText(p, C, 'C')
     assert.deepEqual((await saved()).map((i) => [i.text, i.size, i.opacity]), [['A', 14, 40], ['B', 14, 40], ['C', 32, 60]])
     assert.deepEqual([await stored(WIDTH_KEY), await stored(OPACITY_KEY)], [12, 60], 'the next-note values are unchanged')
     await reload()
@@ -117,7 +104,7 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
     await slideTo(p, OPACITY_SLIDER, 75)
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
     await p.keyboard.type('x')
-    await draw.finishNote(p)
+    await finishNote(p)
     const note = await savedNote('Ax')
     assert.deepEqual([note?.size, note?.opacity], [27, 75])
     assert.deepEqual([await stored(WIDTH_KEY), await stored(OPACITY_KEY)], [12, 60], 'the next-note values are unchanged')
@@ -131,7 +118,7 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
     await p.keyboard.type('Q')
     assert.match(await p.locator(TEXT_BOX).textContent(), /Q$/)
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a note saved with a size off the old menu\'s six keeps it, and a next-note size saved off them is kept as it is', async () => {
@@ -140,10 +127,10 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
     await reload()
     assert.equal((await savedNote('odd')).size, 23)
     assert.equal(await valueOf(p, SIZE_SLIDER), 7.5, 'the saved next-note size shows as it is')
-    await clickAt(A)
+    await clickAt(p, A)
     assert.equal(await valueOf(p, SIZE_SLIDER), 7.5, 'and so does the 23 of the note: width 7.5')
-    await draw.finishNote(p)
-    await typeText([7.5, 1.5], 'kept')
+    await finishNote(p)
+    await typeText(p, [7.5, 1.5], 'kept')
     assert.equal((await savedNote('kept')).size, 23)
     assert.equal((await savedNote('odd')).size, 23)
   })

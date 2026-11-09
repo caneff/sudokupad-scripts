@@ -1,6 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { fakeStore } = require('../fake-store.js')
 const { readdirSync, readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
@@ -10,13 +11,6 @@ const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const source = read(SCRIPT)
 const extras = require(join(ROOT, SCRIPT))
 
-// A store with SudokuPad's three calls that holds `saved`, a map of key to value.
-const storeOf = (saved) => ({
-  getData: (key) => saved[key],
-  setData: (key, value) => { saved[key] = value },
-  removeData: (key) => { delete saved[key] }
-})
-
 // The files the renames reach: the repo's root, `test/`, `live/` and `site/`, so never `docs/research/`, nor the records in dotfiles.
 const filesIn = (dir) => readdirSync(join(ROOT, dir), { withFileTypes: true }).filter((entry) => entry.isFile() && !entry.name.startsWith('.')).map((entry) => join(dir, entry.name))
 const liveFolders = readdirSync(join(ROOT, 'live'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => join('live', entry.name))
@@ -24,18 +18,18 @@ const swept = ['.', 'test', 'test/specs', 'live', ...liveFolders, 'site'].flatMa
 const ownFiles = swept.filter((file) => /pen-tool-extras/.test(file))
 
 // Spec 130's acceptance as one pass over the script's exports and its text, at `npm test`. This seam is blind to real
-// SudokuPad (`npm run test:live` covers the `Framework` calls, rendering and undo there), and to a real Tampermonkey
-// install and crackingthecryptic.com, which no automated run reaches.
+// SudokuPad (`npm run test:live` covers the `Framework` calls, rendering and undo there), and to saved settings from an older version.
+// `npm run test:tampermonkey` installs each script into a real Tampermonkey.
 test('Pen Tool Extras holds spec 130 together', () => {
   const { SETTINGS, settingDefaults, readSettings, saveSetting, changedSettings } = extras
-  const saved = {}
-  const store = storeOf(saved)
+  const store = fakeStore()
+  const saved = store.data
 
   // One table: nothing saved reads as every default, and a saved value out of its range reads as its default.
   const defaults = settingDefaults()
   assert.deepEqual(Object.keys(defaults), Object.keys(SETTINGS))
   assert.deepEqual(readSettings(store), defaults)
-  assert.deepEqual(changedSettings(readSettings(storeOf({ [SETTINGS.thickness.key]: 1e9 })), defaults), [])
+  assert.deepEqual(changedSettings(readSettings(fakeStore({ [SETTINGS.thickness.key]: 1e9 })), defaults), [])
 
   // One save rule: for every row, a changed value saves its key and the default removes it.
   for (const [name, row] of Object.entries(SETTINGS)) {

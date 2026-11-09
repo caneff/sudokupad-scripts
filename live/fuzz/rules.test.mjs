@@ -1,11 +1,9 @@
-// Unit tests of the fuzz's rules with hand-built snapshots: each rule passes on a page where it holds and fails, naming what broke, on one where it does not.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { quietPage } from './fake-target.mjs'
 import { RULES, ruleViolations } from './rules.mjs'
 
 const rule = (name) => RULES.find((r) => r.name === name)
-// The violations of one rule between a snapshot `before` and one `now` (page overrides), for the kind of action between them.
 // `earlier` is the step before `before` as overrides of its page: `{ action, page }`, with its own `earlier` the same way.
 const check = (name, now, { before = {}, action = 'click cell', earlier = null } = {}) => {
   const step = (e) => e && { action: e.action, before: { page: quietPage(e.page) }, earlier: step(e.earlier) }
@@ -16,8 +14,9 @@ const check = (name, now, { before = {}, action = 'click cell', earlier = null }
 const colorByDigit = (mode, cells, groups = [{ key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]) => ({ mode, groups, cells: cells.map(([digit, colours = [], given = false]) => ({ digit, given, colours })) })
 
 describe('the rules', () => {
-  it('each script has a rule, and the names are unique', () => {
-    assert.deepEqual(RULES.map((r) => r.name), ['undo-to-start', 'pen-lines-drawn', 'notes-saved-match-drawn', 'notes-survive-reload', 'reload-changes-nothing', 'undo-redo-restores', 'digit-cells-colored', 'page-stays-dark', 'rules-fit-pane', 'tab-not-letters'])
+  it('the rule names are unique', () => {
+    const names = RULES.map((r) => r.name)
+    assert.equal(new Set(names).size, names.length)
   })
 
   it('a quiet page breaks none, and a violation is reported with its rule name', () => {

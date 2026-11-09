@@ -9,7 +9,8 @@
 import { chromium } from 'playwright'
 import { writeFileSync } from 'node:fs'
 import { openDrawPage } from './draw-tool-screenshot-page.mjs'
-import { slideTo, valueOf, finishNote, SIZE_SLIDER, BACKGROUND_BUTTON, TEXT_BOX, TEXTS, HANDLES, KEYPAD } from '../../../live/draw-tool/draw-tool-fixtures.mjs'
+import { finishNote } from '../../../live/board.mjs'
+import { slideTo, valueOf, SIZE_SLIDER, BACKGROUND_BUTTON, TEXT_BOX, TEXTS, HANDLES, KEYPAD } from '../../../live/draw-tool/draw-tool-fixtures.mjs'
 
 const out = (name) => new URL(`./draw-tool-${name}.png`, import.meta.url).pathname
 const SCALE = 1.5

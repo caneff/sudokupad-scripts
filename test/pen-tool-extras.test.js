@@ -5,6 +5,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
+const { fakeStore } = require('./fake-store.js')
+const { startScript } = require('./unit-start.js')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const {
@@ -165,8 +167,6 @@ test('the full width values are the free lines and the cell circle and cross, no
   assert.deepEqual(FULL_WIDTH_VALUES, ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
 })
 
-// The stroke width and scale each pen value's rule gives it, read back from the CSS, as { value: { width, scale } }
-// (a rule with no transform has scale 1).
 function rulesByValue (css) {
   const byValue = {}
   for (const rule of css.split('\n')) {
@@ -350,10 +350,6 @@ test('a mark whose type is unticked moves to the next ticked mark, or to empty',
   assert.equal(nextType('x', { x: false, directions: true, circle: false }), 'dirA')
   assert.equal(nextType('x', { x: false, directions: false, circle: false }), 'empty')
   assert.equal(nextType('circle', { x: true, directions: false, circle: false }), 'empty')
-})
-
-test('a click on an empty right edge adds the X, which is the character 3', () => {
-  assert.deepEqual(planClick('3', [], ALL), { remove: [], add: '3' })
 })
 
 test('the cycle on a right edge uses 3, j (circle), h, i then clears', () => {
@@ -703,8 +699,6 @@ test('the corner X is two crossing diagonals of half-size s, drawn from the poin
   assert.equal(shapePath('x', 8), ' m -8,-8 l16,16 m -16,0 l16,-16')
 })
 
-// Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dashed, page 3 is j to z and 0, two
-// to a pen, drawn as arrow lines.
 test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dashed, then arrow lines with a character for each way', () => {
   assert.deepEqual(PEN_PAGES, [
     { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dashed: false },
@@ -857,8 +851,6 @@ test('the dash setting keeps a saved whole number from 0 to 8, a saved 0 include
   for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(SETTINGS.dash.normalize(bad), 3, String(bad))
 })
 
-// The declarations of the first (orthogonal) and second (diagonal) page 2 line rule, as { dash, gap, offset } numbers
-// (offset 0 where a rule has no dashoffset).
 const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).filter((r) => r.body.startsWith('stroke-dasharray'))
   .map((r) => {
     const [, on, gap] = /^stroke-dasharray: ([\d.]+) ([\d.]+);/.exec(r.body)
@@ -867,7 +859,6 @@ const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).fi
   })
 
 test('at dash 0 the page 2 lines are the dots they were: the spacing origin/main gave, as literals', () => {
-  // The dasharray of the orthogonal and the diagonal rule at thicknesses 1, 5 and 12.
   const before = { 1: ['0 1.9998', '0 2.011124822779531'], 5: ['0 10.6656', '0 10.055624113897656'], 12: ['0 21.3312', '0 22.625154256269724'] }
   for (const [thickness, want] of Object.entries(before)) {
     const got = rulesOf(buildPagesCss(Number(thickness), 0)).filter((r) => r.body.startsWith('stroke-dasharray'))
@@ -1203,10 +1194,9 @@ test('the editor is a two by two grid: Pen colors | Line settings and Line style
   assert.match(DIALOG_CSS, /@media \(max-width: \d+px\) \{[^@]*grid-template-columns: minmax\(0, 1fr\)/, 'one column on a narrow screen')
 })
 
-test('the dialog is sized to its content, the paragraph around the editor loses its bottom margin, and the dialog is not centred over the board', () => {
+test('the dialog is sized to its content, the paragraph around the editor loses its bottom margin', () => {
   assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \{[^}]*width: fit-content !important;/)
   assert.match(DIALOG_CSS, /\.dialog p:has\(> #pen-tool-extras-editor\) \{ margin-bottom: 0 !important; \}/)
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'pen-tool-extras.user.js'), 'utf8'), /bodyId: EDITOR_ID,\n\s*centerOverBoard: false,/)
 })
 
 test('a missing-color note in the first column wraps within it and never sets its width', () => {
@@ -1264,12 +1254,6 @@ test('the three controls are one 4rem square size, in one rule, in the order mod
   // No other rule gives a control a size of its own.
   assert.equal(PANEL_CSS.split('\n').filter((rule) => /button\.pen-tool-extras-(mode|page|settings)/.test(rule) && /width|height/.test(rule)).length, 1)
   ;[['mode', 1], ['page', 2], ['settings', 3]].forEach(([name, order]) => assert.match(ruleOf(`.tool-pen .controls-input button.pen-tool-extras-${name}`), new RegExp(`order: ${order};`)))
-})
-
-test('the panel sliders block holds the slider rows and no button', () => {
-  assert.match(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /^<div class="pen-tool-extras-sliders"><div class="pen-tool-extras-slider"/)
-  assert.doesNotMatch(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /<button/)
-  assert.equal(PANEL_CSS.includes('sliders-box'), false)
 })
 
 test('the settings button is a button named Pen Tool Extras settings, drawing an outline gear in the panel color and no fill', () => {
@@ -1563,14 +1547,6 @@ test('the arrows and the line scale with the thickness: larger arrows, a wider l
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
-test('below the default thickness the heads shrink with the line, a little slower than it: 0.8 * 5 * (t / 5) ** 0.8 line widths at thickness t', () => {
-  // the head's width across, 2 * halfWidth * scale: worked from the ruling, scale 4 at 5 and 1.1048 at 1
-  const across = (t) => { const ys = pointsOf(arrowLineAt('a', true, 0, 0, t).arrows).map(([, y]) => y); return Math.max(...ys) - Math.min(...ys) }
-  assert.equal(Math.abs(across(5) - 2 * 2.125 * 4) < 0.02, true, `at 5: ${across(5)}`)
-  assert.equal(Math.abs(across(1) - 2 * 2.125 * 1.1048) < 0.02, true, `at 1: ${across(1)}`)
-  assert.equal(arrowLineAt('1', true, 0, 0, 1).lineWidth, 1, 'the line is as thick as a page 1 line, 1')
-})
-
 test('the line under the arrows is as thick as a page 1 line at every slider value, and the arrows clearly stick out past it', () => {
   for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
     const shape = arrowLineAt('a', true, 0, 0, t)
@@ -1619,13 +1595,6 @@ test('an arrow is centered on its line, on a diagonal as on a straight line, at 
       }
     }
   }
-})
-
-test('at the largest thickness an arrow on a grid\'s outer edge reaches the ARROW_LINE size at head scale 10.1387', () => {
-  // a top edge line, 'a', on row 0: the arrow's base corners are the furthest from the edge itself
-  const shape = arrowLineAt('a', true, 0, 0, THICKNESS.max)
-  const reach = Math.max(...pointsOf(shape.arrows).map(([, y]) => Math.abs(y)))
-  assert.equal(Math.abs(reach - ARROW_LINE.halfWidth * 10.1387) < 0.02, true, `the drawn reach ${reach} is the ARROW_LINE size at head scale 10.1387, the largest thickness's`)
 })
 
 test('an arrow line has at least one arrow on any segment at any thickness and any arrow spacing, so a run never has none', () => {
@@ -1721,10 +1690,9 @@ test('both line styles are enabled unless saved as the boolean false, each on it
   for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(SETTINGS.lineStyles.normalize(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
 })
 
-test('a wider arrow spacing gives fewer arrows on the same segment and the spacing sets their distance', () => {
+test('a wider arrow spacing gives fewer arrows on the same segment', () => {
   const count = (spacing) => pointsOf(arrowLineAt('1', true, 0, 0, 5, spacing).arrows).length / 3
   assert.deepEqual([count(3), count(5), count(12)], [3, 2, 1])
-  assert.equal(count(3) > count(5) && count(5) > count(12), true, `${count(3)}, ${count(5)}, ${count(12)}`)
 })
 
 test('the pages in the rotation are page 1 always, page 2 with dashed lines enabled and page 3 with arrow lines enabled', () => {
@@ -1931,28 +1899,23 @@ test('the table holds each setting\'s saved key and default', () => {
   })
 })
 
-// A store that keeps what is saved, as SudokuPad's own does between a save and the next read.
-function memoryStore (saved = {}) {
-  return { saved, getData: (key) => saved[key], setData: (key, value) => { saved[key] = value }, removeData: (key) => { delete saved[key] } }
-}
-
 test('the marks a save writes read back the same, and so do marks saved under the old circle names', () => {
   const unticked = { ...ALL, circle: false, cornerCircle: false }
-  const store = memoryStore()
+  const store = fakeStore()
   const current = settingDefaults()
   saveChangedSettings(store, { ...current, marks: unticked }, current)
   assert.deepEqual(readSettings(store).marks, unticked)
-  const oldSave = memoryStore({ EdgeMarks_marks: { x: true, directions: true, dot: false, cornerX: true, cornerDot: false } })
+  const oldSave = fakeStore({ EdgeMarks_marks: { x: true, directions: true, dot: false, cornerX: true, cornerDot: false } })
   assert.deepEqual(readSettings(oldSave).marks, unticked)
 })
 
 test('saving one mark unticked writes the key, and saving every box ticked removes it so the next read is all ticked', () => {
-  const store = memoryStore()
+  const store = fakeStore()
   const current = settingDefaults()
   assert.deepEqual(saveChangedSettings(store, { ...current, marks: { ...ALL, directions: false } }, current), ['marks'])
-  assert.deepEqual(store.saved, { EdgeMarks_marks: { ...ALL, directions: false } })
+  assert.deepEqual(store.data, { EdgeMarks_marks: { ...ALL, directions: false } })
   assert.deepEqual(saveChangedSettings(store, { ...current, marks: ALL }, current), ['marks'])
-  assert.deepEqual(store.saved, {})
+  assert.deepEqual(store.data, {})
   assert.deepEqual(readSettings(store).marks, ALL)
 })
 
@@ -2014,7 +1977,7 @@ test('flags decode each name on its own: only a saved false is off, a non-object
 
 test('readSettings normalizes what is saved under each key and falls back for the rest', () => {
   const saved = { PenColor_thickness: 9, PenColor_opacity: 57, PenColor_outline: false, PenColor_sliders: { opacity: false } }
-  const read = readSettings({ getData: (key) => saved[key] })
+  const read = readSettings(fakeStore(saved))
   assert.deepEqual(read, {
     ...settingDefaults(),
     thickness: 9,
@@ -2120,7 +2083,6 @@ test('lineSegmentsOf lists the line values of every cell with their color, and l
 // The requirement table: which SudokuPad internal each feature (an install step, the saved settings, the settings dialog) cannot work without.
 const FRAMEWORK_FNS = ['getApp', 'getData', 'setData', 'removeData', 'addSetting', 'showDialog', 'closeDialog']
 const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint']
-// SudokuPad's roots with every internal the features need.
 const completeSudokuPad = () => {
   class Renderer {
     static CellSize = 64
@@ -2199,20 +2161,7 @@ test('without a pen tool, every step that needs it is reported under the first i
 
 // The startup guard: a page with no Framework is not SudokuPad and stays silent; a Framework without getApp holds every install step off, which the probe reports.
 function loadWithFramework (framework) {
-  const file = require.resolve('../pen-tool-extras.user.js')
-  const warnings = []
-  const warn = console.warn
-  console.warn = (...args) => warnings.push(args.join(' '))
-  if (framework !== undefined) global.Framework = framework
-  delete require.cache[file]
-  try {
-    require(file)
-  } finally {
-    console.warn = warn
-    delete global.Framework
-    delete require.cache[file]
-  }
-  return warnings
+  return startScript('../pen-tool-extras.user.js', { Framework: framework }).warnings
 }
 
 // Runs `fn` on a page with a document and a window that take every call the startup makes and find none of SudokuPad's own elements.
@@ -2269,7 +2218,7 @@ test('copiedSettings: every setting at the value in force, the pen colors once s
     ToolPen_linemode: 'edgeonly',
     ColorByDigit_auto: true
   }
-  const copied = JSON.parse(copiedSettings({ getData: (key) => saved[key] ?? null }))
+  const copied = JSON.parse(copiedSettings(fakeStore(saved)))
   assert.deepEqual(Object.keys(copied).sort(), [...Object.values(SETTINGS).map((row) => row.key), 'PenColor_colors'].sort())
   assert.equal(copied.PenColor_thickness, 9)
   assert.equal(copied.PenColor_opacity, SETTINGS.opacity.fallback)

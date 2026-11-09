@@ -4,12 +4,11 @@
 // requires, kept over a reload; notes saved before 0.18.0 load in their places; a dialog covers the notes. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { closeDialogWith } from '../settings.mjs'
 import { settle, stable } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { boxOpen, finishNote, gridPoint } from '../board.mjs'
 
 const { DIALOG, TEXT_BOX, TEXTS } = draw
 // A real mouse lands on whole page pixels, and a note's place is rounded to a hundredth.
@@ -19,9 +18,7 @@ const ON_AT = [2.5, 2.5]
 // What 0.17.0 saved: a note at the middle of r3c3, in board units of 64 to a cell.
 const OLD_NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: 'old', at: [160, 160] }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
   let context, p, errors
@@ -29,13 +26,9 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = () => draw.saved(p)
   const texts = () => draw.texts(p)
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
   const near = (got, want) => got.length === want.length && got.every((v, i) => Math.abs(v - want[i]) <= NEAR_PX)
   const savedNote = async (text) => (await saved()).find((item) => item.text === text)
-  // The middle of the note that reads `text`, on the screen.
   const noteMiddle = (text) => read(([selector, want]) => {
     const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
     return [box.x + box.width / 2, box.y + box.height / 2]
@@ -43,7 +36,6 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
   const notePoint = (text) => draw.notePoint(p, text)
   const noteStart = (text) => draw.noteStart(p, text)
   const noteInCells = (text) => draw.noteInCells(p, text)
-  // Blank page points clear of the board and the controls: right of the controls, and below the board.
   const blankPoints = () => read(() => {
     const controls = document.querySelector('#controls').getBoundingClientRect()
     const board = Framework.app.svgRenderer.getElem().getBoundingClientRect()
@@ -52,7 +44,7 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
   const typeAt = async (point, content) => {
     await p.mouse.click(...point)
     await p.keyboard.type(content)
-    await draw.finishNote(p)
+    await finishNote(p)
   }
   const dragFromTo = async (from, to) => {
     await p.mouse.move(...from)
@@ -61,11 +53,9 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     await p.mouse.up()
   }
   const closeDialog = () => closeDialogWith(p, 'Cancel', DIALOG)
-  const boxOpen = async () => (await p.locator(TEXT_BOX).count()) === 1
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
     await reload()
   })
@@ -97,12 +87,12 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     const spots = [[controls.x + 2, undo.y + undo.height / 2], [topbar.x + topbar.width / 2, topbar.y + topbar.height / 2]]
     for (const spot of spots) {
       await p.mouse.click(...spot)
-      assert.equal(await boxOpen(), false, `a click at ${spot} opened no note`)
+      assert.equal(await boxOpen(p), false, `a click at ${spot} opened no note`)
     }
     await p.click('.draw-tool-settings')
     const dialog = await p.locator(DIALOG).boundingBox()
     await p.mouse.click(dialog.x + 4, dialog.y + dialog.height / 2)
-    assert.equal(await boxOpen(), false, 'a click in the dialog opened no note')
+    assert.equal(await boxOpen(p), false, 'a click in the dialog opened no note')
     await closeDialog()
     assert.deepEqual(await saved(), before)
   })
@@ -135,7 +125,7 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     const { right } = await blankPoints()
     await p.mouse.dblclick(...right)
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'R')
-    await draw.finishNote(p)
+    await finishNote(p)
     await p.mouse.click(...right, { button: 'right' })
     assert.deepEqual(await texts(), ['B'])
     assert.equal(await savedNote('R'), undefined)
@@ -218,7 +208,7 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     const note = await savedNote('N')
     assert.equal(note.box.length, 2)
     assert.equal(near(note.fixed, await notePoint('N')), true, `saved at ${note.fixed}, drawn from ${await notePoint('N')}`)
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('the page raised no error', () => {

@@ -3,11 +3,10 @@
 // The snippet runs ahead of the script's own startup check and puts the internal back after it, so SudokuPad's own code still runs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage, startPuzzle } from '../page.mjs'
 import { openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
+import { openWith, useBrowser } from '../session.mjs'
 
 const { DRAW_BUTTON, SETTINGS_EDITOR: EDITOR, pickDraw, script, texts, tool } = draw
 
@@ -15,9 +14,7 @@ const WARNING = /^draw-tool: /
 const BAR = '#sudokupad-scripts-notices [data-script="draw-tool"]'
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const missingBefore = (owner, name) => `;Framework.getApp().then(() => {
   const owner = ${owner}
@@ -32,7 +29,6 @@ const CASES = [
     owner: 'Framework',
     name: 'addTool',
     off: 'Text tool',
-    // There is no tool button, but the notes saved for the puzzle are still drawn, and the settings open from SudokuPad's own.
     works: async (p) => {
       assert.equal(await p.locator(DRAW_BUTTON).count(), 0, 'no tool button')
       assert.deepEqual(await settle(() => texts(p), ['15']), ['15'], 'the saved note is drawn')
@@ -45,7 +41,6 @@ const CASES = [
     owner: 'Framework',
     name: 'addSetting',
     off: 'settings',
-    // There is no settings entry and no gear, but the tool works and the saved note is drawn.
     works: async (p) => {
       await pickDraw(p)
       assert.equal(await tool(p), 'draw')
@@ -61,13 +56,11 @@ for (const kase of CASES) {
     const warned = []
 
     before(async () => {
-      ;({ context, p, errors } = await openPage(browser, {
+      ;({ context, p, errors } = await openWith(browser(), [{ code: `${missingBefore(kase.owner, kase.name)}${script}` }], {
         expectedSkips: [WARNING],
-        seed: (page) => { page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) }) }
+        seed: (page) => { page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) }) },
+        afterStart: (page) => draw.plantDrawing(page, [NOTE])
       }))
-      await startPuzzle(p)
-      await draw.plantDrawing(p, [NOTE])
-      await p.addScriptTag({ content: `${missingBefore(kase.owner, kase.name)}${script}` })
     })
     after(async () => { await context.close() })
 

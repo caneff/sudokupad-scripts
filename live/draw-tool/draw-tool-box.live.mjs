@@ -3,12 +3,11 @@
 // in a fresh page carries both, an invalid pasted value reading as Page and as off.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { closeDialogWith } from '../settings.mjs'
+import { STATUS, actButton, closeDialogWith } from '../settings.mjs'
+import { useBrowser } from '../session.mjs'
 
-const { BOX_KEY, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXTS, pickDraw } = draw
+const { BOX_KEY, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, pickDraw } = draw
 const PICKS = `${EDITOR} button[data-role="box-pick"]`
 const CUSTOM = `${EDITOR} input[data-role="box-custom"]`
 const FRAME_PICKS = `${EDITOR} button[data-role="frame-pick"]`
@@ -21,13 +20,10 @@ const ITEMS = [
 ]
 const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
-const open = () => openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
+const open = () => draw.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
 const stored = (p, key) => p.evaluate((k) => Framework.getData(k) ?? null, key)
-// Each note's box fill and shadow as the browser computes them, by text.
 const looks = (p) => p.evaluate((selector) => Object.fromEntries([...document.querySelectorAll(selector)].map((e) => {
   const style = window.getComputedStyle(e)
   return [e.textContent, { fill: style.backgroundColor, shadow: style.boxShadow }]
@@ -53,7 +49,6 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
   let context, p, errors
   before(async () => {
     ;({ context, p, errors } = await open())
-    await draw.boot(p)
     await draw.forgetDrawings(p)
     await p.evaluate(([box, frame]) => { Framework.removeData(box); Framework.removeData(frame) }, [BOX_KEY, FRAME_KEY])
     await draw.plantDrawing(p, ITEMS)
@@ -202,7 +197,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       await p.locator(FRAME_ON).click()
     })
     await p.click(SETTINGS_BUTTON)
-    await p.locator('.dialog button[data-act="copy-settings"]').click()
+    await actButton(p, 'copy-settings').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
     const copied = JSON.parse(await p.evaluate(() => navigator.clipboard.readText()))
     assert.equal(copied[BOX_KEY], 'yellow')
@@ -211,14 +206,13 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
 
     const other = await open()
     try {
-      await draw.boot(other.p)
       await draw.plantDrawing(other.p, ITEMS)
       await draw.reload(other.p)
       await pickDraw(other.p)
       for (const [text, box, frame] of [[JSON.stringify(copied), 'yellow', true], [JSON.stringify({ [BOX_KEY]: 'plaid', [FRAME_KEY]: 'yes' }), 'page', false]]) {
         await other.p.evaluate((t) => navigator.clipboard.writeText(t), text)
         await other.p.click(SETTINGS_BUTTON)
-        await other.p.locator('.dialog button[data-act="paste-settings"]').click()
+        await actButton(other.p, 'paste-settings').click()
         await other.p.locator(STATUS).filter({ hasText: /^Pasted \d settings?\.$/ }).waitFor()
         assert.equal(await stored(other.p, BOX_KEY), box)
         assert.equal(await stored(other.p, FRAME_KEY), frame)

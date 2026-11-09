@@ -5,14 +5,11 @@
 /* global Framework, ToolPen, Image, TouchEvent, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
 import { dialogButton, effectiveOpacities, openExtrasEditor } from '../settings.mjs'
 import { draw, drag, openPenTool, penEntries, penValuesNoColor, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
-
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
+import { useBrowser } from '../session.mjs'
 
 const THICKNESS_KEY = 'PenColor_thickness'
 const SLIDERS_KEY = 'PenColor_sliders'
@@ -21,9 +18,7 @@ const LINE_MODE_KEY = 'ToolPen_linemode'
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -52,20 +47,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const GRID_X = 300
   const dragToMax = async (selector) => dragSlider(selector, (await p.locator(selector).boundingBox()).x + 400)
 
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    // The pen tool is off until its own setting turns it on.
-    await read(() => Framework.setSetting('toolpen', true))
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await openPenTool(p)
-  }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
+  const reload = () => extras.reload(p)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await boot()
+    ;({ context, p, errors } = await extras.open(browser()))
     await read(([a, b]) => { Framework.removeData(a); Framework.removeData(b) }, [THICKNESS_KEY, OPACITY_KEY])
     await draw(p, 8)
   })
@@ -96,7 +81,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // (see LINE_PATHS in the script): a center line joins cell middles, an edge line runs along the cell edges between cell corners.
   const CENTER_LINES = ['1', '2', 'd', 'e']
   const EDGE_LINES = ['7', '8', '9', 'a', 'f', 'g']
-  // The kinds of line a real drag adds: one drag of each shape, over cell middles and over cell corners.
   const dragKinds = async (points) => {
     const before = await penEntries(p)
     await drag(p, points)
@@ -463,14 +447,7 @@ describe('with Dark Page on', { concurrency: false }, () => {
   let context, p
 
   before(async () => {
-    ;({ context, p } = await openPage(browser))
-    await startPuzzle(p)
-    await p.addScriptTag({ content: readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8') })
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await p.evaluate(() => Framework.setSetting('toolpen', true))
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await openPenTool(p)
+    ;({ context, p } = await extras.open(browser(), { scripts: ['dark-page.user.js', extras.SCRIPT_FILE] }))
   })
   after(async () => { await context.close() })
 

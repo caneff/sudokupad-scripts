@@ -4,12 +4,14 @@
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { gridPoint, typeText } from '../board.mjs'
 
 const { TEXTS, TEXT_BOX } = draw
+// How long the outline and handles stay hidden after the last nudge: the script's CHROME_BACK_MS, which it does not export, named here once on purpose,
+// so a change to the script's value fails the check instead of moving it along.
+const CHROME_BACK_MS = 300
 const { HIT_MARGIN_PX, WINDOW_PAD_PX } = createRequire(import.meta.url)('../../draw-tool.user.js')
 const SELECTION = '#draw-tool-layer .draw-tool-selection'
 const HANDLES = '#draw-tool-layer .draw-tool-resize'
@@ -22,27 +24,17 @@ const A_AT = [2.5, 2.5]
 const B_AT = [6.5, 2.5]
 const C_AT = [4.5, 6.5]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   let context, p, errors
 
   const noteBox = (text) => p.locator(TEXTS).filter({ hasText: new RegExp(`^${text}$`) }).boundingBox()
-  const typeNote = async (at, content) => {
-    await p.mouse.click(...await gridPoint(p, at))
-    await p.keyboard.type(content)
-    // The first Escape closes the note and leaves it selected, the second ends the selection.
-    await p.keyboard.press('Escape')
-    await p.keyboard.press('Escape')
-  }
   const savedNote = async (text) => (await draw.saved(p)).find((item) => item.text === text)
   const visible = (selector) => p.evaluate((s) => [...document.querySelectorAll(s)].map((e) => window.getComputedStyle(e).visibility), selector)
   const middle = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
   const selectedCount = () => p.locator(`${TEXTS}.draw-tool-selected`).count()
   const onlySelected = async (text) => (await p.locator(`${TEXTS}.draw-tool-selected`).allTextContents()).join() === text
-  // The board point a screen point is over, to compare with a saved note's point.
   const boardPoint = (point) => p.evaluate(([x, y]) => {
     const m = Framework.app.svgRenderer.getElem().getScreenCTM().inverse()
     const q = new window.DOMPoint(x, y).matrixTransform(m)
@@ -50,31 +42,41 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   }, point)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: WINDOW } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: WINDOW } }))
   })
   after(async () => { await context.close() })
 
-  // Three notes apart from each other, Text Anywhere current and nothing selected.
   beforeEach(async () => {
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
-    await typeNote(A_AT, 'AA')
-    await typeNote(B_AT, 'BB')
-    await typeNote(C_AT, 'CC')
+    await draw.reloadOnDraw(p)
+    await typeText(p, A_AT, 'AA')
+    await typeText(p, B_AT, 'BB')
+    await typeText(p, C_AT, 'CC')
     assert.equal(await selectedCount(), 0)
   })
 
   describe('the outline and handles while arrow keys nudge', () => {
-    it('hide on the first nudge, stay hidden while nudging, and come back about 300 ms after the last', async () => {
+    it('hide on the first nudge, stay hidden while nudging, and come back CHROME_BACK_MS after the last', async () => {
       await p.mouse.click(...middle(await noteBox('AA')))
       assert.deepEqual(await visible(SELECTION), ['visible'])
       assert.deepEqual(await visible(HANDLES), ['visible', 'visible', 'visible', 'visible'])
       await p.keyboard.press('ArrowRight')
       assert.deepEqual(await visible(SELECTION), ['hidden'], 'the outline hides')
       assert.deepEqual(await visible(HANDLES), ['hidden', 'hidden', 'hidden', 'hidden'], 'the handles hide')
-      await p.waitForFunction((s) => [...document.querySelectorAll(s)].every((e) => window.getComputedStyle(e).visibility === 'visible'), `${SELECTION}, ${HANDLES}`)
+      // A second nudge restarts the wait: they are still hidden after it, and they come back no sooner than CHROME_BACK_MS after it (a lower bound a timer cannot beat).
+      // The clock starts in the page, at the nudge's keydown, where the script's own timer starts, so the time a key press takes to reach the page cannot count against the lower bound.
+      await p.evaluate(() => {
+        window.addEventListener('keydown', () => { window.__lastNudgeAt = window.performance.now() }, { capture: true })
+      })
+      await p.keyboard.press('ArrowRight')
+      assert.deepEqual(await visible(SELECTION), ['hidden'], 'the outline stays hidden while nudging')
+      await p.waitForFunction((s) => {
+        if (![...document.querySelectorAll(s)].every((e) => window.getComputedStyle(e).visibility === 'visible')) return false
+        window.__backAt = window.performance.now()
+        return true
+      }, `${SELECTION}, ${HANDLES}`)
+      const hiddenFor = await p.evaluate(() => window.__backAt - window.__lastNudgeAt)
+      assert.equal(hiddenFor >= CHROME_BACK_MS, true, `they come back ${CHROME_BACK_MS} ms after the last nudge, not sooner: after ${hiddenFor} ms`)
       assert.equal(await p.locator(`${TEXTS}.draw-tool-selected`).count(), 1, 'the note is still selected')
     })
 

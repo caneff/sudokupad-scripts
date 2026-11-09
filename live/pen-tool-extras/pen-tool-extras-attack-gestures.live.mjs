@@ -6,16 +6,15 @@
 /* global Framework */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
-import { captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
-import { gridPoint, mouseDrag, openPenTool, penEntries } from '../pen.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
+import { gridPoint, mouseDrag, undoAll } from '../board.mjs'
+import { openPenTool, penEntries } from '../pen.mjs'
 import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { FLOOR_MS, settle, stable, STABLE_MS } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
+const { HOLD_TO_EDIT_MS, HOLD_WAIT_MS } = extras
 
 const COLOR_BUTTON = '.tool-pen button[data-key="2"]'
 const PICKERS = '.pen-tool-extras-picker'
@@ -25,7 +24,6 @@ const OPACITY = '#pen-tool-extras-opacity'
 const OPACITY_KEY = 'PenColor_opacity'
 // The drawn drag highlight: SudokuPad's own `.penhint`, which the script moves into its hint layer.
 const HINTS = '.penhint, #pen-tool-extras-hint *'
-// SudokuPad's hotkey for the Corner tool, and the tool it names.
 const OTHER_TOOL_KEY = 'x'
 const OTHER_TOOL = 'corner'
 // Where the line goes, as [row, column] in cells from the grid's top left: along row 2.5 from column 1.5 to 4.5.
@@ -34,12 +32,9 @@ const LINE = [[2.5, 1.5], [2.5, 4.5]]
 const NEXT_LINE = [[5.5, 1.5], [5.5, 4.5]]
 const CLICK_AT = [7.5, 7.5]
 const OUTSIDE_CLICK_AT = [6.5, 7.5]
-const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 const SMALLER_WINDOW = { width: 1100, height: 800 }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () => {
   let context, p, errors
@@ -50,7 +45,6 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
   const tool = () => read(() => Framework.app.tool)
   const hints = () => p.locator(HINTS).count()
   const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
-  const undoAll = async () => { while ((await undoDepth()) > 0) await p.click('#control-undo') }
   const toTool = async () => {
     await openPenTool(p)
     await p.locator('.tool-pen button[data-key="1"]').click()
@@ -75,23 +69,17 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
     await p.mouse.click(...await gridPoint(p, CLICK_AT))
     assert.equal(await settle(async () => (await penEntries(p)).length > afterLine, true), true, `${why}: an ordinary click still marks`)
     assert.equal(await settle(hints, 0), 0, `${why}: no drag highlight is left after an ordinary drag`)
-    await undoAll()
+    await undoAll(p)
     assert.deepEqual(await penEntries(p), [], `${why}: undoing everything leaves the pen as it began`)
     assert.deepEqual(errors, [], `${why}: the page shows no error after recovering`)
   }
-  // The line is drawn once or not at all: after the interruption's release, what the pen holds is the clean drag's entries or nothing.
   const assertWholeOrNone = async (why) => {
     const entries = await settle(async () => JSON.stringify(await penEntries(p)), JSON.stringify(whole), FLOOR_MS * 2, STABLE_MS)
     assert.equal([JSON.stringify([]), JSON.stringify(whole)].includes(entries), true, `${why}: the pen holds ${entries}, neither the whole line ${JSON.stringify(whole)} nor nothing`)
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await read(() => { Framework.setSetting('toolpen', true) })
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
+    ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors, penTool: false }))
     await toTool()
     await mouseDrag(p, LINE)
     whole = await settle(() => penEntries(p), undefined, FLOOR_MS * 2, STABLE_MS)

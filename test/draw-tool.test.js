@@ -6,6 +6,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
+const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
@@ -51,18 +52,11 @@ test('a puzzle with no saved drawing starts empty', () => {
   assert.deepEqual(readDrawing(null), { items: [], kept: [] })
 })
 
-// Framework's saved-data calls over a plain object, as test/specs/spec-204-closing.test.js has them.
-const storeOf = (saved) => ({
-  getData: (key) => (key in saved ? saved[key] : null),
-  setData: (key, value) => { saved[key] = value },
-  removeData: (key) => { delete saved[key] }
-})
 const line = textItem([0, 0], 'a', 1, 20)
 const puzzles = (n) => Array.from({ length: n }, (_, i) => `p${i + 1}`)
 
 // A cage sum "15" at size 20, centred on (100, 50) in board units.
 const sum = textItem([100, 50], '15', 3, 20)
-// The notes a saved list reads as; the entries it keeps are `readDrawing(saved).kept`.
 const readItems = (saved) => readDrawing(saved).items
 // What an earlier version saved: neither is drawn, and both stay in storage.
 const oldStroke = { kind: 'stroke', color: 1, width: 6, opacity: 100, points: [[0, 50], [200, 50]] }
@@ -77,7 +71,7 @@ test('saving a drawing for a 51st puzzle drops the oldest puzzle and keeps the o
 test('saving a drawing for a 51st puzzle keeps the drawings of the 50 newest and removes the oldest one', () => {
   const saved = { [INDEX_KEY]: puzzles(50) }
   for (const key of puzzles(50)) saved[DRAWING_PREFIX + key] = [line]
-  saveDrawingTo(storeOf(saved), 'p51', [line])
+  saveDrawingTo(fakeStore(saved), 'p51', [line])
   assert.deepEqual(saved[INDEX_KEY], puzzles(51).slice(1))
   assert.deepEqual(Object.keys(saved).filter((k) => k !== INDEX_KEY).sort(), puzzles(51).slice(1).map((key) => DRAWING_PREFIX + key).sort())
 })
@@ -86,21 +80,21 @@ test('a save whose write throws loses no saved drawing and leaves the index as i
   const saved = { [INDEX_KEY]: puzzles(50) }
   for (const key of puzzles(50)) saved[DRAWING_PREFIX + key] = [line]
   const before = structuredClone(saved)
-  const full = { ...storeOf(saved), setData: () => { throw new Error('QuotaExceededError') } }
+  const full = { ...fakeStore(saved), setData: () => { throw new Error('QuotaExceededError') } }
   assert.throws(() => saveDrawingTo(full, 'p51', [line]), /QuotaExceededError/)
   assert.deepEqual(saved, before)
 })
 
 test('an index that cannot be read refuses the save, and nothing is written', () => {
   const saved = { [INDEX_KEY]: 'oops', [DRAWING_PREFIX + 'p1']: [line] }
-  assert.throws(() => saveDrawingTo(storeOf(saved), 'p1', []), /saved index/)
-  assert.throws(() => saveDrawingTo(storeOf(saved), 'p2', [line]), /saved index/)
+  assert.throws(() => saveDrawingTo(fakeStore(saved), 'p1', []), /saved index/)
+  assert.throws(() => saveDrawingTo(fakeStore(saved), 'p2', [line]), /saved index/)
   assert.deepEqual(saved, { [INDEX_KEY]: 'oops', [DRAWING_PREFIX + 'p1']: [line] })
 })
 
 test('saving an empty drawing removes the puzzle\'s drawing and takes it out of the index', () => {
   const saved = { [INDEX_KEY]: ['p1', 'p2'], [DRAWING_PREFIX + 'p1']: [line], [DRAWING_PREFIX + 'p2']: [line] }
-  saveDrawingTo(storeOf(saved), 'p1', [])
+  saveDrawingTo(fakeStore(saved), 'p1', [])
   assert.deepEqual(saved, { [INDEX_KEY]: ['p2'], [DRAWING_PREFIX + 'p2']: [line] })
 })
 
@@ -110,7 +104,7 @@ test('keeping a Restart\'s notes for a 51st puzzle removes the oldest puzzle\'s 
     saved[DRAWING_PREFIX + key] = [line]
     saved[RESTARTED_PREFIX + key] = [line]
   }
-  keepRestartedTo(storeOf(saved), 'p51', [sum])
+  keepRestartedTo(fakeStore(saved), 'p51', [sum])
   assert.deepEqual(saved[INDEX_KEY], puzzles(51).slice(1))
   assert.equal(saved[DRAWING_PREFIX + 'p1'], undefined)
   assert.equal(saved[RESTARTED_PREFIX + 'p1'], undefined)
@@ -120,21 +114,21 @@ test('keeping a Restart\'s notes for a 51st puzzle removes the oldest puzzle\'s 
 
 test('a drawing for a 51st puzzle removes the oldest puzzle\'s kept notes with its drawing', () => {
   const saved = { [INDEX_KEY]: puzzles(50), [DRAWING_PREFIX + 'p1']: [line], [RESTARTED_PREFIX + 'p1']: [line] }
-  saveDrawingTo(storeOf(saved), 'p51', [line])
+  saveDrawingTo(fakeStore(saved), 'p51', [line])
   assert.equal(saved[DRAWING_PREFIX + 'p1'], undefined)
   assert.equal(saved[RESTARTED_PREFIX + 'p1'], undefined)
 })
 
 test('Restart\'s empty drawing keeps the puzzle in the index while its kept notes are saved, so they drop out with it', () => {
   const saved = { [INDEX_KEY]: ['p1', 'p2'], [DRAWING_PREFIX + 'p1']: [sum] }
-  keepRestartedTo(storeOf(saved), 'p1', [sum])
-  saveDrawingTo(storeOf(saved), 'p1', [])
+  keepRestartedTo(fakeStore(saved), 'p1', [sum])
+  saveDrawingTo(fakeStore(saved), 'p1', [])
   assert.deepEqual(saved, { [INDEX_KEY]: ['p2', 'p1'], [RESTARTED_PREFIX + 'p1']: [sum] })
 })
 
 test('a Restart that clears no notes drops the notes an earlier Restart kept', () => {
   const saved = { [INDEX_KEY]: ['p1'], [RESTARTED_PREFIX + 'p1']: [sum] }
-  keepRestartedTo(storeOf(saved), 'p1', [])
+  keepRestartedTo(fakeStore(saved), 'p1', [])
   assert.deepEqual(saved, { [INDEX_KEY]: ['p1'] })
 })
 
@@ -305,12 +299,12 @@ test('a Darker page preset the palette lacks, or an unknown one, throws', () => 
 })
 
 test('Copy settings holds the colors, size, transparency, outline, box color, frame and font, defaults included, and no notes, color pick or background', () => {
-  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed', DrawTool_color: 4, DrawTool_drawing_x: [] })))
+  const copied = JSON.parse(copiedSettings(fakeStore({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed', DrawTool_color: 4, DrawTool_drawing_x: [] })))
   assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' })
 })
 
 test('Copy settings leaves the colors out until they are saved', () => {
-  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY, [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false, [FONT_KEY]: 'proportional' })
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY, [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false, [FONT_KEY]: 'proportional' })
 })
 
 // A row added to a copy of the table is handled by Copy, Paste, the start load, the snapshot's keys and Save's changed list, with no other edit. The script's own
@@ -321,20 +315,20 @@ const SPIN_ROW = { name: 'spin', key: SPIN_KEY, read: (saved) => (saved === 'lef
 const WITH_SPIN = [...LOOKS, SPIN_ROW]
 
 test('a row added to a copy of the looks table is copied, pasted and loaded, and is in the snapshot\'s keys and Save\'s changed rows', () => {
-  const store = storeOf({ [SPIN_KEY]: 'left' })
+  const store = fakeStore({ [SPIN_KEY]: 'left' })
   assert.equal(JSON.parse(copiedSettings(store, WITH_SPIN))[SPIN_KEY], 'left')
-  assert.equal(JSON.parse(copiedSettings(storeOf({}), WITH_SPIN))[SPIN_KEY], 'none')
+  assert.equal(JSON.parse(copiedSettings(fakeStore({}), WITH_SPIN))[SPIN_KEY], 'none')
   assert.deepEqual(pastedSettings(JSON.stringify({ [SPIN_KEY]: 'left' }), lookReaders(WITH_SPIN)).values, { [SPIN_KEY]: 'left' })
   assert.equal(readLooks(store, WITH_SPIN).spin, 'left')
-  assert.equal(readLooks(storeOf({}), WITH_SPIN).spin, 'none')
+  assert.equal(readLooks(fakeStore({}), WITH_SPIN).spin, 'none')
   assert.ok(lookKeys(WITH_SPIN).includes(SPIN_KEY), 'the snapshot\'s keys hold the added row\'s key')
-  assert.deepEqual(changedDialogLooks(WITH_SPIN, { ...readLooks(storeOf({}), WITH_SPIN), spin: 'left' }, readLooks(storeOf({}), WITH_SPIN)).map((row) => row.name), ['spin'])
+  assert.deepEqual(changedDialogLooks(WITH_SPIN, { ...readLooks(fakeStore({}), WITH_SPIN), spin: 'left' }, readLooks(fakeStore({}), WITH_SPIN)).map((row) => row.name), ['spin'])
 })
 
 test('the looks table is the one list behind Paste and Copy: every row reads and copies, and the paste readers match', () => {
   assert.deepEqual(Object.keys(lookReaders(LOOKS)), LOOKS.map((row) => row.key))
-  assert.deepEqual(Object.keys(JSON.parse(copiedSettings(storeOf({})))), LOOKS.map((row) => row.key))
-  assert.deepEqual(Object.keys(readLooks(storeOf({}))), LOOKS.map((row) => row.name))
+  assert.deepEqual(Object.keys(JSON.parse(copiedSettings(fakeStore({})))), LOOKS.map((row) => row.key))
+  assert.deepEqual(Object.keys(readLooks(fakeStore({}))), LOOKS.map((row) => row.name))
   for (const key of lookKeys(LOOKS)) assert.ok(key in READERS, key)
 })
 
@@ -352,7 +346,7 @@ test('a pasted size or transparency that is off its slider is skipped, and a pas
 })
 
 test('changedDialogLooks lists the rows whose draft differs from the value in force', () => {
-  const now = readLooks(storeOf({}))
+  const now = readLooks(fakeStore({}))
   assert.deepEqual(changedDialogLooks(LOOKS, { ...now }, now), [])
   assert.deepEqual(changedDialogLooks(LOOKS, { ...now, frame: true, noteFont: 'fixed' }, now).map((row) => row.name), ['frame', 'noteFont'])
   assert.deepEqual(changedDialogLooks(LOOKS, { ...now, width: 9 }, now), [], 'the sliders are not the dialog\'s')
@@ -437,7 +431,7 @@ test('a drawing with strokes and shapes saved by an earlier version reads back w
   const drawing = [oldStroke, sum, oldShape]
   assert.deepEqual(readItems(JSON.parse(JSON.stringify(drawing))), drawing)
   const saved = {}
-  saveDrawingTo(storeOf(saved), 'p1', readItems(drawing).concat(textItem([1, 1], 'x', 1, 20)))
+  saveDrawingTo(fakeStore(saved), 'p1', readItems(drawing).concat(textItem([1, 1], 'x', 1, 20)))
   assert.deepEqual(saved[DRAWING_PREFIX + 'p1'].data.slice(0, 3), drawing)
 })
 
@@ -468,9 +462,9 @@ test('a note at a size or opacity outside today\'s sliders still reads', () => {
 test('a save writes the kept entries back after the notes, versioned, and keeps them when no note is left', () => {
   const bad = { ...sum, text: 15 }
   const saved = {}
-  saveDrawingTo(storeOf(saved), 'p1', [sum], [bad])
+  saveDrawingTo(fakeStore(saved), 'p1', [sum], [bad])
   assert.deepEqual(saved[DRAWING_PREFIX + 'p1'], { v: 0, data: [sum, bad] })
-  saveDrawingTo(storeOf(saved), 'p1', [], [bad])
+  saveDrawingTo(fakeStore(saved), 'p1', [], [bad])
   assert.deepEqual(saved[DRAWING_PREFIX + 'p1'], { v: 0, data: [bad] })
   assert.deepEqual(saved[INDEX_KEY], ['p1'])
 })
@@ -479,11 +473,11 @@ test('loadDrawing reads a versioned drawing, an unversioned one and none, and re
   const bad = { ...sum, text: 15 }
   const key = DRAWING_PREFIX + 'p1'
   const saved = {}
-  saveDrawingTo(storeOf(saved), 'p1', [sum], [bad])
-  assert.deepEqual(loadDrawing(storeOf(saved), 'p1'), { items: [sum], kept: [bad], unreadable: undefined })
-  assert.deepEqual(loadDrawing(storeOf({ [key]: [sum, bad] }), 'p1'), { items: [sum], kept: [bad], unreadable: undefined })
-  assert.deepEqual(loadDrawing(storeOf({}), 'p1'), { items: [], kept: [], unreadable: undefined })
-  const { result, warnings } = quietly(() => loadDrawing(storeOf({ [key]: 'not a drawing' }), 'p1'))
+  saveDrawingTo(fakeStore(saved), 'p1', [sum], [bad])
+  assert.deepEqual(loadDrawing(fakeStore(saved), 'p1'), { items: [sum], kept: [bad], unreadable: undefined })
+  assert.deepEqual(loadDrawing(fakeStore({ [key]: [sum, bad] }), 'p1'), { items: [sum], kept: [bad], unreadable: undefined })
+  assert.deepEqual(loadDrawing(fakeStore({}), 'p1'), { items: [], kept: [], unreadable: undefined })
+  const { result, warnings } = quietly(() => loadDrawing(fakeStore({ [key]: 'not a drawing' }), 'p1'))
   assert.deepEqual([result.items, result.kept], [[], []])
   assert.match(result.unreadable, /saved drawing/)
   assert.equal(warnings.length, 1)
@@ -1083,7 +1077,6 @@ test('once a note is drawn its box is the size drawn, not the guess from its cha
   assert.deepEqual(textBox({ ...long, box: [200, 60], [DRAWN_SIZE]: [300, 23] }), { left: 100, right: 300, top: 50, bottom: 110 })
 })
 
-// A 1000x900 window.
 const WINDOW = { left: 0, top: 0, right: 1000, bottom: 900 }
 
 test('a note whose box is inside the window stays where it is', () => {
@@ -1116,17 +1109,10 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 294.4, right: 385.6, top: 394.4, bottom: 451.6 })
 })
 
-// A SudokuPad with every internal the features declare, and the helpers that take one away.
 const completeRoots = () => {
   const app = { on () {}, getToolNames () {}, puzzle: { on () {} } }
   const Framework = { getApp () {}, getData () {}, setData () {}, removeData () {}, addTool () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { svgRenderer: { getElem () {} }, puzzle: { undoStack: [] }, grid: { rows: 9, cols: 9 }, tools: { colour: {} } } }
   return { Framework, app }
-}
-const withoutPath = (roots, internal) => {
-  const [root, ...keys] = internal.split('.')
-  const last = keys.pop()
-  delete keys.reduce((owner, key) => owner[key], roots[root])[last]
-  return roots
 }
 
 test('Text Anywhere declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
@@ -1180,7 +1166,6 @@ test('with Shift the step grows from ten pixels to the Shift maximum', () => {
 })
 
 const contains = (text, part, message) => assert.match(text, new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), message)
-// The dialog's three sample rows: the buttons of one row, in order, each as { role, value, label, pressed, style }.
 const pick = (html, role) => [...html.matchAll(new RegExp(`<button[^>]*data-role="${role}"[^>]*>`, 'g'))].map(([tag]) => ({
   value: tag.match(/data-value="([^"]*)"/)[1],
   label: tag.match(/aria-label="([^"]*)"/)[1],
@@ -1397,7 +1382,7 @@ test('a locked move keeps the axis of greater movement and zeroes the other; a t
   assert.deepEqual(axisLocked([5, -12], false), [5, -12], 'unlocked moves freely')
 })
 
-test('lockedAxis is the axis of lesser movement, and x on a tie', () => {
+test('lockedAxis is the axis of lesser movement, and y on a tie, so x keeps moving', () => {
   assert.equal(lockedAxis([30, -12]), 1)
   assert.equal(lockedAxis([5, -12]), 0)
   assert.equal(lockedAxis([7, 7]), 1)

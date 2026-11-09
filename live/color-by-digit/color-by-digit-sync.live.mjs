@@ -2,14 +2,13 @@
 // profile, so cells and digits take different profiles, on Same as cell, and on None, which turns digit coloring off.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
-import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, savedState, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, savedState, shadeReaders, watch, selectCell, reloadSession } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 const { shadeOn } = shadeReaders(createRequire(import.meta.url)('../../color-by-digit.user.js'))
 
 const CIRCLES = '#color-by-digit-circles'
@@ -26,9 +25,7 @@ const TWO = [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_E
 const SPLIT_CELLS = [['4'], []]
 const ODD_EVEN_CELLS = [['1'], ['2']]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const tools = (p) => {
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -39,8 +36,7 @@ const tools = (p) => {
   const getState = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
   const icon = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
   const shownCircles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].filter((c) => window.getComputedStyle(c.parentNode).display !== 'none').length, CIRCLES)
-  const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-  const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
+  const enter = async (r, c, digit) => { await selectCell(p, r, c); await p.keyboard.press(digit) }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
   const openMenu = async () => {
@@ -72,7 +68,7 @@ const tools = (p) => {
     assert.equal(await settle(() => p.locator(DIGIT_SELECT).inputValue(), value), value)
   }
   const modeChoice = () => p.$$eval(`${EDITOR} select[data-role="mode-draft"] option`, (es) => es.map((e) => `${e.value}${e.selected ? '*' : ''}`))
-  return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, select, undo, redo, menu, pick, openEditor, save, chooseDigit, modeChoice }
+  return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, undo, redo, menu, pick, openEditor, save, chooseDigit, modeChoice }
 }
 
 describe('the digit profile unsynced, saved synced in Both, injected after Start Puzzle', { concurrency: false }, () => {
@@ -81,7 +77,7 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   const fill = (digit) => allFillsOn(p, 'entered', digit)
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
     t = tools(p)
     for (const key of ['1', '2', '4']) SHADE[key] = await shadeOn(p, key)
     await t.enter(0, 2, '4')
@@ -178,8 +174,7 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   })
 
   it('a reload keeps both picks', async () => {
-    await p.reload({ waitUntil: 'load' })
-    await startInjected(p, script)
+    await reloadSession(p, script)
     assert.equal(await t.label(), 'Digit')
     assert.deepEqual(await t.icon(), ODD_EVEN_ICON)
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], heads: ['Cell', 'Digit'] })
@@ -208,7 +203,7 @@ describe('the dialog\'s Cell and Digit pulldowns, saved synced in Both, injected
   const ROW = (index) => `${EDITOR} [data-role=profile-row][data-index="${index}"]`
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
     t = tools(p)
     for (const key of ['1', '2', '4']) SHADE[key] = await shadeOn(p, key)
     await t.enter(0, 2, '4')
@@ -269,7 +264,7 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
   const fill = (digit) => allFillsOn(p, 'entered', digit)
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: { ...savedProfiles({ profiles: TWO, active: 0, digitActive: 1 }), [MODE_STORAGE_KEY]: 'both' } }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0, digitActive: 1 }), [MODE_STORAGE_KEY]: 'both' } }))
     t = tools(p)
     for (const key of ['1', '2']) SHADE[key] = await shadeOn(p, key)
     await t.enter(0, 2, '4')
@@ -285,7 +280,7 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
     assert.equal(await settle(t.shownCircles, 1), 1)
   })
 
-  it('the Digit pulldown is at the top of the dialog; on None, the mode choice is Cell and Off with Both fallen back to Cell', async () => {
+  it('the Digit pulldown opens on the saved digit profile and lists Same as cell, the profiles and None; on None the mode choice is Cell and Off, with Both fallen back to Cell', async () => {
     await t.openEditor()
     assert.equal(await p.locator(DIGIT_SELECT).inputValue(), '1')
     assert.deepEqual(await t.modeChoice(), ['cell', 'digit', 'both*', 'off'])
@@ -318,8 +313,7 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
   })
 
   it('a reload keeps it off', async () => {
-    await p.reload({ waitUntil: 'load' })
-    await startInjected(p, script)
+    await reloadSession(p, script)
     assert.equal(await t.label(), 'Cell')
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], heads: [] })
     assert.deepEqual(await watch(fill('4')), [[DEFAULT_FILL]])

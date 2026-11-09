@@ -3,10 +3,9 @@
 // note's drawn left and top land on whole device pixels after a move, a nudge or a resize. Reduced motion makes the fade in instant. Real mouse and keyboard input.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { gridPoint } from '../board.mjs'
 
 const { CLEAR_BUTTON, HANDLES: HANDLE, TEXTS, TEXT_BOX, middleOf, pickDraw } = draw
 const ITEMS = [
@@ -21,9 +20,7 @@ const FADE_IN_CURVE = 'cubic-bezier(0, 0, 0, 1)'
 const DEVICE_PIXEL_RATIO = 1.25
 const WHOLE_DEVICE_PX = 0.02
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s motion and precision touches', { concurrency: false }, () => {
   let context, p
@@ -35,7 +32,6 @@ describe('Text Anywhere\'s motion and precision touches', { concurrency: false }
     await draw.reload(p)
     await pickDraw(p)
   }
-  // The computed cursor of the element under the page point `[x, y]` and of the body.
   const cursorsAt = ([x, y]) => p.evaluate(([px, py]) => [document.elementFromPoint(px, py), document.body].map((e) => window.getComputedStyle(e).cursor), [x, y])
   const durationOf = (selector) => p.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transitionDuration, selector)
   const drawnLeftTop = (text) => p.evaluate(([selector, want, ratio]) => {
@@ -46,8 +42,7 @@ describe('Text Anywhere\'s motion and precision touches', { concurrency: false }
   const savedTexts = async () => (await draw.saved(p)).map((item) => item.text)
 
   before(async () => {
-    ;({ context, p } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 }, deviceScaleFactor: DEVICE_PIXEL_RATIO } }))
-    await draw.boot(p)
+    ;({ context, p } = await draw.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 }, deviceScaleFactor: DEVICE_PIXEL_RATIO } }))
   })
   after(async () => { await context.close() })
 
@@ -125,7 +120,6 @@ describe('Text Anywhere\'s motion and precision touches', { concurrency: false }
   describe('a deleted note', () => {
     beforeEach(reset)
 
-    // Whether the note's element is still in the page right after `act`.
     const lingersAfter = async (text, act) => {
       await act()
       return p.evaluate(([selector, want]) => [...document.querySelectorAll(selector)].some((e) => e.textContent === want), [TEXTS, text])
@@ -225,8 +219,7 @@ describe('Text Anywhere\'s motion and precision touches', { concurrency: false }
     let halfContext, half
 
     before(async () => {
-      ;({ context: halfContext, p: half } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 }, deviceScaleFactor: 0.5 } }))
-      await draw.boot(half)
+      ;({ context: halfContext, p: half } = await draw.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 }, deviceScaleFactor: 0.5 } }))
       await draw.forgetDrawings(half)
       await draw.plantDrawing(half, ITEMS)
       await draw.reload(half)

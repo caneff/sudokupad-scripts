@@ -1,6 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { fakeStore } = require('../fake-store.js')
 const { existsSync, readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
@@ -8,7 +9,6 @@ const ROOT = join(__dirname, '..', '..')
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const byDigit = require('../../color-by-digit.user.js')
 
-const storeOf = (saved) => ({ getData: (key) => saved[key] ?? null })
 const group = (key, digits) => ({ key, digits })
 // Typed out as the independent source: Odd/Even, a profile of two groups, SudokuPad's black (its givens' color) and the
 // default palette colors these use (tool-color.css).
@@ -23,8 +23,8 @@ const digitsIn = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m
 // and their press cycle, label and starting mode; copy and paste of the mode, from settings saved before it too; leaving
 // cell coloring; the digit stylesheet, its shades and the conflict circle's CSS; the Each digit preload; the digit
 // profile sync and "Use digit colors"; and Digit Color gone. This seam is blind to real SudokuPad: the Framework calls,
-// the rendering of cells, digits and circles, and undo are `npm run test:live`'s, and neither run covers a real
-// Tampermonkey install or crackingthecryptic.com.
+// the rendering of cells, digits and circles, and undo are `npm run test:live`'s, and a real
+// Tampermonkey install is `npm run test:tampermonkey`'s.
 test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is merged into it', () => {
   const { nextMode, allowedMode, startingMode, buttonLabel, copiedSettings, pastedSettings } = byDigit
 
@@ -42,7 +42,7 @@ test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is 
   assert.equal(startingMode('both', false), 'both')
 
   // Copy carries the mode; a paste from before the mode turns auto mode into Cell or Off.
-  assert.equal(JSON.parse(copiedSettings(storeOf({ ColorByDigit_mode: 'digit' }))).ColorByDigit_mode, 'digit')
+  assert.equal(JSON.parse(copiedSettings(fakeStore({ ColorByDigit_mode: 'digit' }))).ColorByDigit_mode, 'digit')
   assert.equal(pastedSettings(JSON.stringify({ ColorByDigit_auto: true }), byDigit.READERS, byDigit.withModeFromAuto).values.ColorByDigit_mode, 'cell')
   assert.equal(pastedSettings(JSON.stringify({ ColorByDigit_auto: false }), byDigit.READERS, byDigit.withModeFromAuto).values.ColorByDigit_mode, 'off')
 

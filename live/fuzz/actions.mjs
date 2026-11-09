@@ -17,12 +17,11 @@
 import fc from 'fast-check'
 
 export const TOOL_KEYS = ['z', 'x', 'c', 'v']
-export const WINDOW_SIZES = [{ width: 1024, height: 600 }, { width: 1200, height: 900 }, { width: 1400, height: 1000 }]
-export const NOTE_TEXTS = ['15', 'a->b', 'sum 12', '!= 3', 'x\ny']
+const WINDOW_SIZES = [{ width: 1024, height: 600 }, { width: 1200, height: 900 }, { width: 1400, height: 1000 }]
+const NOTE_TEXTS = ['15', 'a->b', 'sum 12', '!= 3', 'x\ny']
 // Dark colors only: Dark Page has no off switch, its page color is the setting, and a rule says it stays dark (#590).
-export const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
+const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
 
-// How far (page pixels) a note is dragged.
 const NOTE_DRAG = [70, 40]
 const OUTSIDE = [-5, -5]
 
@@ -84,7 +83,6 @@ function buildKinds () {
     await env.page.mouse.down()
     await env.page.mouse.move(centre[0] + NOTE_DRAG[0], centre[1] + NOTE_DRAG[1], { steps: 6 })
   }
-  // The same on the first note, placed first when there is none.
   async function noteDragStart (env, [t, a]) {
     await dragNote(env, await env.noteCentre() ?? (await env.placeNote(NOTE_TEXTS[t], a), await env.noteCentre()))
   }
@@ -248,7 +246,6 @@ function buildKinds () {
 }
 
 const KINDS = buildKinds()
-// Every kind's name, in the order above.
 export const KIND_NAMES = KINDS.map((k) => k.kind)
 export const KIND_GROUPS = Object.fromEntries(KINDS.map((k) => [k.kind, k.group]))
 
@@ -265,7 +262,7 @@ const commandOf = (k, puzzle, arg) => ({
 })
 
 // The arbitrary of one weighted action over `puzzle` (`puzzle-set.mjs`).
-export function actionArbitrary (puzzle) {
+function actionArbitrary (puzzle) {
   return fc.oneof(...KINDS.map((k) => ({ weight: k.weight, arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
 }
 

@@ -4,23 +4,19 @@
 // own keypad back under another tool.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint, plantUnchecked } from '../pen.mjs'
+import { plantUnchecked } from '../pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
+import { addScripts, useBrowser } from '../session.mjs'
+import { gridPoint, typeText } from '../board.mjs'
 
 const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, OPACITY_SLIDER, SLIDERS, TEXTS, WIDTH_KEY, slideTo, valueOf } = draw
 // r1c3 of the recorded puzzle, empty.
 const EMPTY_CELL = [0, 2]
-// #rrggbb as the browser computes it.
 const rgb = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
-// The keypad's rectangle, and the lowest and highest edge of anything shown in it.
 const keypadBox = (p) => p.evaluate(() => {
   const panel = document.querySelector('.controls-input')
   const box = panel.getBoundingClientRect()
@@ -33,8 +29,7 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
     let context, p, errors
 
     before(async () => {
-      ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport } }))
-      await draw.boot(p)
+      ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport } }))
     })
     after(async () => { await context.close() })
 
@@ -87,7 +82,7 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
 
     // Last, so the checks above run with one copy of the script on the page.
     it('a second start adds no second panel style', async () => {
-      await p.addScriptTag({ content: draw.script })
+      await addScripts(p, [draw.SCRIPT_FILE])
       assert.equal(await p.locator('style#draw-tool-style').count(), 1)
     })
 
@@ -103,7 +98,6 @@ describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
   const pickDraw = () => draw.pickDraw(p)
   const pickDigit = () => clickUntil(() => p.click(DIGIT_BUTTON), tool, 'normal', SETTLE_MS)
   const reload = () => draw.reload(p)
-  // The keypad's digit buttons, 1 to 9: the Aa label each shows and its color, and whether it is marked current.
   const keypad = () => read(() => [...document.querySelectorAll('.controls-input button.digit')]
     .filter((b) => b.dataset.key !== '0')
     .map((b) => {
@@ -115,7 +109,6 @@ describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
   // The text size the Size slider's width gives.
   const sizeShown = async () => 2 * await valueOf(p, SIZE_SLIDER) + 8
   const savedColors = () => read((key) => Framework.getData(key) ?? null, COLORS_KEY)
-  // The computed color and the size in board units of the last and the first note on the board.
   const look = ({ color, size }) => ({ color, size })
   const lastNote = async () => look((await draw.noteLooks(p)).pop())
   const firstNote = async () => look((await draw.noteLooks(p))[0])
@@ -123,9 +116,7 @@ describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
   // Each note takes its own spot: a click on an earlier note would reopen it.
   const makeNote = async () => {
     const before = await p.locator(TEXTS).count()
-    await p.mouse.click(...await gridPoint(p, [0.5 + (before % 9), 1.5 + 3 * Math.floor(before / 9)]))
-    await p.keyboard.type(String(before + 1))
-    await draw.finishNote(p)
+    await typeText(p, [0.5 + (before % 9), 1.5 + 3 * Math.floor(before / 9)], String(before + 1))
     assert.equal(await p.locator(TEXTS).count(), before + 1, 'the click made a note')
   }
   const selectEmptyCell = async () => {
@@ -138,8 +129,7 @@ describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
   const hold = (selector, button, state) => draw.holdForPickers(p, selector, button, state)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, COLORS_KEY, BACKGROUND_KEY])
     await draw.forgetDrawings(p)
     await reload()

@@ -3,11 +3,10 @@
 // moved note keeps its background. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint, mouseDrag, typeText } from '../board.mjs'
 
 const { BACKGROUND_BUTTON, NOT_NOTES, TEXT_BGS, TEXT_BOX, TEXTS } = draw
 // SudokuPad's board draws a cell 64 units wide from (0, 0); a real mouse lands on whole page pixels, so positions are checked to within a unit.
@@ -20,9 +19,7 @@ const EMPTY = [6.2, 4.5]
 // A drag is by (rows, columns) cells.
 const BY = [1, 2]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s moving', { concurrency: false }, () => {
   let context, p, errors
@@ -30,21 +27,11 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = () => draw.saved(p)
   // A reload leaves Text Anywhere not current.
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
   const texts = () => draw.texts(p)
   const near = (got, want) => got.length === want.length && got.every((v, i) => Math.abs(v - want[i]) <= NEAR_UNITS)
-  // A press at `from`, then a drag by BY, in cells.
   const dragBy = (from) => mouseDrag(p, [from, [from[0] + BY[0], from[1] + BY[1]]])
   const textAts = async () => (await saved()).filter((i) => i.kind === 'text').map((i) => i.at)
-  const typeText = async (at, content) => {
-    await p.mouse.click(...await gridPoint(p, at))
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
-  }
-  // The top left corner of each box, in board units.
   const bgBoxes = () => read((selector) => {
     const toBoard = Framework.app.svgRenderer.getElem().getScreenCTM().inverse()
     return [...document.querySelectorAll(selector)].map((e) => {
@@ -54,19 +41,18 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
   }, TEXT_BGS)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
     await reload()
   })
   after(async () => { await context.close() })
 
   it('a double-click on a note still edits it, and a left-drag that starts on it moves it, keeps the text, and a reload keeps the new place', async () => {
-    await typeText(TEXT_AT, '15')
+    await typeText(p, TEXT_AT, '15')
     assert.deepEqual(await texts(), ['15'])
     await draw.reopen(p, await gridPoint(p, TEXT_AT))
     assert.equal(await p.locator(TEXT_BOX).textContent(), '15', 'the double-click reopened the text')
-    await draw.finishNote(p)
+    await finishNote(p)
     const [before] = await textAts()
     await p.mouse.move(...await gridPoint(p, TEXT_AT))
     await p.mouse.down()
@@ -94,7 +80,7 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
 
   it('a note made with Background on keeps its box with it when moved, and a reload shows the box in the new place', async () => {
     await p.click(BACKGROUND_BUTTON)
-    await typeText(SECOND_AT, '7')
+    await typeText(p, SECOND_AT, '7')
     await p.click(BACKGROUND_BUTTON)
     assert.equal(await p.locator(TEXT_BGS).count(), 1)
     const [boxBefore] = await bgBoxes()
@@ -107,7 +93,7 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
   })
 
   it('a drag held, or ended, over the controls stays there, and one past the window leaves the note inside it', async () => {
-    // The note's middle on the screen, and whether it is inside the window; found by its text, since a note dropped off the board leaves the board's group.
+    // Found by its text, since a note dropped off the board leaves the board's group.
     const [text] = await texts()
     const reachable = () => read(([selector, content]) => {
       const note = [...document.querySelectorAll(selector)].find((e) => e.textContent === content).getBoundingClientRect()

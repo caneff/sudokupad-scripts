@@ -1,30 +1,25 @@
-// Live check of the error log on sudokupad.app in headless Chromium: a feature turned off is recorded in the page's localStorage, the
-// record outlives a reload, and Copy error log in a script's settings dialog puts it on the real clipboard; Clear empties it.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { ERROR_LOG_KEY as LOG_KEY, gotoPuzzle, openPage, startPuzzle } from './page.mjs'
-import { openScriptDialog } from './settings.mjs'
+import { ERROR_LOG_KEY as LOG_KEY } from './page.mjs'
+import { actButton, openScriptDialog, STATUS } from './settings.mjs'
+import { openWith, reloadWith, scriptSource, useBrowser } from './session.mjs'
 
-const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
+const SCRIPT_FILE = 'dark-page.user.js'
 const EDITOR = '#dark-page-input'
-const STATUS = '.dialog [data-role="settings-status"]'
-const actButton = (p, act) => p.locator(`.dialog button[data-act="${act}"]`)
 // Makes Framework.getData throw while the script starts, which is inside the script's saved color feature, so the guard turns it off on a
 // real throw, and puts it back once that task ends.
 const WITH_THROWING_GET_DATA = ';{ const original = Framework.getData; Framework.getData = () => { throw new TypeError(\'planted failure\') }; setTimeout(() => { Framework.getData = original }, 0) }\n'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('the error log', { concurrency: false }, () => {
   let context, p, errors
   before(async () => {
     // The skip line is the planted break's own.
-    ({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] }, expectedSkips: [/^dark-page: saved color skipped because SudokuPad changed: TypeError: planted failure/] }))
-    await startPuzzle(p, { injection: { mode: 'after-start', code: `${WITH_THROWING_GET_DATA}${script}` } })
+    ;({ context, p, errors } = await openWith(browser(), [{ code: `${WITH_THROWING_GET_DATA}${scriptSource(SCRIPT_FILE)}` }], {
+      contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] },
+      expectedSkips: [/^dark-page: saved color skipped because SudokuPad changed: TypeError: planted failure/]
+    }))
   })
   after(async () => { await context?.close() })
 
@@ -39,8 +34,7 @@ describe('the error log', { concurrency: false }, () => {
   })
 
   it('after a reload, Copy error log in the settings dialog copies the record', async () => {
-    await gotoPuzzle(p)
-    await startPuzzle(p, { injection: { mode: 'after-start', code: script } })
+    await reloadWith(p, [SCRIPT_FILE])
     await openScriptDialog(p, 'Dark Page', EDITOR)
     await actButton(p, 'copy-error-log').click()
     await p.locator(STATUS).filter({ hasText: 'Error log copied.' }).waitFor()

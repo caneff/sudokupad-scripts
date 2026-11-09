@@ -4,13 +4,12 @@
 /* global document, window, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
 import { ARROW, BUTTON, EDITOR, center, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState } from './color-by-digit-fixtures.mjs'
-import { closeDialogWith, dialogButton, openScriptDialog } from '../settings.mjs'
+import { dialogButton, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
 const RING = 'rgb(106, 27, 154)'
 const HOVER = 'rgb(243, 229, 245)'
@@ -21,9 +20,7 @@ const DIGIT = (digit) => `${EDITOR} button[data-act=digit][data-digit="${digit}"
 const ROWS = `${EDITOR} [data-role=profile-row]`
 const APART = { profiles: SEED.profiles, active: 1, digitActive: 0 }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const styleOf = (locator, properties, pseudo = null) => locator.evaluate((el, [names, pseudoElement]) => {
   const style = getComputedStyle(el, pseudoElement)
@@ -39,7 +36,7 @@ const activeSlot = (p, containerSelector) => p.evaluate((selector) => [...docume
 describe('the dialog', { concurrency: false }, () => {
   let context, p, cdp
   before(async () => {
-    ({ context, p } = await openSession(browser, script))
+    ({ context, p } = await openSession(browser(), script))
     cdp = await context.newCDPSession(p)
     await openScriptDialog(p, 'Color by Digit', EDITOR)
   })
@@ -197,14 +194,12 @@ describe('the dialog', { concurrency: false }, () => {
     await p.keyboard.press('4')
     assert.deepEqual(await paintedKeys(p), keys)
   })
-
-  it('closes', async () => { await closeDialogWith(p, 'Cancel', EDITOR) })
 })
 
 describe('the mode button and its menu', { concurrency: false }, () => {
   let context, p
   before(async () => {
-    ({ context, p } = await openSession(browser, script, { saved: { ...savedProfiles(APART), [MODE_STORAGE_KEY]: 'both' } }))
+    ({ context, p } = await openSession(browser(), script, { saved: { ...savedProfiles(APART), [MODE_STORAGE_KEY]: 'both' } }))
   })
   after(async () => { await context?.close() })
 

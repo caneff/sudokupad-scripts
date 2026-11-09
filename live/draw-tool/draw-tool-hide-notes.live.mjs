@@ -3,60 +3,39 @@
 // are hidden shows them all and opens the new note; Undo straight after Restart shows them when it brings notes back; a reload shows the notes. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { readUntil, stable } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { clickAt, finishNote, gridPoint, restart, typeText } from '../board.mjs'
 
 const { HIDE_BUTTON, OPACITY_SLIDER, SIZE_SLIDER, SLIDERS, TEXTS, TEXT_BOX, noteStart, texts } = draw
 const A = [1.5, 1.5]
 const B = [3.5, 5.5]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () => {
   let context, p, errors
 
-  const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
-  const typeText = async (at, content) => {
-    await clickAt(at)
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
-  }
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
   const eye = () => p.locator(HIDE_BUTTON)
   const pressed = () => eye().getAttribute('aria-pressed')
-  // How many notes the page draws, and how many of them it paints.
   const painted = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].filter((e) => e.checkVisibility({ visibilityProperty: true })).length, TEXTS)
-  // The notes the page would hit at the middle of each drawn note.
   const hitNotes = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].flatMap((note) => {
     const { x, y, width, height } = note.getBoundingClientRect()
     return document.elementsFromPoint(x + width / 2, y + height / 2).filter((e) => e.matches(selector))
   }).length, TEXTS)
   const selectedCount = () => p.locator(draw.SELECTED).count()
-  const restartFromDialog = async () => {
-    await p.click('#control-restart')
-    await p.locator('.dialog button').filter({ hasText: /Restart/ }).filter({ hasNotText: /Keep Time/ }).first().click()
-    await p.locator('.dialog').waitFor({ state: 'detached' })
-  }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: { width: 1280, height: 720 } } }))
     await draw.forgetDrawings(p)
     await reload()
-    await typeText(A, 'one')
-    await typeText(B, 'two')
+    await typeText(p, A, 'one')
+    await typeText(p, B, 'two')
   })
   after(async () => { await context.close() })
 
-  // The eye and both sliders in the block, on `page`: the eye to the right of both, level with them and centered on the two, nothing overlapping, all inside the panel.
   const checkLayout = async (page) => {
     assert.equal(await page.locator(HIDE_BUTTON).getAttribute('aria-pressed'), 'false')
     assert.equal(await page.locator(HIDE_BUTTON).getAttribute('title'), 'Hide all notes')
@@ -85,7 +64,7 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
   })
 
   it('a click hides every note, none can be hit, the selection is cleared and the eye closes', async () => {
-    await clickAt(A)
+    await clickAt(p, A)
     assert.equal(await selectedCount(), 1, 'a note is selected first')
     await eye().click()
     assert.equal(await pressed(), 'true')
@@ -149,17 +128,17 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
   it('a click on the board while hidden shows every note and opens the new one', async () => {
     await eye().click()
     assert.equal(await painted(), 0)
-    await clickAt([6.5, 2.5])
+    await clickAt(p, [6.5, 2.5])
     await p.locator(TEXT_BOX).waitFor()
     assert.equal(await pressed(), 'false')
     assert.equal(await painted(), 2)
     await p.keyboard.type('three')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await texts(p), ['one', 'two', 'three'])
   })
 
   it('Undo straight after Restart shows the notes it brings back, though they were hidden', async () => {
-    await restartFromDialog()
+    await restart(p)
     assert.deepEqual(await readUntil(() => texts(p), (t) => t.length === 0), [])
     await eye().click()
     assert.equal(await pressed(), 'true')
@@ -209,7 +188,7 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
   })
 
   it('the open note is closed and saved when the eye is clicked', async () => {
-    await clickAt([7.5, 7.5])
+    await clickAt(p, [7.5, 7.5])
     await p.keyboard.type('four')
     await eye().click()
     assert.equal(await p.locator(TEXT_BOX).count(), 0)

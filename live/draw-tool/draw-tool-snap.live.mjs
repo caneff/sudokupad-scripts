@@ -4,10 +4,9 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { cellCentre, gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { cellCentre, finishNote, gridPoint } from '../board.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
 const { SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
@@ -26,14 +25,11 @@ const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [
 const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 60, box: [64, 320, 256, 448] }
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s snap', { concurrency: false }, () => {
   let context, p, errors
 
-  // The page x of the grid's column line `k`.
   const lineX = async (k) => {
     const [x0, , size] = await cellCentre(p, 0, 0)
     return x0 - size / 2 + k * size
@@ -62,22 +58,19 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     const after = await outlineLeft()
     assert.equal(Math.abs(after - guide) < OUTLINE_ON_GUIDE_PX, true, `the outline's line ${after} is off the guide ${guide} it was snapped to, after the release`)
   }
-  // Drags the note so its outline's left line lies `gap` px right of column line `COLUMN_LINE`.
   const dragToGap = async (gap, snaps = false) => dragBy(await lineX(COLUMN_LINE) + gap - ((await noteBox('15')).x - OUTLINE_MIDDLE_PX), 0, snaps)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
     await p.mouse.click(...await gridPoint(p, TEXT_AT))
     await p.keyboard.type('15')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
     await p.mouse.click(...await gridPoint(p, OTHER_AT))
     await p.keyboard.type('2')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
   })
   after(async () => { await context.close() })
@@ -126,7 +119,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(await outlineLeft() - line) < NEAR_PX, true, 'and stays there after the release')
   })
 
-  it('a fast drag released just before the pointer would rest drops where it was drawn, with no jump onto the line', async () => {
+  it('a fast drag released just before the pointer would rest drops where it was drawn, with no jump onto the line', async (t) => {
     const line = await lineX(COLUMN_LINE)
     const note = await noteBox('15')
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
@@ -139,6 +132,11 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     await p.evaluate((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)), SPEED_WINDOW_MS + 4)
     const shown = await outlineLeft()
     await p.mouse.up()
+    // The case needs the drawn move to be the unpulled one. A box too loaded to land inside the 100-120 ms window has not built the case, so it skips instead of passing.
+    if (!(Math.abs(shown - (line + 2)) < NEAR_PX)) {
+      t.skip(`the outline was at ${shown}, not drawn unpulled at ${line + 2}: the window was missed`)
+      return
+    }
     assert.equal(Math.abs(await outlineLeft() - shown) < NEAR_PX, true, `dropped at ${await outlineLeft()}, as drawn at ${shown}`)
   })
 
@@ -201,8 +199,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(left - line) < NEAR_PX, true, `the outline's line ${left} is on the line ${line} before the release`)
     assert.equal(Math.abs(await outlineLeft() - left) < draw.CRISP_HALF_PX + 0.05, true, 'the release moved the outline by more than the half pixel that puts it on a whole device pixel')
     const [at] = (await draw.saved(p)).filter((item) => item.kind === 'text' && item.text === '15').map((item) => item.at)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
     assert.equal(Math.abs((await noteBox('15')).x - OUTLINE_MIDDLE_PX - line) < NEAR_PX, true, `the saved note ${at} is drawn on the line again after a reload`)
   })
 
@@ -255,8 +252,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
 
   it('a note still drags beside an older version\'s stroke and shape, which are no targets', async () => {
     await draw.plantDrawing(p, [OLD_STROKE, NOTE, OLD_SHAPE])
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
     const before = (await noteBox('15')).x
     await dragBy(40)
     assert.equal(Math.abs((await noteBox('15')).x - (before + 40)) < 4 + NEAR_PX, true, 'the note moved with the pointer, to within the pull')

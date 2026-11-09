@@ -1,10 +1,11 @@
-// Shared by the live checks: per script, what shows it has started, its control and one representative action. Not a
-// check itself, so `live/**/*.live.mjs` skips it.
+// Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { openScriptDialog, openSettings } from './settings.mjs'
-import { gridPoint, keydownDefaults, openPenTool, penEntries } from './pen.mjs'
-import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
+import { placeNote } from './board.mjs'
+import { keydownDefaults, openPenTool, PAGE_BUTTON, penEntries } from './pen.mjs'
+import { settle } from './settle.mjs'
+import { DRAW_BUTTON } from './draw-tool/draw-tool-fixtures.mjs'
 
 export const BLACK = 'rgb(0, 0, 0)'
 export const DIGITS = '1234567890'
@@ -12,11 +13,6 @@ export const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 // What the number pad's keys read: digits, or letters in letter mode.
 export const numberPadText = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
-const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
-export const DRAW_BUTTON = '#control-draw'
-
-// SudokuPad binds a new button's click a moment after it appears, so the click repeats until the tool is current.
-export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => p.evaluate(() => Framework.app.tool), 'draw', SETTLE_MS)
 
 const settingsEntry = async (p, text) => {
   const group = await openSettings(p)
@@ -47,7 +43,6 @@ export const SCRIPTS = [
     file: 'dark-page.user.js',
     ready: (p) => p.locator('#dark-page-style').waitFor({ state: 'attached' }),
     control: (p) => settingsEntry(p, /^\s*Dark Page\s*$/),
-    // The page paints black.
     act: async (p) => {
       const background = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
       assert.equal(await settle(background, BLACK), BLACK)
@@ -89,7 +84,6 @@ export const SCRIPTS = [
         Framework.app.resize()
       })
     },
-    // The font bar shows while the pointer is over the pane.
     control: async (p) => {
       const box = await p.locator('.puzzle-rules').boundingBox()
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -110,7 +104,7 @@ export const SCRIPTS = [
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       assert.equal(await openPenTool(p), true, 'the pen tool opened')
     },
-    control: (p) => p.locator(PEN_PAGE_BUTTON).waitFor({ state: 'visible' }),
+    control: (p) => p.locator(PAGE_BUTTON).waitFor({ state: 'visible' }),
     // Two clicks on one cell edge: SudokuPad's own X, then this script's arrow 'm'.
     act: async (p) => {
       const [x0, y0, size] = await p.evaluate(() => {
@@ -131,13 +125,6 @@ export const SCRIPTS = [
     file: 'draw-tool.user.js',
     ready: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' }),
-    // With Text Anywhere picked, a left click on r3c3 and 15 typed leave one note.
-    act: async (p) => {
-      assert.equal(await pickDraw(p), 'draw')
-      await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
-      await p.keyboard.type('15')
-      await p.keyboard.press('Escape')
-      assert.equal(await settle(() => p.locator('#draw-tool-layer .draw-tool-text').count(), 1), 1)
-    }
+    act: (p) => placeNote(p, [2.5, 2.5], '15')
   }
 ]

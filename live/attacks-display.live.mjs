@@ -2,18 +2,18 @@
 // notes and a grid full of pen lines, with Text Anywhere, Pen Tool Extras and Color by Digit installed together, on sudokupad.app in headless
 // Chromium. Each test names its attack and asserts the crash signals (no uncaught error, console error or skip line) beside what a user expects.
 // Clicks, drags and keys are real input; the display changes are Chromium's own emulation.
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
-import { makeNote, pickTool } from './attack-fixtures.mjs'
+import { pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts, reloadWithScripts } from './attacks.mjs'
-import { cellCentre, gridPoint, mouseDrag, penDrawnCount, penEntries } from './pen.mjs'
+import { cellCentre, finishNote, gridPoint, mouseDrag, typeText } from './board.mjs'
+import { penDrawnCount, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
+import { useBrowser } from './session.mjs'
 
 const FULLSCREEN_BUTTON = 'button[data-control="fullscreen"]'
 const WINDOW = { width: 1200, height: 900 }
-// What a screen of its own gives a fullscreen page.
 const SCREEN = { width: 1600, height: 1000 }
 // The most a note's left or top may sit off a whole device pixel: Text Anywhere puts a released note on whole device pixels, and the browser's layout
 // rounds to 1/64 of a CSS pixel, up to 0.03 device pixels at a ratio of 2. A note drawn soft sits half a pixel off.
@@ -22,22 +22,17 @@ const CRISP_EPSILON = 0.05
 const ACTION_BUDGET_MS = 3000
 const NOTE_COUNT = 200
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on the display and scale', { concurrency: false }, () => {
   let context, p, errors
   beforeEach(async () => {
-    ;({ context, p, errors } = await openWithAllScripts(browser))
+    ;({ context, p, errors } = await openWithAllScripts(browser()))
   })
   afterEach(async () => { await context?.close() })
 
-  // A line along a row from column 1.5 to 4.5, in cell middles.
   const rowLine = (row) => mouseDrag(p, [[row + 0.5, 1.5], [row + 0.5, 4.5]])
-  // Where each pen line is drawn on the screen, to a tenth of a pixel.
   const penBoxes = () => p.evaluate(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((g) => Object.values(g.getBoundingClientRect().toJSON()).map((v) => Math.round(v * 10) / 10)))
-  // A drag with the real mouse from one screen point to another.
   const dragBetween = async ([x0, y0], [x1, y1]) => {
     await p.mouse.move(x0, y0)
     await p.mouse.down()
@@ -45,7 +40,6 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
     await p.mouse.up()
     await draw.frames(p)
   }
-  // The left and top of the first note in device pixels, as the part past a whole pixel.
   const offGrid = () => p.evaluate((selector) => {
     const box = document.querySelector(selector).getBoundingClientRect()
     return [box.left, box.top].map((side) => Math.abs(side * window.devicePixelRatio - Math.round(side * window.devicePixelRatio)))
@@ -55,7 +49,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
   it('attack 76: the page\'s devicePixelRatio changing leaves notes and pen lines where they were, and a note moved afterward lands on whole device pixels', async () => {
     const cdp = await context.newCDPSession(p)
     await pickTool(p, 'draw')
-    await makeNote(p, [4.5, 4.5], '15')
+    await typeText(p, [4.5, 4.5], '15')
     await pickTool(p, 'pen')
     await rowLine(1)
     await rowLine(7)
@@ -78,14 +72,14 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
         const off = await offGrid()
         assert.equal(off.every((part) => part < CRISP_EPSILON), true, `${ratio}: the moved note's left and top are on whole device pixels: ${off}`)
       }
-      await draw.finishNote(p)
+      await finishNote(p)
     }
     await assertNoCrash(p, errors)
   })
 
   it('attack 77: SudokuPad\'s fullscreen on and off leaves the notes, the pen lines and the tools where they were and working', async () => {
     await pickTool(p, 'draw')
-    await makeNote(p, [4.5, 4.5], '15')
+    await typeText(p, [4.5, 4.5], '15')
     await pickTool(p, 'pen')
     await rowLine(1)
     let entries = await penEntries(p)
@@ -100,7 +94,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
       assert.deepEqual(await penEntries(p), entries, `round ${round}: the pen lines are where they were`)
       await pickTool(p, 'draw')
       assert.deepEqual(await settle(() => draw.noteInCells(p, '15'), [4.5, 4.5]), [4.5, 4.5], `round ${round}: the note is on its cell`)
-      await makeNote(p, [6.5 + round, 2.5], `f${round}`)
+      await typeText(p, [6.5 + round, 2.5], `f${round}`)
       await pickTool(p, 'pen')
       await rowLine(3 + 2 * round)
       assert.equal((await penEntries(p)).length, entries.length + 3, `round ${round}: a line can be drawn in fullscreen`)
@@ -153,7 +147,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
     await timed('draw a note', async () => {
       await p.mouse.click(...await gridPoint(p, [8.8, 0.3]))
       await p.keyboard.type('new')
-      await draw.finishNote(p)
+      await finishNote(p)
     }, async () => (await draw.texts(p)).length === NOTE_COUNT + 1)
     const [, , size] = await cellCentre(p, 0, 0)
     const moved = async () => (await draw.saved(p)).find((item) => item.text === 'n105').at.join()

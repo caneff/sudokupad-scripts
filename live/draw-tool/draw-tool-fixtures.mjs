@@ -1,16 +1,15 @@
-// Text Anywhere's live fixtures: the script, its storage keys and selectors, the puzzle key rule, and the helpers that boot
-// it after Start Puzzle, reload it and pick Text Anywhere. Not a check itself, so `live/**/*.live.mjs` skips it.
+// Text Anywhere's live fixtures: the script, its storage keys and selectors, the puzzle key rule, and the helpers that open
+// SudokuPad with it, reload it and pick Text Anywhere. Not a check itself, so `live/**/*.live.mjs` skips it.
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { startPuzzle } from '../page.mjs'
+import { openWith, reloadWith, scriptSource } from '../session.mjs'
 import { clickUntil, SETTLE_MS } from '../settle.mjs'
-import { gridPoint } from '../pen.mjs'
 
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
 
-export const script = readFileSync(new URL('../../draw-tool.user.js', import.meta.url), 'utf8')
+export const SCRIPT_FILE = 'draw-tool.user.js'
+export const script = scriptSource(SCRIPT_FILE)
 
 // SudokuPad's tool keys, App.toolHotkeys.
 export const TOOL_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm']
@@ -18,10 +17,9 @@ export const TOOL_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm']
 export const DRAW_BUTTON = '#control-draw'
 export const DIGIT_BUTTON = '#control-normal'
 // The layer's two groups of notes: those on the board, and the fixed ones.
-export const NOTE_GROUPS = '.draw-tool-board, .draw-tool-screen'
+const NOTE_GROUPS = '.draw-tool-board, .draw-tool-screen'
 // Anything in the notes' layer that is not a note, a resize handle, a selection outline or one of the groups, such as a stroke or shape an earlier version drew: none is drawn now.
 export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, .draw-tool-resize, .draw-tool-selection, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
-// Every element in the layer but the groups themselves.
 export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
 // The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
 export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
@@ -30,10 +28,9 @@ export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
 export const SEEN_TEXTS = '#draw-tool-layer .draw-tool-text'
 // A struck run in a finished note, and the words and gaps it is drawn in, each with a line of its own.
 export const STRIKE_PIECE = '.draw-tool-strike-piece'
-export const STRIKES = `${TEXTS} .draw-tool-strike`
+const STRIKES = `${TEXTS} .draw-tool-strike`
 export const STRIKE_PIECES = `${STRIKES} ${STRIKE_PIECE}`
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
-// The sliders under the controls, and the Size and Transparency sliders in them.
 export const SLIDERS = '.draw-tool-sliders'
 export const TRAY = '.draw-tool-tray'
 export const SIZE_SLIDER = '#draw-tool-size'
@@ -68,10 +65,8 @@ export const HANDLES = '#draw-tool-layer .draw-tool-resize'
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
 export const SETTINGS_EDITOR = '#draw-tool-dialog'
-export const SETTINGS_STATUS = '.dialog [data-role="settings-status"]'
 export const PICKER_BOX = '.draw-tool-picker'
 
-// A press held on the middle of `selector` with `button`, until the pickers reach `state`.
 export async function holdForPickers (p, selector, button, state) {
   const box = await p.locator(selector).boundingBox()
   await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -83,13 +78,11 @@ export async function holdForPickers (p, selector, button, state) {
   }
 }
 
-// The middle of a Playwright bounding box.
 export const middleOf = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
 
 export const tool = (p) => p.evaluate(() => Framework.app.tool)
 // The slider thumb's width in rem, as lib/panel.js's SLIDER_THUMB_REM draws it.
 const SLIDER_THUMB_REM = 1.1
-// A slider's value.
 export const valueOf = (p, slider) => p.evaluate((selector) => Number(document.querySelector(selector).value), slider)
 // Presses on `slider`'s track where `value` lies and releases, with real mouse input. The thumb's centre runs from half a thumb in from each end of the track.
 // A press on the thumb drags it by the offset it was pressed at and does not jump, so when the thumb is under the target the track is first pressed at its other end.
@@ -105,6 +98,7 @@ export async function slideTo (p, slider, value) {
   await p.mouse.click(xOf(value), y)
 }
 
+// SudokuPad binds a new button's click a moment after it appears, so the click repeats until the tool is current.
 export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS)
 
 // The puzzle's key, as the script keys its drawing: its id, or the page URL when it has none, as the recorded puzzle does.
@@ -118,7 +112,6 @@ export const drawingOf = (value) => {
 }
 export const saved = async (p) => drawingOf(await p.evaluate((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey(p)))
 
-// Each note drawn: its text, its computed color and its size in board units, its font size on the screen over the board's scale.
 export const noteLooks = (p) => p.evaluate((selector) => {
   const scale = Framework.app.svgRenderer.getElem().getScreenCTM().a
   return [...document.querySelectorAll(selector)].map((e) => {
@@ -181,39 +174,37 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
 
 // Two frames: the pointer's work waits for the next one.
 export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
-// Escape finishes the open note and leaves it selected; a second Escape ends that selection, so the next click on empty space opens a note again.
+// A finished note stays selected until a second Escape or a click elsewhere.
 export const SELECTED = '#draw-tool-layer .draw-tool-selected'
-export const clickAt = async (p, at) => p.mouse.click(...await gridPoint(p, at))
-export async function typeText (p, at, content) {
-  await clickAt(p, at)
-  await p.keyboard.type(content)
-  await finishNote(p)
-}
-
-export async function finishNote (p) {
-  await p.keyboard.press('Escape')
-  if (await p.locator(SELECTED).count() > 0) await p.keyboard.press('Escape')
-}
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
-// Removes every saved drawing, every set of notes a Restart kept, and the index.
 export const forgetDrawings = (p) => p.evaluate(([prefixes, index]) => {
   Object.keys(window.localStorage).filter((k) => prefixes.some((prefix) => k.includes(prefix))).forEach((k) => window.localStorage.removeItem(k))
   Framework.removeData(index)
 }, [[DRAWING_PREFIX, RESTARTED_PREFIX], INDEX_KEY])
 
-export async function boot (p) {
-  await startPuzzle(p)
-  await p.addScriptTag({ content: script })
-  await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
+const ready = (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
+
+// Opens SudokuPad with Text Anywhere injected (after Start Puzzle unless `mode` says otherwise) and returns `{ context, p, errors }`
+// once its button shows. The options are `openWith`'s (live/session.mjs).
+export async function open (browser, options) {
+  const opened = await openWith(browser, [SCRIPT_FILE], options)
+  await ready(opened.p)
+  return opened
 }
 
+// Reloads the page with Text Anywhere injected after Start Puzzle again.
 export async function reload (p) {
-  await p.reload({ waitUntil: 'load' })
-  await boot(p)
+  await reloadWith(p, [SCRIPT_FILE])
+  await ready(p)
 }
 
-// Plants `items` as the saved drawing of the puzzle on the page, so the next load reads them.
+// Reloads, then picks Text Anywhere, where most cases start.
+export async function reloadOnDraw (p) {
+  await reload(p)
+  await pickDraw(p)
+}
+
 export async function plantDrawing (p, items) {
   const key = DRAWING_PREFIX + await puzzleKey(p)
   await p.evaluate(([k, value]) => Framework.setData(k, value), [key, items])

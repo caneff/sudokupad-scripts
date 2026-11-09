@@ -2,16 +2,13 @@
 // effect on the bottom row, and that the choices survive a reload. The Tab option's own behavior is in ui-tweaks-tab.live.mjs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { gotoPuzzle, openPage, startPuzzle } from '../page.mjs'
 import { numberPadText } from '../scripts.mjs'
 import { keydownDefaults } from '../pen.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
+import { openWith, reloadWith, useBrowser } from '../session.mjs'
 
-const source = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
-const script = source('ui-tweaks.user.js')
+const SCRIPT_FILE = 'ui-tweaks.user.js'
 
 const DIALOG = '#ui-tweaks-dialog'
 const ROW = '.controls-aux'
@@ -22,9 +19,7 @@ const LETTERS = 'ABCDEFGHIO'
 // Stand-ins for the buttons other scripts add to the bottom row: with SudokuPad's own four, seven in all.
 const EXTRA_BUTTONS = ['five', 'six', 'seven']
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 const box = (p, id) => p.locator(`${DIALOG} input[data-option="${id}"]`)
 const openDialog = (p) => openScriptDialog(p, 'UI Tweaks', DIALOG)
@@ -34,7 +29,6 @@ async function chooseAndSave (p, choices) {
   for (const [id, on] of Object.entries(choices)) await box(p, id).setChecked(on)
   await closeDialogWith(p, 'Save', DIALOG)
 }
-// The bottom row's visible buttons, in order, with where each sits.
 const rowButtons = (p) => p.evaluate((row) => [...document.querySelector(row).children]
   .filter((button) => button.getClientRects().length > 0)
   .map((button) => { const at = button.getBoundingClientRect(); return { id: button.id, x: Math.round(at.x), y: Math.round(at.y), width: Math.round(at.width) } }), ROW)
@@ -43,23 +37,26 @@ const addExtraButtons = (p) => p.evaluate((names) => {
   Framework.app.refreshControls()
 }, EXTRA_BUTTONS)
 
-async function startPage (p, { scripts = [script] } = {}) {
-  await startPuzzle(p)
-  for (const content of scripts) await p.addScriptTag({ content })
+// Once the scripts are in: the stand-in buttons added and the letter tool on.
+async function ready (p) {
   await addExtraButtons(p)
   await p.evaluate(() => Framework.setSetting('toolletter', true))
   await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })
   await p.locator('#control-seven').waitFor({ state: 'visible' })
 }
 
+// A page with `scripts` in, `ready`.
+async function open (scripts = [SCRIPT_FILE]) {
+  const opened = await openWith(browser(), scripts)
+  await ready(opened.p)
+  return opened
+}
+
 describe('the options dialog', { concurrency: false }, () => {
   let context, p, errors
   const pad = () => numberPadText(p)
 
-  before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await startPage(p)
-  })
+  before(async () => { ;({ context, p, errors } = await open()) })
   after(async () => { await context.close() })
 
   it('the entry opens a dialog named UI Tweaks with the version, Tab on and the other two off', async () => {
@@ -137,11 +134,10 @@ describe('the choices survive a reload', { concurrency: false }, () => {
   let context, p, errors
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await startPage(p)
+    ;({ context, p, errors } = await open())
     await chooseAndSave(p, { tab: false, hideSelect: true, wrapButtons: true })
-    await gotoPuzzle(p)
-    await startPage(p)
+    await reloadWith(p, [SCRIPT_FILE])
+    await ready(p)
   })
   after(async () => { await context.close() })
 
@@ -168,8 +164,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
   let context, p, errors
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await startPage(p, { scripts: ['color-by-digit.user.js', 'pen-tool-extras.user.js', 'draw-tool.user.js', 'ui-tweaks.user.js'].map(source) })
+    ;({ context, p, errors } = await open(['color-by-digit.user.js', 'pen-tool-extras.user.js', 'draw-tool.user.js', SCRIPT_FILE]))
     await p.evaluate(() => Framework.setSetting('toolpen', true))
     await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })
   })
@@ -193,7 +188,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
     assert.deepEqual(ids, ['control-undo', 'control-redo', 'control-check', 'control-colorbydigit', 'control-five', 'control-six', 'control-seven'])
   })
 
-  it('the tool buttons of the other scripts stay where they were', async () => {
+  it('the tool buttons of the other scripts stay visible', async () => {
     assert.equal(await p.locator('#control-pen').isVisible(), true)
     assert.equal(await p.locator('#control-draw').isVisible(), true)
   })

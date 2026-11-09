@@ -4,7 +4,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
+import { useBrowser } from './session.mjs'
 
 const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const ROOT = new URL('../', import.meta.url)
@@ -24,15 +24,15 @@ const SHOWS = [
   beforeLast: slideOf(SOURCE[show.id], -2)
 }))
 
-let browser, page
-before(async () => {
-  browser = await chromium.launch()
-  page = await (await browser.newContext()).newPage()
+const browser = useBrowser()
+let page, made
+// The one page every check uses, made by the first suite's `before`. A `before` at the top of the file would not wait for
+// useBrowser's: node:test starts a file's top-level hooks together, and the browser would not exist yet.
+const sitePage = () => (made ??= (async () => {
+  page = await (await browser().newContext()).newPage()
   await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(r.request().url().slice(RAW.length).replace(/\?.*$/, ''), ROOT)), contentType: 'image/png' }))
-})
-after(async () => { await browser?.close() })
+})())
 
-// What the slideshow under `root` shows now: the counter, the caption and the file name of the one visible picture.
 const shown = (root) => page.evaluate((root) => {
   const show = document.querySelector(root)
   const current = [...show.querySelectorAll('.slide.current')]
@@ -66,6 +66,7 @@ const sizes = () => page.evaluate(() => {
 })
 const DEFAULT_VIEWPORT = { width: 1280, height: 720 }
 const openDetails = async (show, width, height) => {
+  await sitePage()
   await page.setViewportSize({ width, height })
   await page.goto(new URL(`site/${show.details}`, ROOT).href, { waitUntil: 'load' })
   await page.waitForFunction(() => [...document.images].every((i) => i.complete))
@@ -99,7 +100,10 @@ for (const [where, file] of [['the homepage', 'index.html'], ...SHOWS.map((show)
   for (const show of SHOWS.filter((show) => file === 'index.html' || file === show.details)) {
     const root = file === 'index.html' ? `section.row:nth-of-type(${show.row}) .slideshow` : '.slideshow'
     describe(`${where} ${show.heading} slideshow`, { concurrency: false }, () => {
-      before(() => page.goto(new URL(`site/${file}`, ROOT).href, { waitUntil: 'load' }))
+      before(async () => {
+        await sitePage()
+        await page.goto(new URL(`site/${file}`, ROOT).href, { waitUntil: 'load' })
+      })
 
       it('starts on slide 1 with its caption, the buttons are labelled and a step announces its caption', async () => {
         assert.deepEqual(await shown(root), at(1, show.first, show.slides))

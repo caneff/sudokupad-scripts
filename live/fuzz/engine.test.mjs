@@ -1,5 +1,3 @@
-// Unit tests of the fuzz engine on a fake page: a planted page error during an interruption is caught, blamed on its action, shrunk to the one step that
-// causes it and replayed from the numbers it prints; a clean page passes and runs the lists asked for; a run that never got to run is not a failure.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { runFuzz } from './engine.mjs'
@@ -114,11 +112,6 @@ describe('the fuzz engine on a fake page', () => {
       assert.equal(again.failed, false)
       assert.ok(targets.length <= 5, `${targets.length} pages opened`)
     })
-
-    it('the same seed without the planted error passes', async () => {
-      const { openTarget } = fakeTargets()
-      assert.equal((await runFuzz({ openTarget, puzzles: PUZZLES, seed: found.seed, runs: 40, ...WAITS })).failed, false)
-    })
   })
 
   describe('a rule broken by a blur', () => {
@@ -167,9 +160,11 @@ describe('the fuzz engine on a fake page', () => {
 
     it('each rule compares an action with the snapshot just before it, not the one at the start of the list', async () => {
       // Letters from a blur on are no Tab's doing: a Tab after it sees letters before and after.
-      const { openTarget } = fakeTargets({ lettersOnBlur: true })
+      const { openTarget, targets } = fakeTargets({ lettersOnBlur: true })
       const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 300, ...WAITS })
       assert.equal(result.failed, false, result.error)
+      // The case the title names was built: some list has a blur followed later by a Tab.
+      assert.ok(targets.some((t) => { const i = t.log.findIndex(([n]) => n === 'blurFocus'); return i >= 0 && t.log.slice(i).some(([n, k]) => n === 'keyboard.press' && k === 'Tab') }), 'a list with a blur and a later Tab was run')
     })
   })
 

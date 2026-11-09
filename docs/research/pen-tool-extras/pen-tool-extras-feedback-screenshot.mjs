@@ -10,7 +10,8 @@ import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
-import { cellCentre, goToPenPage, gridPoint, mouseDrag, openPenTool, PAGE_BUTTON, PAGE_THREE, PAGE_TWO } from '../../../live/pen.mjs'
+import { cellCentre, gridPoint, mouseDrag } from '../../../live/board.mjs'
+import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, PAGE_TWO } from '../../../live/pen.mjs'
 
 const target = (what, which) => new URL(`./pen-tool-extras-feedback-${what}-${which}.png`, import.meta.url).pathname
 const VERSIONS = {

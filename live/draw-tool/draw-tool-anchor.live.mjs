@@ -2,10 +2,9 @@
 // without selecting a word, the caret is the note's color and follows a recolor, and selected text is tinted in the note's color. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
 const GREEN = 3
@@ -15,9 +14,7 @@ const START_TOLERANCE_PX = 2
 // The line's middle is read off the letter's box, whose height is the font's and not the line's, so it may sit a few pixels off the click.
 const FIRST_LINE_TOLERANCE_PX = 5
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s open note', { concurrency: false }, () => {
   let context, p, errors
@@ -40,7 +37,6 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     }
     throw new Error(`no character ${i}`)
   }, index)
-  // What a color value computes to, as the page's own elements show it.
   const resolved = (color, property = 'color') => p.evaluate(([c, name]) => {
     const probe = document.createElement('i')
     probe.style[name] = c
@@ -57,13 +53,11 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
   const tinted = (color) => resolved(`color-mix(in srgb, ${color} 25%, transparent)`, 'backgroundColor')
   const fresh = async () => {
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await fresh()
   })
   after(async () => { await context.close() })
@@ -78,7 +72,7 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     await p.keyboard.type(' there, a long note that wraps over a few lines because it keeps on going')
     assert.equal((await letterBox(TEXT_BOX, 0)).left, first.left, 'typing more left the start where it was')
     assert.equal((await letterBox(TEXT_BOX, 0)).top, first.top)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.ok(Math.abs((await letterBox(TEXTS, 0)).left - first.left) <= 0.5, 'the closed note starts where the open one did')
   })
 
@@ -86,13 +80,13 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     await fresh()
     await p.mouse.click(...await gridPoint(p, SPOT))
     await p.keyboard.type('abcdefgh')
-    await draw.finishNote(p)
+    await finishNote(p)
     const fifth = await letterBox(TEXTS, 4)
     await p.mouse.dblclick(fifth.left + 1, (fifth.top + fifth.bottom) / 2)
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is open')
     await p.keyboard.type('X')
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'abcdXefgh')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a double-click past the end of the text puts the caret at the end', async () => {
@@ -100,19 +94,19 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     await p.mouse.dblclick(last.right + 1, (last.top + last.bottom) / 2)
     await p.keyboard.type('Y')
     assert.equal((await p.locator(TEXT_BOX).textContent()).at(-1), 'Y')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a double-click on a formatted note puts the caret at the letter shown, past the markers the open note adds', async () => {
     await fresh()
     await p.mouse.click(...await gridPoint(p, SPOT))
     await p.keyboard.type('**ab**cdefgh')
-    await draw.finishNote(p)
+    await finishNote(p)
     const fifth = await letterBox(TEXTS, 4)
     await p.mouse.dblclick(fifth.left + 1, (fifth.top + fifth.bottom) / 2)
     await p.keyboard.type('X')
     assert.equal(await p.locator(TEXT_BOX).textContent(), '**ab**cdXefgh')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a click just inside the board\'s top edge starts a note pinned to the board, though its stored point is half a line above the click', async () => {
@@ -120,7 +114,7 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     const board = await p.evaluate(() => Framework.app.svgRenderer.getElem().getBoundingClientRect().toJSON())
     await p.mouse.click(board.left + board.width / 2, board.top + 2)
     await p.keyboard.type('top')
-    await draw.finishNote(p)
+    await finishNote(p)
     const [note] = await draw.saved(p)
     assert.ok(note.at && !note.fixed, JSON.stringify(note))
   })
@@ -146,7 +140,7 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     // A selection's computed text-shadow reads none whatever the rule says, so the rule itself is read.
     const shadows = await p.evaluate(() => [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]).filter((rule) => rule.selectorText?.includes('.draw-tool-textbox::selection')).map((rule) => rule.style.textShadow))
     assert.deepEqual(shadows, ['none'])
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('no page error', () => { assert.deepEqual(errors, []) })

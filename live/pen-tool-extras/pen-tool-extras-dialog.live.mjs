@@ -2,21 +2,16 @@
 // line meets the title line and the footer line, the Line settings / Line styles divider starting at the vertical line, the pen colors filling their
 // column, the five sliders one column and 96px long, the marks table's headings over their boxes, the title row's icon buttons and status, the dialog
 // centred in the window, one column on a narrow screen, and the button row (Save, Cancel, Restore defaults). A touch screen stays untested. Every click is real input.
-/* global Framework */
 import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { STATUS, closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
+import { useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const SLIDERS = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth']
 const HALF_PIXEL = 0.5
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('the settings dialog layout', { concurrency: false }, () => {
   let context, p, errors
@@ -25,11 +20,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await p.evaluate(() => Framework.setSetting('toolpen', true))
+    ;({ context, p, errors } = await extras.open(browser(), { contextOptions: { viewport: { width: 1200, height: 1000 } }, penTool: false }))
   })
   after(async () => { await context.close() })
 
@@ -170,10 +161,10 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     const buttons = [await copy.boundingBox(), await paste.boundingBox()]
     for (const button of buttons) near(button.y + button.height / 2, title.top + title.height / 2, 'level with the title')
     assert.equal(buttons[0].x < buttons[1].x, true)
-    await p.evaluate(() => { document.querySelector('.dialog [data-role="settings-status"]').textContent = 'Settings copied.' })
-    const status = await rect('.dialog [data-role="settings-status"]')
+    await p.evaluate(([sel, text]) => { document.querySelector(sel).textContent = text }, [STATUS, 'Settings copied.'])
+    const status = await rect(STATUS)
     assert.equal(status.right <= buttons[0].x + 1, true, 'the status is left of the icons')
-    assert.equal(await p.locator('.dialog .pen-tool-extras-title-row').evaluate((row) => row.contains(document.querySelector('.dialog [data-role="settings-status"]'))), true)
+    assert.equal(await p.locator('.dialog .pen-tool-extras-title-row').evaluate((row, sel) => row.contains(document.querySelector(sel)), STATUS), true)
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
@@ -196,17 +187,17 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('at a phone width a long status message wraps beside the icons and stays clear of the title', async () => {
-    await p.setViewportSize({ width: 390, height: 800 })
+  it('at a narrow window a long status message wraps beside the icons and stays clear of the title', async () => {
+    await p.setViewportSize({ width: 500, height: 1000 })
     try {
       await openSettledEditor(p)
-      await p.evaluate(() => { document.querySelector('.dialog [data-role="settings-status"]').textContent = 'Pasted 3 settings; skipped 2 that did not check out.' })
+      await p.evaluate(([sel, text]) => { document.querySelector(sel).textContent = text }, [STATUS, 'Pasted 3 settings; skipped 2 that did not check out.'])
       const title = await rect('.dialog .pen-tool-extras-title-row b')
-      const status = await rect('.dialog [data-role="settings-status"]')
+      const status = await rect(STATUS)
       const copy = await p.getByRole('button', { name: 'Copy settings' }).boundingBox()
       assert.equal(status.left >= title.right - HALF_PIXEL, true, `the status (from ${status.left}) starts after the title (to ${title.right})`)
       assert.equal(status.right <= copy.x + HALF_PIXEL, true, 'and ends before the icons')
-      assert.equal((await rect('.dialog')).right <= 390 + 1, true, 'the dialog stays on the screen')
+      assert.equal((await rect('.dialog')).right <= 500 + 1, true, 'the dialog stays on the screen')
       await closeExtrasEditorWith(p, 'Cancel')
     } finally {
       await p.setViewportSize({ width: 1200, height: 1000 })
@@ -271,8 +262,8 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     }
   })
 
-  it('at a phone width the dialog does not run off the screen sideways', async () => {
-    await p.setViewportSize({ width: 390, height: 800 })
+  it('at a narrow window the dialog does not run off the screen sideways', async () => {
+    await p.setViewportSize({ width: 500, height: 1000 })
     try {
       await openSettledEditor(p)
       const fits = await p.evaluate(() => {

@@ -2,13 +2,12 @@
 // Proportional brings back the page's font, Cancel saves nothing, and Paste settings applies the font. A pulldown in the dialog is no wider than its longest option, its arrow and its padding.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
-import { closeDialogWith } from '../settings.mjs'
+import { STATUS, actButton, closeDialogWith } from '../settings.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
-const { FONT_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXTS, TEXT_BOX } = draw
+const { FONT_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, TEXT_BOX } = draw
 const FONT = `${EDITOR} select[data-role="font-choice"]`
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const CLIPBOARD = { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }
@@ -22,9 +21,7 @@ const NOTES = [
   { kind: 'text', color: 6, size: 20, opacity: 100, text: '- one\n- two', at: [200, 400] }
 ]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
   let context, p, errors
@@ -32,8 +29,7 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
   const familiesOn = (page) => page.evaluate((selector) => [...document.querySelectorAll(selector)].map((note) => window.getComputedStyle(note).fontFamily), TEXTS)
   const families = () => familiesOn(p)
   const reloadAndPick = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
   }
   const choose = async (value, button) => {
     await p.click(SETTINGS_BUTTON)
@@ -42,12 +38,10 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, CLIPBOARD))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), CLIPBOARD))
     await draw.forgetDrawings(p)
     await draw.plantDrawing(p, NOTES)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
   })
   after(async () => { await context.close() })
 
@@ -95,7 +89,7 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
     await p.mouse.click(...await gridPoint(p, [5.5, 5.5]))
     await p.keyboard.type('x=1')
     assert.equal(await p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e).fontFamily), FIXED_STACK)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await families(), [FIXED_STACK, FIXED_STACK, FIXED_STACK])
   })
 
@@ -107,15 +101,14 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
   })
 
   it('Paste settings in a fresh page applies the font to the dialog, the store and the notes', async () => {
-    const other = await openPage(browser, CLIPBOARD)
+    const other = await draw.open(browser(), CLIPBOARD)
     try {
-      await draw.boot(other.p)
       await draw.plantDrawing(other.p, NOTES)
       await draw.reload(other.p)
       await draw.pickDraw(other.p)
       await other.p.evaluate((text) => navigator.clipboard.writeText(text), JSON.stringify({ [FONT_KEY]: 'fixed' }))
       await other.p.click(SETTINGS_BUTTON)
-      await other.p.locator('.dialog button[data-act="paste-settings"]').click()
+      await actButton(other.p, 'paste-settings').click()
       await other.p.locator(STATUS).filter({ hasText: 'Pasted 1 setting.' }).waitFor()
       assert.equal(await other.p.locator(FONT).inputValue(), 'fixed')
       assert.equal(await other.p.evaluate((key) => Framework.getData(key), FONT_KEY), 'fixed')

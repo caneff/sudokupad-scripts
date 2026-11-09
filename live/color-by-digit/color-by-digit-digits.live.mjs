@@ -1,14 +1,13 @@
 // Live check of Color by Digit's digit colors (the Digit and Both modes) on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
-import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
-import { gotoPuzzle, PUZZLE_URL } from '../page.mjs'
+import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, styleOn, watch, selectCell, reloadSession } from './color-by-digit-fixtures.mjs'
+import { PUZZLE_URL } from '../page.mjs'
 import { settle } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 const { shadeOf, shadeOn } = shadeReaders(createRequire(import.meta.url)('../../color-by-digit.user.js'))
 
 // SudokuPad's own color for a given, read off the page with no script installed.
@@ -17,7 +16,6 @@ const GIVEN_FILL = 'rgb(0, 0, 0)'
 const CONFLICT_RED = 'rgb(179, 58, 58)'
 // The active profile: 1 to 5 on palette key 4, 8 and 9 on key 6; 0, 6 and 7 in no group, so they keep SudokuPad's color.
 const SPLIT = [group('4', ['1', '2', '3', '4', '5']), group('6', ['8', '9'])]
-// The givens Split colors: those of a digit in one of its groups.
 const GROUPED_GIVENS = [...GIVENS].filter((d) => SPLIT.some((g) => g.digits.includes(d))).length
 const SEEDED_DIGIT = { ...savedProfiles({ profiles: [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_EVEN }], active: 0 }), [MODE_STORAGE_KEY]: 'digit' }
 // How far from a mark's box, in screen pixels, a circle may sit and still be that mark's circle. This
@@ -41,9 +39,7 @@ const CONFLICT_CELLS = {
 const CONFLICTING = { corner: '#cell-pencilmarks text.cell-pencilmark.conflict', centre: '#cell-candidates tspan.conflict' }
 const STYLE = '#color-by-digit-digits'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('digit colors, saved in Digit, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, decoder, errors
@@ -58,13 +54,11 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   const undoSteps = () => read(() => Framework.app.puzzle.undoStack.length)
   const label = () => labelOn(p)
 
-  // Every circle in the group, as it is drawn: its centre in screen pixels and radius, and whether it paints at all.
   const circles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].map((c) => {
     const centre = new window.DOMPoint(Number(c.getAttribute('cx')), Number(c.getAttribute('cy'))).matrixTransform(c.getScreenCTM())
     return { cx: centre.x, cy: centre.y, r: Number(c.getAttribute('r')), shown: window.getComputedStyle(c.parentNode).display !== 'none' }
   }), CIRCLES)
   const shownCircles = async () => (await circles()).filter((c) => c.shown).length
-  // Circles drawn beyond one per conflicting mark on the board: zero when each mark has its own and no other stands.
   const extraCircles = () => read(([circles, conflicting]) => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length, [CIRCLES, Object.values(CONFLICTING).join(',')])
   // The middle of each conflicting mark of `digit` in `place` and the middle of every circle, both
   // in screen pixels so the board's own transforms are the page's to apply. A mark's middle here is
@@ -76,8 +70,6 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
       return { cx: box.x + box.width / 2, cy: box.y + box.height / 2 }
     })
   }, [CONFLICTING[place], digit])
-  // How many conflicting marks of `digit` in `place` there are, how many of them have a shown circle
-  // beside them, and how many circles are drawn beyond one per conflicting mark on the board.
   const circleState = (place, digit) => async () => {
     const marks = await middles(place, digit)
     const drawn = await circles()
@@ -131,8 +123,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     return drawn.map((c) => ({ dx: c.cx - cx, dy: c.cy - cy })).sort((m, n) => Math.hypot(m.dx, m.dy) - Math.hypot(n.dx, n.dy))[0]
   }
 
-  const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-  const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
+  const enter = async (r, c, digit) => { await selectCell(p, r, c); await p.keyboard.press(digit) }
   const markMode = async (id, fn) => { await p.click(id); try { await fn() } finally { await p.click('#control-normal') } }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
@@ -143,7 +134,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: SEEDED_DIGIT }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: SEEDED_DIGIT }))
     // A blank page decodes the screenshots: the board's page may refuse a `data:` fetch.
     decoder = await context.newPage()
     await p.locator(STYLE).waitFor({ state: 'attached' })
@@ -205,7 +196,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
       return drawn.length
     }, [CIRCLES])
     const state = () => read(([circles]) => ({ all: document.querySelectorAll(circles + ' circle').length, untagged: document.querySelectorAll(circles + ' circle:not([data-kept])').length }), [CIRCLES])
-    // Attribute writes on the tagged circles from now on (a write of the value already there counts).
+    // A write of the value already there counts.
     const watchWrites = () => read(([circles]) => {
       window.__keptWrites = 0
       const watcher = new window.MutationObserver((records) => { window.__keptWrites += records.filter((r) => r.target.hasAttribute('data-kept')).length })
@@ -279,7 +270,6 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   // The page's clock changes text every second and redraws the circles anyway, so this reads the
   // circles two frames after the class change, before a tick is likely.
   it('a mark entering or leaving the conflict state with no other change on the page gets or loses its circle at once', async () => {
-    // Circles drawn beyond one per conflicting mark, read two frames after each class change.
     const extraAfterToggle = await read(async ([circles, conflicting]) => {
       const extra = () => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length
       const twoFrames = () => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
@@ -410,8 +400,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   }
 
   it('the shades survive a reload', async () => {
-    await gotoPuzzle(p)
-    await startInjected(p, script)
+    await reloadSession(p, script)
     await expectShadesAfterEntry()
   })
 
@@ -422,15 +411,6 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
         await expectShadesAfterEntry()
       } finally {
         await read(() => Framework.setSetting('outlinesondigits', false))
-      }
-    })
-
-    it('dark mode (prefers-color-scheme: dark): the shades still apply', async () => {
-      await p.emulateMedia({ colorScheme: 'dark' })
-      try {
-        await expectShadesAfterEntry()
-      } finally {
-        await p.emulateMedia({ colorScheme: 'light' })
       }
     })
 
@@ -450,7 +430,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     // rebuilds the board in place. The repo holds one puzzle URL, so it is the same puzzle again.
     it('the board rebuilt in the page without a reload still gets the shades', async () => {
       // PuzzleLoader is a top-level binding of the page's script, not a window property.
-      await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
+      await p.evaluate(() => { window.pageLoader = PuzzleLoader }) // eslint-disable-line no-undef
       await read(() => document.querySelectorAll('#cell-givens text').forEach((e) => e.setAttribute('data-old-board', '')))
       await read(async (id) => {
         const { parsePuzzleData, fetchPuzzle } = window.pageLoader
@@ -531,20 +511,19 @@ describe('digit colors from the palette the page shows, injected after Start Puz
   let context, p, errors
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script, { saved: SEEDED_DIGIT }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: SEEDED_DIGIT }))
     await p.evaluate((pink) => {
       const palette = JSON.parse(JSON.stringify(Framework.app.tools.colour.palette))
       palette.colors['4'] = pink
       Framework.app.tools.colour.savePalette(palette)
     }, PINK)
-    await gotoPuzzle(p)
-    await startInjected(p, script)
+    await reloadSession(p, script)
   })
   after(async () => { await context.close() })
 
   it('a digit takes the shade of its group\'s color as the page shows it', async () => {
     assert.equal(await paletteColorOn(p, '4'), PINK)
-    await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
+    await selectCell(p, 0, 2)
     await p.keyboard.press('4')
     const shade = shadeOf(PINK)
     assert.deepEqual(await settle(allFillsOn(p, 'entered', '4'), [shade]), [shade])

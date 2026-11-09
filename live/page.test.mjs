@@ -1,9 +1,7 @@
-// `captureConsoleErrors`, `collectPageErrors` and `collectSkipLines` of the live checks, run against a fake page so no browser is needed.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { captureConsoleErrors, collectPageErrors, collectSkipLines } from './page.mjs'
 
-// A page whose `console` and `pageerror` listeners are fed messages by the test.
 const fakePage = () => {
   const listeners = {}
   return {

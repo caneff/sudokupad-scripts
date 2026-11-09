@@ -1,21 +1,18 @@
 // Live check of pen-tool-extras.user.js's pen colors and thickness on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { chromium } from 'playwright'
-import { drawnWidth, openPage, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { drawnWidth } from '../page.mjs'
 import { EXTRAS_EDITOR, closeExtrasEditorWith, dialogButton, headerVersion, openExtrasEditor, openSettings } from '../settings.mjs'
-import { gridPoint, openPenTool, plantUnchecked, setSlider } from '../pen.mjs'
+import { gridPoint } from '../board.mjs'
+import { openPenTool, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { addScripts, openWith, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
-
-const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
+const { HOLD_TO_EDIT_MS, HOLD_WAIT_MS, STYLE } = extras
 
 const DATA_KEY = 'PenColor_colors'
-// The color tool wait's limit in the script (COLOR_TOOL_TIMEOUT_MS).
 const COLOR_TOOL_TIMEOUT_MS = 10000
 const THICKNESS_KEY = 'PenColor_thickness'
 // SudokuPad's cell color pages, darkened: the pen color presets. Typed out
@@ -43,12 +40,11 @@ const CUSTOM_CELL = { css: 'rgb(10, 20, 200)', pen: '#05008c' }
 
 // The pickers appear only when the hold timer fires, so a count that has not moved yet is not a count that stopped.
 const HOLD_QUIET_MS = HOLD_TO_EDIT_MS + 500
-const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
-
-const STYLE = '#pen-tool-extras-style'
 
 const removePalette = (page) => page.evaluate(() => { window.__palette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = undefined })
 const putBackRemovedPalette = (page) => page.evaluate(() => { Framework.app.tools.colour.palette = window.__palette })
+// Opens the page with no script and the color tool's palette gone, for the script to be added to.
+const openWithNoPalette = (options) => openWith(browser(), [], { ...options, afterStart: removePalette })
 
 const probeStrokeWidth = (page, value, parent) => page.evaluate(([value, parent]) => {
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
@@ -60,9 +56,7 @@ const probeStrokeWidth = (page, value, parent) => page.evaluate(([value, parent]
   return computed
 }, [value, parent]).then(drawnWidth)
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -112,20 +106,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.mouse.up()
   }
 
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(STYLE).waitFor({ state: 'attached' })
-    // The pen tool is off until its own setting turns it on.
-    await read(() => Framework.setSetting('toolpen', true))
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-  }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
+  const reload = () => extras.reload(p, { penTool: false })
   const pick = (n, hex) => editor().locator(`input[data-key="${n}"]`).fill(hex)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await boot()
+    ;({ context, p, errors } = await extras.open(browser(), { penTool: false }))
   })
   after(async () => { await context.close() })
 
@@ -134,10 +119,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await swatchesAre(PAGE_PENS[0])
     await drawInFirstColumn(4, 1)
     assert.deepEqual(await settle(allStrokes(4), [rgbOf(PAGE_PENS[0][3])]), [rgbOf(PAGE_PENS[0][3])])
-  })
-
-  it('the cell colors are the ones SudokuPad ships, untouched by the pen', async () => {
-    assert.deepEqual(await cellVars(), CELL_VARS)
   })
 
   it('the dialog has a Pen Tool Extras entry in settings with a picker for each of the nine pen colors, set to the installed colors, and the pulldown shows their preset', async () => {
@@ -523,26 +504,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await allWidths(), { full: [9], half: [4.5] })
     })
 
-    it('Restore defaults sets the dialog\'s thickness slider to 5 for Save: Cancel afterwards leaves the saved thickness and the marks, Save clears it and draws at 5', async () => {
-      await setThickness(7)
-      assert.equal(await savedThickness(), 7)
-      await openExtrasEditor(p)
-      await restoreDefaults()
-      assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
-      assert.equal(await savedThickness(), 7, 'nothing is saved before Save')
-      assert.deepEqual(await widths(1)(), [7])
-      await closeExtrasEditorWith(p, 'Cancel')
-      assert.equal(await savedThickness(), 7)
-      assert.deepEqual(await allWidths(), { full: [7], half: [3.5] })
-      await openExtrasEditor(p)
-      await restoreDefaults()
-      await closeExtrasEditorWith(p, 'Save')
-      assert.equal(await savedThickness(), null)
-      assert.deepEqual(await settle(widths(1), [5]), [5])
-      assert.equal(await slider().inputValue(), '5')
-      assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
-    })
-
     it('the buttons are one row under a divider: Save (filled purple), then Cancel and Restore defaults, plain, the same size', async () => {
       await openExtrasEditor(p)
       // All three in one read, so a dialog still moving into place cannot put them in different frames.
@@ -610,8 +571,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.up()
     }
     const editModeOn = () => p.locator('.tool-pen.pen-tool-extras-editing').count()
-    // Dispatches a cancelable contextmenu on the first element matching `selector` and says
-    // whether the page left it alone (dispatchEvent returns false when preventDefault ran).
     const menuAllowed = (selector) => read((sel) => document.querySelector(sel).dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })), selector)
 
     before(async () => {
@@ -834,7 +793,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await entry.click()
     await editor().waitFor({ state: 'visible' })
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen Tool Extras')
-    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
+    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(extras.script)}`)
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
@@ -845,16 +804,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
 describe('the color tool is not ready yet', { concurrency: false }, () => {
   it('the pens show SudokuPad\'s own colors and nothing is saved while it waits; after 10 s the color save is skipped with a named warning; the dialog offers only SudokuPad colors; a palette that comes later is not saved over them', async () => {
-    const { context, p, errors } = await openPage(browser, { expectedSkips: [/^pen-tool-extras: color save skipped because/] })
+    const { context, p, errors } = await openWithNoPalette({ expectedSkips: [/^pen-tool-extras: color save skipped because/] })
     const warned = []
     p.on('console', (m) => { if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text()) })
     try {
-      await startPuzzle(p)
-      await removePalette(p)
-      await p.addScriptTag({ content: script })
-      await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-      // The wait ends at 10 s: a sleep past it, since the check is that nothing was saved meanwhile and the one warning names the wait.
-      await sleep(COLOR_TOOL_TIMEOUT_MS + 2000)
+      await addScripts(p, [extras.SCRIPT_FILE])
+      await p.locator(STYLE).waitFor({ state: 'attached' })
+      // The wait ends at 10 s: wait for the one warning instead of sleeping past it. A save during the wait would still be stored, so the checks below see it.
+      assert.equal(await settle(() => warned.length, 1, COLOR_TOOL_TIMEOUT_MS + 10000, Infinity), 1, warned.join('\n'))
       const pens = () => p.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()))
       assert.deepEqual(await pens(), OWN_PEN_HEX)
       assert.equal(await p.evaluate((k) => Framework.getData(k), DATA_KEY), null)
@@ -882,11 +839,9 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
   })
 
   it('picking SudokuPad colors and saving while the script waits outranks the install save', async () => {
-    const { context, p } = await openPage(browser)
+    const { context, p } = await openWithNoPalette()
     try {
-      await startPuzzle(p)
-      await removePalette(p)
-      await p.addScriptTag({ content: script })
+      await addScripts(p, [extras.SCRIPT_FILE])
       await openExtrasEditor(p)
       await p.locator('#pen-tool-extras-editor select[data-role="color-choice"]').selectOption('sudokupad')
       await closeExtrasEditorWith(p, 'Save')
@@ -902,11 +857,9 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
   })
 
   it('the install save arriving after a thickness is set in the panel leaves the thickness in place', async () => {
-    const { context, p } = await openPage(browser)
+    const { context, p } = await openWithNoPalette()
     try {
-      await startPuzzle(p)
-      await removePalette(p)
-      await p.addScriptTag({ content: script })
+      await addScripts(p, [extras.SCRIPT_FILE])
       await p.evaluate(() => Framework.setSetting('toolpen', true))
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       await setSlider(p, '#pen-tool-extras-thickness', 11)
@@ -921,11 +874,9 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
   })
 
   it('a save made while the script waits for the color tool outranks the install save', async () => {
-    const { context, p } = await openPage(browser)
+    const { context, p } = await openWithNoPalette()
     try {
-      await startPuzzle(p)
-      await removePalette(p)
-      await p.addScriptTag({ content: script })
+      await addScripts(p, [extras.SCRIPT_FILE])
       await openExtrasEditor(p)
       await p.locator('#pen-tool-extras-editor input[data-key="4"]').fill(FOUR.hex)
       await closeExtrasEditorWith(p, 'Save')

@@ -4,9 +4,10 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { ERROR_LOG_KEY, captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
 import { NOTICE_BAR } from '../attacks.mjs'
-import { cellCentre, gridPoint, openPenTool, PAGE_BUTTON, undoAll } from '../pen.mjs'
+import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
+import { openPenTool, PAGE_BUTTON } from '../pen.mjs'
 import { closeExtrasEditorWith, openExtrasEditor, openScriptDialog } from '../settings.mjs'
-import { finishNote, pickDraw, TEXT_BOX, TEXTS } from '../draw-tool/draw-tool-fixtures.mjs'
+import { pickDraw, TEXT_BOX, TEXTS } from '../draw-tool/draw-tool-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { runFuzz, runScript } from './engine.mjs'
 import { scriptedList } from './actions.mjs'
@@ -15,7 +16,6 @@ import { plantPatch } from './plants.mjs'
 import { FUZZ_PUZZLES, insideGrid, rulesTextFor } from './puzzle-set.mjs'
 import { newestErrorRecords } from './signals.mjs'
 
-// A page error thrown after an Escape pressed while a mouse button is down: the planted failure the smoke test and `--plant-escape-error` use.
 const plantEscapeError = (p) => p.addInitScript(() => {
   let down = false
   window.addEventListener('mousedown', () => { down = true }, true)
@@ -113,7 +113,6 @@ function envFor (p, puzzle) {
   }
 }
 
-// Opens a page for one action list: SudokuPad past Start Puzzle on `puzzle`, every script installed, the pen and replay tools on.
 export async function openTarget (browser, puzzle, { planted, plant }) {
   const { context, p, errors } = await openPage(browser, {
     seed: async (page, collected) => {
@@ -144,7 +143,6 @@ export async function openTarget (browser, puzzle, { planted, plant }) {
   }
 }
 
-// The cells a digit can go in, as `[row, col]`.
 const freeCells = (p) => p.evaluate(() => Framework.app.puzzle.cells.filter((c) => !c.given).map((c) => [c.row, c.col]))
 const sortedCells = (cells) => [...cells].sort(([r1, c1], [r2, c2]) => r1 - r2 || c1 - c2)
 

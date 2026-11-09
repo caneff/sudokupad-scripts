@@ -2,22 +2,21 @@
 // color button, each interrupted by something a user does, on sudokupad.app in headless Chromium. Every case is real input and checks the crash signals
 // (an uncaught error, a console error, a skip line), that what is drawn is what is saved (and what a reload shows), that no gesture is left
 // half done (no selection rectangle, no stuck drag), and that an ordinary gesture works afterward.
-/* global Framework */
+/* global Framework, window */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { captureConsoleErrors, openPage } from '../page.mjs'
-import { gridPoint, mouseDrag } from '../pen.mjs'
+import { captureConsoleErrors } from '../page.mjs'
 import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { settle, stable } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint, mouseDrag, typeText } from '../board.mjs'
 
 const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SELECTED, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = draw
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
 const COLOR_BUTTON = `${KEYPAD} button[data-key="4"]`
 const RECTANGLE = '#draw-tool-layer .draw-tool-selection-rectangle'
-// SudokuPad's hotkey for the Corner tool, and the tool it names.
 const OTHER_TOOL_KEY = 'x'
 const OTHER_TOOL = 'corner'
 // In cells from the grid's top left: the note's start, a drag's end (a move by BY) and a cell clear of both.
@@ -29,9 +28,7 @@ const NOTE_TEXT = '15'
 const IDLE_NEAR_PX = 1.5
 const SMALLER_WINDOW = { width: 1100, height: 800 }
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () => {
   let context, p, errors
@@ -46,18 +43,13 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
   const noteItems = async () => (await items()).filter((i) => i.kind === 'text')
   const selectedCount = () => p.locator(SELECTED).count()
   const handleCount = () => p.locator(HANDLES).count()
-  // The first note's middle on the screen, and whether it is inside the window and clear of the controls.
   const noteBox = () => read((selector) => {
     const note = document.querySelector(selector).getBoundingClientRect()
     const controls = document.querySelector('#controls').getBoundingClientRect()
     const [x, y] = [note.x + note.width / 2, note.y + note.height / 2]
     return { x, y, width: note.width, height: note.height, inWindow: note.left >= 0 && note.top >= 0 && note.right <= window.innerWidth && note.bottom <= window.innerHeight, overControls: x >= controls.left && x <= controls.right && y >= controls.top && y <= controls.bottom }
   }, TEXTS)
-  const makeNote = async (at = NOTE_AT, text = NOTE_TEXT) => {
-    await p.mouse.click(...await gridPoint(p, at))
-    await p.keyboard.type(text)
-    await draw.finishNote(p)
-  }
+  const makeNote = (at = NOTE_AT, text = NOTE_TEXT) => typeText(p, at, text)
   const pickText = async () => {
     await draw.pickDraw(p)
     assert.equal(await tool(), 'draw')
@@ -75,7 +67,6 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await makeNote()
   }
 
-  // The drawn notes are the saved notes, with the text they were typed with, and a reload shows the same.
   const assertWhole = async (why, texts = [NOTE_TEXT]) => {
     assert.deepEqual(errors, [], `${why}: the page shows no error`)
     assert.deepEqual(await settle(() => draw.texts(p), texts), texts, `${why}: the drawn notes`)
@@ -91,9 +82,8 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     assert.deepEqual(await settle(() => draw.texts(p), texts), texts, `${why}: a reload shows the same notes`)
     assert.deepEqual(await items(), saved, `${why}: a reload leaves the saved notes as they were`)
   }
-  // An ordinary move drag still moves the note, and a new note can still be made.
   const assertWorks = async (why) => {
-    await draw.finishNote(p)
+    await finishNote(p)
     await pickText()
     const before = JSON.stringify((await noteItems())[0])
     // A drag from the note's own middle, leftward, since the attack may have left the note at the window's right edge.
@@ -104,15 +94,14 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await p.mouse.up()
     const moved = await settle(async () => JSON.stringify((await noteItems())[0]) !== before, true)
     assert.equal(moved, true, `${why}: an ordinary drag still moves the note`)
-    await draw.finishNote(p)
+    await finishNote(p)
     await makeNote(EMPTY_AT, 'new')
     assert.deepEqual((await draw.texts(p)).sort(), [NOTE_TEXT, 'new'].sort(), `${why}: a new note can still be made`)
     assert.deepEqual(errors, [], `${why}: the page shows no error afterward`)
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { seed: captureConsoleErrors }))
   })
   after(async () => { await context.close() })
   beforeEach(async () => { await fresh() })
@@ -262,10 +251,21 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
       await p.mouse.down()
     }
 
-    it('released at 0.9 s opens no pickers, and a full hold afterward still does', async () => {
+    it('released at 0.9 s opens no pickers, and a full hold afterward still does', async (t) => {
+      // The page times the press itself: a stall of the box that lets the 1 s hold timer fire first makes the release late, not the script wrong.
+      await p.evaluate(() => {
+        window.__press = {}
+        window.addEventListener('pointerdown', (e) => { window.__press.down = e.timeStamp }, { capture: true, once: true })
+        window.addEventListener('pointerup', (e) => { window.__press.up = e.timeStamp }, { capture: true, once: true })
+      })
       await press()
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.9)
       await p.mouse.up()
+      const held = await p.evaluate(() => window.__press.up - window.__press.down)
+      if (!(held < HOLD_TO_EDIT_MS)) {
+        t.skip(`the press lasted ${Math.round(held)} ms, so the release was not early`)
+        return
+      }
       // A "nothing happened" wait: the pickers, if the early release wrongly opened them, would show well within it.
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.4)
       assert.equal(await pickers(), 0, 'no pickers after an early release')

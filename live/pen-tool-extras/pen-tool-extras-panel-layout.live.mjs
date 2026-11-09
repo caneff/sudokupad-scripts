@@ -4,50 +4,48 @@
 /* global Framework, getComputedStyle, Image, document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
 import { openPenTool } from '../pen.mjs'
 import { dialogButton, openExtrasEditor } from '../settings.mjs'
+import { useBrowser } from '../session.mjs'
 
-const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
-// The pickers appear only when the hold timer fires.
-const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
+const { HOLD_WAIT_MS } = extras
 
-// The panel's outer rectangle that SudokuPad gives it, measured on this recording at 1200x900: x, y, width, height of `.controls-input`.
-const OUTER = { x: 724, y: 412.9, width: 212.76, height: 283.65 }
 const KEY_PX = 65.98
 const NEAR_PX = 0.5
 const ICON_INK_PX = 34
 // The ink of an icon is read at this device scale, so a screenshot pixel is a quarter of a layout pixel.
 const SHOT_SCALE = 4
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('the pen panel layout', { concurrency: false }, () => {
   let context, p
+  // SudokuPad's own `.controls-input` rectangle, read before the script is added: the script keeps whatever SudokuPad gives it.
+  let outer
 
   const rect = (selector) => p.locator(selector).evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom } })
   const key = (n) => rect(`.tool-pen button[data-key="${n}"]`)
   const near = (actual, wanted, what) => assert.equal(Math.abs(actual - wanted) <= NEAR_PX, true, `${what}: ${actual} vs ${wanted}`)
 
   before(async () => {
-    ;({ context, p } = await openPage(browser, { contextOptions: { deviceScaleFactor: SHOT_SCALE } }))
-    await startPuzzle(p, { beforeStart: () => p.evaluate(() => Framework.setSetting('toolpen', true)) })
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await openPenTool(p)
+    ;({ context, p } = await extras.open(browser(), {
+      contextOptions: { deviceScaleFactor: SHOT_SCALE },
+      // The page exists before `open` returns it, and `rect` reads `p`.
+      afterStart: async (page) => {
+        p = page
+        await p.evaluate(() => Framework.setSetting('toolpen', true))
+        await openPenTool(p)
+        outer = await rect('.tool-pen .controls-input')
+      }
+    }))
     await p.locator('.pen-tool-extras-settings').waitFor({ state: 'visible' })
   })
   after(async () => { await context.close() })
 
-  it('the panel keeps its outer rectangle, 3 columns at the keys\' width, 284 px tall, within half a pixel', async () => {
+  it('the panel keeps the outer rectangle SudokuPad gave it, within half a pixel', async () => {
     const panel = await rect('.tool-pen .controls-input')
-    for (const side of ['x', 'y', 'width', 'height']) near(panel[side], OUTER[side], side)
+    for (const side of ['x', 'y', 'width', 'height']) near(panel[side], outer[side], side)
   })
 
   it('the nine color buttons are 2.5rem tall, 4rem wide, three to a row, with 2.4 px margins and position relative', async () => {

@@ -2,22 +2,18 @@
 // on sudokupad.app in headless Chromium. The buttons sit just right of the grid, and SudokuPad's own edge hit test still finds an
 // edge of the last column for a press up to one cell beyond it, so a click that leaks draws an X there (#521). A touch screen stays untested.
 // Every click is a real mouse click.
-/* global Framework, ToolPen */
+/* global ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from '../page.mjs'
-import { clickLeftEdge, openPenTool, PAGE_BUTTON, padValues } from '../pen.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { clickLeftEdge, PAGE_BUTTON, padValues } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const LINE_MODE_BUTTON = '.pen-tool-extras-mode'
 const SETTINGS_BUTTON = '.pen-tool-extras-settings'
 const EDITOR = '#pen-tool-extras-editor'
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('a click on the left of a Pen Tool Extras panel button', { concurrency: false }, () => {
   let context, p
@@ -30,11 +26,7 @@ describe('a click on the left of a Pen Tool Extras panel button', { concurrency:
   }
 
   before(async () => {
-    ;({ context, p } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
-    await startPuzzle(p, { beforeStart: () => p.evaluate(() => Framework.setSetting('toolpen', true)) })
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await openPenTool(p)
+    ;({ context, p } = await extras.open(browser(), { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
     await p.locator('.tool-pen button[data-key="1"]').click()
   })
   after(async () => { await context.close() })

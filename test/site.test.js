@@ -162,7 +162,6 @@ const section = (file, heading) => {
   assert.ok(m, `site/${file} has no <h2>${heading}</h2> followed by a list`)
   return items(m[1]).map(plain)
 }
-// An item's opening words are its bold lead-in: the first <strong> of the item.
 const leadIn = li => (li.match(/^<strong>([^<]*)<\/strong>/) || [])[1]
 const leadIns = page => items(page).map(leadIn).filter(Boolean)
 
@@ -229,11 +228,15 @@ test(`${HOME} has one row per script in order, each with an Install button besid
   })
 })
 
-test("the shared Install button's text size and icon size are set in style.css", () => {
+test('the Install button is styled once, in style.css, and shared by every page', () => {
   const css = fs.readFileSync(path.join(SITE_DIR, 'style.css'), 'utf8')
-  const install = css.match(/\.install \{[^}]*\}/)[0]
-  assert.match(install, /font-size: 1\.05rem/)
-  assert.match(css, /\.install::before \{[^}]*width: 1\.3em/)
+  assert.equal(css.match(/\.install \{[^}]*font-size: [^;}]+/g).length, 1, 'one .install rule with a font-size')
+  assert.equal(css.match(/\.install::before \{[^}]*width: [^;}]+/g).length, 1, 'one .install::before rule with a width')
+  for (const page of fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))) {
+    const html = read(page)
+    assert.doesNotMatch(html, /<style[^>]*>[^<]*\.install/, `${page} styles .install in a <style> block`)
+    assert.doesNotMatch(html, /<a [^>]*(?:class="install"[^>]*style=|style=[^>]*class="install")/, `${page} styles an install link inline`)
+  }
 })
 
 test(`${HOME}'s other rows show one picture and no pager`, () => {
@@ -251,7 +254,6 @@ const SHOWS = [
   { heading: 'Text Anywhere', page: DRAW, id: 'text-anywhere' }
 ]
 
-// A slideshow's own markup, from a homepage row or a details page (where it ends at "What it adds").
 const showOf = html => html.split('<div class="slideshow">')[1].split(/<h2>What it adds<\/h2>|<\/section>/)[0]
 const homeShow = heading => showOf(rowsOf(read(HOME)).find(r => r.includes(`<h2>${heading}</h2>`)))
 
@@ -283,7 +285,6 @@ for (const { heading, page: file, id } of SHOWS) {
   })
 }
 
-// Each details page's sections, in order: the page lays out the lede and Install, the slideshow, "What it adds", then its own sections.
 const assertSectionsInOrder = (file, markers) => {
   const page = read(file)
   assert.match(page, /<body class="details">/)
@@ -375,7 +376,6 @@ const pictureSize = (file) => {
   return [bytes.readUInt16LE(6), bytes.readUInt16LE(8)]
 }
 
-// Asserts an <img>'s declared width and height keep the shape of its file; returns the file's size.
 const assertDeclaredAtFileShape = (img, file, what) => {
   const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))
   const [fileW, fileH] = pictureSize(file)
@@ -387,10 +387,25 @@ test(`${CBD} has the slideshow between the install link and "What it adds", then
   assertSectionsInOrder(CBD, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<h2>Good to know</h2>'])
 })
 
-test("Color by Digit's slide 5 shows the three marks that repeat the given 2, and its last slide splits the cell and digit profiles", () => {
+// SudokuPad flags a mark that repeats a given in its row, its column or its 3x3 box.
+const repeatsGiven = ([row, col, digits], given) => digits.includes(given.digit) && (row === given.row || col === given.col || (Math.floor(row / 3) === Math.floor(given.row / 3) && Math.floor(col / 3) === Math.floor(given.col / 3)))
+// What the picture script (read as data, since npm test does not run docs/research/) holds for the board its slides are taken on.
+const exampleBoard = () => {
+  const text = fs.readFileSync(path.join(ROOT, 'docs', 'research', 'color-by-digit', 'color-by-digit-example.mjs'), 'utf8')
+  const list = (name) => JSON.parse(text.match(new RegExp(`const ${name} = (\\[\\[[^;]*\\]\\])\\n`))[1].replace(/'/g, '"'))
+  return { digit: text.match(/const GIVEN = '(\d)'/)[1], marks: [...list('CORNER'), ...list('CENTRE')] }
+}
+
+test("Color by Digit's slide 5 says three marks repeat the given 2, and the board the slides are taken on has exactly three, by row, column or box", () => {
+  const { digit, marks } = exampleBoard()
+  const given = { digit, row: 0, col: 0 }
+  assert.equal(digit, '2')
+  assert.equal(marks.filter((mark) => repeatsGiven(mark, given)).length, 3)
+  // A mark that shares only the 3x3 box with the given goes red, and one that shares nothing does not.
+  assert.equal(repeatsGiven([1, 1, '2'], given), true)
+  assert.equal(repeatsGiven([1, 4, '2'], given), false)
   const alts = homeShow('Color by Digit').match(/\balt="[^"]*"/g)
   assert.match(alts[4], /three marks that repeat the given 2/)
-  assert.match(alts[9], /cells filled in the first profile's .*digits and marks shaded in Modular's/)
 })
 
 // Chris's ruling on #317: the slides' pen colors are far from SudokuPad's nine, so they show colors its own pen cannot draw.

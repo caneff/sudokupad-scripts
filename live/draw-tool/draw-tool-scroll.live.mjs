@@ -6,10 +6,9 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint } from '../board.mjs'
 
 const { DIALOG, TEXT_BOX, TEXTS } = draw
 const { BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT } = createRequire(import.meta.url)('../../draw-tool.user.js')
@@ -29,9 +28,7 @@ const TALL_LINES = [...Array.from({ length: 11 }, (_, i) => `line ${i + 1}`), '*
 const BOX_HEIGHT_EM = BOX_LINES * LINE_HEIGHT
 const NEAR_PX = 1.5
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s note box', { concurrency: false }, () => {
   let context, p, errors
@@ -45,7 +42,6 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
       await p.keyboard.type(line)
     }
   }
-  // The note whose text begins with `start`, in the layer: its content box in pixels and in em, its scroll, and its look.
   const note = (start, selector = TEXTS) => read(([s, want]) => {
     const e = [...document.querySelectorAll(s)].find((n) => n.textContent.startsWith(want))
     const style = window.getComputedStyle(e)
@@ -71,11 +67,9 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
   const wheelsSeen = () => read(() => window.__wheels.splice(0))
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
     await read(() => {
       window.__wheels = []
       document.addEventListener('wheel', (event) => window.__wheels.push(event.defaultPrevented))
@@ -85,7 +79,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
 
   it('a line longer than 16 em wraps inside a box 16 em wide, and does not scroll', async () => {
     await typeNote(LONG_AT, [LONG_TEXT])
-    await draw.finishNote(p)
+    await finishNote(p)
     const long = await note('word')
     assert.ok(long.widthEm <= BOX_WIDTH_EM + 0.05 && long.widthEm > BOX_WIDTH_EM - 2, `${long.widthEm} em wide`)
     assert.ok(long.heightEm > 2 * LINE_HEIGHT - 0.05, `${long.heightEm} em high: wrapped onto more than one line`)
@@ -103,7 +97,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     assert.ok(caret.height > 0, 'the caret has a line box')
     assert.ok(caret.top >= -NEAR_PX && caret.bottom >= -NEAR_PX, `caret ${caret.top}px below the box's top and ${caret.bottom}px above its bottom`)
     assert.ok((await note('line 1', TEXT_BOX)).scrollTop > 0, 'the open box scrolled to its last line')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a note of more than 8 lines stops growing at 8 lines high, and its text runs past the box', async () => {
@@ -158,7 +152,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     await p.mouse.wheel(0, -40)
     assert.equal((await note('line 1')).scrollTop, before)
     assert.deepEqual(await wheelsSeen(), [false])
-    await draw.finishNote(p)
+    await finishNote(p)
     await p.locator(DIALOG).waitFor({ state: 'detached' })
   })
 
@@ -174,7 +168,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     const before = (await note('line 1')).scrollTop
     await p.mouse.click(...await gridPoint(p, TALL_AT))
     assert.equal((await note('line 1')).scrollTop, before)
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('with a digit tool current the wheel over the tall note scrolls it, and a click on the cell under the note reaches SudokuPad', async () => {
@@ -195,7 +189,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
 
   it('the wheel over a short note, or over the board, reaches SudokuPad untouched, as before', async () => {
     await typeNote(SHORT_AT, ['15'])
-    await draw.finishNote(p)
+    await finishNote(p)
     await wheelsSeen()
     await moveTo(SHORT_AT)
     await p.mouse.wheel(0, 40)
@@ -207,18 +201,18 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
 
   it('a click just under a wrapped note, where its characters alone would guess it reaches, misses it and opens a new note', async () => {
     await typeNote(NARROW_AT, [NARROW_TEXT])
-    await draw.finishNote(p)
+    await finishNote(p)
     const narrow = await note('il')
     assert.ok(narrow.heightEm < 1.5 * LINE_HEIGHT, `drawn ${narrow.heightEm} em high: one line`)
     const [x, y] = await gridPoint(p, NARROW_AT)
     await p.mouse.click(x, y + 0.9 * LINE_HEIGHT * narrow.em)
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'a new note opened, so the click missed the note')
-    await draw.finishNote(p)
+    await finishNote(p)
   })
 
   it('a long note off the board wraps, stops at 8 lines and scrolls with the wheel, and is stored by its screen point', async () => {
     await typeNote(OFF_BOARD_AT, [OFF_TEXT, ...TALL_LINES.slice(0, 9)])
-    await draw.finishNote(p)
+    await finishNote(p)
     const saved = (await draw.saved(p)).find((item) => item.text.startsWith('side'))
     assert.ok(saved.fixed, `stored off the board: ${JSON.stringify(saved)}`)
     const off = await note('side')

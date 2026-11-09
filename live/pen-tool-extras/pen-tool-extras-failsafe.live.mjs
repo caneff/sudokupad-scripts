@@ -9,20 +9,19 @@
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { captureConsoleErrors } from '../page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
-import { drag, gridPoint, openPenTool, padValues, penEntries } from '../pen.mjs'
+import { gridPoint, undoAll } from '../board.mjs'
+import { drag, openPenTool, PAGE_BUTTON, padValues, penEntries } from '../pen.mjs'
 import { settle } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
+const { script } = extras
 
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'EdgeMarks_marks']
-const PAGE_BUTTON = '.pen-tool-extras-page'
 const SLIDERS = '#pen-tool-extras-thickness'
 const NOTHING_OFF = ''
-// The color tool wait's limit in the script (COLOR_TOOL_TIMEOUT_MS) and the panel check's pause (PANEL_CHECK_MS).
 const COLOR_TOOL_TIMEOUT_MS = 10000
 const PANEL_CHECK_MS = 1000
 const WARNING = /^pen-tool-extras: /
@@ -131,9 +130,7 @@ const CASES = [
   { name: 'nothing broken', off: NOTHING_OFF }
 ]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 async function dialogLineOf (p) {
   await openExtrasEditor(p)
@@ -145,6 +142,14 @@ async function dialogLineOf (p) {
 
 // The snippet runs on `Framework.getApp()` before the script's own, so the script's startup check sees the internal already broken.
 const withBreak = (kase) => `;Framework.getApp().then(() => { ${kase.breaks || ''} });\n${kase.source || script}`
+
+// A `seed` for `open`: the script's console warnings go into `warned`, and the page's console errors into `errors`.
+const watchWarnings = (warned) => (page, errors) => {
+  page.on('console', (m) => {
+    if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())
+  })
+  captureConsoleErrors(page, errors)
+}
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   for (const kase of CASES) {
@@ -159,26 +164,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       }
       // The pen value of each stored entry, without its color character.
       const edgeValues = async () => (await penEntries(p)).map((v) => v.split(':')[1][0])
-      const undoAll = async () => { while ((await penEntries(p)).length) await p.click('#control-undo') }
       const dialogLine = () => dialogLineOf(p)
 
       before(async () => {
         warned = []
-        ;({ context, p, errors } = await openPage(browser, {
+        ;({ context, p, errors } = await extras.open(browser(), {
+          scripts: [{ code: withBreak(kase) }],
           // The case plants its own breakage, so its skip lines are expected: `warned` holds them and is checked.
           expectedSkips: [WARNING],
-          seed: (page, errs) => {
-            page.on('console', (m) => {
-              if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())
-            })
-            captureConsoleErrors(page, errs)
-          }
+          seed: watchWarnings(warned),
+          // A broken panel may lack the page button, so the tool is opened here.
+          penTool: false
         }))
-        await startPuzzle(p)
-        await p.addScriptTag({ content: withBreak(kase) })
-        await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-        await read((keys) => { keys.forEach((k) => Framework.removeData(k)); Framework.setSetting('toolpen', true) }, KEYS)
-        await p.locator('#control-pen').waitFor({ state: 'visible' })
+        await read((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS)
         await openPenTool(p)
       })
       after(async () => {
@@ -196,7 +194,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           assert.equal(await read(() => document.querySelectorAll('#cell-pen [data-arrow-line-part]').length), 0, 'no arrow group')
           assert.ok(await read(() => document.querySelectorAll('#cell-pen path.cell-pen').length) > 0, 'SudokuPad\'s plain line is drawn on the drag that failed')
           await p.locator(PAGE_BUTTON).click()
-          await undoAll()
+          await undoAll(p)
         }
         if (kase.name === 'right click') {
           const prevented = () => read(() => new Promise((resolve) => {
@@ -209,24 +207,24 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
             assert.equal(await answer, false, 'the menu is not suppressed on the right click that failed or after it')
             assert.deepEqual(await settle(edgeValues, want), want, 'the press that failed is left to SudokuPad')
           }
-          await undoAll()
+          await undoAll(p)
         }
         if (kase.name === 'click wrapper throws') {
           await clickEdge()
           assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'SudokuPad\'s own X on the click that failed')
-          await undoAll()
+          await undoAll(p)
         }
         if (kase.name === 'click queues but never sends') {
           await read(() => { window.dropSend = true })
           await clickEdge()
           assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'SudokuPad\'s own X on the click whose acts were never sent')
-          await undoAll()
+          await undoAll(p)
         }
         if (kase.name === 'render wrapper throws') {
           await clickEdge()
           assert.deepEqual(await settle(edgeValues, ['4']), ['4'])
           assert.equal(await read(() => document.querySelectorAll('#cell-pen .pen-4').length), 1, 'the X is drawn once on the render that failed')
-          await undoAll()
+          await undoAll(p)
         }
         if (kase.warns) assert.equal(await settle(async () => warned.length, 1, 20000, Infinity), 1, 'the warning came')
       }
@@ -256,13 +254,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       })
 
       it('SudokuPad\'s own edge X still draws, and the next click is this script\'s arrow, or SudokuPad\'s own toggle off when marks are off', async () => {
-        await undoAll()
+        await undoAll(p)
         await clickEdge()
         assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'the X on the bottom edge of the cell above')
         await clickEdge()
         const second = kase.edgeAgain === null ? [] : ['m']
         assert.deepEqual(await settle(edgeValues, second), second)
-        await undoAll()
+        await undoAll(p)
       })
 
       it('the steps that are not skipped still work', async () => {
@@ -287,9 +285,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       // A dragged line is SudokuPad's own drawing; it needs the drag highlight, which one case removes.
       if (!kase.noDrag) {
         it('SudokuPad\'s own dragged line still draws', async () => {
-          await undoAll()
+          await undoAll(p)
           await drag(p, [[4.5, 2.5], [4.5, 4.5]])
-          await undoAll()
+          await undoAll(p)
         })
       }
 
@@ -321,20 +319,8 @@ describe('SudokuPad throws after sending a click', { concurrency: false }, () =>
 
   before(async () => {
     warned = []
-    ;({ context, p, errors } = await openPage(browser, {
-      seed: (page, errs) => {
-        page.on('console', (m) => {
-          if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())
-        })
-        captureConsoleErrors(page, errs)
-      }
-    }))
-    await startPuzzle(p)
-    await p.addScriptTag({ content: withBreak({ breaks }) })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await read((keys) => { keys.forEach((k) => Framework.removeData(k)); Framework.setSetting('toolpen', true) }, KEYS)
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await openPenTool(p)
+    ;({ context, p, errors } = await extras.open(browser(), { scripts: [{ code: withBreak({ breaks }) }], seed: watchWarnings(warned) }))
+    await read((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS)
   })
   after(async () => { await context.close() })
 
@@ -356,21 +342,8 @@ describe('the pulldown is missing at one look of the panel check only', { concur
   let context, p, errors, warned
   before(async () => {
     warned = []
-    ;({ context, p, errors } = await openPage(browser, {
-      seed: (page, errs) => {
-        page.on('console', (m) => {
-          if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())
-        })
-        captureConsoleErrors(page, errs)
-      }
-    }))
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await p.evaluate((keys) => { keys.forEach((k) => Framework.removeData(k)); Framework.setSetting('toolpen', true) }, KEYS)
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await openPenTool(p)
-    await p.locator(PAGE_BUTTON).waitFor({ state: 'attached' })
+    ;({ context, p, errors } = await extras.open(browser(), { seed: watchWarnings(warned) }))
+    await p.evaluate((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS)
   })
   after(async () => { await context.close() })
 

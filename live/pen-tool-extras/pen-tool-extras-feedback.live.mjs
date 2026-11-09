@@ -4,34 +4,27 @@
 /* global Framework, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { chromium } from 'playwright'
-import { captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
-import { drag, gridPoint, openPenTool, padValues, penEntries } from '../pen.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
+import { gridPoint, undoAll } from '../board.mjs'
+import { drag, goToPenPage, openPenTool, penEntries } from '../pen.mjs'
 import { settle } from '../settle.mjs'
-
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
+import { useBrowser } from '../session.mjs'
 
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'PenColor_middleerase']
-const PAGE_BUTTON = '.pen-tool-extras-page'
-const PAGES = { 1: '123456789', 2: 'abcdefghi', 3: 'jlnprtvxz' }
 const HEADS = '.pen-tool-extras-hint-arrows'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors, reader
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const undoAll = async () => { while ((await read(() => Framework.app.puzzle.undoStack.length)) > 0) await p.click('#control-undo') }
   const moveTo = async (point) => { await p.mouse.move(...await gridPoint(p, point)) }
   // The strokes the preview has faded, as `row,col:value`: the originals are hidden and their copies show in one group at the faded opacity.
   const fadedStrokes = () => read(() => [...document.querySelectorAll('#cell-pen .cell-pen.pen-tool-extras-faded, #pen-tool-extras-marks .cell-pen.pen-tool-extras-faded')]
     .map((el) => `${el.getAttribute('row')},${el.getAttribute('col')}:${el.getAttribute('value')}`).sort())
-  // The red, green and blue of the screen pixel at (x, y), read off a screenshot loaded into a second page's canvas.
   const pixelAt = async (x, y) => {
     const png = await p.screenshot({ clip: { x: Math.floor(x), y: Math.floor(y), width: 1, height: 1 } })
     const color = await reader.evaluate(async (b64) => {
@@ -62,22 +55,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const selectPenOnPage = async (page, key) => {
     await openPenTool(p)
-    await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
-    for (let i = 0; i < 3 && (await padValues(p)) !== PAGES[page]; i++) await p.locator(PAGE_BUTTON).click()
-    assert.equal(await settle(() => padValues(p), PAGES[page]), PAGES[page])
+    await goToPenPage(p, extras.PAGES[page])
     await p.locator(`.tool-pen button[data-key="${key}"]`).click()
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
+    ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors }))
     reader = await context.newPage()
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await read(() => { Framework.setSetting('toolpen', true) })
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await openPenTool(p)
-    await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS)
   })
   after(async () => {
@@ -101,7 +85,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.up({ button: 'right' })
       assert.deepEqual(await settle(() => penEntries(p), other), other, 'the release erases the line')
       assert.deepEqual(await fadedStrokes(), [], 'no stroke stays faded')
-      await undoAll()
+      await undoAll(p)
     })
 
     it('a mark under the press fades while it is held, and a line the pointer is dragged onto fades as it is crossed', async () => {
@@ -118,7 +102,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await settle(fadedStrokes, ['3,3:3', '6,2:1', '6,3:1']), ['3,3:3', '6,2:1', '6,3:1'], 'the crossed line joins it')
       await p.mouse.up({ button: 'right' })
       assert.deepEqual(await settle(() => penEntries(p), []), [], 'the release erases both')
-      await undoAll()
+      await undoAll(p)
     })
   })
 
@@ -141,7 +125,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.up({ button: 'right' })
       assert.equal(await settle(fadedGroups, 0), 0, 'the release takes the group of copies away')
       await unback()
-      await undoAll()
+      await undoAll(p)
       await p.mouse.click(5, 5) // a click off the grid, or the next drag started right after a release draws nothing
     })
   })
@@ -167,7 +151,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await penEntries(p), lines, 'nothing was erased')
       assert.equal(await read(() => Framework.app.puzzle.undoStack.length), depth, 'no undo step')
       await p.mouse.click(5, 5)
-      await undoAll()
+      await undoAll(p)
     })
   })
 
@@ -186,7 +170,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       }
       await p.mouse.click(...await gridPoint(p, [3.5, 4.0]))
       assert.equal(await settle(() => penEntries(p).then((all) => all.length), 1), 1, 'the click still places its mark')
-      await undoAll()
+      await undoAll(p)
     })
   })
 
@@ -220,7 +204,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(h.headsD, null)
       await p.mouse.up()
       assert.equal(await settle(() => penEntries(p).then((all) => all.length), 2), 2, 'the drag still draws its two segments')
-      await undoAll()
+      await undoAll(p)
     })
 
     it('page 2: a dashed pen\'s hint is dashed, and an erasing drag\'s hint stays solid', async () => {
@@ -237,7 +221,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal((await hint()).linePen, 'erase')
       assert.equal((await hint()).dash, 'none', 'the erase hint is solid')
       await p.mouse.up()
-      await undoAll()
+      await undoAll(p)
     })
 
     it('page 3: an arrow pen\'s hint has arrowheads that point the way of the drag, and none are left when the drag ends', async () => {
@@ -252,13 +236,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.ok(rightHeads.every(({ wing, tip }) => tip > wing), 'a drag to the right points right')
       await p.mouse.up()
       assert.equal(await settle(() => read((heads) => document.querySelectorAll(heads).length, HEADS), 0), 0, 'the heads go with the hint')
-      await undoAll()
+      await undoAll(p)
       await holdDrag([[2.5, 4.5], [2.5, 2.5]])
       await settle(async () => (await hint()) !== null && (await hint()).headsD !== null, true)
       const left = headsOf((await hint()).headsD)
       assert.ok(left.length >= 2 && left.every(({ wing, tip }) => tip < wing), 'a drag to the left points left')
       await p.mouse.up()
-      await undoAll()
+      await undoAll(p)
     })
 
     it('an arrow pen\'s drag hint shows the same color where an arrowhead overlaps the line as the line alone', async () => {
@@ -283,7 +267,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.ok(sameColor(withHeads, lineOnly), `an arrowhead over the line ${withHeads} matches the line alone ${lineOnly}`)
       await p.mouse.up()
       await unback()
-      await undoAll()
+      await undoAll(p)
       await p.mouse.click(5, 5) // as above
     })
   })
@@ -299,7 +283,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const erasing = await read(() => ({ red: document.querySelector('.penhint').classList.contains('pencolor-erase'), heads: document.querySelectorAll('.pen-tool-extras-hint-arrows').length }))
     assert.deepEqual(erasing, { red: true, heads: 0 })
     await p.mouse.up()
-    await undoAll()
+    await undoAll(p)
   })
 
   it('no page error was raised in the whole group', () => {

@@ -3,9 +3,8 @@
 // The pixels of the struck text are counted from a screenshot.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
+import { useBrowser } from '../session.mjs'
 
 const { OUTLINE_KEY, STRIKE_PIECES, TEXTS } = draw
 // A letter pixel is a green one: pen color 1 is green, and the board's grid lines and digits are not.
@@ -17,17 +16,12 @@ const NOTES = [
   { name: 'a done checklist line', text: '- [x] HEXAM', at: [80, 208] }
 ]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s struck text under the halo', { concurrency: false }, () => {
   let context, p, errors
 
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
   // Which pixels of a screen rectangle are the note's green, one flag each, row by row: the board's grid lines and digits are not green.
   const greenIn = async (clip) => {
     const png = await p.screenshot({ clip })
@@ -58,8 +52,7 @@ describe('Text Anywhere\'s struck text under the halo', { concurrency: false }, 
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: { width: 1280, height: 720 } } }))
     await draw.forgetDrawings(p)
   })
   after(async () => { await context.close() })

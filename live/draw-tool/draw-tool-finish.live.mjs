@@ -4,10 +4,9 @@
 // input throughout, at a desktop size.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
+import { useBrowser } from '../session.mjs'
+import { boxOpen, clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
 
 const { SELECTED, TEXT_BOX } = draw
 const RECTANGLE = '#draw-tool-layer .draw-tool-selection-rectangle'
@@ -23,9 +22,7 @@ const BOTTOM_RIGHT = 3
 // A note stays where it is to within this many cells.
 const NEAR_CELLS = 0.1
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: false }, () => {
   let context, p, errors
@@ -34,13 +31,10 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   const savedNote = async (text) => (await saved()).find((item) => item.text === text)
   const texts = () => draw.texts(p)
   const selectedTexts = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent).sort(), SELECTED)
-  const boxOpen = async () => (await p.locator(TEXT_BOX).count()) === 1
   const cellState = () => p.evaluate(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
-  const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
   // A note starts at its click, so a press meant for the note at cell spot `at` lands in its middle.
   const noteAt = async (at) => draw.middleAt(p, await gridPoint(p, at))
   const clickNote = async (at) => p.mouse.click(...await noteAt(at))
-  // A press at `at`, a move by (dx, dy) screen pixels, and the release.
   const slip = async (at, dx, dy) => {
     const [x, y] = await gridPoint(p, at)
     await p.mouse.move(x, y)
@@ -48,18 +42,12 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     await p.mouse.move(x + dx, y + dy, { steps: 3 })
     await p.mouse.up()
   }
-  const typeNote = async (at, content) => {
-    await clickAt(at)
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
-  }
   const near = (a, b) => Math.abs(a - b) <= NEAR_CELLS
   const handleMiddle = async () => {
     const { x, y, width, height } = await p.locator(HANDLE).nth(BOTTOM_RIGHT).boundingBox()
     return [x + width / 2, y + height / 2]
   }
 
-  // Opens the note at A_AT, drags its resize handle, presses `key` mid-drag and releases: the size is back and the note is still open.
   const resizeUndoneBy = async (key) => {
     await draw.reopen(p, await gridPoint(p, A_AT))
     const open = await p.locator(TEXT_BOX).boundingBox()
@@ -70,28 +58,26 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     assert.ok((await p.locator(TEXT_BOX).boundingBox()).width > open.width + 20, 'the drag resized the open note')
     await p.keyboard.press(key)
     await p.mouse.up()
-    assert.equal(await boxOpen(), true, 'the note stays open')
+    assert.equal(await boxOpen(p), true, 'the note stays open')
     const back = await p.locator(TEXT_BOX).boundingBox()
     assert.ok(Math.abs(back.width - open.width) < 1 && Math.abs(back.height - open.height) < 1, `size back to ${open.width}x${open.height}, now ${back.width}x${back.height}`)
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 } } }))
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
-    await typeNote(A_AT, 'A')
-    await typeNote(B_AT, 'B')
+    await draw.reloadOnDraw(p)
+    await typeText(p, A_AT, 'A')
+    await typeText(p, B_AT, 'B')
     assert.deepEqual(await texts(), ['A', 'B'])
   })
   after(async () => { await context.close() })
 
   it('Escape closes the open note and leaves it selected, so an arrow key nudges it at once; a click outside selects nothing', async () => {
-    await clickAt(EMPTY)
+    await clickAt(p, EMPTY)
     await p.keyboard.type('X')
     await p.keyboard.press('Escape')
-    assert.equal(await boxOpen(), false)
+    assert.equal(await boxOpen(p), false)
     assert.deepEqual(await selectedTexts(), ['X'])
     assert.equal(await draw.tool(p), 'draw')
     const before = (await savedNote('X')).at
@@ -100,9 +86,9 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     await p.keyboard.press('Escape')
     assert.deepEqual(await selectedTexts(), [])
     await draw.reopen(p, await gridPoint(p, A_AT))
-    assert.equal(await boxOpen(), true)
-    await clickAt(EMPTY_TWO)
-    assert.equal(await boxOpen(), false, 'a click outside closed the note')
+    assert.equal(await boxOpen(p), true)
+    await clickAt(p, EMPTY_TWO)
+    assert.equal(await boxOpen(p), false, 'a click outside closed the note')
     assert.deepEqual(await selectedTexts(), [], 'and selected nothing')
     assert.deepEqual(await texts(), ['A', 'B', 'X'])
   })
@@ -111,7 +97,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     await clickNote(A_AT)
     assert.deepEqual(await selectedTexts(), ['A'])
     await p.keyboard.press('Enter')
-    assert.equal(await boxOpen(), true)
+    assert.equal(await boxOpen(p), true)
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'A', 'no line break came with the Enter')
     await p.keyboard.type('z')
     await p.keyboard.press('Escape')
@@ -123,16 +109,16 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
 
   it('a click that slips opens a note on empty space and only ends a selection; a real rectangle still selects', async () => {
     await slip(EMPTY_TWO, 6, 3)
-    assert.equal(await boxOpen(), true, 'a 6 px slip on empty space opened a note')
+    assert.equal(await boxOpen(p), true, 'a 6 px slip on empty space opened a note')
     await p.keyboard.type('S')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual(await texts(), ['Az', 'B', 'X', 'S'])
     await clickNote(B_AT)
     await slip(FREE, 5, 5)
-    assert.equal(await boxOpen(), false, 'with a selection, a slip only ends it')
+    assert.equal(await boxOpen(p), false, 'with a selection, a slip only ends it')
     assert.deepEqual(await selectedTexts(), [])
     await slip(FREE, 40, 40)
-    assert.equal(await boxOpen(), false, 'a larger rectangle that selects nothing opens no note')
+    assert.equal(await boxOpen(p), false, 'a larger rectangle that selects nothing opens no note')
     await slip([0.4, 0.4], 150, 150)
     assert.deepEqual(await selectedTexts(), ['Az'], 'a rectangle over a note selects it')
     await p.keyboard.press('Escape')
@@ -154,7 +140,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   })
 
   it('a note of only spaces is removed when it closes, and typing spaces into a new note makes none', async () => {
-    await clickAt(FREE)
+    await clickAt(p, FREE)
     await p.keyboard.type('   ')
     await p.keyboard.press('Escape')
     assert.deepEqual(await texts(), ['Az', 'B', 'X', 'S'])
@@ -168,7 +154,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   })
 
   it('trailing spaces are trimmed from every line when a note closes', async () => {
-    await clickAt(FREE)
+    await clickAt(p, FREE)
     await p.keyboard.type('ab   ')
     await p.keyboard.press('Enter')
     await p.keyboard.type('cd  ')
@@ -219,7 +205,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     await p.mouse.move(...await gridPoint(p, A_AT), { steps: 3 })
     await p.mouse.up()
     assert.deepEqual(await selectedTexts(), [], 'the release over a note selected nothing')
-    assert.equal(await boxOpen(), false)
+    assert.equal(await boxOpen(p), false)
   })
 
   it('Escape during a resize puts the size back: a selected note, and the open note, which stays open', async () => {
@@ -242,19 +228,19 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
 
     await resizeUndoneBy('Escape')
     await p.keyboard.press('Escape')
-    assert.equal(await boxOpen(), false, 'a second Escape closes it')
+    assert.equal(await boxOpen(p), false, 'a second Escape closes it')
     assert.equal((await savedNote('Az')).box, undefined)
   })
 
   it('Ctrl+Enter closes the open note like Escape, with no extra line, and leaves it selected; Shift+Enter still adds a line', async () => {
     await p.keyboard.press('Escape')
-    await clickAt(FREE)
+    await clickAt(p, FREE)
     await p.keyboard.type('one')
     await p.keyboard.press('Shift+Enter')
-    assert.equal(await boxOpen(), true, 'Shift+Enter keeps the note open')
+    assert.equal(await boxOpen(p), true, 'Shift+Enter keeps the note open')
     await p.keyboard.type('two')
     await p.keyboard.press('Control+Enter')
-    assert.equal(await boxOpen(), false, 'Ctrl+Enter closed the note')
+    assert.equal(await boxOpen(p), false, 'Ctrl+Enter closed the note')
     assert.deepEqual(await selectedTexts(), ['one\ntwo'])
     assert.deepEqual((await saved()).map((item) => item.text), ['Az', 'X', 'S', 'one\ntwo'])
     await p.keyboard.press('Delete')
@@ -262,7 +248,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   })
 
   it('Ctrl+Enter and Cmd+Enter keydowns in the open note are default-prevented, and Shift+Enter and Enter are not', async () => {
-    await clickAt(FREE)
+    await clickAt(p, FREE)
     await p.keyboard.type('x')
     // The page's own keydown events, since the browser adds no line on its own and closing trims one anyway.
     const prevented = (init) => p.evaluate(([selector, options]) => {
@@ -272,23 +258,23 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     }, [TEXT_BOX, init])
     assert.equal(await prevented({ shiftKey: true }), false)
     assert.equal(await prevented({}), false)
-    assert.equal(await boxOpen(), true)
+    assert.equal(await boxOpen(p), true)
     assert.equal(await prevented({ metaKey: true }), true)
-    assert.equal(await boxOpen(), false, 'Cmd+Enter closed the note')
+    assert.equal(await boxOpen(p), false, 'Cmd+Enter closed the note')
     await p.keyboard.press('Delete')
-    await clickAt(FREE)
+    await clickAt(p, FREE)
     await p.keyboard.type('y')
     assert.equal(await prevented({ ctrlKey: true }), true)
-    assert.equal(await boxOpen(), false, 'Ctrl+Enter closed the note')
+    assert.equal(await boxOpen(p), false, 'Ctrl+Enter closed the note')
     await p.keyboard.press('Delete')
     assert.deepEqual((await saved()).map((item) => item.text), ['Az', 'X', 'S'])
   })
 
   it('Meta+Enter closes the open note the same way', async () => {
-    await clickAt(FREE)
+    await clickAt(p, FREE)
     await p.keyboard.type('m')
     await p.keyboard.press('Meta+Enter')
-    assert.equal(await boxOpen(), false)
+    assert.equal(await boxOpen(p), false)
     assert.deepEqual(await selectedTexts(), ['m'])
     await p.keyboard.press('Delete')
   })
@@ -296,7 +282,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   it('Ctrl+Enter during a resize puts the size back like Escape, and the note stays open', async () => {
     await resizeUndoneBy('Control+Enter')
     await p.keyboard.press('Control+Enter')
-    assert.equal(await boxOpen(), false, 'a second Ctrl+Enter closes it')
+    assert.equal(await boxOpen(p), false, 'a second Ctrl+Enter closes it')
     assert.equal((await savedNote('Az')).box, undefined)
     await p.keyboard.press('Escape')
   })
@@ -305,11 +291,11 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     const cells = await cellState()
     await draw.reopen(p, await gridPoint(p, A_AT))
     await p.keyboard.press('Tab')
-    assert.equal(await boxOpen(), true)
+    assert.equal(await boxOpen(p), true)
     await p.keyboard.type('k')
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'Azk', 'Tab typed nothing')
     await p.keyboard.press('Shift+Tab')
-    assert.equal(await boxOpen(), true)
+    assert.equal(await boxOpen(p), true)
     await p.keyboard.press('Escape')
     assert.deepEqual((await saved()).map((item) => item.text), ['Az' + 'k', 'X', 'S'])
     assert.equal(await cellState(), cells)

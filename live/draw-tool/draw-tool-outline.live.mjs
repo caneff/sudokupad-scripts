@@ -3,13 +3,12 @@
 // spike past its radius. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
-import { closeDialogWith, dialogButton } from '../settings.mjs'
+import { STATUS, actButton, closeDialogWith, dialogButton } from '../settings.mjs'
+import { useBrowser } from '../session.mjs'
+import { typeText } from '../board.mjs'
 
-const { OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXT_BOX } = draw
+const { OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXT_BOX } = draw
 const PICKS = `${EDITOR} button[data-role="outline-pick"]`
 const OUTLINES = ['None', 'Thin', 'Thick']
 const pick = (page, name) => page.locator(`${PICKS}[aria-label="${name}"]`)
@@ -19,27 +18,15 @@ const REACH_EM = { Thin: 0.07, Thick: 0.14 }
 const A = [1.5, 1.5]
 const B = [1.5, 3.5]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   let context, p, errors
 
   const stored = (page, name) => page.evaluate((k) => Framework.getData(k) ?? null, name)
-  const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
-  const typeText = async (at, content) => {
-    await clickAt(at)
-    await p.keyboard.type(content)
-    await draw.finishNote(p)
-  }
-  const reload = async () => {
-    await draw.reload(p)
-    await draw.pickDraw(p)
-  }
+  const reload = () => draw.reloadOnDraw(p)
   const textShadowOf = (text) => p.evaluate(([selector, want]) => window.getComputedStyle([...document.querySelectorAll(selector)].find((e) => e.textContent === want)).textShadow, [draw.TEXTS, text])
   const fontSizeOf = (text) => p.evaluate(([selector, want]) => parseFloat(window.getComputedStyle([...document.querySelectorAll(selector)].find((e) => e.textContent === want)).fontSize), [draw.TEXTS, text])
-  // A note's halo reach as a share of its own text size: 0 for none.
   const reach = async (text) => {
     const shadow = await textShadowOf(text)
     if (shadow === 'none') return 0
@@ -54,8 +41,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 }, permissions: ['clipboard-read', 'clipboard-write'] } }))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser(), { contextOptions: { viewport: { width: 1280, height: 720 }, permissions: ['clipboard-read', 'clipboard-write'] } }))
     await draw.forgetDrawings(p)
     await p.evaluate((key) => Framework.removeData(key), OUTLINE_KEY)
     await reload()
@@ -63,6 +49,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   after(async () => { await context.close() })
 
   it('the panel has no Outline button, and the dialog\'s Outline choice has the None, Thin and Thick samples with Thick pressed', async () => {
+    assert.equal(await p.locator('.controls-input button[title*="Outline" i], .controls-input button[aria-label*="Outline" i]').count(), 0, 'no Outline button on the panel')
     await p.click(SETTINGS_BUTTON)
     assert.deepEqual(await p.locator(PICKS).evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label'))), OUTLINES)
     assert.equal(await pickedLabel(p), 'Thick')
@@ -72,13 +59,13 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   it('Save applies the choice to every note, old and new, and a note saved with its own outline field is read as Thick until then', async () => {
     await draw.plantDrawing(p, [{ kind: 'text', color: 1, size: 20, opacity: 100, outline: 'none', text: 'old', at: [224, 224] }])
     await reload()
-    await typeText(A, 'A')
-    await typeText(B, 'B')
+    await typeText(p, A, 'A')
+    await typeText(p, B, 'B')
     assert.ok(await reach('old') > 0, 'the note\'s own "none" is ignored')
     await chooseOutline('None')
     assert.deepEqual([await reach('A'), await reach('B'), await reach('old')], [0, 0, 0])
     assert.equal(await stored(p, OUTLINE_KEY), 'none')
-    await typeText([5.5, 5.5], 'C')
+    await typeText(p, [5.5, 5.5], 'C')
     assert.equal(await reach('C'), 0, 'a note made after it too')
     assert.equal((await draw.saved(p)).find((item) => item.text === 'C').outline, undefined, 'and no note gets an outline field of its own')
     await chooseOutline('Thin')
@@ -116,19 +103,18 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   it('Copy then Paste in a fresh page carries the outline, and an invalid pasted one reads as Thick', async () => {
     await chooseOutline('None')
     await p.click(SETTINGS_BUTTON)
-    await p.locator('.dialog button[data-act="copy-settings"]').click()
+    await actButton(p, 'copy-settings').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
     const copied = await p.evaluate(() => navigator.clipboard.readText())
     assert.equal(JSON.parse(copied)[OUTLINE_KEY], 'none')
     await closeDialogWith(p, 'Cancel', EDITOR)
-    const other = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
+    const other = await draw.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
     try {
-      await draw.boot(other.p)
       await draw.pickDraw(other.p)
       for (const [text, outline] of [[copied, 'none'], [JSON.stringify({ [OUTLINE_KEY]: 'plaid' }), 'medium']]) {
         await other.p.evaluate((t) => navigator.clipboard.writeText(t), text)
         await other.p.click(SETTINGS_BUTTON)
-        await other.p.locator('.dialog button[data-act="paste-settings"]').click()
+        await actButton(other.p, 'paste-settings').click()
         await other.p.locator(STATUS).filter({ hasText: /Pasted \d+ settings?\./ }).waitFor()
         assert.equal(await stored(other.p, OUTLINE_KEY), outline)
         assert.equal(await other.p.locator(`${PICKS}[aria-pressed="true"]`).getAttribute('data-value'), outline, 'the dialog shows it')

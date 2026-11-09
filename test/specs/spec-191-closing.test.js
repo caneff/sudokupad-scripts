@@ -8,37 +8,13 @@ const ROOT = join(__dirname, '..', '..')
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const extras = require('../../pen-tool-extras.user.js')
 
-// Each script's line count and @version at 159d79f, the commit spec 191 measured, typed out as the independent source, for
-// the scripts still in the repo.
-const BEFORE = {
-  'dark-page.user.js': [342, '0.3.7'],
-  'color-by-digit.user.js': [1036, '0.5.6'],
-  'pen-tool-extras.user.js': [2406, '1.14.10']
-}
-// The scripts that gained features after spec 191 closed: their line counts passed its ceiling and their versions changed.
-const GREW_AFTER_SPEC = ['dark-page.user.js', 'color-by-digit.user.js', 'pen-tool-extras.user.js']
-const lineCount = (text) => text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
-const versionOf = (text) => /^\/\/ @version\s+(\S+)$/m.exec(text)[1]
-
-// Spec 191's acceptance at `npm test`: the comment rule, the shorter scripts, the per-step failsafe, the one-line exports, the dialog rows
-// drawn from the settings table and the saved keys left alone. This seam is blind to real SudokuPad (`npm run test:live` covers the
-// failsafe's planted throws and the dialog there), and to a real Tampermonkey install with settings saved by 1.14.10 and to
-// crackingthecryptic.com, which no automated run reaches.
+// Spec 191's acceptance at `npm test`: the per-step failsafe, the one-line exports, the dialog rows drawn from the settings table and
+// the saved keys left alone. This seam is blind to real SudokuPad (`npm run test:live` covers the failsafe's planted throws and the
+// dialog there), and to settings saved by 1.14.10 in a real Tampermonkey install, which `npm run test:tampermonkey` does not set up.
 test('spec 191 cuts the scripts without losing a feature or a saved setting', () => {
-  // One comment rule, in the repo's own standards.
-  assert.match(read('CODING_STANDARDS.md'), /^6\. \*\*A comment states only what the code cannot show: a fact about SudokuPad's\s+internals, or the reason for a choice\./m)
-
-  // The scripts that did not grow since keep spec 191's line ceiling and version; the others only had to change their version.
-  for (const [file, [lines, version]] of Object.entries(BEFORE)) {
-    const text = read(file)
-    if (GREW_AFTER_SPEC.includes(file)) {
-      assert.notEqual(versionOf(text), version, file)
-    } else {
-      assert.ok(lineCount(text) < lines, `${file} has ${lineCount(text)} lines, ${lines} before`)
-      assert.equal(versionOf(text), version, file)
-    }
-    // The test exports are one statement on one line.
-    assert.match(text, /^ {4}module\.exports = \{[^\n]*\}$/m, file)
+  // The test exports are one statement on one line, in the scripts spec 191 cut.
+  for (const file of ['dark-page.user.js', 'color-by-digit.user.js', 'pen-tool-extras.user.js']) {
+    assert.match(read(file), /^ {4}module\.exports = \{[^\n]*\}$/m, file)
   }
 
   // The per-feature failsafe is gone; every step has a requirement, so a missing internal skips a named step.

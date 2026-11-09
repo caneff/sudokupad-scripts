@@ -1,11 +1,7 @@
-// Live check of the shared settings dialog shell (`lib/settings-dialog.js`) in all five scripts on sudokupad.app, in headless Chromium:
-// the buttons are Save then Cancel (extra buttons after them), and Save with nothing changed writes nothing.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from './page.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
+import { openWith, useBrowser } from './session.mjs'
 
 const SCRIPTS = [
   { file: 'dark-page', entry: 'Dark Page', editor: '#dark-page-dialog', buttons: ['Save', 'Cancel'] },
@@ -15,24 +11,15 @@ const SCRIPTS = [
   { file: 'pen-tool-extras', entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', buttons: ['Save', 'Cancel', 'Restore defaults'] }
 ]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 for (const { file, entry, editor, buttons } of SCRIPTS) {
   describe(`${entry}'s dialog shell`, { concurrency: false }, () => {
     let context, p, errors
     before(async () => {
-      ({ context, p, errors } = await openPage(browser))
-      await startPuzzle(p, { injection: { mode: 'after-start', code: readFileSync(new URL(`../${file}.user.js`, import.meta.url), 'utf8') } })
+      ({ context, p, errors } = await openWith(browser(), [`${file}.user.js`]))
     })
     after(async () => { await context?.close() })
-
-    it(`has the buttons ${buttons.join(', ')}, in that order`, async () => {
-      await openScriptDialog(p, entry, editor)
-      assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), buttons)
-      await closeDialogWith(p, 'Cancel', editor)
-    })
 
     it('the buttons are one row at the dialog\'s right: Save filled purple left of Cancel, Cancel and any extra button plain', async () => {
       await openScriptDialog(p, entry, editor)

@@ -3,29 +3,21 @@
 /* global Framework, Node */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { useBrowser } from '../session.mjs'
+import { STATUS, closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
 
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
 const STYLE = '#pen-tool-extras-style'
 const EDITOR = '#pen-tool-extras-editor'
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Pen Tool Extras\' Save is all-or-nothing', { concurrency: false }, () => {
   let context, p
   before(async () => {
-    ;({ context, p } = await openPage(browser))
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(STYLE).waitFor({ state: 'attached' })
-    await p.evaluate(() => Framework.setSetting('toolpen', true))
+    ;({ context, p } = await extras.open(browser(), { penTool: false }))
   })
   after(async () => { await context.close() })
 
@@ -57,7 +49,7 @@ describe('Pen Tool Extras\' Save is all-or-nothing', { concurrency: false }, () 
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await dialogButton(p, 'Save').click()
-    await p.locator('.dialog [data-role="settings-status"]').filter({ hasText: 'Not saved: style refused' }).waitFor()
+    await p.locator(STATUS).filter({ hasText: 'Not saved: style refused' }).waitFor()
     assert.deepEqual(await stored(COLORS_KEY), colorsBefore)
     assert.equal(await stored(THICKNESS_KEY), thicknessBefore)
     assert.equal(await p.locator(STYLE).evaluate((el) => el.textContent), styleBefore, 'the page draws with the colors and thickness in force before Save')

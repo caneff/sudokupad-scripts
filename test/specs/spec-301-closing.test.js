@@ -1,6 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { fakeStore } = require('../fake-store.js')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
@@ -8,7 +9,6 @@ const ROOT = join(__dirname, '..', '..')
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const draw = require('../../draw-tool.user.js')
 
-const storeOf = (saved) => ({ getData: (key) => saved[key] ?? null })
 // Typed out as the independent source: SudokuPad's own nine pen colors
 // (tool-pen.css) are what the "SudokuPad colors" preset sets.
 const SUDOKUPAD = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000' }
@@ -19,7 +19,7 @@ const readPen = (n) => PEN[n]
 // its own nine colors and the first-use copy; the presets and Copy/Paste settings; old drawings; and the homepage, details page
 // and README. This seam is blind to real
 // SudokuPad: the panel's layout in the keypad, the hold-to-recolor picker, a drag on the board, rendering, the settings
-// entry and undo are `npm run test:live`'s, and neither run covers a real Tampermonkey install.
+// entry and undo are `npm run test:live`'s, and a real Tampermonkey install is `npm run test:tampermonkey`'s.
 test('spec 301: Text Anywhere has its own colors, one Size slider and a settings dialog', () => {
   // Size: 1 to 16 in steps of 0.5, default 6; text size is 2w + 8.
   assert.equal(draw.readWidth(null), 6)
@@ -48,7 +48,7 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   assert.deepEqual(draw.presetColors('pen', [], null, readPen), PEN)
 
   // Copy carries the colors, the size, transparency, outline, box color, frame and font (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad outline, box color, frame or font reads as its default).
-  const copied = JSON.parse(draw.copiedSettings(storeOf({ DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_drawing_x: [text] })))
+  const copied = JSON.parse(draw.copiedSettings(fakeStore({ DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_drawing_x: [text] })))
   assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false, DrawTool_font: 'proportional' })
   const pasted = draw.pastedSettings(JSON.stringify({ ...copied, DrawTool_width: 99, PenToolExtras_x: 1 }), draw.READERS)
   assert.deepEqual(pasted, { values: { DrawTool_colors: PEN, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false, DrawTool_font: 'proportional' }, skipped: 1 })

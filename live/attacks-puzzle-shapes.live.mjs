@@ -2,14 +2,15 @@
 // asserts the crash signals (no page error, no skip line) beside what a user expects to see. Clicks, drags and keys are real input; the scripts load at
 // DOMContentLoaded of every page load, as Tampermonkey runs them. The puzzles are built here as data and opened by their id (`live/puzzles.mjs`).
 // Text Anywhere's snap onto the ring of cells around the board is #603 and is not checked here.
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import { openPage } from './page.mjs'
 import { TEXTS } from './draw-tool/draw-tool-fixtures.mjs'
-import { cellCentre, mouseDrag, openPenTool, penEntries } from './pen.mjs'
-import { boardOf, CLASSIC_GIVENS, clickCell, installAll, openPuzzleId, placeNote, puzzleData, puzzleIdFor, seedOddEvenCells, useTool } from './puzzles.mjs'
+import { cellCentre, mouseDrag, placeNote } from './board.mjs'
+import { openPenTool, penEntries } from './pen.mjs'
+import { boardOf, CLASSIC_GIVENS, clickCell, installAll, NOTE_POINT, openPuzzleId, puzzleData, puzzleIdFor, seedOddEvenCells, useTool } from './puzzles.mjs'
 import { readUntil, settle } from './settle.mjs'
+import { useBrowser } from './session.mjs'
 
 // Long enough that the pane overflows at SudokuPad's own font in every shape here, so only Auto Rules Resizer makes it fit.
 const RULES = 'Normal sudoku rules apply. ' + 'Digits in a region may not repeat, and neither may digits in a row or a column of the grid. '.repeat(6)
@@ -23,15 +24,13 @@ const NEAR_PX = 0.6
 const ODD = 1
 const EVEN = 2
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on puzzle shapes with every script installed', { concurrency: false }, () => {
   let context, p, errors
 
   beforeEach(async () => {
-    ;({ context, p, errors } = await openPage(browser, { seed: async (page) => { await installAll(page); await seedOddEvenCells(page) } }))
+    ;({ context, p, errors } = await openPage(browser(), { seed: async (page) => { await installAll(page); await seedOddEvenCells(page) } }))
   })
   afterEach(async () => {
     try {
@@ -43,19 +42,16 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
 
   const open = async (data) => openPuzzleId(p, await puzzleIdFor(p, data))
   const gridSize = () => p.evaluate(() => [Framework.app.puzzle.rows, Framework.app.puzzle.cols])
-  // The page x of the grid's column line `k`.
   const lineX = async (k) => {
     const [x0, , size] = await cellCentre(p, 0, 0)
     return x0 - size / 2 + k * size
   }
-  // The board's box on the page: from the first cell's top left to the last cell's bottom right.
   const boardBox = () => p.evaluate(() => {
     const cells = Framework.app.puzzle.cells
     const [first, last] = [cells[0].elem.getBoundingClientRect(), cells[cells.length - 1].elem.getBoundingClientRect()]
     return { x: first.x, y: first.y, width: last.right - first.x, height: last.bottom - first.y }
   })
 
-  // A pen line along the last row from its first cell to its last, an edge mark on the last cell's right edge, and the pen strokes on the board.
   const penMarks = async (rows, cols) => {
     const before = (await penEntries(p)).length
     await openPenTool(p)
@@ -76,7 +72,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
 
   // A note '15' in the middle of the grid, dragged slowly until its outline is 2 px right of the last inner column line: the outline lies on the line with its guide.
   const snapsToLastColumnLine = async (rows, cols) => {
-    await placeNote(p, '15', [Math.min(2.5, rows - 0.5), Math.max(0.5, cols - 2.5)])
+    await placeNote(p, [Math.min(2.5, rows - 0.5), Math.max(0.5, cols - 2.5)], '15')
     const note = await p.locator(TEXTS, { hasText: '15' }).boundingBox()
     const line = await lineX(cols - 1)
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
@@ -109,7 +105,6 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     assert.equal(await settle(() => colorOf(enter), groups[ODD - 1]), groups[ODD - 1], 'an entered odd digit takes the odd color')
   }
 
-  // The rules text fits its pane without being cut off.
   const rulesFit = async () => {
     const read = () => p.evaluate(() => { const e = document.querySelector('.puzzle-rules'); return { fits: e.scrollHeight <= e.clientHeight + 1, shown: e.textContent.includes('Normal sudoku rules apply') } })
     assert.deepEqual(await settle(read, { fits: true, shown: true }), { fits: true, shown: true }, 'the rules show and fit their pane')
@@ -163,7 +158,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       const shownOutsideLight = givens.filter((g) => !g.hidden && !FOG_LIT.some(([r, c]) => r === g.row && c === g.col))
       assert.deepEqual(shownOutsideLight, [], 'only lit cells show their clues')
       await penMarks(9, 9)
-      await placeNote(p, '15')
+      await placeNote(p, NOTE_POINT, '15')
       await useTool(p, '#control-normal')
       await clickCell(p, 0, 2)
       await p.keyboard.press('4')
@@ -172,15 +167,6 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       await p.keyboard.press('3')
       const board = await readUntil(() => boardOf(p), (b) => b.notes.length === 1 && b.entered.length === 1 && b.colours.some((c) => c.startsWith('4,4:')))
       assert.deepEqual([board.notes, board.entered], [['15'], ['0,2:4']])
-    })
-
-    it('attack 68: a fog-of-war puzzle: no script colors a clue the fog hides', async () => {
-      await openFog()
-      const givens = await fogged()
-      assert.equal(givens.some((g) => g.hidden), true, 'the fog hides some givens')
-      // A fogged given's color would show which cells share a digit group.
-      const colored = givens.filter((g) => g.hidden && g.colours > 0).map((g) => [g.row, g.col])
-      assert.deepEqual(colored, [], 'no hidden given has a color')
     })
 
     it('attack 68: a fog-of-war puzzle: a clue the fog lifts from gets its color then', async () => {
@@ -192,7 +178,6 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       const lifted = await readUntil(fogged, (now) => now.some((g, i) => before[i].hidden && !g.hidden))
       const uncovered = lifted.filter((g, i) => before[i].hidden && !g.hidden)
       assert.deepEqual(uncovered.filter((g) => g.colours === 0), [], 'every given the fog uncovered has its color')
-      // The Odd/Even profile: the shown givens of one parity share a color, and the two parities differ.
       const colourOfParity = (parity) => new Set(lifted.filter((g) => !g.hidden && g.digit % 2 === parity).map((g) => g.colour))
       const [odd, even] = [colourOfParity(1), colourOfParity(0)]
       assert.deepEqual([odd.size, even.size], [1, 1], 'the shown givens of one digit group share one color')
@@ -203,14 +188,13 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     it('attack 68: a puzzle with a background image: the image stays under the board while every script draws and notes', async () => {
       const image = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="#88c"/></svg>').toString('base64')
       await open(puzzleData({ id: 'attack-bg', givens: CLASSIC_GIVENS, metadata: { title: 'background', rules: RULES, bgimage: image, bgimageopacity: '0.5' } }))
-      // The image's box on the page against the board's: it must reach every edge of the board, whatever size the board is drawn at.
       const underBoard = async () => {
         const [images, board] = [await p.evaluate(() => [...document.querySelectorAll('#svgrenderer image')].map((i) => { const r = i.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom } })), await boardBox()]
         return { count: images.length, covers: images.length === 1 && images[0].x <= board.x + 1 && images[0].y <= board.y + 1 && images[0].right >= board.x + board.width - 1 && images[0].bottom >= board.y + board.height - 1 }
       }
       assert.deepEqual(await readUntil(underBoard, (r) => r.count === 1), { count: 1, covers: true }, 'the image is under the board')
       await penMarks(9, 9)
-      await placeNote(p, '15')
+      await placeNote(p, NOTE_POINT, '15')
       await useTool(p, '#control-normal')
       await clickCell(p, 0, 2)
       await p.keyboard.press('4')

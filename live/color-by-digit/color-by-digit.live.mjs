@@ -1,15 +1,13 @@
 // Live check of color-by-digit.user.js on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { chromium } from 'playwright'
-import { startPuzzle } from '../page.mjs'
-import { BUTTON, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, savedState, SEED, watch } from './color-by-digit-fixtures.mjs'
+import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, reloadSession, savedState, SEED, selectCell, watch, wrongColorCountOn } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
+import { scriptSource, useBrowser } from '../session.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
+const script = scriptSource('color-by-digit.user.js')
 
 const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 // Two entered digits sit on empty cells: r1c3 = 4, r1c4 = 7.
@@ -22,17 +20,13 @@ const FIT_SLACK_PX = 1
 // How many stand-in buttons another script's row gets in the wrap test; enough to fill a second row.
 const OTHER_BUTTONS = 8
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const cellsState = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({
-    r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])], corner: [...(c.pencilmarks || [])]
-  })))
+  const cellsState = () => cellsStateOn(p)
   const at = (s, r, c) => s.find((x) => x.r === r && x.c === c)
   const coloredCount = () => coloredCountOn(p)
   const colorsAt = async (r, c) => at(await cellsState(), r, c).colours
@@ -48,12 +42,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
   const oddEven = expectedColours((d) => (Number(d) % 2 ? '1' : '2'))
   const lowFiveHigh = expectedColours((d) => (Number(d) < 5 ? '1' : d === '5' ? '5' : '9'))
-  const wrongCount = async (expected) => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(expected(x))).length
+  const wrongCount = (expected) => wrongColorCountOn(p, expected)
 
-  const boot = async () => {
-    await startPuzzle(p, { injection: { mode: 'after-start', code: script } })
-    await p.locator(BUTTON).waitFor({ state: 'attached' })
-  }
   const label = () => labelOn(p)
   // Undo moves the mode back with the board, so a test that undid a mode step steps on from the mode it is at now.
   const MODE_ORDER = ['Off', 'Cell', 'Digit', 'Both']
@@ -65,13 +55,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
-  const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
   const paint = (r, c, key) => paintOn(p, r, c, key)
   const setMultiColor = (v) => read((v) => Framework.setSetting('multicolour', v), v)
   const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser, script))
+    ;({ context, p, errors } = await openSession(browser(), script))
   })
   after(async () => { await context.close() })
 
@@ -123,22 +112,22 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(fits(l), true, JSON.stringify(l))
   })
 
-  it('the button shows an icon or readable text', async () => {
+  it('the button shows an icon', async () => {
     const look = await p.locator(BUTTON).evaluate((e) => {
       const svg = e.querySelector('.icon svg')
       const box = svg ? svg.getBoundingClientRect() : { width: 0, height: 0 }
-      return { icon: box.width > 8 && box.height > 8, text: e.textContent.trim(), fontSize: parseFloat(window.getComputedStyle(e).fontSize) }
+      return { icon: box.width > 8 && box.height > 8, width: box.width, height: box.height }
     })
-    assert.equal(look.icon || (look.text.length > 0 && look.fontSize > 4), true, JSON.stringify(look))
+    assert.equal(look.icon, true, JSON.stringify(look))
   })
 
   let baseline
 
   it('setup: entered digits and a corner mark land, and nothing is colored', async () => {
-    await select(0, 2); await p.keyboard.press('4')
-    await select(0, 3); await p.keyboard.press('7')
-    await p.click('#control-corner'); await select(0, 5); await p.keyboard.press('2'); await p.click('#control-normal')
-    await select(8, 0)
+    await selectCell(p, 0, 2); await p.keyboard.press('4')
+    await selectCell(p, 0, 3); await p.keyboard.press('7')
+    await p.click('#control-corner'); await selectCell(p, 0, 5); await p.keyboard.press('2'); await p.click('#control-normal')
+    await selectCell(p, 8, 0)
     const typed = await settle(async () => { const s = await cellsState(); return [String(at(s, 0, 2).value), String(at(s, 0, 3).value), at(s, 0, 5).corner.length] }, ['4', '7', 1])
     assert.deepEqual(typed, ['4', '7', 1])
     assert.equal(await coloredCount(), 0)
@@ -229,7 +218,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // Hovering first waits for the dialog to stop moving, so the box read is where the key is.
   const centre = async (locator) => { await locator.hover(); const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
   const reopen = async () => { await closeDialogWith(p, 'Cancel', EDITOR); await openEditor() }
-  // Presses at `from`, drags through `through` and releases: the pointer events of one stroke.
   const dragThrough = async (from, through) => {
     await p.mouse.move(from.x, from.y)
     await p.mouse.down()
@@ -343,10 +331,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('the saved list, the mode and the button survive a reload, and a step to Both uses the saved list', async () => {
       await stepTo('Digit')
       const saved = await getData()
-      await p.reload({ waitUntil: 'load' })
-      await boot()
+      await reloadSession(p, script)
       assert.deepEqual(await getData(), saved)
-      await p.locator(BUTTON).waitFor({ state: 'visible' })
       // Clear whatever progress the reload restored, then color with the saved list.
       await read(() => {
         const a = Framework.app
@@ -367,9 +353,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     // Saved groups are Low/5/High here, so centre marks 6, 7 and 9 all belong to key 9.
     it('a step to Cell also colors an empty cell whose centre marks fit one group, leaves one spanning two groups, and one undo removes it', async () => {
-      await select(8, 0); await p.click('#control-centre')
+      await selectCell(p, 8, 0); await p.click('#control-centre')
       for (const k of ['6', '7', '9']) await p.keyboard.press(k)
-      await select(8, 1)
+      await selectCell(p, 8, 1)
       for (const k of ['1', '7']) await p.keyboard.press(k)
       await p.click('#control-normal')
       const marks = () => read(() => [[8, 0], [8, 1]].map(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join('')))
@@ -513,8 +499,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('painting with a key the default palette lacks colors the digit key in the page\'s color', async () => {
       await digitKey('4').click()
       assert.equal(await keyOf('4'), 'u')
-      // rgb(10, 20, 30) at SudokuPad's 60% cell opacity
-      assert.equal(await digitKey('4').evaluate((e) => window.getComputedStyle(e).backgroundColor), 'color(srgb 0.0392157 0.0784314 0.117647 / 0.6)')
+      // rgb(10, 20, 30) at SudokuPad's 60% cell opacity, read as channels and alpha whatever notation Chromium serializes it in (rgba() or color(srgb ...))
+      const bg = await digitKey('4').evaluate((e) => window.getComputedStyle(e).backgroundColor)
+      const numbers = bg.match(/[\d.]+/g).map(Number)
+      const [r, g, b] = bg.startsWith('color(srgb') ? numbers.slice(0, 3).map((v) => v * 255) : numbers.slice(0, 3)
+      assert.equal([r - 10, g - 20, b - 30].every((d) => Math.abs(d) <= 1) && Math.abs(numbers[numbers.length - 1] - 0.6) < 0.01, true, bg)
     })
   })
 

@@ -16,20 +16,21 @@ const OWNED = {
   'page.mjs': ['openPage', 'startPuzzle', 'waitForFramework', 'gotoPuzzle', 'newPage', 'captureConsoleErrors'],
   'settings.mjs': ['openScriptDialog', 'closeDialogWith'],
   'settle.mjs': ['clickUntil', 'POLL_MS', 'SETTLE_MS'],
-  'pen.mjs': ['openPenTool', 'padValues', 'penEntries', 'penValuesNoColor', 'penValuesAt', 'penStrings', 'cellCentre', 'gridPoint', 'mouseDrag', 'drag', 'draw', 'setSlider', 'plantSaved', 'plantUnchecked', 'keydownDefaults']
+  'pen.mjs': ['openPenTool', 'padValues', 'penEntries', 'penValuesNoColor', 'penValuesAt', 'penStrings', 'drag', 'draw', 'setSlider', 'plantSaved', 'plantUnchecked', 'keydownDefaults'],
+  'board.mjs': ['cellCentre', 'gridPoint', 'mouseDrag', 'restart', 'boxOpen', 'finishNote', 'typeText', 'placeNote'],
+  'session.mjs': ['SCRIPT_FILES', 'scriptSource', 'useBrowser', 'addPage', 'openWith', 'reloadWith']
 }
 // The names the spec removed: their job is now a shared module's.
 const REMOVED = ['closeWith', 'pressUntil', 'sleep', 'selectPen']
 // What a live file boots with when it goes round page.mjs.
 const OWN_BOOT = /\.newContext\(|\.goto\(|routeSudokuPad|puzzle-url\.txt|typeof Framework\b.*waitForFunction|waitForFunction\(.*typeof Framework\b/
 const COLOR_BY_DIGIT = ['color-by-digit.live.mjs', 'color-by-digit-mode.live.mjs', 'color-by-digit-profiles.live.mjs', 'color-by-digit-digits.live.mjs', 'color-by-digit-sync.live.mjs'].map((name) => `color-by-digit/${name}`)
-// What the fixtures own for those files: the board, the keys, the selectors and the shared press, count and paint helpers.
 const FIXTURE_NAMES = ['GIVENS', 'SEED', 'ODD_EVEN', 'LOW_FIVE_HIGH', 'BUTTON', 'EDITOR', 'ARROW', 'MENU', 'PROFILES_KEY', 'AUTO_KEY', 'MODE_KEY', 'buttonPoint', 'pressTo', 'labelOn', 'modeLabel', 'ROW_CORNER', 'coloredCountOn', 'givensColoredOn', 'paintOn']
 
 // Spec 129's acceptance as one pass over the live harness, at `npm test`: the live files are read as text, and
 // modeFor is run for each answer the version check can give. This seam is blind to real SudokuPad, so that the live
-// files still pass through this harness is `npm run test:live`'s to show, and neither run covers a real Tampermonkey
-// install or crackingthecryptic.com.
+// files still pass through this harness is `npm run test:live`'s to show, and a real Tampermonkey
+// install is `npm run test:tampermonkey`'s.
 test('the live files share one harness, and the recording is replaced only when SudokuPad\'s version changed', () => {
   for (const [owner, names] of Object.entries(OWNED)) {
     for (const name of names) assert.deepEqual(declarers(name), [owner], name)
@@ -37,10 +38,11 @@ test('the live files share one harness, and the recording is replaced only when 
   for (const name of REMOVED) assert.deepEqual(declarers(name), [], name)
   assert.deepEqual(moduleNames.filter((file) => /Start Puzzle\|Continue/.test(source(file))), ['cache.mjs'])
 
-  // The site's own live file opens site/ from disk and never loads SudokuPad. The attack files boot through attacks.mjs, which boots through page.mjs.
+  // The site's own live file opens site/ from disk and never loads SudokuPad. The attack files boot through attacks.mjs, and Text Anywhere's through
+  // draw-tool-fixtures.mjs, which boot through session.mjs and page.mjs.
   for (const file of liveNames.filter((name) => name !== 'site-slideshow.live.mjs')) {
     const text = source(file)
-    assert.match(text, /from '\.\.?\/(page|color-by-digit-fixtures|attacks)\.mjs'/, `${file} boots through the shared modules`)
+    assert.match(text, /from '\.\.?\/(page|session|draw-tool-fixtures|color-by-digit-fixtures|attacks)\.mjs'/, `${file} boots through the shared modules`)
     assert.doesNotMatch(text, OWN_BOOT, `${file} boots through page.mjs`)
   }
 

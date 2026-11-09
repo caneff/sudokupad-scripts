@@ -7,21 +7,15 @@
 // action works. At document-idle, SudokuPad's `Framework` and `getApp` also exist when the script runs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { captureConsoleErrors, MODES, openPage, START, startPuzzle } from './page.mjs'
+import { captureConsoleErrors, MODES, START } from './page.mjs'
 import { SCRIPTS } from './scripts.mjs'
-
-const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
+import { openWith, scriptSource, useBrowser } from './session.mjs'
 
 const CONCURRENCY = 5
 
-// Prepended to a before-start injection: records whether the Start Puzzle button shows as the script runs.
 const RECORD_START_SHOWN = `window.__startShownAtInjection = [...document.querySelectorAll('button')].some((b) => ${START}.test(b.textContent) && b.getClientRects().length > 0);\n`
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('startup', { concurrency: CONCURRENCY }, () => {
   for (const script of SCRIPTS) {
@@ -30,9 +24,8 @@ describe('startup', { concurrency: CONCURRENCY }, () => {
         let context, p, errors
 
         before(async () => {
-          const injection = { mode, code: (mode === 'before-start' ? RECORD_START_SHOWN : '') + source(script.file) }
-          ;({ context, p, errors } = await openPage(browser, { injection, seed: captureConsoleErrors }))
-          await startPuzzle(p, { injection })
+          const code = (mode === 'before-start' ? RECORD_START_SHOWN : '') + scriptSource(script.file)
+          ;({ context, p, errors } = await openWith(browser(), [{ code }], { mode, seed: captureConsoleErrors }))
           await script.ready(p)
         })
         after(async () => { await context.close() })

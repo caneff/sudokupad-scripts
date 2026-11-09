@@ -2,21 +2,19 @@
 // crash signals (no page error, no console error, no skip line) beside what a user expects to see. Clicks, drags and key presses are real input; the
 // harness restarts the puzzle, sets slider values and reads state from the page.
 /* global Framework, ToolPen */
-import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { captureConsoleErrors, drawnWidth, gotoPuzzle, openPage, startPuzzle } from '../page.mjs'
+import * as extras from './pen-tool-extras-fixtures.mjs'
+import { captureConsoleErrors, drawnWidth } from '../page.mjs'
 import { closeExtrasEditorWith, effectiveOpacities, EXTRAS_EDITOR, openExtrasEditor } from '../settings.mjs'
-import { cellCentre, goToPenPage, mouseDrag, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penEntries, penValuesAt, setInputValue, undoAll } from '../pen.mjs'
+import { cellCentre, mouseDrag, undoAll } from '../board.mjs'
+import { goToPenPage, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penEntries, penValuesAt, setInputValue } from '../pen.mjs'
 import { readUntil, settle, stable } from '../settle.mjs'
-
-const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
+import { useBrowser } from '../session.mjs'
 
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
-// The sliders' limits, as the script's panel gives them.
 const THICKNESS_LIMITS = { min: 1, max: 16 }
 const OPACITY_LIMITS = { min: 20, max: 100 }
 const DIALOG_THICKNESS = `${EXTRAS_EDITOR} input[data-setting="thickness"]`
@@ -26,9 +24,7 @@ const PAGES = [[PAGE_ONE, 0], [PAGE_TWO, 3], [PAGE_THREE, 6]]
 const CELL_CYCLE = ['5', '6', 'z']
 const CELL = [4, 4]
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
   let context, p, errors
@@ -40,19 +36,9 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
   const SAVED_KEYS = ['PenColor_thickness', 'PenColor_opacity', 'PenColor_dash', 'PenColor_arrowspacing', 'PenColor_outlinewidth', 'PenColor_outline', 'PenColor_linestyles', 'PenColor_sliders', 'PenColor_middleerase', 'PenColor_colors', 'PenColor_pen', 'EdgeMarks_marks', 'ToolPen_linemode']
   const lineMode = () => read(() => ToolPen.tool.lineMode)
 
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await read(() => { Framework.setSetting('toolpen', true) })
-    await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await openPenTool(p)
-  }
-
   // Every attack gets its own page with the script installed, default settings and the pen tool open, and ends with the crash signals clean.
   beforeEach(async () => {
-    ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
-    await boot()
+    ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors }))
   })
   afterEach(async () => {
     try {
@@ -62,7 +48,6 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
     }
   })
 
-  // A line along row `row` (0 to 8) from column `col` to two columns right, in cell middles.
   const lineIn = (row, col) => mouseDrag(p, [[row + 0.5, col + 0.5], [row + 0.5, col + 2.5]])
 
   it('attack 35: a line on every pen page in every color, then undo all', async () => {
@@ -177,7 +162,6 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
     assert.ok(widest.max > widest.min, `max thickness draws wider than min: ${widest.max} vs ${widest.min}`)
   })
 
-  // Every range, checkbox, preset and pen color in the dialog, with the value to change it to.
   const changeEveryValue = async () => {
     await editor().locator('select[data-role="color-choice"]').selectOption({ index: 1 })
     const swatches = editor().locator('input[data-role="swatch"]')
@@ -212,8 +196,8 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
     assert.deepEqual(await dialogValues(), changed)
     await closeExtrasEditorWith(p, 'Save')
     assert.notDeepEqual(await stored(SAVED_KEYS), untouched, 'Save saved')
-    await gotoPuzzle(p)
-    await boot()
+    // The saved values may hide the page button, which a ready pen tool waits for.
+    await extras.reload(p, { penTool: false })
     await openExtrasEditor(p)
     assert.deepEqual(await dialogValues(), changed, 'after a reload the dialog shows the saved values')
     await closeExtrasEditorWith(p, 'Cancel')
@@ -225,17 +209,14 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
       await openExtrasEditor(p)
       await setInputValue(p.locator(DIALOG_THICKNESS), 9)
     }
-    // Escape closes it and saves nothing.
     await edit()
     await p.keyboard.press('Escape')
     await editor().waitFor({ state: 'detached' })
     assert.equal(await thickness(), null, 'Escape saved nothing')
-    // A click outside closes it and saves nothing.
     await edit()
     await p.mouse.click(5, 5)
     await editor().waitFor({ state: 'detached' })
     assert.equal(await thickness(), null, 'a click outside saved nothing')
-    // Enter leaves the dialog open and unsaved, and the dialog still works.
     await edit()
     await p.keyboard.press('Enter')
     await p.waitForTimeout(300) // "nothing happened in 300 ms" check

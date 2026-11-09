@@ -4,25 +4,21 @@
 /* global Node */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { closeDialogWith, dialogButton } from '../settings.mjs'
+import { STATUS, closeDialogWith, dialogButton } from '../settings.mjs'
+import { useBrowser } from '../session.mjs'
 
-const { COLORS_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS } = draw
+const { COLORS_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR } = draw
 const COLORS_STYLE_ID = 'draw-tool-colors'
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const SWATCH_2 = `${EDITOR} input[data-role="swatch"][data-key="2"]`
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s Save is all-or-nothing', { concurrency: false }, () => {
   let context, p
   before(async () => {
-    ;({ context, p } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p } = await draw.open(browser()))
     await draw.pickDraw(p)
   })
   after(async () => { await context.close() })

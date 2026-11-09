@@ -5,11 +5,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
-import { gridPoint } from '../pen.mjs'
 import { readUntil } from '../settle.mjs'
+import { useBrowser } from '../session.mjs'
+import { finishNote, gridPoint, typeText } from '../board.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
 const HANDLE = '#draw-tool-layer .draw-tool-resize'
@@ -26,16 +25,13 @@ const { MIN_BOX_EM: MIN_EM, CORNERS: CORNER_TABLE } = createRequire(import.meta.
 const CORNERS = Object.values(CORNER_TABLE)
 const BOTTOM_RIGHT = Object.keys(CORNER_TABLE).indexOf('bottomRight')
 
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = () => draw.saved(p)
-  // The note's text box inside its padding, on the screen, with its text size and how far its text runs past it.
   const box = (selector) => read((s) => {
     const e = document.querySelector(s)
     const r = e.getBoundingClientRect()
@@ -58,7 +54,6 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     const { x, y, width, height } = await p.locator(HANDLE).nth(which).boundingBox()
     return [x + width / 2, y + height / 2]
   }
-  // A press on the handle dragged by (dx, dy) screen pixels.
   const dragHandle = async (dx, dy, which = BOTTOM_RIGHT) => {
     const [x, y] = await handleMiddle(which)
     await p.mouse.move(x, y)
@@ -69,11 +64,9 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
   const near = (a, b) => Math.abs(a - b) <= NEAR_PX
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
-    await draw.boot(p)
+    ;({ context, p, errors } = await draw.open(browser()))
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await draw.reloadOnDraw(p)
   })
   after(async () => { await context.close() })
 
@@ -90,7 +83,7 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
       const corner = [sx < 0 ? edges.left : edges.right, sy < 0 ? edges.top : edges.bottom]
       assert.ok(near(x, corner[0]) && near(y, corner[1]), `handle ${which} at ${x}, ${y}; corner at ${corner}`)
     }
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await handleCount(), 0)
     assert.equal((await saved())[0].box, undefined, 'a note never resized stores no box')
   })
@@ -105,7 +98,7 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     assert.ok(near(after.right - after.left, width) && near(after.bottom - after.top, height), `${after.right - after.left} x ${after.bottom - after.top}, dragged to ${width} x ${height}`)
     assert.ok(after.scrollRoom > 0, 'the text runs past the smaller box')
     await p.keyboard.type('Z')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal((await draw.texts(p))[0], `${NOTE_TEXT}Z`, 'the key typed after the drag went into the note')
     const finished = await box(TEXTS)
     assert.ok(near(finished.right - finished.left, width) && near(finished.bottom - finished.top, height), 'the finished note keeps the box')
@@ -131,12 +124,11 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     await dragHandle(-1000, -1000)
     const smallest = await box(TEXT_BOX)
     assert.ok(near(smallest.right - smallest.left, MIN_EM[0] * smallest.em) && near(smallest.bottom - smallest.top, MIN_EM[1] * smallest.em), `${smallest.right - smallest.left} x ${smallest.bottom - smallest.top}`)
-    await draw.finishNote(p)
+    await finishNote(p)
     // The note's text size is 20 board units.
     assert.deepEqual((await saved())[0].box, MIN_EM.map((em) => em * 20))
   })
 
-  // The note's middle on the screen.
   const middleOfNote = async () => {
     const { left, top, right, bottom } = await box(TEXTS)
     return [(left + right) / 2, (top + bottom) / 2]
@@ -145,17 +137,17 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
   it('a note selected alone shows a handle on each corner, and two selected notes show none', async () => {
     await p.mouse.click(...await middleOfNote())
     assert.equal(await handleCount(), 4)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal(await handleCount(), 0, 'no selection, no handles')
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     await p.keyboard.type('two')
-    await draw.finishNote(p)
+    await finishNote(p)
     await p.mouse.click(...await middleOfNote())
     await p.keyboard.down('Shift')
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     await p.keyboard.up('Shift')
     assert.equal(await handleCount(), 0)
-    await draw.finishNote(p)
+    await finishNote(p)
     // Leaves only the first note.
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     await p.keyboard.press('Delete')
@@ -176,7 +168,7 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     })
   }
 
-  it('dragging the top left handle in rewraps the text, and the size it set survives a reload', async () => {
+  it('dragging the top left handle in rewraps the text', async () => {
     await p.mouse.click(...await middleOfNote())
     const before = await box(TEXTS)
     await dragHandle(40, 0, 0)
@@ -227,12 +219,12 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     await p.mouse.dblclick(...await middleOfNote())
     assert.equal((await draw.texts(p)).length, 0, 'the note itself is open')
     await p.mouse.dblclick(...await handleMiddle())
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal((await saved())[0].box, undefined)
     // Leaves the note with a box for the checks below.
     await p.mouse.click(...await middleOfNote())
     await dragHandle(-20, -5)
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.equal((await saved())[0].box.length, 2)
   })
 
@@ -267,19 +259,19 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     const before = (await saved()).map((item) => item.text)
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     await p.keyboard.type('second')
-    await draw.finishNote(p)
+    await finishNote(p)
     const { left, top, right, bottom } = await box(TEXTS)
     await p.mouse.dblclick((left + right) / 2, (top + bottom) / 2)
     await p.mouse.click(...await handleMiddle(), { button: 'right' })
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
-    await draw.finishNote(p)
+    await finishNote(p)
     assert.deepEqual((await saved()).map((item) => item.text), [...before, 'second'])
   })
 
   it('a note narrower than three characters widened by a handle shrinks back to its own size and no further', async () => {
     await p.mouse.click(...await gridPoint(p, SHORT_AT))
     await p.keyboard.type('hi')
-    await draw.finishNote(p)
+    await finishNote(p)
     await p.mouse.click(...await gridPoint(p, SHORT_AT))
     const index = (await saved()).length - 1
     const start = await box(TEXTS + ':last-of-type')
@@ -302,13 +294,13 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     await dragHandle(-1000, -1000)
     const smallest = await box(TEXT_BOX)
     assert.ok(near(smallest.right - smallest.left, MIN_EM[0] * smallest.em), `${smallest.right - smallest.left} wide, em ${smallest.em}`)
-    await draw.finishNote(p)
+    await finishNote(p)
     await p.mouse.click(...await gridPoint(p, SHORT_AT))
     await p.keyboard.press('Delete')
   })
 
   it('pressing a handle of a scrolled note leaves its scroll where it was', async () => {
-    await draw.finishNote(p)
+    await finishNote(p)
     await p.mouse.click(...await middleOfNote())
     const scrolled = await read((s) => {
       const note = document.querySelector(s)
@@ -325,12 +317,11 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
 
   // The note is the only one, so a resize left on its old index would reach past the notes.
   it('Delete while a selected note\'s handle is held deletes the note, and its release saves nothing back and leaves the Text tool on', async () => {
-    await draw.finishNote(p)
+    await finishNote(p)
     await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
-    await draw.typeText(p, NOTE_AT, NOTE_TEXT)
-    await draw.finishNote(p)
+    await draw.reloadOnDraw(p)
+    await typeText(p, NOTE_AT, NOTE_TEXT)
+    await finishNote(p)
     await p.mouse.click(...await middleOfNote())
     await dragHandle(40, 20)
     assert.equal((await saved())[0].box !== undefined, true, 'the note has a box')

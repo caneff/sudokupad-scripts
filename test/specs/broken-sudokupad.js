@@ -49,14 +49,13 @@ const throwingEvent = () => new Proxy({}, { get (target, key) { throw new OwnCod
 
 // SudokuPad's roots, built from a script's FEATURES. Before `broken.now` a call answers with another member and keeps each function it
 // is handed, or that sits in an object it is handed, as a callback; after it, every call throws and only the declared paths remain.
-function sudokupadStandIn (features, record, broken, missing) {
+function sudokupadStandIn (features, record, broken) {
   // `app` is what `Framework.getApp` resolves to, which SudokuPad also keeps as `Framework.app`.
   const fromPage = (path) => (path.startsWith('app.') ? `Framework.${path}` : path)
   const declared = new Map()
   for (const { needs } of Object.values(features)) {
     for (const [path, kind] of Object.entries(needs)) declared.set(fromPage(path), kind)
   }
-  const gone = new Set(missing.map(fromPage))
   const leadsToDeclared = (path) => [...declared.keys()].some((full) => full === path || full.startsWith(`${path}.`))
   const handedOver = (where, value, depth = 0) => {
     if (typeof value === 'function') record.add({ where, on: 'sudokupad', fn: value })
@@ -82,7 +81,6 @@ function sudokupadStandIn (features, record, broken, missing) {
         // A method the script put on this object (a `wrap`) stays, and is not taken as a callback: see the head of this file.
         if (stored.has(key)) return stored.get(key)
         const child = `${path}.${key}`
-        if (gone.has(child)) return undefined
         if (key === 'then' || child.split('.').length > DEPTH * 2) return undefined
         if (!leadsToDeclared(child) && (broken.now || kind === 'array')) return broken.now ? undefined : Reflect.get(target, key)
         return node(child)
@@ -112,18 +110,18 @@ function sudokupadStandIn (features, record, broken, missing) {
   return Object.fromEntries([...rootNames].map((name) => [name, node(name)]))
 }
 
-// Starts `file` (a script) on the working stand-in page, which lacks the internals in `missing` from the start. Returns `escaped`, each throw that left the script so far, as
+// Starts `file` (a script) on the working stand-in page. Returns `escaped`, each throw that left the script so far, as
 // `{ where, on, error }`; `added`, every way back into the script not yet taken, as `{ where, on, fn, listener }`; `take`, which takes one
 // of them with the event given and counts its throw; `warnings`, what the script warned in the console from then on; `broken`, whose
 // `now` changes SudokuPad; and `roots`, SudokuPad's roots the script declares (`Framework`, `ToolPen`), on which a test may set a member.
-function startOnStandInPage (file, features, { missing = [] } = {}) {
+function startOnStandInPage (file, features) {
   const broken = { now: false }
   const added = []
   const record = { add: (entry) => added.push(entry) }
   const page = pageStandIn(record)
   const warnings = []
   const escaped = []
-  const roots = sudokupadStandIn(features, record, broken, missing)
+  const roots = sudokupadStandIn(features, record, broken)
   const sandbox = {
     window: page('window'),
     document: page('document'),
@@ -196,4 +194,4 @@ function failEachListener (file, features, on, setUp = () => {}) {
   })
 }
 
-module.exports = { startOnStandInPage, runOnBrokenSudokuPad, failEachListener, SudokuPadChanged }
+module.exports = { runOnBrokenSudokuPad, failEachListener, SudokuPadChanged }

@@ -1,24 +1,16 @@
-// Live check of the shared settings helpers (`live/settings.mjs`) on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { chromium } from 'playwright'
-import { openPage, startPuzzle } from './page.mjs'
+import { EDITOR } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { stable } from './settle.mjs'
+import { openWith, useBrowser } from './session.mjs'
 
-const code = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
-const EDITOR = '#color-by-digit-editor'
-
-let browser
-before(async () => { browser = await chromium.launch() })
-after(async () => { await browser?.close() })
+const browser = useBrowser()
 
 describe('openScriptDialog', { concurrency: false }, () => {
   let context, p, errors
   before(async () => {
-    ({ context, p, errors } = await openPage(browser))
-    await startPuzzle(p, { injection: { mode: 'after-start', code } })
+    ({ context, p, errors } = await openWith(browser(), ['color-by-digit.user.js']))
   })
   after(async () => { await context?.close() })
 
