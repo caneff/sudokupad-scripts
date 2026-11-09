@@ -239,9 +239,9 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
     assert.equal(await boxText(), '**a** *b* ~~c~~', 'the markers show while typing')
     await draw.finishNote(p)
     assert.deepEqual((await saved()).map((item) => item.text).slice(-1), ['**a** *b* ~~c~~'], 'the raw markdown is stored')
-    const spans = await read((selector) => [...document.querySelectorAll(`${selector} span`)].map((e) => {
+    const spans = await read((selector) => [...document.querySelectorAll(`${selector} span:not(.draw-tool-strike-piece)`)].map((e) => {
       const style = window.getComputedStyle(e)
-      return { text: e.textContent, bold: Number(style.fontWeight) >= 700, italic: style.fontStyle === 'italic', strike: style.textDecorationLine === 'line-through' }
+      return { text: e.textContent, bold: Number(style.fontWeight) >= 700, italic: style.fontStyle === 'italic', strike: e.classList.contains('draw-tool-strike') }
     }), TEXTS)
     assert.deepEqual(spans, [
       { text: 'a', bold: true, italic: false, strike: false },

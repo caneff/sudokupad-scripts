@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.44.3
+// @version      0.44.4
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.44.3'
+  const VERSION = '0.44.4'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const DIALOG_BLUR_PX = 8
@@ -225,6 +225,8 @@
   const CHECK_CLASS = 'draw-tool-check'
   const CHECK_DONE_CLASS = 'draw-tool-check-done'
   const CODE_CLASS = 'draw-tool-code'
+  const STRIKE_CLASS = 'draw-tool-strike'
+  const STRIKE_PIECE_CLASS = 'draw-tool-strike-piece'
   const CODE_BLOCK_CLASS = 'draw-tool-code-block'
   // A ticked item's line fades to this share of the note's own look.
   const DONE_OPACITY = 0.6
@@ -2075,15 +2077,26 @@
   }
 
   const FLAG_STYLES = (run) => {
-    const decorations = [run.underline && 'underline', run.strike && 'line-through'].filter(Boolean)
-    return { ...(run.bold && { fontWeight: 'bold' }), ...(run.italic && { fontStyle: 'italic' }), ...(decorations.length && { textDecoration: decorations.join(' ') }) }
+    return { ...(run.bold && { fontWeight: 'bold' }), ...(run.italic && { fontStyle: 'italic' }), ...(run.underline && { textDecoration: 'underline' }) }
+  }
+
+  // A struck run is drawn by its own line, not `text-decoration: line-through`: the browser paints a decoration's halo shadow over the letters, which hides their top half. Each word and each
+  // gap is a piece with its own line (a stylesheet rule), so the line follows the text over a wrapped line, and the text itself stays as it was.
+  function struckPieces (text) {
+    return text.split(/(\s+)/).filter(Boolean).map((part) => {
+      const piece = document.createElement('span')
+      piece.className = STRIKE_PIECE_CLASS
+      piece.textContent = part
+      return piece
+    })
   }
 
   function runElement (run) {
     if (!FLAGS.some((flag) => run[flag])) return run.text
     const element = document.createElement('span')
-    element.textContent = run.text
-    if (run.code) element.className = CODE_CLASS
+    if (run.strike) element.append(...struckPieces(run.text))
+    else element.textContent = run.text
+    element.className = [run.code && CODE_CLASS, run.strike && STRIKE_CLASS].filter(Boolean).join(' ')
     Object.assign(element.style, FLAG_STYLES(run))
     return element
   }
@@ -2104,10 +2117,10 @@
     if (mark.checked === undefined) bullet.textContent = mark.text
     else {
       bullet.append(checkBox(mark.checked, lineIndex))
-      if (mark.checked) Object.assign(line.style, { textDecoration: 'line-through', opacity: String(DONE_OPACITY) })
+      if (mark.checked) line.style.opacity = String(DONE_OPACITY)
     }
     Object.assign(bullet.style, { display: 'inline-block', width: `${indent}em`, textIndent: '0' })
-    line.append(bullet, ...runs.map(runElement))
+    line.append(bullet, ...runs.map((run) => runElement(mark.checked ? { ...run, strike: true } : run)))
     return line
   }
 
@@ -2328,6 +2341,9 @@
     `.${HANDLE_CLASS}.${ENTERING_CLASS} { opacity: 0; }`,
     `.${CHECK_CLASS} { display: inline-block; box-sizing: border-box; width: 0.8em; height: 0.8em; border: 2px solid currentColor; border-radius: 3px; vertical-align: -0.05em; position: relative; }`,
     `.${CODE_CLASS} { font-family: ${FIXED_FONT_STACK}; font-size: 0.9em; background: color-mix(in srgb, currentColor 15%, transparent); border-radius: 0.25em; padding: 0.05em 0.25em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }`,
+    // The line sits above every piece's text, with its halo, so a neighbor's halo never covers it.
+    `.${STRIKE_PIECE_CLASS} { position: relative; }`,
+    `.${STRIKE_PIECE_CLASS}::after { content: ''; position: absolute; z-index: 1; left: 0; right: 0; top: 52%; height: 0.07em; background: currentColor; }`,
     `.${CODE_BLOCK_CLASS} { display: block; padding: 0.15em 0.35em; border-radius: 0.3em; }`,
     `.${CHECK_DONE_CLASS}::after { content: ''; position: absolute; left: 0.2em; top: -0.1em; width: 0.25em; height: 0.5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) .${CHECK_CLASS} { cursor: pointer; }`,
