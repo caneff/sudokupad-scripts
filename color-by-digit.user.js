@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.21
+// @version      0.25.22
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.21'
+  const VERSION = '0.25.22'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1497,6 +1497,22 @@
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
+  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
+  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
+  function writeOrRestore (snapshot, write) {
+    const restore = snapshot()
+    try {
+      write()
+    } catch (error) {
+      try {
+        restore()
+      } catch (restoreError) {
+        throw new Error(`${errorText(error)}; the earlier values could not be put back: ${errorText(restoreError)}`, { cause: error })
+      }
+      throw error
+    }
+  }
+
   // The next press ends the swallowing even when no release came (a close from the keyboard).
   function swallowRelease (win = window) {
     const swallow = (event) => event.stopImmediatePropagation()
@@ -1635,30 +1651,21 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  // `snapshot` is `writeOrRestore`'s, and Save writes under it; the script hands the same one to `wireCopyPaste`.
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
+    if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
-      let restore = null
       try {
-        if (failed || changed()) {
-          restore = snapshot ? snapshot() : null
-          save()
-        }
+        if (failed || changed()) writeOrRestore(snapshot, save)
       } catch (error) {
         failed = true
-        let message = `Not saved: ${errorText(error)}`
-        try {
-          if (restore) restore()
-        } catch (restoreError) {
-          message += `; the earlier values could not be put back: ${errorText(restoreError)}`
-        }
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), message)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
         return
       }
       close()
@@ -1866,7 +1873,7 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText */ // from settings-dialog.js, which every script carries beside this one
+  /* global setDialogStatus, errorText, writeOrRestore */ // from settings-dialog.js, which every script carries beside this one
   // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
@@ -1893,8 +1900,10 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
-  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept, under the
+  // dialog's own `snapshot` (`writeOrRestore`'s), so a paste that fails half-way puts every key back; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade, snapshot }, apply) {
+    if (typeof snapshot !== 'function') throw new Error('Paste settings needs a snapshot')
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
@@ -1907,7 +1916,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) apply(values)
+          if (Object.keys(values).length > 0) writeOrRestore(snapshot, () => apply(values))
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -2631,9 +2640,9 @@
     setMode(app, next, groupKeys([...oldGroups, ...groups]))
   }
 
-  // The profiles and the mode as stored and as shown, as a function that puts them back after a Save that failed half-way. Cells a failed Save already colored or cleared stay as they are, an undo step of their own.
+  // The profiles, the mode and the added-preload marks as stored, and the mode as shown, as a function that puts them back after a Save or Paste that failed half-way. Cells a failed Save already colored or cleared stay as they are, an undo step of their own.
   function snapshotSave () {
-    const restoreStored = snapshotStore(savedData, [PROFILES_KEY, MODE_KEY])
+    const restoreStored = snapshotStore(savedData, [PROFILES_KEY, MODE_KEY, ...ADDED_PRELOADS.map(({ key }) => key)])
     const was = mode
     return () => {
       try {
@@ -2677,7 +2686,7 @@
       if (draft.state.profiles[draft.selected].groups !== groups) draw()
     }
     draw()
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings({ getData: readData }), readers: READERS, upgrade: withModeFromAuto }, (values) => {
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings({ getData: readData }), readers: READERS, upgrade: withModeFromAuto, snapshot: snapshotSave }, (values) => {
       ADDED_PRELOADS.forEach(({ key }) => { if (key in values) writeData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()

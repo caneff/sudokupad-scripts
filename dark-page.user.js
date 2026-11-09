@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.9
+// @version      0.7.10
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.9'
+  const VERSION = '0.7.10'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -236,6 +236,22 @@
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
+  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
+  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
+  function writeOrRestore (snapshot, write) {
+    const restore = snapshot()
+    try {
+      write()
+    } catch (error) {
+      try {
+        restore()
+      } catch (restoreError) {
+        throw new Error(`${errorText(error)}; the earlier values could not be put back: ${errorText(restoreError)}`, { cause: error })
+      }
+      throw error
+    }
+  }
+
   // The next press ends the swallowing even when no release came (a close from the keyboard).
   function swallowRelease (win = window) {
     const swallow = (event) => event.stopImmediatePropagation()
@@ -374,30 +390,21 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  // `snapshot` is `writeOrRestore`'s, and Save writes under it; the script hands the same one to `wireCopyPaste`.
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
+    if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
-    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves the stored values as they were; a restore that itself throws is named beside the save's failure.
     const saveAndClose = () => {
-      let restore = null
       try {
-        if (failed || changed()) {
-          restore = snapshot ? snapshot() : null
-          save()
-        }
+        if (failed || changed()) writeOrRestore(snapshot, save)
       } catch (error) {
         failed = true
-        let message = `Not saved: ${errorText(error)}`
-        try {
-          if (restore) restore()
-        } catch (restoreError) {
-          message += `; the earlier values could not be put back: ${errorText(restoreError)}`
-        }
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), message)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
         return
       }
       close()
@@ -430,7 +437,7 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText */ // from settings-dialog.js, which every script carries beside this one
+  /* global setDialogStatus, errorText, writeOrRestore */ // from settings-dialog.js, which every script carries beside this one
   // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
@@ -457,8 +464,10 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
-  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept, under the
+  // dialog's own `snapshot` (`writeOrRestore`'s), so a paste that fails half-way puts every key back; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade, snapshot }, apply) {
+    if (typeof snapshot !== 'function') throw new Error('Paste settings needs a snapshot')
     const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
@@ -471,7 +480,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) apply(values)
+          if (Object.keys(values).length > 0) writeOrRestore(snapshot, () => apply(values))
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -844,6 +853,8 @@
   }
   // A copy or paste with its feature off says so in the dialog's status line.
   const offNow = (feature) => () => { throw new Error(`the ${FEATURES[feature].label} is off`) }
+  // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
+  const snapshotColor = () => snapshotStore(Framework, [DATA_KEY])
 
   function openDialog () {
     let picked = pageColor
@@ -853,7 +864,8 @@
       version: VERSION,
       bodyId: DIALOG_ID,
       changed: () => picked !== pageColor,
-      save: () => settingsEntry.run(() => saveColor(picked))
+      snapshot: snapshotColor,
+      save: () => settingsEntry.run(() => saveColor(picked), offNow('settings'))
     })
     if (!body) return
     body.innerHTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
@@ -872,7 +884,7 @@
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase(); preview() })
     const copied = () => savedPageColor.run(() => copiedSettings(Framework), offNow('savedColor'))
-    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS }, (values) => settingsEntry.run(() => {
+    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS, snapshot: snapshotColor }, (values) => settingsEntry.run(() => {
       if (!(DATA_KEY in values)) return
       picked = values[DATA_KEY]
       input.value = picked
