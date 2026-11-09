@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.8
+// @version      1.31.9
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.8'
+  const VERSION = '1.31.9'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -51,6 +51,9 @@
   /* eslint-disable no-unused-vars */
   const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
   const rem = (value) => Math.round(value * 100) / 100
+
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:pointer-session>
@@ -1208,9 +1211,6 @@
   }
 
   const hasModifier = (event) => event.ctrlKey || event.altKey || event.metaKey || event.shiftKey
-
-  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
-  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
 
   function digitKeyPen (event, page) {
     if (hasModifier(event) || typedIntoField(event)) return null
