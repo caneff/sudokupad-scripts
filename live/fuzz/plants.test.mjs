@@ -1,11 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { applyPlant, PLANTS, plantById, plantPatch } from './plants.mjs'
 import { plantTable } from './plant-table.mjs'
+import { scriptSource } from '../session.mjs'
 
-const ROOT = new URL('../../', import.meta.url)
-const scriptText = (file) => readFileSync(new URL(file, ROOT), 'utf8')
 const occurrences = (text, find) => text.split(find).length - 1
 
 describe('applyPlant', () => {
@@ -44,7 +42,7 @@ describe('the plants against the shipped scripts', () => {
 
   for (const plant of PLANTS) {
     it(`${plant.id}: its find text matches ${plant.file} exactly once and changes it`, () => {
-      const text = scriptText(plant.file)
+      const text = scriptSource(plant.file)
       assert.equal(occurrences(text, plant.find), 1)
       assert.notEqual(applyPlant(plant, text), text)
     })
@@ -56,7 +54,7 @@ describe('the plants against the shipped scripts', () => {
   })
 
   it('no shipped script holds a replacement', () => {
-    for (const plant of PLANTS) assert.equal(occurrences(scriptText(plant.file), plant.replace), 0, `${plant.id}: ${plant.file} holds the bug`)
+    for (const plant of PLANTS) assert.equal(occurrences(scriptSource(plant.file), plant.replace), 0, `${plant.id}: ${plant.file} holds the bug`)
   })
 })
 

@@ -1,20 +1,16 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { openPage, startPuzzle } from './page.mjs'
+import { EDITOR } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { stable } from './settle.mjs'
-import { scriptSource, useBrowser } from './session.mjs'
-
-const code = scriptSource('color-by-digit.user.js')
-const EDITOR = '#color-by-digit-editor'
+import { openWith, useBrowser } from './session.mjs'
 
 const browser = useBrowser()
 
 describe('openScriptDialog', { concurrency: false }, () => {
   let context, p, errors
   before(async () => {
-    ({ context, p, errors } = await openPage(browser()))
-    await startPuzzle(p, { injection: { mode: 'after-start', code } })
+    ({ context, p, errors } = await openWith(browser(), ['color-by-digit.user.js']))
   })
   after(async () => { await context?.close() })
 

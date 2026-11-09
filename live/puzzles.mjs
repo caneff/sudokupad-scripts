@@ -4,13 +4,11 @@ import assert from 'node:assert/strict'
 import { LOAD_MS } from './cache.mjs'
 import { GIVENS, MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { texts, tool } from './draw-tool/draw-tool-fixtures.mjs'
-import { injectAtIdle, startPuzzle, START } from './page.mjs'
+import { startPuzzle, START } from './page.mjs'
 import { cellCentre } from './board.mjs'
 import { clickUntil, SETTLE_MS } from './settle.mjs'
-import { SCRIPT_FILES, scriptSource } from './session.mjs'
+import { installAtIdle, SCRIPT_FILES, scriptSource } from './session.mjs'
 import { animationsDone } from './settings.mjs'
-
-const ALL_SCRIPTS = SCRIPT_FILES.map(scriptSource)
 
 const SUDOKUPAD = 'https://sudokupad.app/'
 
@@ -25,7 +23,7 @@ const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQ
 export async function installAll (p, patch = (file, code) => code) {
   await p.route(/googletagmanager/, (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }))
   await p.route(/\/images\/(?:sven)?toby-icon\.png/, (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }))
-  for (const [i, code] of ALL_SCRIPTS.entries()) await injectAtIdle(p, patch(SCRIPT_FILES[i], code))
+  await installAtIdle(p, SCRIPT_FILES.map((file) => ({ code: patch(file, scriptSource(file)) })))
 }
 
 // Saves Color by Digit's Odd/Even profile in Cell mode before the page loads, so odd digits take one color and even digits another.

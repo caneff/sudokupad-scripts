@@ -7,12 +7,9 @@
 // action works. At document-idle, SudokuPad's `Framework` and `getApp` also exist when the script runs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { captureConsoleErrors, MODES, openPage, START, startPuzzle } from './page.mjs'
+import { captureConsoleErrors, MODES, START } from './page.mjs'
 import { SCRIPTS } from './scripts.mjs'
-import { useBrowser } from './session.mjs'
-
-const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
+import { openWith, scriptSource, useBrowser } from './session.mjs'
 
 const CONCURRENCY = 5
 
@@ -27,9 +24,8 @@ describe('startup', { concurrency: CONCURRENCY }, () => {
         let context, p, errors
 
         before(async () => {
-          const injection = { mode, code: (mode === 'before-start' ? RECORD_START_SHOWN : '') + source(script.file) }
-          ;({ context, p, errors } = await openPage(browser(), { injection, seed: captureConsoleErrors }))
-          await startPuzzle(p, { injection })
+          const code = (mode === 'before-start' ? RECORD_START_SHOWN : '') + scriptSource(script.file)
+          ;({ context, p, errors } = await openWith(browser(), [{ code }], { mode, seed: captureConsoleErrors }))
           await script.ready(p)
         })
         after(async () => { await context.close() })

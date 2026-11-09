@@ -3,16 +3,12 @@
 // Replay under a real Tampermonkey install and on crackingthecryptic.com stays untested.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, TEXT_BOX, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
-import { openPage, startPuzzle } from './page.mjs'
+import { buttonIds, DIGIT_BUTTON, pickDraw, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
 import { seedOddEvenCells } from './puzzles.mjs'
-import { SCRIPT_FILES, useBrowser } from './session.mjs'
-import { cellCentre, gridPoint, mouseDrag } from './board.mjs'
+import { openWith, SCRIPT_FILES, useBrowser } from './session.mjs'
+import { cellCentre, mouseDrag, placeNote } from './board.mjs'
 import { goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
-
-const ROOT = new URL('../', import.meta.url)
 
 const REPLAY_BUTTON = '#control-replay'
 const PLAY_BUTTON = '.controls-input button[data-key="2"]'
@@ -25,9 +21,7 @@ const KEY_SWITCHES_MS = 700
 const browser = useBrowser()
 
 async function openSolver (files) {
-  const opened = await openPage(browser(), { seed: seedOddEvenCells })
-  await startPuzzle(opened.p)
-  for (const file of files) await opened.p.addScriptTag({ content: readFileSync(new URL(file, ROOT), 'utf8') })
+  const opened = await openWith(browser(), files, { seed: seedOddEvenCells })
   await opened.p.evaluate(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolreplay', true) })
   await opened.p.locator('#control-pen').waitFor({ state: 'visible' })
   await opened.p.locator(REPLAY_BUTTON).waitFor({ state: 'visible' })
@@ -100,12 +94,8 @@ for (const [order, files] of INSTALL_ORDERS) {
       await p.mouse.click(x + half - 2, y)
       assert.equal(await settle(async () => (await penStrings(p)).length > count, true), true, 'an edge mark appeared')
       // Text Anywhere: a note
-      await useTool(DRAW_BUTTON)
-      await p.mouse.click(...await gridPoint(p, [6.2, 6.25]))
-      await p.locator(TEXT_BOX).waitFor({ state: 'attached' })
-      await p.keyboard.type('15')
-      await p.keyboard.press('Escape')
-      assert.deepEqual(await settle(() => drawTexts(p), ['15']), ['15'])
+      await placeNote(p, [6.2, 6.25], '15')
+      assert.deepEqual(await drawTexts(p), ['15'])
       await useTool(DIGIT_BUTTON)
       solved = await board()
     })
@@ -192,7 +182,7 @@ describe('the replay tool\'s button and key with Draw installed', { concurrency:
     const { p } = withDraw
     await p.click(DIGIT_BUTTON)
     assert.equal(await clickUntil(() => p.click(REPLAY_BUTTON), () => tool(p), 'replay', SETTLE_MS), 'replay')
-    assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS), 'draw')
+    assert.equal(await pickDraw(p), 'draw')
   })
 
   it('the replay button comes before Text Anywhere\'s among the tool buttons on screen, as it does without it', async () => {

@@ -2,10 +2,10 @@
 import assert from 'node:assert/strict'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { openScriptDialog, openSettings } from './settings.mjs'
-import { gridPoint } from './board.mjs'
+import { placeNote } from './board.mjs'
 import { keydownDefaults, openPenTool, PAGE_BUTTON, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
-import { DRAW_BUTTON, pickDraw } from './draw-tool/draw-tool-fixtures.mjs'
+import { DRAW_BUTTON } from './draw-tool/draw-tool-fixtures.mjs'
 
 export const BLACK = 'rgb(0, 0, 0)'
 export const DIGITS = '1234567890'
@@ -125,12 +125,6 @@ export const SCRIPTS = [
     file: 'draw-tool.user.js',
     ready: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' }),
-    act: async (p) => {
-      assert.equal(await pickDraw(p), 'draw')
-      await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
-      await p.keyboard.type('15')
-      await p.keyboard.press('Escape')
-      assert.equal(await settle(() => p.locator('#draw-tool-layer .draw-tool-text').count(), 1), 1)
-    }
+    act: (p) => placeNote(p, [2.5, 2.5], '15')
   }
 ]

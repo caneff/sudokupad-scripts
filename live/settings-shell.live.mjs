@@ -1,8 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { openPage, startPuzzle } from './page.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
-import { scriptSource, useBrowser } from './session.mjs'
+import { openWith, useBrowser } from './session.mjs'
 
 const SCRIPTS = [
   { file: 'dark-page', entry: 'Dark Page', editor: '#dark-page-dialog', buttons: ['Save', 'Cancel'] },
@@ -18,8 +17,7 @@ for (const { file, entry, editor, buttons } of SCRIPTS) {
   describe(`${entry}'s dialog shell`, { concurrency: false }, () => {
     let context, p, errors
     before(async () => {
-      ({ context, p, errors } = await openPage(browser()))
-      await startPuzzle(p, { injection: { mode: 'after-start', code: scriptSource(`${file}.user.js`) } })
+      ({ context, p, errors } = await openWith(browser(), [`${file}.user.js`]))
     })
     after(async () => { await context?.close() })
 

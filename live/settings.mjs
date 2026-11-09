@@ -1,7 +1,6 @@
 // Shared by the live checks: opening SudokuPad's settings dialog the way a user finds a script's
 // entry, the version in a script's header, and the Copy settings and Paste settings buttons of the scripts with a dialog. Not a check itself, so `live/**/*.live.mjs` skips it.
 
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 
 // The label of the group every script's settings entry is in.
@@ -57,7 +56,6 @@ export const effectiveOpacities = (page, selector) => page.evaluate((sel) => [..
   return Math.round(product * 1000) / 1000
 }), selector)
 
-export const code = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 export const STATUS = '.dialog [data-role="settings-status"]'
 // Every script's two buttons are icons, so each pair is found by its act, not its words.
 export const actButton = (p, act) => p.locator(`.dialog button[data-act="${act}"]`)
@@ -72,6 +70,10 @@ export const SETTINGS_SCRIPTS = [
   { file: 'draw-tool.user.js', owns: /^DrawTool_/, entry: 'Text Anywhere', editor: '#draw-tool-dialog', key: 'DrawTool_width', saved: 3.5, badKey: 'DrawTool_width', bad: 500 },
   { file: 'pen-tool-extras.user.js', owns: /^(PenColor_|EdgeMarks_)/, entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 }
 ]
+
+// Every key `script` (one of SETTINGS_SCRIPTS) owns, as it is in localStorage, by key in order: what a check that nothing was saved compares.
+export const ownedSettings = (p, script) => p.evaluate((pattern) => Object.fromEntries(Object.keys(window.localStorage)
+  .filter((k) => new RegExp(pattern).test(k.replace(/^svencodes_/, ''))).sort().map((k) => [k, window.localStorage.getItem(k)])), script.owns.source)
 
 // Puts `text` on the clipboard, clears the last status, presses Paste settings and returns the status it shows.
 export async function paste (p, text) {

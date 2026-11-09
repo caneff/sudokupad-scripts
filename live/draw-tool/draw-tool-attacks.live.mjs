@@ -1,5 +1,5 @@
 // Live attacks on Text Anywhere's editing (#597, attacks 19-33 of #590): each test tries to break the script in one hostile way and asserts the crash signals
-// (a page error or a skip line, collected by `openPage` and checked after every test) plus what a user expects to see. Attack 34 waits on #584.
+// (a page error or a skip line, collected by `openWith` and checked after every test) plus what a user expects to see. Attack 34 waits on #584.
 // Real mouse and keyboard input throughout, at a desktop size.
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

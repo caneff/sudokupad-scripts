@@ -6,14 +6,14 @@ import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllScripts } from './attacks.mjs'
-import { captureConsoleErrors, gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
+import { captureConsoleErrors } from './page.mjs'
 import { mouseDrag, typeText } from './board.mjs'
 import { openPenTool, penEntries, setSlider } from './pen.mjs'
-import { closeDialogWith, code, openScriptDialog, paste, SETTINGS_SCRIPTS } from './settings.mjs'
+import { closeDialogWith, openScriptDialog, ownedSettings, paste, SETTINGS_SCRIPTS } from './settings.mjs'
 import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import * as draw from './draw-tool/draw-tool-fixtures.mjs'
-import { useBrowser } from './session.mjs'
+import { addPage, openWith, useBrowser } from './session.mjs'
 
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
@@ -83,10 +83,9 @@ describe('attacks on storage', { concurrency: false }, () => {
 
   it('attack 74: settings pasted as malformed text, from an older version and a megabyte large change nothing they should not, and answer in time', async () => {
     for (const script of SETTINGS_SCRIPTS) {
-      ;({ context, p, errors } = await openPage(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
-      await startPuzzle(p, { injection: { mode: 'after-start', code: code(script.file) } })
+      ;({ context, p, errors } = await openWith(browser(), [script.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await openScriptDialog(p, script.entry, script.editor)
-      const owned = () => p.evaluate((pattern) => Object.fromEntries(Object.keys(window.localStorage).filter((k) => new RegExp(pattern).test(k.replace(/^svencodes_/, ''))).sort().map((k) => [k, window.localStorage.getItem(k)])), script.owns.source)
+      const owned = () => ownedSettings(p, script)
       const timed = async (text) => {
         const started = Date.now()
         const status = await paste(p, text)
@@ -123,10 +122,7 @@ describe('attacks on storage', { concurrency: false }, () => {
 
   it('attack 75: settings changed in one tab while another tab has the puzzle open leave that tab working, keep the other settings, and show up on its reload', async () => {
     ;({ context, p, errors } = await openWithAllScripts(browser()))
-    const other = await newPage(context)
-    captureConsoleErrors(other.p, other.errors)
-    await gotoPuzzle(other.p)
-    await startPuzzle(other.p)
+    const other = await addPage(context, [], { seed: captureConsoleErrors })
     await loadScripts(other.p)
     const stored = (page, key) => page.evaluate((k) => Framework.getData(k), key)
 

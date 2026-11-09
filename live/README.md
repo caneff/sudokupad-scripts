@@ -7,30 +7,49 @@ you need to write or debug one.
 ## Opening SudokuPad
 
 A suite launches no Chromium of its own: `const browser = useBrowser()` at the top of the file (`live/session.mjs`) launches one
-before its tests and closes it after them. `openWith(browser(), scripts, { mode })` opens the puzzle in a context of its own and
-gets it past Start Puzzle with `scripts` (file names from `SCRIPT_FILES`) injected at `mode`; `addPage` opens another page in the
+before its tests and closes it after them. Its hooks run with the file's other top-level hooks, not before them, so a suite reads
+`browser()` in a `describe`'s hooks or tests, never in a `before` at the top of the file. `openWith(browser(), scripts, { mode })` opens the puzzle in a context of its own and
+gets it past Start Puzzle with `scripts` injected at `mode`; a script is a file name from `SCRIPT_FILES` or `{ code }`, text of
+the test's own such as a script with a break planted (`scriptSource(file)` reads a script). `addPage` opens another page in the
 same context and `reloadWith` reloads one. A script's own fixtures wrap them with what shows the script is up, as Text Anywhere's
 and Pen Tool Extras' (`live/pen-tool-extras/pen-tool-extras-fixtures.mjs`, which also turns the pen tool on and opens it) `open` and `reload` do. `live/board.mjs` holds what every suite does to the board: where a cell is, a click and a drag there,
 Undo back to the start, Restart, and a Text Anywhere note typed (`typeText`) or placed with the tool picked first (`placeNote`).
+The settings dialogs' selectors, buttons and keys are `live/settings.mjs`'s (`STATUS`, `actButton`, `SETTINGS_SCRIPTS`), and each
+script's editor is its fixtures'.
 
 ## Injection time
 
-`openWith` and `reloadWith` (`live/session.mjs`) decide it. A script is injected after Start Puzzle by default. A case about the injection time itself runs at
-all three times: at `DOMContentLoaded`, after load before Start Puzzle, after Start Puzzle.
+`live/session.mjs` injects every script a suite runs on SudokuPad, at one of three times: at `DOMContentLoaded` (`document-idle`),
+after load before Start Puzzle (`before-start`), or after Start Puzzle (`after-start`, the default). `openWith`, `addPage` and
+`reloadWith` take the time as `mode`. Two exports cover a suite that sets the page up itself:
+
+- `addScripts(p, scripts)` injects into a page already past Start Puzzle, as `after-start` does, for a suite that reads the page
+  without the script first: Auto Rules Resizer measures SudokuPad's own rules pane, then adds the script.
+- `installAtIdle(p, scripts)` registers the scripts at `document-idle` for every later load of the page, as a userscript manager
+  runs them, for a suite that opens puzzles in the tab itself: `installAll` (`live/puzzles.mjs`) for the puzzle attacks and the fuzz run.
+
+A case about the injection time itself runs at all three times:
 
 - `live/startup.live.mjs` checks each script's startup that way: it loads with no page error, its
   control appears, one action works.
 - The two "auto mode saved on and no mode saved" groups of `live/color-by-digit/color-by-digit-mode.live.mjs` do too.
 - Dark Page's page color dialog group injects at `DOMContentLoaded` only.
 
+Three checks load a script another way, each because no time `live/session.mjs` offers is the one under test:
+
+- Dark Page's `at document-start` group (`live/dark-page/dark-page.live.mjs`) runs it as an init script, before the page's own
+  scripts and before Framework exists: the time its `@run-at document-start` asks a manager for, which no other script uses.
+- Its `a page with no puzzle` case adds it to a blank page that never loads SudokuPad.
+- `npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) lets a real Tampermonkey inject each script.
+
 ## Errors and skip lines
 
-`openPage` (and `newPage`) collect into the returned `errors` every uncaught page error and every skip line a script logs
+`openWith`, `addPage` and `newPage` (`live/page.mjs`) collect into the returned `errors` every uncaught page error and every skip line a script logs
 (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`), of any console type. A suite seeds
 nothing for that: a feature that turns itself off at runtime fails any suite that asserts `errors` is empty.
 `captureConsoleErrors` (a `seed`) adds the page's `console.error` lines.
 
-A suite that breaks a feature on purpose declares the skip lines it expects: `openPage(browser, { expectedSkips: [/^dark-page: /] })`
+A suite that breaks a feature on purpose declares the skip lines it expects: `openWith(browser, scripts, { expectedSkips: [/^dark-page: /] })`
 (patterns). Those lines stay out of `errors`, and the suite checks them itself; any other skip line fails it. Declare
 as narrow a pattern as the break allows: a pattern for a whole script lets a second, unplanted skip line pass, unless the
 suite also counts its warnings.

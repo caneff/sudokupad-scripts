@@ -143,7 +143,7 @@ async function dialogLineOf (p) {
 // The snippet runs on `Framework.getApp()` before the script's own, so the script's startup check sees the internal already broken.
 const withBreak = (kase) => `;Framework.getApp().then(() => { ${kase.breaks || ''} });\n${kase.source || script}`
 
-// A `seed` for `openPage`: the script's console warnings go into `warned`, and the page's console errors into `errors`.
+// A `seed` for `open`: the script's console warnings go into `warned`, and the page's console errors into `errors`.
 const watchWarnings = (warned) => (page, errors) => {
   page.on('console', (m) => {
     if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())

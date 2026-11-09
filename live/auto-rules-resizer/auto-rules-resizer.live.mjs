@@ -3,13 +3,13 @@
 // script is injected.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { scriptSource, useBrowser } from '../session.mjs'
-import { openPage, startPuzzle } from '../page.mjs'
+import { addScripts, openWith, scriptSource, useBrowser } from '../session.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 
-const script = scriptSource('auto-rules-resizer.user.js')
+const SCRIPT_FILE = 'auto-rules-resizer.user.js'
+const script = scriptSource(SCRIPT_FILE)
 
 // Three lines at SudokuPad's own width in a 1920 x 1080 window, well under its 14rem cap: short rules.
 const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.'
@@ -40,10 +40,9 @@ const CORNER = (corner) => `#auto-rules-resizer-drag-${corner}`
 
 const browser = useBrowser()
 
-// A page in a `viewport` window with the puzzle started and RULES shown. `seed()` runs before the script goes in.
+// A page in a `viewport` window with the puzzle started and RULES shown, and no script yet: `inject` adds it. `seed()` runs before the script goes in.
 async function rulesPage (viewport, seed, rules = RULES, { expectedSkips } = {}) {
-  const opened = await openPage(browser(), { contextOptions: { viewport }, expectedSkips })
-  await startPuzzle(opened.p)
+  const opened = await openWith(browser(), [], { contextOptions: { viewport }, expectedSkips })
   await opened.p.evaluate((rules) => {
     Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
     Framework.app.resize()
@@ -52,8 +51,9 @@ async function rulesPage (viewport, seed, rules = RULES, { expectedSkips } = {})
   return opened
 }
 
-const inject = async (p) => {
-  await p.addScriptTag({ content: script })
+// Adds the script (or `scripts`, such as it with a break planted) to a page `rulesPage` opened, and waits for its style.
+const inject = async (p, scripts = [SCRIPT_FILE]) => {
+  await addScripts(p, scripts)
   await p.locator(STYLE).waitFor({ state: 'attached' })
 }
 
@@ -604,8 +604,7 @@ describe('the scrollbar track (a classic scrollbar, as Windows Chrome draws)', {
   })
 
   async function classicPage (rules) {
-    const opened = await openPage(classic(), { contextOptions: { viewport: LANDSCAPE } })
-    await startPuzzle(opened.p)
+    const opened = await openWith(classic(), [], { contextOptions: { viewport: LANDSCAPE } })
     await opened.p.evaluate((text) => {
       Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules: text })
       Framework.app.resize()
@@ -736,9 +735,8 @@ describe('rules with blank lines (SudokuPad sets each newline as a break)', { co
 
 describe('the first paint of the fit (#542, row 10)', { concurrency: false }, () => {
   it('never shows SudokuPad\'s size once the script is in: the fit runs in the same task as the layout', async () => {
-    const { context, p, errors } = await openPage(browser(), { contextOptions: { viewport: LANDSCAPE } })
+    const { context, p, errors } = await openWith(browser(), [], { contextOptions: { viewport: LANDSCAPE } })
     try {
-      await startPuzzle(p)
       await inject(p)
       await p.evaluate(() => {
         window.__frames = []
@@ -839,8 +837,7 @@ for (const kase of MISSING) {
         const original = owner.${kase.name}
         owner.${kase.name} = undefined
         Framework.getApp().then(() => { owner.${kase.name} = original })`
-      await p.addScriptTag({ content: `;Framework.getApp().then(() => { ${breaks} });\n${script}` })
-      await p.locator(STYLE).waitFor({ state: 'attached' })
+      await inject(p, [{ code: `;Framework.getApp().then(() => { ${breaks} });\n${script}` }])
     })
     after(async () => { await context.close() })
 

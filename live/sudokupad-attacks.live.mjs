@@ -5,13 +5,13 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { assertNoCrash, attack, cellsState, colorCell, emptyCells, flushSave, loadScripts, noteCount, NOTES, NOTICE_BAR, openWithAllScripts, reloadWithScripts, rowCol, rulesScroll, rulesWidth, setLongRules, typeDigits } from './attacks.mjs'
 import { BUTTON as CBD_BUTTON, labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { captureConsoleErrors, gotoPuzzle, newPage, startPuzzle } from './page.mjs'
+import { captureConsoleErrors } from './page.mjs'
 import { BLACK } from './scripts.mjs'
 import { gridPoint, placeNote, restart } from './board.mjs'
 import { draw, openPenTool, penEntries, setInputValue } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
 import { DRAW_BUTTON } from './draw-tool/draw-tool-fixtures.mjs'
-import { useBrowser } from './session.mjs'
+import { addPage, useBrowser } from './session.mjs'
 
 const browser = useBrowser()
 
@@ -174,10 +174,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
   it('55 Two tabs of the same puzzle: change settings in one, reload the other', async () => {
     const { context, p: tabA, errors: errorsA } = await openWithAllScripts(browser())
     try {
-      const { p: tabB, errors: errorsB } = await newPage(context)
-      captureConsoleErrors(tabB, errorsB)
-      await gotoPuzzle(tabB)
-      await startPuzzle(tabB)
+      const { p: tabB, errors: errorsB } = await addPage(context, [], { seed: captureConsoleErrors })
       await loadScripts(tabB)
       await tabA.bringToFront()
       // Color by Digit's mode and Pen Tool Extras' Thickness, saved by tab A.

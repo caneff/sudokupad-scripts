@@ -2,16 +2,13 @@
 // effect on the bottom row, and that the choices survive a reload. The Tab option's own behavior is in ui-tweaks-tab.live.mjs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { gotoPuzzle, openPage, startPuzzle } from '../page.mjs'
 import { numberPadText } from '../scripts.mjs'
 import { keydownDefaults } from '../pen.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
-import { useBrowser } from '../session.mjs'
+import { openWith, reloadWith, useBrowser } from '../session.mjs'
 
-const source = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
-const script = source('ui-tweaks.user.js')
+const SCRIPT_FILE = 'ui-tweaks.user.js'
 
 const DIALOG = '#ui-tweaks-dialog'
 const ROW = '.controls-aux'
@@ -40,23 +37,26 @@ const addExtraButtons = (p) => p.evaluate((names) => {
   Framework.app.refreshControls()
 }, EXTRA_BUTTONS)
 
-async function startPage (p, { scripts = [script] } = {}) {
-  await startPuzzle(p)
-  for (const content of scripts) await p.addScriptTag({ content })
+// Once the scripts are in: the stand-in buttons added and the letter tool on.
+async function ready (p) {
   await addExtraButtons(p)
   await p.evaluate(() => Framework.setSetting('toolletter', true))
   await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })
   await p.locator('#control-seven').waitFor({ state: 'visible' })
 }
 
+// A page with `scripts` in, `ready`.
+async function open (scripts = [SCRIPT_FILE]) {
+  const opened = await openWith(browser(), scripts)
+  await ready(opened.p)
+  return opened
+}
+
 describe('the options dialog', { concurrency: false }, () => {
   let context, p, errors
   const pad = () => numberPadText(p)
 
-  before(async () => {
-    ;({ context, p, errors } = await openPage(browser()))
-    await startPage(p)
-  })
+  before(async () => { ;({ context, p, errors } = await open()) })
   after(async () => { await context.close() })
 
   it('the entry opens a dialog named UI Tweaks with the version, Tab on and the other two off', async () => {
@@ -134,11 +134,10 @@ describe('the choices survive a reload', { concurrency: false }, () => {
   let context, p, errors
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser()))
-    await startPage(p)
+    ;({ context, p, errors } = await open())
     await chooseAndSave(p, { tab: false, hideSelect: true, wrapButtons: true })
-    await gotoPuzzle(p)
-    await startPage(p)
+    await reloadWith(p, [SCRIPT_FILE])
+    await ready(p)
   })
   after(async () => { await context.close() })
 
@@ -165,8 +164,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
   let context, p, errors
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser()))
-    await startPage(p, { scripts: ['color-by-digit.user.js', 'pen-tool-extras.user.js', 'draw-tool.user.js', 'ui-tweaks.user.js'].map(source) })
+    ;({ context, p, errors } = await open(['color-by-digit.user.js', 'pen-tool-extras.user.js', 'draw-tool.user.js', SCRIPT_FILE]))
     await p.evaluate(() => Framework.setSetting('toolpen', true))
     await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })
   })
