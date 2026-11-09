@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.17
+// @version      0.25.18
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.17'
+  const VERSION = '0.25.18'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1786,6 +1786,9 @@
   // One key for every script, so a reader finds every feature any script turned off.
   const ERROR_LOG_KEY = 'sudokupad-scripts-error-log'
   const ERROR_LOG_LIMIT = 50
+  // A write the browser refuses (a full localStorage) is the browser's doing, not a SudokuPad change.
+  const isRefusedWrite = (error) => Boolean(error) && error.name === 'QuotaExceededError'
+
   // A report is a URL, and GitHub refuses a long one.
   const REPORT_STACK_LIMIT = 1200
 
@@ -1919,6 +1922,35 @@
       host.append(bar)
     }
 
+    // A bar of plain words, one per text and page load; the same host as the SudokuPad-changed bar, with no report link.
+    const told = new Set()
+    function tell (text) {
+      if (told.has(text) || !page || !page.doc.body) return
+      told.add(text)
+      const { doc } = page
+      let host = doc.getElementById(NOTICE_HOST_ID)
+      if (!host) {
+        host = doc.createElement('div')
+        host.id = NOTICE_HOST_ID
+        host.style.cssText = NOTICE_HOST_CSS
+        doc.body.append(host)
+      }
+      const message = doc.createElement('div')
+      message.setAttribute('data-script', script)
+      message.style.cssText = NOTICE_BAR_CSS
+      const span = doc.createElement('span')
+      span.textContent = text
+      const dismiss = doc.createElement('button')
+      dismiss.type = 'button'
+      dismiss.textContent = '×'
+      dismiss.title = 'Dismiss'
+      dismiss.setAttribute('aria-label', 'Dismiss')
+      dismiss.style.cssText = NOTICE_DISMISS_CSS
+      dismiss.addEventListener('click', () => message.remove())
+      message.append(span, dismiss)
+      host.append(message)
+    }
+
     // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
     function createFeature (featureName, { label, onSkip }) {
       const feature = {
@@ -1947,6 +1979,19 @@
             feature.skip(error)
             return fallback()
           }
+        },
+        // A write the browser refuses (a full localStorage) is told to the user and leaves the feature on, so it saves again once space
+        // frees. Any other throw skips the feature as `run` does.
+        write (fn) {
+          return feature.run(() => {
+            try {
+              return fn()
+            } catch (error) {
+              if (!isRefusedWrite(error)) throw error
+              console.warn(`${script}: ${label} could not save, the browser refused the write:`, error)
+              tell(`${name}: the browser has no room left, so ${label} could not be saved.`)
+            }
+          })
         },
         // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
         // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
@@ -2077,7 +2122,7 @@
 
   // The saved data is read and written only here: with no getData or setData nothing is read, so the preloads and the starting mode show, and nothing is kept.
   const readData = (key) => storage.run(() => Framework.getData(key), () => null)
-  const writeData = (key, value) => storage.run(() => Framework.setData(key, value))
+  const writeData = (key, value) => storage.write(() => Framework.setData(key, value))
   // What the shared store reads and writes through: the saved settings feature's guarded calls, never Framework itself.
   const savedData = { getData: readData, setData: writeData, removeData: (key) => storage.run(() => Framework.removeData(key)) }
   // What the settings entry and the editor are handed in place of Framework: the editor's close runs under the editor when a button is pressed.
