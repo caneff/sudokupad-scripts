@@ -1,7 +1,9 @@
 # What the fuzz catches: planted bugs (#678)
 
-`npm run fuzz:plants` (`live/fuzz/plants-run.mjs`) injects one planted bug at a time, in place of the real script, and fuzzes it for 4 minutes (2 per puzzle,
-recorded 9x9 first, then the 6x6 if it was not caught) with shrinks of up to 2 minutes. The 10 plants are in `live/fuzz/plants.mjs`; the shipped `*.user.js` never hold one.
+`npm run fuzz:plants` (`live/fuzz/plants-run.mjs`) injects one planted bug at a time, in place of the real script, and fuzzes it. The plants are in `live/fuzz/plants.mjs`;
+the shipped `*.user.js` never hold one. The first run fuzzed each of the 10 plants of the time for 4 minutes (2 per puzzle, recorded 9x9 first, then the 6x6 if it was not
+caught) with shrinks of up to 2 minutes; each later run says how it ran, and since the third (#727) the command runs each plant on K seeds with a short budget each
+(`live/README.md` § Measuring the fuzz: planted bugs).
 
 First run, 2026-11-09, seed 678, rules as of #677:
 
@@ -64,8 +66,8 @@ over the budget), with a total; two or more `--config` names run on the same see
 and the ones that do not repeat are counted. New plant `quick-digit-not-colored` (#725's first step): a race, Color by Digit leaving a digit's cell uncolored when it is
 entered within 30 ms of the one before, which only a wait of 0 ms between actions can reach.
 
-Run on 2026-11-10 (`--seeds 5 --budget 60 --seed 200`, 12 plants, 3 configurations, 180 hunts over the whole puzzle set, about 2.5 hours on one box while a drain worker
-ran beside it). Each cell is seeds caught of 5 and the median time to catch:
+Run on 2026-11-10 (`--seeds 5 --budget 60 --seed 200 --shrink-minutes 0.3`, 12 plants, 3 configurations, 180 hunts over the whole puzzle set, 2 h 08 min on one box while a
+drain worker ran beside it). Each cell is seeds caught of 5 and the median time to catch:
 
 | plant | kind | current | varied-wait | busy-start |
 | --- | --- | --- | --- | --- |
@@ -86,7 +88,9 @@ ran beside it). Each cell is seeds caught of 5 and the median time to catch:
 Every catch replayed from its path (0 of 37, 0 of 39 and 0 of 41 did not).
 
 - **The race plant is caught only with the varied wait** (2 of 5 seeds, none under the fixed 40 ms), which is the evidence #725's first step asked for.
-- **The busy start catches the most and the fastest** (41 of 60, median 21 s against 37 and 39 s), and it alone took `dark-page-saves-light` and `box-color-stale` to 4 of 5:
+  The per-action wait that `fuzz-hit-rate.md` (row 5, section 5) proposes is left out, because the wait drawn per list already reaches the race and a list that waits 0 ms
+  after every action puts two fast inputs in a row more often than a wait drawn anew for each action.
+- **The busy start catches the most and the fastest** (41 of 60, median 21 s against 39 s and 26.2 s), and it alone took `dark-page-saves-light` and `box-color-stale` to 4 of 5:
   both need saved state that an empty board reaches only after several actions.
 - **The varied wait cost `box-color-stale` all its catches** (0 of 5 against 3); five seeds per cell is a small sample, so one cell's swing of 3 is not yet a rate.
 - **What is not measured here:** the combined configuration (`varied-wait+busy-start`), run next on the same seeds to decide which one the nightly uses.

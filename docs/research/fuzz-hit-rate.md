@@ -189,7 +189,7 @@ snapshot; a failure is replayed by index and shrunk for at most 10 minutes.
   workflow runs `fuzz-seconds: 600` in `mode: 'code-change'`, with batch fuzzing `fuzz-seconds: 3600` on a cron (every sixth hour in the example) and continuous builds
   used so that PR fuzzing reports only crashes "newly introduced". The analogue here: a 10-minute fuzz on PRs that touch a `*.user.js`, and a failure that also fails
   on `main` reported as "not from this PR". It finds the same bugs sooner; it does not raise the nightly's hit rate.
-- Locally, `fuzz:plants` already takes about 40 minutes on one core; parallel plants on the shared machine fall under the machine-load rule and are not proposed here.
+- Locally, `fuzz:plants` already takes about 45 minutes per configuration on one core (2 h 08 min for three, `fuzz-planted-bugs.md`'s third run); parallel plants on the shared machine fall under the machine-load rule and are not proposed here.
 
 ## Not checked
 
