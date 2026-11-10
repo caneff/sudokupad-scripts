@@ -48,14 +48,32 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.equal(await savedSize('A'), 22)
   })
 
-  it('with Ctrl or Alt held the keys leave the size alone', async () => {
+  it('with Ctrl, Alt or Meta held the keys leave the size alone', async () => {
     await typeText(p, A, 'A')
     await clickAt(p, A)
     await p.keyboard.press('+')
-    for (const chord of ['Control+-', 'Alt+=', 'Control+Shift+=']) {
+    for (const chord of ['Control+-', 'Alt+=', 'Control+Shift+=', 'Meta+=']) {
       await p.keyboard.press(chord)
       assert.equal(await savedSize('A'), 21, `${chord} left the size as the plain + made it`)
     }
+  })
+
+  it('with notes of different sizes selected, + and - step each from its own size, and the slider and the next note take the first note\'s new size', async () => {
+    await typeText(p, A, 'A')
+    await typeText(p, B, 'B')
+    await clickAt(p, A)
+    await p.keyboard.press('+')
+    await p.keyboard.press('+')
+    await clickAt(p, B)
+    await p.keyboard.down('Shift')
+    await clickAt(p, A)
+    await p.keyboard.up('Shift')
+    await p.keyboard.press('+')
+    assert.deepEqual([await savedSize('A'), await savedSize('B')], [23, 21])
+    assert.deepEqual([await valueOf(p, SIZE_SLIDER), await p.evaluate((k) => Framework.getData(k), WIDTH_KEY)], [7.5, 7.5])
+    await p.keyboard.press('-')
+    await p.keyboard.press('-')
+    assert.deepEqual([await savedSize('A'), await savedSize('B')], [21, 19])
   })
 
   it('a + pressed in the middle of a move of the note changes nothing, and the size stays what the drop leaves', async () => {
