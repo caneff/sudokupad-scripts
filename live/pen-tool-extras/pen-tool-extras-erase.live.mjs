@@ -385,6 +385,25 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openPenTool(p)
   })
 
+  // A pen drag cut short by the Corner tool's key leaves the tool's path behind; the erase that follows is not that drag, and must not be split along it.
+  it('a right click erases a page 3 line after a drag was cut short by a key, with no step turned off', async () => {
+    await restartPuzzle(p)
+    await selectPenOnPage(3, 3)
+    await drag(p, [[2.5, 2.5], [2.5, 4.5]])
+    const [x, y] = await gridPoint(p, [5.5, 2.5])
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    const [x2, y2] = await gridPoint(p, [5.5, 4.5])
+    await p.mouse.move(x2, y2, { steps: 6 })
+    await p.keyboard.press('c')
+    await p.mouse.up()
+    await openPenTool(p)
+    await rightClick([2.5, 3.0])
+    assert.equal((await settle(() => penEntries(p).then((v) => v.filter((e) => e.startsWith('2,'))), [])).length, 0, 'the line is erased')
+    assert.equal(await read(() => document.querySelectorAll('#sudokupad-scripts-notices [data-script="pen-tool-extras"]').length), 0, 'no step is off')
+    await undoAll(p)
+  })
+
   it('no page error was raised in the whole group', () => {
     assert.deepEqual(errors, [])
   })

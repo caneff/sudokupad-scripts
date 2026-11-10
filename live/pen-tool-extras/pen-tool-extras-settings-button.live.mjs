@@ -74,3 +74,37 @@ describe('the settings button in the pen panel', { concurrency: false }, () => {
     }
   })
 })
+
+// With SudokuPad's settings dialog calls gone the button would do nothing, so the panel has no settings button; the line mode and line type buttons stay.
+describe('the settings button with the settings dialog off', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    const code = `;Framework.getApp().then(() => { Framework.addSetting = undefined });\n${extras.script}`
+    ;({ context, p } = await extras.open(browser(), { scripts: [{ code }], expectedSkips: [/^pen-tool-extras: settings dialog skipped because SudokuPad has no Framework\.addSetting$/] }))
+  })
+  after(async () => { await context.close() })
+
+  it('the panel shows no settings button and keeps the others', async () => {
+    await p.locator('.pen-tool-extras-mode').waitFor({ state: 'visible' })
+    assert.equal(await p.locator('.pen-tool-extras-page').count(), 1)
+    assert.equal(await p.locator(BUTTON).count(), 0)
+  })
+})
+
+// A settings step that turns off after the panel is built takes the button already showing with it.
+describe('the settings button when the settings dialog turns off later', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    const code = `;Framework.getApp().then(() => { Framework.showDialog = () => { throw new TypeError('showDialog is gone') } });\n${extras.script}`
+    ;({ context, p } = await extras.open(browser(), { scripts: [{ code }], expectedSkips: [/^pen-tool-extras: settings dialog skipped because SudokuPad changed: /] }))
+  })
+  after(async () => { await context.close() })
+
+  it('a click that cannot open the dialog turns the step off, and the button goes with it', async () => {
+    await p.locator(BUTTON).click()
+    await p.locator(BUTTON).waitFor({ state: 'detached' })
+    assert.equal(await p.locator('.pen-tool-extras-mode').count(), 1)
+  })
+})
