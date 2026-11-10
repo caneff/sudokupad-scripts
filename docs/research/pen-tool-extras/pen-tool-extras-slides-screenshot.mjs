@@ -15,6 +15,7 @@
 //   pen-tool-extras-slide-13-outline-on.png   the same line with White outlines on
 //   pen-tool-extras-slide-14-erase.png     a red ring on a line, where a right press is held (the line is not dimmed)
 //   pen-tool-extras-slide-15-erased.png    the whole line gone after the right click
+//   pen-tool-extras-slide-16-settings.png  a red ring on the panel's settings button, beside the settings dialog it opens
 // Every line is a real drag, every mark a real click, every hold a real press; a red ring marks where a hold or the right click lands,
 // since a screenshot draws no pointer. Each line, mark and hold is checked to have landed. The board patch and the panel are joined side
 // by side on white with Python's Pillow (python3 with Pillow).
@@ -160,6 +161,24 @@ const setOutline = async (on) => {
   await park()
 }
 const colorCell = (row, col, key) => p.evaluate(([row, col, key]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(row, col)); a.act({ type: 'colour', arg: key }); a.deselect() }, [row, col, key])
+// The settings slide: the panel and the dialog, both shrunk by one factor so the dialog fits the slide's height, centered on white in a picture
+// the size of every other slide (the slides share one frame, site/slideshows.json).
+const SETTINGS_JOIN = `
+import sys
+from PIL import Image
+panel, dialog, target, gap = Image.open(sys.argv[1]).convert('RGB'), Image.open(sys.argv[2]).convert('RGB'), sys.argv[3], int(sys.argv[4])
+width, height = int(sys.argv[5]), int(sys.argv[6])
+scale = min(1, (height - 2 * gap) / dialog.height, (width - 3 * gap) / (panel.width + dialog.width))
+shrink = lambda im: im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS)
+panel, dialog = shrink(panel), shrink(dialog)
+sheet = Image.new('RGB', (width, height), 'white')
+left = (width - panel.width - gap - dialog.width) // 2
+sheet.paste(panel, (left, (height - panel.height) // 2))
+sheet.paste(dialog, (left + panel.width + gap, (height - dialog.height) // 2))
+sheet.save(target)
+`
+const SETTINGS_BUTTON = '.pen-tool-extras-settings'
+const DIALOG_VIEWPORT = { width: 1200, height: 900 }
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
 
@@ -248,6 +267,26 @@ await unring()
 await park()
 await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, before, { timeout: SETTLE_TIMEOUT_MS })
 await slide('15-erased')
+
+// 16. The settings button, and the dialog it opens.
+const sheetSize = JSON.parse(readFileSync(new URL('../../../site/slideshows.json', import.meta.url), 'utf8'))['pen-tool-extras']
+const gear = await p.locator(SETTINGS_BUTTON).boundingBox()
+await ring(gear.x + gear.width / 2, gear.y + gear.height / 2)
+await p.waitForTimeout(SETTLE_MS)
+await panel.screenshot({ path: join(frames, 'panel.png') })
+await unring()
+// The dialog needs a larger window than the board's: at 900 x 700 its right column is clipped.
+await p.setViewportSize(DIALOG_VIEWPORT)
+await p.locator(SETTINGS_BUTTON).click()
+const dialog = p.locator('.dialog').filter({ has: p.locator('#pen-tool-extras-editor') })
+await dialog.waitFor({ state: 'visible' })
+// The dialog fades in; a picture taken mid-fade is a shade off.
+await p.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)))
+await dialog.screenshot({ path: join(frames, 'dialog.png') })
+const settingsJoined = spawnSync('python3', ['-I', '-c', SETTINGS_JOIN, join(frames, 'panel.png'), join(frames, 'dialog.png'), target('16-settings'), String(GAP_PX), String(sheetSize.width), String(sheetSize.height)], { encoding: 'utf8' })
+if (settingsJoined.status !== 0) throw new Error(`joining slide 16-settings failed: ${settingsJoined.error ?? settingsJoined.stderr}`)
+console.log(`wrote ${target('16-settings')}`)
+await closeExtrasEditorWith(p, 'Cancel')
 
 rmSync(frames, { recursive: true })
 await browser.close()

@@ -1,0 +1,51 @@
+@font-face { font-family: Fredoka; src: url("Fredoka.ttf"); font-weight: 300 700; }
+@font-face { font-family: Nunito; src: url("Nunito.ttf"); font-weight: 200 1000; }
+:root { --accent: #5f519e; --accent-strong: #3f3577; --frame-bg: #fdfdf7; --frame-edge: #b1e6c6; }
+html { background: repeating-linear-gradient(118deg, #ffc9d2 0 90px, #ffe0bd 90px 180px, #fff3c0 180px 270px, #cff5dc 270px 360px, #cdeaff 360px 450px, #ddd2ff 450px 540px, #ffd4ea 540px 630px) fixed; }
+body { font-family: Nunito, system-ui, sans-serif; color: #3b3350; max-width: 72rem; padding: 1.5rem; }
+h1, h2 { font-family: Fredoka, sans-serif; font-weight: 600; color: #5f519e; }
+h1 { font-size: 2.6rem; background: #f5f1fe; border: 10px solid #c9b8f2; border-radius: 24px; padding: .6rem 1.4rem; box-shadow: 0 0 0 6px #fff, 0 6px 14px rgb(95 81 158 / .25); transform: rotate(-.6deg); display: inline-block; }
+h1::before { content: "ChinStrap's "; }
+.warning { border: 8px solid #fcd598; border-radius: 20px; background: #fff8eb; color: #6b512f; box-shadow: 0 0 0 5px #fff; }
+body > p { background: #fff; border-radius: 16px; padding: .6rem 1rem; display: inline-block; box-shadow: 0 0 0 5px #fff; }
+section.row { background: #fff; border: 12px solid var(--c, #a9d4f5); border-radius: 30px; box-shadow: 0 0 0 7px #fff, 0 8px 18px rgb(0 0 0 / .12); padding: 1.2rem 1.4rem !important; margin: 2rem 0 !important; border-top: 12px solid var(--c, #a9d4f5) !important; }
+section.row:nth-of-type(1) { --c: #a9d4f5 } section.row:nth-of-type(2) { --c: #f9b7c6 } section.row:nth-of-type(3) { --c: #fcd598 }
+section.row:nth-of-type(4) { --c: #b1e6c6 } section.row:nth-of-type(5) { --c: #c9b8f2 } section.row:nth-of-type(6) { --c: #fcbf98 }
+.install { font-family: Fredoka, sans-serif; background: #5f519e; box-shadow: 0 0 0 4px #fff, 0 3px 8px rgb(95 81 158 / .35); }
+.slide-frame { border: 4px solid #e9e4f7; border-radius: 16px; background: #fdfdf7; }
+hr { display: none; }
+/* Round 3: the title prefix only on the homepage; a details page is one white sticker card over the stripes, and each feature a pastel tile. */
+body.details h1::before { content: none; }
+body.details { background: #fff; border: 12px solid #c9b8f2; border-radius: 30px; box-shadow: 0 0 0 7px #fff, 0 8px 18px rgb(0 0 0 / .12); margin: 2rem auto; padding: 1.5rem 2rem; }
+body.details h1 { transform: none; }
+body.details > p:not(.warning), body.details .lede { background: none; box-shadow: none; padding: 0; display: block; }
+.features li { list-style: none; background: var(--t, #f5f1fe); border: 3px solid var(--b, #c9b8f2); border-radius: 16px; padding: .6rem .8rem; }
+.features li:nth-child(6n+1) { --t: #eaf4fd; --b: #a9d4f5 } .features li:nth-child(6n+2) { --t: #fdeaef; --b: #f9b7c6 }
+.features li:nth-child(6n+3) { --t: #fff8eb; --b: #fcd598 } .features li:nth-child(6n+4) { --t: #eefaf2; --b: #b1e6c6 }
+.features li:nth-child(6n+5) { --t: #f5f1fe; --b: #c9b8f2 } .features li:nth-child(6n+6) { --t: #fff3ea; --b: #fcbf98 }
+/* Round 4: light only (dark mode dropped), so the dark-scheme overrides never apply: white text on the purple buttons. */
+:root, :root:root { color-scheme: light; --accent: #5f519e; --on-accent: #fff; --accent-strong: #3f3577; --warn-edge: #fcd598; --warn-bg: #fff8eb; --warn-text: #6b512f; --frame-bg: #fdfdf7; --frame-edge: #e9e4f7; }
+.install, .install:visited { color: #fff; }
+/* Round 8: no line above the cards; the intro is the title sticker's subtitle; the title sticker tilts over the warning sticker's top edge, as the stream banner does. */
+.rows { border-top: 0; }
+.row { border-bottom: 12px solid var(--c, #a9d4f5); }
+header.banner { position: relative; z-index: 2; display: inline-block; max-width: 46rem; background: #f5f1fe; border: 10px solid #c9b8f2; border-radius: 24px; padding: .7rem 1.4rem .8rem; box-shadow: 0 0 0 6px #fff, 0 6px 14px rgb(95 81 158 / .25); transform: rotate(-1deg); margin: .5rem 0 -1.6rem 1rem; }
+header.banner h1 { background: none; border: 0; box-shadow: none; padding: 0; margin: 0 0 .25rem; transform: none; display: block; }
+header.banner .lede { background: none; box-shadow: none; padding: 0; margin: 0; display: block; font-size: 1.05rem; }
+body:not(.details) > .warning { position: relative; z-index: 1; padding-top: 2.1rem; margin-top: 0; }
+/* Round 9: only the halos touch, as in the stream layout: the title sticker's lower edge sits just over the warning sticker's top border. */
+header.banner { margin-bottom: -10px; }
+body:not(.details) > .warning { padding-top: .9rem; }
+/* Round 10: only the white halos meet; both colored borders stay whole, as in the stream layout. */
+header.banner { margin-bottom: 4px; }
+header.banner { margin-bottom: 14px; }
+/* Round 12: one gap between stickers, measured halo to halo (HALO_GAP), except the title's deliberate touch on the warning. Halos: cards 7px, warning 5px. */
+:root { --halo-gap: 14px; }
+.rows { margin: 0; display: flex; flex-direction: column; gap: calc(var(--halo-gap) + 14px); }
+section.row { margin: 0 !important; }
+body:not(.details) > .warning { margin-bottom: calc(var(--halo-gap) + 12px); }
+footer { margin-top: calc(var(--halo-gap) + 7px); }
+/* Round 14: the homepage as in round 12; a details page grows to 62rem (from round 13). */
+body.details { max-width: 62rem; }
+/* Round 15: the title sticker's left edge lines up with the warning sticker's (halo to halo; the banner's halo is 1px wider). */
+header.banner { margin-left: 1px; }

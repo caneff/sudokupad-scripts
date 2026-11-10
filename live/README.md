@@ -170,8 +170,8 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
     Color by Digit colors the entered cells every time the page opens, so a coloring undone before the reload returns by design, and the colors and the marks
     sit in one serialized string that the rule does not parse. Also leaves out the notes' position and look (`notes-survive-reload` counts their text), the undo
     stack depth and the letter pad, which a reload does not promise to keep, and the rules pane. It found #681: SudokuPad alone brings a stroke back in color 1
-    after a reload within about half a second of the stroke (`docs/research/pen-reload-color.md`), so the rule leaves the pen colors out when the reload follows a pen
-    action and every stroke after it is color 1, and so does `undo-redo-restores` after reload, undo, redo.
+    after a reload within about half a second of the stroke (`docs/research/pen-reload-color.md`), so the rule leaves the pen colors out when a stroke was drawn or erased since the last
+    reload (a key press between the two does not matter, #743) and every stroke after it is color 1, and so does `undo-redo-restores` after reload, undo, redo.
   - `undo-to-start` also checks that no pen stroke is drawn and no cell is colored. Text Anywhere's notes ride no undo step, so they stay.
 - **A failure** is shrunk (for 10 minutes at most) and printed with the seed, the shortest list that still fails as numbered steps, the one command that
   replays it (`npm run test:fuzz -- --seed <n> --path <path>`, which runs that one list and does not shrink) and the newest records of the shared error log
@@ -213,9 +213,9 @@ npm run fuzz:plants -- [--seeds <k>] [--budget <seconds per hunt>] [--seed <firs
 in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `workflow_dispatch` runs it by hand). It is a workflow of its own, not a job of
 `watch.yml`, so 30 minutes of fuzzing never holds up the watch and the two keep separate concurrency groups.
 
-- **One issue per distinct failure.** A failure files one `bug` issue titled by what failed: `Fuzz: rule broken: <rule names>` for a broken rule, or
+- **One issue per distinct failure.** A failure files one `bug` and `needs-info` issue (a finding can be the fuzz's own rule bug, and is diagnosed before an agent builds it, #805) titled by what failed: `Fuzz: rule broken: <rule names>` for a broken rule, or
   `Fuzz: crash: <first signal>` (numbers folded to `N`) for a crash signal. The body has the seed, the puzzle, the shrunk steps, the replay command, the shared
-  error log and the run's link. When an open issue already has that title, the run comments on it with the same details and files nothing. Closing the issue
+  error log and the run's link, then a `## Blocked by` section reading `None`, as the watch's issues do. When an open issue already has that title, the run comments on it with the same details and files nothing. Closing the issue
   is what makes the next occurrence file a new one.
 - **The hunt goes on after a failure** (#676). `run.mjs` stops at its first failure, so after a failure is filed or commented on, the night starts `run.mjs` again on a
   new seed with the minutes left of the 30, until they are used (less than one minute left is not worth a page start). A failure's title is filed or
@@ -244,7 +244,7 @@ not the nightly the morning after. It runs on a `pull_request` whose paths are o
 
 `npm run watch:live` (`live/watch.mjs`) is for a daily schedule, so a SudokuPad update that breaks a script shows
 up as a bug and not when someone installs it. Its header comment is the full rule: a new version runs the suite
-with `LIVE_REFRESH=1`, red files one `bug` issue, and a version already checked is a no-op until a week has passed. The last version
+with `LIVE_REFRESH=1`, red files one `bug` and `needs-info` issue, and a version already checked is a no-op until a week has passed. The last version
 checked lives in `last-version`, beside the recording.
 
 Two more rules close gaps in that:

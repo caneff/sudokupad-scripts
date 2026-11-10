@@ -189,7 +189,7 @@ While the right button is held nothing dims or changes: the erase shows no previ
 
 A line is hit within 0.2 of a cell of it, held to at least 10 px on small cells and at most 0.24 of a cell, so a centre line and the edge line beside it (0.5 apart) are never both hit.
 
-A right-drag erases every line and mark it crosses, as one undo step, the way Draw's right-drag does. The browser's menu stays shut over the grid in the pen tool. Outside the pen tool, or off the grid, the right button and the menu are left to SudokuPad and the browser.
+A right-drag erases every line and mark it crosses, as one undo step. The browser's menu stays shut over the grid in the pen tool. Outside the pen tool, or off the grid, the right button and the menu are left to SudokuPad and the browser.
 
 A left click steps an edge, corner or cell mark forward, and a right click does not step it. Touch is unchanged.
 
@@ -223,5 +223,5 @@ The settings dialog names the skipped steps in one line under its title (every s
 | pen panel | the pen tool (`ToolPen.tool`), or the `.penlinemode` element in its panel (checked a second after the panel shows) | SudokuPad's own line mode pulldown stays in the panel, and the sliders, the tray and the three control buttons (line mode, line type and settings), which would take its rows, are left out. Tab still turns pages |
 | line erase | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell`, `rows` or `cols` | A right click is SudokuPad's own click, and the browser's menu opens |
 | saved settings | Framework's `getData`, `setData` or `removeData` | The settings and pen colors start from their defaults, and nothing is kept |
-| settings dialog | Framework's `addSetting`, `showDialog` or `closeDialog` | SudokuPad's settings menu has no Pen Tool Extras entry, and the pen panel's settings button does nothing |
+| settings dialog | Framework's `addSetting`, `showDialog` or `closeDialog` | SudokuPad's settings menu has no Pen Tool Extras entry, and the pen panel has no settings button |
 | dialog overlay | Framework's `showDialog`; also off when installing its listener throws | A press on the dark area around the settings dialog closes it and also marks the grid cell under the pointer |

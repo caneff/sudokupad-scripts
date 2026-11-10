@@ -4,4 +4,4 @@
 set -euo pipefail
 open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[].title')
 if printf '%s\n' "$open" | grep -qxF "$TITLE"; then exit 0; fi
-gh issue create --repo "$GITHUB_REPOSITORY" --label bug --title "$TITLE" --body "$BODY"
+gh issue create --repo "$GITHUB_REPOSITORY" --label bug,needs-info --title "$TITLE" --body "$BODY"$'\n\n## Blocked by\n\n- None — can start immediately.'

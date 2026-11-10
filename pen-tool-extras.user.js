@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.3
+// @version      1.32.10
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.3'
+  const VERSION = '1.32.10'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -36,6 +36,7 @@
   const ARROW_SPACING = { min: 3, max: 12, step: 1, fallback: 5 }
   // SudokuPad draws every pen mark with `.cell-pen { opacity: 0.8 }` (tool-pen.css), so 80 leaves the marks as they are; 20 is the floor where a mark still shows.
   const OPACITY = { min: 20, max: 100, step: 5, fallback: 80 }
+  const OPACITY_LABEL = 'Opacity'
   // The outline's width on each side of the pen layer's shape, in cell units. It does not scale with the thickness; 2 shows over a colored cell and a digit without covering the digits beside a line.
   const OUTLINE_WIDTH = { min: 1, max: 8, step: 1, fallback: 2 }
   // The pen values (the `pen-<value>` class of a stroke) SudokuPad draws at the full width, from `docs/research/sudokupad-pen-edge-marks.md`: the free lines, and 5 and 6
@@ -54,6 +55,9 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
+  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
   /* eslint-enable no-unused-vars */
   // </lib:plain>
 
@@ -478,7 +482,7 @@
   // The line mode is saved its own way. A row `under` a box is hidden while that box is unticked.
   const SETTINGS = {
     thickness: slider('PenColor_thickness', THICKNESS, adoptThickness, { label: 'Thickness', section: 'Line settings', box: 'show' }),
-    opacity: slider('PenColor_opacity', OPACITY, adoptOpacity, { label: 'Opacity (%)', section: 'Line settings', box: 'show' }),
+    opacity: slider('PenColor_opacity', OPACITY, adoptOpacity, { label: OPACITY_LABEL, section: 'Line settings', box: 'show' }),
     dash: slider('PenColor_dash', DASH, syncPenPanel, { label: 'Dash length', under: 'lineStyles.dashed' }),
     arrowSpacing: slider('PenColor_arrowspacing', ARROW_SPACING, adoptArrowSpacing, { label: 'Arrow spacing', under: 'lineStyles.arrows' }),
     outlineWidth: slider('PenColor_outlinewidth', OUTLINE_WIDTH, adoptOutline, { label: 'Outline width', under: 'outline' }),
@@ -572,7 +576,8 @@
   const APP = { 'Framework.getApp': 'function' }
   const FEATURES = {
     saved: { label: 'saved settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' } },
-    settings: { label: 'settings dialog', needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' } },
+    // The panel's settings button goes with the step, so one already showing is taken out now rather than at the next change to the page.
+    settings: { label: 'settings dialog', needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }, onSkip: () => syncPenPanel() },
     // The press on the settings dialog's overlay is held back on its own, so a throw installing it costs the dialog nothing; the overlay is SudokuPad's dialog's.
     overlay: { label: 'dialog overlay', needs: { 'Framework.showDialog': 'function' } },
     colors: { label: 'colors', needs: { ...APP, 'Framework.app.tools.colour': 'object' } },
@@ -744,6 +749,12 @@
     }
     if (darkest) colors[darkest] = '#000000'
     return { colors, missing }
+  }
+
+  function missingColorsText (missing, fromPreset) {
+    const page = PAGE_PRESETS.indexOf(fromPreset) + 1
+    const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
+    return `Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.`
   }
 
   function paletteOptions (pageCount) {
@@ -1287,8 +1298,6 @@
     return PEN_PAGES[page].chars[PEN_COLOR_KEYS.indexOf(number)]
   }
 
-  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
-  const hasChord = (event) => event.ctrlKey || event.altKey || event.metaKey
   const hasModifier = (event) => hasChord(event) || event.shiftKey
 
   function digitKeyPen (event, page) {
@@ -2119,7 +2128,8 @@
     const marks = [...erase.marks].map(([cell, values]) => ({ cell, values: [...values] }))
     const acts = eraseActs([...erase.lines], marks, (row, col) => Framework.app.grid.getCell(row, col))
     tool.actStart()
-    sendActs(tool, acts)
+    // The tool's `currentPath` may be a drag cut short by a key, not this erase, so the arrow lines' send must not split these acts along it.
+    withOwnProperty(tool, 'currentPath', null, () => sendActs(tool, acts))
   }
 
   // A right press over the grid in the pen tool starts an erase and has its default prevented, which stops SudokuPad's own draw. A prevented `pointerdown` also stops the browser sending `mousedown`, `mouseup` and so SudokuPad's `clickCell` (checked live), so no pen mark or drag
@@ -2484,7 +2494,7 @@
       : `<div class="${SLIDER_ROW}" data-empty></div>`
     return `<div class="${SLIDERS}">` +
       row(show.thickness, THICKNESS_SLIDER, 'Thickness', THICKNESS, thickness) +
-      row(show.opacity, OPACITY_SLIDER, 'Opacity', OPACITY, opacity) +
+      row(show.opacity, OPACITY_SLIDER, OPACITY_LABEL, OPACITY, opacity) +
       '</div>'
   }
 
@@ -2567,7 +2577,9 @@
       if (!markup && sliders) sliders.remove()
       if (markup) syncPart(pulldown, `.${SLIDERS}`, markup)
       syncPart(pulldown, `.${TRAY}`, `<div class="${TRAY}"></div>`)
-      syncPart(pulldown, `.${SETTINGS_BUTTON}`, renderSettingsButton())
+      // With the settings dialog off the button would do nothing, so it is left out, as Text Anywhere leaves its gear out; the settings step's `onSkip` runs this for one already in.
+      if (steps.settings.off) document.querySelectorAll(`.${SETTINGS_BUTTON}`).forEach((el) => el.remove())
+      else syncPart(pulldown, `.${SETTINGS_BUTTON}`, renderSettingsButton())
       syncLineModeButton(pulldown)
       syncPageButton(pulldown)
     }, removePanelParts)
@@ -2650,13 +2662,7 @@
   const SLIDER_COLUMNS = 'pen-tool-extras-columns'
   const CELL = 'pen-tool-extras-cell'
 
-  // `pickedPreset` is the page preset the missing pens came from.
-  function missingNote (missing, pickedPreset) {
-    if (!missing.length) return ''
-    const page = PAGE_PRESETS.indexOf(pickedPreset) + 1
-    const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
-    return `<div class="${NOTE}">Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
-  }
+  const missingNote = (missing, pickedPreset) => missing.length ? `<div class="${NOTE}">${missingColorsText(missing, pickedPreset)}</div>` : ''
 
   const sectionTitle = (text) => `<div class="${SECTION_TITLE}">${text}</div>`
 

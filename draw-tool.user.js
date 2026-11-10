@@ -103,6 +103,12 @@
     return { colors, missing }
   }
 
+  function missingColorsText (missing, fromPreset) {
+    const page = PAGE_PRESETS.indexOf(fromPreset) + 1
+    const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
+    return `Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.`
+  }
+
   function paletteOptions (pageCount) {
     return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
   }
@@ -664,6 +670,8 @@
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
   const sizeStep = (width, direction) => steppedSlider({ min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width, direction)
+  // A note steps from its own size, not from the width the panel shows for the first selected note.
+  const steppedNote = (item, direction) => ({ ...item, size: textSizeFor(sizeStep(widthFor(item.size), direction)) })
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
   const noteOpacity = (item) => itemOpacity(item) / 100
@@ -695,6 +703,9 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
+  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
   /* eslint-enable no-unused-vars */
   // </lib:plain>
 
@@ -1129,8 +1140,9 @@
 
   // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
   function presetColors (preset, pages, readCell, readPen) {
-    if (preset === PEN_PRESET) return copiedPenColors(readPen)
-    return { ...paletteColors(preset, pages, readCell).colors }
+    if (preset === PEN_PRESET) return { colors: copiedPenColors(readPen), missing: [] }
+    const { colors, missing } = paletteColors(preset, pages, readCell)
+    return { colors: { ...colors }, missing }
   }
 
   // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `validator` a pasted value must pass or be skipped.
@@ -1294,7 +1306,7 @@
 
   // T makes Text Anywhere current, except where T is typed. An open note needs no test: only Text Anywhere opens one.
   const wantsTextTool = (event, { tool, letterMode, dialogOpen, inField }) =>
-    typeof event.key === 'string' && event.key.toLowerCase() === TEXT_KEY && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing &&
+    typeof event.key === 'string' && event.key.toLowerCase() === TEXT_KEY && !hasChord(event) && !event.isComposing &&
     tool !== TOOL_NAME && !letterMode && !dialogOpen && !inField
 
   // <lib:settings-dialog>
@@ -2051,7 +2063,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, draftWithPasted, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, draftWithPasted, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2457,6 +2469,9 @@
   let colors = null
   // The preset `colors` came from, or null for Custom.
   let colorsPreset = null
+  // The pens of `colors` the page preset left with SudokuPad's own, and that preset, for the dialog's note until the page reloads; a Custom set keeps them.
+  let colorsMissing = []
+  let colorsFromPreset = null
   let panelParts = []
 
   const keypad = () => document.querySelector('.controls-input')
@@ -2500,10 +2515,14 @@
   const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...lookKeys(LOOKS)], () => {
     const wasColors = colors
     const wasPreset = colorsPreset
+    const wasMissing = colorsMissing
+    const wasFromPreset = colorsFromPreset
     const wasLooks = { ...look }
     return () => {
       colors = wasColors
       colorsPreset = wasPreset
+      colorsMissing = wasMissing
+      colorsFromPreset = wasFromPreset
       Object.assign(look, wasLooks)
       showPanelValues()
       showColors()
@@ -2513,9 +2532,11 @@
   })
 
   // A set saved with no preset is Custom.
-  function saveColors (next, preset = null) {
+  function saveColors (next, preset = null, missing = [], fromPreset = null) {
     colors = next
     colorsPreset = preset
+    colorsMissing = missing
+    colorsFromPreset = fromPreset
     savedData.setData(COLORS_KEY, storedNoteColors(colors, preset))
     showColors()
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
@@ -2564,6 +2585,8 @@
     // Null is Custom.
     let chosen = colors ? colorsPreset : PEN_PRESET
     let colorsEdited = false
+    let draftMissing = colorsMissing
+    let pickedPreset = colorsFromPreset
     let draftLooks = { ...look }
     let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
     let pages = []
@@ -2590,7 +2613,7 @@
       snapshot: snapshotSave,
       feature: settingsUi,
       save: () => {
-        if (colorsEdited) saveColors(draft, chosen)
+        if (colorsEdited) saveColors(draft, chosen, draftMissing, pickedPreset)
         for (const { name } of editedLooks()) setLook(name, draftLooks[name])
       },
       copyPaste: {
@@ -2605,6 +2628,7 @@
           if (BOX_KEY in values) draftCustom = savedHex(look.boxColor) ?? draftCustom
           if (COLORS_KEY in values) {
             draft = colors
+            draftMissing = []
             chosen = colorsPreset
             colorsEdited = false
           }
@@ -2619,6 +2643,7 @@
       draftLooks = { ...draftLooks, ...dialogDefaults() }
       draft = copiedPenColors(readPenColor)
       chosen = PEN_PRESET
+      draftMissing = []
       colorsEdited = true
       draw()
     }
@@ -2627,6 +2652,7 @@
       box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
+        (draftMissing.length ? `<div data-role="missing-note">${missingColorsText(draftMissing, pickedPreset)}</div>` : '') +
         `<div class="${CLASS_PREFIX}section-title">Font</div>${renderFontChoice(draftLooks.noteFont)}` +
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft[color] })
     }
@@ -2635,7 +2661,8 @@
       const target = event.target
       if (target.matches('[data-role="color-choice"]')) {
         chosen = target.value
-        draft = presetColors(chosen, pages, readCellColor, readPenColor)
+        ;({ colors: draft, missing: draftMissing } = presetColors(chosen, pages, readCellColor, readPenColor))
+        pickedPreset = chosen
         colorsEdited = true
         draw()
       } else if (target.matches('[data-role="font-choice"]')) {
@@ -2646,6 +2673,7 @@
         draw()
       } else if (target.matches('input[data-role="swatch"]')) {
         draft = editedColor(draft, Number(target.dataset.key), target.value)
+        draftMissing = draftMissing.filter((n) => String(n) !== target.dataset.key)
         chosen = null
         colorsEdited = true
         draw()
@@ -2723,9 +2751,9 @@
   }
 
   function stepSize (direction) {
-    const slider = document.getElementById(SIZE_SLIDER)
-    slider.value = sizeStep(panelValues().width, direction)
-    slideLook(slider)
+    // The next note takes the first note's new size, as the panel shows it.
+    const next = sizeStep(panelValues().width, direction)
+    applyLook((item) => steppedNote(item, direction), () => setLook('width', lookRow('width').read(next)))
     showPanelValues()
   }
 
@@ -2789,7 +2817,7 @@
 
   // A hold on a color button toggles a color picker over each, and a picker recolors its color number at once: every note in it reads the variable.
   function installColorPickers () {
-    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value)), guard: (toggle) => textTool.run(toggle) })
+    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value), null, colorsMissing.filter((m) => String(m) !== String(n)), colorsFromPreset), guard: (toggle) => textTool.run(toggle) })
   }
 
   // A left press in progress: `start` is the index of the note it began on, or -1 for none; `points` its points on the screen, and `pending` those its
@@ -4175,12 +4203,12 @@
         cancelResize()
         return true
       }
-      if (event.key === 'Enter' && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && selected.length === 1 && !editing && !drag) {
+      if (event.key === 'Enter' && !hasChord(event) && !event.shiftKey && selected.length === 1 && !editing && !drag) {
         event.preventDefault()
         openText(selected[0])
         return true
       }
-      const sizeDirection = SLIDER_STEP_KEYS[event.key]
+      const sizeDirection = hasChord(event) ? undefined : SLIDER_STEP_KEYS[event.key]
       if (sizeDirection && !editing) {
         // A gesture holds its notes as they were at the press, and its release would put the old size back.
         if (!drag && !resizing) stepSize(sizeDirection)
