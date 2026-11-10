@@ -446,7 +446,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
   })
 
-  describe('set in the Rules Resizer dialog', { concurrency: false }, () => {
+  describe('set in the Auto Rules Resizer dialog', { concurrency: false }, () => {
     let context, p, errors
 
     before(async () => {
@@ -460,11 +460,11 @@ describe('the max auto width and height', { concurrency: false }, () => {
 
     it('opens from the settings entry with both boxes empty, and typing in a box enters no digit on the board', async () => {
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
-      const entry = (await openSettings(p)).locator('button').filter({ hasText: 'Rules Resizer' })
-      assert.equal((await entry.textContent()).trim(), 'Rules Resizer')
+      const entry = (await openSettings(p)).locator('button').filter({ hasText: 'Auto Rules Resizer' })
+      assert.equal((await entry.textContent()).trim(), 'Auto Rules Resizer')
       await entry.click()
       await p.locator(MAX_WIDTH_INPUT).waitFor({ state: 'visible' })
-      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Rules Resizer')
+      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Auto Rules Resizer')
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
@@ -485,7 +485,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
 
     it('a box holding no usable number keeps the saved limit', async () => {
-      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
+      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
       await p.locator(MAX_WIDTH_INPUT).evaluate((el) => { el.value = '0' })
       await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
       assert.equal(await data(MAX_WIDTH_KEY), 500)
@@ -493,7 +493,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
 
     it('shows the saved values on reopening, and clearing both and saving removes the keys and lifts the cap', async () => {
-      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
+      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '500')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '50')
       await p.locator(MAX_WIDTH_INPUT).fill('')
@@ -506,7 +506,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
 
     it('Cancel saves nothing', async () => {
-      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
+      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
       await p.locator(MAX_WIDTH_INPUT).fill('300')
       await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
       assert.equal(await data(MAX_WIDTH_KEY), null)
@@ -859,7 +859,7 @@ for (const kase of MISSING) {
       await hoverPane(p)
       assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), true, 'font buttons')
       const group = await openSettings(p)
-      assert.equal(await group.locator('button, [role=button]').filter({ hasText: /^\s*Rules Resizer\s*$/ }).count(), kase.entry ? 1 : 0, 'the Rules Resizer entry')
+      assert.equal(await group.locator('button, [role=button]').filter({ hasText: /^\s*Auto Rules Resizer\s*$/ }).count(), kase.entry ? 1 : 0, 'the Auto Rules Resizer entry')
     })
 
     it('the page raised no error, and no further warning came', () => {
@@ -1119,7 +1119,7 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
     try {
       await clickFont(p, 'f+')
       await settle(async () => (await savedSizing(p)) !== null, true)
-      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
+      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
       await p.getByRole('button', { name: 'Restore defaults' }).click()
       assert.equal(await settle(async () => (await savedSizing(p)) === null, true), true, 'the key is gone')
       assert.equal(await settle(() => fontPx(p), opened.font), opened.font, 'back at the automatic size')

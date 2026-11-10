@@ -171,7 +171,7 @@
   wheel works over its own page button, not over the rest of its panel).
 - **install step** — one of the parts Pen Tool Extras installs at startup, each a **feature** of the **SudokuPad guard**: colors, color save, pen pages, arrow
   lines, drag highlight, marks, line erase, pen panel. Its saved settings and settings dialog are features too, but not install steps. A step is **skipped** when SudokuPad lacks an internal it
-  needs or its own code throws: one console warning names it, the **error log** records it, the **notice bar** and the settings dialog's "Off because SudokuPad changed" line list it,
+  needs or its own code throws: one console warning names it, the **error log** records it, the **notice bar** lists it, and so does the "Off because SudokuPad changed" line in every script's settings dialog (`lib/settings-dialog.js`),
   and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
 - **SudokuPad guard** — `lib/sudokupad.js`: a script declares its **features**, each with a label and the SudokuPad internals it needs, and a
   feature that lacks one at startup, or whose own code throws, turns off alone while the rest of the script keeps working.
@@ -271,4 +271,4 @@
   shrank the pane, and moved the controls column). It is saved under `AutoRulesResizer_sizing_<puzzle>` (the puzzle's id, else its page URL) as
   `{ nudgePx, box }`, `nudgePx` being the font offset's stored name, and only f+, f-, a corner drag or Restore defaults changes it: a window too small
   for all of it, or an automatic size already at the cap, applies less of it and leaves what is saved alone. A puzzle never resized has no key and starts
-  at the default, no offset and no drag. Restore defaults in the Rules Resizer dialog clears the current puzzle's.
+  at the default, no offset and no drag. Restore defaults in the Auto Rules Resizer dialog clears the current puzzle's.
