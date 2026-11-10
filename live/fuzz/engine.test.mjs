@@ -392,6 +392,16 @@ describe('swarm and longer lists reach the engine (#728, #730)', () => {
     assert.equal((await hunt(CONFIGS['long-50'])).failed, true)
   })
 
+  it('a swarm failure replays from its path and replay path, whatever the seed', async () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const { openTarget } = fakeTargets({ errorAtClicks: 3 })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed, runs: 300, ...FIXED_WAIT, ...CONFIGS.swarm })
+      assert.equal(found.failed, true, `seed ${seed}`)
+      const again = await runFuzz({ openTarget: fakeTargets({ errorAtClicks: 3 }).openTarget, puzzles: PUZZLES, seed, path: found.path, replayPath: found.replayPath, ...FIXED_WAIT, ...CONFIGS.swarm })
+      assert.deepEqual(again.sequence, found.sequence, `seed ${seed}`)
+    }
+  })
+
   it('a long-lists run has no empty list', async () => {
     const logs = await ran(CONFIGS['long-40'], 150)
     assert.equal(logs.filter((log) => log.length === 0).length, 0)

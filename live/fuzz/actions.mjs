@@ -449,7 +449,7 @@ export const DEFAULT_MAX_COMMANDS = 20
 // `waits` (#725) is the milliseconds the engine may wait after each action: each list draws its own, beside its actions, so a path replays it and a shrink moves it
 // to the first of the set; with none, `waitMs` is undefined and the engine's own wait stands.
 // `swarm` (#728) draws each list a random non-empty subset of the kinds, `kinds` (the names), and generates its actions only from it, so a list without undo-all or a reload keeps
-// what it builds; a shrink drops kinds. Without it `kinds` is every kind. `nonEmpty` (#730) refuses a list with no action, which fast-check otherwise draws 1 time in `maxCommands + 1`.
+// what it builds; a shrink keeps the subset and drops steps. Without it `kinds` is every kind. `nonEmpty` (#730) refuses a list with no action, which fast-check otherwise draws 1 time in `maxCommands + 1`.
 export const actionList = (puzzles, { maxCommands = DEFAULT_MAX_COMMANDS, replayPath, focus = [], waits = [], busyStart = false, swarm = false, nonEmpty = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
   const weights = kindWeights(focus)
   const commandsOf = (kinds) => {
@@ -457,7 +457,8 @@ export const actionList = (puzzles, { maxCommands = DEFAULT_MAX_COMMANDS, replay
     return (nonEmpty ? drawn.filter((c) => [...c].length > 0) : drawn).map((commands) => ({ kinds: kinds.map((k) => k.kind), commands }))
   }
   // Without a swarm the commands are drawn as one part of the tuple, not chained, so a shrink treats the wait, the start and the actions alone, as before.
-  const drawn = swarm ? fc.subarray(KINDS, { minLength: 1 }).chain(commandsOf) : commandsOf(KINDS)
+  // The subset does not shrink: a shrunk subset would draw its actions again, and `replayPath` describes the list the path ended on, so a replay would stop on `Too short replayPath`.
+  const drawn = swarm ? fc.noShrink(fc.subarray(KINDS, { minLength: 1 })).chain(commandsOf) : commandsOf(KINDS)
   // A single wait is a constant, which draws nothing, so its lists are those of no set.
   const waitMs = waits.length > 1 ? fc.constantFrom(...waits) : fc.constant(waits[0])
   const start = busyStart ? startArbitrary(puzzle, weights) : fc.constant([])
