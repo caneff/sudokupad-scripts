@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.30
+// @version      0.25.32
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.30'
+  const VERSION = '0.25.32'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1018,6 +1018,13 @@
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
   const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
 
+  // A preset in force that is not among the pickable `presets` (Custom, a page the palette no longer has) is shown first, selected and disabled, so the pulldown says what is in force and
+  // every preset stays pickable: picking the option already shown fires no `change`. `labels` names each id.
+  function presetChoices (preset, presets, labels) {
+    const option = (id, disabled) => ({ value: id, label: labels[id], selected: id === preset, disabled })
+    return [...(presets.includes(preset) ? [] : [option(preset, true)]), ...presets.map((id) => option(id, false))]
+  }
+
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
   const fillWithOpacity = (color, opacity) => opacity < 1 ? `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)` : color
@@ -1404,7 +1411,12 @@
       }
       case 'delete': return showing(deleteProfile(state, event.index), indexAfterDelete(selected, event.index, state.profiles.length))
       case 'move': return event.from === event.to ? draft : showing(moveProfile(state, event.from, event.to), indexAfterMove(selected, event.from, event.to))
-      case 'reload': return showingProfile({ ...draft, mode: event.mode }, event.state, event.state.active)
+      // A paste replaces only what it holds: the profiles (selecting the pasted active one) and the mode; every other edit stays.
+      case 'paste': {
+        const next = event.state ?? state
+        const pasted = { ...draft, mode: allowedMode(event.mode ?? draft.mode, usesDigitColors(next)) }
+        return event.state ? showingProfile(pasted, next, next.active) : pasted
+      }
     }
     throw new Error(`reduceDraft: no edit ${event.type}`)
   }
@@ -2722,7 +2734,7 @@
           ADDED_PRELOADS.forEach(({ key }) => { if (key in values) savedData.setData(key, values[key]) })
           saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
           savedState = loadState()
-          edit({ type: 'reload', state: savedState, mode })
+          edit({ type: 'paste', ...(PROFILES_KEY in values ? { state: savedState } : {}), ...(MODE_KEY in values ? { mode: values[MODE_KEY] } : {}) })
           draw()
         }
       }
