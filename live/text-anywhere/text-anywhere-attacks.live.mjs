@@ -9,8 +9,9 @@ import { captureConsoleErrors } from '../page.mjs'
 import { SETTLE_MS, settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, clickAt, finishNote, gridPoint, mouseDrag, restart, typeText, undoDepth } from '../board.mjs'
+import { slideTo } from '../slider.mjs'
 
-const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SELECTED, SIZE_SLIDER, TEXT_BOX, TEXTS, slideTo } = textAnywhere
+const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SELECTED, SIZE_SLIDER, TEXT_BOX, TEXTS } = textAnywhere
 const { HIT_MARGIN_PX } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const HOME = { width: 1200, height: 900 }
 const SPOT = [2.5, 2.5]
