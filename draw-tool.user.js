@@ -3623,7 +3623,7 @@
     }
   }
 
-  // A press that never moved opens no text box.
+  // A press that never moved opens no text box. A lost pointer (a blur, a tool switch, a move with the button up) cancels an erase, so nothing goes that the release never confirmed.
   function endGesture () {
     stopHold()
     flushFrame()
@@ -3966,7 +3966,7 @@
     else redraw()
   }
 
-  // Adds, whole, to the erase's touched notes every note the drag from `from` to `to`, in board units, passes through or within HIT_MARGIN_PX of.
+  // Adds to the erase's touched notes every note the drag from `from` to `to`, in board units, passes through or within HIT_MARGIN_PX of.
   function touchAlong (from, to, map) {
     const [a, b] = [from, to].map(map.toScreen)
     for (const item of puzzleNotes) {
@@ -4094,7 +4094,8 @@
     // or button enters anything in a cell.
     handleToolButton (value) {
       const picked = noteColorNumber(value)
-      if (picked !== undefined) pickColor(picked)
+      // A held erase keeps the notes it touched as they were at the press, and a color pick would replace them.
+      if (picked !== undefined && !erasing) pickColor(picked)
       return true
     },
     // SudokuPad calls every tool's handleKeydown first, and true ends the keydown there. Shift would otherwise switch to Corner for as long as it is held (that
@@ -4110,6 +4111,8 @@
         erasing = null
         return true
       }
+      // A key that changes notes would replace the ones the erase touched, so it waits for the release.
+      if (erasing && (ARROWS[event.key] || SIZE_KEYS[event.key] || event.key === 'Delete' || event.key === 'Backspace')) return true
       if (event.key === 'Escape' && drag && !drag.cancelled) {
         cancelDrag()
         return true

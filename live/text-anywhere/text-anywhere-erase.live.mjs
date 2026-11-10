@@ -143,7 +143,7 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['20'])
   })
 
-  it('a right-drag across two notes removes both at the release and not before, in one save', async () => {
+  it('a right-drag across two notes removes both at the release and not before', async () => {
     await typeText(p, UPPER_AT, '15')
     assert.deepEqual(await texts(), ['20', '15'])
     await p.mouse.move(...await gridPoint(p, [1.5, 2.2]))
@@ -184,13 +184,28 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
 
   // A mouse move with no button down stands for a release the page never saw, such as one off the window.
   it('a right-drag whose button is no longer held removes nothing, and the release finds no erase', async () => {
-    await p.mouse.move(...await gridPoint(p, [5.5, 0.5]))
+    await p.mouse.move(...await gridPoint(p, [3.5, 1.5]))
     await p.mouse.down({ button: 'right' })
-    const [x, y] = await gridPoint(p, [3.5, 1])
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.5]), { steps: 8 })
+    const [x, y] = await gridPoint(p, [5.5, 2.5])
     await read(([cx, cy]) => document.elementFromPoint(cx, cy).dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, clientX: cx, clientY: cy, buttons: 0 })), [x, y])
-    await p.mouse.move(...await gridPoint(p, [3.5, 2.2]), { steps: 4 })
-    await p.mouse.move(...await gridPoint(p, [3.5, 2.8]), { steps: 8 })
     await p.mouse.up({ button: 'right' })
+    assert.deepEqual(await texts(), ['20'], 'the note the drag crossed before the loss is kept')
+    assert.equal((await saved()).length, 1)
+  })
+
+  it('a key that changes the selected note during a right press leaves it to the erase: the release removes it', async () => {
+    await p.mouse.click(...await gridPoint(p, LOWER_AT))
+    await p.keyboard.press('Escape')
+    await p.mouse.click(...await gridPoint(p, LOWER_AT))
+    assert.equal(await read(() => document.querySelectorAll('#text-anywhere-layer .text-anywhere-selected').length), 1, 'the note is selected')
+    await p.mouse.move(...await gridPoint(p, LOWER_AT))
+    await p.mouse.down({ button: 'right' })
+    await p.keyboard.press('ArrowRight')
+    await p.mouse.move(...await gridPoint(p, [5.5, 4.5]), { steps: 4 })
+    await p.mouse.up({ button: 'right' })
+    assert.deepEqual(await settle(texts, []), [])
+    await typeText(p, LOWER_AT, '20')
     assert.deepEqual(await texts(), ['20'])
   })
 
