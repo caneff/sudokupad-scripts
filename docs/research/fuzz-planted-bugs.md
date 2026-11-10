@@ -56,3 +56,37 @@ not re-measured here.
   The rule does not see a White pick, which looks the same as Page on a white page.
 - **The lesson for the next plant** is the arithmetic in `fuzz-hit-rate.md`: a bug behind a state two actions deep needs an action that builds that state in one step.
   Each of the two plants was one weighted action away from being reachable, and a single seed per plant is a single sample of about 90 lists, so the three seeds above are not a rate.
+
+## Third run: several seeds per plant, and the varied wait and the busy start (#725, #726, #727)
+
+`npm run fuzz:plants` now runs each plant on K seeds with a short budget and prints, per plant, how many seeds caught it and the median time to catch (a miss counts as
+over the budget), with a total; two or more `--config` names run on the same seeds side by side (`live/fuzz/configs.mjs`). Each catch is replayed from its own printed path
+and the ones that do not repeat are counted. New plant `quick-digit-not-colored` (#725's first step): a race, Color by Digit leaving a digit's cell uncolored when it is
+entered within 30 ms of the one before, which only a wait of 0 ms between actions can reach.
+
+Run on 2026-11-10 (`--seeds 5 --budget 60 --seed 200`, 12 plants, 3 configurations, 180 hunts over the whole puzzle set, about 2.5 hours on one box while a drain worker
+ran beside it). Each cell is seeds caught of 5 and the median time to catch:
+
+| plant | kind | current | varied-wait | busy-start |
+| --- | --- | --- | --- | --- |
+| tab-turns-pad-to-letters | rule | 2/5 > 60 s | 2/5 > 60 s | 2/5 > 60 s |
+| tab-handler-typo | crash | 3/5 55.1 s | 4/5 29.6 s | 2/5 > 60 s |
+| digit-five-wrong-group | rule | 4/5 20.5 s | 4/5 40 s | 5/5 40.6 s |
+| mode-not-saved | rule | 1/5 > 60 s | 2/5 > 60 s | 1/5 > 60 s |
+| note-dropped-on-load | rule | 4/5 37 s | 3/5 21 s | 3/5 18.5 s |
+| load-logs-console-error | crash | 5/5 1 s | 5/5 1.1 s | 5/5 0.9 s |
+| box-color-stale | rule | 3/5 46 s | 0/5 > 60 s | 4/5 18.9 s |
+| dark-page-saves-light | rule | 2/5 > 60 s | 3/5 47.9 s | 4/5 7.6 s |
+| rules-always-fit | rule | 5/5 5.1 s | 5/5 5.1 s | 5/5 5 s |
+| page-three-line-not-drawn | rule | 5/5 8.1 s | 5/5 12.8 s | 5/5 2.2 s |
+| quick-digit-not-colored | rule | 0/5 > 60 s | 2/5 > 60 s | 0/5 > 60 s |
+| redraw-typo | crash | 3/5 27 s | 4/5 38.7 s | 5/5 20.4 s |
+| **total** | | **37/60, 39 s** | **39/60, 26.2 s** | **41/60, 21 s** |
+
+Every catch replayed from its path (0 of 37, 0 of 39 and 0 of 41 did not).
+
+- **The race plant is caught only with the varied wait** (2 of 5 seeds, none under the fixed 40 ms), which is the evidence #725's first step asked for.
+- **The busy start catches the most and the fastest** (41 of 60, median 21 s against 37 and 39 s), and it alone took `dark-page-saves-light` and `box-color-stale` to 4 of 5:
+  both need saved state that an empty board reaches only after several actions.
+- **The varied wait cost `box-color-stale` all its catches** (0 of 5 against 3); five seeds per cell is a small sample, so one cell's swing of 3 is not yet a rate.
+- **What is not measured here:** the combined configuration (`varied-wait+busy-start`), run next on the same seeds to decide which one the nightly uses.
