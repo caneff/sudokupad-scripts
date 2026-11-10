@@ -60,9 +60,9 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     assert.equal(await settle(() => pageColor(p), WHITE), WHITE, 'a saved white page color lightens the page')
     assert.equal(await p.locator('.pen-tool-extras-sliders').isVisible(), true, 'the pen panel shows on the white page')
     await openScriptDialog(p, 'Dark Page', DARK_EDITOR)
-    await p.locator('#dark-page-reset').click()
+    await dialogButton(p, 'Restore defaults').click()
     await dialogButton(p, 'Save').click()
-    assert.equal(await settle(() => pageColor(p), BLACK), BLACK, 'Black puts the dark page back')
+    assert.equal(await settle(() => pageColor(p), BLACK), BLACK, 'Restore defaults puts the dark page back')
   }))
 
   it('58 Pen Tool Extras\' and Text Anywhere\'s settings dialogs asked for one after the other, the first still open', () => attack(browser(), async (p) => {

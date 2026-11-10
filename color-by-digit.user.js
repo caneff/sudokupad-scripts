@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.39
+// @version      0.25.40
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.39'
+  const VERSION = '0.25.40'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -288,6 +288,8 @@
   }
 
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
+  // The profiles of an install with nothing saved.
+  const preloadedState = () => makeState(preloadProfiles(), 0, undefined, true)
 
   const stateFromStored = (store) => load(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
 
@@ -296,7 +298,7 @@
   function stateFromLegacy (legacyGroups) {
     const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
-    if (!legacy) return { profiles: preloads, active: 0 }
+    if (!legacy) return preloadedState()
     const equal = preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
     if (equal >= 0) return { profiles: preloads, active: equal }
     return { profiles: [{ name: CUSTOM_NAME, groups: legacy }, ...preloads], active: 0 }
@@ -1393,6 +1395,10 @@
       case 'brush': return { ...draft, brush: event.key }
       case 'page': return { ...draft, page: event.page }
       case 'clear': return withGroups([])
+      case 'restore': {
+        const preloaded = preloadedState()
+        return JSON.stringify(state) === JSON.stringify(preloaded) ? draft : showingProfile(draft, preloaded, 0)
+      }
       case 'press': return draft.paintKey === undefined ? draft : { ...draft, paintKey: undefined }
       case 'paint': {
         if (brush === null) return draft
@@ -2761,9 +2767,16 @@
           edit({ type: 'paste', ...(PROFILES_KEY in values ? { state: savedState } : {}), ...(MODE_KEY in values ? { mode: values[MODE_KEY] } : {}) })
           draw()
         }
-      }
+      },
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
     })
     if (!box) return
+    // The draft takes the preloaded profiles, and Save or Cancel decides. Profiles of the user's own are lost on Save, so a draft that holds any asks first.
+    const restoreDefaults = () => {
+      if (JSON.stringify(draft.state.profiles) !== JSON.stringify(preloadedState().profiles) && !window.confirm('Restore the preloaded profiles? Your own profiles and edits are removed when you Save.')) return
+      edit({ type: 'restore' })
+      draw()
+    }
     const draw = () => {
       const { state, mode: draftMode, selected, pages, page, brush } = draft
       box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadable })
