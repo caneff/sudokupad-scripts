@@ -54,6 +54,8 @@ The colors are saved under `PenColor_colors` as `{"1": "#rrggbb", …, "9": "#rr
 
 Both sliders sit in the pen tool's panel, across its full width under the three control buttons, so you can change them during play. The track says what a slider does: Thickness is a wedge widening to the right, Opacity fades from faint to solid purple, and the thumb is a white circle with a purple ring. Hover a slider for its name. A move changes the marks live and saves at once. It adds nothing to undo or the replay, and gives the keyboard back to the puzzle.
 
+**Stepping Thickness with the + and - keys**: with the pen tool on, the + key (also =, and the keypad's +) moves the Thickness slider one step up and the - key (also the keypad's) one step down, as Text Anywhere's Size keys do, and saves it as a slider move is. It stops at the ends of the range. It does nothing with Ctrl, Alt or Meta held (the browser's zoom), while a field has focus, with the pen tool off, or with the Thickness slider hidden from the panel ("Slider in panel"). A held key steps once: SudokuPad drops a key's repeats before any tool sees them. SudokuPad's own pen tool does nothing with these keys (`docs/research/sudokupad-pen-tool.md` § + and -). Opacity has no keys.
+
 | Slider | Range | Default | Changes | Saved under |
 | --- | --- | --- | --- | --- |
 | Thickness | 1 to 16, in steps of 0.5 | 5 | Lines, cell circles, crosses and dots, and edge and corner marks, by the same factor | `PenColor_thickness` |
@@ -112,7 +114,7 @@ Only lines change with the page. A cell circle, a cross, a dot and the edge and 
 
 **Picking a pen with a digit key**: with the pen tool on, a bare digit key 1 to 9 picks pen N on the page showing, as a click on that color button does: on page 2, key 3 picks page 2's pen 3. The key follows the button's number, so Keypad Flipped changes nothing. Key 0, a digit with Ctrl, Alt, Meta or Shift held, and a digit typed into a text field are left to SudokuPad and the browser.
 
-Besides Tab and the wheel, which SudokuPad's color tool uses the same way (`docs/research/sudokupad-color-tool-paging.md`), the digit keys are the one input the script takes that SudokuPad's pen tool ignores.
+Besides Tab and the wheel, which SudokuPad's color tool uses the same way (`docs/research/sudokupad-color-tool-paging.md`), the digit keys and the + and - keys are the inputs the script takes that SudokuPad's pen tool ignores.
 
 The same pen number stays selected across pages. The selected pen is saved under `PenColor_pen` and comes back after a reload. SudokuPad's own `ToolPen_color` only ever holds the pen's number, so removing the script leaves stock SudokuPad working with that pen on its first page.
 
