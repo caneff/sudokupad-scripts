@@ -13,7 +13,7 @@
 //   pen-tool-extras-slide-11-opacity.png   the Opacity slider down: the whole pen layer fainter
 //   pen-tool-extras-slide-12-outline-off.png  a line across dark cells with White outlines off
 //   pen-tool-extras-slide-13-outline-on.png   the same line with White outlines on
-//   pen-tool-extras-slide-14-erase.png     a red ring on a line, where a right press is held and the line is faded
+//   pen-tool-extras-slide-14-erase.png     a red ring on a line, where a right press is held (the line is not dimmed)
 //   pen-tool-extras-slide-15-erased.png    the whole line gone after the right click
 // Every line is a real drag, every mark a real click, every hold a real press; a red ring marks where a hold or the right click lands,
 // since a screenshot draws no pointer. Each line, mark and hold is checked to have landed. The board patch and the panel are joined side
@@ -236,13 +236,12 @@ await slide('12-outline-off')
 await setOutline(true)
 await slide('13-outline-on')
 
-// 14 and 15. A right press on the first line fades the whole line; letting go erases it.
+// 14 and 15. A right press on the first line shows no preview; letting go erases the whole line.
 const before = await penCount()
 const [lx, ly] = await gridPoint(p, [TEAL_ROW, 1.5])
 await ring(lx, ly)
 await p.mouse.move(lx, ly)
 await p.mouse.down({ button: 'right' })
-await p.waitForFunction(() => document.querySelector('.pen-tool-extras-faded') !== null, null, { timeout: SETTLE_TIMEOUT_MS })
 await slide('14-erase')
 await p.mouse.up({ button: 'right' })
 await unring()

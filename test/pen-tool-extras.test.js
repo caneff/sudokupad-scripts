@@ -1614,13 +1614,12 @@ test('the outline setting is off only for a saved false: nothing saved and anyth
 
 test('buildOutlineCss is empty when the outline is off and filters the pen layer and not the highlight, when on', () => {
   assert.equal(buildOutlineCss(false), '')
-  assert.equal(buildOutlineCss(true), `:root:root #cell-pen, :root:root .pen-tool-extras-faded-group { filter: url(#${OUTLINE_FILTER_ID}); }`)
+  assert.equal(buildOutlineCss(true), `:root:root #cell-pen { filter: url(#${OUTLINE_FILTER_ID}); }`)
   assert.doesNotMatch(buildOutlineCss(true), /penhint|pen-tool-extras-hint/)
 })
 
-test('buildFeedbackCss hides the erase\'s strokes (their copies, in one group, show the fade), and outranks the layer\'s opacity-1 rule', () => {
-  const rules = buildFeedbackCss(3).split('\n')
-  assert.equal(rules[0], ':root:root .cell-pen.pen-tool-extras-faded { opacity: 0; }')
+test('buildFeedbackCss has no rule that hides a stroke: the erase shows no preview', () => {
+  assert.doesNotMatch(buildFeedbackCss(3), /opacity: 0;|faded/)
 })
 
 test('buildFeedbackCss dashes the hint of the page 2 pens only, for the hint\'s width of 16: 3 widths is 32 on, 32 off, half a dash in; 0 is dots', () => {

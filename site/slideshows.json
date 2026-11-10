@@ -71,8 +71,8 @@
       },
       {
         "picture": "pen-tool-extras-slide-14-erase.png",
-        "alt": "A red ring on the first line, which has faded to show it is the line a right press will erase",
-        "caption": "Hold a right click on a line and it fades; let go to delete it"
+        "alt": "A red ring on the first line, where a right press is held",
+        "caption": "Right click a line to delete it, or drag across lines to delete each one you cross"
       },
       {
         "picture": "pen-tool-extras-slide-15-erased.png",
