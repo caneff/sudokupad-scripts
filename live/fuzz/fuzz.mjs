@@ -13,6 +13,7 @@ import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
 import { scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
+import { tagSource } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
 import { replayCommand } from './replay-command.mjs'
 import { FUZZ_PUZZLES, insideGrid, rulesTextFor } from './puzzle-set.mjs'
@@ -55,7 +56,7 @@ async function clickIn (p, selector) {
 }
 
 // The env `actions.mjs` runs on, over a real page showing `puzzle`.
-function envFor (p, puzzle) {
+function envFor (p, puzzle, { beforeReload }) {
   const openPen = async () => {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
   }
@@ -143,6 +144,7 @@ function envFor (p, puzzle) {
       window.dispatchEvent(new Event('focus'))
     }),
     async reload () {
+      await beforeReload()
       await p.reload({ waitUntil: 'load' })
       // The intro dialog (Resume Puzzle) can show after the board does, which `resumeAfterHistory` alone would not wait for.
       await startPuzzle(p)
@@ -158,14 +160,19 @@ function envFor (p, puzzle) {
   }
 }
 
-export async function openTarget (browser, puzzle, { planted, plant }) {
+// `coverage` (`coverage.mjs`'s `createCoverage`) hears the coverage of the scripts on this page: V8 keeps it per script load, so it is read before a reload and at the end.
+export async function openTarget (browser, puzzle, { planted, plant, coverage }) {
+  const patch = plant && plantPatch(plant)
   const { context, p, errors } = await openPage(browser, {
     seed: async (page, collected) => {
       captureConsoleErrors(page, collected)
       if (planted) await plantEscapeError(page)
-      await installAll(page, plant && plantPatch(plant))
+      if (coverage) await page.coverage.startJSCoverage({ resetOnNavigation: false })
+      await installAll(page, coverage ? (file, code) => tagSource(file, patch ? patch(file, code) : code) : patch)
     }
   })
+  const readCoverage = async () => { if (coverage) coverage.add(await p.coverage.stopJSCoverage()) }
+  const restartCoverage = async () => { if (coverage) await p.coverage.startJSCoverage({ resetOnNavigation: false }) }
   try {
     if (puzzle.data) await openPuzzleId(p, await puzzleIdFor(p, puzzle.data))
     else await startWithTools(p)
@@ -176,11 +183,17 @@ export async function openTarget (browser, puzzle, { planted, plant }) {
     const onPage = await freeCells(p)
     if (JSON.stringify(sortedCells(onPage)) !== JSON.stringify(sortedCells(puzzle.free))) throw new Error(`the ${puzzle.name} puzzle opened with ${onPage.length} free cells that are not the ${puzzle.free.length} of puzzle-set.mjs`)
     return {
-      env: envFor(p, puzzle),
+      env: envFor(p, puzzle, { beforeReload: async () => { await readCoverage(); await restartCoverage() } }),
       snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR), page: await readPageState(p, { expectRules: rulesTextFor(puzzle) !== null }) }),
       wait: (ms) => sleep(ms),
       errorLog: async () => newestErrorRecords(await p.evaluate((key) => window.localStorage.getItem(key), ERROR_LOG_KEY)),
-      close: () => context.close()
+      close: async () => {
+        try {
+          await readCoverage()
+        } finally {
+          await context.close()
+        }
+      }
     }
   } catch (error) {
     await context.close()
@@ -192,11 +205,11 @@ const freeCells = (p) => p.evaluate(() => Framework.app.puzzle.cells.filter((c) 
 const sortedCells = (cells) => [...cells].sort(([r1, c1], [r2, c2]) => r1 - r2 || c1 - c2)
 
 // Fuzzes with `seed` (a number) for `minutes` or `runs` action lists, each on a puzzle of the set that the list names, then shrinks a failure. `path` is a printed replay
-// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug. `config` names the generator's configuration (`configs.mjs`). `focus` is script files (`focusFiles` of `actions.mjs`) whose actions come up more often.
-export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant, focus, config = DEFAULT_CONFIG }) {
+// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug. `config` names the generator's configuration (`configs.mjs`). `coverage` is a `createCoverage` that hears the scripts' V8 coverage of every page (`coverage.mjs`). `focus` is script files (`focusFiles` of `actions.mjs`) whose actions come up more often.
+export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant, focus, config = DEFAULT_CONFIG, coverage }) {
   const [fcPath, replayPath] = path == null ? [] : path.split('@')
   const result = await runFuzz({
-    openTarget: (puzzle) => openTarget(browser, puzzle, { planted, plant }),
+    openTarget: (puzzle) => openTarget(browser, puzzle, { planted, plant, coverage }),
     puzzles: FUZZ_PUZZLES,
     seed,
     runs,
