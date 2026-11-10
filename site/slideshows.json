@@ -78,6 +78,11 @@
         "picture": "pen-tool-extras-slide-15-erased.png",
         "alt": "The board with the first line gone and every other line and mark still there",
         "caption": "The whole line is gone"
+      },
+      {
+        "picture": "pen-tool-extras-slide-16-settings.png",
+        "alt": "A red ring on the settings button in the pen panel, beside the Pen Tool Extras settings dialog it opens: pen color presets, Thickness and Opacity, line styles, the marks each click cycles through, White outlines, and Save, Cancel and Restore defaults",
+        "caption": "The settings button opens the settings: color presets, line styles, which marks a click cycles through, and more"
       }
     ]
   },
