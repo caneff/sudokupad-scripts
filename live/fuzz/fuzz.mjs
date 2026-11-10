@@ -13,7 +13,7 @@ import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
 import { scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
-import { tagSource } from './coverage.mjs'
+import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
 import { replayCommand } from './replay-command.mjs'
 import { FUZZ_PUZZLES, insideGrid, rulesTextFor } from './puzzle-set.mjs'
@@ -208,8 +208,9 @@ const sortedCells = (cells) => [...cells].sort(([r1, c1], [r2, c2]) => r1 - r2 |
 // path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug. `config` names the generator's configuration (`configs.mjs`). `coverage` is a `createCoverage` that hears the scripts' V8 coverage of every page (`coverage.mjs`). `focus` is script files (`focusFiles` of `actions.mjs`) whose actions come up more often.
 export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant, focus, config = DEFAULT_CONFIG, coverage }) {
   const [fcPath, replayPath] = path == null ? [] : path.split('@')
+  const tracked = trackClosing((puzzle) => openTarget(browser, puzzle, { planted, plant, coverage }))
   const result = await runFuzz({
-    openTarget: (puzzle) => openTarget(browser, puzzle, { planted, plant, coverage }),
+    openTarget: tracked.open,
     puzzles: FUZZ_PUZZLES,
     seed,
     runs,
@@ -220,6 +221,8 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
     focus,
     ...configOptions(config)
   })
+  // The time limit returns while the last list goes on; its page's coverage comes with its close.
+  if (coverage) await tracked.allClosed()
   if (!result.failed) return result
   return { ...result, path: `${result.path}@${result.replayPath}`, replayCommand: replayCommand({ seed: result.seed, path: `${result.path}@${result.replayPath}`, planted, plant, focus, config }) }
 }

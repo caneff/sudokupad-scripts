@@ -123,7 +123,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 
 - **`--coverage`** (#729) tags each injected script with `//# sourceURL=<file>` (V8 leaves an inline script with no URL out of coverage), turns on `page.coverage.startJSCoverage` on every page and, at the end of the run,
   prints per script the functions that no list made run, merged over every page (`live/fuzz/coverage.mjs`, tested in `npm test`). A page's coverage is read before a reload and at the end, since V8 keeps it per
-  script load. A function inside a never-run one is not listed (V8 never compiles it). Off by default and out of the nightly: `docs/research/fuzz-hit-rate.md` § The first never-run list has the cost and the list.
+  script load. A function inside a never-run one is not listed (V8 never compiles it). Off by default; the nightly passes it (`NIGHTLY_CONFIG`'s command in `nightly.mjs`), since the measured cost is small and the verdict's parser ignores the list after it. `docs/research/fuzz-hit-rate.md` § The first never-run list has the cost and the list.
 
 - **`--focus <script>`** (#724) raises the weight of the actions that exercise that script, by `FOCUS_FACTOR` (4), so a run spends its time where a change is. It takes a script's name
   without `.user.js` (`pen-tool-extras`); another name stops the run before the browser starts and repeats for several. Every other action keeps its weight, so every action still comes up. Which script an action exercises is
@@ -244,16 +244,16 @@ in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `
 the first full result is in `docs/research/fuzz-planted-bugs.md`.
 
 ```
-npm run fuzz:mutants -- [--per-script <n>] [--seeds <k>] [--budget <seconds per hunt>] [--seed <first seed>] [--sample-seed <n>] [--coverage-minutes <m>] [--shrink-minutes <m>] [--file <script> ...] [--config <name>]
+npm run fuzz:mutants -- [--per-script <n>] [--seeds <k>] [--budget <seconds per hunt>] [--seed <first seed>] [--sample-seed <n>] [--coverage-runs <k>] [--shrink-minutes <m>] [--file <script> ...] [--config <name>]
 ```
 
 - **The generator** (`mutants.mjs`, on `acorn`, a direct `devDependency`; Stryker was ruled out in `docs/research/fuzz-hit-rate.md` row 7) finds, on each script's AST, the relational (`<` to `<=`, `===` to `!==`, ...),
   conditional (a tested condition negated, `&&` and `||` swapped) and statement-deletion (a call, assignment or update dropped) mutants. A mutant is an edit of the script's text in memory, so the root `*.user.js` never change. Its id,
   `mutant:<file>:<start>-<end>:<family>`, works as `--plant <id>` of `npm run test:fuzz`, so a catch replays like a plant's; it names an offset, so it stops matching when the script changes.
-- **Only code a fuzz run reached.** The run first fuzzes the shipped scripts with coverage for `--coverage-minutes` (4), and samples only mutants whose edit lies in code that ran. The sample is `--per-script` (30) mutants per script, seeded
-  by `--sample-seed` (723) so a run repeats, each family in turn so no family fills it.
+- **Only code a fuzz run reached.** The run first fuzzes the shipped scripts with coverage for `--coverage-runs` (40) action lists, and samples only mutants whose edit lies in code that ran. The sample is `--per-script` (30) mutants per script (the ticket's "30-50" read per script, so 180 in all; `--file` takes a script's short name, as `--focus` does), seeded
+  by `--sample-seed` (723) and drawn from the code that coverage hunt ran, each family in turn so no family fills it.
 - **Each mutant** is opened once first: one that crashes the page when it loads is a *load error*. Then it is fuzzed on `--seeds` (2) seeds for `--budget` (30) seconds each, over the whole puzzle set. Any failure catches it,
-  since no message belongs to a mutant. A mutant no seed caught whose changed code ran in no hunt is *unreachable* (the miss says nothing about the rules); one whose code ran is *missed*.
+  since no message belongs to a mutant. A mutant no seed caught whose changed code ran in none of its hunts is *unreachable*: the hunts did not reach it, which is a shortfall of a short budget as much as of the actions, so read it as a lower bound on the misses; one whose code ran is *missed*. Each catch is replayed from its own path, and the run says how many did not repeat.
 - **The table** per script (`mutants-stats.mjs`): per family and in total, the mutants, how many were caught, missed, unreachable or load errors, the seeds that caught the fuzzed ones, and the median time to catch (a miss counts as slower than any catch).
   Worst case it is (scripts x mutants x seeds x budget): the default 6 x 30 x 2 x 30 s is 3 hours of hunting; `--file` runs one script.
 

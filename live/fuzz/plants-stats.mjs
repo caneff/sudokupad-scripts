@@ -28,7 +28,7 @@ export function plantStats (runs) {
   }))
 }
 
-const secondsText = (median, budget) => (median === null ? `> ${budget} s` : `${Math.round(median * 10) / 10} s`)
+export const secondsText = (median, budget) => (median === null ? `> ${budget} s` : `${Math.round(median * 10) / 10} s`)
 const cell = ({ caught, total, median }, budget) => `${caught}/${total} ${secondsText(median, budget)}`
 const totalOf = (runs) => ({ caught: runs.filter((r) => r.caught).length, total: runs.length, median: medianSeconds(runs) })
 

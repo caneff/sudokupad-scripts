@@ -105,6 +105,7 @@ export async function nightly ({ runFuzz, fileIssue: file, newSeed, now = Date.n
   return reported.size > 0 ? 'red' : 'green'
 }
 
+// The nightly also asks for the never-run list (`--coverage`, #729): the measured cost is small (docs/research/fuzz-hit-rate.md), and `parseFuzzOutput` reads only the lines of a verdict, so the list after it is ignored.
 // The configuration the nightly hunts with: busy-start caught the most planted bugs, and the fastest, of the four measured
 // (docs/research/fuzz-planted-bugs.md, third run). Named on the command line, not made the default, so a replay command printed before keeps replaying.
 export const NIGHTLY_CONFIG = 'busy-start'
@@ -112,7 +113,7 @@ export const NIGHTLY_CONFIG = 'busy-start'
 // Each run is told its seed in the log, since a run killed for hanging prints none.
 export function fuzzProcess (seed, { minutes, timeoutMs }, runner = run) {
   console.error(`fuzz:nightly: seed ${seed} for ${minutes} minutes`)
-  return runner('node', ['live/fuzz/run.mjs', '--seed', String(seed), '--minutes', String(minutes), '--config', NIGHTLY_CONFIG], { mergeStderr: true, timeout: timeoutMs })
+  return runner('node', ['live/fuzz/run.mjs', '--seed', String(seed), '--minutes', String(minutes), '--config', NIGHTLY_CONFIG, '--coverage'], { mergeStderr: true, timeout: timeoutMs })
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

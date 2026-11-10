@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { applyMutant, mutantPlant, mutantsOf, sampleMutants, seededRandom } from './mutants.mjs'
+import { SCRIPT_FILES, scriptSource } from '../session.mjs'
+import { applyMutant, FAMILIES, mutantPlant, mutantsOf, sampleMutants, seededRandom } from './mutants.mjs'
 
 const code = `(function () {
   const limit = 3
@@ -35,7 +36,7 @@ test('a call, assignment or update statement is deleted, and a declaration or re
   assert.deepEqual(originals, ['seen += n', 'record(n)', 'bump(1)'])
 })
 
-test('every mutant still parses, and the mutated text differs only at the edit', () => {
+test('a mutated text differs from the script only at the edit', () => {
   const all = mutantsOf('one.user.js', code)
   assert.ok(all.length >= 9)
   for (const m of all) {
@@ -54,6 +55,7 @@ test('a mutant is a plant that any failure catches, in the script it came from',
   const plant = mutantPlant(find('relational', '<'))
   assert.equal(plant.file, 'one.user.js')
   assert.equal(plant.expect.test('anything at all'), true)
+  assert.throws(() => plant.apply(code.replace('n < limit', 'n > limit')), /no longer holds/)
   assert.match(plant.apply(code), /n <= limit/)
 })
 
@@ -71,4 +73,18 @@ test('sampleMutants takes each family in turn, repeats for a seed and gives a sh
   assert.deepEqual(first.map((m) => m.family), ['relational', 'conditional', 'deletion', 'relational', 'conditional', 'deletion'])
   assert.equal(sampleMutants(all, 1000, 1).length, all.length)
   assert.notDeepEqual(first.map((m) => m.id), sampleMutants(all, 6, 2).map((m) => m.id))
+})
+
+test('sampleMutants gives a family that has fewer than its share to the others', () => {
+  const some = (family, count) => Array.from({ length: count }, (_, i) => ({ id: `${family}${i}`, family }))
+  const sample = sampleMutants([...some('relational', 1), ...some('conditional', 5), ...some('deletion', 5)], 7, 1)
+  assert.equal(sample.length, 7)
+  assert.equal(sample.filter((m) => m.family === 'relational').length, 1)
+})
+
+test('every shipped script parses and has mutants of all three families', () => {
+  for (const file of SCRIPT_FILES) {
+    const families = new Set(mutantsOf(file, scriptSource(file)).map((m) => m.family))
+    assert.deepEqual([...families].sort(), [...FAMILIES].sort(), file)
+  }
 })

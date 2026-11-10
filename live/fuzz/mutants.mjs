@@ -11,7 +11,7 @@ const LOGICAL = { '&&': '||', '||': '&&' }
 const DELETABLE = new Set(['CallExpression', 'AssignmentExpression', 'UpdateExpression', 'AwaitExpression'])
 const TESTED = new Set(['IfStatement', 'ConditionalExpression', 'WhileStatement'])
 
-const parseScript = (code) => parse(code, { ecmaVersion: 'latest', sourceType: 'script', allowReturnOutsideFunction: true, allowHashBang: true, locations: true })
+const parseScript = (code) => parse(code, { ecmaVersion: 'latest', sourceType: 'script', locations: true })
 
 function walk (node, visit) {
   visit(node)
@@ -26,7 +26,7 @@ const isIife = (expression) => expression.type === 'CallExpression' && /^(?:Arro
 const snippet = (text) => { const one = text.replace(/\s+/g, ' '); return one.length > 50 ? `${one.slice(0, 47)}...` : one }
 
 // Every mutant of the script `file` whose text is `code`: `{ id, file, family, start, end, original, text, line, description }`, the edit being `code.slice(start, end)` (`original`) replaced
-// by `text`. Mutants that do not parse are left out.
+// by `text`.
 export function mutantsOf (file, code) {
   const edits = []
   const add = (family, start, end, text, line) => edits.push({ family, start, end, text, line })
@@ -43,9 +43,7 @@ export function mutantsOf (file, code) {
     if (TESTED.has(node.type)) add('conditional', node.test.start, node.test.end, `!(${code.slice(node.test.start, node.test.end)})`, line)
     if (node.type === 'ExpressionStatement' && !node.directive && DELETABLE.has(node.expression.type) && !isIife(node.expression)) add('deletion', node.start, node.end, ';', line)
   })
-  return edits
-    .map((e) => ({ ...e, id: `mutant:${file}:${e.start}-${e.end}:${e.family}`, file, original: code.slice(e.start, e.end), description: `line ${e.line}: ${e.family}, \`${snippet(code.slice(e.start, e.end))}\` becomes \`${snippet(e.text)}\`` }))
-    .filter((m) => { try { parseScript(applyMutant(m, code)); return true } catch { return false } })
+  return edits.map((e) => ({ ...e, id: `mutant:${file}:${e.start}-${e.end}:${e.family}`, file, original: code.slice(e.start, e.end), description: `line ${e.line}: ${e.family}, \`${snippet(code.slice(e.start, e.end))}\` becomes \`${snippet(e.text)}\`` }))
 }
 
 // The script's text with the mutant in it. A text that is no longer the one the mutant was made from is an error: a script that changed under it must not run unmutated.
