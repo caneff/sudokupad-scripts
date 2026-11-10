@@ -1,4 +1,4 @@
-// Live check of pen-tool-extras.user.js's feedback before a gesture lands, on sudokupad.app in headless Chromium: the right-click erase's preview and its Escape (#546 rows 1 and 7),
+// Live check of pen-tool-extras.user.js's feedback before a gesture lands, on sudokupad.app in headless Chromium: the right-click erase's lack of a preview and its Escape (#546 rows 1 and 7),
 // and the drag highlight in the pen's style (row 5). Every press, move and key is real input; each check reads the page's computed
 // style and what is stored (`cell.pen`).
 /* global Framework, getComputedStyle */
@@ -22,9 +22,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const moveTo = async (point) => { await p.mouse.move(...await gridPoint(p, point)) }
-  // The strokes the preview has faded, as `row,col:value`: the originals are hidden and their copies show in one group at the faded opacity.
-  const fadedStrokes = () => read(() => [...document.querySelectorAll('#cell-pen .cell-pen.pen-tool-extras-faded, #pen-tool-extras-marks .cell-pen.pen-tool-extras-faded')]
-    .map((el) => `${el.getAttribute('row')},${el.getAttribute('col')}:${el.getAttribute('value')}`).sort())
+  // What dims a stroke while a press is held, whatever it is named: a pen stroke element outside the pen, marks and hint layers (a copy drawn beside them), or a stroke in them under 1 of its own opacity.
+  const dimming = () => read(() => {
+    const own = [...document.querySelectorAll('#cell-pen .cell-pen, #pen-tool-extras-marks .cell-pen')]
+    return {
+      copies: document.querySelectorAll('.cell-pen').length - document.querySelectorAll('#cell-pen .cell-pen, #pen-tool-extras-marks .cell-pen, #pen-tool-extras-hint .cell-pen').length,
+      under1: own.filter((el) => getComputedStyle(el).opacity !== '1').length
+    }
+  })
+  const NOT_DIMMED = { copies: 0, under1: 0 }
   const pixelAt = async (x, y) => {
     const png = await p.screenshot({ clip: { x: Math.floor(x), y: Math.floor(y), width: 1, height: 1 } })
     const color = await reader.evaluate(async (b64) => {
@@ -41,7 +47,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.bringToFront() // the second page took the focus, and a drag on this one then draws nothing
     return color
   }
-  // A white rectangle under the pen layer: the page behind the board is transparent in the screenshot, so a faded stroke would read black over it.
+  // A white rectangle under the pen layer: the page behind the board is transparent in the screenshot, so a stroke drawn under 1 opacity would read black over it.
   const back = () => read(() => {
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
     rect.id = 'live-backing'
@@ -50,8 +56,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   const unback = () => read(() => document.getElementById('live-backing')?.remove())
   const sameColor = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 2)
-  const fadedGroups = () => read(() => document.querySelectorAll('.pen-tool-extras-faded-group').length)
-  const centreOf = (point) => gridPoint(p, point)
 
   const selectPenOnPage = async (page, key) => {
     await openPenTool(p)
@@ -69,8 +73,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await context.close()
   })
 
-  describe('row 1: the right-click erase shows what it will erase while the button is held', () => {
-    it('the whole line the press hit fades to 0.3, a line it will not erase stays whole, and the release erases the faded line', async () => {
+  describe('row 1: the right-click erase dims nothing while the button is held', () => {
+    it('a press on a line leaves every stroke at full opacity with no copy, and the release erases the whole line', async () => {
       await restartPuzzle(p)
       await selectPenOnPage(1, 3)
       await drag(p, [[2.5, 2.5], [2.5, 4.5]])
@@ -78,17 +82,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await selectPenOnPage(1, 6)
       await drag(p, [[6.5, 2.5], [6.5, 3.5]])
       const other = (await penEntries(p)).filter((v) => !line.includes(v))
-      assert.deepEqual(await fadedStrokes(), [], 'nothing is faded before the press')
       await moveTo([2.5, 3.0])
       await p.mouse.down({ button: 'right' })
-      assert.deepEqual(await settle(fadedStrokes, ['2,2:1', '2,3:1']), ['2,2:1', '2,3:1'], 'both segments of the pressed line fade, nothing else does')
+      await sleep(200) // "nothing happened in 200 ms" check: a preview would have drawn by now
+      assert.deepEqual(await dimming(), NOT_DIMMED, 'the pressed line is not dimmed')
+      assert.deepEqual(await penEntries(p), [...line, ...other].sort(), 'nothing is erased before the release')
       await p.mouse.up({ button: 'right' })
       assert.deepEqual(await settle(() => penEntries(p), other), other, 'the release erases the line')
-      assert.deepEqual(await fadedStrokes(), [], 'no stroke stays faded')
       await undoAll(p)
     })
 
-    it('a mark under the press fades while it is held, and a line the pointer is dragged onto fades as it is crossed', async () => {
+    it('a mark under the press and a line the pointer is dragged across stay at full opacity until the release erases both', async () => {
       await restartPuzzle(p)
       await selectPenOnPage(1, 3)
       await p.mouse.click(...await gridPoint(p, [3.5, 4.0]))
@@ -97,41 +101,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(marked.filter((v) => v.startsWith('3,3:')).length, 1, 'the edge mark is stored')
       await moveTo([3.5, 4.0])
       await p.mouse.down({ button: 'right' })
-      assert.equal((await settle(fadedStrokes, ['3,3:3'])).length, 1, 'the mark fades')
       await p.mouse.move(...await gridPoint(p, [6.5, 3.0]), { steps: 8 })
-      assert.deepEqual(await settle(fadedStrokes, ['3,3:3', '6,2:1', '6,3:1']), ['3,3:3', '6,2:1', '6,3:1'], 'the crossed line joins it')
+      await sleep(200) // "nothing happened in 200 ms" check
+      assert.deepEqual(await dimming(), NOT_DIMMED, 'neither the mark nor the crossed line is dimmed')
+      assert.deepEqual(await penEntries(p), marked, 'nothing is erased before the release')
       await p.mouse.up({ button: 'right' })
       assert.deepEqual(await settle(() => penEntries(p), []), [], 'the release erases both')
       await undoAll(p)
     })
   })
 
-  describe('the preview and the hint fade as one picture', () => {
-    it('the erase preview of a two-segment line shows the same color at the joint as along a segment, and is fainter than the line', async () => {
-      await restartPuzzle(p)
-      await selectPenOnPage(1, 3)
-      await drag(p, [[2.5, 2.5], [2.5, 4.5]])
-      await back()
-      const [joint, mid] = [await centreOf([2.5, 3.5]), await centreOf([2.5, 3.0])]
-      const solid = await pixelAt(...mid)
-      await moveTo([2.5, 3.0])
-      await p.mouse.down({ button: 'right' })
-      assert.deepEqual(await settle(fadedStrokes, ['2,2:1', '2,3:1']), ['2,2:1', '2,3:1'])
-      const [group, layer] = await read(() => ['.pen-tool-extras-faded-group', '#cell-pen'].map((sel) => Number(getComputedStyle(document.querySelector(sel)).opacity)))
-      assert.equal(Math.round(group * 1000) / 1000, Math.round(0.3 * layer * 1000) / 1000, 'the copies fade as one group at 0.3 of what the pen layer shows (the Opacity slider)')
-      const [atJoint, atMid] = [await pixelAt(...joint), await pixelAt(...mid)]
-      assert.ok(!sameColor(atMid, solid), `the preview is fainter than the line: ${atMid} against ${solid}`)
-      assert.ok(sameColor(atJoint, atMid), `the joint ${atJoint} matches the middle of a segment ${atMid}`)
-      await p.mouse.up({ button: 'right' })
-      assert.equal(await settle(fadedGroups, 0), 0, 'the release takes the group of copies away')
-      await unback()
-      await undoAll(p)
-      await p.mouse.click(5, 5) // a click off the grid, or the next drag started right after a release draws nothing
-    })
-  })
-
   describe('row 7: Escape while the right button is held cancels the erase', () => {
-    it('nothing is erased, the fade goes, and a later release or move does nothing', async () => {
+    it('nothing is erased, nothing dims, and a later release or move does nothing', async () => {
       await restartPuzzle(p)
       await selectPenOnPage(1, 3)
       await drag(p, [[2.5, 2.5], [2.5, 4.5]])
@@ -140,12 +121,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const depth = await read(() => Framework.app.puzzle.undoStack.length)
       await moveTo([2.5, 3.0])
       await p.mouse.down({ button: 'right' })
-      assert.equal((await settle(fadedStrokes, ['2,2:1', '2,3:1'])).length, 2)
       await p.keyboard.press('Escape')
-      assert.deepEqual(await settle(fadedStrokes, []), [], 'Escape clears the fade')
-      assert.equal(await settle(fadedGroups, 0), 0, 'and the group of copies that showed it')
       await p.mouse.move(...await gridPoint(p, [5.5, 3.0]), { steps: 8 })
-      assert.deepEqual(await fadedStrokes(), [], 'the drag after Escape fades nothing')
+      assert.deepEqual(await dimming(), NOT_DIMMED, 'the drag after Escape dims nothing')
       await p.mouse.up({ button: 'right' })
       await sleep(200) // "nothing happened in 200 ms" check
       assert.deepEqual(await penEntries(p), lines, 'nothing was erased')
@@ -156,7 +134,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   describe('hovering draws nothing until the click', () => {
-    it('over an edge, a grid corner and a cell middle, with the pen tool on, no stroke is added or faded, then the click places its mark', async () => {
+    it('over an edge, a grid corner and a cell middle, with the pen tool on, no stroke is added or dimmed, then the click places its mark', async () => {
       await restartPuzzle(p)
       await selectPenOnPage(1, 3)
       const strokes = () => read(() => document.querySelectorAll('#cell-pen .cell-pen, #pen-tool-extras-hint .cell-pen, #pen-tool-extras-marks .cell-pen').length)
@@ -166,7 +144,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         await moveTo(point)
         await sleep(200) // "nothing happened in 200 ms" check
         assert.equal(await strokes(), before, `no stroke drawn while hovering ${point}`)
-        assert.deepEqual(await fadedStrokes(), [], `nothing faded while hovering ${point}`)
+        assert.deepEqual(await dimming(), NOT_DIMMED, `nothing dimmed while hovering ${point}`)
       }
       await p.mouse.click(...await gridPoint(p, [3.5, 4.0]))
       assert.equal(await settle(() => penEntries(p).then((all) => all.length), 1), 1, 'the click still places its mark')

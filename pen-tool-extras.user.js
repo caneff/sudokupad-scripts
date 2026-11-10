@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.22
+// @version      1.31.23
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.22'
+  const VERSION = '1.31.23'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1660,53 +1660,6 @@
   }
 
   // 6. Marks: edge marks, grid-corner marks, cell marks and the marks layer
-  // Faded strokes: what the right-click erase will take is drawn at this opacity, a little under tldraw's 0.32 for the same.
-  const FADED_OPACITY = 0.3
-  const FADED_CLASS = 'pen-tool-extras-faded'
-  const FADED_GROUP_CLASS = 'pen-tool-extras-faded-group'
-  const PREVIEW_LAYER_ID = 'pen-tool-extras-erase-preview'
-
-  // `Cell.renderPropPen` keeps each stroke's element in `childElems` under the class it was drawn with (docs/research/sudokupad-pen-tool.md). A stroke with no element throws,
-  // which turns off the feature that asked, rather than leaving the stroke unfaded.
-  function strokeElementOf (cell, valueColor) {
-    const className = `cell-pen pen-${valueColor[0]} pencolor-${valueColor.slice(1)}`
-    const element = cell.childElems[className]
-    if (!element) throw new Error(`pen-tool-extras: cell ${cell.row},${cell.col} holds no element for ${className}`)
-    return element
-  }
-
-  // Exactly `elements` carry the faded class, which hides them, and copies of them show in one group at the faded opacity, so the set fades as one picture: where two segments
-  // of a line join, the joint shows the same shade as the rest (each stroke fading on its own would stack there). The group is beside the pen layer, so the layer's opacity is
-  // applied to it here and the outline filter is applied by `buildOutlineCss`.
-  let fadedGroup = null
-
-  // What the faded group shows: the faded opacity under the pen layer's own, which the group, being beside the layer, does not get from it.
-  const fadedOpacity = () => FADED_OPACITY * inForce.opacity / 100
-
-  function copiesOf (className, elements) {
-    const group = document.createElementNS(SVG_NAMESPACE, 'g')
-    group.setAttribute('class', className)
-    elements.forEach((element) => {
-      const copy = element.cloneNode(true)
-      copy.classList.remove(FADED_CLASS)
-      group.appendChild(copy)
-    })
-    return group
-  }
-
-  function fadeStrokes (elements) {
-    const layer = previewLayer()
-    const shown = layer ? elements : []
-    document.querySelectorAll(`.${FADED_CLASS}`).forEach((el) => { if (!shown.includes(el)) el.classList.remove(FADED_CLASS) })
-    shown.forEach((el) => el.classList.add(FADED_CLASS))
-    if (fadedGroup !== null) fadedGroup.remove()
-    fadedGroup = null
-    if (!shown.length) return
-    fadedGroup = copiesOf(FADED_GROUP_CLASS, shown)
-    fadedGroup.style.opacity = fadedOpacity()
-    layer.appendChild(fadedGroup)
-  }
-
   const overGridInPenTool = (app, event) => app.tool === 'pen' && Boolean(event.target.closest && event.target.closest(GRID_SELECTOR))
 
   const guardedBy = (step, fallback) => (handler) => (event) => step.run(() => handler(event), fallback)
@@ -2136,12 +2089,6 @@
     erase.at = to
   }
 
-  function erasedElements (erase) {
-    const lines = [...erase.lines].map(({ value, row, col, color }) => strokeElementOf(Framework.app.grid.getCell(row, col), value + color))
-    const marks = [...erase.marks].flatMap(([cell, values]) => cell.pen.filter((valueColor) => values.has(valueColor[0])).map((valueColor) => strokeElementOf(cell, valueColor)))
-    return [...lines, ...marks]
-  }
-
   function finishErase (tool, erase) {
     const marks = [...erase.marks].map(([cell, values]) => ({ cell, values: [...values] }))
     const acts = eraseActs([...erase.lines], marks, (row, col) => Framework.app.grid.getCell(row, col))
@@ -2161,8 +2108,7 @@
     steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => isEraseButton(lastButton) ? undefined : stock(...args))
     const erasePress = (event) => isEraseButton(event.button) && overGridInPenTool(app, event)
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
-    const showErasing = () => fadeStrokes(erase === null ? [] : erasedElements(erase))
-    const guarded = guardedBy(steps.lineErase, () => { erase = null; menuOwed = false; showErasing() })
+    const guarded = guardedBy(steps.lineErase, () => { erase = null; menuOwed = false })
     window.addEventListener('pointerdown', guarded((event) => {
       erase = null
       menuOwed = false
@@ -2174,19 +2120,16 @@
       erase = started
       menuOwed = true
       crossPoint(marksAt, started, point)
-      showErasing()
       // A `pointerup` comes only once the last button is up, whichever it is, so a drag with a second button pressed ends at that release.
       trackPointer(window, {
         move: guarded((moveEvent) => {
           if (erase === started && (moveEvent.buttons & RIGHT_BIT)) {
             crossTo(marksAt, started, pointOf(moveEvent))
-            showErasing()
           }
         }),
         end: guarded((endEvent) => {
           if (erase !== started) return
           erase = null
-          showErasing()
           if (endEvent.type === 'pointercancel') return
           crossTo(marksAt, started, pointOf(endEvent))
           finishErase(tool, started)
@@ -2197,7 +2140,6 @@
     window.addEventListener('keydown', guarded((event) => {
       if (event.key !== 'Escape' || erase === null) return
       erase = null
-      showErasing()
     }), true)
     document.addEventListener('contextmenu', guarded((event) => {
       const overGrid = inForce.eraseClicks && overGridInPenTool(app, event)
@@ -2264,7 +2206,6 @@
     const colorsOf = (pages) => pages.flatMap((page) => page.chars.map((char, i) => [char, PEN_COLOR_KEYS[i]]))
     const dashed = PEN_PAGES.filter((page) => page.dashed).flatMap((page) => page.chars)
     return [
-      `:root:root .cell-pen.${FADED_CLASS} { opacity: 0; }`,
       // The hint layer fades as one picture, so an arrowhead over the line shows the line's shade. The erase hint keeps its stock 0.5 overall.
       `:root:root #${HINT_LAYER_ID} { opacity: ${HINT_OPACITY}; }`,
       `:root:root #${HINT_LAYER_ID} .penhint { opacity: 1; }`,
@@ -2277,7 +2218,7 @@
 
   // A filter runs on the layer's picture before its opacity does, so the outline fades with the marks. The highlight (`.penhint`) is in its own group beside the layer, so it is not outlined.
   function buildOutlineCss (outline) {
-    return outline ? `:root:root ${PEN_LAYER}, :root:root .${FADED_GROUP_CLASS} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
+    return outline ? `:root:root ${PEN_LAYER} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
   }
 
   // The layer's alpha is grown in the two steps described at OUTLINE_SQUARE_SHARE, as one shape, so the outline does not cut across where lines join or cross. The filter works
@@ -2316,10 +2257,6 @@
 
   function hintLayer () {
     return layerIn(HINT_LAYER_ID, true)
-  }
-
-  function previewLayer () {
-    return layerIn(PREVIEW_LAYER_ID, true)
   }
 
   // SudokuPad draws the drag highlight inside the pen layer; it moves to the layer beside it, so the pen layer's opacity and outline do not touch it.
