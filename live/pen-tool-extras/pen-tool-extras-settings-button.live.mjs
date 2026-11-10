@@ -91,3 +91,20 @@ describe('the settings button with the settings dialog off', { concurrency: fals
     assert.equal(await p.locator(BUTTON).count(), 0)
   })
 })
+
+// A settings step that turns off after the panel is built takes the button already showing with it.
+describe('the settings button when the settings dialog turns off later', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    const code = `;Framework.getApp().then(() => { Framework.showDialog = () => { throw new TypeError('showDialog is gone') } });\n${extras.script}`
+    ;({ context, p } = await extras.open(browser(), { scripts: [{ code }], expectedSkips: [/^pen-tool-extras: settings dialog skipped because SudokuPad changed: /] }))
+  })
+  after(async () => { await context.close() })
+
+  it('a click that cannot open the dialog turns the step off, and the button goes with it', async () => {
+    await p.locator(BUTTON).click()
+    await p.locator(BUTTON).waitFor({ state: 'detached' })
+    assert.equal(await p.locator('.pen-tool-extras-mode').count(), 1)
+  })
+})
