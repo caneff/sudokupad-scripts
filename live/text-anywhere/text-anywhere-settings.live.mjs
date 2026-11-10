@@ -11,6 +11,9 @@ const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, SETT
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const SUDOKUPAD_COLORS = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000' }
 
+const HALF_PIXEL = 0.5
+const SWATCH_PX = 34
+
 const browser = useBrowser()
 
 const open = () => textAnywhere.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
@@ -34,6 +37,20 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Text Anywhere')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
     assert.equal(await p.locator(`${EDITOR} input[type=color]`).count(), 9)
+    await closeDialogWith(p, 'Cancel', EDITOR)
+  })
+
+  it('the swatch grid is as wide as the preset pulldown above it, its nine swatches square and filling it', async () => {
+    await openScriptDialog(p, 'Text Anywhere', EDITOR)
+    const pulldown = await p.locator(PRESET).evaluate((el) => el.getBoundingClientRect().toJSON())
+    const grid = await p.locator(`${EDITOR} .text-anywhere-swatches`).evaluate((el) => el.getBoundingClientRect().toJSON())
+    const swatches = await p.locator(`${EDITOR} input[data-role="swatch"]`).evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))
+    const near = (actual, expected, message) => assert.equal(Math.abs(actual - expected) <= HALF_PIXEL, true, `${message}: ${actual} vs ${expected}`)
+    near(grid.width, pulldown.width, 'the grid is as wide as the pulldown')
+    near(grid.left, pulldown.left, 'the left edges')
+    assert.equal(swatches.length, 9)
+    near(swatches[2].right, pulldown.right, 'the third swatch ends where the pulldown does')
+    for (const swatch of swatches) { assert.equal(swatch.width >= SWATCH_PX - HALF_PIXEL, true, `width ${swatch.width} is at least ${SWATCH_PX}`); near(swatch.height, swatch.width, 'square') }
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 

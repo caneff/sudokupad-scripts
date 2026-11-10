@@ -80,15 +80,18 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('the pen colors are the shared color block: nine 34px square inputs, 4px apart, with no numbers, under a pulldown as wide as the column', async () => {
+  it('the pen colors are the shared color block: nine square inputs of at least 34px, 4px apart, with no numbers, in a grid as wide as the pulldown above it, which is as wide as the column', async () => {
     await openSettledEditor(p)
     const boxes = await editor().locator('input[data-role="swatch"]').evaluateAll((els) => els.map((el) => { const { left, right, top, width, height } = el.getBoundingClientRect(); return { left, right, top, width, height } }))
     assert.equal(boxes.length, 9)
-    for (const box of boxes) { near(box.width, 34, 'width'); near(box.height, 34, 'height') }
+    for (const box of boxes) { assert.equal(box.width >= 34 - HALF_PIXEL, true, `width ${box.width} is at least 34`); near(box.height, box.width, 'square') }
     near(boxes[1].left - boxes[0].right, 4, 'across gap')
     near(boxes[3].top - (boxes[0].top + boxes[0].height), 4, 'down gap')
     const pulldown = await rect('#pen-tool-extras-editor select[data-role="color-choice"]')
     near(pulldown.left, boxes[0].left, 'the pulldown and the grid share their left edge')
+    near(pulldown.right, boxes[2].right, 'the pulldown and the grid share their right edge')
+    const grid = await rect('#pen-tool-extras-editor .pen-tool-extras-swatches')
+    near(grid.width, pulldown.width, 'the grid is as wide as the pulldown')
     assert.equal(await editor().locator('.pen-tool-extras-swatches b').count(), 0)
     const lastMarksColumn = await rect('#pen-tool-extras-editor .pen-tool-extras-marks-table > :nth-child(5)')
     near(pulldown.right, lastMarksColumn.right, 'the pulldown fills the column the marks table sets, and does not widen it')
