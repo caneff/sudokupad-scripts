@@ -393,6 +393,8 @@ const NEW_ADDRESS = 'text-anywhere.user.js'
 // The last @version main served from the old address, before the move.
 const LAST_OLD_VERSION = '0.44.14'
 const HANDOVER_VERSION = '0.45.1'
+// The SHA-256 of draw-tool.user.js as 0.45.1 shipped it (commit 2341bc3). Text Anywhere's later changes never reach it: nobody installs from it (#800).
+const HANDOVER_SHA256 = '872fd65050ec26595d4eb923dd6e576cfdfab77dbbfc162fec281a00f0829171'
 const newerThan = (a, b) => a.localeCompare(b, undefined, { numeric: true }) > 0
 
 test('draw-tool.user.js is the frozen handover: it sends updates to text-anywhere.user.js under the same @name and @namespace', () => {
@@ -407,6 +409,7 @@ test('draw-tool.user.js is the frozen handover: it sends updates to text-anywher
   }
   for (const field of ['name', 'namespace']) assert.equal(headerField(handover, field), headerField(script, field), field)
   assert.equal(headerVersion(handover), HANDOVER_VERSION, 'the handover is frozen at one version')
+  assert.equal(require('node:crypto').createHash('sha256').update(handover).digest('hex'), HANDOVER_SHA256, 'draw-tool.user.js is byte for byte its 0.45.1 content: never mirror Text Anywhere into it')
   assert.ok(newerThan(HANDOVER_VERSION, LAST_OLD_VERSION), 'a copy from the old address updates to the handover')
   assert.ok(newerThan(headerVersion(script), HANDOVER_VERSION), 'the handover updates to text-anywhere.user.js')
 })

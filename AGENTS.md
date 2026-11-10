@@ -15,7 +15,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   and notes about SudokuPad itself at the top.
 - **Tests**: unit tests are in `test/` (`test/<script name>.test.js`), each shared module's in `lib/<name>.test.js`, a spec's closing test in `test/specs/`, and live tests in
   `live/<script name>/`. Every `*.user.js` stays at the root: every installed copy checks that address for updates. Never edit `draw-tool.user.js`:
-  it is Text Anywhere's frozen handover (`GLOSSARY.md`).
+  it is Text Anywhere's handover, frozen at 0.45.1 (`GLOSSARY.md`), and a change to Text Anywhere never touches it; `test/text-anywhere.test.js` fails when its bytes change (Chris, 2026-11-10).
 - **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live` every night at 06:17 UTC on GitHub Actions (and by hand through
   `workflow_dispatch`); `live/README.md` § The daily watch has the rule.
 - **`GLOSSARY.md`**: the vocabulary.
