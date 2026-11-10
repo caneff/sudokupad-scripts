@@ -93,4 +93,9 @@ Every catch replayed from its path (0 of 37, 0 of 39 and 0 of 41 did not).
 - **The busy start catches the most and the fastest** (41 of 60, median 21 s against 39 s and 26.2 s), and it alone took `dark-page-saves-light` and `box-color-stale` to 4 of 5:
   both need saved state that an empty board reaches only after several actions.
 - **The varied wait cost `box-color-stale` all its catches** (0 of 5 against 3); five seeds per cell is a small sample, so one cell's swing of 3 is not yet a rate.
-- **What is not measured here:** the combined configuration (`varied-wait+busy-start`), run next on the same seeds to decide which one the nightly uses.
+- **The combined configuration is no better than either alone.** `varied-wait+busy-start` on the same seeds and flags (2026-11-10, 60 hunts, 45 min, on the branch
+  before its review fixes) caught 38 of 60, median 26.8 s, with every catch replaying; it caught the race plant on 1 of 5 seeds and `box-color-stale` and `dark-page-saves-light`
+  on 5 of 5, but lost `tab-turns-pad-to-letters` and `mode-not-saved` (0 of 5) and `note-dropped-on-load` (2 of 5).
+- **So the nightly hunts with `busy-start`** (`NIGHTLY_CONFIG` in `live/fuzz/nightly.mjs`), the most catches and the fastest. The cost: no nightly reaches the race plant,
+  which only the varied wait does; `--config varied-wait` stays a command away. The default of `npm run test:fuzz` stays `current`, so a replay command printed before
+  this change, which names no configuration, still replays the same lists.

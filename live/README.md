@@ -214,7 +214,7 @@ npm run fuzz:plants -- [--seeds <k>] [--budget <seconds per hunt>] [--seed <firs
 
 ## The nightly fuzz
 
-`npm run fuzz:nightly` (`live/fuzz/nightly.mjs`, #595) runs `live/fuzz/run.mjs` with a fresh random seed and files what it finds, on GitHub Actions
+`npm run fuzz:nightly` (`live/fuzz/nightly.mjs`, #595) runs `live/fuzz/run.mjs` with a fresh random seed and the `busy-start` configuration (`NIGHTLY_CONFIG`, the best of the four in `docs/research/fuzz-planted-bugs.md`) and files what it finds, on GitHub Actions
 in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `workflow_dispatch` runs it by hand). It is a workflow of its own, not a job of
 `watch.yml`, so 30 minutes of fuzzing never holds up the watch and the two keep separate concurrency groups.
 
