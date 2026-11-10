@@ -7,7 +7,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { readUntil } from '../settle.mjs'
+import { readUntil, settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
 
@@ -266,14 +266,15 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     assert.deepEqual(look.afterFrame.map(Math.round), [right + 30, bottom + 15].map(Math.round))
   })
 
-  it('a right-drag erases only after the next frame, along every pointer move', async () => {
+  it('a right-drag removes nothing while held, then at the release every note along every pointer move', async () => {
     await p.mouse.move(...await gridPoint(p, [8.5, 1.5]))
     await p.mouse.down({ button: 'right' })
-    // Through n29's middle (r8c3) and back, all in one task.
+    // Through n29's middle (r8c3) and back, all in one task: only a check of every move finds the note.
     const target = [...await steps([8.5, 1.5], [-1, 1], 2), ...await steps([7.5, 2.5], [1, -1], 2)]
     const look = await movesInOneTask(target, 2, () => [...document.querySelectorAll('#text-anywhere-layer .text-anywhere-text')].some((n) => n.textContent === 'n29'))
+    assert.deepEqual(look, { straightAfter: true, afterFrame: true })
     await p.mouse.up({ button: 'right' })
-    assert.deepEqual(look, { straightAfter: true, afterFrame: false })
+    assert.equal(await settle(async () => (await textAnywhere.texts(p)).includes('n29'), false), false)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
   })
 

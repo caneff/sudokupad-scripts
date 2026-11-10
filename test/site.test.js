@@ -485,7 +485,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
     'Key to switch on Press T to pick the Text tool (not while you are typing in a note, a dialog or the Letter tool).',
     'Hide all notes The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.',
-    'Erase Right-click a note, or press Delete.',
+    'Erase Right-click a note, or drag with the right button across several; they go when you let go. Or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
     'Settings Color presets, font (proportional or fixed width), halo, box color and border by sample; Copy and Paste to another browser.'
   ])
