@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.21
+// @version      1.31.22
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.21'
+  const VERSION = '1.31.22'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -2448,7 +2448,7 @@
   }
 
   // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops the browser dragging a slider's thumb. A move over the sliders is kept from
-  // SudokuPad's handlers, so the thumb drags and the drag reaches nothing else on the page. A drag leaves the focus on the slider, where the arrow keys would move it and not
+  // SudokuPad's handlers, so the thumb drags and the drag reaches nothing else on the page. A drag leaves the focus on the slider, where the arrow keys would not
   // reach the puzzle, so the focus goes back to the page when the pointer is released. `sliders` is the selector of the block that holds the slider inputs.
   function installSliderGuards (sliders, doc = document, win = window) {
     doc.addEventListener('mousemove', (event) => {

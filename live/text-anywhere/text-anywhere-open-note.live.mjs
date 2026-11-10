@@ -5,8 +5,9 @@ import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, finishNote, gridPoint } from '../board.mjs'
+import { slideTo } from '../slider.mjs'
 
-const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, TEXT_BOX, WIDTH_KEY, slideTo, valueOf } = textAnywhere
+const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, TEXT_BOX, WIDTH_KEY, valueOf } = textAnywhere
 const BLACK = 1
 const GREEN = 3
 const RED = 4
