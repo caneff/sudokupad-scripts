@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text Anywhere: SudokuPad scripts</title>
+<link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body class="details">
+  <p class="back"><a href="index.html">&larr; All SudokuPad scripts</a></p>
+  <h1>Text Anywhere</h1>
+  <p class="warning">This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad. When an update breaks one part, only that part turns off, and a bar at the bottom of the page names it with a link to report it.</p>
+  <p class="lede">Adds to <a href="https://sudokupad.app">SudokuPad</a> a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.</p>
+  <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js">Install Text Anywhere</a></p>
+
+  <!-- slideshow:text-anywhere -->
+  <div class="slideshow">
+    <div class="slide-frame">
+      <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-1-type.png?v=85517f9" alt="Three orange lines typed with Enter in the margin beside the top rows of the grid, A=B+5, A+B=11 and B=3, A=8" width="800" height="500">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-2-format.png?v=2d3bfa8" alt="An orange note in the margin beside the grid: a bold header X-wing on 6, then r2 and r8 in bold with an arrow to c3, c7, then a ticked and struck-through checklist item box 1 and an unticked one, box 7" width="800" height="500">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-3-style.png?v=fbe2e09" alt="A small green note and a large red note above the grid, and a faint blue note on the board, beside the Text Anywhere panel with its nine colors, Size slider and Opacity slider" width="800" height="500">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-4-background.png?v=a23bc39" alt="A bold red formula, A+B=11, on a cell edge with no box, and a red formula, X+Y=2Z, in a pale red box that hides the grid lines under it" width="800" height="500">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-5-select.png?v=2959423" alt="Three blue notes in the margin, A=B+5 and X+Y=2Z above the grid and r1: 4,6 in c7-9 beside row 1, each with a solid purple outline, selected by a solid purple drag box and recolored from orange to blue together" width="800" height="500">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-6-long.png?v=c5a31fe" alt="A blue note in the margin, open for typing and made two lines tall with the handle on its bottom right corner, scrolled to the end to show 2B+5=11 and B=3, A=8, with its scroll bar beside the text" width="800" height="500">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-7-hide.png?v=87081dd" alt="The board with no notes showing, beside the Text Anywhere panel with a red ring on its pressed eye button, which shows a closed eye" width="800" height="500">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-8-erase.png?v=5ba8689" alt="A red ring on a green note above the grid reading A=B+5, which shows a faint purple outline under the pointer, where a right click lands" width="800" height="500">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-9-settings.png?v=8d77a1f" alt="Two green notes on the board in a fixed-width font, r4: 2,7 with a thick white halo over a grid line and A=B+5 in a yellow box, beside the settings dialog's Font, Halo, Box color and Box border rows with Fixed width, Thick and Yellow picked" width="800" height="500">
+    </div>
+    <div class="slide-bar">
+      <div class="slide-captions">
+        <p class="slide-caption current">Left click to type a note</p>
+        <p class="slide-caption">Formatting: **bold**, # headers, -&gt; as →, and checklists you tick with a click</p>
+        <p class="slide-caption">Nine colors (keys 1-9), Size and Opacity; + and - step the size</p>
+        <p class="slide-caption">Background: a box behind the next note</p>
+        <p class="slide-caption">Select: drag a box round notes, then change them together; drag to move, arrow keys nudge</p>
+        <p class="slide-caption">Long notes scroll; drag any corner to resize</p>
+        <p class="slide-caption">The eye hides every note to show the board; click it again to bring them back</p>
+        <p class="slide-caption">Erase: right-click a note</p>
+        <p class="slide-caption">Settings: font, halo, box color and border, color presets</p>
+      </div>
+    </div>
+  </div>
+  <!-- /slideshow:text-anywhere -->
+
+  <h2>What it adds</h2>
+  <ul class="features">
+    <li><strong>Typed notes anywhere</strong> <p>Click to type; Esc or Ctrl+Enter finishes; Ctrl+Z and Ctrl+Y undo and redo the typing; double-click a note to edit.</p></li>
+    <li><strong>Formatting</strong> <p>Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and <code>-></code>, <code>!=</code> or <code>sum</code> typed as → ≠ Σ. One note below shows every style, and the text that made it.</p></li>
+    <li><strong>Long notes</strong> <p>Wraps and scrolls; drag a corner to resize.</p></li>
+    <li><strong>Readable over digits</strong> <p>A white outline round the letters, and an optional box behind them.</p></li>
+    <li><strong>Colors, size and opacity</strong> <p>Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make each selected note, or the next note, one Size step bigger or smaller than it is. A color, size, opacity or Background you set on a note also becomes the setting for the next note.</p></li>
+    <li><strong>Select and move</strong> <p>Click a note or drag a box round several; drag to move, arrow keys nudge.</p></li>
+    <li><strong>Key to switch on</strong> <p>Press <code>T</code> to pick the Text tool (not while you are typing in a note, a dialog or the Letter tool).</p></li>
+    <li><strong>Hide all notes</strong> <p>The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.</p></li>
+    <li><strong>Erase</strong> <p>Right-click a note, or drag with the right button across several; they go when you let go. Or press Delete.</p></li>
+    <li><strong>Kept per puzzle</strong> <p>Notes survive a reload, for your last 50 puzzles.</p></li>
+    <li><strong>Settings</strong> <p>Color presets, font (proportional or fixed width), halo, box color and border by sample; Copy and Paste to another browser.</p></li>
+  </ul>
+
+  <h2>One note, every style</h2>
+  <div class="slideshow">
+    <div class="slide-frame">
+      <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-formatting-raw.png?v=0c41355" alt="The same note open for typing, showing the text that made it: # Header one, ## Header two, ### Header three, -# subtext, **bold**, *italic*, _italic_, ***bold italics***, __underlined__ and its combinations, ~~struck through~~, - a bullet, an indented - nested bullet, 1. and 2. numbered items, - [x] a ticked item, - [ ] an empty item, `inline code`, a block between two lines of ```, and the keys for the symbols, -&gt; &lt;- != &lt;= &gt;= sum" width="777" height="716">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-formatting.png?v=9e0fba1" alt="One large note on the board, beside the grid, showing every style rendered: three headers of falling size, small faded subtext, bold, italic and bold italics, underlined, underlined italics, underlined bold and underlined bold italics, struck through, a bullet with a nested bullet, a numbered list of two items, a ticked checklist item and an empty one, inline code and a code block in monospace, and the symbols → ← ≠ ≤ ≥ Σ" width="777" height="716">
+    </div>
+    <div class="slide-bar">
+      <div class="slide-captions">
+        <p class="slide-caption current">Before: what you type</p>
+        <p class="slide-caption">After: what the note shows. Click a checklist box to tick it.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>The Text Anywhere panel</h2>
+  <p class="prose">Pick the Text tool and its panel opens beside the puzzle.</p>
+  <div class="figure"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-panel-annotated.png?v=6e96cd9" alt="The Text Anywhere panel with each part labelled on its left. Color buttons: click or press 1 to 9, and hold to edit. Background: boxes new or selected notes. Clear all: deletes the selected notes, or all. Settings: opens the settings. Size: a slider for the text size, from small to large. Opacity: a slider from faint to solid. Eye: hides or shows all notes." width="519" height="332"></div>
+
+  <h2>Good to know</h2>
+  <ul class="notes">
+    <li>The notes are kept in this browser only, so another browser or device does not show them.</li>
+    <li>Undo right after Restart restores the notes. If the notes cannot be saved, a message says so.</li>
+  </ul>
+  <footer><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
+  <script src="slides.js"></script>
+</body>
+</html>
