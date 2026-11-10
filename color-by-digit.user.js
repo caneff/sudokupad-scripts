@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.27
+// @version      0.25.34
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.27'
+  const VERSION = '0.25.34'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -376,6 +376,18 @@
 
   function setProfileGroups (state, index, groups) {
     return editState(state, { profiles: state.profiles.map((p, i) => (i === index ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))) })
+  }
+
+  // Profiles have no id, so a step finds its profile by name; `groups` is given only where the step changed them.
+  const cellProfile = (state, withGroups) => ({ name: state.profiles[state.active].name, ...(withGroups && { groups: activeGroups(state) }) })
+
+  // The profile a step names makes the active one, and takes its groups back when the step holds them. One no profile bears the name of leaves the state as it is, since a Save may have deleted or renamed it.
+  function withCellProfile (state, { name, groups }) {
+    const named = state.profiles.map((p, i) => i).filter((i) => state.profiles[i].name === name)
+    if (named.length === 0) return state
+    const index = (groups && named.find((i) => sameGroups(state.profiles[i].groups, groups))) ?? named[0]
+    const active = setActive(state, index)
+    return groups ? setProfileGroups(active, index, groups) : active
   }
 
   const dropIndex = (mids, from, y) => mids.filter((mid, i) => i !== from && mid < y).length
@@ -1006,6 +1018,13 @@
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
   const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
 
+  // A preset in force that is not among the pickable `presets` (Custom, a page the palette no longer has) is shown first, selected and disabled, so the pulldown says what is in force and
+  // every preset stays pickable: picking the option already shown fires no `change`. `labels` names each id.
+  function presetChoices (preset, presets, labels) {
+    const option = (id, disabled) => ({ value: id, label: labels[id], selected: id === preset, disabled })
+    return [...(presets.includes(preset) ? [] : [option(preset, true)]), ...presets.map((id) => option(id, false))]
+  }
+
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
   const fillWithOpacity = (color, opacity) => opacity < 1 ? `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)` : color
@@ -1282,8 +1301,8 @@
   /* eslint-disable no-unused-vars */
   // SudokuPad's bottom row of tool buttons.
   const BOTTOM_ROW = '.controls-aux'
-  // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
-  const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
+  // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button. !important because an inline max-width on the row beats a stylesheet cap.
+  const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem !important; }`
   /* eslint-enable no-unused-vars */
   // </lib:bottom-row>
   const BOTTOM_ROW_STYLE_ID = 'color-by-digit-row'
@@ -1392,7 +1411,12 @@
       }
       case 'delete': return showing(deleteProfile(state, event.index), indexAfterDelete(selected, event.index, state.profiles.length))
       case 'move': return event.from === event.to ? draft : showing(moveProfile(state, event.from, event.to), indexAfterMove(selected, event.from, event.to))
-      case 'reload': return showingProfile({ ...draft, mode: event.mode }, event.state, event.state.active)
+      // A paste replaces only what it holds: the profiles (selecting the pasted active one) and the mode; every other edit stays.
+      case 'paste': {
+        const next = event.state ?? state
+        const pasted = { ...draft, mode: allowedMode(event.mode ?? draft.mode, usesDigitColors(next)) }
+        return event.state ? showingProfile(pasted, next, next.active) : pasted
+      }
     }
     throw new Error(`reduceDraft: no edit ${event.type}`)
   }
@@ -1643,6 +1667,8 @@
       `.${prefix}version { opacity: .6; }`,
       `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
+      `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
+      `.${prefix}off-note:empty { display: none; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
@@ -1679,12 +1705,21 @@
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
 
+  const OFF_NOTE_ATTRIBUTE = 'data-role="off-note"'
+
+  // A script whose dialog can turn a feature off while it is open calls this again after the change.
+  function setOffNote (dialog, off) {
+    dialog.querySelector(`[${OFF_NOTE_ATTRIBUTE}]`).textContent = off.length > 0 ? `Off because SudokuPad changed: ${off.join(', ')}` : ''
+  }
+
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
   // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
+  // `off` is `guard.off`; a missing one throws, since it would read as nothing being off.
   // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
+    if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
@@ -1710,6 +1745,7 @@
       centerOverBoard,
       parts: [
         { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div class="${prefix}off-note" ${OFF_NOTE_ATTRIBUTE}></div>` },
         { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
         { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) },
         // Below the footer, so the script's own layout still runs down to the footer line.
@@ -1719,6 +1755,7 @@
     const body = doc.getElementById(bodyId)
     if (!body) return null
     const dialog = body.closest('.dialog')
+    setOffNote(dialog, off)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -2136,7 +2173,7 @@
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2216,31 +2253,33 @@
 
   const colorEnteredCells = (app) => recolor(app, (plans) => planCellColors(plans, loadGroups(), enteredIndices(plans)))
 
-  // The mode steps that left an undo step, each `at` the undo stack's length after it, so Undo and Redo can move the mode along.
+  // The mode and cell profile steps that left an undo step, each `at` the undo stack's length after it, so Undo and Redo can move them along.
+  // A step that changed the cell profile holds it before and after (`profiles`: `{ from, to }`, each a `cellProfile`).
   function createModeHistory () {
     const done = []
     let undone = []
     let beforeRestart = null
     return {
-      record (at, from, to) {
-        done.push({ at, from, to })
+      record (at, from, to, profiles) {
+        done.push({ at, from, to, profiles })
         undone = []
       },
-      // The mode before the earliest step an Undo down to `stackLength` took back.
+      // The mode, and the cell profile when a step changed it, before the earliest step an Undo down to `stackLength` took back.
       undo (stackLength) {
         const first = done.findIndex((step) => step.at > stackLength)
         if (first < 0) return undefined
         const taken = done.splice(first)
         undone.push(...taken.reverse())
-        return taken[taken.length - 1].from
+        const earliest = taken[taken.length - 1]
+        return { mode: earliest.from, profile: taken.findLast((step) => step.profiles)?.profiles.from }
       },
-      // The mode after the latest step a Redo up to `stackLength` put back.
+      // The same after the latest step a Redo up to `stackLength` put back.
       redo (stackLength) {
         const put = []
         while (undone.length > 0 && undone[undone.length - 1].at <= stackLength) put.push(undone.pop())
         if (put.length === 0) return undefined
         done.push(...put)
-        return put[put.length - 1].to
+        return { mode: put[put.length - 1].to, profile: put.findLast((step) => step.profiles)?.profiles.to }
       },
       forgetRedo () { undone = [] },
       // A Restart empties the undo stack, but SudokuPad's next Undo on the empty stack brings back the board from before it, stack included.
@@ -2398,30 +2437,32 @@
 
   const modeHistory = createModeHistory()
 
-  function recordingModeStep (app, from, to, step) {
+  function recordingModeStep (app, from, to, step, profiles) {
     coloring.run(() => {
       const before = app.puzzle.undoStack.length
       step()
       const after = app.puzzle.undoStack.length
-      if (after > before) modeHistory.record(after, from, to)
+      if (after > before) modeHistory.record(after, from, to, profiles)
     })
   }
 
   // Leaving cell coloring takes the colors of `keys`, the group keys to take off, off every cell.
-  function setMode (app, next, keys = groupKeys(loadGroups())) {
+  function setMode (app, next, keys = groupKeys(loadGroups()), profiles) {
     const was = mode
     showMode(next)
     recordingModeStep(app, was, next, () => {
       if (colorsCells(next) && !colorsCells(was)) colorEnteredCells(app)
       if (!colorsCells(next) && colorsCells(was)) recolor(app, (plans) => planClear(plans, keys))
-    })
+    }, profiles)
   }
 
-  // Undo and Redo move the mode with the board: a mode step that colored or cleared cells is an undo step, so taking it back or putting it again changes the mode too.
+  // Undo and Redo move the mode and the cell profile with the board: a step that colored or cleared cells is an undo step, so taking it back or putting it again changes them too.
   function followUndo (app, type) {
     const stackLength = app.puzzle.undoStack.length
     const target = type === 'undo' ? modeHistory.undo(stackLength) : modeHistory.redo(stackLength)
-    if (target !== undefined) showMode(allowedMode(target, usesDigitColors(loadState())))
+    if (target === undefined) return
+    if (target.profile) saveState(withCellProfile(loadState(), target.profile))
+    showMode(allowedMode(target.mode, usesDigitColors(loadState())))
   }
 
   // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
@@ -2573,10 +2614,13 @@
     if (index === (digits ? state.digitActive : state.active)) return
     const next = digits ? setDigitActive(state, index) : setActive(state, index)
     saveState(next)
-    if (!digits && colorsCells(mode)) recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next)))
+    if (!digits && colorsCells(mode)) {
+      recordingModeStep(app, mode, mode, () => recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next))), { from: cellProfile(state), to: cellProfile(next) })
+    }
     redraw()
   }
 
+  // The hold opens a menu, which should open fast, so it is shorter than HOLD_TO_EDIT_MS; only the left button holds.
   const HOLD_MS = 500
   const HOLD_SLOP = 10
 
@@ -2663,8 +2707,12 @@
     const next = allowedMode(draftMode, usesDigitColors(draft))
     const oldGroups = activeGroups(oldState)
     const groups = activeGroups(draft)
-    if (colorsCells(next) && !sameGroups(oldGroups, groups)) recolor(app, (plans) => planSwitch(plans, oldGroups, groups))
-    setMode(app, next, groupKeys([...oldGroups, ...groups]))
+    const profiles = { from: cellProfile(oldState, true), to: cellProfile(draft, true) }
+    const changed = JSON.stringify(profiles.from) !== JSON.stringify(profiles.to)
+    if (colorsCells(next) && !sameGroups(oldGroups, groups)) {
+      recordingModeStep(app, mode, next, () => recolor(app, (plans) => planSwitch(plans, oldGroups, groups)), profiles)
+    }
+    setMode(app, next, groupKeys([...oldGroups, ...groups]), changed ? profiles : undefined)
   }
 
   // The profiles, the mode and the added-preload marks as stored, and the mode as shown, as a function that puts them back after a Save or Paste that failed half-way. Cells a failed Save already colored or cleared stay as they are, an undo step of their own.
@@ -2684,6 +2732,7 @@
       prefix: CLASS_PREFIX,
       name: 'Color by Digit',
       version: VERSION,
+      off: guard.off,
       bodyId: EDITOR_ID,
       styleId: STYLE_ID,
       css: STYLE_CSS,
@@ -2700,7 +2749,7 @@
           ADDED_PRELOADS.forEach(({ key }) => { if (key in values) savedData.setData(key, values[key]) })
           saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
           savedState = loadState()
-          edit({ type: 'reload', state: savedState, mode })
+          edit({ type: 'paste', ...(PROFILES_KEY in values ? { state: savedState } : {}), ...(MODE_KEY in values ? { mode: values[MODE_KEY] } : {}) })
           draw()
         }
       }

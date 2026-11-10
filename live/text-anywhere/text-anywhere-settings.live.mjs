@@ -15,7 +15,11 @@ const browser = useBrowser()
 
 const open = () => textAnywhere.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
 const read = (p, fn, arg) => p.evaluate(fn, arg)
-const savedColors = (p) => read(p, (key) => Framework.getData(key) ?? null, COLORS_KEY)
+const savedKeys = (p, keys) => read(p, (names) => Object.fromEntries(names.map((key) => [key, Framework.getData(key)])), keys)
+const saved = (p) => read(p, (key) => Framework.getData(key) ?? null, COLORS_KEY)
+const savedColors = async (p) => { const { preset, ...colors } = await saved(p); return colors }
+const savedPreset = async (p) => (await saved(p)).preset ?? null
+const presetShown = (p) => p.locator(PRESET).evaluate((select) => ({ value: select.value, label: select.selectedOptions[0].textContent, disabled: [...select.options].filter((o) => o.disabled).map((o) => o.textContent) }))
 const dialogColors = (p) => p.locator(`${EDITOR} input[type=color]`).evaluateAll((inputs) => Object.fromEntries(inputs.map((i) => [i.dataset.key, i.value])))
 
 describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
@@ -49,11 +53,18 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     assert.deepEqual(await savedColors(p), before)
   })
 
-  it('the presets are Pen colors, a Darker page for each page the palette has, and SudokuPad colors', async () => {
+  it('the first use saves the pen colors with the Pen colors preset, and the dialog opens on it', async () => {
+    assert.equal(await savedPreset(p), 'pen')
+    await p.click(SETTINGS_BUTTON)
+    assert.deepEqual(await presetShown(p), { value: 'pen', label: 'Pen colors', disabled: [] })
+    await closeDialogWith(p, 'Cancel', EDITOR)
+  })
+
+  it('the presets are Pen colors, a Darker page for each page the palette has, and SudokuPad colors, and Custom is no choice while a preset is in force', async () => {
     await p.click(SETTINGS_BUTTON)
     const labels = await p.locator(`${PRESET} option`).allTextContents()
-    assert.deepEqual(labels.filter((l) => !l.startsWith('Darker page')), ['Custom', 'Pen colors', 'SudokuPad colors'])
-    assert.equal(labels[2], 'Darker page 1')
+    assert.deepEqual(labels.filter((l) => !l.startsWith('Darker page')), ['Pen colors', 'SudokuPad colors'])
+    assert.equal(labels[1], 'Darker page 1')
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
@@ -64,6 +75,10 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     assert.notDeepEqual(colors, SUDOKUPAD_COLORS)
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await savedColors(p), colors)
+    assert.equal(await savedPreset(p), 'page-1', 'the preset is saved with the colors')
+    await p.click(SETTINGS_BUTTON)
+    assert.deepEqual(await presetShown(p), { value: 'page-1', label: 'Darker page 1', disabled: [] }, 'the dialog opens on the preset in force')
+    await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
   it('SudokuPad colors, after Darker page 1, sets all nine colors in the dialog, and Save writes them and recolors the panel', async () => {
@@ -80,18 +95,23 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     await p.click(SETTINGS_BUTTON)
     await p.locator(PRESET).selectOption('sudokupad')
     await p.locator(`${EDITOR} input[data-role="swatch"][data-key="2"]`).fill('#123456')
-    assert.equal(await p.locator(PRESET).inputValue(), '')
+    assert.equal(await p.locator(PRESET).inputValue(), 'custom')
+    assert.deepEqual(await presetShown(p), { value: 'custom', label: 'Custom', disabled: ['Custom'] }, 'Custom is shown after a hand edit, and cannot be picked')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await savedColors(p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
+    assert.equal(await savedPreset(p), null, 'a hand edit saves no preset')
+    await p.click(SETTINGS_BUTTON)
+    assert.deepEqual(await presetShown(p), { value: 'custom', label: 'Custom', disabled: ['Custom'] }, 'the dialog opens on Custom')
+    await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
-  it('Copy settings then Paste settings in a fresh page restores the colors, size, transparency, outline, box color, frame and font, and carries nothing else', async () => {
+  it('Copy settings then Paste settings in a fresh page restores the colors, size, opacity, outline, box color, frame and font, and carries nothing else', async () => {
     await read(p, (values) => Object.entries(values).forEach(([key, value]) => Framework.setData(key, value)), { [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' })
     await p.click(SETTINGS_BUTTON)
     await actButton(p, 'copy-settings').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
     const copied = await p.evaluate(() => navigator.clipboard.readText())
-    assert.deepEqual(Object.keys(JSON.parse(copied)).sort(), [BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, WIDTH_KEY], 'colors, size, transparency, outline, box color, frame and font only')
+    assert.deepEqual(Object.keys(JSON.parse(copied)).sort(), [BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, WIDTH_KEY], 'colors, size, opacity, outline, box color, frame and font only')
     await closeDialogWith(p, 'Cancel', EDITOR)
 
     const other = await open()
@@ -116,6 +136,95 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     } finally {
       await other.context.close()
     }
+  })
+
+  it('Copy settings carries the preset in force, and Paste settings in a fresh page opens the dialog on it', async () => {
+    await p.click(SETTINGS_BUTTON)
+    await p.locator(PRESET).selectOption('page-1')
+    await closeDialogWith(p, 'Save', EDITOR)
+    await p.click(SETTINGS_BUTTON)
+    await actButton(p, 'copy-settings').click()
+    await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
+    const copied = await p.evaluate(() => navigator.clipboard.readText())
+    assert.equal(JSON.parse(copied)[COLORS_KEY].preset, 'page-1')
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    const other = await open()
+    try {
+      await pickTextAnywhere(other.p)
+      await other.p.evaluate((t) => navigator.clipboard.writeText(t), copied)
+      await other.p.click(SETTINGS_BUTTON)
+      await actButton(other.p, 'paste-settings').click()
+      await other.p.locator(STATUS).filter({ hasText: /^Pasted \d+ settings\.$/ }).waitFor()
+      assert.deepEqual(await presetShown(other.p), { value: 'page-1', label: 'Darker page 1', disabled: [] })
+      assert.equal(await savedPreset(other.p), 'page-1')
+      assert.deepEqual(other.errors, [])
+    } finally {
+      await other.context.close()
+    }
+  })
+
+  it('a saved preset is read back after a reload, a saved id that is none of ours reads as Custom, and a hold edit of one color makes the set Custom', async () => {
+    await textAnywhere.reload(p)
+    await pickTextAnywhere(p)
+    await p.click(SETTINGS_BUTTON)
+    assert.deepEqual(await presetShown(p), { value: 'page-1', label: 'Darker page 1', disabled: [] }, 'the saved preset opens the dialog after a reload')
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    await textAnywhere.holdForPickers(p, '.controls-input button[data-key="4"]', 'left', 'visible')
+    await p.locator(`${textAnywhere.PICKER_BOX}[data-key="4"] input`).fill('#102030')
+    await p.keyboard.press('Escape')
+    assert.equal(await savedPreset(p), null, 'a hold edit saves no preset')
+    await p.click(SETTINGS_BUTTON)
+    assert.deepEqual(await presetShown(p), { value: 'custom', label: 'Custom', disabled: ['Custom'] })
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    await read(p, ([key, value]) => Framework.setData(key, value), [COLORS_KEY, { ...(await savedColors(p)), preset: 'nope' }])
+    await textAnywhere.reload(p)
+    await pickTextAnywhere(p)
+    await p.click(SETTINGS_BUTTON)
+    assert.deepEqual(await presetShown(p), { value: 'custom', label: 'Custom', disabled: ['Custom'] })
+    await closeDialogWith(p, 'Cancel', EDITOR)
+  })
+
+  it('Restore defaults fills the draft with the pen colors and the default looks; Cancel keeps what was saved and Save stores the defaults', async () => {
+    const changed = { [OUTLINE_KEY]: 'none', [BOX_KEY]: 'yellow', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' }
+    await read(p, (values) => Object.entries(values).forEach(([key, value]) => Framework.setData(key, value)), changed)
+    await textAnywhere.reload(p)
+    await pickTextAnywhere(p)
+    const keys = [COLORS_KEY, ...Object.keys(changed)]
+    const before = await savedKeys(p, keys)
+    await p.click(SETTINGS_BUTTON)
+    await p.locator(PRESET).selectOption('pen')
+    const penColors = await dialogColors(p)
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    await p.click(SETTINGS_BUTTON)
+    await dialogButton(p, 'Restore defaults').click()
+    assert.deepEqual(await dialogColors(p), penColors, 'the colors are the pen colors')
+    assert.deepEqual(await presetShown(p), { value: 'pen', label: 'Pen colors', disabled: [] })
+    for (const [role, value] of [['outline-pick', 'medium'], ['box-pick', 'page'], ['frame-pick', 'off']]) assert.equal(await p.locator(`${EDITOR} button[data-role="${role}"][data-value="${value}"]`).getAttribute('aria-pressed'), 'true', role)
+    assert.equal(await p.locator(`${EDITOR} [data-role="font-choice"]`).inputValue(), 'proportional')
+    assert.deepEqual(await savedKeys(p, keys), before, 'Restore defaults saves nothing by itself')
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    assert.deepEqual(await savedKeys(p, keys), before, 'Cancel keeps the saved settings')
+    await p.click(SETTINGS_BUTTON)
+    await dialogButton(p, 'Restore defaults').click()
+    await closeDialogWith(p, 'Save', EDITOR)
+    assert.equal(await savedPreset(p), 'pen')
+    assert.deepEqual(await savedColors(p), penColors, 'the saved colors are the pen colors')
+    assert.deepEqual(await savedKeys(p, Object.keys(changed)), { [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false, [FONT_KEY]: 'proportional' })
+  })
+
+  it('a paste leaves an unsaved edit of a setting it does not hold in the draft, and replaces the ones it does', async () => {
+    await p.click(SETTINGS_BUTTON)
+    await p.locator(`${EDITOR} button[data-role="outline-pick"][data-value="none"]`).click()
+    await p.locator(`${EDITOR} input[data-role="swatch"][data-key="3"]`).fill('#102030')
+    await p.evaluate(() => navigator.clipboard.writeText('{"TextAnywhere_font":"fixed"}'))
+    await actButton(p, 'paste-settings').click()
+    await p.locator(STATUS).filter({ hasText: 'Pasted 1 setting.' }).waitFor()
+    assert.equal(await p.locator(`${EDITOR} [data-role="font-choice"]`).inputValue(), 'fixed', 'the pasted font is in the draft')
+    assert.equal(await p.locator(`${EDITOR} button[data-role="outline-pick"][data-value="none"]`).getAttribute('aria-pressed'), 'true', 'the unsaved halo edit is still in the draft')
+    assert.equal((await dialogColors(p))[3], '#102030', 'the unsaved color edit is still in the draft')
+    await closeDialogWith(p, 'Save', EDITOR)
+    assert.equal((await savedKeys(p, [OUTLINE_KEY]))[OUTLINE_KEY], 'none')
+    assert.equal((await savedColors(p))[3], '#102030')
   })
 
   it('a palette of a shape the script does not know leaves the Darker page presets out, and the dialog says so', async () => {

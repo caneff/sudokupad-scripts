@@ -12,6 +12,7 @@ import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, mouseDrag, typeText } from '../board.mjs'
+import { slideTo } from '../slider.mjs'
 
 const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SELECTED, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
@@ -216,7 +217,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await assertWorks('tool switch mid-rectangle')
   })
 
-  for (const [name, slider, key] of [['Size', SIZE_SLIDER, WIDTH_KEY], ['Transparency', OPACITY_SLIDER, OPACITY_KEY]]) {
+  for (const [name, slider, key] of [['Size', SIZE_SLIDER, WIDTH_KEY], ['Opacity', OPACITY_SLIDER, OPACITY_KEY]]) {
     it(`17: a ${name} slider drag with a tool hotkey mid-drag ends the drag: the saved value is the one shown, and the slider answers a click when Text Anywhere is back`, async () => {
       const valueOf = () => textAnywhere.valueOf(p, slider)
       const before = await valueOf()
@@ -236,7 +237,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
       assert.equal(Number(savedState(stored)), await valueOf(), 'the saved value is the one the slider shows')
       const resting = await valueOf()
       const { min, max } = await read((selector) => ({ min: Number(document.querySelector(selector).min), max: Number(document.querySelector(selector).max) }), slider)
-      await textAnywhere.slideTo(p, slider, resting - min > max - resting ? min : max)
+      await slideTo(p, slider, resting - min > max - resting ? min : max)
       assert.notEqual(await stable(valueOf), resting, 'the slider answers a click again')
       assert.equal(await read((selector) => document.activeElement?.matches(`${selector} input`) === true, textAnywhere.SLIDERS), false, 'no slider keeps the focus')
       assert.deepEqual(errors, [], 'the page shows no error')

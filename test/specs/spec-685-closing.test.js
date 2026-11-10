@@ -42,7 +42,7 @@ const fakeSudokuPad = () => {
   let options = []
   const dialog = {
     addEventListener: (type, fn) => { if (type === 'click') clicks.push(fn) },
-    querySelector: (selector) => (selector === '[data-role="settings-status"]' ? status : selector === '[data-role="error-log"]' ? { addEventListener () {} } : null)
+    querySelector: (selector) => (selector === '[data-role="settings-status"]' ? status : selector === '[data-role="off-note"]' ? {} : selector === '[data-role="error-log"]' ? { addEventListener () {} } : null)
   }
   const body = { closest: (selector) => (selector === '.dialog' ? dialog : null) }
   const doc = { head: { appendChild () {} }, createElement: () => ({}), getElementById: (id) => (id === 'demo-body' ? body : null) }
@@ -83,6 +83,7 @@ function openDialog ({ ownThrow = false } = {}) {
     name: 'Demo',
     version: '1.0.0',
     bodyId: 'demo-body',
+    off: guard.off,
     changed: () => true,
     save: () => write({ A_width: 500, A_height: 700 }),
     snapshot: () => lib.snapshotStore(store, ['A_width', 'A_height'], holdMirror),
@@ -146,7 +147,7 @@ test('every script\'s settings go through the shared guard, its dialog takes a s
     assert.ok(/guard\.dialogsFor\(/.test(own), `${file} opens its dialogs through the guard`)
     // The dialog's options, up to its Copy and Paste.
     const options = /showSettingsDialog\(dialogs, \{([\s\S]*?)\bcopyPaste: \{/.exec(own)?.[1] ?? ''
-    for (const option of ['snapshot', 'feature']) assert.ok(new RegExp(`\\b${option}: `).test(options), `${file} hands its dialog a ${option} and its Copy and Paste`)
+    for (const option of ['snapshot', 'feature', 'off']) assert.ok(new RegExp(`\\b${option}: `).test(options), `${file} hands its dialog a ${option} and its Copy and Paste`)
     for (const copy of [/const dialogs = \{/, /const savedData = \{/, /\b(offNow|settingsOff)\b/, /\bPURPLE\s*=/, /#6a1b9a/i, /M12\.22 2h-\.44/, /function (writeOrRestore|snapshotStore|wrapIndex|writeStyle)\b/]) {
       assert.equal(copy.test(own), false, `${file} keeps its own ${copy}`)
     }

@@ -4,7 +4,7 @@
 // functions and its own source.
 // Blind to real SudokuPad: the Framework calls, rendering and undo. The live suites cover them on sudokupad.app: auto-rules-resizer (a resized puzzle reloads with
 // its sizing, puzzle B opens at the default after A, Restore defaults), pen-tool-extras-erase and pen-tool-extras-marks (the click and the erase through
-// marksAtPoint), pen-tool-extras-arrow-lines (the arrow heads), settings-shell (the Rules Resizer dialog's buttons) and sudokupad-attacks (blocked storage).
+// marksAtPoint), pen-tool-extras-arrow-lines (the arrow heads), settings-shell (the Auto Rules Resizer dialog's buttons) and sudokupad-attacks (blocked storage).
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { readFileSync } = require('node:fs')

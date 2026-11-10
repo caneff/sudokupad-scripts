@@ -54,6 +54,8 @@ The colors are saved under `PenColor_colors` as `{"1": "#rrggbb", …, "9": "#rr
 
 Both sliders sit in the pen tool's panel, across its full width under the three control buttons, so you can change them during play. The track says what a slider does: Thickness is a wedge widening to the right, Opacity fades from faint to solid purple, and the thumb is a white circle with a purple ring. Hover a slider for its name. A move changes the marks live and saves at once. It adds nothing to undo or the replay, and gives the keyboard back to the puzzle.
 
+**Stepping Thickness with the + and - keys**: with the pen tool on, the + key (also =, and the keypad's +) moves the Thickness slider one step up and the - key (also the keypad's) one step down, as Text Anywhere's Size keys do, and saves it as a slider move is. It stops at the ends of the range. It does nothing with Ctrl, Alt or Meta held (the browser's zoom), while a field has focus or a dialog is open, with the pen tool off, or with the Thickness slider hidden from the panel ("Slider in panel"). A held key steps once, because the script ignores a repeat, as SudokuPad does for a tool's keys. SudokuPad's own pen tool does nothing with these keys (`docs/research/sudokupad-pen-tool.md` § + and -). Opacity has no keys.
+
 | Slider | Range | Default | Changes | Saved under |
 | --- | --- | --- | --- | --- |
 | Thickness | 1 to 16, in steps of 0.5 | 5 | Lines, cell circles, crosses and dots, and edge and corner marks, by the same factor | `PenColor_thickness` |
@@ -112,7 +114,7 @@ Only lines change with the page. A cell circle, a cross, a dot and the edge and 
 
 **Picking a pen with a digit key**: with the pen tool on, a bare digit key 1 to 9 picks pen N on the page showing, as a click on that color button does: on page 2, key 3 picks page 2's pen 3. The key follows the button's number, so Keypad Flipped changes nothing. Key 0, a digit with Ctrl, Alt, Meta or Shift held, and a digit typed into a text field are left to SudokuPad and the browser.
 
-Besides Tab and the wheel, which SudokuPad's color tool uses the same way (`docs/research/sudokupad-color-tool-paging.md`), the digit keys are the one input the script takes that SudokuPad's pen tool ignores.
+Besides Tab and the wheel, which SudokuPad's color tool uses the same way (`docs/research/sudokupad-color-tool-paging.md`), the digit keys and the + and - keys are the inputs the script takes that SudokuPad's pen tool ignores.
 
 The same pen number stays selected across pages. The selected pen is saved under `PenColor_pen` and comes back after a reload. SudokuPad's own `ToolPen_color` only ever holds the pen's number, so removing the script leaves stock SudokuPad working with that pen on its first page.
 
@@ -183,7 +185,7 @@ With the box on and the pen tool on, a right click over the grid erases what is 
 - On an edge mark, a grid-corner mark or a cell's circle, cross or dot with no line under the pointer: that mark, whatever its shape. Lines win over marks when both are under the pointer.
 - On nothing: nothing, and no mark is made.
 
-While the right button is held, everything the erase has gathered so far is drawn at 0.3 opacity: the whole line the press hit with its branches, and the marks. Releasing erases it at once, with no fade. Escape while the button is held cancels the erase: the faded strokes return to full opacity, nothing is erased and there is no undo step.
+While the right button is held nothing dims or changes: the erase shows no preview. Releasing erases the whole line the press hit with its branches, and the marks, at once, with no fade. Escape while the button is held cancels the erase: nothing is erased and there is no undo step.
 
 A line is hit within 0.2 of a cell of it, held to at least 10 px on small cells and at most 0.24 of a cell, so a centre line and the edge line beside it (0.5 apart) are never both hit.
 
@@ -209,7 +211,7 @@ The dialog's Restore defaults picks the Darker page 1 preset, or SudokuPad color
 
 The script installs itself in steps, and each step checks at startup that the SudokuPad internals it needs are there. A step whose internals are gone is not installed, and the browser console says so once: `pen-tool-extras: marks, line erase skipped because SudokuPad has no getCell`. A step that throws later, in its own code, is skipped from then on: SudokuPad's own function answers in its place on that call and every later one, and the console says so once as `pen-tool-extras: <step> skipped because SudokuPad changed:` with the error. A throw in SudokuPad's own function is SudokuPad's, and skips nothing. A failure outside every step is logged as an error, `pen-tool-extras: startup failed:`. The other steps keep working, and a bar at the bottom of the page names what is off, with a Report link.
 
-The settings dialog names the skipped steps in one line at its top, for example `Off because SudokuPad changed: arrow lines`, and shows nothing when all is well. Its controls stay; a control of a skipped step does nothing until the page loads with the step installed. Reload after updating the script.
+The settings dialog names the skipped steps in one line under its title (every script's settings dialog does the same for its own parts), for example `Off because SudokuPad changed: arrow lines`, and shows nothing when all is well. Its controls stay; a control of a skipped step does nothing until the page loads with the step installed. Reload after updating the script.
 
 | Step | Not installed when SudokuPad has no | What you see with it skipped |
 | --- | --- | --- |

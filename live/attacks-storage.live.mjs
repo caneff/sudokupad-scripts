@@ -14,6 +14,7 @@ import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
 import { addPage, openWith, useBrowser } from './session.mjs'
+import { slideTo } from './slider.mjs'
 
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
@@ -61,7 +62,7 @@ describe('attacks on storage', { concurrency: false }, () => {
       // With a note selected the slider changes that note; with none it saves the next note's size, a settings write.
       await p.keyboard.press('Escape')
       if (await p.locator(textAnywhere.SELECTED).count() > 0) await p.keyboard.press('Escape')
-      await textAnywhere.slideTo(p, textAnywhere.SIZE_SLIDER, 12)
+      await slideTo(p, textAnywhere.SIZE_SLIDER, 12)
       await dismissNotice()
       await setSlider(p, THICKNESS, 9)
       await mouseDrag(p, [[1.5, 1.5], [1.5, 4.5]])
@@ -132,7 +133,7 @@ describe('attacks on storage', { concurrency: false }, () => {
     await other.p.click('#control-colorbydigit')
     const modeThere = await readUntil(() => labelOn(other.p), (label) => label !== modeBefore)
     await pickTool(other.p, 'textanywhere')
-    await textAnywhere.slideTo(other.p, textAnywhere.SIZE_SLIDER, 40)
+    await slideTo(other.p, textAnywhere.SIZE_SLIDER, 40)
     const widthThere = await textAnywhere.valueOf(other.p, textAnywhere.SIZE_SLIDER)
     assert.equal(await stored(p, THICKNESS_KEY), OTHER_TAB_THICKNESS, 'the first tab sees the saved thickness')
 

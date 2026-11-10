@@ -5,9 +5,9 @@ import { openWith, useBrowser } from './session.mjs'
 
 const SCRIPTS = [
   { file: 'dark-page', entry: 'Dark Page', editor: '#dark-page-dialog', buttons: ['Save', 'Cancel'] },
-  { file: 'auto-rules-resizer', entry: 'Rules Resizer', editor: '#rules-resizer-dialog', buttons: ['Save', 'Cancel', 'Restore defaults'] },
+  { file: 'auto-rules-resizer', entry: 'Auto Rules Resizer', editor: '#rules-resizer-dialog', buttons: ['Save', 'Cancel', 'Restore defaults'] },
   { file: 'color-by-digit', entry: 'Color by Digit', editor: '#color-by-digit-editor', buttons: ['Save', 'Cancel'] },
-  { file: 'text-anywhere', entry: 'Text Anywhere', editor: '#text-anywhere-dialog', buttons: ['Save', 'Cancel'] },
+  { file: 'text-anywhere', entry: 'Text Anywhere', editor: '#text-anywhere-dialog', buttons: ['Save', 'Cancel', 'Restore defaults'] },
   { file: 'pen-tool-extras', entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', buttons: ['Save', 'Cancel', 'Restore defaults'] }
 ]
 
@@ -58,3 +58,35 @@ for (const { file, entry, editor, buttons } of SCRIPTS) {
     })
   })
 }
+
+describe('a script\'s dialog names the parts that are off because SudokuPad changed', { concurrency: false }, () => {
+  let context, p, errors
+  before(async () => {
+    // Dark Page's saved color needs Framework.getData and its settings entry does not, so the entry still opens.
+    ({ context, p, errors } = await openWith(browser(), ['dark-page.user.js'], {
+      // SudokuPad needs getData itself, so it is hidden only until the script has logged its skip.
+      afterStart: (page) => page.evaluate(() => {
+        const getData = Framework.getData
+        const warn = console.warn
+        Framework.getData = undefined
+        console.warn = function (...args) {
+          warn.apply(this, args)
+          if (String(args[0]).startsWith('dark-page: saved color skipped')) { Framework.getData = getData; console.warn = warn }
+        }
+      }),
+      expectedSkips: [/^dark-page: saved color skipped because SudokuPad has no Framework\.getData/]
+    }))
+  })
+  after(async () => { await context?.close() })
+
+  it('Dark Page\'s dialog has the line, and says which part is off', async () => {
+    await openScriptDialog(p, 'Dark Page', '#dark-page-dialog')
+    const note = await p.locator('.dialog .dark-page-off-note').allTextContents()
+    assert.deepEqual(note, ['Off because SudokuPad changed: saved color'])
+    await closeDialogWith(p, 'Cancel', '#dark-page-dialog')
+  })
+
+  it('the page raised no error beyond the declared skip', () => {
+    assert.deepEqual(errors, [])
+  })
+})

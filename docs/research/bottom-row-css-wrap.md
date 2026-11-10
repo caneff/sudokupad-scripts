@@ -18,6 +18,9 @@ One rule gives 5 buttons a row, whichever script added which button and in whate
 .controls-aux { max-width: 21.6rem; }
 ```
 
+Since #738 the rule carries `!important`: a page showed an inline `max-width: 482px` on the row (writer unknown), which beats a
+stylesheet cap, and the probe below ran without one.
+
 Probe (`.scratch/probe-wrap.mjs`, not kept): Pen Tool Extras, Draw Tool and Color by Digit injected, #364's JS row
 undone, two stand-ins for GDC's buttons appended, then the rule. At 1600x900 and 1280x720 the row wrapped 5 + 2, and
 SudokuPad re-laid out the controls so nothing overlapped and the footer stayed on screen. Picture:

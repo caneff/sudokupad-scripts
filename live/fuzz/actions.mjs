@@ -34,7 +34,7 @@ const NOTE_TEXTS = ['15', 'a->b', 'sum 12', '!= 3', 'x\ny']
 const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
 
 // The four sliders of the pen panel and the notes panel, by the name a step prints.
-export const SLIDERS = ['pen thickness', 'pen opacity', 'note size', 'note transparency']
+export const SLIDERS = ['pen thickness', 'pen opacity', 'note size', 'note opacity']
 // Text Anywhere's Box color buttons, in the dialog's order; `custom` is Own.
 const BOX_CHOICES = [...Object.keys(BOX_PRESETS), 'custom']
 const boxLabel = (choice) => BOX_PRESETS[choice] ?? 'Own'

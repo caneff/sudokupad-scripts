@@ -1,12 +1,13 @@
-// Live check of text-anywhere.user.js's panel while a note is open: it shows the open note's color and size, a color button or the Size and Transparency sliders change that note
-// and leaves the next-note settings alone (a brand-new note's color and size also become the next note's), the press keeps the note open with its caret, and finishing the note brings the next-note values back. Real mouse input.
+// Live check of text-anywhere.user.js's panel while a note is open: it shows the open note's color and size, a color button or the Size and Opacity sliders change that note
+// and are also the next-note settings (opening a note changes none), the press keeps the note open with its caret, and finishing the note leaves the panel on the next-note values. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, finishNote, gridPoint } from '../board.mjs'
+import { slideTo } from '../slider.mjs'
 
-const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, TEXT_BOX, WIDTH_KEY, slideTo, valueOf } = textAnywhere
+const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, TEXT_BOX, WIDTH_KEY, valueOf } = textAnywhere
 const BLACK = 1
 const GREEN = 3
 const RED = 4
@@ -54,43 +55,52 @@ describe('Text Anywhere\'s panel while a note is open', { concurrency: false }, 
     assert.equal(await boxOpen(p), true, 'the note is still open')
     assert.deepEqual(await currentKeys(), [RED])
     assert.equal(await boxColor(), await read((c) => { const d = document.createElement('i'); d.style.color = c; document.body.append(d); const v = window.getComputedStyle(d).color; d.remove(); return v }, await penColor(RED)))
-    assert.equal(await stored(COLOR_KEY), BLACK, 'the next-note color is unchanged')
+    assert.equal(await stored(COLOR_KEY), RED, 'the color picked is also the next-note color')
     await p.keyboard.type('X')
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'aXb', 'the caret was where it was')
   })
 
-  it('finishing keeps the note red, and the panel shows the next-note color again', async () => {
+  it('finishing keeps the note red, and the panel shows the next-note color, now red', async () => {
     await finishNote(p)
     assert.equal(await boxOpen(p), false)
     assert.deepEqual((await textAnywhere.saved(p)).map((i) => [i.text, i.color]), [['aXb', RED]])
-    assert.deepEqual(await currentKeys(), [BLACK])
+    assert.deepEqual(await currentKeys(), [RED])
   })
 
-  it('the Size slider resizes the open note only, and the next-note size is unchanged', async () => {
-    const nextSize = await size()
+  it('opening a note and finishing it changes no next-note setting', async () => {
+    const color = await stored(COLOR_KEY)
+    await openAt()
+    assert.equal(await stored(WIDTH_KEY), null)
+    await finishNote(p)
+    assert.equal(await stored(COLOR_KEY), color, 'the next-note color is as it was')
+    assert.equal(await stored(WIDTH_KEY), null)
+    assert.equal(await stored(OPACITY_KEY), null)
+  })
+
+  it('the Size slider resizes the open note, and the size picked is also the next-note size', async () => {
     await openAt()
     const before = (await textAnywhere.saved(p))[0].size
     await slideTo(p, SIZE_SLIDER, 16)
     assert.equal(await boxOpen(p), true, 'the note is still open')
-    assert.equal(await stored(WIDTH_KEY), null, 'the next-note size was never saved')
+    assert.equal(await stored(WIDTH_KEY), 16, 'the next-note size is the one picked')
     assert.equal(await size(), 16, 'the slider shows the open note\'s size')
     await p.keyboard.type('Z')
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'aXbZ', 'typing continues in the note')
     await finishNote(p)
     const after = (await textAnywhere.saved(p))[0].size
     assert.ok(after > before, `the note grew (${before} to ${after})`)
-    assert.equal(await size(), nextSize, 'the slider shows the next-note size again')
+    assert.equal(await size(), 16, 'the slider still shows the size picked')
   })
 
-  it('the Transparency slider fades the open note only, and the next-note transparency is unchanged', async () => {
+  it('the Opacity slider fades the open note, and the opacity picked is also the next-note opacity', async () => {
     await openAt()
     await slideTo(p, OPACITY_SLIDER, 50)
     assert.equal(await boxOpen(p), true, 'the note is still open')
     assert.equal(await valueOf(p, OPACITY_SLIDER), 50)
-    assert.equal(await stored(OPACITY_KEY), null, 'the next-note transparency was never saved')
+    assert.equal(await stored(OPACITY_KEY), 50, 'the next-note opacity is the one picked')
     await finishNote(p)
     assert.equal((await textAnywhere.saved(p))[0].opacity, 50, 'a note reopened and only faded is saved with the change')
-    assert.equal(await valueOf(p, OPACITY_SLIDER), 100, 'the slider shows the next-note transparency again')
+    assert.equal(await valueOf(p, OPACITY_SLIDER), 50, 'the slider still shows the opacity picked')
   })
 
   it('a press on a slider that moves nothing leaves the note open with the focus back in it, so typing goes into the note', async () => {
@@ -165,7 +175,7 @@ describe('Text Anywhere\'s panel while a brand-new note is open', { concurrency:
     const picked = await size()
     assert.ok(picked > before, 'the size went up')
     assert.equal(await stored(WIDTH_KEY), 12, 'the next-note size is the one picked')
-    assert.equal(await stored(OPACITY_KEY), 55, 'and so is the next-note transparency')
+    assert.equal(await stored(OPACITY_KEY), 55, 'and so is the next-note opacity')
     await finishNote(p)
     assert.deepEqual([await size(), await valueOf(p, OPACITY_SLIDER)], [picked, 55], 'the sliders still show them after the note is saved')
     assert.deepEqual([(await textAnywhere.saved(p))[0].size, (await textAnywhere.saved(p))[0].opacity], [32, 55], 'the new note was saved with both')

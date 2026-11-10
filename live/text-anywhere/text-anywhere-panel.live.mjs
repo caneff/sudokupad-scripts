@@ -1,5 +1,5 @@
 // Live check of text-anywhere.user.js's panel on sudokupad.app: the nine colors copied from the pen colors on first use, the nine "Aa" color buttons,
-// the controls row (Clear all, Background and the gear) and the Size and Transparency sliders inside the keypad's height at the two desktop sizes, the digit keys,
+// the controls row (Clear all, Background and the gear) and the Size and Opacity sliders inside the keypad's height at the two desktop sizes, the digit keys,
 // a hold that opens the color pickers and a recolor of notes already made, the choices kept over a reload, and SudokuPad's
 // own keypad back under another tool.
 import { after, before, describe, it } from 'node:test'
@@ -9,8 +9,9 @@ import { plantUnchecked } from '../pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 import { addScripts, useBrowser } from '../session.mjs'
 import { gridPoint, typeText } from '../board.mjs'
+import { slideTo } from '../slider.mjs'
 
-const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, OPACITY_SLIDER, SLIDERS, TEXTS, WIDTH_KEY, slideTo, valueOf } = textAnywhere
+const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, OPACITY_SLIDER, SLIDERS, TEXTS, WIDTH_KEY, valueOf } = textAnywhere
 // r1c3 of the recorded puzzle, empty.
 const EMPTY_CELL = [0, 2]
 const rgb = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
@@ -70,7 +71,7 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
       assert.equal(sliders.y >= clear.bottom, true, 'the sliders are under the controls')
     })
 
-    it('the panel is nine Aa color buttons, Clear all, Background and the gear, and the Size and Transparency sliders, with no Shape button', async () => {
+    it('the panel is nine Aa color buttons, Clear all, Background and the gear, and the Size and Opacity sliders, with no Shape button', async () => {
       assert.equal(await p.locator('.controls-input button.digit:not([data-key="0"])').count(), 9)
       const labels = await p.evaluate(() => [...document.querySelectorAll('.controls-input button.digit:not([data-key="0"])')].map((b) => window.getComputedStyle(b, '::after').content))
       assert.deepEqual(labels, Array(9).fill('"Aa"'))

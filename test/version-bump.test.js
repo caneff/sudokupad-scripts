@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { headerVersion } = require('./header-version.js')
+const { scriptFiles } = require('../sync-lib.js')
 
 const ROOT = path.join(__dirname, '..')
 const BASE_REF = 'origin/main'
@@ -91,7 +92,9 @@ describe('this checkout against origin/main', () => {
       return t.skip(`${BASE_REF} is not fetched`)
     }
     const mergeBase = git('merge-base', BASE_REF, 'HEAD').trim()
-    const files = git('ls-files', '*.user.js').split('\n').filter(Boolean)
+    // A handover is frozen at one version (#711), so it is not one of the scripts whose bump is checked.
+    const tracked = new Set(git('ls-files', '*.user.js').split('\n').filter(Boolean))
+    const files = scriptFiles().filter((file) => tracked.has(file))
     assert.notEqual(files.length, 0, 'git ls-files found no *.user.js')
     const current = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8')
     assert.deepEqual(versionProblems(files, { current, mergeBase: (file) => fileAt(mergeBase, file), tip: (file) => fileAt(BASE_REF, file) }, BASE_REF), [])

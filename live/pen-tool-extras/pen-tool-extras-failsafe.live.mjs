@@ -134,7 +134,7 @@ const browser = useBrowser()
 
 async function dialogLineOf (p) {
   await openExtrasEditor(p)
-  const text = await p.locator('#pen-tool-extras-editor').innerText()
+  const text = await p.locator('.dialog .pen-tool-extras-off-note').innerText()
   const line = /Off because SudokuPad changed: (.*)/.exec(text)
   await closeExtrasEditorWith(p, 'Cancel')
   return line ? line[1].trim() : NOTHING_OFF

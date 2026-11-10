@@ -1,4 +1,4 @@
-// Live check of text-anywhere.user.js's erasing on sudokupad.app: a right-drag or right click deletes the notes it crosses (a middle click or drag does nothing), the
+// Live check of text-anywhere.user.js's erasing on sudokupad.app: a right-drag or right click collects the notes it crosses and deletes them on the release, Escape or a lost pointer cancels it (a middle click or drag does nothing), the
 // board's context menu is suppressed while Text Anywhere is current, Clear all asks first, and closing its dialog over the board
 // makes no note and opens no text box. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
@@ -124,33 +124,100 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
   })
 
   // Z switches to Digit with the right button still held, so the release goes to the Digit tool and not to Text Anywhere.
-  it('a right-drag cut short by a tool switch keeps what it erased, and erases nothing more when Text Anywhere is back', async () => {
+  it('a right-drag cut short by a tool switch removes nothing, and erases nothing more when Text Anywhere is back', async () => {
     await typeText(p, UPPER_AT, '15')
     await p.mouse.move(...await gridPoint(p, [1.5, 2.2]))
     await p.mouse.down({ button: 'right' })
     await p.mouse.move(...await gridPoint(p, [1.5, 2.8]), { steps: 8 })
-    assert.deepEqual(await texts(), ['20'], 'the drag erased the upper note')
+    assert.deepEqual(await texts(), ['20', '15'], 'nothing is removed while the button is held')
     await p.keyboard.press('z')
     assert.equal(await settle(tool, 'normal'), 'normal')
     await p.mouse.up({ button: 'right' })
-    assert.equal((await saved()).length, 1, 'the erase was saved when Text Anywhere was left')
+    assert.deepEqual(await texts(), ['20', '15'], 'the tool switch cancelled the erase')
     await read(() => Framework.app.changeTool('textanywhere'))
     assert.equal(await tool(), 'textanywhere')
     await p.mouse.move(...await gridPoint(p, [3.5, 2.2]))
     await p.mouse.move(...await gridPoint(p, [3.5, 2.8]), { steps: 8 })
+    assert.deepEqual(await texts(), ['20', '15'])
+    await p.mouse.click(...await gridPoint(p, UPPER_AT), { button: 'right' })
     assert.deepEqual(await texts(), ['20'])
   })
 
-  // A mouse move with no button down stands for a release the page never saw, such as one off the window.
-  it('a right-drag whose button is no longer held erases nothing more', async () => {
-    await p.mouse.move(...await gridPoint(p, [5.5, 0.5]))
+  it('a right-drag across two notes removes both at the release and not before', async () => {
+    await typeText(p, UPPER_AT, '15')
+    assert.deepEqual(await texts(), ['20', '15'])
+    await p.mouse.move(...await gridPoint(p, [1.5, 2.2]))
     await p.mouse.down({ button: 'right' })
-    const [x, y] = await gridPoint(p, [3.5, 1])
-    await read(([cx, cy]) => document.elementFromPoint(cx, cy).dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, clientX: cx, clientY: cy, buttons: 0 })), [x, y])
+    await p.mouse.move(...await gridPoint(p, [1.5, 2.5]), { steps: 4 })
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.5]), { steps: 12 })
+    assert.deepEqual(await texts(), ['20', '15'], 'both notes are still there while the button is held')
+    assert.deepEqual((await saved()).map((item) => item.text), ['20', '15'], 'and still saved')
+    await p.mouse.up({ button: 'right' })
+    assert.deepEqual(await settle(texts, []), [])
+    assert.equal(await saved(), null)
+    await typeText(p, LOWER_AT, '20')
+    await typeText(p, UPPER_AT, '15')
+    assert.deepEqual(await texts(), ['20', '15'])
+  })
+
+  it('Escape while the right button is held cancels the erase: the release removes nothing', async () => {
+    await p.mouse.move(...await gridPoint(p, [1.5, 2.2]))
+    await p.mouse.down({ button: 'right' })
+    await p.mouse.move(...await gridPoint(p, [1.5, 2.5]), { steps: 4 })
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.5]), { steps: 12 })
+    await p.keyboard.press('Escape')
     await p.mouse.move(...await gridPoint(p, [3.5, 2.2]), { steps: 4 })
+    await p.mouse.up({ button: 'right' })
+    assert.deepEqual(await texts(), ['20', '15'])
+    assert.equal((await saved()).length, 2)
+  })
+
+  it('a right press, Escape and a release on a note removes nothing', async () => {
+    await p.mouse.move(...await gridPoint(p, UPPER_AT))
+    await p.mouse.down({ button: 'right' })
+    await p.keyboard.press('Escape')
+    await p.mouse.up({ button: 'right' })
+    assert.deepEqual(await texts(), ['20', '15'])
+    await p.mouse.click(...await gridPoint(p, UPPER_AT), { button: 'right' })
+    assert.deepEqual(await texts(), ['20'], 'the next right click erases as before')
+  })
+
+  // A mouse move with no button down stands for a release the page never saw, such as one off the window.
+  it('a right-drag whose button is no longer held removes nothing, and the release finds no erase', async () => {
+    await p.mouse.move(...await gridPoint(p, [3.5, 1.5]))
+    await p.mouse.down({ button: 'right' })
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.5]), { steps: 8 })
+    const [x, y] = await gridPoint(p, [5.5, 2.5])
+    await read(([cx, cy]) => document.elementFromPoint(cx, cy).dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, clientX: cx, clientY: cy, buttons: 0 })), [x, y])
+    await p.mouse.up({ button: 'right' })
+    assert.deepEqual(await texts(), ['20'], 'the note the drag crossed before the loss is kept')
+    assert.equal((await saved()).length, 1)
+  })
+
+  it('a key that changes the selected note during a right press leaves it to the erase: the release removes it', async () => {
+    await p.mouse.click(...await gridPoint(p, LOWER_AT))
+    await p.keyboard.press('Escape')
+    await p.mouse.click(...await gridPoint(p, LOWER_AT))
+    assert.equal(await read(() => document.querySelectorAll('#text-anywhere-layer .text-anywhere-selected').length), 1, 'the note is selected')
+    await p.mouse.move(...await gridPoint(p, LOWER_AT))
+    await p.mouse.down({ button: 'right' })
+    await p.mouse.move(...await gridPoint(p, [5.5, 4.5]), { steps: 4 })
+    await p.keyboard.down('ArrowRight')
+    await p.keyboard.up('ArrowRight')
+    await p.mouse.up({ button: 'right' })
+    assert.deepEqual(await settle(texts, []), [])
+    await typeText(p, LOWER_AT, '20')
+    assert.deepEqual(await texts(), ['20'])
+  })
+
+  it('a right-drag cut short by the window losing focus removes nothing', async () => {
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.2]))
+    await p.mouse.down({ button: 'right' })
     await p.mouse.move(...await gridPoint(p, [3.5, 2.8]), { steps: 8 })
+    await read(() => window.dispatchEvent(new window.Event('blur')))
     await p.mouse.up({ button: 'right' })
     assert.deepEqual(await texts(), ['20'])
+    assert.equal((await saved()).length, 1)
   })
 
   // The window's blur stands for the solver switching window mid-drag; the release then goes to the other window.

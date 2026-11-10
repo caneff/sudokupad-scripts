@@ -9,8 +9,9 @@ import { captureConsoleErrors } from '../page.mjs'
 import { SETTLE_MS, settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, clickAt, finishNote, gridPoint, mouseDrag, restart, typeText, undoDepth } from '../board.mjs'
+import { slideTo } from '../slider.mjs'
 
-const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SELECTED, SIZE_SLIDER, TEXT_BOX, TEXTS, slideTo } = textAnywhere
+const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SELECTED, SIZE_SLIDER, TEXT_BOX, TEXTS } = textAnywhere
 const { HIT_MARGIN_PX } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const HOME = { width: 1200, height: 900 }
 const SPOT = [2.5, 2.5]
@@ -329,7 +330,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.deepEqual(await savedTexts(), [])
   })
 
-  it('attack 30: several selected notes take a new Size, Color and Transparency from the panel, and SudokuPad\'s Undo leaves those notes as they are', async () => {
+  it('attack 30: several selected notes take a new Size, Color and Opacity from the panel, and SudokuPad\'s Undo leaves those notes as they are', async () => {
     const places = { A: [1.5, 1.5], B: [1.5, 3.5], C: [3.5, 2.5] }
     for (const [text, at] of Object.entries(places)) await typeText(p, at, text)
     // A digit gives SudokuPad's Undo something to undo.

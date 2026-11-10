@@ -267,8 +267,11 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.equal(await t.menu().count(), 0)
   })
 
+  let oddEvenIcon
+
   it('a pick in Cell removes the old colors and colors every pure cell by the new profile, as one undo step', async () => {
     const before = await t.coloursOf()
+    oddEvenIcon = await t.iconShownDigits()
     await t.openMenuByArrow()
     await t.pick('Low/5/High')
     assert.equal(await settle(() => t.wrongCount(LOW_FIVE_HIGH), 0), 0)
@@ -278,22 +281,31 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.equal(await settle(t.coloursOf, before), before)
   })
 
-  it('the undo left the profile switched: the saved profile and the icon stay Low/5/High', async () => {
-    assert.equal((await t.getState()).active, 1)
-    assert.deepEqual(await t.iconShownDigits(), ['1', '5', '9'])
+  it('the undo took the profile back too: the saved profile and the icon are Odd/Even\'s again', async () => {
+    assert.equal((await t.getState()).active, 0)
+    assert.deepEqual(await settle(t.iconShownDigits, oddEvenIcon), oddEvenIcon)
   })
 
-  it('stepping to Digit takes off the active profile\'s colors only, and a pick in Digit changes no cell\'s color', async () => {
-    // The undo above left Odd/Even's colors on the board under the active Low/5/High: its 2 is in no group of Low/5/High.
-    const lowKeys = () => t.read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).some((k) => ['1', '5', '9'].includes(k))).length)
+  it('redo puts the pick back with its colors: the saved profile is Low/5/High again; the undo after it takes it back', async () => {
+    await p.click('#control-redo')
+    assert.equal(await settle(() => t.wrongCount(LOW_FIVE_HIGH), 0), 0)
+    assert.equal((await t.getState()).active, 1)
+    await t.undo()
+    assert.equal(await settle(() => t.wrongCount(ODD_EVEN), 0), 0)
+    assert.equal((await t.getState()).active, 0)
+  })
+
+  it('stepping to Digit takes off the active profile\'s colors, and a pick in Digit changes no cell\'s color', async () => {
     await pressTo(p, 'Digit')
-    assert.equal(await settle(lowKeys, 0), 0)
-    assert.notEqual(await t.coloredCount(), 0)
+    assert.equal(await settle(t.coloredCount, 0), 0)
     const before = await t.coloursOf()
+    await t.openMenuByArrow()
+    await t.pick('Low/5/High')
+    assert.equal((await t.getState()).active, 1)
+    assert.deepEqual(await watch(t.coloursOf), [before])
     await t.openMenuByArrow()
     await t.pick('Odd/Even')
     assert.equal((await t.getState()).active, 0)
-    assert.deepEqual(await watch(t.coloursOf), [before])
     await pressTo(p, 'Both')
     assert.equal(await settle(() => t.wrongCount(ODD_EVEN), 0), 0)
   })

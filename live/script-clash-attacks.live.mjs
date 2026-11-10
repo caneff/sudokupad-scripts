@@ -35,7 +35,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
       ['Text Anywhere dialog', () => openScriptDialog(p, 'Text Anywhere', TEXT_EDITOR), TEXT_EDITOR, close(TEXT_EDITOR)],
       ['Color by Digit editor', () => openScriptDialog(p, 'Color by Digit', CBD_EDITOR), CBD_EDITOR, close(CBD_EDITOR)],
       ['Dark Page dialog', () => openScriptDialog(p, 'Dark Page', DARK_EDITOR), DARK_EDITOR, close(DARK_EDITOR)],
-      ['Auto Rules Resizer dialog', () => openScriptDialog(p, 'Rules Resizer', RULES_EDITOR), RULES_EDITOR, close(RULES_EDITOR)]
+      ['Auto Rules Resizer dialog', () => openScriptDialog(p, 'Auto Rules Resizer', RULES_EDITOR), RULES_EDITOR, close(RULES_EDITOR)]
     ]
     assert.equal(await settle(() => pageColor(p), BLACK), BLACK, 'the page starts dark')
     for (const [name, open, surface, close = async () => {}] of SURFACES) {

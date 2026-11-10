@@ -8,7 +8,7 @@ const { headerField, headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY } = require('../text-anywhere.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, draftWithPasted, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -430,7 +430,7 @@ test('a Darker page preset the palette lacks, or an unknown one, throws', () => 
   assert.throws(() => presetColors('nope', [], () => undefined, () => undefined), /not a preset/)
 })
 
-test('Copy settings holds the colors, size, transparency, outline, box color, frame and font, defaults included, and no notes, color pick or background', () => {
+test('Copy settings holds the colors, size, opacity, outline, box color, frame and font, defaults included, and no notes, color pick or background', () => {
   const copied = JSON.parse(copiedSettings(fakeStore({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed', [COLOR_KEY]: 4, [NOTES_PREFIX + 'x']: [] })))
   assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' })
 })
@@ -464,7 +464,7 @@ test('the looks table is the one list behind Paste and Copy: every row reads and
   for (const key of lookKeys(LOOKS)) assert.ok(key in READERS, key)
 })
 
-test('a pasted size or transparency that is off its slider is skipped, and a pasted outline, box color, frame or font that is invalid is read as its default', () => {
+test('a pasted size or opacity that is off its slider is skipped, and a pasted outline, box color, frame or font that is invalid is read as its default', () => {
   const readers = lookReaders(LOOKS)
   assert.equal(readers[WIDTH_KEY](3.5), 3.5)
   assert.equal(readers[WIDTH_KEY](999), undefined)
@@ -522,7 +522,7 @@ test('the frame setting is on only for true, and a frame is a thin light gray ri
   assert.equal(frameShadow(true), `0 0 0 var(--text-anywhere-px, 1px) ${FRAME_COLOR}`)
 })
 
-test('Paste settings returns the colors, size and transparency, ignores other scripts\' keys and counts a refused value as skipped', () => {
+test('Paste settings returns the colors, size and opacity, ignores other scripts\' keys and counts a refused value as skipped', () => {
   const text = JSON.stringify({ [COLORS_KEY]: hexes('#AABBCC'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35, PenColor_colors: hexes('#000000'), unrelated: 1 })
   assert.deepEqual(readPaste(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35 }, skipped: 0 })
   const bad = readPaste(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99, [OPACITY_KEY]: 10 }))
@@ -730,12 +730,12 @@ const red20 = textItem([0, 0], 'a', 4, 20)
 const red14Boxed = textItem([0, 0], 'b', 4, 14, true)
 const blue20Boxed = textItem([0, 0], 'c', 6, 20, true)
 
-test('the panel shows a selection that agrees on everything as its color, size, transparency and background', () => {
+test('the panel shows a selection that agrees on everything as its color, size, opacity and background', () => {
   assert.deepEqual(panelLooks([red20, { ...red20, text: 'd' }]), { color: 4, width: 6, opacity: 100, bg: false })
   assert.deepEqual(panelLooks([blue20Boxed]), { color: 6, width: 6, opacity: 100, bg: true })
 })
 
-test('a mixed selection shows no color or background state where its notes differ, and the first note\'s size and transparency', () => {
+test('a mixed selection shows no color or background state where its notes differ, and the first note\'s size and opacity', () => {
   assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, width: 3, opacity: 100, bg: true })
   assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, width: 6, opacity: 100, bg: null })
   assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, width: 6, opacity: 100, bg: null })
@@ -744,13 +744,13 @@ test('a mixed selection shows no color or background state where its notes diffe
   assert.equal(panelLooks([{ ...red20, size: textSizeFor(7.5) }, red20]).width, 7.5)
 })
 
-test('a saved transparency reads back for any slider value, and a missing or bad one reads as the default', () => {
+test('a saved opacity reads back for any slider value, and a missing or bad one reads as the default', () => {
   for (const saved of [MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY]) assert.equal(readOpacity(saved), saved)
   assert.equal(readOpacity(55), 55)
   for (const saved of [null, undefined, 0, 19, 101, 57, '60', 'faint', {}, NaN]) assert.equal(readOpacity(saved), DEFAULT_OPACITY, JSON.stringify(saved))
 })
 
-test('a new note carries the transparency it is given, and 100 when none is', () => {
+test('a new note carries the opacity it is given, and 100 when none is', () => {
   assert.equal(textItem([0, 0], 'a', 1, 20, false, 60).opacity, 60)
   assert.equal(textItem([0, 0], 'a', 1, 20).opacity, 100)
 })
@@ -1651,4 +1651,34 @@ test('nothing but the old stored keys, the old install address and site page, an
       .map(([where]) => where)
   })
   assert.deepEqual(found, [])
+})
+
+test('a saved preset id is read back when it is one of the presets, and anything else is Custom', () => {
+  for (const id of ['pen', 'page-1', 'page-2', 'page-3', 'sudokupad']) assert.equal(readNotePreset({ ...hexes('#112233'), preset: id }), id)
+  for (const saved of [null, undefined, 'pen', [], hexes('#112233'), { ...hexes('#112233'), preset: 'nope' }, { ...hexes('#112233'), preset: 7 }]) assert.equal(readNotePreset(saved), null, JSON.stringify(saved))
+})
+
+test('colors are stored with their preset id beside them, and a Custom set with none; readNoteColors ignores it', () => {
+  assert.deepEqual(storedNoteColors(hexes('#112233'), 'page-2'), { ...hexes('#112233'), preset: 'page-2' })
+  assert.deepEqual(storedNoteColors(hexes('#112233'), null), hexes('#112233'))
+  assert.deepEqual(readNoteColors({ ...hexes('#112233'), preset: 'page-2' }), hexes('#112233'))
+})
+
+test('Copy settings carries the saved preset id with the colors, and Paste keeps it', () => {
+  const colors = { ...hexes('#112233'), preset: 'sudokupad' }
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [COLORS_KEY]: colors })))[COLORS_KEY], colors)
+  assert.deepEqual(readPaste(JSON.stringify({ [COLORS_KEY]: colors })).values, { [COLORS_KEY]: colors })
+  assert.deepEqual(readPaste(JSON.stringify({ [COLORS_KEY]: { ...colors, preset: 'nope' } })).values, { [COLORS_KEY]: hexes('#112233') }, 'a preset id that is none of ours is Custom')
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [COLORS_KEY]: { ...colors, preset: 'nope' } })))[COLORS_KEY], hexes('#112233'), 'and so is one saved that way')
+})
+
+test('the dialog defaults are the default of every look the dialog sets, and no panel slider', () => {
+  assert.deepEqual(dialogDefaults(), { outline: 'medium', boxColor: 'page', frame: false, noteFont: 'proportional' })
+})
+
+test('a paste changes only the pasted looks in the draft; the others keep their edits', () => {
+  const now = { ...readLooks(fakeStore({})), outline: 'thin', frame: true }
+  const draft = { ...now, outline: 'none', noteFont: 'fixed', frame: false }
+  assert.deepEqual(draftWithPasted(LOOKS, draft, now, { [OUTLINE_KEY]: 'thin' }), { ...draft, outline: 'thin' })
+  assert.deepEqual(draftWithPasted(LOOKS, draft, now, {}), draft, 'a paste of colors only leaves every look as drafted')
 })

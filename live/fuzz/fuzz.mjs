@@ -40,7 +40,7 @@ const SLIDER_SELECTORS = {
   'pen thickness': { selector: '#pen-tool-extras-thickness', tool: 'pen' },
   'pen opacity': { selector: '#pen-tool-extras-opacity', tool: 'pen' },
   'note size': { selector: NOTE_SIZE_SLIDER, tool: 'notes' },
-  'note transparency': { selector: NOTE_OPACITY_SLIDER, tool: 'notes' }
+  'note opacity': { selector: NOTE_OPACITY_SLIDER, tool: 'notes' }
 }
 for (const name of SLIDERS) if (!SLIDER_SELECTORS[name]) throw new Error(`actions.mjs names a ${name} slider that fuzz.mjs has no selector for`)
 // A press on a track this far in from its end is on the track, not on the edge pixel that belongs to the next element.

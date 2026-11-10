@@ -78,6 +78,17 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.deepEqual([await savedSize('A'), await savedSize('B')], [20, 21])
   })
 
+  it('with a note selected, + changes that note and is also the next note\'s size', async () => {
+    await typeText(p, A, 'A')
+    await clickAt(p, A)
+    await p.keyboard.press('+')
+    assert.equal(await savedSize('A'), 21)
+    assert.equal(await p.evaluate((k) => Framework.getData(k), WIDTH_KEY), 6.5, 'the next-note size stepped too')
+    await finishNote(p)
+    await typeText(p, B, 'B')
+    assert.equal(await savedSize('B'), 21)
+  })
+
   it('inside an open note, + and - type as text and change no size', async () => {
     await clickAt(p, A)
     await p.keyboard.type('1+2-3')
