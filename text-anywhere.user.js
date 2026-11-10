@@ -1299,7 +1299,7 @@
 
   // T makes Text Anywhere current, except where T is typed. An open note needs no test: only Text Anywhere opens one.
   const wantsTextTool = (event, { tool, letterMode, dialogOpen, inField }) =>
-    typeof event.key === 'string' && event.key.toLowerCase() === TEXT_KEY && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing &&
+    typeof event.key === 'string' && event.key.toLowerCase() === TEXT_KEY && !hasChord(event) && !event.isComposing &&
     tool !== TOOL_NAME && !letterMode && !dialogOpen && !inField
 
   // <lib:settings-dialog>
@@ -2728,9 +2728,8 @@
   }
 
   function stepSize (direction) {
-    const notes = targetNotes()
     // The next note takes the first note's new size, as the panel shows it.
-    const next = sizeStep(notes ? panelLooks(notes).width : look.width, direction)
+    const next = sizeStep(panelValues().width, direction)
     applyLook((item) => steppedNote(item, direction), () => setLook('width', lookRow('width').read(next)))
     showPanelValues()
   }
@@ -4181,7 +4180,7 @@
         cancelResize()
         return true
       }
-      if (event.key === 'Enter' && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && selected.length === 1 && !editing && !drag) {
+      if (event.key === 'Enter' && !hasChord(event) && !event.shiftKey && selected.length === 1 && !editing && !drag) {
         event.preventDefault()
         openText(selected[0])
         return true

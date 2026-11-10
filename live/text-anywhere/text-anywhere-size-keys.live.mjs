@@ -48,11 +48,11 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.equal(await savedSize('A'), 22)
   })
 
-  it('with Ctrl, Alt or Meta held the keys leave the size alone', async () => {
+  it('with Ctrl, Alt or Meta held the keys leave the size alone (Alt is what the script\'s own check stops)', async () => {
     await typeText(p, A, 'A')
     await clickAt(p, A)
     await p.keyboard.press('+')
-    // Ctrl switches the tool to Centre while held, so a chord after a Ctrl one would never reach this script: Alt and Meta go first.
+    // Ctrl (and Cmd, which SudokuPad treats alike) switches the tool while held, so the Control and Meta cases pass for that reason and only the Alt ones witness the script's own check; Alt goes first because a chord after a Ctrl one would never reach this script.
     for (const chord of ['Alt+=', 'Alt+-', 'Meta+=', 'Control+-']) {
       await p.keyboard.press(chord)
       assert.equal(await savedSize('A'), 21, `${chord} left the size as the plain + made it`)
@@ -66,15 +66,17 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     await p.keyboard.press('+')
     await p.keyboard.press('+')
     await clickAt(p, B)
+    await p.keyboard.press('-')
     await p.keyboard.down('Shift')
     await clickAt(p, A)
     await p.keyboard.up('Shift')
+    // A is 22 (width 7), B 19 (width 5.5) and the next note's width is 5.5, so only the first note's step can make it 7.5.
     await p.keyboard.press('+')
-    assert.deepEqual([await savedSize('A'), await savedSize('B')], [23, 21])
+    assert.deepEqual([await savedSize('A'), await savedSize('B')], [23, 20])
     assert.deepEqual([await valueOf(p, SIZE_SLIDER), await p.evaluate((k) => Framework.getData(k), WIDTH_KEY)], [7.5, 7.5])
     await p.keyboard.press('-')
     await p.keyboard.press('-')
-    assert.deepEqual([await savedSize('A'), await savedSize('B')], [21, 19])
+    assert.deepEqual([await savedSize('A'), await savedSize('B')], [21, 18])
   })
 
   it('a + pressed in the middle of a move of the note changes nothing, and the size stays what the drop leaves', async () => {
