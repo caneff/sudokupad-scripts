@@ -28,10 +28,10 @@ import { openPage, startPuzzle } from '../../../live/page.mjs'
 import { cellCentre, gridPoint, mouseDrag } from '../../../live/board.mjs'
 import { openPenTool, PAGE_BUTTON, penStrings, penValuesNoColor, setInputValue } from '../../../live/pen.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../../../live/settings.mjs'
+import { writeAnimation } from '../site/slide-animation.mjs'
 import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extras-recolor.mjs'
 
 const target = (name, extension = 'png') => new URL(`./pen-tool-extras-slide-${name}.${extension}`, import.meta.url).pathname
-const ANIMATE = new URL('../site/slide-animation.py', import.meta.url).pathname
 const script = readFileSync(new URL('../../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 // A 900 x 700 window draws cells 53 px wide and a pen panel 159 px wide and 212 px tall. The board is three columns and four rows of them,
 // as tall as the panel, so the picture is about 340 px wide on the page and no taller than the panel.
@@ -109,7 +109,6 @@ const patch = { x: x0 - MARGIN, y: y0 - MARGIN_Y, width: COLS * cell + 2 * MARGI
 const panel = p.locator('.tool-pen .controls-input')
 const panelHeight = (await panel.boundingBox()).height
 if (Math.abs(panelHeight - patch.height) > HEIGHT_SLACK_PX) throw new Error(`the board is ${patch.height} px tall and the panel ${panelHeight}: change ROWS or VIEWPORT`)
-// Writes the board patch beside the panel, joined, to `file`.
 const shoot = async (file) => {
   await p.waitForTimeout(SETTLE_MS)
   await p.screenshot({ path: join(frames, 'board.png'), clip: patch })
@@ -121,14 +120,12 @@ const slide = async (name) => {
   await shoot(target(name))
   console.log(`wrote ${target(name)}`)
 }
-// A before picture kept in the temporary folder, for `animatedSlide`.
+// The before pictures of the animated slides wait in the temporary folder until their after is taken.
 const before = async (name) => shoot(join(frames, `before-${name}.png`))
-// Writes the slide's still (the after) and its animation from the before kept under the same name. `beforeName` names a before kept for more than one slide.
+// `beforeName` names a before kept for more than one slide.
 const animatedSlide = async (name, beforeName = name) => {
   await slide(name)
-  const animated = spawnSync('python3', ['-I', ANIMATE, join(frames, `before-${beforeName}.png`), target(name), target(name, 'webp')], { encoding: 'utf8' })
-  if (animated.status !== 0) throw new Error(`animating slide ${name} failed: ${animated.error ?? animated.stderr}`)
-  console.log(`wrote ${target(name, 'webp')}`)
+  writeAnimation(join(frames, `before-${beforeName}.png`), target(name), target(name, 'webp'))
 }
 const pick = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
 const park = () => p.mouse.move(5, 5)
@@ -270,7 +267,7 @@ await setOutline(true)
 await animatedSlide('11-outline')
 
 // 12. A right press on the first line shows no preview; letting go erases the whole line.
-const lines = await penCount()
+const penValuesBefore = await penCount()
 const [lx, ly] = await gridPoint(p, [TEAL_ROW, 1.5])
 await ring(lx, ly)
 await p.mouse.move(lx, ly)
@@ -279,7 +276,7 @@ await before('12-erase')
 await p.mouse.up({ button: 'right' })
 await unring()
 await park()
-await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, lines, { timeout: SETTLE_TIMEOUT_MS })
+await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, penValuesBefore, { timeout: SETTLE_TIMEOUT_MS })
 await animatedSlide('12-erase')
 
 // 13. The settings button, and the dialog it opens.

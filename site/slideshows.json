@@ -146,7 +146,7 @@
       {
         "picture": "text-anywhere-slide-2-format.png",
         "animation": "text-anywhere-slide-2-format.webp",
-        "alt": "A note in the margin beside the grid, open for typing and showing the raw text, ## X-wing on 6, **r2** and **r8** -> c3, c7, - [x] box 1 and - [ ] box 7, then finished and formatted: an orange bold header X-wing on 6, r2 and r8 in bold with an arrow to c3, c7, a ticked and struck-through checklist item box 1 and an unticked one, box 7",
+        "alt": "A note in the margin beside the grid, open for typing and showing the raw text, ## X-wing on 6, **r2** and **r8** → c3, c7, - [x] box 1 and - [ ] box 7, then finished and formatted: an orange bold header X-wing on 6, r2 and r8 in bold with an arrow to c3, c7, a ticked and struck-through checklist item box 1 and an unticked one, box 7",
         "caption": "Formatting: **bold**, # headers, ->"
       },
       {

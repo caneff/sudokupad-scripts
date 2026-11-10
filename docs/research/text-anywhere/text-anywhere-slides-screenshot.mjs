@@ -27,20 +27,21 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openTextAnywherePage } from './text-anywhere-screenshot-page.mjs'
+import { writeAnimation } from '../site/slide-animation.mjs'
 import { saved, valueOf } from '../../../live/text-anywhere/text-anywhere-fixtures.mjs'
 import { slideTo } from '../../../live/slider.mjs'
 
 const out = (name, extension = 'png') => new URL(`./text-anywhere-slide-${name}.${extension}`, import.meta.url).pathname
-const ANIMATE = new URL('../site/slide-animation.py', import.meta.url).pathname
 // The before pictures of the animated slides wait here until their after is taken.
 const kept = mkdtempSync(join(tmpdir(), 'ta-before-'))
 const keptPath = (name) => join(kept, `${name}.png`)
-// Writes the WebP of a slide whose before was kept, from the before and the slide's PNG.
+// The slides with an animation: each keeps a before picture, and a slide missing it fails the run instead of leaving the old WebP in place.
+const ANIMATED = new Set(['2-format', '5-select', '7-hide', '8-erase'])
 const animate = (name) => {
-  const animated = spawnSync('python3', ['-I', ANIMATE, keptPath(name), out(name), out(name, 'webp')], { encoding: 'utf8' })
-  if (animated.status !== 0) throw new Error(`animating slide ${name} failed: ${animated.error ?? animated.stderr}`)
-  console.log(`wrote ${out(name, 'webp')}`)
+  if (!existsSync(keptPath(name))) throw new Error(`slide ${name} is animated but kept no before picture`)
+  writeAnimation(keptPath(name), out(name), out(name, 'webp'))
 }
+
 const DRAG_STEPS = 10
 // Every picture is PICTURE pixels, the 16:10 of the site's slide frame. A board slide is BOARD cells from its own [row, column] from the grid's top left, taking in the notes it shows;
 // the origin is picked so neither edge cuts a digit (a digit's glyph fills about 0.2 to 0.8 of its cell down). The panel is hidden.
@@ -70,13 +71,16 @@ const RED = 4
 const BLUE = 6
 const NOTES = '#text-anywhere-layer .text-anywhere-text'
 
+// The class of the ring and the dot a slide draws, so the after picture can remove them.
+const MARKER = 'slide-marker'
+
 // A red ring round the point (x, y), where a press lands.
-const addRing = (p, [x, y], size = 34) => p.evaluate(([px, py, d]) => {
+const addRing = (p, [x, y], size = 34) => p.evaluate(([px, py, d, marker]) => {
   const ring = document.createElement('div')
-  ring.className = 'slide-marker'
+  ring.className = marker
   ring.style.cssText = `position:fixed;left:${px}px;top:${py}px;width:${d}px;height:${d}px;margin:${-d / 2}px 0 0 ${-d / 2}px;box-sizing:border-box;border-radius:50%;border:3px solid #d32f2f;pointer-events:none;z-index:99998`
   document.body.appendChild(ring)
-}, [x, y, size])
+}, [x, y, size, MARKER])
 
 // A solid purple box with a faint fill over the page box `{ x, y, width, height }`: where a drag went, as the script draws it.
 const addSelectionRectangle = (p, box) => p.evaluate(({ x, y, width, height }) => {
@@ -114,7 +118,6 @@ async function scene (origin, cols = BOARD[0]) {
       await p.keyboard.type(line)
     }
   }
-  // `whileOpen`, when given, runs once the text is typed and the note is still open.
   const note = async (cell, text, whileOpen) => {
     const before = await items()
     await p.mouse.click(...at(cell))
@@ -155,8 +158,7 @@ async function scene (origin, cols = BOARD[0]) {
       if (!inside) throw new Error(`the note ${text} is not wholly inside the picture: ${JSON.stringify(rect)} in ${JSON.stringify(clipRect())}`)
     }
   }
-  // Writes the board crop as the slide `name`, or as its kept before when `before` is set; the page stays open when `keepOpen` or `before`.
-  const shoot = async (name, { keepOpen = false, before = false } = {}) => {
+  const shoot = async (name, { before = false } = {}) => {
     await checkNotes()
     const file = before ? keptPath(name) : out(name)
     const hidden = await p.addStyleTag({ content: '#controls { visibility: hidden !important }' })
@@ -165,11 +167,10 @@ async function scene (origin, cols = BOARD[0]) {
     const size = [picture.readUInt32BE(16), picture.readUInt32BE(20)]
     if (size.join() !== PICTURE.join()) throw new Error(`the picture is ${size.join(' x ')}, not ${PICTURE.join(' x ')}`)
     console.log(`wrote ${file}`)
-    if (!before && existsSync(keptPath(name))) animate(name)
-    if (!keepOpen && !before) await p.close()
+    if (!before && ANIMATED.has(name)) animate(name)
+    if (!before) await p.close()
   }
   // Writes a joined slide: the board crop, then beside it the control `shootControl(path)` writes, taken after the board with the panel shown again (a ring the page draws over it shows).
-  // With `before` it writes the slide's kept before instead, and leaves the page open.
   const join2 = async (name, shootControl, { before = false } = {}) => {
     await checkNotes()
     const file = before ? keptPath(name) : out(name)
@@ -182,7 +183,7 @@ async function scene (origin, cols = BOARD[0]) {
     rmSync(frames, { recursive: true })
     if (joined.status !== 0) throw new Error(`joining slide ${name} failed: ${joined.error ?? joined.stderr}`)
     console.log(`wrote ${file}`)
-    if (!before && existsSync(keptPath(name))) animate(name)
+    if (!before && ANIMATED.has(name)) animate(name)
     if (!before) await p.close()
   }
   return { p, at, items, pick, pickSize, note, typeLines, background, shoot, join: join2 }
@@ -342,19 +343,19 @@ const SETTINGS_DIALOG = '#text-anywhere-dialog'
   const x = box.x + box.width / 2
   const y = box.y + box.height / 2
   await addRing(s.p, [x, y], 60)
-  await s.p.evaluate(([px, py]) => {
+  await s.p.evaluate(([px, py, marker]) => {
     const dot = document.createElement('div')
-    dot.className = 'slide-marker'
+    dot.className = marker
     dot.style.cssText = `position:fixed;left:${px}px;top:${py}px;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:rgba(40,40,40,.55);border:2px solid #fff;pointer-events:none;z-index:99999`
     document.body.appendChild(dot)
-  }, [x, y])
+  }, [x, y, MARKER])
   await s.p.mouse.move(x, y)
   await s.shoot('8-erase', { before: true })
   await s.p.mouse.click(x, y, { button: 'right' })
   // The erase redraws on the next frame, so wait for the note to go; a wait that times out fails the run.
   await s.p.waitForFunction((selector) => !document.querySelector(selector), NOTES, { timeout: 2000 })
   if ((await s.items()) !== 0) throw new Error('the right click did not erase the note')
-  await s.p.evaluate(() => document.querySelectorAll('.slide-marker').forEach((el) => el.remove()))
+  await s.p.evaluate((marker) => document.querySelectorAll(`.${marker}`).forEach((el) => el.remove()), MARKER)
   await s.p.mouse.move(0, 0)
   await s.shoot('8-erase')
 }

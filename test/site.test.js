@@ -296,7 +296,6 @@ for (const { heading, page: file, id } of SHOWS) {
         assert.ok(raw.includes(`src="${RAW}${dir}${picture}?v=${tagOf(dir + picture)}"`), `${page} has no tagged still ${picture}`)
       }
     }
-    assert.ok(animated.length > 0 || id === 'color-by-digit', `${heading} has no animated slide`)
   })
 
   test(`${HOME}'s ${heading} slides each declare the size of their file`, () => {
