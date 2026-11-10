@@ -421,6 +421,37 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.equal(await settle(coloredCount, 0), 0)
   })
 
+  it('Undo of a Save that leaves Cell and changes the profile brings the mode and the profile back, and Redo puts both again', async () => {
+    await pressTo(p, 'Cell')
+    assert.equal(await settle(label, 'Cell'), 'Cell')
+    const before = await getGroups()
+    await openEditor()
+    await chooseProfile(1)
+    await chooseMode('off')
+    await closeDialogWith(p, 'Save', EDITOR)
+    assert.equal(await settle(label, 'Off'), 'Off')
+    await undo()
+    assert.equal(await settle(label, 'Cell'), 'Cell')
+    assert.deepEqual(await settle(getGroups, before), before)
+    await redo()
+    assert.equal(await settle(label, 'Off'), 'Off')
+    assert.deepEqual(await settle(getGroups, LOW_FIVE_HIGH), LOW_FIVE_HIGH)
+  })
+
+  it('Undo of a Save that enters Cell and changes the profile ends in Off with the old profile, and Redo in Cell with the new one', async () => {
+    await openEditor()
+    await chooseProfile(0)
+    await chooseMode('cell')
+    await closeDialogWith(p, 'Save', EDITOR)
+    assert.equal(await settle(label, 'Cell'), 'Cell')
+    await undo()
+    assert.equal(await settle(label, 'Off'), 'Off')
+    assert.deepEqual(await settle(getGroups, LOW_FIVE_HIGH), LOW_FIVE_HIGH)
+    await redo()
+    assert.equal(await settle(label, 'Cell'), 'Cell')
+    assert.deepEqual(await settle(getGroups, ODD_EVEN), ODD_EVEN)
+  })
+
   it('no uncaught page errors', () => {
     assert.deepEqual(errors, [])
   })

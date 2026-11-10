@@ -2063,37 +2063,56 @@ test('createModeHistory: Undo to a length below a step gives the mode before the
   assert.equal(history.undo(0).mode, 'off')
 })
 
-test('createModeHistory: Undo gives the cell profile before the earliest step taken back, Redo the one after the latest put back', () => {
+test('createModeHistory: Undo gives the cell profile before the earliest step taken back, Redo the one after the latest put back, across several steps at once', () => {
   const history = createModeHistory()
-  const a = { index: 0, groups: [{ key: 'a', digits: ['1'] }] }
-  const b = { index: 1, groups: [{ key: 'b', digits: ['1'] }] }
-  const c = { index: 2, groups: [{ key: 'c', digits: ['1'] }] }
+  const a = { name: 'A' }
+  const b = { name: 'B' }
+  const c = { name: 'C' }
   history.record(6, 'cell', 'cell', { from: a, to: b })
   history.record(12, 'cell', 'cell', { from: b, to: c })
   assert.deepEqual(history.undo(5).profile, a)
-  assert.deepEqual(history.redo(6).profile, b)
   assert.deepEqual(history.redo(12).profile, c)
   assert.deepEqual(history.undo(11).profile, b)
+  assert.deepEqual(history.redo(12).profile, c)
 })
 
-test('createModeHistory: a step recorded with no profile change gives no profile', () => {
+test('createModeHistory: a step with no profile between two that have one is skipped, and a step with none alone gives none', () => {
   const history = createModeHistory()
-  history.record(6, 'off', 'cell')
-  assert.equal(history.undo(0).profile, undefined)
-  assert.equal(history.redo(6).profile, undefined)
+  const a = { name: 'A' }
+  const b = { name: 'B' }
+  history.record(6, 'cell', 'cell', { from: a, to: b })
+  history.record(12, 'cell', 'digit')
+  history.record(18, 'digit', 'digit', { from: b, to: a })
+  assert.deepEqual(history.undo(0), { mode: 'cell', profile: a })
+  assert.deepEqual(history.redo(18), { mode: 'digit', profile: a })
+  assert.deepEqual(history.undo(17), { mode: 'digit', profile: b })
+  assert.equal(history.undo(11).profile, undefined)
 })
 
-test('withCellProfile: puts back the active index and that profile\'s groups, and leaves the others', () => {
+test('withCellProfile: makes the named profile active, with its groups put back when the step holds them, and leaves the others', () => {
   const state = { profiles: [{ name: 'A', groups: [{ key: 'a', digits: ['1'] }] }, { name: 'B', groups: [{ key: 'b', digits: ['2'] }] }], active: 1 }
-  const put = withCellProfile(state, { index: 0, groups: [{ key: 'x', digits: ['9'] }] })
+  const named = withCellProfile(state, { name: 'A' })
+  assert.equal(named.active, 0)
+  assert.deepEqual(named.profiles, state.profiles)
+  const put = withCellProfile(state, { name: 'A', groups: [{ key: 'x', digits: ['9'] }] })
   assert.equal(put.active, 0)
   assert.deepEqual(put.profiles[0].groups, [{ key: 'x', digits: ['9'] }])
   assert.deepEqual(put.profiles[1], state.profiles[1])
 })
 
-test('withCellProfile: a profile that no longer exists leaves the state as it is', () => {
+test('withCellProfile: finds the profile by name after a Save moved or deleted others, and prefers the same-named one holding the step\'s groups', () => {
+  const ones = [{ key: 'a', digits: ['1'] }]
+  const twos = [{ key: 'b', digits: ['2'] }]
+  const moved = { profiles: [{ name: 'C', groups: twos }, { name: 'B', groups: twos }, { name: 'A', groups: ones }], active: 1 }
+  assert.equal(withCellProfile(moved, { name: 'A', groups: ones }).active, 2)
+  assert.deepEqual(withCellProfile(moved, { name: 'A', groups: ones }).profiles, moved.profiles)
+  const twins = { profiles: [{ name: 'A', groups: twos }, { name: 'A', groups: ones }], active: 0 }
+  assert.equal(withCellProfile(twins, { name: 'A', groups: ones }).active, 1)
+})
+
+test('withCellProfile: a name no profile bears leaves the state as it is', () => {
   const state = { profiles: [{ name: 'A', groups: [{ key: 'a', digits: ['1'] }] }], active: 0 }
-  assert.deepEqual(withCellProfile(state, { index: 3, groups: [] }), state)
+  assert.deepEqual(withCellProfile(state, { name: 'Gone', groups: [] }), state)
 })
 
 test('createModeHistory: a new step or forgetRedo drops the steps that could have been redone', () => {

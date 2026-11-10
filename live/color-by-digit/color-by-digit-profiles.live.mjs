@@ -267,8 +267,11 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.equal(await t.menu().count(), 0)
   })
 
+  let oddEvenIcon
+
   it('a pick in Cell removes the old colors and colors every pure cell by the new profile, as one undo step', async () => {
     const before = await t.coloursOf()
+    oddEvenIcon = await t.iconShownDigits()
     await t.openMenuByArrow()
     await t.pick('Low/5/High')
     assert.equal(await settle(() => t.wrongCount(LOW_FIVE_HIGH), 0), 0)
@@ -278,9 +281,9 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.equal(await settle(t.coloursOf, before), before)
   })
 
-  it('the undo took the profile back too: the saved profile is Odd/Even again and the icon no longer shows Low/5/High\'s digits', async () => {
+  it('the undo took the profile back too: the saved profile and the icon are Odd/Even\'s again', async () => {
     assert.equal((await t.getState()).active, 0)
-    assert.notDeepEqual(await t.iconShownDigits(), ['1', '5', '9'])
+    assert.deepEqual(await settle(t.iconShownDigits, oddEvenIcon), oddEvenIcon)
   })
 
   it('redo puts the pick back with its colors: the saved profile is Low/5/High again; the undo after it takes it back', async () => {

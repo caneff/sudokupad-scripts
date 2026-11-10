@@ -140,6 +140,23 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'the other cells keep their colors')
   })
 
+  it('attack 45b: pick a profile, delete the old one in the dialog and Save, then undo: the picked profile keeps its own groups', async () => {
+    await p.click(ARROW)
+    await p.locator(MENU).waitFor({ state: 'visible' })
+    await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).click()
+    await p.locator(MENU).waitFor({ state: 'detached' })
+    const lowFiveHigh = (await getState()).profiles.find((x) => x.name === 'Low/5/High').groups
+    assert.equal(await settle(() => wrongCount(lowFiveHigh), 0), 0)
+    await openEditor()
+    await deleteProfileRow(p, 1)
+    await closeEditor('Save')
+    assert.deepEqual((await getState()).profiles.map((x) => x.name), ['Low/5/High'])
+    await undo()
+    // The profile the undo would name is gone, so the saved profile is left as it is.
+    const after = await getState()
+    assert.deepEqual(after.profiles.map((x) => [x.name, x.groups]), [['Low/5/High', lowFiveHigh]])
+  })
+
   it('attack 46: in the editor add, rename, copy, move and delete profiles up to six', async () => {
     await openEditor()
     assert.deepEqual(await rowNames(), ['Odd/Even', 'Low/5/High'])
