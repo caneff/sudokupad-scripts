@@ -238,8 +238,8 @@
 - **box** (a note's) — the room a Text Anywhere note's text takes. A note never resized has one 16 em wide and 8 lines high at its text size, which
   it fits up to; a resized one is exactly the size a **resize handle** set, stored on the note as `box: [width, height]` in board units, on the board
   or off it, since a note off the board is drawn at the board's scale too. A long line wraps inside it and text past its bottom scrolls: the wheel over
-  the note scrolls it, and reaches SudokuPad only once the note can scroll no further that way, and a thin scroll bar shows while the pointer is over
-  it. The scroll position is not saved.
+  the note scrolls it, and reaches SudokuPad only once the note can scroll no further that way, and a note that scrolls always shows a thin scroll bar in its own color (the one open for typing shows it
+  only while the pointer is over it). The scroll position is not saved.
 - **resize handle** — one of the four small purple squares on the corners of the note open in the **text box**, or of the one note **selected** alone (none
   show with several selected), so a drag anywhere else on a note moves it. Dragging one sets the note's **box**, the opposite corner kept still, down to about 3 em wide and one
   line high, with diagonal resize cursors; a double-click on one removes the stored `box`, so the note goes back to auto size.
