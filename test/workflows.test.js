@@ -63,3 +63,26 @@ describe('the workflows', () => {
     })
   }
 })
+
+describe('fuzz-pr.yml (#724)', () => {
+  const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'fuzz-pr.yml'), 'utf8')
+
+  it('runs on pull requests that change a script, lib/ or the fuzz, and on nothing else', () => {
+    assert.match(yml, /^on:\n {2}pull_request:\n {4}paths:\n/m)
+    assert.doesNotMatch(yml, /^ {2}(push|schedule|workflow_dispatch):/m)
+    const paths = yml.split('paths:\n')[1].split(/\n(?! {6}- )/)[0].split('\n').map((l) => l.replace(/^ {6}- /, ''))
+    const scripts = fs.readdirSync(ROOT).filter((f) => f.endsWith('.user.js') && f !== 'draw-tool.user.js')
+    assert.deepEqual(paths.sort(), [...scripts, 'lib/**', 'live/fuzz/**'].sort())
+  })
+
+  it('fuzzes for 5 minutes with the changed scripts in focus, and files no issue and runs no other live test', () => {
+    assert.match(yml, /npm run test:fuzz -- --minutes 5 /)
+    assert.match(yml, /--focus "\$script"/)
+    assert.doesNotMatch(yml, /file-issue-once|gh issue/)
+    assert.doesNotMatch(yml, /test:tampermonkey|test:live/)
+  })
+
+  it('puts a failure into the job summary', () => {
+    assert.match(yml, />> "\$GITHUB_STEP_SUMMARY"/)
+  })
+})

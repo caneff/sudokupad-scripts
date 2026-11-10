@@ -10,7 +10,7 @@ import { closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { runFuzz, runScript } from './engine.mjs'
-import { scriptedList, SLIDERS } from './actions.mjs'
+import { focusFiles, scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantPatch } from './plants.mjs'
 import { FUZZ_PUZZLES, insideGrid, rulesTextFor } from './puzzle-set.mjs'
@@ -190,8 +190,9 @@ const freeCells = (p) => p.evaluate(() => Framework.app.puzzle.cells.filter((c) 
 const sortedCells = (cells) => [...cells].sort(([r1, c1], [r2, c2]) => r1 - r2 || c1 - c2)
 
 // Fuzzes with `seed` (a number) for `minutes` or `runs` action lists, each on a puzzle of the set that the list names, then shrinks a failure. `path` is a printed replay
-// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug.
-export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant }) {
+// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug. `focus` names scripts whose actions come up more often (`actions.mjs`).
+export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant, focus }) {
+  const focusOn = focusFiles(focus)
   const [fcPath, replayPath] = path == null ? [] : path.split('@')
   const result = await runFuzz({
     openTarget: (puzzle) => openTarget(browser, puzzle, { planted, plant }),
@@ -201,10 +202,11 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
     minutes,
     shrinkMinutes,
     path: fcPath,
-    replayPath
+    replayPath,
+    focus: focusOn
   })
   if (!result.failed) return result
-  const replayArgs = ['--seed', result.seed, '--path', `${result.path}@${result.replayPath}`, ...(planted ? ['--plant-escape-error'] : []), ...(plant ? ['--plant', plant.id] : [])]
+  const replayArgs = ['--seed', result.seed, '--path', `${result.path}@${result.replayPath}`, ...(planted ? ['--plant-escape-error'] : []), ...focusOn.flatMap((f) => ['--focus', f.replace('.user.js', '')]), ...(plant ? ['--plant', plant.id] : [])]
   return { ...result, path: `${result.path}@${result.replayPath}`, replayCommand: `npm run test:fuzz -- ${replayArgs.join(' ')}` }
 }
 

@@ -2,9 +2,10 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, KIND_GROUPS, KIND_NAMES, scriptedList } from './actions.mjs'
+import { actionList, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, scriptedList } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
+import { scriptFiles } from '../../sync-lib.js'
 
 // The lists a seed gives (each `{ puzzle, commands }`) over the whole puzzle set, or over `puzzles`.
 const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList(puzzles, { maxCommands: 20 }), { seed, numRuns: count })
@@ -239,5 +240,50 @@ describe('the action vocabulary', () => {
       assert.deepEqual(target.log.filter(([n]) => n === 'keyboard.press'), [['keyboard.press', '5']])
       assert.throws(() => scriptedList(puzzle, [['no such kind', 0]]), /no action kind "no such kind"/)
     })
+  })
+})
+
+describe('focusing the actions on a script (#724)', () => {
+  const PEN = 'pen-tool-extras.user.js'
+  const kindsOf = (file) => KIND_NAMES.filter((k) => KIND_SCRIPTS[k].includes(file))
+  const counts = (focus) => {
+    const seen = Object.fromEntries(KIND_NAMES.map((k) => [k, 0]))
+    for (const a of actionsOf(fc.sample(actionList(FUZZ_PUZZLES, { maxCommands: 20, focus }), { seed: 11, numRuns: 300 }))) seen[a.kind]++
+    return seen
+  }
+  const share = (seen, kinds) => kinds.reduce((sum, k) => sum + seen[k], 0) / Object.values(seen).reduce((a, b) => a + b, 0)
+
+  it('names only real kinds and real scripts, and every script has a kind', () => {
+    assert.deepEqual(Object.keys(KIND_SCRIPTS).sort(), [...KIND_NAMES].sort())
+    const files = new Set(scriptFiles())
+    for (const [kind, scripts] of Object.entries(KIND_SCRIPTS)) for (const f of scripts) assert.ok(files.has(f), `${kind}: ${f} is no script`)
+    for (const f of files) assert.ok(kindsOf(f).length > 0, `${f} has no action that exercises it`)
+  })
+
+  it('a focused script\'s kinds weigh FOCUS_FACTOR times their own weight and every other kind keeps it', () => {
+    const plain = kindWeights([])
+    const focused = kindWeights([PEN])
+    for (const k of KIND_NAMES) assert.equal(focused[k], kindsOf(PEN).includes(k) ? plain[k] * FOCUS_FACTOR : plain[k], k)
+    assert.ok(FOCUS_FACTOR > 1)
+  })
+
+  it('a kind of two focused scripts is raised once, not twice', () => {
+    const both = KIND_NAMES.find((k) => KIND_SCRIPTS[k].length > 1)
+    assert.ok(both, 'some kind exercises two scripts')
+    const weights = kindWeights(KIND_SCRIPTS[both])
+    assert.equal(weights[both], kindWeights([])[both] * FOCUS_FACTOR)
+  })
+
+  it('a focused run draws the focused script\'s actions more often, and still draws every kind', () => {
+    const [plain, focused] = [counts([]), counts([PEN])]
+    assert.ok(share(focused, kindsOf(PEN)) > share(plain, kindsOf(PEN)) * 1.5, `${share(plain, kindsOf(PEN))} -> ${share(focused, kindsOf(PEN))}`)
+    assert.deepEqual(KIND_NAMES.filter((k) => !focused[k]), [], 'every kind appears')
+  })
+
+  it('a script is named by its file or its short name, and an unknown name is refused', () => {
+    assert.deepEqual(focusFiles(['pen-tool-extras', 'text-anywhere.user.js']), [PEN, 'text-anywhere.user.js'])
+    assert.deepEqual(focusFiles(undefined), [])
+    assert.throws(() => focusFiles(['pen-tool']), /pen-tool.*pen-tool-extras/)
+    assert.throws(() => focusFiles(['draw-tool']), /draw-tool/)
   })
 })
