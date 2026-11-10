@@ -425,9 +425,9 @@ export function focusFiles (names = []) {
 // The weight of every kind, by name, when the actions are focused on the script files `focus`.
 export const kindWeights = (focus = []) => Object.fromEntries(KINDS.map((k) => [k.kind, k.weight * (KIND_SCRIPTS[k.kind].some((f) => focus.includes(f)) ? FOCUS_FACTOR : 1)]))
 
-// The arbitrary of one weighted action over `puzzle` (`puzzle-set.mjs`).
-function actionArbitrary (puzzle, weights) {
-  return fc.oneof(...KINDS.map((k) => ({ weight: weights[k.kind], arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
+// The arbitrary of one action of `kinds` over `puzzle` (`puzzle-set.mjs`), weighted by `weights` (`kindWeights`).
+function actionArbitrary (puzzle, weights, kinds = KINDS) {
+  return fc.oneof(...kinds.map((k) => ({ weight: weights[k.kind], arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
 }
 
 // The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
@@ -436,8 +436,8 @@ export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 
-// The arbitrary of a busy start's steps over `puzzle`: commands like a list's, run first, each printed with `(start) ` before it.
-const startArbitrary = (puzzle) => fc.array(fc.oneof(...KINDS.filter((k) => START_KINDS.includes(k.kind)).map((k) => ({ weight: k.weight, arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) }))), { maxLength: MAX_START_STEPS, size: 'max' })
+// The arbitrary of a busy start's steps over `puzzle`: commands like a list's, weighted alike (`--focus` included), run first, each printed with `(start) ` before it.
+const startArbitrary = (puzzle, weights) => fc.array(actionArbitrary(puzzle, weights, KINDS.filter((k) => START_KINDS.includes(k.kind))), { maxLength: MAX_START_STEPS, size: 'max' })
 
 // The generator of whole lists, each `{ puzzle, start, commands, waitMs }`: a puzzle of `puzzles`, then (with `busyStart`, #726) a start of up to `MAX_START_STEPS` steps that builds a
 // busy board, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list (what `String()` of a failing list prints, which is the start's steps and then the
@@ -446,9 +446,10 @@ const startArbitrary = (puzzle) => fc.array(fc.oneof(...KINDS.filter((k) => STAR
 // `waits` (#725) is the milliseconds the engine may wait after each action: with more than one, each list draws its own, drawn beside its actions so a path replays it and a
 // shrink moves it to the first of the set; with one or none, `waitMs` is undefined and the engine's own wait stands.
 export const actionList = (puzzles, { maxCommands = 20, replayPath, focus = [], waits = [], busyStart = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
-  const commands = fc.commands([actionArbitrary(puzzle, kindWeights(focus))], { maxCommands, size: 'max', replayPath })
+  const weights = kindWeights(focus)
+  const commands = fc.commands([actionArbitrary(puzzle, weights)], { maxCommands, size: 'max', replayPath })
   const waitMs = waits.length < 2 ? fc.constant(undefined) : fc.constantFrom(...waits)
-  const start = busyStart ? startArbitrary(puzzle) : fc.constant([])
+  const start = busyStart ? startArbitrary(puzzle, weights) : fc.constant([])
   return fc.tuple(waitMs, start, commands).map(([wait, steps, c]) => ({
     puzzle,
     start: steps,

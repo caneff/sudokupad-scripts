@@ -11,11 +11,9 @@ import { crashSignals } from './signals.mjs'
 // property, so a late error still fails and still shrinks.
 const ERRORS_LAND_MS = 200
 // And after every action, this long before its signals are read, so an error that lands a moment later (a timer, a frame) is blamed on the action that
-// caused it. fast-check never removes the last action of a list in a shrink, so an error read only after the list would keep one stray step.
-const ACTION_SETTLE_MS = 40
-// A list that waits less than this after an action reads the page again after this long before it blames the action for a broken rule or a crash signal (#725): the first read
-// came before the page settled, and only what is still wrong after it is the action's.
-const RECHECK_SETTLE_MS = 40
+// caused it. fast-check never removes the last action of a list in a shrink, so an error read only after the list would keep one stray step. A list that waits
+// less (#725) reads the page again after this long before it blames an action: the first read came before the page settled.
+export const ACTION_SETTLE_MS = 40
 // No number of runs: the time limit or `runs` ends the hunt.
 const UNBOUNDED = 1000000
 const DEFAULT_MINUTES = 2
@@ -53,8 +51,8 @@ async function runList (openTarget, actions, landMs, settleMs) {
     let earlier = null
     // The snapshot after an action, read again after a short settle when the first read finds fault and the list does not wait for the page.
     const read = async (action, now) => {
-      if (settleMs >= RECHECK_SETTLE_MS || (crashSignals(now).length === 0 && ruleViolations({ now, before, action: action.cmd.kind, earlier }).length === 0)) return now
-      await target.wait(RECHECK_SETTLE_MS)
+      if (settleMs >= ACTION_SETTLE_MS || (crashSignals(now).length === 0 && ruleViolations({ now, before, action: action.cmd.kind, earlier }).length === 0)) return now
+      await target.wait(ACTION_SETTLE_MS)
       return target.snapshot()
     }
     const checked = (action) => ({
@@ -88,9 +86,10 @@ async function runList (openTarget, actions, landMs, settleMs) {
 export const runScript = ({ openTarget, puzzle, actions }) => runList(() => openTarget(puzzle), actions, ERRORS_LAND_MS, ACTION_SETTLE_MS)
 
 // Fuzzes with `seed` over `puzzles` (each list picks one): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
-// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus` (script files, `actionList`) raises those scripts' actions; a replay needs the focus it was found with. `busyStart` (`actionList`) makes some lists begin with steps that build a busy board, printed `(start) ...`; a replay needs it too. `waits` (milliseconds, `actionList`) makes each list draw its own wait after an action, reported as `waitMs`; a replay needs the same set. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
+// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus`, `busyStart` and `waits` shape the lists (`actionList`), so a replay
+// needs the ones it was found with. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
 // each puzzle ran, by name) or the failure: `error`, `puzzle` (its name), `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`,
-// `replayPath`, `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
+// `replayPath`, `waitMs` (the list's own wait, under `waits`), `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
 export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits, busyStart }) {
   // The puzzle of every list started, in order: the hunt's lists are the first `hunt.numRuns` (a list the time limit cut off, and the shrink's, come after).
   const started = []
