@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "test": "node --test \"test/**/*.test.*\" \"lib/**/*.test.js\" \"live/**/*.test.mjs\"",
-    "test:live": "node --test --test-concurrency=4 --test-timeout=1200000 \"live/**/*.live.mjs\"",
+    "test:live": "npm run test:live:files -- \"live/**/*.live.mjs\"",
+    "test:live:files": "node --test --test-concurrency=4 --test-timeout=1200000",
     "test:fuzz": "node live/fuzz/run.mjs",
     "fuzz:plants": "node live/fuzz/plants-run.mjs",
     "fuzz:nightly": "node live/fuzz/nightly.mjs",

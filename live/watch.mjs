@@ -46,7 +46,7 @@ export function readLastFullRun (file) {
   return Number.isFinite(ms) && ms > 0 ? ms : null
 }
 
-// What failed in `node --test --test-reporter=tap` output. `checks` are tests that ran and failed. `unrun` are
+// What failed in `node --test --test-reporter=tap` output. `checks` are tests that ran and failed or hit the test time limit. `unrun` are
 // what never got to run: a file that failed to load (a failure at the top level) and a test cancelled by a
 // failing `before` hook, which is how a missing Chromium or a failed recording shows. A parent suite fails only
 // because something inside it did, so it is neither. A failing `# TODO` test does not fail the run.
@@ -62,7 +62,7 @@ export function failedChecks (tap) {
     const type = /failureType: '(\w+)'/.exec(block)?.[1]
     const name = m[2].replace(/\\([#\\])/g, '$1')
     if (type === 'hookFailed' || (type === 'testCodeFailure' && m[1] === '')) unrun.push(name)
-    else if (type === 'testCodeFailure') checks.push(name)
+    else if (type === 'testCodeFailure' || type === 'testTimeoutFailure') checks.push(name)
   })
   return { checks, unrun }
 }

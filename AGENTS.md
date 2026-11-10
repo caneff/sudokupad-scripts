@@ -71,9 +71,9 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 - `npm run test:live` needs a Playwright Chromium (`npx playwright install chromium`), so it stays out of `npm test` and
   `land.testcmd`.
 - Run it when a change touches a `Framework` call, rendering or undo.
-- `npm run test:live` has a 20-minute limit per test, so a hang fails and does not run for hours.
 - While you iterate, run only the changed script's files (`live/<script name>/*.live.mjs`, and `live/startup.live.mjs` when
-  its startup changed); the worker runs the full suite once before "PR up". Before the controller's merge rerun: read `live/README.md` § The merge rerun.
+  its startup changed) with `npm run test:live:files -- <files>`; the worker runs the full suite once before "PR up", and its report says the sha.
+  Before the controller's merge rerun: read `live/README.md` § The merge rerun.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
 - `npm run test:tampermonkey` installs every script into a real Tampermonkey; `live/README.md` § The Tampermonkey test

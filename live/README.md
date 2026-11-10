@@ -3,14 +3,20 @@
 `npm run test:live` runs every `live/**/*.live.mjs` on sudokupad.app in headless Chromium, with the
 script under test injected. `AGENTS.md` § End-to-end seam says when to run it; this file is what
 you need to write or debug one.
-Every test has a 20-minute limit (`--test-timeout=1200000` in `package.json`): a hang on a promise that never settles fails the file there.
-The suite is run locally, never in `npm test` or the CI workflow; only the daily watch runs it on GitHub Actions.
+`npm run test:live` and `npm run test:live:files -- <files>` (a run of some files) give every test a time limit (`--test-timeout` in `package.json`):
+a test that hangs on a promise that never settles fails there, and the watch reports it as a failed check. The limit is per test, so a hang that holds the
+process open (a timer, a hook that never returns) still needs a kill. Run live files through these scripts, never `node --test` directly.
+The suite is run locally and never in `npm test` or the CI workflow; only the daily watch runs it on GitHub Actions.
 
 ## The merge rerun
 
-When the worker's full run was at the merged head, the controller's merge check reruns only the live files the merge touches: the files of
-`live/<script name>/` for each `*.user.js` or `lib/` module it changed, and each changed `live/**/*.live.mjs`. A moved head, or a change to a
-`live/*.mjs` helper, reruns the full suite (#717).
+The controller's merge check reruns the full suite, unless the worker's "PR up" names a full run at the head being merged and `origin/main` is already in that head.
+Then it reruns, with `npm run test:live:files`, the files this change touches against `origin/main`:
+
+- `live/<script name>/` for each script whose `*.user.js` or `live/<script name>/` folder changed;
+- every `live/*.live.mjs` at the top of `live/`, since they load every script (`startup`, `settings*`, `attacks-*`, `script-clash-attacks`, `error-log`, `site-slideshow`).
+
+A change to a `live/*.mjs` helper, `package.json`, `site/` or `.github/` reruns the full suite (#717).
 
 ## Opening SudokuPad
 

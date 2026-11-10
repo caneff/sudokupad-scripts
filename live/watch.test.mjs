@@ -45,6 +45,10 @@ describe('failedChecks', () => {
     'ok 2 - live/b.live.mjs'
   ].join('\n')
 
+  it('a test that hit the time limit is a failed check that names it, not an unrun suite', () => {
+    assert.deepEqual(failedChecks(failure('    ', 'stuck on a promise', 'testTimeoutFailure')), { checks: ['stuck on a promise'], unrun: [] })
+  })
+
   it('names each test that ran and failed, not the suites that failed because of it', () => {
     assert.deepEqual(failedChecks(tap), { checks: ['breaks "x"', 'lone failure'], unrun: [] })
   })
