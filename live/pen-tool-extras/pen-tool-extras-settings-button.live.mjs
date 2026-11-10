@@ -74,3 +74,20 @@ describe('the settings button in the pen panel', { concurrency: false }, () => {
     }
   })
 })
+
+// With SudokuPad's settings dialog calls gone the button would do nothing, so the panel has no settings button; the line mode and line type buttons stay.
+describe('the settings button with the settings dialog off', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    const code = `;Framework.getApp().then(() => { Framework.addSetting = undefined });\n${extras.script}`
+    ;({ context, p } = await extras.open(browser(), { scripts: [{ code }], expectedSkips: [/^pen-tool-extras: settings dialog skipped because SudokuPad has no Framework\.addSetting$/] }))
+  })
+  after(async () => { await context.close() })
+
+  it('the panel shows no settings button and keeps the others', async () => {
+    await p.locator('.pen-tool-extras-mode').waitFor({ state: 'visible' })
+    assert.equal(await p.locator('.pen-tool-extras-page').count(), 1)
+    assert.equal(await p.locator(BUTTON).count(), 0)
+  })
+})

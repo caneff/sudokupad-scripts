@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.7
+// @version      1.32.8
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.7'
+  const VERSION = '1.32.8'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -2575,7 +2575,9 @@
       if (!markup && sliders) sliders.remove()
       if (markup) syncPart(pulldown, `.${SLIDERS}`, markup)
       syncPart(pulldown, `.${TRAY}`, `<div class="${TRAY}"></div>`)
-      syncPart(pulldown, `.${SETTINGS_BUTTON}`, renderSettingsButton())
+      // With the settings dialog off the button would do nothing, so it is left out, as Text Anywhere leaves its gear out; one already in goes when the step turns off later.
+      if (steps.settings.off) document.querySelectorAll(`.${SETTINGS_BUTTON}`).forEach((el) => el.remove())
+      else syncPart(pulldown, `.${SETTINGS_BUTTON}`, renderSettingsButton())
       syncLineModeButton(pulldown)
       syncPageButton(pulldown)
     }, removePanelParts)
