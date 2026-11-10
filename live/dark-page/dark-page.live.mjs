@@ -421,7 +421,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const dialog = p.locator('.dialog')
     await dialog.locator(PICKER).waitFor({ state: 'visible' })
     assert.equal((await dialog.locator('b').first().textContent()).trim(), 'Dark Page')
-    assert.equal((await dialog.locator('small').textContent()).trim(), `v${headerVersion(script)}`)
+    assert.equal((await dialog.locator('small').textContent()).trim(), `v${headerVersion(script)} by ChinStrap`)
     assert.equal(await dialog.locator(PICKER).inputValue(), '#000000')
     await dialog.getByRole('button', { name: 'Cancel' }).click()
   })

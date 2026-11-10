@@ -793,7 +793,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await entry.click()
     await editor().waitFor({ state: 'visible' })
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen Tool Extras')
-    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(extras.script)}`)
+    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(extras.script)} by ChinStrap`)
     await closeExtrasEditorWith(p, 'Cancel')
   })
 

@@ -1,7 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.12
+// @version      0.46.13
+// @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.12'
+  const VERSION = '0.46.13'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -1415,10 +1416,13 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
+  // Every script's maker, as its @author header says; the dialog names it after the version.
+  const AUTHOR = 'ChinStrap'
+
   // The title rules travel with the row, so they are in the page exactly while the dialog is.
   function renderDialogTitle ({ prefix, name, version }) {
     return `<style>${dialogTitleCss(prefix)}</style>` +
-      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version} by ${AUTHOR}</small></span>` +
       `<span ${STATUS_ATTRIBUTE}></span>` +
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }

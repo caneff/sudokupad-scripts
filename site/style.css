@@ -1,30 +1,40 @@
+/* The ChinStrap theme: the look of Chris's Twitch stream (docs/research/site/chinstrap-theme/). Light only: Chris ruled dark mode out. */
+@font-face { font-family: Fredoka; src: url("Fredoka.ttf"); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: Nunito; src: url("Nunito.ttf"); font-weight: 200 1000; font-display: swap; }
 :root {
-  color-scheme: light dark;
-  /* SudokuPad's own button purple, read from its controls: rgb(106, 27, 154). */
-  --accent: #6a1b9a; --on-accent: #fff;
-  --warn-edge: #b26a00; --warn-bg: #fff4d6; --warn-text: #3d2600;
-  --accent-strong: #3d0a5c;
-  --frame-bg: #f4f2f7; --frame-edge: #e2dde9;
+  color-scheme: light;
+  /* The stream's banner purple. */
+  --accent: #5f519e; --on-accent: #fff;
+  /* The stream's six sticker colors, each with the pale fill of a tile in it. */
+  --blue: #a9d4f5; --pink: #f9b7c6; --yellow: #fcd598; --mint: #b1e6c6; --lavender: #c9b8f2; --peach: #fcbf98;
+  --blue-fill: #eaf4fd; --pink-fill: #fdeaef; --yellow-fill: #fff8eb; --mint-fill: #eefaf2; --lavender-fill: #f5f1fe; --peach-fill: #fff3ea;
+  --warn-edge: var(--yellow); --warn-bg: var(--yellow-fill); --warn-text: #6b512f;
+  --accent-strong: #3f3577;
+  --frame-bg: #fdfdf7; --frame-edge: #e9e4f7;
+  /* A sticker is a pastel border inside a white ring; one gap between stickers, measured ring to ring. */
+  --title-ring-width: 6px; --card-ring-width: 7px; --warn-ring-width: 5px; --install-ring-width: 4px;
+  --title-ring: 0 0 0 var(--title-ring-width) #fff, 0 6px 14px color-mix(in srgb, var(--accent) 25%, transparent);
+  --card-ring: 0 0 0 var(--card-ring-width) #fff, 0 8px 18px rgb(0 0 0 / .12);
+  --ring-gap: 14px;
 }
-@media (prefers-color-scheme: dark) {
-  :root { --accent: #d2a8f0; --on-accent: #1a0a24; --warn-edge: #e0a030; --warn-bg: #3a2a08; --warn-text: #ffe9b8; --accent-strong: #f0dcff; --frame-bg: #221d29; --frame-edge: #3b3446; }
-}
-body { max-width: 68rem; margin: 0 auto; padding: 1rem; font: 1.0625rem/1.5 system-ui, sans-serif; }
+/* The stream's ground: pastel diagonal stripes behind the page. */
+html { background: repeating-linear-gradient(118deg, #ffc9d2 0 90px, #ffe0bd 90px 180px, #fff3c0 180px 270px, #cff5dc 270px 360px, #cdeaff 360px 450px, #ddd2ff 450px 540px, #ffd4ea 540px 630px) fixed; }
+body { max-width: 72rem; margin: 0 auto; padding: 1.5rem; font: 1.0625rem/1.5 Nunito, system-ui, sans-serif; color: #3b3350; }
 a { color: var(--accent); }
-h1, h2 { margin: 0 0 .5rem; }
-h1 { font-size: 2.1rem; letter-spacing: -.01em; }
+h1, h2 { margin: 0 0 .5rem; font-family: Fredoka, sans-serif; font-weight: 600; color: var(--accent); }
+h1 { font-size: 2.6rem; letter-spacing: -.01em; }
 h2 { font-size: 1.2rem; }
 p { margin: 0 0 .5rem; }
-.install { display: inline-flex; align-items: center; gap: .55rem; padding: .6rem 1.4rem .6rem 1.1rem; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 1.05rem; font-weight: 600; text-decoration: none; box-shadow: 0 1px 3px rgb(0 0 0 / .3); }
-/* A download arrow into a tray, drawn in the text colour through a mask so it follows the light and dark themes. */
+.install { display: inline-flex; align-items: center; gap: .55rem; padding: .6rem 1.4rem .6rem 1.1rem; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-family: Fredoka, sans-serif; font-size: 1.05rem; font-weight: 600; text-decoration: none; box-shadow: 0 0 0 var(--install-ring-width) #fff, 0 3px 8px color-mix(in srgb, var(--accent) 35%, transparent); }
+/* A download arrow into a tray, drawn in the text colour through a mask. */
 .install::before { content: ""; width: 1.3em; height: 1.3em; background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M6.5 9.5 12 15l5.5-5.5M4 17v3h16v-3'/%3E%3C/svg%3E") center / contain no-repeat; }
-.install:hover { filter: brightness(1.15); box-shadow: 0 2px 6px rgb(0 0 0 / .35); }
+.install:hover { filter: brightness(1.15); box-shadow: 0 0 0 var(--install-ring-width) #fff, 0 4px 10px color-mix(in srgb, var(--accent) 45%, transparent); }
 .install:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.warning { margin: .5rem 0 1rem; padding: .6rem .9rem; border: 2px solid var(--warn-edge); border-left-width: .5rem; border-radius: 3px; background: var(--warn-bg); color: var(--warn-text); font-weight: 600; }
+.warning { margin: .5rem 0 1rem; padding: .6rem .9rem; border: 8px solid var(--warn-edge); border-radius: 20px; background: var(--warn-bg); color: var(--warn-text); font-weight: 600; box-shadow: 0 0 0 var(--warn-ring-width) #fff; }
 
 /* The slideshow: a framed picture, then a caption on the left and a pager on the right. slides.js adds the pager. */
 .slideshow { display: flex; flex-direction: column; }
-.slide-frame { --slide-inset: .6rem; position: relative; aspect-ratio: 16 / 10; background: var(--frame-bg); border: 1px solid var(--frame-edge); border-radius: 8px; }
+.slide-frame { --slide-inset: .6rem; position: relative; aspect-ratio: 16 / 10; background: var(--frame-bg); border: 4px solid var(--frame-edge); border-radius: 16px; }
 /* An animated slide's <picture> adds no box of its own, so its image is placed in the frame like any other slide's. */
 .slide-frame picture { display: contents; }
 .slide-frame img { position: absolute; inset: var(--slide-inset); margin: auto; max-width: calc(100% - 2 * var(--slide-inset)); max-height: calc(100% - 2 * var(--slide-inset)); width: auto; height: auto; }
@@ -45,8 +55,12 @@ p { margin: 0 0 .5rem; }
 .slide-pager button:active { transform: scale(.9); }
 .slide-pager button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
-/* The details layout (body.details): a back link, title, warning, lede and Install, then the slideshow, then sections divided by thin rules. */
-body.details { max-width: 46rem; }
+/* The details layout (body.details): one white sticker card over the stripes holding a back link, title, warning, lede and Install,
+   then the slideshow, then sections divided by thin rules. */
+body.details { max-width: 62rem; margin: 2rem auto; padding: 1.5rem 2rem; background: #fff; border: 12px solid var(--lavender); border-radius: 30px; box-shadow: var(--card-ring); }
+/* The title sticker, lavender: the homepage's banner, and a details page's title inside its card. */
+.banner, .details h1 { background: var(--lavender-fill); border: 10px solid var(--lavender); border-radius: 24px; box-shadow: var(--title-ring); }
+.details h1 { display: inline-block; padding: .6rem 1.4rem; }
 .details .back { font-size: .95rem; margin: .25rem 0 1rem; }
 .details .slide-caption { font-size: 1.25rem; }
 /* On a details page the frame takes the slides' own shape: the pictures stack in one grid cell at their own width (never larger), shrinking to fit a narrow window, so the frame is as wide and tall as the biggest. */
@@ -59,12 +73,18 @@ body.details { max-width: 46rem; }
 .details .actions { margin: .75rem 0 1.5rem; }
 .details h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--frame-edge); }
 .details .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem 2rem; margin: 0; padding: 0; list-style: none; }
+/* Each feature is a pastel tile, in the six stream colors in turn. */
+.details .features li { background: var(--tile); border: 3px solid var(--tile-edge); border-radius: 16px; padding: .6rem .8rem; }
+.details .features li:nth-child(6n+1) { --tile: var(--blue-fill); --tile-edge: var(--blue); }
+.details .features li:nth-child(6n+2) { --tile: var(--pink-fill); --tile-edge: var(--pink); }
+.details .features li:nth-child(6n+3) { --tile: var(--yellow-fill); --tile-edge: var(--yellow); }
+.details .features li:nth-child(6n+4) { --tile: var(--mint-fill); --tile-edge: var(--mint); }
+.details .features li:nth-child(6n+5) { --tile: var(--lavender-fill); --tile-edge: var(--lavender); }
+.details .features li:nth-child(6n+6) { --tile: var(--peach-fill); --tile-edge: var(--peach); }
 .details .features strong { display: block; margin-bottom: .15rem; }
 .details .features p { margin: 0; }
 .details .figure { margin: 1rem 0; }
 .details .figure img { display: block; max-width: 100%; height: auto; }
-.details .figure img + img { margin-top: .75rem; }
-.details .figure .caption { margin: .5rem 0 0; font-size: .95rem; }
 .details .notes li { margin-bottom: .45rem; }
 .details .notes { padding-left: 1.4rem; }
 .details footer { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--frame-edge); font-size: .95rem; }

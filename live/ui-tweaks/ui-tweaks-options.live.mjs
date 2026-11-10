@@ -66,7 +66,7 @@ describe('the options dialog', { concurrency: false }, () => {
   it('the entry opens a dialog named UI Tweaks with the version, Tab on and the other two off', async () => {
     await openDialog(p)
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'UI Tweaks')
-    assert.match(await p.locator('.dialog small.ui-tweaks-version').textContent(), /^v\d+\.\d+\.\d+$/)
+    assert.match(await p.locator('.dialog small.ui-tweaks-version').textContent(), /^v\d+\.\d+\.\d+ by ChinStrap$/)
     assert.deepEqual(await Promise.all(['tab', 'hideSelect', 'wrapButtons'].map((id) => box(p, id).isChecked())), [true, false, false])
     await closeDialogWith(p, 'Cancel', DIALOG)
   })
