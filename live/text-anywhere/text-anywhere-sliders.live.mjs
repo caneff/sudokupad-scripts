@@ -7,8 +7,9 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { readUntil } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
+import { slideTo } from '../slider.mjs'
 
-const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, SLIDERS, TEXT_BOX, WIDTH_KEY, slideTo, valueOf } = textAnywhere
+const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, SLIDERS, TEXT_BOX, WIDTH_KEY, valueOf } = textAnywhere
 const A = [1.5, 1.5]
 const B = [1.5, 3.5]
 const C = [5.5, 5.5]

@@ -8,6 +8,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { clickAt, finishNote, gridPoint, mouseDrag, typeText } from '../board.mjs'
+import { slideTo } from '../slider.mjs'
 
 const { BACKGROUND_BUTTON, CLEAR_BUTTON, COLOR_KEY, DIALOG, DIGIT_BUTTON, KEYPAD, TEXT_BOX, TEXTS, WIDTH_KEY } = textAnywhere
 const SELECTED = '#text-anywhere-layer .text-anywhere-selected'
@@ -130,7 +131,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   it('the Size slider and Background change only the selected notes, a mixed selection shows no color and no background state, and Background then boxes them all', async () => {
     const nextWidth = await p.evaluate((key) => Framework.getData(key), WIDTH_KEY)
     await selectThree()
-    await textAnywhere.slideTo(p, textAnywhere.SIZE_SLIDER, 12)
+    await slideTo(p, textAnywhere.SIZE_SLIDER, 12)
     assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => (await savedNote(t)).size)), [32, 32, 32, 20])
     assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), nextWidth, 'the next-note size is unchanged')
     assert.equal(await backgroundPressed(), 'false')

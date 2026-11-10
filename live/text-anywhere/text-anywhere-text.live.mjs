@@ -8,8 +8,9 @@ import { plantUnchecked } from '../pen.mjs'
 import { readUntil, settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, clickAt, finishNote, gridPoint } from '../board.mjs'
+import { slideTo } from '../slider.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, STRIKE_PIECE, SIZE_SLIDER, WIDTH_KEY, slideTo, valueOf } = textAnywhere
+const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, STRIKE_PIECE, SIZE_SLIDER, WIDTH_KEY, valueOf } = textAnywhere
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
