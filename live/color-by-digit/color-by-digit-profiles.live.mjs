@@ -710,7 +710,11 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit']), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
     await t.openEditor()
+    // A dialog nobody listens for is dismissed unseen, so this one is counted.
+    const count = (dialog) => { asks.push(dialog.message()); return dialog.dismiss() }
+    p.on('dialog', count)
     await dialogButton(p, 'Restore defaults').click()
+    p.off('dialog', count)
     assert.equal(asks.length, 3, 'the preloads alone lose nothing, so Restore defaults does not ask again')
     await closeDialogWith(p, 'Cancel', EDITOR)
   })

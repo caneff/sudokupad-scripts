@@ -298,7 +298,7 @@
   function stateFromLegacy (legacyGroups) {
     const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
-    if (!legacy) return { profiles: preloads, active: 0 }
+    if (!legacy) return preloadedState()
     const equal = preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
     if (equal >= 0) return { profiles: preloads, active: equal }
     return { profiles: [{ name: CUSTOM_NAME, groups: legacy }, ...preloads], active: 0 }
@@ -1395,7 +1395,10 @@
       case 'brush': return { ...draft, brush: event.key }
       case 'page': return { ...draft, page: event.page }
       case 'clear': return withGroups([])
-      case 'restore': return sameGroups(state, preloadedState()) ? draft : showingProfile({ ...draft, mode: allowedMode(draft.mode, true) }, preloadedState(), 0)
+      case 'restore': {
+        const preloaded = preloadedState()
+        return JSON.stringify(state) === JSON.stringify(preloaded) ? draft : showingProfile(draft, preloaded, 0)
+      }
       case 'press': return draft.paintKey === undefined ? draft : { ...draft, paintKey: undefined }
       case 'paint': {
         if (brush === null) return draft
@@ -2185,7 +2188,7 @@
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { preloadedState, VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2770,7 +2773,7 @@
     if (!box) return
     // The draft takes the preloaded profiles, and Save or Cancel decides. Profiles of the user's own are lost on Save, so a draft that holds any asks first.
     const restoreDefaults = () => {
-      if (!sameGroups(draft.state.profiles, preloadedState().profiles) && !window.confirm('Restore the preloaded profiles? Your own profiles and edits are removed when you Save.')) return
+      if (JSON.stringify(draft.state.profiles) !== JSON.stringify(preloadedState().profiles) && !window.confirm('Restore the preloaded profiles? Your own profiles and edits are removed when you Save.')) return
       edit({ type: 'restore' })
       draw()
     }
