@@ -1727,7 +1727,7 @@ const rulesFor = (css, selector) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
 const declarationsOf = (selector) => rulesFor(STYLE_CSS, selector)
 
 test('the bottom row is capped at 21.6rem, which live/color-by-digit-rows.live.mjs shows wraps it at five buttons a row', () => {
-  assert.match(BOTTOM_ROW_CSS, /^\.controls-aux \{ max-width: 21\.6rem; \}$/)
+  assert.match(BOTTOM_ROW_CSS, /^\.controls-aux \{ max-width: 21\.6rem !important; \}$/)
 })
 
 test('renderProfiles draws each row\'s chips as a run of cells in the Cell look', () => {

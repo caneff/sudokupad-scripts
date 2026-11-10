@@ -181,6 +181,16 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
     assert.equal((await rowButtons(p))[4].id, 'control-colorbydigit')
   })
 
+  it('with Wrap buttons on, the row still breaks after five when something gives it an inline max-width', async () => {
+    await p.evaluate(() => { document.querySelector('.controls-aux').style.maxWidth = '482px' })
+    const buttons = await settle(async () => {
+      const found = await rowButtons(p)
+      return found.map((b) => b.y > found[0].y)
+    }, [false, false, false, false, false, true, true, true])
+    await p.evaluate(() => { document.querySelector('.controls-aux').style.maxWidth = '' })
+    assert.deepEqual(buttons, [false, false, false, false, false, true, true, true])
+  })
+
   it('Hide the Toggle Selection button leaves Color by Digit\'s button and the others', async () => {
     await chooseAndSave(p, { hideSelect: true })
     await p.locator(SELECT).waitFor({ state: 'hidden' })
