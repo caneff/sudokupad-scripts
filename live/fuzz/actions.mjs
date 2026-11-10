@@ -430,11 +430,16 @@ function actionArbitrary (puzzle, weights) {
   return fc.oneof(...KINDS.map((k) => ({ weight: weights[k.kind], arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
 }
 
-// The generator of whole lists, each `{ puzzle, commands }`: a puzzle of `puzzles`, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list
+// The generator of whole lists, each `{ puzzle, commands, waitMs }`: a puzzle of `puzzles`, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list
 // (what `String()` of a failing list prints); the puzzle is drawn first, so the same path gives the same puzzle. A list prints as its commands.
 // `focus` is script files (`focusFiles`) whose actions weigh more; a path replays only with the focus it was found with.
-export const actionList = (puzzles, { maxCommands = 20, replayPath, focus = [] } = {}) => fc.constantFrom(...puzzles).chain((puzzle) =>
-  fc.commands([actionArbitrary(puzzle, kindWeights(focus))], { maxCommands, size: 'max', replayPath }).map((commands) => ({ puzzle, commands, toString: () => String(commands) })))
+// `waits` (#725) is the milliseconds the engine may wait after each action: with more than one, each list draws its own, drawn beside its actions so a path replays it and a
+// shrink moves it to the first of the set; with one or none, `waitMs` is undefined and the engine's own wait stands.
+export const actionList = (puzzles, { maxCommands = 20, replayPath, focus = [], waits = [] } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
+  const commands = fc.commands([actionArbitrary(puzzle, kindWeights(focus))], { maxCommands, size: 'max', replayPath })
+  if (waits.length < 2) return commands.map((c) => ({ puzzle, commands: c, toString: () => String(c) }))
+  return fc.tuple(fc.constantFrom(...waits), commands).map(([waitMs, c]) => ({ puzzle, commands: c, waitMs, toString: () => String(c) }))
+})
 
 // A list written out by hand, for a regression that is one known sequence: `steps` are `[kind, arg]` of the kinds above, in the shape fast-check wraps them in.
 export function scriptedList (puzzle, steps) {

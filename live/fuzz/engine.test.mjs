@@ -191,6 +191,77 @@ describe('the fuzz engine on a fake page', () => {
     })
   })
 
+  describe('the wait between actions is part of each list (#725)', () => {
+    // The wait the engine drew for a list is one of these, 40 first so a shrink that does not need the timing ends on the old fixed wait.
+    const VARIED = { waits: [40, 0, 300], landMs: 1 }
+
+    it('a planted error that needs two Tabs within 10 ms is never caught at the fixed wait', async () => {
+      const { openTarget } = fakeTargets({ raceOnFastTabs: true })
+      const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 600, landMs: 1, settleMs: 40 })
+      assert.equal(result.failed, false)
+    })
+
+    describe('with the wait drawn per list', () => {
+      let found
+
+      it('catches it, blaming the Tab, and reports the 0 ms wait that exposed it', async () => {
+        const { openTarget } = fakeTargets({ raceOnFastTabs: true })
+        found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 600, ...VARIED })
+        assert.equal(found.failed, true)
+        assert.match(found.error, /crash signal after .*: page error or console error: Error: planted race/)
+        assert.equal(found.waitMs, 0)
+      })
+
+      it('shrinks to the two Tabs', () => {
+        assert.deepEqual(found.sequence, ['press Tab', 'press Tab'])
+      })
+
+      it('replays from its path with the same wait, steps and error', async () => {
+        const { openTarget } = fakeTargets({ raceOnFastTabs: true })
+        const again = await runFuzz({ openTarget, puzzles: PUZZLES, seed: found.seed, path: found.path, replayPath: found.replayPath, ...VARIED })
+        assert.equal(again.failed, true)
+        assert.equal(again.waitMs, 0)
+        assert.deepEqual(again.sequence, found.sequence)
+        assert.equal(again.error, found.error)
+      })
+    })
+
+    it('a failure that does not need the timing shrinks to the old fixed wait', async () => {
+      const { openTarget } = fakeTargets({ plantEscapeError: true })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 300, ...VARIED })
+      assert.equal(found.failed, true)
+      assert.equal(found.waitMs, 40)
+    })
+
+    it('every wait of the set is drawn, by lists of their own', async () => {
+      const { openTarget, targets } = fakeTargets()
+      await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 120, ...VARIED })
+      // The wait after the first action of each list that has one, leaving out the last wait of the list, which is the landing read.
+      const drawn = new Set(targets.flatMap((t) => t.waited.slice(0, -1).slice(0, 1)))
+      assert.deepEqual([...drawn].sort((a, b) => a - b), [0, 40, 300])
+    })
+
+    it('a set of one wait is the fixed wait: the same lists as before, and no wait reported', async () => {
+      const one = await runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, waits: [1], landMs: 1 })
+      const fixed = await runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, landMs: 1, settleMs: 1 })
+      assert.equal(one.waitMs, undefined)
+      assert.deepEqual({ path: one.path, sequence: one.sequence }, { path: fixed.path, sequence: fixed.sequence })
+    })
+
+    it('a page that has not settled at 0 ms is read again after a short settle before a rule is blamed', async () => {
+      const { openTarget } = fakeTargets({ whiteUntilWait: true })
+      const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 100, landMs: 1, settleMs: 0 })
+      assert.equal(result.failed, false, result.error)
+    })
+
+    it('a rule broken for good at 0 ms is still blamed, on the action that broke it', async () => {
+      const { openTarget } = fakeTargets({ whitenOnBlur: true })
+      const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, landMs: 1, settleMs: 0 })
+      assert.equal(result.failed, true)
+      assert.match(result.error, /rule broken after ".*blur.*": page-stays-dark/)
+    })
+  })
+
   it('a log that cannot be read is said so, never reported as empty', async () => {
     const { openTarget } = fakeTargets({ plantEscapeError: true })
     const unreadable = async () => ({ ...await openTarget(), errorLog: async () => { throw new Error('storage blocked') } })
