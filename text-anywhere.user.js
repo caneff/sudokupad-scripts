@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.45.6
+// @version      0.45.7
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.45.6'
+  const VERSION = '0.45.7'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -2743,8 +2743,8 @@
   // that window has passed with the pointer still; `move` the notes it moves (each with its index and the item as it was at the press), or null; `shift` and `detail`
   // the press's Shift key and click count; and `rectangle`, the selection rectangle's element once a press on no note has dragged.
   let drag = null
-  // A right-drag in progress: the last point it reached, the points its moves reached since the last frame, and whether it has erased an item yet. The
-  // right button's `buttons` bit holds it.
+  // A right-drag in progress: the last point it reached, the points its moves reached since the last frame, and the notes it has touched, which go on its release.
+  // The right button's `buttons` bit holds it.
   let erasing = null
   // The note open for typing: the index of the text it reopened, or -1 for a new one, the item and its element, which the solver types in.
   let editing = null
@@ -3627,7 +3627,7 @@
   function endGesture () {
     stopHold()
     flushFrame()
-    if (erasing) endErase()
+    erasing = null
     if (drag) endDrag()
     saveNudge()
   }
@@ -3869,9 +3869,11 @@
   }
 
   function endErase () {
-    const { erased } = erasing
+    const { touched } = erasing
     erasing = null
-    if (erased) saveNotes()
+    if (!keepItems((item) => !touched.has(item))) return
+    saveNotes()
+    redraw()
   }
 
   function cancelInput () {
@@ -3964,24 +3966,22 @@
     else redraw()
   }
 
-  // Deletes, whole, every note the drag from `from` to `to`, in board units, passes through or within HIT_MARGIN_PX of. Whether any went.
-  function eraseAlong (from, to, map) {
+  // Adds, whole, to the erase's touched notes every note the drag from `from` to `to`, in board units, passes through or within HIT_MARGIN_PX of.
+  function touchAlong (from, to, map) {
     const [a, b] = [from, to].map(map.toScreen)
-    if (!keepItems((item) => item.kind !== TEXT_KIND || !touchesBox(grownBox(noteScreenBox(item, map, look.outline), HIT_MARGIN_PX), a, b))) return false
-    erasing.erased = true
-    return true
+    for (const item of puzzleNotes) {
+      if (item.kind === TEXT_KIND && touchesBox(grownBox(noteScreenBox(item, map, look.outline), HIT_MARGIN_PX), a, b)) erasing.touched.add(item)
+    }
   }
 
-  function eraseMoves () {
+  function touchMoves () {
     if (!erasing) return
     const map = boardMap()
-    let erased = false
     for (const point of erasing.pending.splice(0)) {
       const at = map.toBoard(point)
-      erased = eraseAlong(erasing.last, at, map) || erased
+      touchAlong(erasing.last, at, map)
       erasing.last = at
     }
-    if (erased) redraw()
   }
 
   // SudokuPad gives a tool every button's mousedown; the browser opens its menu on the press on Linux and on the
@@ -4019,8 +4019,8 @@
       if (event.button === SECONDARY_BUTTON) {
         if (notesHidden) return true
         const at = map.toBoard(point)
-        erasing = { last: at, pending: [], erased: false }
-        if (eraseAlong(at, at, map)) redraw()
+        erasing = { last: at, pending: [], touched: new Set() }
+        touchAlong(at, at, map)
         return true
       }
       if (event.button !== PRIMARY_BUTTON) return false
@@ -4048,7 +4048,7 @@
       }
       if (erasing) {
         erasing.pending.push(eventPoint(event))
-        inFrame('erase', eraseMoves)
+        inFrame('erase', touchMoves)
         return true
       }
       if (!drag) return false
@@ -4063,6 +4063,8 @@
     handleInputup (event) {
       flushFrame()
       if (erasing) {
+        erasing.pending.push(eventPoint(event))
+        touchMoves()
         endErase()
         return true
       }
@@ -4102,6 +4104,10 @@
       holdShift = event.shiftKey
       if (event.key === 'Shift') {
         if (drag?.move) inFrame('drag', dragMoves)
+        return true
+      }
+      if (event.key === 'Escape' && erasing) {
+        erasing = null
         return true
       }
       if (event.key === 'Escape' && drag && !drag.cancelled) {
