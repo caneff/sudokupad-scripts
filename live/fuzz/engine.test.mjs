@@ -1,5 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import fc from 'fast-check'
+import { actionList, MAX_START_STEPS, START_KINDS } from './actions.mjs'
 import { runFuzz } from './engine.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES } from './puzzle-set.mjs'
@@ -259,6 +261,55 @@ describe('the fuzz engine on a fake page', () => {
       const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, landMs: 1, settleMs: 0 })
       assert.equal(result.failed, true)
       assert.match(result.error, /rule broken after ".*blur.*": page-stays-dark/)
+    })
+  })
+
+  describe('some lists start from a busy board (#726)', () => {
+    const BUSY = { busyStart: true, ...WAITS }
+
+    it('a start is drawn for some lists and none for others, printed ahead of the actions', () => {
+      const lists = fc.sample(actionList(PUZZLES, { busyStart: true }), { numRuns: 200, seed: SEED })
+      assert.ok(lists.some((l) => l.start.length >= 10), 'a list starts with 10 or more steps')
+      assert.ok(lists.some((l) => l.start.length === 0), 'a list starts on the empty board')
+      assert.ok(lists.every((l) => l.start.length <= MAX_START_STEPS))
+      assert.ok(lists.every((l) => l.start.every((c) => START_KINDS.includes(c.kind))), 'a start builds, and never undoes, reloads or holds a gesture open')
+      assert.ok(lists.find((l) => l.start.length > 0).toString().startsWith('(start) '))
+    })
+
+    it('with no busyStart, no list has a start', () => {
+      const lists = fc.sample(actionList(PUZZLES), { numRuns: 100, seed: SEED })
+      assert.ok(lists.every((l) => l.start.length === 0))
+    })
+
+    describe('a failure that needs the busy board', () => {
+      let found
+      it('is caught, with the start steps it needs among the shrunk steps', async () => {
+        // 16 clicks do not come from the 20 actions of one list alone (none was found in 1500 lists without a start).
+        const { openTarget } = fakeTargets({ errorAtClicks: 16 })
+        found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 1500, ...BUSY })
+        assert.equal(found.failed, true)
+        assert.ok(found.sequence.some((s) => s.startsWith('(start) ')), found.sequence.join(' | '))
+      })
+
+      it('replays from its path: the same steps, start included', async () => {
+        const { openTarget } = fakeTargets({ errorAtClicks: 16 })
+        const again = await runFuzz({ openTarget, puzzles: PUZZLES, seed: found.seed, path: found.path, replayPath: found.replayPath, ...BUSY })
+        assert.equal(again.failed, true)
+        assert.deepEqual(again.sequence, found.sequence)
+      })
+    })
+
+    it('the same lists without a start never reach that failure, so the start is what finds it', async () => {
+      const { openTarget } = fakeTargets({ errorAtClicks: 16 })
+      assert.equal((await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 1500, ...WAITS })).failed, false)
+    })
+
+    it('a failure that does not need it shrinks to no start at all', async () => {
+      const { openTarget } = fakeTargets({ plantEscapeError: true })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 300, ...BUSY })
+      assert.equal(found.failed, true)
+      assert.deepEqual(found.sequence.filter((s) => s.startsWith('(start) ')), [])
+      assert.equal(found.sequence.length, 1)
     })
   })
 

@@ -25,8 +25,8 @@ const RACE_MS = 10
 // timer's error lands after the action returned, so the tests need no real clock. `withNote` starts the page with a note drawn. `whitenOnBlur` turns the page
 // white when the window blurs, which breaks the Dark Page rule; `whitenOnWait` makes it so only after the next wait; `lettersOnTab` turns the number pad to letters on Tab, which breaks the Tab rule, and `lettersOnBlur` does it on a blur, which breaks no rule; `lettersOnRedo` does it on a redo, which breaks only the rule that a redo after an undo restores the page (the fake's undo stack is a count: undo takes one off, redo puts one back).
 // The fake keeps a virtual clock that only `wait` moves: `raceOnFastTabs` throws a page error (landing after the next wait) when a Tab comes under 10 ms of virtual time after another, the
-// bug that shows only when two inputs land close together; `whiteUntilWait` turns the page white on a blur until the next wait, a page that has not settled yet.
-export function fakeTargets ({ plantEscapeError = false, withNote = true, whitenOnBlur = false, whitenOnWait = false, lettersOnTab = false, lettersOnBlur = false, lettersOnRedo = false, raceOnFastTabs = false, whiteUntilWait = false } = {}) {
+// bug that shows only when two inputs land close together; `whiteUntilWait` turns the page white on a blur until the next wait, a page that has not settled yet; `errorAtClicks` throws a page error when the list's clicks reach that many, a bug that wants a busy board.
+export function fakeTargets ({ plantEscapeError = false, withNote = true, whitenOnBlur = false, whitenOnWait = false, lettersOnTab = false, lettersOnBlur = false, lettersOnRedo = false, raceOnFastTabs = false, whiteUntilWait = false, errorAtClicks = 0 } = {}) {
   const targets = []
   const openTarget = async (puzzle) => {
     const log = []
@@ -44,7 +44,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
     const page = {
       mouse: {
         move: rec('mouse.move'),
-        click: rec('mouse.click'),
+        click: async (...a) => { log.push(['mouse.click', ...a]); if (errorAtClicks && log.filter(([n]) => n === 'mouse.click').length === errorAtClicks) pending.push('Error: planted busy-board error') },
         down: async (...a) => { down++; log.push(['mouse.down', ...a]) },
         up: async (...a) => { down = Math.max(0, down - 1); log.push(['mouse.up', ...a]) }
       },

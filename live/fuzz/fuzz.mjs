@@ -9,6 +9,7 @@ import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from
 import { closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
+import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
 import { scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
@@ -191,8 +192,8 @@ const freeCells = (p) => p.evaluate(() => Framework.app.puzzle.cells.filter((c) 
 const sortedCells = (cells) => [...cells].sort(([r1, c1], [r2, c2]) => r1 - r2 || c1 - c2)
 
 // Fuzzes with `seed` (a number) for `minutes` or `runs` action lists, each on a puzzle of the set that the list names, then shrinks a failure. `path` is a printed replay
-// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug. `focus` is script files (`focusFiles` of `actions.mjs`) whose actions come up more often.
-export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant, focus }) {
+// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug. `config` names the generator's configuration (`configs.mjs`). `focus` is script files (`focusFiles` of `actions.mjs`) whose actions come up more often.
+export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant, focus, config = DEFAULT_CONFIG }) {
   const [fcPath, replayPath] = path == null ? [] : path.split('@')
   const result = await runFuzz({
     openTarget: (puzzle) => openTarget(browser, puzzle, { planted, plant }),
@@ -203,10 +204,11 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
     shrinkMinutes,
     path: fcPath,
     replayPath,
-    focus
+    focus,
+    ...configOptions(config)
   })
   if (!result.failed) return result
-  return { ...result, path: `${result.path}@${result.replayPath}`, replayCommand: replayCommand({ seed: result.seed, path: `${result.path}@${result.replayPath}`, planted, plant, focus }) }
+  return { ...result, path: `${result.path}@${result.replayPath}`, replayCommand: replayCommand({ seed: result.seed, path: `${result.path}@${result.replayPath}`, planted, plant, focus, config }) }
 }
 
 // Runs one list written by hand (`steps`: `[kind, arg]`, `actions.mjs`) on `puzzle` with the checks of every run; resolves to nothing, or throws the failure.

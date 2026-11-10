@@ -430,15 +430,32 @@ function actionArbitrary (puzzle, weights) {
   return fc.oneof(...KINDS.map((k) => ({ weight: weights[k.kind], arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
 }
 
-// The generator of whole lists, each `{ puzzle, commands, waitMs }`: a puzzle of `puzzles`, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list
-// (what `String()` of a failing list prints); the puzzle is drawn first, so the same path gives the same puzzle. A list prints as its commands.
-// `focus` is script files (`focusFiles`) whose actions weigh more; a path replays only with the focus it was found with.
+// The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
+// Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
+export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'place note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'dark page']
+// The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
+export const MAX_START_STEPS = 30
+
+// The arbitrary of a busy start's steps over `puzzle`: commands like a list's, run first, each printed with `(start) ` before it.
+const startArbitrary = (puzzle) => fc.array(fc.oneof(...KINDS.filter((k) => START_KINDS.includes(k.kind)).map((k) => ({ weight: k.weight, arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) }))), { maxLength: MAX_START_STEPS, size: 'max' })
+
+// The generator of whole lists, each `{ puzzle, start, commands, waitMs }`: a puzzle of `puzzles`, then (with `busyStart`, #726) a start of up to `MAX_START_STEPS` steps that builds a
+// busy board, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list (what `String()` of a failing list prints, which is the start's steps and then the
+// actions'); the puzzle is drawn first, so the same path gives the same puzzle. `focus` is script files (`focusFiles`) whose actions weigh more; a path replays only with the
+// focus it was found with. A start is an array, so a shrink drops its steps and leaves a list that begins on the empty board when the failure does not need it.
 // `waits` (#725) is the milliseconds the engine may wait after each action: with more than one, each list draws its own, drawn beside its actions so a path replays it and a
 // shrink moves it to the first of the set; with one or none, `waitMs` is undefined and the engine's own wait stands.
-export const actionList = (puzzles, { maxCommands = 20, replayPath, focus = [], waits = [] } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
+export const actionList = (puzzles, { maxCommands = 20, replayPath, focus = [], waits = [], busyStart = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
   const commands = fc.commands([actionArbitrary(puzzle, kindWeights(focus))], { maxCommands, size: 'max', replayPath })
-  if (waits.length < 2) return commands.map((c) => ({ puzzle, commands: c, toString: () => String(c) }))
-  return fc.tuple(fc.constantFrom(...waits), commands).map(([waitMs, c]) => ({ puzzle, commands: c, waitMs, toString: () => String(c) }))
+  const waitMs = waits.length < 2 ? fc.constant(undefined) : fc.constantFrom(...waits)
+  const start = busyStart ? startArbitrary(puzzle) : fc.constant([])
+  return fc.tuple(waitMs, start, commands).map(([wait, steps, c]) => ({
+    puzzle,
+    start: steps,
+    commands: c,
+    waitMs: wait,
+    toString: () => [...steps.map((step) => `(start) ${step}`), String(c)].join(',')
+  }))
 })
 
 // A list written out by hand, for a regression that is one known sequence: `steps` are `[kind, arg]` of the kinds above, in the shape fast-check wraps them in.

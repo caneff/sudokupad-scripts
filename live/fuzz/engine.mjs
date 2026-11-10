@@ -19,10 +19,14 @@ const RECHECK_SETTLE_MS = 40
 // No number of runs: the time limit or `runs` ends the hunt.
 const UNBOUNDED = 1000000
 const DEFAULT_MINUTES = 2
+// A busy start's step in the shape fast-check's own list entries have (`cmd` is the action), so the checks read the two alike.
+const asStep = (cmd) => ({ cmd, check: (model) => cmd.check(model), run: (model, real) => cmd.run(model, real), toString: () => String(cmd) })
 // A failure is shrunk for at most this long; a list shrunk that far is reported as it stands.
 const DEFAULT_SHRINK_MINUTES = 10
 
 const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
+// The steps a printed list holds, in order: a busy start's steps (`(start) ...`) and then the actions'. fast-check prints them joined by commas, so no step holds one.
+const stepsOf = (shown) => shown.replace(REPLAY_PATH, '').trim().split(',').filter((step) => step.trim() !== '')
 
 function assertClean (snapshot, when) {
   const signals = crashSignals(snapshot)
@@ -79,15 +83,15 @@ async function runList (openTarget, actions, landMs, settleMs) {
 export const runScript = ({ openTarget, puzzle, actions }) => runList(() => openTarget(puzzle), actions, ERRORS_LAND_MS, ACTION_SETTLE_MS)
 
 // Fuzzes with `seed` over `puzzles` (each list picks one): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
-// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus` (script files, `actionList`) raises those scripts' actions; a replay needs the focus it was found with. `waits` (milliseconds, `actionList`) makes each list draw its own wait after an action, reported as `waitMs`; a replay needs the same set. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
+// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus` (script files, `actionList`) raises those scripts' actions; a replay needs the focus it was found with. `busyStart` (`actionList`) makes some lists begin with steps that build a busy board, printed `(start) ...`; a replay needs it too. `waits` (milliseconds, `actionList`) makes each list draw its own wait after an action, reported as `waitMs`; a replay needs the same set. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
 // each puzzle ran, by name) or the failure: `error`, `puzzle` (its name), `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`,
 // `replayPath`, `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
-export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits }) {
+export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits, busyStart }) {
   // The puzzle of every list started, in order: the hunt's lists are the first `hunt.numRuns` (a list the time limit cut off, and the shrink's, come after).
   const started = []
-  const property = fc.asyncProperty(actionList(puzzles, { replayPath, focus, waits }), ({ puzzle, commands, waitMs }) => {
+  const property = fc.asyncProperty(actionList(puzzles, { replayPath, focus, waits, busyStart }), ({ puzzle, start, commands, waitMs }) => {
     started.push(puzzle.name)
-    return runList(() => openTarget(puzzle), commands, landMs, waitMs ?? settleMs)
+    return runList(() => openTarget(puzzle), [...start.map(asStep), ...commands], landMs, waitMs ?? settleMs)
   })
   const replaying = path != null
   // A path names its run by index, so a run limit one past it replays that run alone and a failure that does not repeat ends there.
@@ -112,7 +116,7 @@ export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFA
     puzzle: found.counterexample[0].puzzle.name,
     waitMs: found.counterexample[0].waitMs,
     error: String(found.errorInstance?.message ?? found.error),
-    sequence: shown.replace(REPLAY_PATH, '').trim().split(','),
+    sequence: stepsOf(shown),
     seed: found.seed,
     path: found.counterexamplePath,
     replayPath: REPLAY_PATH.exec(shown)[1],
@@ -120,6 +124,6 @@ export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFA
     runs: hunt.numRuns,
     huntMs,
     puzzleRuns: huntRuns,
-    huntedSteps: String(hunt.counterexample[0]).replace(REPLAY_PATH, '').trim().split(',').length
+    huntedSteps: stepsOf(String(hunt.counterexample[0])).length
   }
 }
