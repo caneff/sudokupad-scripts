@@ -115,25 +115,23 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     await finishNote(p)
   })
 
-  it('a color picked with three notes selected recolors only those three, and the next new note takes the earlier next-note color', async () => {
-    const nextColor = await p.evaluate((key) => Framework.getData(key), COLOR_KEY)
+  it('a color picked with three notes selected recolors only those three, and the next new note takes the color picked', async () => {
     await selectThree()
     await p.click(`${KEYPAD} button[data-key="6"]`)
     assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => (await savedNote(t)).color)), [6, 6, 6, 1])
     assert.equal(await markedColor(), '6', 'the panel shows the selection\'s color')
-    assert.equal(await p.evaluate((key) => Framework.getData(key), COLOR_KEY), nextColor, 'the next-note color is unchanged')
+    assert.equal(await p.evaluate((key) => Framework.getData(key), COLOR_KEY), 6, 'the color picked is also the next-note color')
     await clickAt(p, EMPTY)
-    assert.equal(await markedColor(), String(nextColor ?? 1), 'with nothing selected the panel shows the next-note color')
+    assert.equal(await markedColor(), '6', 'with nothing selected the panel shows the next-note color')
     await typeText(p, EMPTY, 'E')
-    assert.equal((await savedNote('E')).color, nextColor ?? 1)
+    assert.equal((await savedNote('E')).color, 6)
   })
 
-  it('the Size slider and Background change only the selected notes, a mixed selection shows no color and no background state, and Background then boxes them all', async () => {
-    const nextWidth = await p.evaluate((key) => Framework.getData(key), WIDTH_KEY)
+  it('the Size slider and Background change the selected notes and are also the next-note settings, a mixed selection shows no color and no background state, and Background then boxes them all', async () => {
     await selectThree()
     await slideTo(p, textAnywhere.SIZE_SLIDER, 12)
     assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => (await savedNote(t)).size)), [32, 32, 32, 20])
-    assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), nextWidth, 'the next-note size is unchanged')
+    assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), 12, 'the size picked is also the next-note size')
     assert.equal(await backgroundPressed(), 'false')
     await p.click(BACKGROUND_BUTTON)
     assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => Boolean((await savedNote(t)).bg))), [true, true, true, false])
@@ -147,7 +145,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => Boolean((await savedNote(t)).bg))), [true, true, true, true])
     assert.equal(await backgroundPressed(), 'true')
     await finishNote(p)
-    assert.equal(await backgroundPressed(), 'false', 'with nothing selected the button shows the next-note setting')
+    assert.equal(await backgroundPressed(), 'true', 'with nothing selected the button shows the next-note setting, now the one pressed')
   })
 
   it('a drag on one selected note moves every selected note, and they keep their spacing after a reload', async () => {

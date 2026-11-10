@@ -47,7 +47,7 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   assert.deepEqual(textAnywhere.presetColors('sudokupad', [], null, readPen), SUDOKUPAD)
   assert.deepEqual(textAnywhere.presetColors('pen', [], null, readPen), PEN)
 
-  // Copy carries the colors, the size, transparency, outline, box color, frame and font (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad outline, box color, frame or font reads as its default).
+  // Copy carries the colors, the size, opacity, outline, box color, frame and font (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad outline, box color, frame or font reads as its default).
   const copied = JSON.parse(textAnywhere.copiedSettings(fakeStore({ TextAnywhere_colors: PEN, TextAnywhere_width: 3.5, TextAnywhere_notes_x: [text] })))
   assert.deepEqual(copied, { TextAnywhere_colors: PEN, TextAnywhere_width: 3.5, TextAnywhere_opacity: 100, TextAnywhere_outline: 'medium', TextAnywhere_box: 'page', TextAnywhere_frame: false, TextAnywhere_font: 'proportional' })
   const pasted = textAnywhere.pastedSettings(JSON.stringify({ ...copied, TextAnywhere_width: 99, PenToolExtras_x: 1 }), textAnywhere.READERS)
@@ -60,6 +60,6 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   assert.match(read('site/index.html'), summary)
   assert.match(read('text-anywhere.user.js'), summary)
   const details = read('site/text-anywhere.html')
-  for (const lead of ['Typed notes anywhere', 'Colors, size and transparency', 'Readable over digits', 'Settings']) assert.match(details, new RegExp(`<strong>${lead}</strong>`))
+  for (const lead of ['Typed notes anywhere', 'Colors, size and opacity', 'Readable over digits', 'Settings']) assert.match(details, new RegExp(`<strong>${lead}</strong>`))
   assert.match(read('README.md'), /Each script adds an entry/)
 })
