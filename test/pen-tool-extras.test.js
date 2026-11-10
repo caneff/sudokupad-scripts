@@ -936,7 +936,6 @@ const editorState = (over = {}) => ({
   eraseClicks: true,
   outline: true,
   outlineWidth: 2,
-  off: [],
   ...over
 })
 
