@@ -205,7 +205,7 @@ npm run fuzz:plants -- [--seeds <k>] [--budget <seconds per hunt>] [--seed <firs
 - **The budget** is 60 seconds a plant on each of 5 seeds, each hunt over the whole puzzle set (#679), plus a short shrink of each catch for the replay check. A hunt ends at its first failure, so the
   12 plants take about 25 minutes per configuration on one core and one Chromium.
 - **A miss** is read for its likely reason: no rule sees it, no action reaches it, the board is too empty, or timing. Add a plant by adding an entry to `plants.mjs`.
-- **Replaying a catch**: `npm run test:fuzz -- --seed <n> --path <path> --plant <id> [--config <name>]` replays one list with the plant in; the per-run line of the sweep gives the seed.
+- **Replaying a catch**: `npm run test:fuzz -- --seed <n> --path <path> --plant <id> [--config <name>]` replays one list with the plant in; the sweep's per-run line gives the seed and the path of each catch.
 
 ## The nightly fuzz
 

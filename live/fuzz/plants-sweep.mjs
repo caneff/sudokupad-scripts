@@ -6,7 +6,7 @@ export const seedList = ({ base, count, list }) => list ?? Array.from({ length: 
 
 const round1 = (ms) => Math.round(ms / 100) / 10
 
-// Resolves to `{ <configuration>: runs }`, a run being `{ plant, config, seed, caught, other, seconds, replayed? }` (`plants-stats.mjs`). `onRun` hears each as it finishes.
+// Resolves to `{ <configuration>: runs }`, a run being `{ plant, config, seed, caught, other, seconds, path?, replayed? }` (`path` is the catch's replay path) (`plants-stats.mjs`). `onRun` hears each as it finishes.
 // A hunt that finds nothing in the budget is a miss costing the whole budget; a failure that is not the plant's ends the hunt and is a miss too (`other`).
 export async function sweep ({ fuzz, plants, configs, seeds, budgetSeconds, shrinkMinutes, checkReplay = true, onRun = () => {} }) {
   const byConfig = Object.fromEntries(configs.map((name) => [name, []]))
@@ -15,7 +15,7 @@ export async function sweep ({ fuzz, plants, configs, seeds, budgetSeconds, shri
       for (const config of configs) {
         const result = await fuzz({ seed, minutes: budgetSeconds / 60, shrinkMinutes, plant, config })
         const caught = result.failed && plant.expect.test(result.error)
-        const run = { plant: plant.id, config, seed, caught, other: result.failed && !caught, seconds: result.failed ? round1(result.huntMs) : budgetSeconds }
+        const run = { plant: plant.id, config, seed, caught, other: result.failed && !caught, seconds: result.failed ? round1(result.huntMs) : budgetSeconds, path: caught ? result.path : undefined }
         // The catch's own path, run alone: a failure that depends on timing may not fail again.
         if (caught && checkReplay) {
           const again = await fuzz({ seed, path: result.path, plant, config })

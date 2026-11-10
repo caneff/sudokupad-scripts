@@ -49,7 +49,7 @@ try {
     shrinkMinutes,
     checkReplay: !values['no-replay-check'],
     // One line per run, in the order they finish, so a status check or a killed run still has what was found.
-    onRun: (r) => console.log(`${r.plant} ${r.config} seed ${r.seed}: ${r.caught ? `caught in ${r.seconds} s${r.replayed === undefined ? '' : r.replayed ? ', replays' : ', DID NOT REPLAY'}` : r.other ? `a failure that is not the plant's after ${r.seconds} s` : 'missed'}`)
+    onRun: (r) => console.log(`${r.plant} ${r.config} seed ${r.seed}: ${r.caught ? `caught in ${r.seconds} s, path ${r.path}${r.replayed === undefined ? '' : r.replayed ? ', replays' : ', DID NOT REPLAY'}` : r.other ? `a failure that is not the plant's after ${r.seconds} s` : 'missed'}`)
   })
 } finally {
   await browser.close()

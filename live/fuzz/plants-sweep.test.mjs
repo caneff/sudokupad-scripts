@@ -40,9 +40,9 @@ describe('sweep', () => {
   it('a run that failed with the plant\'s error is a catch, at its hunt time; a miss costs the budget', async () => {
     const { fuzz } = fakeFuzz({ 'a/current/1': { failed: true, error: 'rule broken after "x": rule-a: y', huntMs: 12340, path: '1:0@C', runs: 5 } })
     const runs = await sweep({ fuzz, plants: [plantA], configs: ['current'], seeds: [1, 2], budgetSeconds: 60, shrinkMinutes: 1, checkReplay: false })
-    assert.deepEqual(runs.current.map(({ caught, seconds, other }) => ({ caught, seconds, other })), [
-      { caught: true, seconds: 12.3, other: false },
-      { caught: false, seconds: 60, other: false }
+    assert.deepEqual(runs.current.map(({ caught, seconds, other, path }) => ({ caught, seconds, other, path })), [
+      { caught: true, seconds: 12.3, other: false, path: '1:0@C' },
+      { caught: false, seconds: 60, other: false, path: undefined }
     ])
   })
 
