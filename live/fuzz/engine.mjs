@@ -105,14 +105,14 @@ async function blameLate (open, steps, { landMs, settleMs }, failure) {
 export const runScript = ({ openTarget, puzzle, actions }) => runList(() => openTarget(puzzle), actions, ERRORS_LAND_MS, ACTION_SETTLE_MS)
 
 // Fuzzes with `seed` over `puzzles` (each list picks one): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
-// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus`, `busyStart` and `waits` shape the lists (`actionList`), so a replay
+// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus`, `busyStart`, `waits`, `swarm`, `maxCommands` and `nonEmpty` shape the lists (`actionList`), so a replay
 // needs the ones it was found with. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
 // each puzzle ran, by name) or the failure: `error`, `puzzle` (its name), `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`,
 // `replayPath`, `waitMs` (the list's own wait, under `waits`), `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
-export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits, busyStart }) {
+export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits, busyStart, swarm, maxCommands, nonEmpty }) {
   // The puzzle of every list started, in order: the hunt's lists are the first `hunt.numRuns` (a list the time limit cut off, and the shrink's, come after).
   const started = []
-  const property = fc.asyncProperty(actionList(puzzles, { replayPath, focus, waits, busyStart }), ({ puzzle, start, commands, waitMs }) => {
+  const property = fc.asyncProperty(actionList(puzzles, { replayPath, focus, waits, busyStart, swarm, maxCommands, nonEmpty }), ({ puzzle, start, commands, waitMs }) => {
     started.push(puzzle.name)
     return runList(() => openTarget(puzzle), [...start.map(asStep), ...commands], landMs, waitMs ?? settleMs)
   })

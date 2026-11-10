@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { actionList, KIND_NAMES, MAX_START_STEPS, START_KINDS } from './actions.mjs'
-import { WAITS } from './configs.mjs'
+import { CONFIGS, WAITS } from './configs.mjs'
 import { ACTION_SETTLE_MS, runFuzz, strokeSinceReload } from './engine.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES } from './puzzle-set.mjs'
@@ -366,5 +366,34 @@ describe('the fuzz engine on a fake page', () => {
     const unreadable = async () => ({ ...await openTarget(), errorLog: async () => { throw new Error('storage blocked') } })
     const result = await runFuzz({ openTarget: unreadable, puzzles: PUZZLES, seed: SEED, runs: 200, ...FIXED_WAIT })
     assert.deepEqual(result.errorLog, ['the error log could not be read: storage blocked'])
+  })
+})
+
+describe('swarm and longer lists reach the engine (#728, #730)', () => {
+  const ran = async (options, runs = 100) => {
+    const { openTarget, targets } = fakeTargets()
+    await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs, ...FIXED_WAIT, ...options })
+    return targets.map((t) => t.log)
+  }
+  // The fake logs what an action called, so a list with many calls and few kinds of call came from a few kinds of action.
+  const narrow = (logs) => logs.filter((log) => log.length >= 12 && new Set(log.map(([name]) => name)).size <= 4).length
+
+  it('a swarm run has lists of a few kinds, and a run without one has none', async () => {
+    assert.ok(narrow(await ran(CONFIGS.swarm)) > 0)
+    assert.equal(narrow(await ran({})), 0)
+  })
+
+  it('a failure that wants 10 clicks is found by a long list and not by the default 20 in 300 lists', async () => {
+    const hunt = async (options) => {
+      const { openTarget } = fakeTargets({ errorAtClicks: 10 })
+      return runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 300, shrinkMinutes: 0.05, ...FIXED_WAIT, ...options })
+    }
+    assert.equal((await hunt({})).failed, false)
+    assert.equal((await hunt(CONFIGS['long-50'])).failed, true)
+  })
+
+  it('a long-lists run has no empty list', async () => {
+    const logs = await ran(CONFIGS['long-40'], 150)
+    assert.equal(logs.filter((log) => log.length === 0).length, 0)
   })
 })
