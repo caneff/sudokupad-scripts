@@ -23,7 +23,8 @@ const asStep = (cmd) => ({ cmd, check: (model) => cmd.check(model), run: (model,
 const DEFAULT_SHRINK_MINUTES = 10
 
 const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
-// The steps a printed list holds, in order: a busy start's steps (`(start) ...`) and then the actions'. fast-check prints them joined by commas, so no step holds one.
+// The steps a printed list holds, in order: a busy start's steps (`(start) ...`) and then the actions'. fast-check prints them joined by commas, so no step holds one;
+// a list that failed in its start ran no action and prints an empty one last.
 const stepsOf = (shown) => shown.replace(REPLAY_PATH, '').trim().split(',').filter((step) => step.trim() !== '')
 
 // Each failure names `step`, the index of the step whose read found it (the list's length for the read after the last action).

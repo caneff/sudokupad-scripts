@@ -443,12 +443,13 @@ const startArbitrary = (puzzle, weights) => fc.array(actionArbitrary(puzzle, wei
 // busy board, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list (what `String()` of a failing list prints, which is the start's steps and then the
 // actions'); the puzzle is drawn first, so the same path gives the same puzzle. `focus` is script files (`focusFiles`) whose actions weigh more; a path replays only with the
 // focus it was found with. A start is an array, so a shrink drops its steps and leaves a list that begins on the empty board when the failure does not need it.
-// `waits` (#725) is the milliseconds the engine may wait after each action: with more than one, each list draws its own, drawn beside its actions so a path replays it and a
-// shrink moves it to the first of the set; with one or none, `waitMs` is undefined and the engine's own wait stands.
+// `waits` (#725) is the milliseconds the engine may wait after each action: each list draws its own, beside its actions, so a path replays it and a shrink moves it
+// to the first of the set; with none, `waitMs` is undefined and the engine's own wait stands.
 export const actionList = (puzzles, { maxCommands = 20, replayPath, focus = [], waits = [], busyStart = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
   const weights = kindWeights(focus)
   const commands = fc.commands([actionArbitrary(puzzle, weights)], { maxCommands, size: 'max', replayPath })
-  const waitMs = waits.length < 2 ? fc.constant(undefined) : fc.constantFrom(...waits)
+  // A single wait is a constant, which draws nothing, so its lists are those of no set.
+  const waitMs = waits.length > 1 ? fc.constantFrom(...waits) : fc.constant(waits[0])
   const start = busyStart ? startArbitrary(puzzle, weights) : fc.constant([])
   return fc.tuple(waitMs, start, commands).map(([wait, steps, c]) => ({
     puzzle,

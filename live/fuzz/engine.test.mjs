@@ -271,17 +271,27 @@ describe('the fuzz engine on a fake page', () => {
       assert.deepEqual([...drawn].sort((a, b) => a - b), [0, 40, 300])
     })
 
-    it('a set of one wait is the fixed wait: the same lists as before, and no wait reported', async () => {
-      const one = await runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, waits: [1], landMs: 1 })
-      const fixed = await runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, landMs: 1, settleMs: 1 })
-      assert.equal(one.waitMs, undefined)
-      assert.deepEqual({ path: one.path, sequence: one.sequence }, { path: fixed.path, sequence: fixed.sequence })
+    it('a set of one wait is waited after every action, and gives the lists of a fixed wait that long', async () => {
+      const { openTarget, targets } = fakeTargets()
+      await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 20, waits: [0], landMs: 1 })
+      // Every wait of each list but its last, the landing read's.
+      assert.deepEqual([...new Set(targets.flatMap((t) => t.waited.slice(0, -1)))], [0])
+      const one = await runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, waits: [0], landMs: 1 })
+      const fixed = await runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, landMs: 1, settleMs: 0 })
+      assert.deepEqual({ waitMs: one.waitMs, path: one.path, sequence: one.sequence }, { waitMs: 0, path: fixed.path, sequence: fixed.sequence })
     })
 
     it('a page that has not settled at 0 ms is read again after a short settle before a rule is blamed', async () => {
-      const { openTarget } = fakeTargets({ whiteUntilWait: true })
+      const { openTarget } = fakeTargets({ whiteForWaits: 1 })
       const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 100, landMs: 1, settleMs: 0 })
       assert.equal(result.failed, false, result.error)
+    })
+
+    it('a list at the fixed wait is not read again: a page still wrong after it is blamed, though it would settle later', async () => {
+      const { openTarget } = fakeTargets({ whiteForWaits: 2 })
+      const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 100, ...FIXED_WAIT })
+      assert.equal(result.failed, true)
+      assert.match(result.error, /^rule broken after ".*blur.*": page-stays-dark/)
     })
 
     it('a rule broken for good at 0 ms is still blamed, on the action that broke it', async () => {
@@ -334,6 +344,12 @@ describe('the fuzz engine on a fake page', () => {
     it('the same lists without a start never reach that failure, so the start is what finds it', async () => {
       const { openTarget } = fakeTargets({ errorAtClicks: 16 })
       assert.equal((await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 1500, ...FIXED_WAIT })).failed, false)
+    })
+
+    it('a failure inside the start, whose actions never ran, prints the start\'s steps alone', async () => {
+      const { openTarget } = fakeTargets({ errorAtClicks: 2 })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 300, ...BUSY })
+      assert.deepEqual(found.sequence, ['(start) click r1c1', '(start) click r1c1'])
     })
 
     it('a failure that does not need it shrinks to no start at all', async () => {

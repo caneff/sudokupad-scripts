@@ -25,8 +25,8 @@ const RACE_MS = 10
 // timer's error lands after the action returned, so the tests need no real clock. `withNote` starts the page with a note drawn. `whitenOnBlur` turns the page
 // white when the window blurs, which breaks the Dark Page rule; `whitenOnWait` makes it so only after the next wait; `lettersOnTab` turns the number pad to letters on Tab, which breaks the Tab rule, and `lettersOnBlur` does it on a blur, which breaks no rule; `lettersOnRedo` does it on a redo, which breaks only the rule that a redo after an undo restores the page (the fake's undo stack is a count: undo takes one off, redo puts one back).
 // The fake keeps a virtual clock that only `wait` moves: `raceOnFastTabs` throws a page error (landing after the next wait) when a Tab comes under 10 ms of virtual time after another, the
-// bug that shows only when two inputs land close together; `whiteUntilWait` turns the page white on a blur until the next wait, a page that has not settled yet; `errorAtClicks` throws a page error when the list's clicks reach that many, a bug that wants a busy board.
-export function fakeTargets ({ plantEscapeError = false, withNote = true, whitenOnBlur = false, whitenOnWait = false, lettersOnTab = false, lettersOnBlur = false, lettersOnRedo = false, raceOnFastTabs = false, whiteUntilWait = false, errorAtClicks = 0 } = {}) {
+// bug that shows only when two inputs land close together; `whiteForWaits` turns the page white on a blur for that many waits of more than 0 ms, a page that has not settled yet; `errorAtClicks` throws a page error when the list's clicks reach that many, a bug that wants a busy board.
+export function fakeTargets ({ plantEscapeError = false, withNote = true, whitenOnBlur = false, whitenOnWait = false, lettersOnTab = false, lettersOnBlur = false, lettersOnRedo = false, raceOnFastTabs = false, whiteForWaits = 0, errorAtClicks = 0 } = {}) {
   const targets = []
   const openTarget = async (puzzle) => {
     const log = []
@@ -38,6 +38,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
     let letterMode = false
     let undoDepth = 3
     let whitenPending = false
+    let whiteWaitsLeft = 0
     let clock = 0
     let lastTabAt = -Infinity
     const rec = (name, result) => async (...args) => { log.push([name, ...args]); return result }
@@ -81,7 +82,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       setNoteBackground: rec('setNoteBackground'),
       useArrowPen: rec('useArrowPen'),
       resize: rec('resize'),
-      blurFocus: async (...a) => { log.push(['blurFocus', ...a]); if (whitenOnBlur) pageColor = 'rgb(255, 255, 255)'; if (whitenOnWait) whitenPending = true; if (lettersOnBlur) letterMode = true; if (whiteUntilWait) pageColor = 'rgb(255, 255, 255)' },
+      blurFocus: async (...a) => { log.push(['blurFocus', ...a]); if (whitenOnBlur) pageColor = 'rgb(255, 255, 255)'; if (whitenOnWait) whitenPending = true; if (lettersOnBlur) letterMode = true; if (whiteForWaits) { pageColor = 'rgb(255, 255, 255)'; whiteWaitsLeft = whiteForWaits } },
       reload: rec('reload'),
       darkPage: rec('darkPage')
     }
@@ -96,7 +97,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
         target.waited.push(ms)
         if (ms <= 0) return
         clock += ms
-        if (whiteUntilWait) pageColor = 'rgb(0, 0, 0)'
+        if (whiteWaitsLeft > 0 && --whiteWaitsLeft === 0) pageColor = 'rgb(0, 0, 0)'
         errors.push(...pending.splice(0))
         if (whitenPending) pageColor = 'rgb(255, 255, 255)'
       },
