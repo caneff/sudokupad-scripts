@@ -5,7 +5,7 @@
 //   text-anywhere-slide-1-type.png        a three-line note typed with Enter in the margin beside rows 1 and 2
 //   text-anywhere-slide-2-format.png      a note typed with a header, bold, -> and checklist items, finished, so it shows them formatted
 //   text-anywhere-slide-3-style.png       notes in three colors, two sizes and a lower opacity, beside the panel with its sliders moved
-//   text-anywhere-slide-4-background.png  the Background button on: a formula in a page-colored box over the grid lines, beside one made with it off
+//   text-anywhere-slide-4-background.png  the Background button on: a formula in a Tint box over the grid lines, beside one made with it off
 //   text-anywhere-slide-5-select.png      three margin notes selected by a drag on empty space, the dragged box solid purple, and recolored together from the panel
 //   text-anywhere-slide-6-long.png        a four-line note open for typing, made two lines tall with its bottom right handle of four, so it scrolls to its last two lines, its scroll bar visible
 //   text-anywhere-slide-7-hide.png        the board with every note hidden, beside the panel with a ring on the pressed eye button
@@ -210,6 +210,13 @@ const SETTINGS_DIALOG = '#text-anywhere-dialog'
 // 4: one formula made with Background off, one with it on, both on the board over grid lines, where the box is what the slide shows.
 {
   const s = await scene([3, 2])
+  // The default Box color is the page's own white, which reads as no box on a white page: the slide picks Tint, a pale shade of the note's color.
+  await s.p.click('.text-anywhere-settings')
+  const dialog = s.p.locator(SETTINGS_DIALOG)
+  await dialog.waitFor({ state: 'visible' })
+  await dialog.locator('button[data-role="box-pick"][data-value="tint"]').click()
+  await s.p.locator('.dialog button', { hasText: /^\s*Save\s*$/ }).click()
+  await dialog.waitFor({ state: 'detached' })
   await s.pick(RED, 26)
   await s.background(false)
   await s.note([3.3, 6.2], '**A+B=11**')
