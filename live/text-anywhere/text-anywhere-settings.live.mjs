@@ -92,6 +92,13 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
       assert.equal(await p.locator(`${EDITOR} [data-role="missing-note"]`).count(), 0)
       await p.locator(PRESET).selectOption('page-1')
       assert.match(await p.locator(`${EDITOR} [data-role="missing-note"]`).textContent(), /^Cell color page 1 has no usable color at the matching button, so pen color 4 keeps SudokuPad's own\.$/)
+      // Saved, the note is there again when the dialog is reopened; fixing the pen by hand takes it off the note.
+      await closeDialogWith(p, 'Save', EDITOR)
+      await p.click(SETTINGS_BUTTON)
+      assert.match(await p.locator(`${EDITOR} [data-role="missing-note"]`).textContent(), /pen color 4 keeps/)
+      await p.locator(`${EDITOR} input[data-role="swatch"][data-key="4"]`).fill('#123456')
+      assert.equal(await p.locator(`${EDITOR} [data-role="missing-note"]`).count(), 0)
+      await p.locator(PRESET).selectOption('page-1')
       await p.locator(PRESET).selectOption('sudokupad')
       assert.equal(await p.locator(`${EDITOR} [data-role="missing-note"]`).count(), 0)
       await closeDialogWith(p, 'Cancel', EDITOR)

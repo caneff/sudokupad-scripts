@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.7
+// @version      0.46.8
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.7'
+  const VERSION = '0.46.8'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -103,10 +103,8 @@
     return { colors, missing }
   }
 
-  // `pickedPreset` is the page preset the missing pens came from.
-  function missingColorsText (missing, pickedPreset) {
-    if (!missing.length) return ''
-    const page = PAGE_PRESETS.indexOf(pickedPreset) + 1
+  function missingColorsText (missing, fromPreset) {
+    const page = PAGE_PRESETS.indexOf(fromPreset) + 1
     const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
     return `Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.`
   }
@@ -2471,6 +2469,9 @@
   let colors = null
   // The preset `colors` came from, or null for Custom.
   let colorsPreset = null
+  // The pens of `colors` the page preset left with SudokuPad's own, and that preset, for the dialog's note until the page reloads; a Custom set keeps them.
+  let colorsMissing = []
+  let colorsFromPreset = null
   let panelParts = []
 
   const keypad = () => document.querySelector('.controls-input')
@@ -2514,10 +2515,14 @@
   const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...lookKeys(LOOKS)], () => {
     const wasColors = colors
     const wasPreset = colorsPreset
+    const wasMissing = colorsMissing
+    const wasFromPreset = colorsFromPreset
     const wasLooks = { ...look }
     return () => {
       colors = wasColors
       colorsPreset = wasPreset
+      colorsMissing = wasMissing
+      colorsFromPreset = wasFromPreset
       Object.assign(look, wasLooks)
       showPanelValues()
       showColors()
@@ -2527,9 +2532,11 @@
   })
 
   // A set saved with no preset is Custom.
-  function saveColors (next, preset = null) {
+  function saveColors (next, preset = null, missing = [], fromPreset = null) {
     colors = next
     colorsPreset = preset
+    colorsMissing = missing
+    colorsFromPreset = fromPreset
     savedData.setData(COLORS_KEY, storedNoteColors(colors, preset))
     showColors()
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
@@ -2578,9 +2585,8 @@
     // Null is Custom.
     let chosen = colors ? colorsPreset : PEN_PRESET
     let colorsEdited = false
-    // The pens the chosen page preset left with SudokuPad's own, and that preset; a hand edit keeps them, as in Pen Tool Extras.
-    let draftMissing = []
-    let pickedPreset = null
+    let draftMissing = colorsMissing
+    let pickedPreset = colorsFromPreset
     let draftLooks = { ...look }
     let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
     let pages = []
@@ -2607,7 +2613,7 @@
       snapshot: snapshotSave,
       feature: settingsUi,
       save: () => {
-        if (colorsEdited) saveColors(draft, chosen)
+        if (colorsEdited) saveColors(draft, chosen, draftMissing, pickedPreset)
         for (const { name } of editedLooks()) setLook(name, draftLooks[name])
       },
       copyPaste: {
@@ -2667,6 +2673,7 @@
         draw()
       } else if (target.matches('input[data-role="swatch"]')) {
         draft = editedColor(draft, Number(target.dataset.key), target.value)
+        draftMissing = draftMissing.filter((n) => String(n) !== target.dataset.key)
         chosen = null
         colorsEdited = true
         draw()
@@ -2810,7 +2817,7 @@
 
   // A hold on a color button toggles a color picker over each, and a picker recolors its color number at once: every note in it reads the variable.
   function installColorPickers () {
-    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value)), guard: (toggle) => textTool.run(toggle) })
+    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value), null, colorsMissing.filter((m) => String(m) !== String(n)), colorsFromPreset), guard: (toggle) => textTool.run(toggle) })
   }
 
   // A left press in progress: `start` is the index of the note it began on, or -1 for none; `points` its points on the screen, and `pending` those its
