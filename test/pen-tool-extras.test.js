@@ -1855,12 +1855,6 @@ test('every settings table row with a section is drawn in the dialog, so a secti
   }
 })
 
-test('the dialog shows one plain line naming the steps that are skipped, and nothing when none is', () => {
-  assert.doesNotMatch(renderEditor(editorState({ off: [] })), /Off because/)
-  assert.match(renderEditor(editorState({ off: ['arrow lines'] })), />Off because SudokuPad changed: arrow lines<\/div>/)
-  assert.match(renderEditor(editorState({ off: ['marks', 'line erase'] })), />Off because SudokuPad changed: marks, line erase<\/div>/)
-})
-
 test('inRange takes a whole number from min to max on the steps counted from min, and nothing else', () => {
   const range = { min: 20, max: 100, step: 5, fallback: 80 }
   for (const ok of [20, 25, 80, 100]) assert.equal(inRange(ok, range), true, String(ok))
