@@ -936,7 +936,6 @@ const editorState = (over = {}) => ({
   eraseClicks: true,
   outline: true,
   outlineWidth: 2,
-  off: [],
   ...over
 })
 
@@ -1853,12 +1852,6 @@ test('every settings table row with a section is drawn in the dialog, so a secti
     if (!row.dialog.section) continue
     assert.ok(html.includes(row.range ? `data-row="${name}"` : `data-box="${name}`), name)
   }
-})
-
-test('the dialog shows one plain line naming the steps that are skipped, and nothing when none is', () => {
-  assert.doesNotMatch(renderEditor(editorState({ off: [] })), /Off because/)
-  assert.match(renderEditor(editorState({ off: ['arrow lines'] })), />Off because SudokuPad changed: arrow lines<\/div>/)
-  assert.match(renderEditor(editorState({ off: ['marks', 'line erase'] })), />Off because SudokuPad changed: marks, line erase<\/div>/)
 })
 
 test('inRange takes a whole number from min to max on the steps counted from min, and nothing else', () => {

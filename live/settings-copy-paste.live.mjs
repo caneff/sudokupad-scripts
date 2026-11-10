@@ -92,7 +92,7 @@ const FAILED_PASTES = [
   { file: 'dark-page.user.js', entry: 'Dark Page', editor: '#dark-page-input', pasted: { DarkPage_color: '#336699' }, failing: 'DarkPage_color', shows: ['#dark-page-input'] },
   {
     file: 'auto-rules-resizer.user.js',
-    entry: 'Rules Resizer',
+    entry: 'Auto Rules Resizer',
     editor: '#auto-rules-resizer-max-width',
     pasted: { AutoRulesResizer_maxWidth: 640, AutoRulesResizer_maxHeight: 480 },
     failing: 'AutoRulesResizer_maxHeight',
@@ -195,7 +195,7 @@ describe('auto-rules-resizer.user.js: a Save whose height write throws', { concu
 
   it('says it was not saved, the width key is still unsaved and the max size settings stay on', async () => {
     ({ context, p, errors } = await openWith(browser(), ['auto-rules-resizer.user.js']))
-    await openScriptDialog(p, 'Rules Resizer', '#auto-rules-resizer-max-width')
+    await openScriptDialog(p, 'Auto Rules Resizer', '#auto-rules-resizer-max-width')
     await failNextWriteOf(p, 'AutoRulesResizer_maxHeight', 'planted height write failure')
     await p.fill('#auto-rules-resizer-max-width', '640')
     await p.fill('#auto-rules-resizer-max-height', '480')

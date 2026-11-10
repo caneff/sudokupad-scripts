@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.1
+// @version      1.32.3
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.1'
+  const VERSION = '1.32.3'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -2650,11 +2650,6 @@
   const SLIDER_COLUMNS = 'pen-tool-extras-columns'
   const CELL = 'pen-tool-extras-cell'
 
-  function offNote (off) {
-    if (!off.length) return ''
-    return `<div class="${NOTE}">Off because SudokuPad changed: ${off.join(', ')}</div>`
-  }
-
   // `pickedPreset` is the page preset the missing pens came from.
   function missingNote (missing, pickedPreset) {
     if (!missing.length) return ''
@@ -2751,7 +2746,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       '<div></div>' + MARK_COLUMNS.map(columnHead).join('') + MARK_ROWS.map(markRow).join('') +
       '</div>'
     const cell = (markup) => `<div class="${CELL}">${markup}</div>`
-    return offNote(state.off) + '<div class="pen-tool-extras-layout">' +
+    return '<div class="pen-tool-extras-layout">' +
       cell(sectionTitle('Pen colors') + colorBlock + missingNote(state.missing, state.pickedPreset)) +
       cell(section('Line settings') + DIVIDER + section('Line styles')) +
       cell(sectionTitle('Marks to cycle') + marksTable) +
@@ -2776,7 +2771,8 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     let draft = { ...inForce }
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ ...set, pickedPreset, presets: availablePresets(), ...draft, off: guard.off })
+      box.innerHTML = renderEditor({ ...set, pickedPreset, presets: availablePresets(), ...draft })
+      setOffNote(box.closest('.dialog'), guard.off)
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
@@ -2800,7 +2796,9 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       name: 'Pen Tool Extras',
       version: VERSION,
       bodyId: EDITOR_ID,
+      // The largest, two-column dialog: centred in the window instead of over the board.
       centerOverBoard: false,
+      off: guard.off,
       changed: () => colorsChosen || changedSettings(draft, inForce).length > 0,
       snapshot: snapshotSave,
       feature: steps.settings,
@@ -3028,6 +3026,8 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       `.${prefix}version { opacity: .6; }`,
       `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
+      `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
+      `.${prefix}off-note:empty { display: none; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
@@ -3064,12 +3064,21 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
 
+  const OFF_NOTE_ATTRIBUTE = 'data-role="off-note"'
+
+  // A script whose dialog can turn a feature off while it is open calls this again after the change.
+  function setOffNote (dialog, off) {
+    dialog.querySelector(`[${OFF_NOTE_ATTRIBUTE}]`).textContent = off.length > 0 ? `Off because SudokuPad changed: ${off.join(', ')}` : ''
+  }
+
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
   // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
+  // `off` is `guard.off`; a missing one throws, since it would read as nothing being off.
   // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
+    if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
@@ -3095,6 +3104,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       centerOverBoard,
       parts: [
         { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div class="${prefix}off-note" ${OFF_NOTE_ATTRIBUTE}></div>` },
         { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
         { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) },
         // Below the footer, so the script's own layout still runs down to the footer line.
@@ -3104,6 +3114,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     const body = doc.getElementById(bodyId)
     if (!body) return null
     const dialog = body.closest('.dialog')
+    setOffNote(dialog, off)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.

@@ -17,7 +17,7 @@ import { useBrowser } from './session.mjs'
 
 const CONGRATS = 'Congrats'
 const OK = /^\s*OK\s*$/
-const SCRIPT_DIALOGS = [['Pen Tool Extras', EXTRAS_EDITOR], ['Color by Digit', COLOR_BY_DIGIT_EDITOR], ['Text Anywhere', SETTINGS_EDITOR], ['Dark Page', '.dialog input[type=color]'], ['Rules Resizer', '#auto-rules-resizer-max-width']]
+const SCRIPT_DIALOGS = [['Pen Tool Extras', EXTRAS_EDITOR], ['Color by Digit', COLOR_BY_DIGIT_EDITOR], ['Text Anywhere', SETTINGS_EDITOR], ['Dark Page', '.dialog input[type=color]'], ['Auto Rules Resizer', '#auto-rules-resizer-max-width']]
 const COLORED = [4, 4]
 
 const browser = useBrowser()

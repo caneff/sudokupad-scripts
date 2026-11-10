@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.2
-// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
+// @version      0.7.4
+// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.2'
+  const VERSION = '0.7.4'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -518,6 +518,8 @@
       `.${prefix}version { opacity: .6; }`,
       `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
+      `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
+      `.${prefix}off-note:empty { display: none; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
@@ -554,12 +556,21 @@
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
 
+  const OFF_NOTE_ATTRIBUTE = 'data-role="off-note"'
+
+  // A script whose dialog can turn a feature off while it is open calls this again after the change.
+  function setOffNote (dialog, off) {
+    dialog.querySelector(`[${OFF_NOTE_ATTRIBUTE}]`).textContent = off.length > 0 ? `Off because SudokuPad changed: ${off.join(', ')}` : ''
+  }
+
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
   // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
+  // `off` is `guard.off`; a missing one throws, since it would read as nothing being off.
   // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
+    if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
@@ -585,6 +596,7 @@
       centerOverBoard,
       parts: [
         { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div class="${prefix}off-note" ${OFF_NOTE_ATTRIBUTE}></div>` },
         { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
         { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) },
         // Below the footer, so the script's own layout still runs down to the footer line.
@@ -594,6 +606,7 @@
     const body = doc.getElementById(bodyId)
     if (!body) return null
     const dialog = body.closest('.dialog')
+    setOffNote(dialog, off)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -1413,8 +1426,9 @@
     })
     const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'Rules Resizer',
+      name: 'Auto Rules Resizer',
       version: VERSION,
+      off: guard.off,
       bodyId: DIALOG_ID,
       changed: () => {
         const typed = typedLimits()
@@ -1463,7 +1477,7 @@
     guard.probe({ roots: { Framework }, store: Framework })
     maxSizeSettings.run(() => {
       limits = readLimits(Framework)
-      addSettingsEntry(dialogs, { name: 'rulesresizer', content: 'Rules Resizer', open: () => maxSizeSettings.run(openDialog) })
+      addSettingsEntry(dialogs, { name: 'rulesresizer', content: 'Auto Rules Resizer', open: () => maxSizeSettings.run(openDialog) })
     })
     addStyleOnce(`${ID}-style`, STYLE)
     addFontBar()

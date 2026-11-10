@@ -211,7 +211,7 @@ The dialog's Restore defaults picks the Darker page 1 preset, or SudokuPad color
 
 The script installs itself in steps, and each step checks at startup that the SudokuPad internals it needs are there. A step whose internals are gone is not installed, and the browser console says so once: `pen-tool-extras: marks, line erase skipped because SudokuPad has no getCell`. A step that throws later, in its own code, is skipped from then on: SudokuPad's own function answers in its place on that call and every later one, and the console says so once as `pen-tool-extras: <step> skipped because SudokuPad changed:` with the error. A throw in SudokuPad's own function is SudokuPad's, and skips nothing. A failure outside every step is logged as an error, `pen-tool-extras: startup failed:`. The other steps keep working, and a bar at the bottom of the page names what is off, with a Report link.
 
-The settings dialog names the skipped steps in one line at its top, for example `Off because SudokuPad changed: arrow lines`, and shows nothing when all is well. Its controls stay; a control of a skipped step does nothing until the page loads with the step installed. Reload after updating the script.
+The settings dialog names the skipped steps in one line under its title (every script's settings dialog does the same for its own parts), for example `Off because SudokuPad changed: arrow lines`, and shows nothing when all is well. Its controls stay; a control of a skipped step does nothing until the page loads with the step installed. Reload after updating the script.
 
 | Step | Not installed when SudokuPad has no | What you see with it skipped |
 | --- | --- | --- |

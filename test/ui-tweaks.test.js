@@ -148,9 +148,10 @@ test('lackingInternals names the internal a feature lacks', () => {
   assert.deepEqual([...lackingInternals({ tab: FEATURES.tab }, { ...roots, ToolLetter: { tool: {} } })], [['ToolLetter.tool.keyHandlers', ['tab']]])
 })
 
-test('the header names the script, points updates at its own file and asks for the menu command grant', () => {
+test('the header names the script, points updates at its own file and asks for no grant, so the settings entry is its one way in', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'ui-tweaks.user.js'), 'utf8')
   assert.match(source, /^\/\/ @name\s+SudokuPad UI Tweaks$/m)
   assert.match(source, /^\/\/ @updateURL\s+https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/ui-tweaks\.user\.js$/m)
-  assert.match(source, /^\/\/ @grant\s+GM_registerMenuCommand$/m)
+  assert.match(source, /^\/\/ @grant\s+none$/m)
+  assert.doesNotMatch(source, /GM_registerMenuCommand/)
 })
