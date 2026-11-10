@@ -47,3 +47,5 @@ body:not(.details) > .warning { margin-bottom: calc(var(--halo-gap) + 12px); }
 footer { margin-top: calc(var(--halo-gap) + 7px); }
 /* Round 14: the homepage as in round 12; a details page grows to 62rem (from round 13). */
 body.details { max-width: 62rem; }
+/* Round 15: the title sticker's left edge lines up with the warning sticker's (halo to halo; the banner's halo is 1px wider). */
+header.banner { margin-left: 1px; }

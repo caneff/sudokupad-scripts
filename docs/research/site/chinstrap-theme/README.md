@@ -1,6 +1,6 @@
 # The ChinStrap theme mockup (2026-11-10)
 
-The site restyled in the look of Chris's Twitch stream (ChinStrap, twitch.tv/chinstrap45), as Chris approved it in round 14 of a mockup loop.
+The site restyled in the look of Chris's Twitch stream (ChinStrap, twitch.tv/chinstrap45), as Chris approved it in round 14 of a mockup loop, with round 15's left alignment of the title sticker.
 Its colors, fonts and sticker style come from the stream layout in `twitch-rules-scroller` (`layout/make-sticker.py`'s `TOKENS` and `GROUND`,
 `docs/obs-layout.md`: Fredoka 600, banner `#5f519e`).
 
