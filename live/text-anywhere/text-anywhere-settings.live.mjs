@@ -37,6 +37,15 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
+  it('the swatch grid is as wide as the preset pulldown above it', async () => {
+    await openScriptDialog(p, 'Text Anywhere', EDITOR)
+    const width = (selector) => p.locator(selector).evaluate((el) => el.getBoundingClientRect().width)
+    const pulldown = await width(PRESET)
+    const grid = await width(`${EDITOR} .text-anywhere-swatches`)
+    assert.equal(Math.abs(grid - pulldown) <= 1, true, `grid ${grid} vs pulldown ${pulldown}`)
+    await closeDialogWith(p, 'Cancel', EDITOR)
+  })
+
   it('the panel\'s gear opens the same dialog', async () => {
     await pickTextAnywhere(p)
     await p.click(SETTINGS_BUTTON)
