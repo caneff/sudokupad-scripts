@@ -61,7 +61,7 @@ seam. These come from `twitch-rules-scroller` and
 
 13. **A diff that changes what a `*.user.js` does raises its `@version`, and its
     `VERSION` where it has one.** Tampermonkey's update check reads `@version`;
-    the tests only check the two match.
+    `test/version-bump.test.js` fails a changed script whose `@version` is not above `origin/main`'s, and the tests check the two match.
 
 ## Behavior
 

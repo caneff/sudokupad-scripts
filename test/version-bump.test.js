@@ -7,76 +7,93 @@ const { spawnSync } = require('node:child_process')
 const { headerVersion } = require('./header-version.js')
 
 const ROOT = path.join(__dirname, '..')
+const BASE_REF = 'origin/main'
 
-// Positive when `a` is a higher X.Y.Z than `b`.
+// A version's three numbers. Throws on any other shape, so an unreadable version fails the check instead of passing it.
+function parseVersion (version) {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`@version "${version}" is not X.Y.Z`)
+  return version.split('.').map(Number)
+}
+
+// Positive when `a` is a higher version than `b`.
 function compareVersions (a, b) {
-  const [pa, pb] = [a, b].map(v => v.split('.').map(Number))
+  const [pa, pb] = [parseVersion(a), parseVersion(b)]
   for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] - pb[i]
   return 0
 }
 
-// One message per script whose text changed since `mergeBase` but whose @version is not above the one on `tipRev`.
-// `show(rev, file)` returns the file's text at a revision, or null when it does not exist there.
-function versionProblems (files, mergeBase, tipRev, show) {
+// One message per script this branch changed since the merge base whose @version is not above the one on `baseRef`.
+// `current`, `mergeBase` and `tip` each take a file name and return its text there, or null when the file does not exist there.
+function versionProblems (files, { current, mergeBase, tip }, baseRef) {
   const problems = []
   for (const file of files) {
-    const current = show('HEAD', file)
-    const onBase = show(mergeBase, file)
-    const onTip = show(tipRev, file)
-    if (current === null || onBase === null || onTip === null || current === onBase) continue
-    const [now, tip] = [headerVersion(current), headerVersion(onTip)]
-    if (compareVersions(now, tip) <= 0) problems.push(`${file} changed but @version ${now} is not above ${tipRev}'s ${tip}`)
+    const [now, forked, onTip] = [current(file), mergeBase(file), tip(file)]
+    if (now === null || forked === null || onTip === null || now === forked) continue
+    const [nowVersion, tipVersion] = [headerVersion(now), headerVersion(onTip)]
+    if (compareVersions(nowVersion, tipVersion) <= 0) problems.push(`${file} changed but @version ${nowVersion} is not above ${baseRef}'s ${tipVersion}`)
   }
   return problems
 }
 
 describe('versionProblems', () => {
   const src = (version, body = '') => `// @version      ${version}\n${body}`
-  const fake = (revs) => (rev, file) => (revs[rev] && revs[rev][file] !== undefined ? revs[rev][file] : null)
+  const at = (text) => (file) => text === null ? null : text
+  const check = ({ current, mergeBase, tip }) => versionProblems(['a.user.js'], { current: at(current), mergeBase: at(mergeBase), tip: at(tip) }, 'tip')
 
   it('passes a changed script whose version is above the tip\'s', () => {
-    const show = fake({ HEAD: { 'a.user.js': src('1.0.1', 'x') }, base: { 'a.user.js': src('1.0.0') }, tip: { 'a.user.js': src('1.0.0') } })
-    assert.deepEqual(versionProblems(['a.user.js'], 'base', 'tip', show), [])
+    assert.deepEqual(check({ current: src('1.0.1', 'x'), mergeBase: src('1.0.0'), tip: src('1.0.0') }), [])
   })
 
   it('fails a changed script whose version equals the tip\'s', () => {
-    const show = fake({ HEAD: { 'a.user.js': src('1.0.1', 'x') }, base: { 'a.user.js': src('1.0.0') }, tip: { 'a.user.js': src('1.0.1', 'y') } })
-    assert.deepEqual(versionProblems(['a.user.js'], 'base', 'tip', show), ["a.user.js changed but @version 1.0.1 is not above tip's 1.0.1"])
+    assert.deepEqual(check({ current: src('1.0.1', 'x'), mergeBase: src('1.0.0'), tip: src('1.0.1', 'y') }), ["a.user.js changed but @version 1.0.1 is not above tip's 1.0.1"])
   })
 
   it('compares numerically, so 0.9.0 is below 0.10.0', () => {
-    const show = fake({ HEAD: { 'a.user.js': src('0.9.0', 'x') }, base: { 'a.user.js': src('0.8.0') }, tip: { 'a.user.js': src('0.10.0') } })
-    assert.equal(versionProblems(['a.user.js'], 'base', 'tip', show).length, 1)
+    assert.equal(check({ current: src('0.9.0', 'x'), mergeBase: src('0.8.0'), tip: src('0.10.0') }).length, 1)
   })
 
   it('ignores a script this branch did not change, even when the tip moved ahead', () => {
-    const show = fake({ HEAD: { 'a.user.js': src('1.0.0') }, base: { 'a.user.js': src('1.0.0') }, tip: { 'a.user.js': src('1.0.5') } })
-    assert.deepEqual(versionProblems(['a.user.js'], 'base', 'tip', show), [])
+    assert.deepEqual(check({ current: src('1.0.0'), mergeBase: src('1.0.0'), tip: src('1.0.5') }), [])
   })
 
-  it('ignores a script new on this branch', () => {
-    const show = fake({ HEAD: { 'a.user.js': src('0.0.1') }, base: {}, tip: {} })
-    assert.deepEqual(versionProblems(['a.user.js'], 'base', 'tip', show), [])
+  it('ignores a script new on this branch (absent at the merge base)', () => {
+    assert.deepEqual(check({ current: src('0.0.1'), mergeBase: null, tip: null }), [])
+    assert.deepEqual(check({ current: src('0.0.1'), mergeBase: null, tip: src('0.0.1') }), [])
+  })
+
+  it('ignores a script the tip deleted', () => {
+    assert.deepEqual(check({ current: src('1.0.1', 'x'), mergeBase: src('1.0.0'), tip: null }), [])
+  })
+
+  it('throws on a version that is not X.Y.Z, rather than passing it', () => {
+    assert.throws(() => check({ current: src('1.2', 'x'), mergeBase: src('1.0.0'), tip: src('1.0.0') }), /"1.2" is not X.Y.Z/)
+    assert.throws(() => check({ current: src('1.0.1', 'x'), mergeBase: src('1.0.0'), tip: src('1.0.0-beta') }), /"1.0.0-beta" is not X.Y.Z/)
   })
 })
 
-const git = (...args) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' })
+function git (...args) {
+  const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' })
+  if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${r.stderr}`)
+  return r.stdout
+}
+
+// The file's text at a revision, or null when the revision has no such file; any other git failure throws.
+function fileAt (rev, file) {
+  return git('ls-tree', rev, '--', file) === '' ? null : git('show', `${rev}:${file}`)
+}
 
 describe('this checkout against origin/main', () => {
   it('raises the @version of every *.user.js it changed', (t) => {
-    if (git('rev-parse', '--verify', '-q', 'origin/main').status !== 0) {
+    const hasBase = spawnSync('git', ['rev-parse', '--verify', '-q', BASE_REF], { cwd: ROOT }).status === 0
+    if (!hasBase) {
       // Only CI must have the ref; a local clone without it has nothing to compare against.
-      assert.notEqual(process.env.CI, 'true', 'origin/main is not fetched; ci.yml must fetch it')
-      return t.skip('origin/main is not fetched')
+      assert.notEqual(process.env.CI, 'true', `${BASE_REF} is not fetched; ci.yml must fetch it`)
+      return t.skip(`${BASE_REF} is not fetched`)
     }
-    const base = git('merge-base', 'origin/main', 'HEAD')
-    assert.equal(base.status, 0, `git merge-base failed: ${base.stderr}`)
-    const files = git('ls-files', '*.user.js').stdout.split('\n').filter(Boolean)
-    const show = (rev, file) => {
-      const r = git('show', `${rev}:${file}`)
-      return r.status === 0 ? r.stdout : null
-    }
-    const mergeBase = base.stdout.trim()
-    assert.deepEqual(versionProblems(files, mergeBase, 'origin/main', (rev, file) => rev === 'HEAD' ? fs.readFileSync(path.join(ROOT, file), 'utf8') : show(rev, file)), [])
+    const mergeBase = git('merge-base', BASE_REF, 'HEAD').trim()
+    const files = git('ls-files', '*.user.js').split('\n').filter(Boolean)
+    assert.notEqual(files.length, 0, 'git ls-files found no *.user.js')
+    const current = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8')
+    assert.deepEqual(versionProblems(files, { current, mergeBase: (file) => fileAt(mergeBase, file), tip: (file) => fileAt(BASE_REF, file) }, BASE_REF), [])
   })
 })
