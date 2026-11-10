@@ -58,6 +58,8 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
       scrollRoom: e.scrollHeight - e.clientHeight,
       overflowY: style.overflowY,
       scrollbarColor: style.scrollbarColor,
+      color: style.color,
+      textToolOn: document.querySelector('.text-anywhere-active') !== null,
       halo: Math.max(0, ...[...style.textShadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px 0px/g)].map((m) => Math.hypot(Number(m[1]), Number(m[2])))),
       padding: parseFloat(style.paddingLeft),
       bold: [...e.querySelectorAll('span')].filter((span) => Number(window.getComputedStyle(span).fontWeight) >= 700).map((span) => span.textContent)
@@ -107,15 +109,18 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     assert.equal(tall.scrollTop, 0, 'a finished note starts at its first line')
   })
 
-  it('the scroll bar shows while the pointer is over the note and hides when it leaves', async () => {
+  it('a note that scrolls always shows its scroll bar, in its own color, with the Text tool off and the pointer away; a note that fits shows none', async () => {
+    await p.click(textAnywhere.DIGIT_BUTTON)
+    await read(() => Framework.app.deselect())
     await moveTo(EMPTY_AT)
-    const away = await note('line 1')
-    await moveTo(TALL_AT)
-    const over = await note('line 1')
-    assert.equal(over.overflowY, 'auto')
-    assert.notEqual(over.scrollbarColor, away.scrollbarColor, `bar color ${over.scrollbarColor} over the note, ${away.scrollbarColor} away`)
-    await moveTo(EMPTY_AT)
-    assert.equal((await note('line 1')).scrollbarColor, away.scrollbarColor)
+    const tall = await note('line 1')
+    assert.equal(tall.overflowY, 'auto')
+    assert.ok(!tall.textToolOn, 'the Text tool is off')
+    assert.match(tall.scrollbarColor, /^rgb\(.+\) (rgba\(0, 0, 0, 0\)|transparent)$/, `bar color ${tall.scrollbarColor}`)
+    assert.equal(tall.scrollbarColor.split(') ')[0] + ')', tall.color, 'the bar is the note\'s color')
+    const fits = await note('word')
+    assert.equal(fits.overflowY, 'hidden', 'a note that fits has no scroll bar')
+    await textAnywhere.pickTextAnywhere(p)
   })
 
   it('the wheel over the tall note scrolls its text and never reaches SudokuPad, until it can scroll no further', async () => {
