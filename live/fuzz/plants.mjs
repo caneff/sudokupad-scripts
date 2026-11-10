@@ -94,6 +94,15 @@ export const PLANTS = [
     expect: /pen-lines-drawn/
   },
   {
+    id: 'quick-digit-not-colored',
+    file: 'color-by-digit.user.js',
+    kind: 'rule',
+    bug: 'Color by Digit takes a digit entered within 30 ms of the last one for a key repeat and leaves its cell uncolored, a guard against a double fire that fires on a fast second entry',
+    find: 'const touched = [...app.puzzle.selectedCells]\n        if (!touched.some((cell) => mayChange(action, cell))) return stock(action)',
+    replace: 'const touched = [...app.puzzle.selectedCells]\n        if (!touched.some((cell) => mayChange(action, cell))) return stock(action)\n        const sinceLast = Date.now() - (window.lastEntryAt ?? -Infinity)\n        window.lastEntryAt = Date.now()\n        if (sinceLast < 30) return stock(action)',
+    expect: /digit-cells-colored/
+  },
+  {
     id: 'redraw-typo',
     file: 'pen-tool-extras.user.js',
     kind: 'crash',
