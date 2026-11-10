@@ -467,7 +467,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 
 // Text Anywhere's entry and details page.
 const DRAW_SUMMARY = 'Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
-const DRAW_LEAD_INS = ['Typed notes anywhere', 'Formatting', 'Long notes', 'Readable over digits', 'Colors, size and transparency', 'Select and move', 'Key to switch on', 'Hide all notes', 'Erase', 'Kept per puzzle', 'Settings']
+const DRAW_LEAD_INS = ['Typed notes anywhere', 'Formatting', 'Long notes', 'Readable over digits', 'Colors, size and opacity', 'Select and move', 'Key to switch on', 'Hide all notes', 'Erase', 'Kept per puzzle', 'Settings']
 
 test(`${HOME} describes Text Anywhere in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Text Anywhere<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -481,7 +481,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Formatting Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and ->, != or sum typed as → ≠ Σ. One note below shows every style, and the text that made it.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',
-    'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders. The + and - keys make the selected notes, or the next note, one Size step bigger or smaller.',
+    'Colors, size and opacity Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make the selected notes, or the next note, one Size step bigger or smaller. A color, size, opacity or Background you set on a note also becomes the setting for the next note.',
     'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
     'Key to switch on Press T to pick the Text tool (not while you are typing in a note, a dialog or the Letter tool).',
     'Hide all notes The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.',
@@ -506,7 +506,7 @@ test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated pictur
   assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the Text Anywhere panel section is the intro and the picture only')
   assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/text-anywhere/text-anywhere-panel-annotated.png"`))
   const alt = altOf(found[0])
-  for (const label of ['Color buttons', 'Background', 'Clear all', 'Settings', 'Size', 'Transparency']) {
+  for (const label of ['Color buttons', 'Background', 'Clear all', 'Settings', 'Size', 'Opacity']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
   assert.match(alt, /press 1 to 9/)

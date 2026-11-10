@@ -106,7 +106,7 @@ describe('the action vocabulary', () => {
         assert.deepEqual(moves[0].slice(1, 3), [100 + points[0][2] * 200, 300], `${a}: the press point`)
         assert.deepEqual(moves.at(-1).slice(1, 3), [100 + points[1][2] * 200, 300], `${a}: the drag ends on the second point`)
       }
-      assert.deepEqual([...seen].sort(), ['note size', 'note transparency', 'pen opacity', 'pen thickness'])
+      assert.deepEqual([...seen].sort(), ['note opacity', 'note size', 'pen opacity', 'pen thickness'])
     })
 
     it('a slider key action focuses the slider, presses its keys and leaves the slider', async () => {

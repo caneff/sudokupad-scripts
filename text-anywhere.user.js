@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.45.5
+// @version      0.45.6
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.45.5'
+  const VERSION = '0.45.6'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -24,7 +24,7 @@
   const MAX_WIDTH = 16
   const WIDTH_STEP = 0.5
   const DEFAULT_WIDTH = 6
-  // Percent. The Transparency slider sets it; a note saved without one reads as the default.
+  // Percent. The Opacity slider sets it; a note saved without one reads as the default.
   const MIN_OPACITY = 20
   const MAX_OPACITY = 100
   const OPACITY_STEP = 5
@@ -243,7 +243,7 @@
   const SIZE_SLIDER = 'text-anywhere-size'
   const OPACITY_SLIDER = 'text-anywhere-opacity'
   const SIZE_LABEL = 'Size'
-  const OPACITY_LABEL = 'Transparency'
+  const OPACITY_LABEL = 'Opacity'
   const CLASS_PREFIX = 'text-anywhere-'
   const COLORS_STYLE_ID = 'text-anywhere-colors'
   const PANEL_STYLE_ID = 'text-anywhere-style'
@@ -681,7 +681,7 @@
   // Where the note at index `index` sits after the notes `keep` marks false went, or -1 when it went (or was never saved, as a new note's -1).
   const indexAfterKeep = (index, keep) => index < 0 || !keep[index] ? -1 : keep.slice(0, index).filter(Boolean).length
 
-  // Which notes a change of color, size, transparency or Background reaches: the open note, else the selected ones, else the next one typed.
+  // Which notes a change of color, size, opacity or Background reaches besides the next note's setting: the open note, else the selected ones, else none.
   const lookTarget = (editing, selected) => editing ? 'open' : selected.length ? 'selected' : 'next'
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
@@ -1129,7 +1129,7 @@
   // The dialog's rows whose draft differs from the value in force.
   const changedDialogLooks = (looks, draft, now) => looks.filter((row) => row.dialog && draft[row.name] !== now[row.name])
 
-  // Copy and Paste carry the colors, size, transparency, outline, box color, frame and font, and not the notes, the color picked or the background button.
+  // Copy and Paste carry the colors, size, opacity, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readNoteColors(data) : undefined
   const READERS = { [COLORS_KEY]: readPastedColors, ...lookReaders(LOOKS) }
 
@@ -2422,10 +2422,9 @@
 
   const unmarkColor = () => { for (const button of keypad().querySelectorAll('button.digit.current')) button.classList.remove('current') }
 
-  // The open note's own look changes. A brand-new note's look also becomes the next note's (`alsoNext`); an existing note's changes only itself.
-  function changeOpen (change, alsoNext) {
+  // The open note's own look changes.
+  function changeOpen (change) {
     editing.item = change(editing.item)
-    if (editing.index === -1) alsoNext()
     showEditing(boardMap())
     showPanelValues()
   }
@@ -2435,15 +2434,13 @@
     savedData.setData(COLOR_KEY, color)
   }
 
-  // Applies `change` to the notes `lookTarget` names; a new open note's look also becomes the next note's (`setNext`).
+  // An explicit change reaches the notes `lookTarget` names and is also the next note's setting (`setNext`); selecting or opening a note sets nothing.
   function applyLook (change, setNext) {
+    setNext()
     const target = lookTarget(editing, selected)
-    if (target === 'open') changeOpen(change, setNext)
+    if (target === 'open') changeOpen(change)
     else if (target === 'selected') changeSelected(change)
-    else {
-      setNext()
-      showPanelValues()
-    }
+    else showPanelValues()
   }
 
   // The notes `lookTarget` names as a list, or null for the next note.

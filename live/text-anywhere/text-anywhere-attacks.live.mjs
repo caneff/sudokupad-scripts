@@ -330,7 +330,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.deepEqual(await savedTexts(), [])
   })
 
-  it('attack 30: several selected notes take a new Size, Color and Transparency from the panel, and SudokuPad\'s Undo leaves those notes as they are', async () => {
+  it('attack 30: several selected notes take a new Size, Color and Opacity from the panel, and SudokuPad\'s Undo leaves those notes as they are', async () => {
     const places = { A: [1.5, 1.5], B: [1.5, 3.5], C: [3.5, 2.5] }
     for (const [text, at] of Object.entries(places)) await typeText(p, at, text)
     // A digit gives SudokuPad's Undo something to undo.

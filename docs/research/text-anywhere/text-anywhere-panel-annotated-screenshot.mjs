@@ -1,6 +1,6 @@
 // Takes the one annotated picture of the Text Anywhere panel on site/text-anywhere.html ("The Text Anywhere panel"), from the real
 // text-anywhere.user.js on the recorded puzzle: the panel (nine color buttons, Clear all, the Background button, the settings gear
-// the Size and Transparency sliders and the Hide all notes eye) cropped close at 3x, with each part labelled on its left by a short phrase and a line from the phrase to the part:
+// the Size and Opacity sliders and the Hide all notes eye) cropped close at 3x, with each part labelled on its left by a short phrase and a line from the phrase to the part:
 //   text-anywhere-panel-annotated.png
 // Labels are laid out from the parts' own boxes. The script fails when a part is missing, and writes the file only when
 // the picture is taken. The mascot is hidden.
@@ -60,7 +60,7 @@ const labels = [
   { text: 'Opens the settings', y: lowGapY - 12, to: [[-14, lowGapY - 12], [-14, lowGapY], [part.gear.cx, lowGapY], [part.gear.cx, part.gear.y + part.gear.h - 8]] },
   { text: 'Hides or shows all notes', y: underY + 14, to: [[-14, underY + 14], [-14, underY], [part.hide.cx, underY], [part.hide.cx, part.hide.y + part.hide.h - 8]] },
   { text: 'Text size, small to large', y: part.size.cy, to: [[part.size.x + 6, part.size.cy]] },
-  { text: 'Transparency, faint to solid', y: part.opacity.cy, to: [[part.opacity.x + 6, part.opacity.cy]] }
+  { text: 'Opacity, faint to solid', y: part.opacity.cy, to: [[part.opacity.x + 6, part.opacity.cy]] }
 ]
 
 const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + panel.width

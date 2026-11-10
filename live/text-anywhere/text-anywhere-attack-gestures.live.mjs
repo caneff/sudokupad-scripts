@@ -217,7 +217,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await assertWorks('tool switch mid-rectangle')
   })
 
-  for (const [name, slider, key] of [['Size', SIZE_SLIDER, WIDTH_KEY], ['Transparency', OPACITY_SLIDER, OPACITY_KEY]]) {
+  for (const [name, slider, key] of [['Size', SIZE_SLIDER, WIDTH_KEY], ['Opacity', OPACITY_SLIDER, OPACITY_KEY]]) {
     it(`17: a ${name} slider drag with a tool hotkey mid-drag ends the drag: the saved value is the one shown, and the slider answers a click when Text Anywhere is back`, async () => {
       const valueOf = () => textAnywhere.valueOf(p, slider)
       const before = await valueOf()
