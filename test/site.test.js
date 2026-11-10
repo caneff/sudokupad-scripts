@@ -184,7 +184,9 @@ test('the theme fonts, Fredoka and Nunito, are served from site/ beside their OF
   assert.deepEqual(faces.map(([family]) => family).sort(), ['Fredoka', 'Nunito'])
   for (const [family, file] of faces) {
     assert.ok(fs.existsSync(path.join(SITE_DIR, file)), `site/${file} (${family}) is missing`)
-    assert.match(fs.readFileSync(path.join(SITE_DIR, `OFL-${family}.txt`), 'utf8'), /SIL OPEN FONT LICENSE/i, `site/OFL-${family}.txt is missing or not the OFL`)
+    const license = path.join(SITE_DIR, `OFL-${family}.txt`)
+    assert.ok(fs.existsSync(license), `site/OFL-${family}.txt is missing`)
+    assert.match(fs.readFileSync(license, 'utf8'), /SIL OPEN FONT LICENSE/i, `site/OFL-${family}.txt is not the OFL`)
   }
 })
 
