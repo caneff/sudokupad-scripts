@@ -26,14 +26,15 @@ const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
 // The steps a printed list holds, in order: a busy start's steps (`(start) ...`) and then the actions'. fast-check prints them joined by commas, so no step holds one.
 const stepsOf = (shown) => shown.replace(REPLAY_PATH, '').trim().split(',').filter((step) => step.trim() !== '')
 
-function assertClean (snapshot, when) {
+// Each failure names `step`, the index of the step whose read found it (the list's length for the read after the last action).
+function assertClean (snapshot, when, step) {
   const signals = crashSignals(snapshot)
-  if (signals.length) throw new Error(`${signals.length === 1 ? 'crash signal' : 'crash signals'} ${when}: ${signals.join('; ')}`)
+  if (signals.length) throw Object.assign(new Error(`${signals.length === 1 ? 'crash signal' : 'crash signals'} ${when}: ${signals.join('; ')}`), { step })
 }
 
-function assertRules (now, before, action, when, earlier) {
+function assertRules (now, before, action, when, earlier, step) {
   const broken = ruleViolations({ now, before, action, earlier })
-  if (broken.length) throw new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`)
+  if (broken.length) throw Object.assign(new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`), { step })
 }
 
 // Whether a stroke was drawn or erased since the last reload, once `kind` has run after `earlier`. The reload bug of #681 needs a reload soon after a stroke, and
@@ -42,37 +43,40 @@ const STROKE_KIND = /^(pen (line|erase|drag)|arrow line)/
 export const strokeSinceReload = (kind, earlier) => kind !== 'reload' && (earlier?.strokeSinceReload || STROKE_KIND.test(kind))
 
 // Runs one generated list on a page of its own. A page is never reused between runs: Restart empties the replay but leaves the earlier digits
-// behind Undo, which would make a run depend on the runs before it and break replay (docs/research/ui-fuzz-tools.md).
-async function runList (openTarget, actions, landMs, settleMs) {
+// behind Undo, which would make a run depend on the runs before it and break replay (docs/research/ui-fuzz-tools.md). The step at index `settledStep` waits
+// at least the fixed wait, whatever `settleMs` is (`blameLate`).
+async function runList (openTarget, actions, landMs, settleMs, settledStep = -1) {
   const target = await openTarget()
+  const steps = [...actions]
   try {
     let before = await target.snapshot()
     // The step before the current one, for a rule that reads two steps (undo, then redo).
     let earlier = null
-    // The snapshot after an action, read again after a short settle when the first read finds fault and the list does not wait for the page.
-    const read = async (action, now) => {
-      if (settleMs >= ACTION_SETTLE_MS || (crashSignals(now).length === 0 && ruleViolations({ now, before, action: action.cmd.kind, earlier }).length === 0)) return now
+    // The snapshot after an action, read again after a short settle when the first read finds fault and the action did not wait for the page.
+    const read = async (action, now, waited) => {
+      if (waited >= ACTION_SETTLE_MS || (crashSignals(now).length === 0 && ruleViolations({ now, before, action: action.cmd.kind, earlier }).length === 0)) return now
       await target.wait(ACTION_SETTLE_MS)
       return target.snapshot()
     }
-    const checked = (action) => ({
+    const checked = (action, step) => ({
       check: (model) => action.check(model),
       toString: () => action.toString(),
       async run (model, real) {
         await action.run(model, real)
-        await target.wait(settleMs)
-        const now = await read(action, await target.snapshot())
-        assertClean(now, `after "${action}"`)
-        assertRules(now, before, action.cmd.kind, `after "${action}"`, earlier)
+        const waitMs = step === settledStep ? Math.max(settleMs, ACTION_SETTLE_MS) : settleMs
+        await target.wait(waitMs)
+        const now = await read(action, await target.snapshot(), waitMs)
+        assertClean(now, `after "${action}"`, step)
+        assertRules(now, before, action.cmd.kind, `after "${action}"`, earlier, step)
         earlier = { action: action.cmd.kind, before, strokeSinceReload: strokeSinceReload(action.cmd.kind, earlier), earlier: earlier && { action: earlier.action, before: earlier.before } }
         before = now
       }
     })
-    await fc.asyncModelRun(() => ({ model: { selected: false }, real: { env: target.env } }), [...actions].map(checked))
+    await fc.asyncModelRun(() => ({ model: { selected: false }, real: { env: target.env } }), steps.map(checked))
     await target.wait(landMs)
     const last = await target.snapshot()
-    assertClean(last, 'after the last action')
-    assertRules(last, before, 'wait', 'after the last action', earlier)
+    assertClean(last, 'after the last action', steps.length)
+    assertRules(last, before, 'wait', 'after the last action', earlier, steps.length)
   } catch (error) {
     // A log that cannot be read is said so: an empty answer would read as a page with nothing logged.
     error.errorLog = await target.errorLog().catch((e) => [`the error log could not be read: ${e.message}`])
@@ -80,6 +84,20 @@ async function runList (openTarget, actions, landMs, settleMs) {
   } finally {
     await target.close()
   }
+}
+
+// A list that waits less than the fixed wait reads an action before its late error lands, so the error shows at a later step's read, or after the last action.
+// The list's beginnings are run again, each ending one step earlier, from the step before the one blamed, with their last step given the fixed wait: the shortest
+// that still fails there names the step that caused it (#725). Resolves to the failure to report: `failure`, or a beginning's.
+async function blameLate (open, steps, { landMs, settleMs }, failure) {
+  let blamed = failure
+  for (let step = Math.min(failure.step, steps.length - 1) - 1; step >= 0; step--) {
+    const error = await runList(open, steps.slice(0, step + 1), landMs, settleMs, step).then(() => null, (e) => e)
+    // A beginning that passes, or fails only after its settled step, clears that step and every one before it.
+    if (!error || error.step > step) break
+    blamed = error
+  }
+  return blamed
 }
 
 // Runs a list written by hand (`scriptedList` of `actions.mjs`) on a page of its own for `puzzle`, with the checks of every fuzz run; throws what a failing run throws.
@@ -113,18 +131,23 @@ export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFA
     const shrunk = await fc.check(property, { seed, numRuns: upTo(hunt.counterexamplePath), path: hunt.counterexamplePath.split(':')[0], interruptAfterTimeLimit: shrinkMinutes * 60000, verbose: 0 })
     if (shrunk.failed && shrunk.counterexample !== null) found = shrunk
   }
+  const list = found.counterexample[0]
   // fast-check prints the list as `a,b,c /*replayPath="..."*/`, so no step holds a comma.
-  const shown = String(found.counterexample[0])
+  const shown = String(list)
+  const listWait = list.waitMs ?? settleMs
+  const failure = listWait < ACTION_SETTLE_MS && found.errorInstance?.step != null
+    ? await blameLate(() => openTarget(list.puzzle), [...list.start.map(asStep), ...list.commands], { landMs, settleMs: listWait }, found.errorInstance)
+    : found.errorInstance
   return {
     failed: true,
-    puzzle: found.counterexample[0].puzzle.name,
-    waitMs: found.counterexample[0].waitMs,
-    error: String(found.errorInstance?.message ?? found.error),
+    puzzle: list.puzzle.name,
+    waitMs: list.waitMs,
+    error: String(failure?.message ?? found.error),
     sequence: stepsOf(shown),
     seed: found.seed,
     path: found.counterexamplePath,
     replayPath: REPLAY_PATH.exec(shown)[1],
-    errorLog: found.errorInstance?.errorLog ?? [],
+    errorLog: failure?.errorLog ?? [],
     runs: hunt.numRuns,
     huntMs,
     puzzleRuns: huntRuns,

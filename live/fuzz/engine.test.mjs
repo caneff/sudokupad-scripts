@@ -177,11 +177,13 @@ describe('the fuzz engine on a fake page', () => {
   })
 
   describe('where a broken rule is read', () => {
-    it('a rule broken only after a wait is caught by the read after the last action', async () => {
+    it('a rule broken only after a wait, in a list that does not wait, is blamed on the blur that broke it, not on a step after it', async () => {
       const { openTarget } = fakeTargets({ whitenOnWait: true })
       const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, landMs: 1, settleMs: 0 })
       assert.equal(found.failed, true)
-      assert.match(found.error, /rule broken after the last action: page-stays-dark/)
+      const blur = found.sequence.findIndex((step) => /blur/.test(step))
+      assert.ok(blur < found.sequence.length - 1, `the shrink left a step after the blur: ${found.sequence.join(' | ')}`)
+      assert.equal(found.error, `rule broken after "${found.sequence[blur]}": page-stays-dark: the page color rgb(255, 255, 255) is not dark`)
     })
 
     it('each rule compares an action with the snapshot just before it, not the one at the start of the list', async () => {
@@ -195,11 +197,13 @@ describe('the fuzz engine on a fake page', () => {
   })
 
   describe('where a late error is read', () => {
-    it('with no wait after an action, the wait after the last action still catches it', async () => {
+    it('with no wait after an action, it is still caught, and blamed on the step that caused it, not the stray step the shrink leaves after it', async () => {
       const { openTarget } = fakeTargets({ plantEscapeError: true })
       const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, landMs: 1, settleMs: 0 })
       assert.equal(result.failed, true)
-      assert.match(result.error, /crash signal after the last action: /)
+      assert.equal(result.sequence.length, 2, result.sequence.join(' | '))
+      assert.match(result.sequence[0], / then Escape then release$/)
+      assert.equal(result.error, `crash signal after "${result.sequence[0]}": page error or console error: Error: planted page error`)
     })
 
     it('with no wait at all, the late error is never read', async () => {
@@ -222,16 +226,16 @@ describe('the fuzz engine on a fake page', () => {
     describe('with the wait drawn per list', () => {
       let found
 
-      it('catches it, blaming the Tab, and reports the 0 ms wait that exposed it', async () => {
+      it('catches it, and reports the 0 ms wait that exposed it', async () => {
         const { openTarget } = fakeTargets({ raceOnFastTabs: true })
         found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 600, ...VARIED })
         assert.equal(found.failed, true)
-        assert.match(found.error, /crash signal after .*: page error or console error: Error: planted race/)
         assert.equal(found.waitMs, 0)
       })
 
-      it('shrinks to the two Tabs', () => {
+      it('shrinks to the two Tabs, and blames the second, the last action', () => {
         assert.deepEqual(found.sequence, ['press Tab', 'press Tab'])
+        assert.equal(found.error, 'crash signal after the last action: page error or console error: Error: planted race')
       })
 
       it('replays from its path with the same wait, steps and error', async () => {
@@ -242,6 +246,14 @@ describe('the fuzz engine on a fake page', () => {
         assert.deepEqual(again.sequence, found.sequence)
         assert.equal(again.error, found.error)
       })
+    })
+
+    it('a race whose shrink keeps a stray step after the two Tabs still blames the second Tab, not the stray step', async () => {
+      // Seed 8 shrinks to the two Tabs and one step after them, which a list that does not wait reads the late error after.
+      const { openTarget } = fakeTargets({ raceOnFastTabs: true })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: 8, runs: 600, ...VARIED })
+      assert.deepEqual({ waitMs: found.waitMs, steps: found.sequence.length, tabs: found.sequence.slice(0, 2) }, { waitMs: 0, steps: 3, tabs: ['press Tab', 'press Tab'] })
+      assert.equal(found.error, 'crash signal after "press Tab": page error or console error: Error: planted race')
     })
 
     it('a failure that does not need the timing shrinks to the old fixed wait', async () => {
