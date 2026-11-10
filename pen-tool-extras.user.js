@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.5
+// @version      1.32.6
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.5'
+  const VERSION = '1.32.6'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -36,6 +36,7 @@
   const ARROW_SPACING = { min: 3, max: 12, step: 1, fallback: 5 }
   // SudokuPad draws every pen mark with `.cell-pen { opacity: 0.8 }` (tool-pen.css), so 80 leaves the marks as they are; 20 is the floor where a mark still shows.
   const OPACITY = { min: 20, max: 100, step: 5, fallback: 80 }
+  const OPACITY_LABEL = 'Opacity'
   // The outline's width on each side of the pen layer's shape, in cell units. It does not scale with the thickness; 2 shows over a colored cell and a digit without covering the digits beside a line.
   const OUTLINE_WIDTH = { min: 1, max: 8, step: 1, fallback: 2 }
   // The pen values (the `pen-<value>` class of a stroke) SudokuPad draws at the full width, from `docs/research/sudokupad-pen-edge-marks.md`: the free lines, and 5 and 6
@@ -481,7 +482,7 @@
   // The line mode is saved its own way. A row `under` a box is hidden while that box is unticked.
   const SETTINGS = {
     thickness: slider('PenColor_thickness', THICKNESS, adoptThickness, { label: 'Thickness', section: 'Line settings', box: 'show' }),
-    opacity: slider('PenColor_opacity', OPACITY, adoptOpacity, { label: 'Opacity (%)', section: 'Line settings', box: 'show' }),
+    opacity: slider('PenColor_opacity', OPACITY, adoptOpacity, { label: OPACITY_LABEL, section: 'Line settings', box: 'show' }),
     dash: slider('PenColor_dash', DASH, syncPenPanel, { label: 'Dash length', under: 'lineStyles.dashed' }),
     arrowSpacing: slider('PenColor_arrowspacing', ARROW_SPACING, adoptArrowSpacing, { label: 'Arrow spacing', under: 'lineStyles.arrows' }),
     outlineWidth: slider('PenColor_outlinewidth', OUTLINE_WIDTH, adoptOutline, { label: 'Outline width', under: 'outline' }),
@@ -747,6 +748,14 @@
     }
     if (darkest) colors[darkest] = '#000000'
     return { colors, missing }
+  }
+
+  // `pickedPreset` is the page preset the missing pens came from.
+  function missingColorsText (missing, pickedPreset) {
+    if (!missing.length) return ''
+    const page = PAGE_PRESETS.indexOf(pickedPreset) + 1
+    const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
+    return `Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.`
   }
 
   function paletteOptions (pageCount) {
@@ -2485,7 +2494,7 @@
       : `<div class="${SLIDER_ROW}" data-empty></div>`
     return `<div class="${SLIDERS}">` +
       row(show.thickness, THICKNESS_SLIDER, 'Thickness', THICKNESS, thickness) +
-      row(show.opacity, OPACITY_SLIDER, 'Opacity', OPACITY, opacity) +
+      row(show.opacity, OPACITY_SLIDER, OPACITY_LABEL, OPACITY, opacity) +
       '</div>'
   }
 
@@ -2651,13 +2660,7 @@
   const SLIDER_COLUMNS = 'pen-tool-extras-columns'
   const CELL = 'pen-tool-extras-cell'
 
-  // `pickedPreset` is the page preset the missing pens came from.
-  function missingNote (missing, pickedPreset) {
-    if (!missing.length) return ''
-    const page = PAGE_PRESETS.indexOf(pickedPreset) + 1
-    const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
-    return `<div class="${NOTE}">Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
-  }
+  const missingNote = (missing, pickedPreset) => missing.length ? `<div class="${NOTE}">${missingColorsText(missing, pickedPreset)}</div>` : ''
 
   const sectionTitle = (text) => `<div class="${SECTION_TITLE}">${text}</div>`
 

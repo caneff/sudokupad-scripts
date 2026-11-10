@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.6
+// @version      0.46.7
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.6'
+  const VERSION = '0.46.7'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -101,6 +101,14 @@
     }
     if (darkest) colors[darkest] = '#000000'
     return { colors, missing }
+  }
+
+  // `pickedPreset` is the page preset the missing pens came from.
+  function missingColorsText (missing, pickedPreset) {
+    if (!missing.length) return ''
+    const page = PAGE_PRESETS.indexOf(pickedPreset) + 1
+    const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
+    return `Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.`
   }
 
   function paletteOptions (pageCount) {
@@ -1134,8 +1142,9 @@
 
   // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
   function presetColors (preset, pages, readCell, readPen) {
-    if (preset === PEN_PRESET) return copiedPenColors(readPen)
-    return { ...paletteColors(preset, pages, readCell).colors }
+    if (preset === PEN_PRESET) return { colors: copiedPenColors(readPen), missing: [] }
+    const { colors, missing } = paletteColors(preset, pages, readCell)
+    return { colors: { ...colors }, missing }
   }
 
   // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `validator` a pasted value must pass or be skipped.
@@ -2569,6 +2578,9 @@
     // Null is Custom.
     let chosen = colors ? colorsPreset : PEN_PRESET
     let colorsEdited = false
+    // The pens the chosen page preset left with SudokuPad's own, and that preset; a hand edit keeps them, as in Pen Tool Extras.
+    let draftMissing = []
+    let pickedPreset = null
     let draftLooks = { ...look }
     let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
     let pages = []
@@ -2610,6 +2622,7 @@
           if (BOX_KEY in values) draftCustom = savedHex(look.boxColor) ?? draftCustom
           if (COLORS_KEY in values) {
             draft = colors
+            draftMissing = []
             chosen = colorsPreset
             colorsEdited = false
           }
@@ -2624,6 +2637,7 @@
       draftLooks = { ...draftLooks, ...dialogDefaults() }
       draft = copiedPenColors(readPenColor)
       chosen = PEN_PRESET
+      draftMissing = []
       colorsEdited = true
       draw()
     }
@@ -2632,6 +2646,7 @@
       box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
+        (draftMissing.length ? `<div data-role="missing-note">${missingColorsText(draftMissing, pickedPreset)}</div>` : '') +
         `<div class="${CLASS_PREFIX}section-title">Font</div>${renderFontChoice(draftLooks.noteFont)}` +
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft[color] })
     }
@@ -2640,7 +2655,8 @@
       const target = event.target
       if (target.matches('[data-role="color-choice"]')) {
         chosen = target.value
-        draft = presetColors(chosen, pages, readCellColor, readPenColor)
+        ;({ colors: draft, missing: draftMissing } = presetColors(chosen, pages, readCellColor, readPenColor))
+        pickedPreset = chosen
         colorsEdited = true
         draw()
       } else if (target.matches('[data-role="font-choice"]')) {

@@ -81,6 +81,25 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
+  it('a Darker page preset with an unusable cell color names the pens that keep SudokuPad\'s own, and another preset takes the note away', async () => {
+    const key = await read(p, () => {
+      const key = Framework.app.tools.colour.palette.pages[0][4]
+      document.documentElement.style.setProperty(`--cell-color-${key}`, 'transparent')
+      return key
+    })
+    try {
+      await p.click(SETTINGS_BUTTON)
+      assert.equal(await p.locator(`${EDITOR} [data-role="missing-note"]`).count(), 0)
+      await p.locator(PRESET).selectOption('page-1')
+      assert.match(await p.locator(`${EDITOR} [data-role="missing-note"]`).textContent(), /^Cell color page 1 has no usable color at the matching button, so pen color 4 keeps SudokuPad's own\.$/)
+      await p.locator(PRESET).selectOption('sudokupad')
+      assert.equal(await p.locator(`${EDITOR} [data-role="missing-note"]`).count(), 0)
+      await closeDialogWith(p, 'Cancel', EDITOR)
+    } finally {
+      await read(p, (name) => document.documentElement.style.removeProperty(`--cell-color-${name}`), key)
+    }
+  })
+
   it('SudokuPad colors, after Darker page 1, sets all nine colors in the dialog, and Save writes them and recolors the panel', async () => {
     await p.click(SETTINGS_BUTTON)
     await p.locator(PRESET).selectOption('sudokupad')
