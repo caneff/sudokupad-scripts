@@ -20,3 +20,11 @@ export function configOptions (name) {
   if (!options) throw new Error(`no configuration "${name}"; known: ${Object.keys(CONFIGS).join(', ')}`)
   return options
 }
+
+// The configurations a run names, each a known one and named once: a repeat would put its runs twice into one column of the table.
+export function configNames (names) {
+  names.forEach(configOptions)
+  const repeated = names.find((name, i) => names.indexOf(name) !== i)
+  if (repeated) throw new Error(`--config ${repeated} is named twice`)
+  return names
+}

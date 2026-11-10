@@ -1,5 +1,5 @@
-// The numbers of the planted-bug harness (#727): per plant, how many of its seeded runs caught it and how long the median run took, for one fuzz configuration or two
-// side by side. Pure, so `plants-stats.test.mjs` tests it. Not a check itself.
+// The numbers of the planted-bug harness (#727): per plant, how many of its seeded runs caught it and how long the median run took, for one fuzz configuration or
+// more side by side. Pure, so `plants-stats.test.mjs` tests it. Not a check itself.
 //
 // A run is `{ plant, caught, seconds, other?, replayed? }`: `seconds` is the hunt's time (to the catch, or the whole budget when it caught nothing), `other` a failure that is
 // not the plant's (counted as a miss), `replayed` whether the catch's own path failed again (absent when nobody checked).
@@ -49,15 +49,8 @@ function notes (runs) {
   return lines
 }
 
-// `kinds` maps a plant id to its kind (`rule` or `crash`); `budget` is the seconds of one hunt, which a median that is a miss is shown as exceeding.
-export function statsTable (runs, { kinds, budget }) {
-  const rows = plantStats(runs).map((s) => [s.plant, kinds[s.plant] ?? '', String(`${s.caught}/${s.total}`), secondsText(s.median, budget)])
-  const total = totalOf(runs)
-  rows.push(['total', '', `${total.caught}/${total.total}`, secondsText(total.median, budget)])
-  return [...layout(['plant', 'kind', 'caught', 'median'], rows), ...notes(runs)].join('\n')
-}
-
-// `byConfig` is `{ <configuration name>: runs }` over the same plants and seeds.
+// `byConfig` is `{ <configuration name>: runs }` over the same plants and seeds, one configuration or more. `kinds` maps a plant id to its kind (`rule` or `crash`); `budget`
+// is the seconds of one hunt, which a median that is a miss is shown as exceeding.
 export function compareTable (byConfig, { kinds, budget }) {
   const names = Object.keys(byConfig)
   const stats = names.map((name) => plantStats(byConfig[name]))

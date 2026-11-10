@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { compareTable, medianSeconds, plantStats, statsTable } from './plants-stats.mjs'
+import { compareTable, medianSeconds, plantStats } from './plants-stats.mjs'
 
 const run = (plant, caught, seconds, extra = {}) => ({ plant, caught, seconds, ...extra })
 
@@ -53,20 +53,6 @@ describe('plantStats', () => {
   })
 })
 
-describe('statsTable', () => {
-  const runs = [run('a-bug', true, 10), run('a-bug', true, 30), run('a-bug', false, 60), run('b-bug', false, 60), run('b-bug', false, 60), run('b-bug', false, 60)]
-  const text = statsTable(runs, { kinds: { 'a-bug': 'rule', 'b-bug': 'crash' }, budget: 60 })
-
-  it('shows per plant the catch fraction and the median, and a median that is a miss as over the budget', () => {
-    assert.match(text, /a-bug +rule +2\/3 +30 s/)
-    assert.match(text, /b-bug +crash +0\/3 +> 60 s/)
-  })
-
-  it('ends with the total: catches over runs, and the median over all of them', () => {
-    assert.match(text, /total +2\/6 +> 60 s/)
-  })
-})
-
 describe('compareTable', () => {
   const current = [run('a-bug', true, 40), run('a-bug', false, 60), run('b-bug', true, 5), run('b-bug', true, 7)]
   const candidate = [run('a-bug', true, 20), run('a-bug', true, 30), run('b-bug', true, 6), run('b-bug', false, 60)]
@@ -80,5 +66,12 @@ describe('compareTable', () => {
 
   it('totals each configuration', () => {
     assert.match(text, /total +3\/4 .*3\/4 /)
+  })
+
+  it('prints one configuration alone, with its kind column and total, and a median that is a miss as over the budget', () => {
+    const one = compareTable({ current: [run('a-bug', true, 10), run('a-bug', false, 60), run('a-bug', false, 60)] }, { kinds: { 'a-bug': 'crash' }, budget: 60 })
+    assert.match(one, /plant +kind +current\n/)
+    assert.match(one, /a-bug +crash +1\/3 > 60 s/)
+    assert.match(one, /total +1\/3 > 60 s/)
   })
 })

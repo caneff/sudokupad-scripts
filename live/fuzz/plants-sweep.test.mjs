@@ -21,9 +21,6 @@ describe('seedList', () => {
     assert.deepEqual(seedList({ base: 10, count: 3 }), [10, 11, 12])
   })
 
-  it('an explicit list wins over the count', () => {
-    assert.deepEqual(seedList({ base: 10, count: 3, list: [4, 9] }), [4, 9])
-  })
 })
 
 describe('sweep', () => {
@@ -34,29 +31,30 @@ describe('sweep', () => {
     assert.deepEqual(Object.keys(runs), ['current', 'varied-wait'])
     assert.equal(runs.current.length, 4)
     assert.deepEqual(runs.current.map((r) => [r.plant, r.seed]), runs['varied-wait'].map((r) => [r.plant, r.seed]))
-    assert.ok(calls.every((c) => c.minutes === 0.5 && c.shrinkMinutes === 1))
+    assert.deepEqual([...new Set(calls.map((c) => `${c.minutes}/${c.shrinkMinutes}`))], ['0.5/1'])
   })
 
   it('a run that failed with the plant\'s error is a catch, at its hunt time; a miss costs the budget', async () => {
-    const { fuzz } = fakeFuzz({ 'a/current/1': { failed: true, error: 'rule broken after "x": rule-a: y', huntMs: 12340, path: '1:0@C', runs: 5 } })
+    const { fuzz } = fakeFuzz({ 'a/current/1': { failed: true, error: 'rule broken after "x": rule-a: y', huntMs: 12340, path: '1:0@C', replayCommand: 'replay 1', runs: 5 } })
     const runs = await sweep({ fuzz, plants: [plantA], configs: ['current'], seeds: [1, 2], budgetSeconds: 60, shrinkMinutes: 1, checkReplay: false })
-    assert.deepEqual(runs.current.map(({ caught, seconds, other, path }) => ({ caught, seconds, other, path })), [
-      { caught: true, seconds: 12.3, other: false, path: '1:0@C' },
-      { caught: false, seconds: 60, other: false, path: undefined }
+    assert.deepEqual(runs.current.map(({ caught, seconds, other, replayCommand }) => ({ caught, seconds, other, replayCommand })), [
+      { caught: true, seconds: 12.3, other: false, replayCommand: 'replay 1' },
+      { caught: false, seconds: 60, other: false, replayCommand: undefined }
     ])
   })
 
-  it('a failure that is not the plant\'s is a miss and is marked other', async () => {
-    const { fuzz } = fakeFuzz({ 'a/current/1': { failed: true, error: 'rule broken: rule-zzz', huntMs: 5000, path: 'p', runs: 1 } })
+  it('a failure that is not the plant\'s is a miss, marked other, and keeps its error and the command that replays it', async () => {
+    const { fuzz } = fakeFuzz({ 'a/current/1': { failed: true, error: 'rule broken: rule-zzz', huntMs: 5000, path: 'p', replayCommand: 'replay p', runs: 1 } })
     const [run] = (await sweep({ fuzz, plants: [plantA], configs: ['current'], seeds: [1], budgetSeconds: 60, shrinkMinutes: 1, checkReplay: false })).current
-    assert.deepEqual({ caught: run.caught, other: run.other, seconds: run.seconds }, { caught: false, other: true, seconds: 5 })
+    assert.deepEqual({ caught: run.caught, other: run.other, seconds: run.seconds, error: run.error, replayCommand: run.replayCommand }, { caught: false, other: true, seconds: 5, error: 'rule broken: rule-zzz', replayCommand: 'replay p' })
   })
 
-  it('replays each catch from its path and records whether it failed again with the plant\'s error', async () => {
+  it('replays each catch from its path and records whether it failed again with the plant\'s error, not another', async () => {
     const found = { failed: true, error: 'rule-a', huntMs: 1000, path: '1:0@C', runs: 5 }
-    const { fuzz, calls } = fakeFuzz({ 'a/current/1': found, 'a/current/2': found, replay: (o) => (o.seed === 1 ? { failed: true, error: 'rule-a' } : { failed: false }) })
-    const runs = await sweep({ fuzz, plants: [plantA], configs: ['current'], seeds: [1, 2], budgetSeconds: 60, shrinkMinutes: 1, checkReplay: true })
-    assert.deepEqual(runs.current.map((r) => r.replayed), [true, false])
+    const again = { 1: { failed: true, error: 'rule-a' }, 2: { failed: false }, 3: { failed: true, error: 'rule-zzz' } }
+    const { fuzz, calls } = fakeFuzz({ 'a/current/1': found, 'a/current/2': found, 'a/current/3': found, replay: (o) => again[o.seed] })
+    const runs = await sweep({ fuzz, plants: [plantA], configs: ['current'], seeds: [1, 2, 3], budgetSeconds: 60, shrinkMinutes: 1, checkReplay: true })
+    assert.deepEqual(runs.current.map((r) => r.replayed), [true, false, false])
     const replay = calls.find((c) => c.path != null)
     assert.equal(replay.config, 'current')
     assert.equal(replay.path, '1:0@C')

@@ -6,6 +6,7 @@ import { parseArgs } from 'node:util'
 import { chromium } from 'playwright'
 import { focusFiles } from './actions.mjs'
 import { numberOption } from './cli-number.mjs'
+import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { fuzz } from './fuzz.mjs'
 import { plantById } from './plants.mjs'
 
@@ -16,8 +17,10 @@ const { values } = parseArgs({
 const number = (name, fallback, options) => numberOption(values, name, fallback, options)
 
 const seed = number('seed', Math.floor(Math.random() * 2 ** 31), { integer: true })
-// Before the browser starts: a name that is no script stops the run at once.
+// Before the browser starts: a name that is no script or no configuration stops the run at once.
 const focus = focusFiles(values.focus)
+const config = values.config ?? DEFAULT_CONFIG
+configOptions(config)
 const started = Date.now()
 const browser = await chromium.launch()
 try {
@@ -31,7 +34,7 @@ try {
     planted: values['plant-escape-error'],
     plant: values.plant && plantById(values.plant),
     focus,
-    config: values.config
+    config
   })
   const seconds = Math.round((Date.now() - started) / 1000)
   if (!r.failed) {
