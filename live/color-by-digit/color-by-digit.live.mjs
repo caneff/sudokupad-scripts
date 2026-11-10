@@ -514,7 +514,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await entry.click()
     await editor().waitFor({ state: 'visible' })
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Color by Digit')
-    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
+    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)} by ChinStrap`)
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
