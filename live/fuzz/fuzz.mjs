@@ -13,6 +13,7 @@ import { runFuzz, runScript } from './engine.mjs'
 import { scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantPatch } from './plants.mjs'
+import { replayCommand } from './replay-command.mjs'
 import { FUZZ_PUZZLES, insideGrid, rulesTextFor } from './puzzle-set.mjs'
 import { newestErrorRecords } from './signals.mjs'
 
@@ -190,8 +191,8 @@ const freeCells = (p) => p.evaluate(() => Framework.app.puzzle.cells.filter((c) 
 const sortedCells = (cells) => [...cells].sort(([r1, c1], [r2, c2]) => r1 - r2 || c1 - c2)
 
 // Fuzzes with `seed` (a number) for `minutes` or `runs` action lists, each on a puzzle of the set that the list names, then shrinks a failure. `path` is a printed replay
-// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug.
-export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant }) {
+// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug. `focus` is script files (`focusFiles` of `actions.mjs`) whose actions come up more often.
+export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant, focus }) {
   const [fcPath, replayPath] = path == null ? [] : path.split('@')
   const result = await runFuzz({
     openTarget: (puzzle) => openTarget(browser, puzzle, { planted, plant }),
@@ -201,11 +202,11 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
     minutes,
     shrinkMinutes,
     path: fcPath,
-    replayPath
+    replayPath,
+    focus
   })
   if (!result.failed) return result
-  const replayArgs = ['--seed', result.seed, '--path', `${result.path}@${result.replayPath}`, ...(planted ? ['--plant-escape-error'] : []), ...(plant ? ['--plant', plant.id] : [])]
-  return { ...result, path: `${result.path}@${result.replayPath}`, replayCommand: `npm run test:fuzz -- ${replayArgs.join(' ')}` }
+  return { ...result, path: `${result.path}@${result.replayPath}`, replayCommand: replayCommand({ seed: result.seed, path: `${result.path}@${result.replayPath}`, planted, plant, focus }) }
 }
 
 // Runs one list written by hand (`steps`: `[kind, arg]`, `actions.mjs`) on `puzzle` with the checks of every run; resolves to nothing, or throws the failure.

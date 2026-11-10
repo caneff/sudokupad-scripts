@@ -1,0 +1,66 @@
+name: Fuzz pull request
+
+# A short fuzz of a pull request that changes a script, so a bug it adds shows before the merge and not the morning after (the nightly is fuzz.yml). 5 minutes of
+# `npm run test:fuzz` on real SudokuPad across the puzzle set, with the actions of the changed scripts raised (`--focus`). A failure fails the check and prints the seed, the
+# shrunk steps and the replay command in the job summary; it files no issue, since the pull request is where it is seen. It runs neither the Tampermonkey test nor the live suite.
+on:
+  pull_request:
+    paths:
+      - auto-rules-resizer.user.js
+      - color-by-digit.user.js
+      - dark-page.user.js
+      - pen-tool-extras.user.js
+      - text-anywhere.user.js
+      - ui-tweaks.user.js
+      - lib/**
+      - live/fuzz/**
+
+permissions:
+  contents: read
+
+# A new push to the pull request makes the run on the old one worthless.
+concurrency:
+  group: fuzz-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The changed scripts are read from the diff against the base.
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - id: fuzz
+        run: |
+          set -o pipefail
+          # An assignment, so a git error fails the step (`bash -e`) instead of reading as "nothing changed".
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- '*.user.js')
+          focus=()
+          for file in $changed; do
+            # draw-tool.user.js is a frozen handover that no fuzz page installs.
+            [ "$file" = draw-tool.user.js ] || focus+=(--focus "${file%.user.js}")
+          done
+          echo "focus: ${focus[*]:-none (a change to lib/ or the fuzz only)}"
+          npm run test:fuzz -- --minutes 5 --shrink-minutes 3 "${focus[@]}" 2>&1 | tee "$RUNNER_TEMP/fuzz.out"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+      - name: Show the failure in the job summary
+        if: ${{ failure() && steps.fuzz.outcome == 'failure' }}
+        run: |
+          {
+            echo '## Fuzz failed'
+            echo
+            echo 'The seed, the shrunk steps and the replay command are in the output below; the replay command runs the failure again on your machine.'
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/fuzz.out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

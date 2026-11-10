@@ -70,13 +70,13 @@ async function runList (openTarget, actions, landMs, settleMs) {
 export const runScript = ({ openTarget, puzzle, actions }) => runList(() => openTarget(puzzle), actions, ERRORS_LAND_MS, ACTION_SETTLE_MS)
 
 // Fuzzes with `seed` over `puzzles` (each list picks one): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
-// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
+// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus` (script files, `actionList`) raises those scripts' actions; a replay needs the focus it was found with. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
 // each puzzle ran, by name) or the failure: `error`, `puzzle` (its name), `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`,
 // `replayPath`, `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
-export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS }) {
+export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS }) {
   // The puzzle of every list started, in order: the hunt's lists are the first `hunt.numRuns` (a list the time limit cut off, and the shrink's, come after).
   const started = []
-  const property = fc.asyncProperty(actionList(puzzles, { replayPath }), ({ puzzle, commands }) => {
+  const property = fc.asyncProperty(actionList(puzzles, { replayPath, focus }), ({ puzzle, commands }) => {
     started.push(puzzle.name)
     return runList(() => openTarget(puzzle), commands, landMs, settleMs)
   })

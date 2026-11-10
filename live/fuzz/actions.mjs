@@ -25,6 +25,7 @@ import fc from 'fast-check'
 const require = createRequire(import.meta.url)
 const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.js')
 const { BOX_PRESETS } = require('../../text-anywhere.user.js')
+const { scriptFiles } = require('../../sync-lib.js')
 
 export const TOOL_KEYS = ['z', 'x', 'c', 'v']
 const WINDOW_SIZES = [{ width: 1024, height: 600 }, { width: 1200, height: 900 }, { width: 1400, height: 1000 }]
@@ -355,15 +356,85 @@ const commandOf = (k, puzzle, arg) => ({
   toString: () => k.label(arg, nameTarget(puzzle))
 })
 
+// A script's file name from its short name, which is what `--focus` takes and a replay command prints.
+export const scriptFile = (name) => `${name}.user.js`
+export const scriptName = (file) => file.replace(/\.user\.js$/, '')
+const AUTO_RULES_RESIZER = scriptFile('auto-rules-resizer')
+const COLOR_BY_DIGIT = scriptFile('color-by-digit')
+const DARK_PAGE = scriptFile('dark-page')
+const PEN_TOOL_EXTRAS = scriptFile('pen-tool-extras')
+const TEXT_ANYWHERE = scriptFile('text-anywhere')
+const UI_TWEAKS = scriptFile('ui-tweaks')
+
+// The scripts each kind exercises, by file name: what `--focus` raises. A kind that reaches a script only through SudokuPad (a click on a cell, a window blur) names none.
+export const KIND_SCRIPTS = {
+  'click cell': [],
+  'type digit': [COLOR_BY_DIGIT],
+  'enter digit': [COLOR_BY_DIGIT],
+  undo: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  'undo all': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  redo: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  'tool key': [COLOR_BY_DIGIT, UI_TWEAKS],
+  tab: [UI_TWEAKS],
+  'pen line': [PEN_TOOL_EXTRAS],
+  'pen erase': [PEN_TOOL_EXTRAS],
+  'pen page': [PEN_TOOL_EXTRAS],
+  'place note': [TEXT_ANYWHERE],
+  'move note': [TEXT_ANYWHERE],
+  'pen settings': [PEN_TOOL_EXTRAS],
+  'slider drag': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  'slider keys': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  'pen settings values': [PEN_TOOL_EXTRAS],
+  'note box color': [TEXT_ANYWHERE],
+  'note background': [TEXT_ANYWHERE],
+  'boxed note': [TEXT_ANYWHERE],
+  'arrow line': [PEN_TOOL_EXTRAS],
+  'color mode': [COLOR_BY_DIGIT],
+  'pen drag, Escape': [PEN_TOOL_EXTRAS],
+  'pen drag, tool key': [PEN_TOOL_EXTRAS],
+  'pen drag, undo': [PEN_TOOL_EXTRAS],
+  'pen drag, resize': [PEN_TOOL_EXTRAS, AUTO_RULES_RESIZER],
+  'pen drag, second button': [PEN_TOOL_EXTRAS],
+  'pen drag, blur': [PEN_TOOL_EXTRAS],
+  'pen drag, leave window': [PEN_TOOL_EXTRAS],
+  'erase held, Escape': [PEN_TOOL_EXTRAS],
+  'erase held, tool key': [PEN_TOOL_EXTRAS],
+  'erase held, left button': [PEN_TOOL_EXTRAS],
+  'note drag, Escape': [TEXT_ANYWHERE],
+  'note drag, Delete': [TEXT_ANYWHERE],
+  'note drag, undo': [TEXT_ANYWHERE],
+  'note drag, resize': [TEXT_ANYWHERE, AUTO_RULES_RESIZER],
+  'blur and focus': [],
+  reload: [],
+  resize: [AUTO_RULES_RESIZER],
+  'dark page': [DARK_PAGE]
+}
+
+// How much a focused script's kinds weigh over their own weight: a kind is raised, never silenced, so the others still come up.
+export const FOCUS_FACTOR = 4
+
+// The script files `--focus` names (short names); a name that is no script is refused, naming the ones that are.
+export function focusFiles (names = []) {
+  const files = scriptFiles()
+  return names.map((name) => {
+    if (!files.includes(scriptFile(name))) throw new Error(`--focus ${name} is no script; the scripts are ${files.map(scriptName).join(', ')}`)
+    return scriptFile(name)
+  })
+}
+
+// The weight of every kind, by name, when the actions are focused on the script files `focus`.
+export const kindWeights = (focus = []) => Object.fromEntries(KINDS.map((k) => [k.kind, k.weight * (KIND_SCRIPTS[k.kind].some((f) => focus.includes(f)) ? FOCUS_FACTOR : 1)]))
+
 // The arbitrary of one weighted action over `puzzle` (`puzzle-set.mjs`).
-function actionArbitrary (puzzle) {
-  return fc.oneof(...KINDS.map((k) => ({ weight: k.weight, arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
+function actionArbitrary (puzzle, weights) {
+  return fc.oneof(...KINDS.map((k) => ({ weight: weights[k.kind], arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
 }
 
 // The generator of whole lists, each `{ puzzle, commands }`: a puzzle of `puzzles`, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list
 // (what `String()` of a failing list prints); the puzzle is drawn first, so the same path gives the same puzzle. A list prints as its commands.
-export const actionList = (puzzles, { maxCommands = 20, replayPath } = {}) => fc.constantFrom(...puzzles).chain((puzzle) =>
-  fc.commands([actionArbitrary(puzzle)], { maxCommands, size: 'max', replayPath }).map((commands) => ({ puzzle, commands, toString: () => String(commands) })))
+// `focus` is script files (`focusFiles`) whose actions weigh more; a path replays only with the focus it was found with.
+export const actionList = (puzzles, { maxCommands = 20, replayPath, focus = [] } = {}) => fc.constantFrom(...puzzles).chain((puzzle) =>
+  fc.commands([actionArbitrary(puzzle, kindWeights(focus))], { maxCommands, size: 'max', replayPath }).map((commands) => ({ puzzle, commands, toString: () => String(commands) })))
 
 // A list written out by hand, for a regression that is one known sequence: `steps` are `[kind, arg]` of the kinds above, in the shape fast-check wraps them in.
 export function scriptedList (puzzle, steps) {
