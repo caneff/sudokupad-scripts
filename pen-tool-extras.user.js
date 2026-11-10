@@ -2795,6 +2795,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       name: 'Pen Tool Extras',
       version: VERSION,
       bodyId: EDITOR_ID,
+      // Every other settings dialog centres over the board; this one is the largest and has two columns, so it is centred in the window instead (docs/pen-tool-extras.md).
       centerOverBoard: false,
       off: guard.off,
       changed: () => colorsChosen || changedSettings(draft, inForce).length > 0,

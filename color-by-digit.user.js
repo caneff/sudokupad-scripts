@@ -2615,6 +2615,7 @@
     redraw()
   }
 
+  // The hold opens the profile menu, which should open fast, so it is shorter than the 1000 ms hold-to-edit on a color button (HOLD_TO_EDIT_MS), and only the left button holds.
   const HOLD_MS = 500
   const HOLD_SLOP = 10
 
