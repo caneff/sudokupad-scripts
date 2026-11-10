@@ -38,11 +38,12 @@ describe('file-issue-once.sh', () => {
     assert.match(r.calls[0], /^issue list /)
   })
 
-  it('files a bug issue when no open issue has exactly the title', () => {
+  it('files a bug and needs-info issue, its body ending with the Blocked by section (#805), when no open issue has exactly the title', () => {
     const r = runScript(['other', 'T and more'])
     assert.equal(r.status, 0)
-    assert.equal(r.calls.length, 2)
-    assert.equal(r.calls[1], 'issue create --repo o/r --label bug --title T --body B')
+    assert.equal(r.calls[0].split(' ')[0], 'issue')
+    // The fake logs the body's own newlines as extra lines.
+    assert.equal(r.calls.slice(1).join('\n'), 'issue create --repo o/r --label bug,needs-info --title T --body B\n\n## Blocked by\n\n- None — can start immediately.')
   })
 
   it('fails when the list fails, rather than filing a possible duplicate blind', () => {
