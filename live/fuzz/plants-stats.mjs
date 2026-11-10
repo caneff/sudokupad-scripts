@@ -32,7 +32,7 @@ const secondsText = (median, budget) => (median === null ? `> ${budget} s` : `${
 const cell = ({ caught, total, median }, budget) => `${caught}/${total} ${secondsText(median, budget)}`
 const totalOf = (runs) => ({ caught: runs.filter((r) => r.caught).length, total: runs.length, median: medianSeconds(runs) })
 
-function layout (header, rows) {
+export function layout (header, rows) {
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)))
   const line = (cells) => cells.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd()
   return [line(header), line(widths.map((w) => '-'.repeat(w))), ...rows.map(line)]

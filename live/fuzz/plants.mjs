@@ -2,6 +2,8 @@
 // disk never hold a bug. `kind` is how the bug should show: a broken rule (`rules.mjs`) or a crash signal (`signals.mjs`); `expect` matches the failure message that
 // counts as catching it (a crash plant names its own error text), so a failure the real scripts already have is not scored as a catch. Not a check itself.
 
+import { mutantById, mutantPlant } from './mutants.mjs'
+
 export const PLANTS = [
   {
     id: 'tab-turns-pad-to-letters',
@@ -113,14 +115,17 @@ export const PLANTS = [
   }
 ]
 
+// A plant id, or the id of a mutant (`mutants.mjs`, #723), which is found again in the script as it is now.
 export function plantById (id) {
+  if (id.startsWith('mutant:')) return mutantPlant(mutantById(id))
   const plant = PLANTS.find((p) => p.id === id)
   if (!plant) throw new Error(`no plant "${id}"; known: ${PLANTS.map((p) => p.id).join(', ')}`)
   return plant
 }
 
-// The script's text with the bug in it. A find text that matches anywhere but once is an error: a script that changed under the plant must not run unplanted.
+// The script's text with the bug in it. A mutant (`apply`) makes its own edit. A find text that matches anywhere but once is an error: a script that changed under the plant must not run unplanted.
 export function applyPlant (plant, code) {
+  if (plant.apply) return plant.apply(code)
   const matches = code.split(plant.find).length - 1
   if (matches !== 1) throw new Error(`plant ${plant.id}: the text to find (${JSON.stringify(plant.find)}) in ${plant.file} matches ${matches} times, not once`)
   return code.replace(plant.find, () => plant.replace)
