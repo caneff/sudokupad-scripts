@@ -34,3 +34,15 @@ test('pictureTags lists each repo picture with its tag, undefined for a missing 
     { file: 'docs/research/a.png', tag: undefined }
   ])
 })
+
+const ANIMATED = [
+  '<picture>',
+  `<source media="(prefers-reduced-motion: no-preference)" srcset="${RAW}docs/research/a.png">`,
+  `<img class="slide" src="${RAW}docs/research/b.gif" alt="B">`,
+  '</picture>'
+].join('\n')
+
+test('a picture\'s source srcset is tagged and listed like an image src', () => {
+  assert.equal(tagPictures(ANIMATED, hashOf), ANIMATED.replace('a.png"', 'a.png?v=aaaaaaa"').replace('b.gif"', 'b.gif?v=bbbbbbb"'))
+  assert.deepEqual(pictureTags(ANIMATED), [{ file: 'docs/research/a.png', tag: undefined }, { file: 'docs/research/b.gif', tag: undefined }])
+})

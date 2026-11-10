@@ -23,7 +23,7 @@ const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && f !== 
 const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 
 const plain = html => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
-const targets = page => [...page.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(m => m[1])
+const targets = page => [...page.matchAll(/\b(?:href|src|srcset)="([^"]*)"/g)].map(m => m[1])
 const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX))
 const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(t => t.slice(RAW.length).replace(/\?.*$/, ''))
 // A link into the site itself: not a URL with a scheme and not a fragment. The site is served from a
@@ -283,6 +283,21 @@ for (const { heading, page: file, id } of SHOWS) {
       assert.deepEqual(syncText(raw), { text: raw, problems: [] })
     })
   }
+
+  test(`${heading}'s animated slides each have a tracked WebP and a tracked still PNG, both tagged on ${file} and ${HOME}`, () => {
+    const animated = slides.filter(s => s.animation)
+    for (const { picture, animation } of animated) {
+      assert.match(animation, /\.webp$/, `${animation} is not a WebP`)
+      const tracked = execFileSync('git', ['ls-files', '--', dir + animation, dir + picture], { cwd: ROOT, encoding: 'utf8' }).split('\n')
+      assert.deepEqual(tracked.filter(Boolean).sort(), [dir + animation, dir + picture].sort(), `${animation} and ${picture} must both be tracked`)
+      for (const page of [HOME, file]) {
+        const raw = fs.readFileSync(path.join(SITE_DIR, page), 'utf8')
+        assert.ok(raw.includes(`srcset="${RAW}${dir}${animation}?v=${tagOf(dir + animation)}"`), `${page} has no tagged <source> for ${animation}`)
+        assert.ok(raw.includes(`src="${RAW}${dir}${picture}?v=${tagOf(dir + picture)}"`), `${page} has no tagged still ${picture}`)
+      }
+    }
+    assert.ok(animated.length > 0 || id === 'color-by-digit', `${heading} has no animated slide`)
+  })
 
   test(`${HOME}'s ${heading} slides each declare the size of their file`, () => {
     imgs(homeShow(heading)).forEach((img, i) => assertDeclaredAtFileShape(img, `${dir}${slides[i].picture}`, `slide ${i + 1}`))

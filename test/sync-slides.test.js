@@ -28,6 +28,20 @@ test('a rendered show makes the first slide and caption current, tags each pictu
   ].join('\n'))
 })
 
+const animated = { ...show, slides: [{ ...show.slides[0], animation: 'a.webp' }, show.slides[1]] }
+const hashOfAnimated = file => file === 'docs/research/x/a.webp' ? 'ccccccc' : hashOf(file)
+
+test('a slide with an animation is a picture: the WebP for motion, the still PNG as the slide image, each tagged', () => {
+  const lines = renderShow(animated, 2, hashOfAnimated).split('\n')
+  assert.deepEqual(lines.slice(2, 7), [
+    '      <picture>',
+    `        <source media="(prefers-reduced-motion: no-preference)" srcset="${RAW}docs/research/x/a.webp?v=ccccccc">`,
+    `        <img class="slide current" src="${RAW}docs/research/x/a.png?v=aaaaaaa" alt="A &quot;one&quot; &amp; &lt;more&gt;" width="10" height="5">`,
+    '      </picture>',
+    `      <img class="slide" src="${RAW}docs/research/x/b.png?v=bbbbbbb" alt="Two" width="10" height="5">`
+  ])
+})
+
 const page = body => `<body>\n  <!-- slideshow:x -->\n${body}\n  <!-- /slideshow:x -->\n</body>`
 
 test('a stale block is rewritten from the source and a current one is left alone', () => {
