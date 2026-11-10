@@ -88,7 +88,7 @@ test('#710: settings text 0.44.14 copied pastes under the new keys', () => {
   assert.deepEqual(values, Object.fromEntries(Object.entries(OLD_COPIED).map(([key, value]) => [key.replace(/^DrawTool_/, 'TextAnywhere_'), value])))
 })
 
-test('#711: draw-tool.user.js is the script frozen at the handover version, sending updates to text-anywhere.user.js, and the homepage installs the new address', () => {
+test('#711: draw-tool.user.js is no script of its own, sends updates to text-anywhere.user.js under the same name and namespace, and the homepage installs the new address', () => {
   const script = read(SCRIPT)
   const handover = read(HANDOVER)
   assert.deepEqual(HANDOVERS, { [HANDOVER]: SCRIPT })
