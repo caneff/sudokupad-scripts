@@ -663,7 +663,7 @@
   const TEXT_SIZE_PER_WIDTH = 2
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
-  const sizeStep = (width, direction) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width + direction * WIDTH_STEP))
+  const sizeStep = (width, direction) => steppedSlider({ min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width, direction)
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
   const noteOpacity = (item) => itemOpacity(item) / 100
@@ -697,6 +697,15 @@
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
   /* eslint-enable no-unused-vars */
   // </lib:plain>
+
+  // <lib:slider-keys>
+  // Generated from lib/slider-keys.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The keys that step a panel slider: + (also =, and the keypad's) up and - down.
+  const SLIDER_STEP_KEYS = { '+': 1, '=': 1, '-': -1 }
+  const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
+  /* eslint-enable no-unused-vars */
+  // </lib:slider-keys>
 
   // <lib:write-style>
   // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
@@ -2687,8 +2696,6 @@
     return row
   }
 
-  const SIZE_KEYS = { '+': 1, '=': 1, '-': -1 }
-
   // The look each slider sets, read by its row in LOOKS, and how it changes a note.
   const SLIDER_LOOKS = {
     [SIZE_SLIDER]: { name: 'width', change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
@@ -4145,7 +4152,7 @@
         return true
       }
       // A key that changes notes would replace the ones the erase touched, so it waits for the release.
-      if (erasing && (ARROWS[event.key] || SIZE_KEYS[event.key] || event.key === 'Delete' || event.key === 'Backspace')) return true
+      if (erasing && (ARROWS[event.key] || SLIDER_STEP_KEYS[event.key] || event.key === 'Delete' || event.key === 'Backspace')) return true
       if (event.key === 'Escape' && drag && !drag.cancelled) {
         cancelDrag()
         return true
@@ -4159,7 +4166,7 @@
         openText(selected[0])
         return true
       }
-      const sizeDirection = SIZE_KEYS[event.key]
+      const sizeDirection = SLIDER_STEP_KEYS[event.key]
       if (sizeDirection && !editing) {
         // A gesture holds its notes as they were at the press, and its release would put the old size back.
         if (!drag && !resizing) stepSize(sizeDirection)

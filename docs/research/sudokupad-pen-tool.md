@@ -246,3 +246,15 @@ Traced in the page on 2026-11-07, SudokuPad 0.611.0.
 - A button a script inserts later never gets `handleButton`. Its `mousedown` bubbles to `window`, then `handleInputup`, then the pen tool's `clickCell` with `getInputRc()` near the pointer.
 - SudokuPad's edge hit test finds an edge for a press up to one cell beyond the grid. A button within that distance of the grid draws an edge X: Pen Tool Extras' line mode, page and settings buttons (c = 9.8 to 10.7), and Auto Rules Resizer's font bar on a 1920x1080 window.
 - The fix is a `mousedown` `stopPropagation()` on the added control. Color by Digit and Text Anywhere (`draw-tool.user.js`) already stop `mousedown` on their controls. Their dialog buttons and banners were not probed. At a 1200x1000 window Pen Tool Extras' page and settings buttons sit more than a cell beyond the grid, so a leaked press on them marks nothing; the test checks that no `mousedown` reaches `window`.
+
+## + and - (run on the page 2026-11-10, SudokuPad 0.616.0, headless Chromium, no script loaded, #759)
+
+Run in the pen tool with `Framework.app.tool === 'pen'`, by `keyboard.press` of `Shift+Equal`, `Equal`, `Minus`, `NumpadAdd` and `NumpadSubtract`, then `keyboard.down` of `Minus` three times.
+
+- SudokuPad's pen tool and its key handler do nothing with any of them: the tool, the undo stack, the selection, the pen entries, the selected pen color, the saved settings and the panel's current button were identical before and after. The `Q` key, pressed first as a control, changed nothing either.
+- The one difference after `Shift+Equal` is the selected pen color read back as the number `1` instead of the string `"1"`. It comes from the Shift keydown, not the +: the Shift switches the tool to Corner (`tempKey`) until it is released.
+- So the `+` keydown of `Shift+Equal` arrives with `Framework.app.tool === 'corner'` and `Framework.app.prevTool === 'pen'`. A script that wants the + checks both.
+- A held key sends keydowns with `repeat: true`; SudokuPad's `App.handleKeydown` drops them before any tool sees them, so a tool's `handleKeydown` is called once. A listener on `window` in the capture or bubble phase still sees them.
+- Run later: SudokuPad does not ask a tool for a key while a dialog is open (the digit key 3 did nothing in Pen Tool Extras' own dialog), so a script's `window` listener has to check for `.dialog` itself.
+- No other script in this repo handles + or - outside Text Anywhere's Size keys.
+- Checked in `live/pen-tool-extras/pen-tool-extras-thickness-keys.live.mjs`.

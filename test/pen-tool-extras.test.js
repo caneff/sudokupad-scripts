@@ -17,7 +17,7 @@ const {
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
   clickedMarks, marksAtPoint, holdsMark, DOT_FILL_CSS,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
+  PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX,
@@ -2272,6 +2272,22 @@ test('digitKeyPen: a bare digit 1 to 9 picks that pen on the page showing, and n
   assert.equal(digitKeyPen(key('3', { target: field }), 0), null, 'a key typed into a field')
   assert.equal(digitKeyPen(key('3', { target: { closest: () => null } }), 0), '3', 'a key on a non-field')
   for (const mod of ['ctrlKey', 'altKey', 'metaKey', 'shiftKey']) assert.equal(digitKeyPen(key('3', { [mod]: true }), 0), null, mod)
+})
+
+test('thicknessKeyStep: + and = step Thickness up and - steps it down, by its step and within its range, and no other key does', () => {
+  const key = (k, extra = {}) => ({ key: k, ctrlKey: false, altKey: false, metaKey: false, shiftKey: false, repeat: false, ...extra })
+  assert.equal(thicknessKeyStep(key('+', { shiftKey: true }), 5), 5 + THICKNESS.step)
+  assert.equal(thicknessKeyStep(key('='), 5), 5 + THICKNESS.step)
+  assert.equal(thicknessKeyStep(key('-'), 5), 5 - THICKNESS.step)
+  assert.equal(thicknessKeyStep(key('+'), THICKNESS.max), THICKNESS.max, 'stops at the top')
+  assert.equal(thicknessKeyStep(key('-'), THICKNESS.min), THICKNESS.min, 'stops at the bottom')
+  assert.equal(thicknessKeyStep(key('a'), 5), null)
+  assert.equal(thicknessKeyStep(key('3'), 5), null)
+  for (const mod of ['ctrlKey', 'altKey', 'metaKey']) assert.equal(thicknessKeyStep(key('-', { [mod]: true }), 5), null, `${mod} is the browser's zoom`)
+  assert.equal(thicknessKeyStep(key('-', { repeat: true }), 5), null, 'a repeat is not a press')
+  const field = { closest: (selector) => (selector.includes('input') ? {} : null) }
+  assert.equal(thicknessKeyStep(key('-', { target: field }), 5), null, 'a key typed into a field')
+  assert.equal(thicknessKeyStep(key('-', { target: { closest: () => null } }), 5), 5 - THICKNESS.step, 'a key on a non-field')
 })
 
 test('whenReady resolves with the value check() gives', async () => {
