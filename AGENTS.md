@@ -35,6 +35,8 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   one, and the site teaches the right click.
 - **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07). No change is checked, styled, screenshot or
   demonstrated at a phone or tablet size, and no ticket or PR asks for it.
+- **Text Anywhere's notes stay off Undo and Redo** (Chris, 2026-11-10): putting them on SudokuPad's undo stack would put them in the
+  replay, and a history interleaved with SudokuPad's must catch every Undo first, which risks digit Undo for a small gain. No ticket proposes either.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
   2026-11-06). A dark page means Dark Page.
 - **Keys SudokuPad owns**: a design never proposes one of these as a script's shortcut (four shortcut proposals were rejected on this ground): Tab, Space,
