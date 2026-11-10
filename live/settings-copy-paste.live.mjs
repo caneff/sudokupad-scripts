@@ -154,6 +154,40 @@ for (const failedPaste of FAILED_PASTES) {
   })
 }
 
+describe('color-by-digit.user.js: a Paste replaces only the pasted settings in the dialog\'s draft', { concurrency: false }, () => {
+  const { editor, entry, saved } = SETTINGS_SCRIPTS.find((s) => s.file === 'color-by-digit.user.js')
+  const MODE = `${editor} select[data-role="mode-draft"]`
+  const CELL_PROFILE = `${editor} select[data-role="cell-profile"]`
+  let context, p, errors
+  before(async () => {
+    ({ context, p, errors } = await openWith(browser(), ['color-by-digit.user.js'], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+  })
+  after(async () => { await context?.close() })
+
+  it('pasted profiles leave the draft\'s unsaved mode as it is', async () => {
+    await openScriptDialog(p, entry, editor)
+    await p.selectOption(MODE, 'off')
+    assert.equal(await paste(p, JSON.stringify({ ColorByDigit_profiles: saved })), 'Pasted 1 setting.')
+    assert.equal(await p.locator(MODE).inputValue(), 'off', 'the unsaved mode edit is still in the draft')
+    assert.equal(await p.locator(`${editor} .cbd-profile`).count(), 1, 'the pasted profiles are in the draft')
+    await closeDialogWith(p, 'Cancel', editor)
+  })
+
+  it('a pasted mode leaves the draft\'s unsaved choice of profile as it is', async () => {
+    await openScriptDialog(p, entry, editor)
+    await p.selectOption(`${CELL_PROFILE}`, { index: 0 })
+    const chosen = await p.locator(CELL_PROFILE).inputValue()
+    assert.equal(await paste(p, JSON.stringify({ ColorByDigit_mode: 'both' })), 'Pasted 1 setting.')
+    assert.equal(await p.locator(MODE).inputValue(), 'both', 'the pasted mode is in the draft')
+    assert.equal(await p.locator(CELL_PROFILE).inputValue(), chosen, 'the unsaved profile choice is still in the draft')
+    await closeDialogWith(p, 'Cancel', editor)
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
 describe('auto-rules-resizer.user.js: a Save whose height write throws', { concurrency: false }, () => {
   let context, p, errors
   after(async () => { await context?.close() })

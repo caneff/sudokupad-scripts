@@ -155,6 +155,7 @@
   // The page's own color, as SudokuPad's buttons use it behind their icons.
   const PAGE_COLOR = 'var(--body-bg, #fff)'
   const PEN_PRESET = 'pen'
+  const CUSTOM_LABEL = 'Custom'
   const PRESET_LABELS = {
     [PEN_PRESET]: 'Pen colors',
     ...PALETTE_PRESET_LABELS
@@ -1089,6 +1090,11 @@
     return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, savedHex(entries[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
   }
 
+  // The colors stay under keys 1 to 9 with the preset's id beside them; a set with no `preset`, or one that is none of ours, is Custom (null).
+  const NOTE_PRESETS = [PEN_PRESET, ...PAGE_PRESETS, SUDOKUPAD_PRESET]
+  const readNotePreset = (saved) => isPlainObject(saved) && NOTE_PRESETS.includes(saved.preset) ? saved.preset : null
+  const storedNoteColors = (colors, preset) => preset ? { ...colors, preset } : { ...colors }
+
   // `readPenColor(n)` reads pen color n as the browser computes it.
   const copiedPenColors = (readPenColor) => Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hexColor(readPenColor(n)) ?? SUDOKUPAD_PEN_COLORS[n]]))
 
@@ -1103,6 +1109,13 @@
   const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  ${colorVar(n)}: ${colors[n]};`), '}'].join('\n')
 
   const presetOptions = (pageCount) => [PEN_PRESET, ...paletteOptions(pageCount)]
+
+  // A set in force that is no pickable preset (Custom, or a page the palette no longer has) is shown first and cannot be picked, so the pulldown says what is in force and
+  // every preset stays pickable: picking the option already shown fires no `change`.
+  function colorChoices (preset, presets) {
+    const option = (value, label, disabled) => ({ value, label, selected: (value || null) === preset, disabled })
+    return [...(presets.includes(preset) ? [] : [option(preset ?? '', preset ? PRESET_LABELS[preset] : CUSTOM_LABEL, true)]), ...presets.map((id) => option(id, PRESET_LABELS[id], false))]
+  }
 
   // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
   function presetColors (preset, pages, readCell, readPen) {
@@ -1128,16 +1141,19 @@
   const lookRow = (name) => LOOKS.find((row) => row.name === name)
   // The dialog's rows whose draft differs from the value in force.
   const changedDialogLooks = (looks, draft, now) => looks.filter((row) => row.dialog && draft[row.name] !== now[row.name])
+  const dialogDefaults = (looks = LOOKS) => Object.fromEntries(looks.filter((row) => row.dialog).map((row) => [row.name, row.read(undefined)]))
+  // A paste puts the pasted looks (read from `now`, once saved) into the draft and leaves every other look as the draft has it.
+  const draftWithPasted = (looks, draft, now, values) => ({ ...draft, ...Object.fromEntries(looks.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
 
   // Copy and Paste carry the colors, size, opacity, outline, box color, frame and font, and not the notes, the color picked or the background button.
-  const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readNoteColors(data) : undefined
+  const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? storedNoteColors(readNoteColors(data), readNotePreset(data)) : undefined
   const READERS = { [COLORS_KEY]: readPastedColors, ...lookReaders(LOOKS) }
 
   // The looks in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store, looks = LOOKS) {
     const copied = readLooks(store, looks, 'key')
     const savedColors = readNoteColors(store.getData(COLORS_KEY))
-    if (savedColors) copied[COLORS_KEY] = savedColors
+    if (savedColors) copied[COLORS_KEY] = storedNoteColors(savedColors, readNotePreset(store.getData(COLORS_KEY)))
     return JSON.stringify(copied)
   }
 
@@ -2012,7 +2028,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, colorChoices, dialogDefaults, draftWithPasted, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2416,6 +2432,8 @@
   let background = false
   // Text Anywhere's nine colors, or null until they are first copied from the pen colors.
   let colors = null
+  // The preset `colors` came from, or null for Custom.
+  let colorsPreset = null
   let panelParts = []
 
   const keypad = () => document.querySelector('.controls-input')
@@ -2458,9 +2476,11 @@
   // The colors and every look as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
   const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...lookKeys(LOOKS)], () => {
     const wasColors = colors
+    const wasPreset = colorsPreset
     const wasLooks = { ...look }
     return () => {
       colors = wasColors
+      colorsPreset = wasPreset
       Object.assign(look, wasLooks)
       showPanelValues()
       showColors()
@@ -2469,9 +2489,11 @@
     }
   })
 
-  function saveColors (next) {
+  // `preset` is the preset the colors came from; a hand edit passes none and the set is Custom.
+  function saveColors (next, preset = null) {
     colors = next
-    savedData.setData(COLORS_KEY, colors)
+    colorsPreset = preset
+    savedData.setData(COLORS_KEY, storedNoteColors(colors, preset))
     showColors()
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
   }
@@ -2491,7 +2513,6 @@
   // The dialog's pickers fill a draft that Save writes; Copy and Paste settings act at once.
   const DIALOG_ID = 'text-anywhere-dialog'
   const DIALOG_STYLE_ID = 'text-anywhere-dialog-style'
-  const CUSTOM_LABEL = 'Custom'
   const DIALOG_CSS = [
     `#${DIALOG_ID} .${CLASS_PREFIX}section-title { font-weight: 600; margin: 6px 0 0; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}pick-note { margin: 2px 0 0; font-size: 0.85em; opacity: 0.8; }`,
@@ -2509,7 +2530,7 @@
 
   // A pasted value is saved and shown at once, whether or not Text Anywhere is current.
   function applyPasted (values) {
-    if (COLORS_KEY in values) saveColors(values[COLORS_KEY])
+    if (COLORS_KEY in values) saveColors(readNoteColors(values[COLORS_KEY]), readNotePreset(values[COLORS_KEY]))
     for (const { name, key } of LOOKS) if (key in values) setLook(name, values[key])
     showPanelValues()
   }
@@ -2517,7 +2538,8 @@
   function openDialog () {
     // Until the colors are first copied, the draft is the pen colors a first use would copy.
     let draft = colors ?? copiedPenColors(readPenColor)
-    let chosen = null
+    // The preset in force, or null for Custom; with no colors saved yet, the first-use copy of the pen colors.
+    let chosen = colors ? colorsPreset : PEN_PRESET
     let colorsEdited = false
     let draftLooks = { ...look }
     let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
@@ -2544,7 +2566,7 @@
       snapshot: snapshotSave,
       feature: settingsUi,
       save: () => {
-        if (colorsEdited) saveColors(draft)
+        if (colorsEdited) saveColors(draft, chosen)
         for (const { name } of editedLooks()) setLook(name, draftLooks[name])
       },
       copyPaste: {
@@ -2554,18 +2576,30 @@
         upgrade: withNewKeys,
         apply: (values) => {
           applyPasted(values)
-          draftLooks = { ...look }
-          draftCustom = savedHex(look.boxColor) ?? draftCustom
-          draft = colors ?? draft
-          chosen = null
-          colorsEdited = false
+          // The draft takes only what was pasted: an edit to anything else is still there for Save.
+          draftLooks = draftWithPasted(LOOKS, draftLooks, look, values)
+          if (BOX_KEY in values) draftCustom = savedHex(look.boxColor) ?? draftCustom
+          if (COLORS_KEY in values) {
+            draft = colors
+            chosen = colorsPreset
+            colorsEdited = false
+          }
           draw()
         }
-      }
+      },
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
     }), () => null)
     if (!box) return
+    // Like Pen Tool Extras: the draft takes the defaults, and Save or Cancel decides.
+    const restoreDefaults = () => {
+      draftLooks = { ...draftLooks, ...dialogDefaults() }
+      draft = copiedPenColors(readPenColor)
+      chosen = PEN_PRESET
+      colorsEdited = true
+      draw()
+    }
     const draw = () => {
-      const options = [{ value: '', label: CUSTOM_LABEL, selected: !chosen }, ...presetOptions(pages.length).map((id) => ({ value: id, label: PRESET_LABELS[id], selected: id === chosen }))]
+      const options = colorChoices(chosen, presetOptions(pages.length))
       box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
@@ -2576,11 +2610,9 @@
     box.addEventListener('change', under(settingsUi, (event) => {
       const target = event.target
       if (target.matches('[data-role="color-choice"]')) {
-        chosen = target.value || null
-        if (chosen) {
-          draft = presetColors(chosen, pages, readCellColor, readPenColor)
-          colorsEdited = true
-        }
+        chosen = target.value
+        draft = presetColors(chosen, pages, readCellColor, readPenColor)
+        colorsEdited = true
         draw()
       } else if (target.matches('[data-role="font-choice"]')) {
         draftLooks.noteFont = readFont(target.value)
@@ -4074,7 +4106,7 @@
       return true
     },
     handleToolEnter () {
-      if (!colors) saveColors(copiedPenColors(readPenColor))
+      if (!colors) saveColors(copiedPenColors(readPenColor), PEN_PRESET)
       notesLayer().classList.add(ACTIVE_CLASS)
       showPanel()
     },
@@ -4161,6 +4193,7 @@
     Object.assign(look, readLooks(savedData))
     background = readBackground(savedData.getData(BACKGROUND_KEY))
     colors = readNoteColors(savedData.getData(COLORS_KEY))
+    colorsPreset = readNotePreset(savedData.getData(COLORS_KEY))
     showColors()
     // The features are independent: one that fails to install costs the others nothing.
     textTool.run(() => {

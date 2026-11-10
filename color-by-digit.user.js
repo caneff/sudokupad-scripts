@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.30
+// @version      0.25.31
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.30'
+  const VERSION = '0.25.31'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1404,7 +1404,12 @@
       }
       case 'delete': return showing(deleteProfile(state, event.index), indexAfterDelete(selected, event.index, state.profiles.length))
       case 'move': return event.from === event.to ? draft : showing(moveProfile(state, event.from, event.to), indexAfterMove(selected, event.from, event.to))
-      case 'reload': return showingProfile({ ...draft, mode: event.mode }, event.state, event.state.active)
+      // A paste replaces only what it holds: the profiles (selecting the pasted active one) and the mode; every other edit stays.
+      case 'paste': {
+        const next = event.state ?? state
+        const pastedMode = event.mode ?? (event.state ? allowedMode(draft.mode, usesDigitColors(next)) : draft.mode)
+        return event.state ? showingProfile({ ...draft, mode: pastedMode }, next, next.active) : { ...draft, mode: pastedMode }
+      }
     }
     throw new Error(`reduceDraft: no edit ${event.type}`)
   }
@@ -2722,7 +2727,7 @@
           ADDED_PRELOADS.forEach(({ key }) => { if (key in values) savedData.setData(key, values[key]) })
           saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
           savedState = loadState()
-          edit({ type: 'reload', state: savedState, mode })
+          edit({ type: 'paste', ...(PROFILES_KEY in values ? { state: savedState } : {}), ...(MODE_KEY in values ? { mode } : {}) })
           draw()
         }
       }

@@ -181,6 +181,7 @@
   and its status line names the failure, after a Save or Paste has put every key back.
 - **refused write** — a save the browser refuses with `QuotaExceededError` (a full `localStorage`). It is the browser's doing, not a SudokuPad change: the
   guard warns once in the console, puts up a plain bar, and the feature keeps saving once space frees.
+- **Paste settings** — a settings dialog's paste button (Copy settings is its twin, and carries the saved settings only): it saves the pasted keys at once and puts only those into the dialog's draft, so an unsaved edit of any setting the pasted text lacks stays there for Save or Cancel. In Color by Digit the pasted profiles replace the draft's profiles, and the draft's mode stays unless one was pasted.
 - **notice bar** — the guard's bar at the bottom of the page, in the one purple every script's bar uses (Pen Tool Extras' and the site's
   accent): "<script>: <features> is/are off — SudokuPad changed.", a Report link to a new issue filled in with the script, each feature,
   its missing internal or error, and SudokuPad's version, and a × that dismisses it. A dismissal is saved per SudokuPad version, so a new
@@ -221,6 +222,7 @@
   read is never copied over: each color it lacks shows SudokuPad's own pen color. A hold of a second on a
   color button puts a color picker over each button, and a picked color recolors every note already made in that number,
   since a note saves the number. The digit keys 1 to 9 pick one. A color button shows "Aa" in its color.
+  The settings dialog's color pulldown (a **color block**) opens on the preset the colors came from, `pen` (Pen colors), `page-1` to `page-3` or `sudokupad`, saved as `preset` beside the colors as Pen Tool Extras' **pen color preset** is, and carried by Copy and Paste settings. The first use's copy of the pen colors is Pen colors. An edit, in the dialog or by hold, makes the set Custom with no `preset`, and so are colors an older version saved; Custom shows first and cannot be picked, as in Pen. Restore defaults, in the dialog's button row, fills the draft with the pen colors (Pen colors), Proportional, the default halo, box color and box border, for Save or Cancel to decide; the size and opacity, which the dialog does not set, stay.
 - **text** (a note) — a short string typed onto the notes, in a note color, with its own size and opacity (the **Size slider** and **Opacity slider** set them; a saved note keeps its own), starting at the
   point clicked: its stored point is the top left of its text. It is typed in place, in the **text box**: the note's own element, open for typing, which a click anywhere
   on the page but SudokuPad's controls (what is drawn in the control panel, the top bar, the menu and an open dialog; the panel's empty space opens one) opens while nothing is
