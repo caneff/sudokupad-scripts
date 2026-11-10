@@ -3,7 +3,7 @@
 // handover and the homepage. #709: its tool, guard id, keys and repo paths carry the new name (the repo-wide search for the old name is
 // test/text-anywhere.test.js's). #710: a board saved by 0.44.14, under every old key, reads its notes, settings and notice bar dismissal under the new keys
 // after a start, the old keys kept; a start the browser refused room for copies again at the next; settings text 0.44.14 copied pastes. #711:
-// draw-tool.user.js is the frozen handover, the script itself but for its version, sending updates to text-anywhere.user.js, and the homepage installs
+// draw-tool.user.js is the handover frozen at 0.45.1 (its bytes are checked in test/text-anywhere.test.js), sending updates to text-anywhere.user.js, and the homepage installs
 // from the new address.
 // Blind to real SudokuPad: the startup copy and the paste run through Framework, which live/text-anywhere/text-anywhere-old-keys.live.mjs covers. Blind to
 // a real update: `npm run test:tampermonkey` follows the move in a Tampermonkey under Playwright, clicking Update on the page a changed @updateURL opens,
@@ -14,7 +14,7 @@ const assert = require('node:assert/strict')
 const { existsSync, readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { fakeStore } = require('../fake-store.js')
-const { headerField, headerVersion } = require('../header-version.js')
+const { headerField } = require('../header-version.js')
 const { guardId, scriptFiles, HANDOVERS } = require('../../sync-lib.js')
 const { RAW } = require('../../tag-pictures.js')
 const ta = require('../../text-anywhere.user.js')
@@ -93,8 +93,6 @@ test('#711: draw-tool.user.js is the script frozen at the handover version, send
   const handover = read(HANDOVER)
   assert.deepEqual(HANDOVERS, { [HANDOVER]: SCRIPT })
   assert.equal(scriptFiles().includes(HANDOVER), false, 'the handover is no script of its own')
-  const version = headerVersion(handover)
-  assert.equal(handover, script.split(headerVersion(script)).join(version), 'the handover is the script but for its version, so every fix ships in both')
   for (const field of ['updateURL', 'downloadURL']) assert.equal(headerField(handover, field), RAW + SCRIPT, field)
   for (const field of ['name', 'namespace']) assert.equal(headerField(handover, field), headerField(script, field), field)
   const home = read('site/index.html')
