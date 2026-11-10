@@ -47,7 +47,7 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
 
 ### Dark Page
 
-- Pick a color in the settings dialog, or use the Black button to go back. The choice is kept and applies without a reload.
+- Pick a color in the settings dialog, or use Restore defaults to go back to black. The choice is kept and applies without a reload.
 - The page's own text turns dark on a light color.
 - On a dark color, the control buttons go dark gray with light purple icons. On a light color, they stay as SudokuPad draws them.
 - Puzzle colors stay as intended, unlike SudokuPad's dark mode.

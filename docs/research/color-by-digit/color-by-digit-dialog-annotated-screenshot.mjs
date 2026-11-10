@@ -60,7 +60,7 @@ const parts = {
   name: await box(`${E} input[type=text]`),
   palette: union(await page.locator(`${E} button[data-role=swatch]`).evaluateAll((es) => es.map((e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height } }))),
   digits: union(await page.locator(`${E} button[data-act=digit]`).evaluateAll((es) => es.map((e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height } }))),
-  bottom: union(await Promise.all(['Save', 'Cancel'].map((t) => box(`.dialog-options button:text-is("${t}")`))))
+  bottom: union(await Promise.all(['Save', 'Cancel', 'Restore defaults'].map((t) => box(`.dialog-options button:text-is("${t}")`))))
 }
 const dialogPng = (await page.screenshot({ clip: dialog })).toString('base64')
 const rel = (b) => ({ x: b.x - dialog.x, y: b.y - dialog.y, w: b.width, h: b.height, cx: b.x - dialog.x + b.width / 2, cy: b.y - dialog.y + b.height / 2 })
@@ -80,7 +80,7 @@ const labels = [
   { text: 'Rename the selected profile', y: nameGap, to: [[r.name.cx, nameGap], [r.name.cx, r.name.y + 6]] },
   { text: 'Click a profile to edit its colors', y: r.profiles.cy, to: [[r.profiles.x + 6, r.profiles.cy]] },
   { text: 'Pick a color, click digits to paint', y: paletteY, to: [[r.palette.cx, paletteY], [r.palette.cx, r.palette.y + r.palette.h - 4]] },
-  { text: 'Save or cancel the changes', y: r.bottom.cy, to: [[r.bottom.x + 6, r.bottom.cy]] }
+  { text: 'Save, cancel or restore the defaults', y: r.bottom.cy, to: [[r.bottom.x + 6, r.bottom.cy]] }
 ]
 
 const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + dialog.width

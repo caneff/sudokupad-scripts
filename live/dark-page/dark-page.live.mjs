@@ -601,18 +601,18 @@ describe('the page color dialog', { concurrency: false }, () => {
     assert.equal(await saved(), '#ffcc00')
   })
 
-  it('the Black button previews black, and Cancel puts the saved color back', async () => {
+  it('the Restore defaults button previews black, and Cancel puts the saved color back', async () => {
     await openDialog()
-    await dialogButton('Black').click()
+    await dialogButton('Restore defaults').click()
     assert.equal(await bodyColor(), BLACK)
     await dialogButton('Cancel').click()
     await p.locator('.dialog').waitFor({ state: 'detached' })
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
   })
 
-  it('Black then Save returns to the default black with light text, and saves nothing', async () => {
+  it('Restore defaults then Save returns to the default black with light text, and saves nothing', async () => {
     await openDialog()
-    await dialogButton('Black').click()
+    await dialogButton('Restore defaults').click()
     assert.equal(await p.locator(`.dialog ${PICKER}`).inputValue(), '#000000')
     await dialogButton('Save').click()
     assert.equal(await bodyColor(), BLACK)

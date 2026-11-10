@@ -445,7 +445,7 @@ test(`${CBD} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(leadIns(grid[1]), CBD_LEAD_INS)
 })
 
-test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its intro and its two notes`, () => {
+test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its intro and its three notes`, () => {
   const m = read(CBD).match(/<h2>The settings dialog<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${CBD} has no <h2>The settings dialog</h2>`)
   const found = imgs(m[1])
@@ -455,7 +455,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. From the keyboard, Tab and the arrow keys move around the colors and the digit keys, and typing 0 to 9 paints that digit.')
+  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. Restore defaults brings back the five built-in profiles, after asking, since it removes your own. Save keeps them and Cancel drops them. From the keyboard, Tab and the arrow keys move around the colors and the digit keys, and typing 0 to 9 paints that digit.')
 })
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {

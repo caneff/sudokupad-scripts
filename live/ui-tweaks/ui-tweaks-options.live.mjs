@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { numberPadText } from '../scripts.mjs'
 import { keydownDefaults } from '../pen.mjs'
-import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { closeDialogWith, dialogButton, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 import { openWith, reloadWith, useBrowser } from '../session.mjs'
 
@@ -133,6 +133,26 @@ describe('the options dialog', { concurrency: false }, () => {
     await chooseAndSave(p, { tab: true })
     await keydownDefaults(p, 'Tab')
     assert.equal(await pad(), DIGITS, 'Tab left the pad on digits')
+  })
+
+  it('Restore defaults puts the defaults in the boxes as a draft: Cancel keeps what was saved, Save stores the defaults', async () => {
+    const options = ['tab', 'hideSelect', 'wrapButtons']
+    const boxes = () => Promise.all(options.map((id) => box(p, id).isChecked()))
+    await chooseAndSave(p, { tab: false, hideSelect: true })
+    await p.locator(SELECT).waitFor({ state: 'hidden' })
+    await openDialog(p)
+    await dialogButton(p, 'Restore defaults').click()
+    assert.deepEqual(await boxes(), [true, false, false])
+    await closeDialogWith(p, 'Cancel', DIALOG)
+    assert.equal(await p.locator(SELECT).isHidden(), true, 'Cancel left the saved Hide the Toggle Selection button')
+    await openDialog(p)
+    assert.deepEqual(await boxes(), [false, true, false], 'the saved options are still the ones shown')
+    await dialogButton(p, 'Restore defaults').click()
+    await closeDialogWith(p, 'Save', DIALOG)
+    await p.locator(SELECT).waitFor({ state: 'visible' })
+    await openDialog(p)
+    assert.deepEqual(await boxes(), [true, false, false])
+    await closeDialogWith(p, 'Cancel', DIALOG)
   })
 
   it('the page raised no error', () => {
