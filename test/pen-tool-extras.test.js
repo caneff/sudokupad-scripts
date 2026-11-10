@@ -1618,10 +1618,6 @@ test('buildOutlineCss is empty when the outline is off and filters the pen layer
   assert.doesNotMatch(buildOutlineCss(true), /penhint|pen-tool-extras-hint/)
 })
 
-test('buildFeedbackCss has no rule that hides a stroke: the erase shows no preview', () => {
-  assert.doesNotMatch(buildFeedbackCss(3), /opacity: 0;|faded/)
-})
-
 test('buildFeedbackCss dashes the hint of the page 2 pens only, for the hint\'s width of 16: 3 widths is 32 on, 32 off, half a dash in; 0 is dots', () => {
   const dashed = (dash) => buildFeedbackCss(dash).split('\n').filter((rule) => rule.startsWith(':root:root .penhint:is'))
   assert.deepEqual(dashed(3), [':root:root .penhint:is(.pencolor-a, .pencolor-b, .pencolor-c, .pencolor-d, .pencolor-e, .pencolor-f, .pencolor-g, .pencolor-h, .pencolor-i) { stroke-dasharray: 32 32; stroke-dashoffset: 16; }'])

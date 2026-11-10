@@ -163,7 +163,6 @@ that the slider sets `opacity` on `.cell-pen` and that overlaps darken at every 
   it. Live: their effective opacity, the product over their ancestors, is 0.6 and 0.5 with the slider at 20 and at 100.
   The hint layer itself carries the 0.6 (`.penhint` and the arrowheads beside an arrow pen's hint are solid inside it; the
   erase hint is `calc(0.5 / 0.6)`), so an arrowhead over the hint line shows the line's shade instead of stacking to about 0.84 (#580).
-  The right-click erase used to draw a preview the same way (a group of copies at 0.3, in `g#pen-tool-extras-erase-preview`); Chris ruled it out on 2026-11-09 (#739), so nothing dims during a right press.
 
 ### The panel
 

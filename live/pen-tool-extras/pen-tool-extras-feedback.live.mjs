@@ -22,13 +22,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const moveTo = async (point) => { await p.mouse.move(...await gridPoint(p, point)) }
-  // What dims a stroke while a press is held: a stroke carrying a class of this script, a group of copies, or a stroke drawn under 1 of its own opacity (the layer's own is read apart).
-  const dimming = () => read(() => ({
-    classed: document.querySelectorAll('[class*="pen-tool-extras-faded"]').length,
-    copies: document.querySelectorAll('#pen-tool-extras-erase-preview, .pen-tool-extras-faded-group').length,
-    under1: [...document.querySelectorAll('#cell-pen .cell-pen, #pen-tool-extras-marks .cell-pen')].filter((el) => getComputedStyle(el).opacity !== '1').length
-  }))
-  const NOT_DIMMED = { classed: 0, copies: 0, under1: 0 }
+  // What dims a stroke while a press is held, whatever it is named: a pen stroke element outside the pen, marks and hint layers (a copy drawn beside them), or a stroke in them under 1 of its own opacity.
+  const dimming = () => read(() => {
+    const own = [...document.querySelectorAll('#cell-pen .cell-pen, #pen-tool-extras-marks .cell-pen')]
+    return {
+      copies: document.querySelectorAll('.cell-pen').length - document.querySelectorAll('#cell-pen .cell-pen, #pen-tool-extras-marks .cell-pen, #pen-tool-extras-hint .cell-pen').length,
+      under1: own.filter((el) => getComputedStyle(el).opacity !== '1').length
+    }
+  })
+  const NOT_DIMMED = { copies: 0, under1: 0 }
   const pixelAt = async (x, y) => {
     const png = await p.screenshot({ clip: { x: Math.floor(x), y: Math.floor(y), width: 1, height: 1 } })
     const color = await reader.evaluate(async (b64) => {
