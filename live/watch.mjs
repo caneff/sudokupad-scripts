@@ -1,5 +1,5 @@
 // `npm run watch:live`: runs the live suite for each new SudokuPad version, and once a week whatever the version, and
-// files a bug when it is red. Meant for a daily schedule. A version already checked, with a full run under a week old,
+// files a `bug` and `needs-info` issue when it is red. Meant for a daily schedule. A version already checked, with a full run under a week old,
 // is a no-op: one plain request and nothing else.
 //
 // The version is read the way live/cache.mjs reads it (docs/research/sudokupad-version-signal.md). A new version, or a
@@ -67,6 +67,9 @@ export function failedChecks (tap) {
   return { checks, unrun }
 }
 
+// The last section of every issue body filed here: drain and triage read it, and a finding is never blocked by another ticket.
+export const BLOCKED_BY = '## Blocked by\n\n- None — can start immediately.'
+
 // `once`: a weekly run on a version that is still red must not file the same bug again while one is open.
 export const issueFor = (version, { checks, unrun }, { weekly = false } = {}) => ({
   title: `Live tests fail on SudokuPad ${version}`,
@@ -77,7 +80,9 @@ export const issueFor = (version, { checks, unrun }, { weekly = false } = {}) =>
     ...checks.map((c) => `- ${c}`),
     ...(unrun.length ? ['', 'Did not run (a file that failed to load, or a failed `before` hook):', '', ...unrun.map((c) => `- ${c}`)] : []),
     '',
-    'Filed by `npm run watch:live` (`live/watch.mjs`).'
+    'Filed by `npm run watch:live` (`live/watch.mjs`).',
+    '',
+    BLOCKED_BY
   ].join('\n')
 })
 
@@ -90,7 +95,9 @@ export const didNotRunIssue = (version, why) => ({
     '',
     why,
     '',
-    'Filed by `npm run watch:live` (`live/watch.mjs`).'
+    'Filed by `npm run watch:live` (`live/watch.mjs`).',
+    '',
+    BLOCKED_BY
   ].join('\n')
 })
 
@@ -142,7 +149,7 @@ export async function fileIssue ({ title, body, once, comment }, runGh = run) {
       return
     }
   }
-  const { ok } = await runGh('gh', ['issue', 'create', '--repo', REPO, '--label', 'bug', '--title', title, '--body-file', '-'], { input: body })
+  const { ok } = await runGh('gh', ['issue', 'create', '--repo', REPO, '--label', 'bug,needs-info', '--title', title, '--body-file', '-'], { input: body })
   if (!ok) throw new Error('gh issue create failed')
 }
 

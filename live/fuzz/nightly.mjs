@@ -1,10 +1,10 @@
 // `npm run fuzz:nightly`: the 30-minute fuzz run of the nightly workflow. It runs `live/fuzz/run.mjs` with a fresh
-// seed and reads what it prints. A failure files one `bug` issue titled by the failing rule or error signature (the seed, the shrunk steps and the replay
+// seed and reads what it prints. A failure files one `bug` and `needs-info` issue titled by the failing rule or error signature (the seed, the shrunk steps and the replay
 // command in the body); a failure whose title an open issue already has comments on that issue instead. After a failure the hunt starts again on a new seed
 // with the time left, so one failure cannot use the whole night; a failure's title is filed or commented on at most once a night. A run that could not start or print a verdict
 // files one "did not run" issue and ends the night, as the daily watch does. Filing is `fileIssue` of live/watch.mjs, not a second copy.
 import { pathToFileURL } from 'node:url'
-import { fileIssue, run } from '../watch.mjs'
+import { BLOCKED_BY, fileIssue, run } from '../watch.mjs'
 
 export const FUZZ_MINUTES = 30
 export const MINUTE_MS = 60000
@@ -61,7 +61,7 @@ function fuzzIssue (f, { runUrl } = {}) {
   return {
     title: failureTitle(f.error),
     once: true,
-    body: `${intro}\n\n${details}\nFiled by \`npm run fuzz:nightly\` (\`live/fuzz/nightly.mjs\`).`,
+    body: `${intro}\n\n${details}\nFiled by \`npm run fuzz:nightly\` (\`live/fuzz/nightly.mjs\`).\n\n${BLOCKED_BY}`,
     comment: `The same failure again, seed ${f.seed} on the ${f.puzzle} puzzle.\n\n${details}`
   }
 }
@@ -75,7 +75,9 @@ export const didNotRunIssue = (why) => ({
     '',
     why,
     '',
-    'Filed by `npm run fuzz:nightly` (`live/fuzz/nightly.mjs`).'
+    'Filed by `npm run fuzz:nightly` (`live/fuzz/nightly.mjs`).',
+    '',
+    BLOCKED_BY
   ].join('\n')
 })
 

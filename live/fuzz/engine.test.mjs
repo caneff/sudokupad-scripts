@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { runFuzz } from './engine.mjs'
+import { runFuzz, strokeSinceReload } from './engine.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES } from './puzzle-set.mjs'
 
@@ -10,6 +10,21 @@ const PUZZLES = [{ name: 'fake', rows: 3, cols: 4, keys: ['1', '2', '3', '4'], f
 const SEED = 7
 // The fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const WAITS = { landMs: 1, settleMs: 1 }
+
+describe('strokeSinceReload (#743)', () => {
+  it('carries a stroke across key presses and any other action up to the reload, which clears it', () => {
+    const afterStroke = { strokeSinceReload: strokeSinceReload('pen line', null) }
+    assert.equal(afterStroke.strokeSinceReload, true)
+    const afterKey = { strokeSinceReload: strokeSinceReload('tool key', afterStroke) }
+    assert.equal(afterKey.strokeSinceReload, true)
+    assert.equal(strokeSinceReload('reload', afterKey), false)
+    assert.equal(strokeSinceReload('tool key', { strokeSinceReload: false }), false)
+  })
+  it('counts every action that draws or erases a stroke, and no action that draws none', () => {
+    for (const kind of ['pen line', 'pen erase', 'pen drag, blur', 'pen drag, leave window', 'arrow line']) assert.equal(strokeSinceReload(kind, null), true, kind)
+    for (const kind of ['pen settings', 'pen settings values', 'pen page', 'place note', 'click cell']) assert.equal(strokeSinceReload(kind, null), false, kind)
+  })
+})
 
 describe('the fuzz engine on a fake page', () => {
   it('a clean page passes, and runs the number of lists asked for, each on a page of its own that is closed after', async () => {

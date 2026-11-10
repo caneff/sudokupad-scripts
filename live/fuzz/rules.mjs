@@ -3,7 +3,7 @@
 // Not a check itself.
 //
 // A rule is `{ name, check({ now, before, action, earlier }) }`: `now` is the snapshot after the action, `before` the one before it and `action` the action's
-// kind (`actions.mjs`); `earlier` is the step before that, `{ action, before, earlier }` with its own `earlier` (the step before it, without one of its own), or null for the first. It returns one readable line per violation; none means the rule holds. A snapshot's `page` is:
+// kind (`actions.mjs`); `earlier` is the step before that, `{ action, before, strokeSinceReload, earlier }` with its own `earlier` (the step before it, without one of its own), or null for the first. It returns one readable line per violation; none means the rule holds. A snapshot's `page` is:
 //   undoDepth     how many steps SudokuPad's undo stack holds
 //   cells         SudokuPad's serialized state of every cell, in row order: '' for a cell that holds nothing
 //   penState      one `pen-<value> pencolor-<color>` per pen entry in the cells, as SudokuPad names the stroke it draws
@@ -136,8 +136,8 @@ export const RULES = [
     // All scripts: what the player sees after a reload is what they saw before it, as far as `reloadView` reads. The exception: `resetToColorOne`.
     check: ({ now, before, action, earlier }) => {
       if (action !== 'reload') return []
-      // Only straight after a pen action: the bug needs the reload within about half a second of a stroke.
-      const ignorePenColors = /^pen/.test(earlier?.action ?? '') && resetToColorOne(now.page)
+      // Only when a stroke was drawn since the last reload (the engine's `strokeSinceReload`): the bug needs the reload soon after one, and a key press can come between.
+      const ignorePenColors = earlier?.strokeSinceReload === true && resetToColorOne(now.page)
       return viewDifferences(reloadView(before.page, ignorePenColors), reloadView(now.page, ignorePenColors))
     }
   },

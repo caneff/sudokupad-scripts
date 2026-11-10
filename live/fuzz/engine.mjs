@@ -31,6 +31,11 @@ function assertRules (now, before, action, when, earlier) {
   if (broken.length) throw new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`)
 }
 
+// Whether a stroke was drawn or erased since the last reload, once `kind` has run after `earlier`. The reload bug of #681 needs a reload soon after a stroke, and
+// the engine has no clock for actions, so any such action since the last reload counts; the settings, the page turn and the notes draw no stroke.
+const STROKE_KIND = /^(pen (line|erase|drag)|arrow line)/
+export const strokeSinceReload = (kind, earlier) => kind !== 'reload' && (earlier?.strokeSinceReload || STROKE_KIND.test(kind))
+
 // Runs one generated list on a page of its own. A page is never reused between runs: Restart empties the replay but leaves the earlier digits
 // behind Undo, which would make a run depend on the runs before it and break replay (docs/research/ui-fuzz-tools.md).
 async function runList (openTarget, actions, landMs, settleMs) {
@@ -48,7 +53,7 @@ async function runList (openTarget, actions, landMs, settleMs) {
         const now = await target.snapshot()
         assertClean(now, `after "${action}"`)
         assertRules(now, before, action.cmd.kind, `after "${action}"`, earlier)
-        earlier = { action: action.cmd.kind, before, earlier: earlier && { action: earlier.action, before: earlier.before } }
+        earlier = { action: action.cmd.kind, before, strokeSinceReload: strokeSinceReload(action.cmd.kind, earlier), earlier: earlier && { action: earlier.action, before: earlier.before } }
         before = now
       }
     })
