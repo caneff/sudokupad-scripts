@@ -20,7 +20,6 @@ describe('seedList', () => {
   it('is K consecutive seeds from the base', () => {
     assert.deepEqual(seedList({ base: 10, count: 3 }), [10, 11, 12])
   })
-
 })
 
 describe('sweep', () => {
