@@ -41,7 +41,7 @@
   hold: one dense row per profile, its **chips** then its name, the active one highlighted, and Edit profiles…; with the
   Digit pulldown on a profile's name, each row instead ends in a Cell dot and a Digit dot, under the words Cell and
   Digit, each column with its own pick marked. Picking a row makes that profile
-  active: in Cell and Both it recolors the cells (planSwitch), as one undo step, and in Digit and Both the
+  active: in Cell and Both it recolors the cells (planSwitch), as one undo step that Undo and Redo also take the active profile back and forward with, and in Digit and Both the
   digits take their new **digit colors** at once. With separate picks, a Cell dot does only the first and a Digit dot,
   which picks the digit profile, only the second.
 - **mode** — Color by Digit's saved setting, Cell, Digit, Both or Off, named by the word above the button's **chips**, which also draw it (Cell: group

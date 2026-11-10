@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.29
+// @version      0.25.30
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.29'
+  const VERSION = '0.25.30'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -377,6 +377,12 @@
   function setProfileGroups (state, index, groups) {
     return editState(state, { profiles: state.profiles.map((p, i) => (i === index ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))) })
   }
+
+  // The cell profile as an Undo step sees it: which profile is active and the groups it holds.
+  const cellProfile = (state) => ({ index: state.active, groups: activeGroups(state) })
+
+  // A profile that is gone (a Save deleted it) leaves the state as it is.
+  const withCellProfile = (state, { index, groups }) => setProfileGroups(setActive(state, index), index, groups)
 
   const dropIndex = (mids, from, y) => mids.filter((mid, i) => i !== from && mid < y).length
 
@@ -2136,7 +2142,7 @@
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, withCellProfile, cellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2217,30 +2223,34 @@
   const colorEnteredCells = (app) => recolor(app, (plans) => planCellColors(plans, loadGroups(), enteredIndices(plans)))
 
   // The mode steps that left an undo step, each `at` the undo stack's length after it, so Undo and Redo can move the mode along.
+  // A step that changed the cell profile also holds it before and after (`profiles`: `{ from, to }`, each a `cellProfile`).
   function createModeHistory () {
     const done = []
     let undone = []
     let beforeRestart = null
     return {
-      record (at, from, to) {
-        done.push({ at, from, to })
+      record (at, from, to, profiles) {
+        done.push({ at, from, to, profiles })
         undone = []
       },
-      // The mode before the earliest step an Undo down to `stackLength` took back.
+      // The mode, and the cell profile when a step changed it, before the earliest step an Undo down to `stackLength` took back.
       undo (stackLength) {
         const first = done.findIndex((step) => step.at > stackLength)
         if (first < 0) return undefined
         const taken = done.splice(first)
         undone.push(...taken.reverse())
-        return taken[taken.length - 1].from
+        const earliest = taken[taken.length - 1]
+        const changed = taken.filter((step) => step.profiles)
+        return { mode: earliest.from, profile: changed.length > 0 ? changed[changed.length - 1].profiles.from : undefined }
       },
-      // The mode after the latest step a Redo up to `stackLength` put back.
+      // The same after the latest step a Redo up to `stackLength` put back.
       redo (stackLength) {
         const put = []
         while (undone.length > 0 && undone[undone.length - 1].at <= stackLength) put.push(undone.pop())
         if (put.length === 0) return undefined
         done.push(...put)
-        return put[put.length - 1].to
+        const changed = put.filter((step) => step.profiles)
+        return { mode: put[put.length - 1].to, profile: changed.length > 0 ? changed[changed.length - 1].profiles.to : undefined }
       },
       forgetRedo () { undone = [] },
       // A Restart empties the undo stack, but SudokuPad's next Undo on the empty stack brings back the board from before it, stack included.
@@ -2398,12 +2408,12 @@
 
   const modeHistory = createModeHistory()
 
-  function recordingModeStep (app, from, to, step) {
+  function recordingModeStep (app, from, to, step, profiles) {
     coloring.run(() => {
       const before = app.puzzle.undoStack.length
       step()
       const after = app.puzzle.undoStack.length
-      if (after > before) modeHistory.record(after, from, to)
+      if (after > before) modeHistory.record(after, from, to, profiles)
     })
   }
 
@@ -2417,11 +2427,13 @@
     })
   }
 
-  // Undo and Redo move the mode with the board: a mode step that colored or cleared cells is an undo step, so taking it back or putting it again changes the mode too.
+  // Undo and Redo move the mode and the cell profile with the board: a step that colored or cleared cells is an undo step, so taking it back or putting it again changes them too.
   function followUndo (app, type) {
     const stackLength = app.puzzle.undoStack.length
     const target = type === 'undo' ? modeHistory.undo(stackLength) : modeHistory.redo(stackLength)
-    if (target !== undefined) showMode(allowedMode(target, usesDigitColors(loadState())))
+    if (target === undefined) return
+    if (target.profile) saveState(withCellProfile(loadState(), target.profile))
+    showMode(allowedMode(target.mode, usesDigitColors(loadState())))
   }
 
   // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
@@ -2573,7 +2585,9 @@
     if (index === (digits ? state.digitActive : state.active)) return
     const next = digits ? setDigitActive(state, index) : setActive(state, index)
     saveState(next)
-    if (!digits && colorsCells(mode)) recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next)))
+    if (!digits && colorsCells(mode)) {
+      recordingModeStep(app, mode, mode, () => recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next))), { from: cellProfile(state), to: cellProfile(next) })
+    }
     redraw()
   }
 
@@ -2663,7 +2677,9 @@
     const next = allowedMode(draftMode, usesDigitColors(draft))
     const oldGroups = activeGroups(oldState)
     const groups = activeGroups(draft)
-    if (colorsCells(next) && !sameGroups(oldGroups, groups)) recolor(app, (plans) => planSwitch(plans, oldGroups, groups))
+    if (colorsCells(next) && !sameGroups(oldGroups, groups)) {
+      recordingModeStep(app, mode, mode, () => recolor(app, (plans) => planSwitch(plans, oldGroups, groups)), { from: cellProfile(oldState), to: cellProfile(draft) })
+    }
     setMode(app, next, groupKeys([...oldGroups, ...groups]))
   }
 

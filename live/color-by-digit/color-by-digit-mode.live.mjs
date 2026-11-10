@@ -3,7 +3,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, watch, wordOn, cellsStateOn, selectCell, wrongColorCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
+import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, ODD_EVEN, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, watch, wordOn, cellsStateOn, selectCell, wrongColorCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
 import { MODES } from '../page.mjs'
 import { restart } from '../board.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
@@ -391,6 +391,10 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.equal(await settle(wrong, 0), 0)
     await undo()
     assert.equal(await settle(allColors, before), before)
+    assert.deepEqual(await settle(getGroups, LOW_FIVE_HIGH), LOW_FIVE_HIGH, 'the undo brings the old active profile back too')
+    await redo()
+    assert.equal(await settle(wrong, 0), 0)
+    assert.deepEqual(await settle(getGroups, ODD_EVEN), ODD_EVEN, 'and the redo the new one')
   })
 
   it('one Save that enters Cell and changes the groups recolors every pure cell, not only the givens', async () => {

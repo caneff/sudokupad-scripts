@@ -10,7 +10,7 @@ const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { startScript, withScript, withoutPath } = require('./unit-start.js')
-const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 
 // The chips a profile pair draws in `style`; the digit profile is the cell profile unless given.
 const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
@@ -2056,11 +2056,44 @@ test('createModeHistory: Undo to a length below a step gives the mode before the
   history.record(12, 'cell', 'digit')
   history.record(18, 'digit', 'both')
   assert.equal(history.undo(18), undefined)
-  assert.equal(history.undo(5), 'off')
+  assert.equal(history.undo(5).mode, 'off')
   assert.equal(history.redo(5), undefined)
-  assert.equal(history.redo(18), 'both')
-  assert.equal(history.undo(11), 'cell')
-  assert.equal(history.undo(0), 'off')
+  assert.equal(history.redo(18).mode, 'both')
+  assert.equal(history.undo(11).mode, 'cell')
+  assert.equal(history.undo(0).mode, 'off')
+})
+
+test('createModeHistory: Undo gives the cell profile before the earliest step taken back, Redo the one after the latest put back', () => {
+  const history = createModeHistory()
+  const a = { index: 0, groups: [{ key: 'a', digits: ['1'] }] }
+  const b = { index: 1, groups: [{ key: 'b', digits: ['1'] }] }
+  const c = { index: 2, groups: [{ key: 'c', digits: ['1'] }] }
+  history.record(6, 'cell', 'cell', { from: a, to: b })
+  history.record(12, 'cell', 'cell', { from: b, to: c })
+  assert.deepEqual(history.undo(5).profile, a)
+  assert.deepEqual(history.redo(6).profile, b)
+  assert.deepEqual(history.redo(12).profile, c)
+  assert.deepEqual(history.undo(11).profile, b)
+})
+
+test('createModeHistory: a step recorded with no profile change gives no profile', () => {
+  const history = createModeHistory()
+  history.record(6, 'off', 'cell')
+  assert.equal(history.undo(0).profile, undefined)
+  assert.equal(history.redo(6).profile, undefined)
+})
+
+test('withCellProfile: puts back the active index and that profile\'s groups, and leaves the others', () => {
+  const state = { profiles: [{ name: 'A', groups: [{ key: 'a', digits: ['1'] }] }, { name: 'B', groups: [{ key: 'b', digits: ['2'] }] }], active: 1 }
+  const put = withCellProfile(state, { index: 0, groups: [{ key: 'x', digits: ['9'] }] })
+  assert.equal(put.active, 0)
+  assert.deepEqual(put.profiles[0].groups, [{ key: 'x', digits: ['9'] }])
+  assert.deepEqual(put.profiles[1], state.profiles[1])
+})
+
+test('withCellProfile: a profile that no longer exists leaves the state as it is', () => {
+  const state = { profiles: [{ name: 'A', groups: [{ key: 'a', digits: ['1'] }] }], active: 0 }
+  assert.deepEqual(withCellProfile(state, { index: 3, groups: [] }), state)
 })
 
 test('createModeHistory: a new step or forgetRedo drops the steps that could have been redone', () => {
@@ -2081,9 +2114,9 @@ test('createModeHistory: a restart sets the steps aside, and the Undo that loads
   history.restart()
   assert.equal(history.undo(0), undefined)
   history.restoreBeforeRestart()
-  assert.equal(history.undo(0), 'off')
+  assert.equal(history.undo(0).mode, 'off')
   history.restart()
   history.restart()
   history.restoreBeforeRestart()
-  assert.equal(history.redo(99), 'cell')
+  assert.equal(history.redo(99).mode, 'cell')
 })
