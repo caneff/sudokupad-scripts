@@ -3,6 +3,14 @@
 `npm run test:live` runs every `live/**/*.live.mjs` on sudokupad.app in headless Chromium, with the
 script under test injected. `AGENTS.md` § End-to-end seam says when to run it; this file is what
 you need to write or debug one.
+Every test has a 20-minute limit (`--test-timeout=1200000` in `package.json`): a hang on a promise that never settles fails the file there.
+The suite is run locally, never in `npm test` or the CI workflow; only the daily watch runs it on GitHub Actions.
+
+## The merge rerun
+
+When the worker's full run was at the merged head, the controller's merge check reruns only the live files the merge touches: the files of
+`live/<script name>/` for each `*.user.js` or `lib/` module it changed, and each changed `live/**/*.live.mjs`. A moved head, or a change to a
+`live/*.mjs` helper, reruns the full suite (#717).
 
 ## Opening SudokuPad
 
