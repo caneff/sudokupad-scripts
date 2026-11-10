@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.3
+// @version      1.32.5
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.3'
+  const VERSION = '1.32.5'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -54,6 +54,9 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
+  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
   /* eslint-enable no-unused-vars */
   // </lib:plain>
 
@@ -1287,8 +1290,6 @@
     return PEN_PAGES[page].chars[PEN_COLOR_KEYS.indexOf(number)]
   }
 
-  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
-  const hasChord = (event) => event.ctrlKey || event.altKey || event.metaKey
   const hasModifier = (event) => hasChord(event) || event.shiftKey
 
   function digitKeyPen (event, page) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.34
+// @version      0.25.37
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.34'
+  const VERSION = '0.25.37'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1995,6 +1995,9 @@
 
   // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
   const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
+  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
   /* eslint-enable no-unused-vars */
   // </lib:plain>
 
@@ -2854,7 +2857,7 @@
     const focusDigitKey = (digit) => box.querySelector(`[data-act="digit"][data-digit="${digit}"]`)?.focus()
     box.addEventListener('keydown', (event) => {
       const grid = event.target.closest(PAINT_GRIDS)
-      if (!grid || event.ctrlKey || event.altKey || event.metaKey) return
+      if (!grid || hasChord(event)) return
       const slots = [...grid.children]
       const index = slots.indexOf(event.target)
       const to = index < 0 ? null : gridTarget(event.key, index, slots.map((slot) => slot.matches(FOCUSABLE_SLOT)), PAGE_COLUMNS)
