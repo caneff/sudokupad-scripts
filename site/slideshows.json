@@ -82,7 +82,7 @@
       {
         "picture": "pen-tool-extras-slide-16-settings.png",
         "alt": "A red ring on the settings button in the pen panel, beside the Pen Tool Extras settings dialog it opens: pen color presets, Thickness and Opacity, line styles, the marks each click cycles through, White outlines, and Save, Cancel and Restore defaults",
-        "caption": "The settings button opens the settings: color presets, line styles, which marks a click cycles through, and more"
+        "caption": "Settings: color presets, line styles, which marks a click cycles through, and more"
       }
     ]
   },
@@ -191,7 +191,7 @@
       {
         "picture": "text-anywhere-slide-9-settings.png",
         "alt": "Two green notes on the board in a fixed-width font, r4: 2,7 with a thick white halo over a grid line and A=B+5 in a yellow box, beside the settings dialog's Font, Halo, Box color and Box border rows with Fixed width, Thick and Yellow picked",
-        "caption": "The settings: font, halo, box color and border, color presets"
+        "caption": "Settings: font, halo, box color and border, color presets"
       }
     ]
   }
