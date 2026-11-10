@@ -1,4 +1,5 @@
-// Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Text Anywhere), opened from disk: Next and Previous step
+// Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Text Anywhere, and Text Anywhere's
+// second one, of one note before and after), opened from disk: Next and Previous step
 // the slideshow's picture, caption and counter, and both ends wrap. Each details page's slides also fill their frame to its inset and are never shown wider than their own width, at 1280x720 and 1600x900. The page's raw.githubusercontent.com
 // pictures are served from this checkout, since a branch is not on main yet.
 import { after, before, describe, it } from 'node:test'
@@ -8,13 +9,15 @@ import { useBrowser } from './session.mjs'
 
 const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const ROOT = new URL('../', import.meta.url)
-// The slideshows: the homepage row heading and its place among the rows, the details page and the slideshow's id in site/slideshows.json, which holds the slide count and each picture and caption.
+// The slideshows: the homepage row heading and its place among the rows (none for a slideshow the homepage does not show), the details page, the
+// slideshow's place on it (the main one follows the Install button), and its id in site/slideshows.json, which holds the slide count and each picture and caption.
 const SOURCE = JSON.parse(readFileSync(new URL('site/slideshows.json', ROOT), 'utf8'))
 const slideOf = ({ slides }, i) => [slides.at(i).picture, slides.at(i).caption]
 const SHOWS = [
-  { heading: 'Color by Digit', row: 3, details: 'color-by-digit.html', id: 'color-by-digit' },
-  { heading: 'Pen Tool Extras', row: 1, details: 'pen-tool-extras.html', id: 'pen-tool-extras' },
-  { heading: 'Text Anywhere', row: 2, details: 'text-anywhere.html', id: 'text-anywhere' }
+  { heading: 'Color by Digit', row: 3, details: 'color-by-digit.html', at: '.actions + .slideshow', id: 'color-by-digit' },
+  { heading: 'Pen Tool Extras', row: 1, details: 'pen-tool-extras.html', at: '.actions + .slideshow', id: 'pen-tool-extras' },
+  { heading: 'Text Anywhere', row: 2, details: 'text-anywhere.html', at: '.actions + .slideshow', id: 'text-anywhere' },
+  { heading: 'Text Anywhere formatting', details: 'text-anywhere.html', at: 'h2 + .slideshow', id: 'text-anywhere-formatting' }
 ].map((show) => ({
   ...show,
   slides: SOURCE[show.id].slides.length,
@@ -55,15 +58,17 @@ const gaps = (root) => page.evaluate((root) => {
   }
   return { inset: 0.6 * parseFloat(window.getComputedStyle(document.documentElement).fontSize), gaps: [...frame.querySelectorAll('.slide')].map(gap) }
 }, root)
-const sizes = () => page.evaluate(() => {
+const sizes = (root) => page.evaluate((root) => {
   const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, width: r.width } }
+  const frame = document.querySelector(`${root} .slide-frame`)
   return {
-    slides: [...document.querySelectorAll('.slideshow .slide')].map((i) => ({ shown: i.getBoundingClientRect().width, own: Number(i.getAttribute('width')) })),
+    slides: [...frame.querySelectorAll('.slide')].map((i) => ({ shown: i.getBoundingClientRect().width, own: Number(i.getAttribute('width')) })),
     lede: box(document.querySelector('.lede')),
-    frame: box(document.querySelector('.slide-frame')),
+    frame: box(frame),
+    border: parseFloat(window.getComputedStyle(frame).borderLeftWidth),
     inset: 0.6 * parseFloat(window.getComputedStyle(document.documentElement).fontSize)
   }
-})
+}, root)
 const DEFAULT_VIEWPORT = { width: 1280, height: 720 }
 const openDetails = async (show, width, height) => {
   await sitePage()
@@ -79,26 +84,28 @@ for (const show of SHOWS) {
       // A slide of another shape would sit off the inset on one side, so every slide of a show must share one size.
       it('every slide fills its frame to the inset on each side', async () => {
         await openDetails(show, width, height)
-        const { inset, gaps: all } = await gaps('.slideshow')
+        const { inset, gaps: all } = await gaps(show.at)
         assert.equal(all.length, show.slides)
         for (const g of all) for (const side of ['left', 'right', 'top', 'bottom']) assert.ok(Math.abs(g[side] - inset) <= 1, `${side} gap ${g[side]} px, want ${inset} px: ${JSON.stringify(g)}`)
       })
       it('no slide is shown wider than its own width, and the frame is no wider than its widest slide and sits left-aligned with the text', async () => {
         await openDetails(show, width, height)
-        const { slides, lede, frame, inset } = await sizes()
+        const { slides, lede, frame, border, inset } = await sizes(show.at)
         for (const { shown, own } of slides) assert.ok(shown <= own + 1, `slide shown ${shown} px wide, its own width is ${own} px`)
         assert.ok(Math.abs(frame.left - lede.left) <= 1, `frame left ${frame.left} px, text left ${lede.left} px`)
-        // A caption wider than the slides must not widen the frame (the 2 px are its border).
+        // A caption wider than the slides must not widen the frame, which adds only its inset and border on each side.
         const widest = Math.max(...slides.map(({ own }) => own))
-        assert.ok(frame.width <= widest + 2 * inset + 2 + 1, `frame ${frame.width} px wide, widest slide ${widest} px`)
+        assert.ok(frame.width <= widest + 2 * (inset + border) + 1, `frame ${frame.width} px wide, widest slide ${widest} px, inset ${inset} px, border ${border} px`)
       })
     })
   }
 }
 
-for (const [where, file] of [['the homepage', 'index.html'], ...SHOWS.map((show) => [`${show.heading}'s details page`, show.details])]) {
-  for (const show of SHOWS.filter((show) => file === 'index.html' || file === show.details)) {
-    const root = file === 'index.html' ? `section.row:nth-of-type(${show.row}) .slideshow` : '.slideshow'
+const PAGES = [['the homepage', 'index.html'], ...SHOWS.filter((show) => show.row).map((show) => [`${show.heading}'s details page`, show.details])]
+for (const [where, file] of PAGES) {
+  const onPage = SHOWS.filter((show) => file === 'index.html' ? show.row : file === show.details)
+  for (const show of onPage) {
+    const root = file === 'index.html' ? `section.row:nth-of-type(${show.row}) .slideshow` : show.at
     describe(`${where} ${show.heading} slideshow`, { concurrency: false }, () => {
       before(async () => {
         await sitePage()
@@ -128,7 +135,7 @@ for (const [where, file] of [['the homepage', 'index.html'], ...SHOWS.map((show)
       })
 
       it('has a pager on each slideshow of the page', async () => {
-        assert.equal(await page.locator('.slide-pager').count(), file === 'index.html' ? SHOWS.length : 1)
+        assert.equal(await page.locator('.slide-pager').count(), onPage.length)
       })
     })
   }
