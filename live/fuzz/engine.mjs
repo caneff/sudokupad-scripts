@@ -31,13 +31,18 @@ function assertRules (now, before, action, when, earlier) {
   if (broken.length) throw new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`)
 }
 
+// Whether a stroke was drawn or erased since the last reload, once `kind` has run after `earlier`. The reload bug of #681 needs a reload soon after a stroke, and
+// the engine has no clock for actions, so any such action since the last reload counts; the settings, the page turn and the notes draw no stroke.
+const STROKE_KIND = /^(pen (line|erase|drag)|arrow line)/
+export const strokeSinceReload = (kind, earlier) => kind !== 'reload' && (earlier?.strokeSinceReload || STROKE_KIND.test(kind))
+
 // Runs one generated list on a page of its own. A page is never reused between runs: Restart empties the replay but leaves the earlier digits
 // behind Undo, which would make a run depend on the runs before it and break replay (docs/research/ui-fuzz-tools.md).
 async function runList (openTarget, actions, landMs, settleMs) {
   const target = await openTarget()
   try {
     let before = await target.snapshot()
-    // The step before the current one, for a rule that reads two steps (undo, then redo). `penSinceReload`: a pen action came since the last reload.
+    // The step before the current one, for a rule that reads two steps (undo, then redo).
     let earlier = null
     const checked = (action) => ({
       check: (model) => action.check(model),
@@ -48,8 +53,7 @@ async function runList (openTarget, actions, landMs, settleMs) {
         const now = await target.snapshot()
         assertClean(now, `after "${action}"`)
         assertRules(now, before, action.cmd.kind, `after "${action}"`, earlier)
-        const penSinceReload = action.cmd.kind !== 'reload' && (earlier?.penSinceReload === true || /^pen/.test(action.cmd.kind))
-        earlier = { action: action.cmd.kind, before, penSinceReload, earlier: earlier && { action: earlier.action, before: earlier.before } }
+        earlier = { action: action.cmd.kind, before, strokeSinceReload: strokeSinceReload(action.cmd.kind, earlier), earlier: earlier && { action: earlier.action, before: earlier.before } }
         before = now
       }
     })

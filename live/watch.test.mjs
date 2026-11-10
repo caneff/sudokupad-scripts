@@ -258,10 +258,11 @@ describe('the did-not-run title in the workflow', () => {
 
 describe('every issue body the watch files ends with its Blocked by section (#805)', () => {
   const end = '\n\n## Blocked by\n\n- None — can start immediately.'
+  const tail = (body) => body.slice(-end.length)
   it('ends the failing-checks issue and the did-not-run issue with it', () => {
-    assert.ok(issueFor('0.612.0', { checks: ['one'], unrun: ['a'] }).body.endsWith(end))
-    assert.ok(issueFor('0.612.0', { checks: ['one'], unrun: [] }, { weekly: true }).body.endsWith(end))
-    assert.ok(didNotRunIssue('0.612.0', 'no Chromium').body.endsWith(end))
+    assert.equal(tail(issueFor('0.612.0', { checks: ['one'], unrun: ['a'] }).body), end)
+    assert.equal(tail(issueFor('0.612.0', { checks: ['one'], unrun: [] }, { weekly: true }).body), end)
+    assert.equal(tail(didNotRunIssue('0.612.0', 'no Chromium').body), end)
   })
 })
 

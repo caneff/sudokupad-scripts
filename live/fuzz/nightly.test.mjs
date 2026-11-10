@@ -49,11 +49,12 @@ const night = (gh, outputs, ok = false) => {
   })
   return Object.assign(outcome, { runs })
 }
+const BLOCKED = '\n\n## Blocked by\n\n- None — can start immediately.'
 const verbs = (gh) => gh.calls.map((c) => c.verb).filter((v) => v !== 'issue list')
 
 describe('the fuzz did-not-run issue (#805)', () => {
   it('ends with the Blocked by section', () => {
-    assert.ok(didNotRunIssue('x').body.endsWith('\n\n## Blocked by\n\n- None — can start immediately.'))
+    assert.equal(didNotRunIssue('x').body.slice(-BLOCKED.length), BLOCKED)
   })
 })
 
@@ -65,7 +66,7 @@ describe('a failing fuzz run', () => {
     const create = gh.calls.find((c) => c.verb === 'issue create')
     assert.equal(create.args[create.args.indexOf('--title') + 1], 'Fuzz: rule broken: pen-lines-drawn')
     assert.equal(create.args[create.args.indexOf('--label') + 1], 'bug,needs-info')
-    assert.ok(create.input.endsWith('\n\n## Blocked by\n\n- None — can start immediately.'), 'the Blocked by section is last')
+    assert.equal(create.input.slice(-BLOCKED.length), BLOCKED, 'the Blocked by section is last')
     assert.match(create.input, /seed 77/)
     assert.match(create.input, /1\. click cell 3\n2\. digit 5/)
     assert.match(create.input, /npm run test:fuzz -- --seed 77 --path 12:0@3/)

@@ -1,5 +1,5 @@
 name: File an issue once
-description: Files a bug issue with the given title unless an open issue already has exactly that title.
+description: Files a bug and needs-info issue, ending with a Blocked by section (#805), with the given title unless an open issue already has exactly that title.
 inputs:
   title:
     description: The issue title, also the key for the open-issue check.
