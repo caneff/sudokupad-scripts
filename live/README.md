@@ -118,8 +118,13 @@ Manager with empty files. A history move (Back, Forward) or a second puzzle leav
 manager does, and the run fails on a crash signal. It runs for 2 minutes. It is not in `npm test`, `npm run test:live` or `land.testcmd`.
 
 ```
-npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>]
+npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--focus <script> ...]
 ```
+
+- **`--focus <script>`** (#724) raises the weight of the actions that exercise that script, by `FOCUS_FACTOR` (4), so a run spends its time where a change is. It takes a script's name
+  without `.user.js` (`pen-tool-extras`) and repeats for several. Every other action keeps its weight, so every action still comes up. Which script an action exercises is
+  `KIND_SCRIPTS` of `live/fuzz/actions.mjs`; a new action kind needs an entry, which `actions.test.mjs` checks. The weights change the lists a seed gives, so a failure's printed replay
+  command carries the same `--focus`, and a `--path` replays only with it.
 
 - **Each action list names its puzzle** (#679), drawn first from the set in `puzzle-set.mjs`, so one run covers them all and a printed `--path` replays on the
   puzzle that failed. The set is the recorded 9x9 (`live/puzzle-url.txt`) and puzzles built in code with `puzzleData` and opened by
@@ -214,6 +219,18 @@ in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `
 - **Shared code.** Filing is `fileIssue` of `live/watch.mjs` (its `comment` option makes a duplicate a comment). `live/fuzz/nightly.test.mjs` tests it in
   `npm test` with `gh` faked, the same seam as `live/watch.test.mjs`.
 - The exit is 1 on a failure in any run of the night or a run that did not run, so the Actions run is red either way.
+
+## The pull-request fuzz
+
+`.github/workflows/fuzz-pr.yml` (#724) fuzzes a pull request for 5 minutes (`npm run test:fuzz -- --minutes 5 --shrink-minutes 3`), so a bug a change adds fails its check and
+not the nightly the morning after. It runs on a `pull_request` whose paths are one of the six `*.user.js` (not `draw-tool.user.js`), `lib/` or `live/fuzz/`.
+
+- **`--focus` is set from the diff**: each of the six scripts the pull request changes against its base is a `--focus`. A change to `lib/` or to the fuzz alone has none, so the actions are as
+  they are in the nightly.
+- **A failure fails the check** and prints the seed, the shrunk steps and the replay command into the job summary (the fuzz's own output, the same as `npm run test:fuzz` prints). It files no issue:
+  the pull request is where it is seen. Replay it on your machine with the command in the summary, which carries the `--focus`.
+- **It runs neither the Tampermonkey test nor the live suite.** A push to the pull request cancels the run on the old head.
+- **A failure may not be the pull request's.** The fuzz is random, and a bug already on `main` can fail the check; the nightly's issues are the place to look for the same title.
 
 ## The daily watch
 
