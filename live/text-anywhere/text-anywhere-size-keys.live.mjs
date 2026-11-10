@@ -52,7 +52,8 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     await typeText(p, A, 'A')
     await clickAt(p, A)
     await p.keyboard.press('+')
-    for (const chord of ['Control+-', 'Alt+=', 'Control+Shift+=', 'Meta+=']) {
+    // Ctrl switches the tool to Centre while held, so a chord after a Ctrl one would never reach this script: Alt and Meta go first.
+    for (const chord of ['Alt+=', 'Alt+-', 'Meta+=', 'Control+-']) {
       await p.keyboard.press(chord)
       assert.equal(await savedSize('A'), 21, `${chord} left the size as the plain + made it`)
     }
