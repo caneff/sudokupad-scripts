@@ -95,6 +95,12 @@ describe('fileIssue', () => {
     assert.equal(seen.opts.input, 'B')
   })
 
+  it('files the issue as bug and needs-info, so triage diagnoses it before an agent builds it (#805)', async () => {
+    let seen
+    await fileIssue({ title: 'T', body: 'B' }, async (cmd, args) => { seen = args; return { ok: true } })
+    assert.equal(seen[seen.indexOf('--label') + 1], 'bug,needs-info')
+  })
+
   it('throws when gh fails, so the version is not remembered as filed', async () => {
     await assert.rejects(fileIssue({ title: 'T', body: 'B' }, async () => ({ ok: false })), /gh issue create failed/)
   })
@@ -247,6 +253,15 @@ describe('the did-not-run title in the workflow', () => {
   it('is the same text watch.yml files under, so the open-issue check matches across the two', () => {
     const yml = readFileSync(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
     assert.ok(yml.includes(`title: '${didNotRunIssue('x', 'y').title}'`))
+  })
+})
+
+describe('every issue body the watch files ends with its Blocked by section (#805)', () => {
+  const end = '\n\n## Blocked by\n\n- None — can start immediately.'
+  it('ends the failing-checks issue and the did-not-run issue with it', () => {
+    assert.ok(issueFor('0.612.0', { checks: ['one'], unrun: ['a'] }).body.endsWith(end))
+    assert.ok(issueFor('0.612.0', { checks: ['one'], unrun: [] }, { weekly: true }).body.endsWith(end))
+    assert.ok(didNotRunIssue('0.612.0', 'no Chromium').body.endsWith(end))
   })
 })
 

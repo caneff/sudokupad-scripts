@@ -51,6 +51,12 @@ const night = (gh, outputs, ok = false) => {
 }
 const verbs = (gh) => gh.calls.map((c) => c.verb).filter((v) => v !== 'issue list')
 
+describe('the fuzz did-not-run issue (#805)', () => {
+  it('ends with the Blocked by section', () => {
+    assert.ok(didNotRunIssue('x').body.endsWith('\n\n## Blocked by\n\n- None — can start immediately.'))
+  })
+})
+
 describe('a failing fuzz run', () => {
   it('files one bug issue with the seed, the shrunk steps and the replay command', async () => {
     const gh = fakeGh()
@@ -58,7 +64,8 @@ describe('a failing fuzz run', () => {
     assert.deepEqual(verbs(gh), ['issue create'])
     const create = gh.calls.find((c) => c.verb === 'issue create')
     assert.equal(create.args[create.args.indexOf('--title') + 1], 'Fuzz: rule broken: pen-lines-drawn')
-    assert.equal(create.args[create.args.indexOf('--label') + 1], 'bug')
+    assert.equal(create.args[create.args.indexOf('--label') + 1], 'bug,needs-info')
+    assert.ok(create.input.endsWith('\n\n## Blocked by\n\n- None — can start immediately.'), 'the Blocked by section is last')
     assert.match(create.input, /seed 77/)
     assert.match(create.input, /1\. click cell 3\n2\. digit 5/)
     assert.match(create.input, /npm run test:fuzz -- --seed 77 --path 12:0@3/)

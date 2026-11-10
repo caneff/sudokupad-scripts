@@ -205,9 +205,9 @@ npm run fuzz:plants -- [--minutes <m per plant>] [--shrink-minutes <m>] [--seed 
 in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `workflow_dispatch` runs it by hand). It is a workflow of its own, not a job of
 `watch.yml`, so 30 minutes of fuzzing never holds up the watch and the two keep separate concurrency groups.
 
-- **One issue per distinct failure.** A failure files one `bug` issue titled by what failed: `Fuzz: rule broken: <rule names>` for a broken rule, or
+- **One issue per distinct failure.** A failure files one `bug` and `needs-info` issue (a finding can be the fuzz's own rule bug, and is diagnosed before an agent builds it, #805) titled by what failed: `Fuzz: rule broken: <rule names>` for a broken rule, or
   `Fuzz: crash: <first signal>` (numbers folded to `N`) for a crash signal. The body has the seed, the puzzle, the shrunk steps, the replay command, the shared
-  error log and the run's link. When an open issue already has that title, the run comments on it with the same details and files nothing. Closing the issue
+  error log and the run's link, then a `## Blocked by` section reading `None`, as the watch's issues do. When an open issue already has that title, the run comments on it with the same details and files nothing. Closing the issue
   is what makes the next occurrence file a new one.
 - **The hunt goes on after a failure** (#676). `run.mjs` stops at its first failure, so after a failure is filed or commented on, the night starts `run.mjs` again on a
   new seed with the minutes left of the 30, until they are used (less than one minute left is not worth a page start). A failure's title is filed or
@@ -236,7 +236,7 @@ not the nightly the morning after. It runs on a `pull_request` whose paths are o
 
 `npm run watch:live` (`live/watch.mjs`) is for a daily schedule, so a SudokuPad update that breaks a script shows
 up as a bug and not when someone installs it. Its header comment is the full rule: a new version runs the suite
-with `LIVE_REFRESH=1`, red files one `bug` issue, and a version already checked is a no-op until a week has passed. The last version
+with `LIVE_REFRESH=1`, red files one `bug` and `needs-info` issue, and a version already checked is a no-op until a week has passed. The last version
 checked lives in `last-version`, beside the recording.
 
 Two more rules close gaps in that:
