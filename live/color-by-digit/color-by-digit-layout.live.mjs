@@ -59,7 +59,7 @@ describe(`the dialog at ${DESKTOP.width} px`, { concurrency: false }, () => {
     assert.equal(row.right - icons[1].right <= 12, true, `paste icon sits at the row's right end: ${JSON.stringify([row, icons])}`)
     assert.equal(icons[1].x >= icons[0].right - NEAR_PX && Math.abs(icons[0].y - icons[1].y) <= NEAR_PX, true, JSON.stringify(icons))
     for (const i of icons) assert.equal(i.width >= 20 && i.height >= 20 && i.height <= 40, true, `icon size: ${JSON.stringify(i)}`)
-    assert.deepEqual(await p.locator('.dialog-options button').evaluateAll((es) => es.map((e) => e.textContent.trim())), ['Save', 'Cancel'])
+    assert.deepEqual(await p.locator('.dialog-options button').evaluateAll((es) => es.map((e) => e.textContent.trim())), ['Save', 'Cancel', 'Restore defaults'])
   })
 
   it('lists the profiles in rows about 30 px tall, the drag handle and delete shown on the selected row and on a hovered one only', async () => {

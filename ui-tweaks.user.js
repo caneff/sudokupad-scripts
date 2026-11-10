@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.13
+// @version      0.1.14
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Toggle Selection button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.13'
+  const VERSION = '0.1.14'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -834,9 +834,15 @@
             box(option.id).checked = next[option.id]
           })
         }
-      }
+      },
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
     })
     if (!body) return
+    // The draft takes the defaults, and Save or Cancel decides.
+    const restoreDefaults = () => OPTIONS.forEach((option) => {
+      draft[option.id] = DEFAULT_OPTIONS[option.id]
+      box(option.id).checked = draft[option.id]
+    })
     body.innerHTML = OPTIONS.map(optionRow).join('')
     const box = (id) => body.querySelector(`input[data-option="${id}"]`)
     OPTIONS.forEach((option) => {

@@ -1981,6 +1981,16 @@ test('reduceDraft delete: the row goes and the selection stays on the same profi
   assert.equal(reduceDraft(one, { type: 'delete', index: 0 }), one)
 })
 
+test('reduceDraft restore: the draft holds the preloaded profiles and the pulldowns\' starting picks with the first profile selected, the mode kept, and a draft already there is the same draft', () => {
+  const own = { ...dialogState(), digitActive: 1, useDigitColors: false }
+  const restored = run(opened(own, 'both'), { type: 'restore' })
+  assert.deepEqual(restored.state.profiles.map((p) => p.name), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
+  assert.deepEqual(restored.state.profiles.map((p) => p.groups), Object.values(PRELOADS))
+  assert.deepEqual({ selected: restored.selected, active: restored.state.active, digitActive: restored.state.digitActive, useDigitColors: usesDigitColors(restored.state), mode: restored.mode }, { selected: 0, active: 0, digitActive: undefined, useDigitColors: true, mode: 'both' })
+  assert.deepEqual(shownGroups(restored), PRELOADS['Low/5/High'])
+  assert.equal(reduceDraft(restored, { type: 'restore' }), restored)
+})
+
 test('reduceDraft move: a dragged row moves, the selection follows its profile, and a drop on its own place is the same draft', () => {
   const moved = run(opened(), { type: 'move', from: 0, to: 2 })
   assert.deepEqual(moved.state.profiles.map((p) => p.name), ['B', 'C', 'A'])

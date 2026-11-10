@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.16
+// @version      0.7.17
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.16'
+  const VERSION = '0.7.17'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -933,12 +933,11 @@
           picked = pageColor
           input.value = picked
         }
-      }
+      },
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
     })
     if (!body) return
-    body.innerHTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
-      `<input type="color" id="dark-page-input" value="${picked}">` +
-      '<button type="button" id="dark-page-reset">Black</button></div>'
+    body.innerHTML = `<div style="margin:6px 0"><input type="color" id="dark-page-input" value="${picked}"></div>`
     const input = document.getElementById('dark-page-input')
     const preview = () => { style.textContent = buildCss(picked) }
     // However the dialog closes (Save, Cancel, Escape), the page goes back to the saved color; a Save has already made it the saved one.
@@ -948,16 +947,14 @@
       style.textContent = buildCss(pageColor)
     })
     closed.observe(document.body, { childList: true, subtree: true })
-    const reset = document.getElementById('dark-page-reset')
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase(); preview() })
-    reset.addEventListener('click', (event) => {
-      event.preventDefault()
-      event.stopPropagation()
+    // The draft takes the default and the page previews it, and Save or Cancel decides.
+    function restoreDefaults () {
       picked = DEFAULT_COLOR
       input.value = DEFAULT_COLOR
       preview()
-    })
+    }
   }
 
   // At DOMContentLoaded Framework exists (before the app is ready). What it reads is the saved color, and the early

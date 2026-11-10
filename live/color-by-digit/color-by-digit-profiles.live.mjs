@@ -3,7 +3,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, watch, cellsStateOn, selectCell, wrongCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
-import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { closeDialogWith, dialogButton, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -544,8 +544,8 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await p.click(`${ROWS}:nth-child(1)`)
   })
 
-  it('the buttons row is Save then Cancel, Save filled purple, the title row holds the two settings icons, and the page pulldown has the dialog\'s own look', async () => {
-    assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Save', 'Cancel'])
+  it('the buttons row is Save, Cancel then Restore defaults, Save filled purple, the title row holds the two settings icons, and the page pulldown has the dialog\'s own look', async () => {
+    assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Save', 'Cancel', 'Restore defaults'])
     assert.deepEqual(await p.$$eval('.cbd-title-row button', (bs) => bs.map((b) => b.getAttribute('aria-label'))), ['Copy settings', 'Paste settings'])
     assert.equal(await p.$eval('.dialog-options button[data-role=save]', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
     assert.match(await p.$eval(`${EDITOR} select[data-role=color-choice]`, (e) => window.getComputedStyle(e).backgroundImage), /^url\("data:image\/svg\+xml/)
@@ -685,6 +685,38 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     const state = await settle(async () => (await t.getState()).profiles.length, 1)
     assert.equal(state, 1)
     assert.equal((await t.getState()).active, 0)
+  })
+
+  it('Restore defaults asks first: a refusal changes nothing; accepted, the draft holds the five preloads, Cancel drops it and Save stores it', async () => {
+    const before = await t.names()
+    assert.equal(before.length, 1, 'one profile of the install\'s own is saved')
+    const asks = []
+    const answer = (accept) => p.once('dialog', (dialog) => { asks.push(dialog.message()); return accept ? dialog.accept() : dialog.dismiss() })
+    await t.openEditor()
+    answer(false)
+    await dialogButton(p, 'Restore defaults').click()
+    assert.deepEqual(await t.rowNames(), before)
+    answer(true)
+    await dialogButton(p, 'Restore defaults').click()
+    assert.deepEqual(await t.rowNames(), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
+    assert.equal(await t.selectedRow(), 0)
+    assert.equal(asks.length, 2)
+    assert.match(asks[0], /own profiles/)
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    assert.deepEqual(await t.names(), before, 'Restore defaults saves nothing by itself')
+    await t.openEditor()
+    answer(true)
+    await dialogButton(p, 'Restore defaults').click()
+    await closeDialogWith(p, 'Save', EDITOR)
+    assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit']), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
+    await t.openEditor()
+    // A dialog nobody listens for is dismissed unseen, so this one is counted.
+    const count = (dialog) => { asks.push(dialog.message()); return dialog.dismiss() }
+    p.on('dialog', count)
+    await dialogButton(p, 'Restore defaults').click()
+    p.off('dialog', count)
+    assert.equal(asks.length, 3, 'the preloads alone lose nothing, so Restore defaults does not ask again')
+    await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
   it('no uncaught page errors', () => {
