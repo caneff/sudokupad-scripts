@@ -2357,10 +2357,10 @@
     `.${TEXT_CLASS} { position: absolute; box-sizing: content-box; line-height: ${LINE_HEIGHT}; white-space: pre-wrap; overflow-wrap: anywhere; width: max-content; max-width: ${BOX_WIDTH_EM}em; max-height: ${roundToTenth(BOX_LINES * LINE_HEIGHT)}em; overflow: hidden; }`,
     // A thin bar whose room is kept whether it shows or not, so the text does not wrap again as it appears.
     // A closed note that scrolls always shows it, in the note's own color, so a solver sees there is more text; it fades with the note.
-    // The open box keeps its bar hidden until the pointer is over it under this tool.
+    // The open box is being typed in, so its bar stays out of the way until the pointer is over it.
     `.${TEXT_CLASS}.${SCROLLS_CLASS} { overflow-y: auto; scrollbar-width: thin; scrollbar-color: currentColor transparent; }`,
     `.${TEXT_CLASS}.${TEXT_BOX_CLASS}.${SCROLLS_CLASS} { scrollbar-color: transparent transparent; }`,
-    `.${ACTIVE_CLASS} .${TEXT_CLASS}.${TEXT_BOX_CLASS}.${SCROLLS_CLASS}:hover { scrollbar-color: currentColor transparent; }`,
+    `.${TEXT_CLASS}.${TEXT_BOX_CLASS}.${SCROLLS_CLASS}:hover { scrollbar-color: currentColor transparent; }`,
     // Under every other tool a press or a move over a note goes to what lies under it, as if the notes were not there. Under this one a closed note shows
     // the move cursor, and a note neither selected nor open shows a faint outline and fill, so a click reads as selecting it and not as starting a new note.
     // The hover look is drawn on the note itself, so each share is divided by the note's opacity, to a cap of all of it: a faded note's cue stays about as visible as the note.

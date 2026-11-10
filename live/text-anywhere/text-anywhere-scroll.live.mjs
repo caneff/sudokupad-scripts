@@ -1,6 +1,6 @@
 // Live check of text-anywhere.user.js's note box on sudokupad.app: a long line wraps at 16 em, a note of more than 8 lines stops growing
 // there and the wheel scrolls it without reaching SudokuPad, typing keeps the caret in view, a short note and the board keep the wheel,
-// the scroll bar shows only under the pointer, and markdown, line breaks and the halo still draw in a scrolled box. Ctrl+wheel and a dialog over a note keep
+// a note that scrolls always shows its scroll bar (the open box only under the pointer), and markdown, line breaks and the halo still draw in a scrolled box. Ctrl+wheel and a dialog over a note keep
 // the wheel, a digit tool keeps the wheel's scroll while a click reaches the cell under the note, a click just under a wrapped note misses it,
 // and a note off the board wraps, scrolls and shows the move cursor. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
@@ -59,7 +59,6 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
       overflowY: style.overflowY,
       scrollbarColor: style.scrollbarColor,
       color: style.color,
-      textToolOn: document.querySelector('.text-anywhere-active') !== null,
       halo: Math.max(0, ...[...style.textShadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px 0px/g)].map((m) => Math.hypot(Number(m[1]), Number(m[2])))),
       padding: parseFloat(style.paddingLeft),
       bold: [...e.querySelectorAll('span')].filter((span) => Number(window.getComputedStyle(span).fontWeight) >= 700).map((span) => span.textContent)
@@ -99,6 +98,13 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     assert.ok(caret.height > 0, 'the caret has a line box')
     assert.ok(caret.top >= -NEAR_PX && caret.bottom >= -NEAR_PX, `caret ${caret.top}px below the box's top and ${caret.bottom}px above its bottom`)
     assert.ok((await note('line 1', TEXT_BOX)).scrollTop > 0, 'the open box scrolled to its last line')
+    // The open box keeps its bar hidden until the pointer is over it, unlike a closed note's.
+    await moveTo(EMPTY_AT)
+    const away = await note('line 1', TEXT_BOX)
+    await moveTo(TALL_AT)
+    const over = await note('line 1', TEXT_BOX)
+    assert.equal(away.scrollbarColor, 'rgba(0, 0, 0, 0) rgba(0, 0, 0, 0)', `bar color ${away.scrollbarColor} with the pointer away`)
+    assert.equal(over.scrollbarColor.split(') ')[0] + ')', over.color, `bar color ${over.scrollbarColor} with the pointer over the box`)
     await finishNote(p)
   })
 
@@ -111,16 +117,19 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
 
   it('a note that scrolls always shows its scroll bar, in its own color, with the Text tool off and the pointer away; a note that fits shows none', async () => {
     await p.click(textAnywhere.DIGIT_BUTTON)
-    await read(() => Framework.app.deselect())
-    await moveTo(EMPTY_AT)
-    const tall = await note('line 1')
-    assert.equal(tall.overflowY, 'auto')
-    assert.ok(!tall.textToolOn, 'the Text tool is off')
-    assert.match(tall.scrollbarColor, /^rgb\(.+\) (rgba\(0, 0, 0, 0\)|transparent)$/, `bar color ${tall.scrollbarColor}`)
-    assert.equal(tall.scrollbarColor.split(') ')[0] + ')', tall.color, 'the bar is the note\'s color')
-    const fits = await note('word')
-    assert.equal(fits.overflowY, 'hidden', 'a note that fits has no scroll bar')
-    await textAnywhere.pickTextAnywhere(p)
+    try {
+      await read(() => Framework.app.deselect())
+      await moveTo(EMPTY_AT)
+      assert.notEqual(await textAnywhere.tool(p), 'textanywhere', 'the Text tool is off')
+      const tall = await note('line 1')
+      assert.equal(tall.overflowY, 'auto')
+      assert.match(tall.scrollbarColor, /^rgb\(.+\) (rgba\(0, 0, 0, 0\)|transparent)$/, `bar color ${tall.scrollbarColor}`)
+      assert.equal(tall.scrollbarColor.split(') ')[0] + ')', tall.color, 'the bar is the note\'s color')
+      const fits = await note('word')
+      assert.equal(fits.overflowY, 'hidden', 'a note that fits has no scroll bar')
+    } finally {
+      await textAnywhere.pickTextAnywhere(p)
+    }
   })
 
   it('the wheel over the tall note scrolls its text and never reaches SudokuPad, until it can scroll no further', async () => {
