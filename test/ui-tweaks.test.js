@@ -61,7 +61,7 @@ test('buildCss: Hide the Toggle Selection button hides only that button, in the 
 })
 
 test('buildCss: Wrap buttons caps the bottom row at five buttons', () => {
-  assert.equal(buildCss({ ...DEFAULT_OPTIONS, wrapButtons: true }), '.controls-aux { max-width: 21.6rem; }')
+  assert.equal(buildCss({ ...DEFAULT_OPTIONS, wrapButtons: true }), '.controls-aux { max-width: 21.6rem !important; }')
 })
 
 test('buildCss: both rules together; Tab adds none', () => {

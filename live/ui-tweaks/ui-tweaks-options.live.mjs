@@ -32,6 +32,10 @@ async function chooseAndSave (p, choices) {
 const rowButtons = (p) => p.evaluate((row) => [...document.querySelector(row).children]
   .filter((button) => button.getClientRects().length > 0)
   .map((button) => { const at = button.getBoundingClientRect(); return { id: button.id, x: Math.round(at.x), y: Math.round(at.y), width: Math.round(at.width) } }), ROW)
+const belowFirst = async (p) => {
+  const found = await rowButtons(p)
+  return found.map((b) => b.y > found[0].y)
+}
 const addExtraButtons = (p) => p.evaluate((names) => {
   names.forEach((name) => Framework.addControlButton({ parent: '.controls-aux', name, title: name, content: `<div class="icon">${name[0]}</div>`, onClick () {} }))
   Framework.app.refreshControls()
@@ -104,13 +108,19 @@ describe('the options dialog', { concurrency: false }, () => {
 
   it('Wrap buttons puts the sixth button on a second line, and switching it off puts the row on one line again', async () => {
     await chooseAndSave(p, { wrapButtons: true })
-    const wrapped = await settle(async () => {
-      const found = await rowButtons(p)
-      return found.map((b) => b.y > found[0].y)
-    }, [false, false, false, false, false, true, true])
+    const wrapped = await settle(() => belowFirst(p), [false, false, false, false, false, true, true])
     assert.deepEqual(wrapped, [false, false, false, false, false, true, true])
     await chooseAndSave(p, { wrapButtons: false })
     assert.equal(await settle(async () => new Set((await rowButtons(p)).map((b) => b.y)).size, 1), 1)
+  })
+
+  it('Wrap buttons still breaks the row after five when something gives it an inline max-width', async () => {
+    await chooseAndSave(p, { wrapButtons: true })
+    await p.evaluate(() => { document.querySelector('.controls-aux').style.maxWidth = '482px' })
+    const wrapped = await settle(() => belowFirst(p), [false, false, false, false, false, true, true])
+    await p.evaluate(() => { document.querySelector('.controls-aux').style.maxWidth = '' })
+    assert.deepEqual(wrapped, [false, false, false, false, false, true, true])
+    await chooseAndSave(p, { wrapButtons: false })
   })
 
   it('Tab never switches to letters: off, Tab switches the number pad as SudokuPad does; on again, it does not', async () => {
@@ -173,12 +183,16 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
   // Color by Digit caps the row itself, so this shows the two do not conflict; the option's own effect is checked above, without it.
   it('with Wrap buttons on, five buttons are on the first line, Color by Digit\'s among them, and the rest are on the second', async () => {
     await chooseAndSave(p, { wrapButtons: true })
-    const buttons = await settle(async () => {
-      const found = await rowButtons(p)
-      return found.map((b) => b.y > found[0].y)
-    }, [false, false, false, false, false, true, true, true])
+    const buttons = await settle(() => belowFirst(p), [false, false, false, false, false, true, true, true])
     assert.deepEqual(buttons, [false, false, false, false, false, true, true, true])
     assert.equal((await rowButtons(p))[4].id, 'control-colorbydigit')
+  })
+
+  it('with Color by Digit also capping the row, Wrap buttons on still breaks it after five under an inline max-width', async () => {
+    await p.evaluate(() => { document.querySelector('.controls-aux').style.maxWidth = '482px' })
+    const buttons = await settle(() => belowFirst(p), [false, false, false, false, false, true, true, true])
+    await p.evaluate(() => { document.querySelector('.controls-aux').style.maxWidth = '' })
+    assert.deepEqual(buttons, [false, false, false, false, false, true, true, true])
   })
 
   it('Hide the Toggle Selection button leaves Color by Digit\'s button and the others', async () => {
