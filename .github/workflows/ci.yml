@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # test/version-bump.test.js compares each changed *.user.js @version with origin/main's, so it needs the history.
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 24
