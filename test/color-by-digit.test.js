@@ -1998,9 +1998,10 @@ test('reduceDraft paste: pasted profiles replace the draft\'s, selecting their a
 })
 
 test('reduceDraft paste: a pasted mode alone changes the mode and leaves the draft\'s unsaved profile edits', () => {
-  const edited = run(opened(), { type: 'rename', name: 'Mine' }, { type: 'select', index: 1 })
+  const edited = run(opened(), { type: 'rename', name: 'Mine' }, { type: 'select', index: 2 })
+  assert.notEqual(edited.selected, opened().selected, 'the draft selects a profile other than the active one')
   const draft = reduceDraft(edited, { type: 'paste', mode: 'both' })
-  assert.deepEqual({ state: draft.state, selected: draft.selected, mode: draft.mode }, { state: edited.state, selected: 1, mode: 'both' })
+  assert.deepEqual({ state: draft.state, selected: draft.selected, mode: draft.mode }, { state: edited.state, selected: 2, mode: 'both' })
 })
 
 test('reduceDraft paste: a draft mode the pasted profiles do not allow falls back to one they do', () => {
@@ -2008,6 +2009,12 @@ test('reduceDraft paste: a draft mode the pasted profiles do not allow falls bac
   const edited = reduceDraft(opened(), { type: 'choose', role: 'mode-draft', value: 'digit' })
   assert.equal(reduceDraft(edited, { type: 'paste', state: none }).mode, allowedMode('digit', usesDigitColors(none)))
   assert.notEqual(allowedMode('digit', usesDigitColors(none)), 'digit')
+})
+
+test('reduceDraft paste: a pasted mode is held to the draft\'s own profiles, not the saved ones', () => {
+  const noDigits = { ...dialogState(), useDigitColors: false }
+  assert.equal(reduceDraft(opened(noDigits), { type: 'paste', mode: 'digit' }).mode, 'off')
+  assert.equal(reduceDraft(opened(), { type: 'paste', mode: 'digit' }).mode, 'digit')
 })
 
 // The dialog's focus, hover and press states, hit areas, grab cursor and keyboard.

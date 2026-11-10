@@ -164,22 +164,23 @@ describe('color-by-digit.user.js: a Paste replaces only the pasted settings in t
   })
   after(async () => { await context?.close() })
 
+  it('a pasted mode leaves the draft\'s unsaved choice of profile as it is', async () => {
+    await openScriptDialog(p, entry, editor)
+    const active = await p.locator(CELL_PROFILE).inputValue()
+    const chosen = await p.locator(`${CELL_PROFILE} option`).evaluateAll((options, current) => options.find((o) => o.value !== current).value, active)
+    await p.selectOption(CELL_PROFILE, chosen)
+    assert.equal(await paste(p, JSON.stringify({ ColorByDigit_mode: 'both' })), 'Pasted 1 setting.')
+    assert.equal(await p.locator(MODE).inputValue(), 'both', 'the pasted mode is in the draft')
+    assert.equal(await p.locator(CELL_PROFILE).inputValue(), chosen, 'the unsaved profile choice is still in the draft')
+    await closeDialogWith(p, 'Cancel', editor)
+  })
+
   it('pasted profiles leave the draft\'s unsaved mode as it is', async () => {
     await openScriptDialog(p, entry, editor)
     await p.selectOption(MODE, 'off')
     assert.equal(await paste(p, JSON.stringify({ ColorByDigit_profiles: saved })), 'Pasted 1 setting.')
     assert.equal(await p.locator(MODE).inputValue(), 'off', 'the unsaved mode edit is still in the draft')
     assert.equal(await p.locator(`${editor} .cbd-profile`).count(), 1, 'the pasted profiles are in the draft')
-    await closeDialogWith(p, 'Cancel', editor)
-  })
-
-  it('a pasted mode leaves the draft\'s unsaved choice of profile as it is', async () => {
-    await openScriptDialog(p, entry, editor)
-    await p.selectOption(`${CELL_PROFILE}`, { index: 0 })
-    const chosen = await p.locator(CELL_PROFILE).inputValue()
-    assert.equal(await paste(p, JSON.stringify({ ColorByDigit_mode: 'both' })), 'Pasted 1 setting.')
-    assert.equal(await p.locator(MODE).inputValue(), 'both', 'the pasted mode is in the draft')
-    assert.equal(await p.locator(CELL_PROFILE).inputValue(), chosen, 'the unsaved profile choice is still in the draft')
     await closeDialogWith(p, 'Cancel', editor)
   })
 

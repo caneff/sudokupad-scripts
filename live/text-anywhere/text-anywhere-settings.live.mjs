@@ -15,6 +15,7 @@ const browser = useBrowser()
 
 const open = () => textAnywhere.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
 const read = (p, fn, arg) => p.evaluate(fn, arg)
+const savedKeys = (p, keys) => read(p, (names) => Object.fromEntries(names.map((key) => [key, Framework.getData(key)])), keys)
 const saved = (p) => read(p, (key) => Framework.getData(key) ?? null, COLORS_KEY)
 const savedColors = async (p) => { const { preset, ...colors } = await saved(p); return colors }
 const savedPreset = async (p) => (await saved(p)).preset ?? null
@@ -94,13 +95,13 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     await p.click(SETTINGS_BUTTON)
     await p.locator(PRESET).selectOption('sudokupad')
     await p.locator(`${EDITOR} input[data-role="swatch"][data-key="2"]`).fill('#123456')
-    assert.equal(await p.locator(PRESET).inputValue(), '')
-    assert.deepEqual(await presetShown(p), { value: '', label: 'Custom', disabled: ['Custom'] }, 'Custom is shown after a hand edit, and cannot be picked')
+    assert.equal(await p.locator(PRESET).inputValue(), 'custom')
+    assert.deepEqual(await presetShown(p), { value: 'custom', label: 'Custom', disabled: ['Custom'] }, 'Custom is shown after a hand edit, and cannot be picked')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await savedColors(p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
     assert.equal(await savedPreset(p), null, 'a hand edit saves no preset')
     await p.click(SETTINGS_BUTTON)
-    assert.deepEqual(await presetShown(p), { value: '', label: 'Custom', disabled: ['Custom'] }, 'the dialog opens on Custom')
+    assert.deepEqual(await presetShown(p), { value: 'custom', label: 'Custom', disabled: ['Custom'] }, 'the dialog opens on Custom')
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
@@ -162,12 +163,34 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     }
   })
 
+  it('a saved preset is read back after a reload, a saved id that is none of ours reads as Custom, and a hold edit of one color makes the set Custom', async () => {
+    await textAnywhere.reload(p)
+    await pickTextAnywhere(p)
+    await p.click(SETTINGS_BUTTON)
+    assert.deepEqual(await presetShown(p), { value: 'page-1', label: 'Darker page 1', disabled: [] }, 'the saved preset opens the dialog after a reload')
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    await textAnywhere.holdForPickers(p, '.controls-input button[data-key="4"]', 'left', 'visible')
+    await p.locator(`${textAnywhere.PICKER_BOX}[data-key="4"] input`).fill('#102030')
+    await p.keyboard.press('Escape')
+    assert.equal(await savedPreset(p), null, 'a hold edit saves no preset')
+    await p.click(SETTINGS_BUTTON)
+    assert.deepEqual(await presetShown(p), { value: 'custom', label: 'Custom', disabled: ['Custom'] })
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    await read(p, ([key, value]) => Framework.setData(key, value), [COLORS_KEY, { ...(await savedColors(p)), preset: 'nope' }])
+    await textAnywhere.reload(p)
+    await pickTextAnywhere(p)
+    await p.click(SETTINGS_BUTTON)
+    assert.deepEqual(await presetShown(p), { value: 'custom', label: 'Custom', disabled: ['Custom'] })
+    await closeDialogWith(p, 'Cancel', EDITOR)
+  })
+
   it('Restore defaults fills the draft with the pen colors and the default looks; Cancel keeps what was saved and Save stores the defaults', async () => {
     const changed = { [OUTLINE_KEY]: 'none', [BOX_KEY]: 'yellow', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' }
     await read(p, (values) => Object.entries(values).forEach(([key, value]) => Framework.setData(key, value)), changed)
     await textAnywhere.reload(p)
     await pickTextAnywhere(p)
-    const before = await read(p, (keys) => Object.fromEntries(keys.map((key) => [key, Framework.getData(key)])), [COLORS_KEY, ...Object.keys(changed)])
+    const keys = [COLORS_KEY, ...Object.keys(changed)]
+    const before = await savedKeys(p, keys)
     await p.click(SETTINGS_BUTTON)
     await p.locator(PRESET).selectOption('pen')
     const penColors = await dialogColors(p)
@@ -178,17 +201,15 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     assert.deepEqual(await presetShown(p), { value: 'pen', label: 'Pen colors', disabled: [] })
     for (const [role, value] of [['outline-pick', 'medium'], ['box-pick', 'page'], ['frame-pick', 'off']]) assert.equal(await p.locator(`${EDITOR} button[data-role="${role}"][data-value="${value}"]`).getAttribute('aria-pressed'), 'true', role)
     assert.equal(await p.locator(`${EDITOR} [data-role="font-choice"]`).inputValue(), 'proportional')
-    assert.deepEqual(await read(p, (keys) => Object.fromEntries(keys.map((key) => [key, Framework.getData(key)])), [COLORS_KEY, ...Object.keys(changed)]), before, 'Restore defaults saves nothing by itself')
+    assert.deepEqual(await savedKeys(p, keys), before, 'Restore defaults saves nothing by itself')
     await closeDialogWith(p, 'Cancel', EDITOR)
-    assert.deepEqual(await read(p, (keys) => Object.fromEntries(keys.map((key) => [key, Framework.getData(key)])), [COLORS_KEY, ...Object.keys(changed)]), before, 'Cancel keeps the saved settings')
+    assert.deepEqual(await savedKeys(p, keys), before, 'Cancel keeps the saved settings')
     await p.click(SETTINGS_BUTTON)
     await dialogButton(p, 'Restore defaults').click()
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await savedPreset(p), 'pen')
-    assert.equal(await read(p, (key) => Framework.getData(key), OUTLINE_KEY), 'medium')
-    assert.equal(await read(p, (key) => Framework.getData(key), BOX_KEY), 'page')
-    assert.equal(await read(p, (key) => Framework.getData(key), FRAME_KEY), false)
-    assert.equal(await read(p, (key) => Framework.getData(key), FONT_KEY), 'proportional')
+    assert.deepEqual(await savedColors(p), penColors, 'the saved colors are the pen colors')
+    assert.deepEqual(await savedKeys(p, Object.keys(changed)), { [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false, [FONT_KEY]: 'proportional' })
   })
 
   it('a paste leaves an unsaved edit of a setting it does not hold in the draft, and replaces the ones it does', async () => {
@@ -202,7 +223,7 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     assert.equal(await p.locator(`${EDITOR} button[data-role="outline-pick"][data-value="none"]`).getAttribute('aria-pressed'), 'true', 'the unsaved halo edit is still in the draft')
     assert.equal((await dialogColors(p))[3], '#102030', 'the unsaved color edit is still in the draft')
     await closeDialogWith(p, 'Save', EDITOR)
-    assert.equal(await read(p, (key) => Framework.getData(key), OUTLINE_KEY), 'none')
+    assert.equal((await savedKeys(p, [OUTLINE_KEY]))[OUTLINE_KEY], 'none')
     assert.equal((await savedColors(p))[3], '#102030')
   })
 
