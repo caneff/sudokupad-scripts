@@ -9,8 +9,8 @@ const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const TAG_LENGTH = 7
 const SITE_DIR = path.join(__dirname, 'site')
 const COMMENT = /(<!--[\s\S]*?-->)/
-// A repo picture's src: RAW, the file's path, then whatever query follows (the tag, or a stale or foreign one).
-const PICTURE_SRC = new RegExp(`(<img\\b[^>]*?\\bsrc=")${RAW.replace(/\./g, '\\.')}([^"?]+)(\\?[^"]*)?"`, 'g')
+// A repo picture's src (or a <source>'s srcset): RAW, the file's path, then whatever query follows (the tag, or a stale or foreign one).
+const PICTURE_SRC = new RegExp(`(<(?:img|source)\\b[^>]*?\\b(?:src|srcset)=")${RAW.replace(/\./g, '\\.')}([^"?]+)(\\?[^"]*)?"`, 'g')
 const TAG_QUERY = /^\?v=([0-9a-f]{7})$/
 
 const tagOf = file => execFileSync('git', ['hash-object', file], { cwd: __dirname, encoding: 'utf8' }).trim().slice(0, TAG_LENGTH)

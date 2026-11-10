@@ -22,8 +22,13 @@ const renderShow = ({ dir, width, height, slides }, indent, hashOf = tagOf) => {
   return [
     `${at(0)}<div class="slideshow">`,
     `${at(2)}<div class="slide-frame">`,
-    ...slides.map(({ picture, alt }, i) =>
-      `${at(4)}<img class="slide${current(i)}" src="${RAW}${dir}${picture}?v=${hashOf(dir + picture)}" alt="${escape(alt)}" width="${width}" height="${height}">`),
+    ...slides.flatMap(({ picture, animation, alt }, i) => {
+      const still = n => `${at(n)}<img class="slide${current(i)}" src="${RAW}${dir}${picture}?v=${hashOf(dir + picture)}" alt="${escape(alt)}" width="${width}" height="${height}">`
+      // A visitor who prefers reduced motion gets the still picture alone; the animation is only a <source> for everyone else.
+      return animation
+        ? [`${at(4)}<picture>`, `${at(6)}<source media="(prefers-reduced-motion: no-preference)" srcset="${RAW}${dir}${animation}?v=${hashOf(dir + animation)}">`, still(6), `${at(4)}</picture>`]
+        : [still(4)]
+    }),
     `${at(2)}</div>`,
     `${at(2)}<div class="slide-bar">`,
     `${at(4)}<div class="slide-captions">`,

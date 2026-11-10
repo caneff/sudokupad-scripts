@@ -25,6 +25,8 @@ p { margin: 0 0 .5rem; }
 /* The slideshow: a framed picture, then a caption on the left and a pager on the right. slides.js adds the pager. */
 .slideshow { display: flex; flex-direction: column; }
 .slide-frame { --slide-inset: .6rem; position: relative; aspect-ratio: 16 / 10; background: var(--frame-bg); border: 1px solid var(--frame-edge); border-radius: 8px; }
+/* An animated slide's <picture> adds no box of its own, so its image is placed in the frame like any other slide's. */
+.slide-frame picture { display: contents; }
 .slide-frame img { position: absolute; inset: var(--slide-inset); margin: auto; max-width: calc(100% - 2 * var(--slide-inset)); max-height: calc(100% - 2 * var(--slide-inset)); width: auto; height: auto; }
 /* Every slide shares the frame, and only the current one shows, so the first one shows without script. */
 .slideshow .slide:not(.current) { visibility: hidden; }

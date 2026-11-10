@@ -1,21 +1,20 @@
-// Takes the slides of Pen Tool Extras' slideshow (site/index.html and site/pen-tool-extras.html), from the real script on the live page, on a
-// blank grid. Each slide is the board patch in use beside the pen panel, cropped tight, with no caption drawn in (the captions are page text):
+// Takes the 13 slides of Pen Tool Extras' slideshow (site/index.html and site/pen-tool-extras.html), from the real script on the live page, on a
+// blank grid. Each slide is the board patch in use beside the pen panel, cropped tight, with no caption drawn in (the captions are page text).
+// A slide that shows a before and an after is also an animated WebP (docs/research/site/slide-animation.py): the before, a crossfade, the after,
+// a crossfade back. Its PNG is the after, the still a visitor who prefers reduced motion sees. A * marks those slides.
 //   pen-tool-extras-slide-1-line.png       a line drawn in the first pen
-//   pen-tool-extras-slide-2-hold.png       a hold on a pen color button: edit mode, a color picker under each pen button
-//   pen-tool-extras-slide-3-color.png      a color picked, the button and the line recolored
-//   pen-tool-extras-slide-4-solid.png      a solid line
-//   pen-tool-extras-slide-5-dashed.png     a dashed line
-//   pen-tool-extras-slide-6-arrow.png      an arrow line
-//   pen-tool-extras-slide-7-edges.png      four cell edges marked, clicked once to four times: an X, a circle and both arrows
-//   pen-tool-extras-slide-8-corner.png     two grid corners marked, clicked once and twice: an X and a circle
-//   pen-tool-extras-slide-9-center.png     three cell centers marked, clicked once to three times: a circle, a cross and a dot
-//   pen-tool-extras-slide-10-thickness.png  the Thickness slider up: every line and mark thicker
-//   pen-tool-extras-slide-11-opacity.png   the Opacity slider down: the whole pen layer fainter
-//   pen-tool-extras-slide-12-outline-off.png  a line across dark cells with White outlines off
-//   pen-tool-extras-slide-13-outline-on.png   the same line with White outlines on
-//   pen-tool-extras-slide-14-erase.png     a red ring on a line, where a right press is held (the line is not dimmed)
-//   pen-tool-extras-slide-15-erased.png    the whole line gone after the right click
-//   pen-tool-extras-slide-16-settings.png  a red ring on the panel's settings button, beside the settings dialog it opens
+//   pen-tool-extras-slide-2-color.png    * a hold on a pen color button (edit mode, a color picker under each pen button), then a color picked: the button and the line recolored
+//   pen-tool-extras-slide-3-solid.png      a solid line
+//   pen-tool-extras-slide-4-dashed.png     a dashed line
+//   pen-tool-extras-slide-5-arrow.png      an arrow line
+//   pen-tool-extras-slide-6-edges.png      four cell edges marked, clicked once to four times: an X, a circle and both arrows
+//   pen-tool-extras-slide-7-corner.png     two grid corners marked, clicked once and twice: an X and a circle
+//   pen-tool-extras-slide-8-center.png     three cell centers marked, clicked once to three times: a circle, a cross and a dot
+//   pen-tool-extras-slide-9-thickness.png  * the default board, then the Thickness slider up: every line and mark thicker
+//   pen-tool-extras-slide-10-opacity.png   * the default board, then the Opacity slider down: the whole pen layer fainter
+//   pen-tool-extras-slide-11-outline.png   * a line across dark cells with White outlines off, then on
+//   pen-tool-extras-slide-12-erase.png     * a red ring on a line, where a right press is held (the line is not dimmed), then the whole line gone after the right click
+//   pen-tool-extras-slide-13-settings.png  a red ring on the panel's settings button, beside the settings dialog it opens
 // Every line is a real drag, every mark a real click, every hold a real press; a red ring marks where a hold or the right click lands,
 // since a screenshot draws no pointer. Each line, mark and hold is checked to have landed. The board patch and the panel are joined side
 // by side on white with Python's Pillow (python3 with Pillow).
@@ -29,9 +28,10 @@ import { openPage, startPuzzle } from '../../../live/page.mjs'
 import { cellCentre, gridPoint, mouseDrag } from '../../../live/board.mjs'
 import { openPenTool, PAGE_BUTTON, penStrings, penValuesNoColor, setInputValue } from '../../../live/pen.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../../../live/settings.mjs'
+import { writeAnimation } from '../site/slide-animation.mjs'
 import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extras-recolor.mjs'
 
-const target = (name) => new URL(`./pen-tool-extras-slide-${name}.png`, import.meta.url).pathname
+const target = (name, extension = 'png') => new URL(`./pen-tool-extras-slide-${name}.${extension}`, import.meta.url).pathname
 const script = readFileSync(new URL('../../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 // A 900 x 700 window draws cells 53 px wide and a pen panel 159 px wide and 212 px tall. The board is three columns and four rows of them,
 // as tall as the panel, so the picture is about 340 px wide on the page and no taller than the panel.
@@ -109,14 +109,23 @@ const patch = { x: x0 - MARGIN, y: y0 - MARGIN_Y, width: COLS * cell + 2 * MARGI
 const panel = p.locator('.tool-pen .controls-input')
 const panelHeight = (await panel.boundingBox()).height
 if (Math.abs(panelHeight - patch.height) > HEIGHT_SLACK_PX) throw new Error(`the board is ${patch.height} px tall and the panel ${panelHeight}: change ROWS or VIEWPORT`)
-// Writes one slide: the board patch beside the panel, joined.
-const slide = async (name) => {
+const shoot = async (file) => {
   await p.waitForTimeout(SETTLE_MS)
   await p.screenshot({ path: join(frames, 'board.png'), clip: patch })
   await panel.screenshot({ path: join(frames, 'panel.png') })
-  const joined = spawnSync('python3', ['-I', '-c', JOIN, join(frames, 'board.png'), join(frames, 'panel.png'), target(name), String(GAP_PX)], { encoding: 'utf8' })
-  if (joined.status !== 0) throw new Error(`joining slide ${name} failed: ${joined.error ?? joined.stderr}`)
+  const joined = spawnSync('python3', ['-I', '-c', JOIN, join(frames, 'board.png'), join(frames, 'panel.png'), file, String(GAP_PX)], { encoding: 'utf8' })
+  if (joined.status !== 0) throw new Error(`joining ${file} failed: ${joined.error ?? joined.stderr}`)
+}
+const slide = async (name) => {
+  await shoot(target(name))
   console.log(`wrote ${target(name)}`)
+}
+// The before pictures of the animated slides wait in the temporary folder until their after is taken.
+const before = async (name) => shoot(join(frames, `before-${name}.png`))
+// `beforeName` names a before kept for more than one slide.
+const animatedSlide = async (name, beforeName = name) => {
+  await slide(name)
+  writeAnimation(join(frames, `before-${beforeName}.png`), target(name), target(name, 'webp'))
 }
 const pick = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
 const park = () => p.mouse.move(5, 5)
@@ -182,29 +191,29 @@ const DIALOG_VIEWPORT = { width: 1200, height: 900 }
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
 
-// 1 to 3. Recolor pen 1 in edit mode.
+// 1 and 2. Recolor pen 1 in edit mode.
 await line(NEW_PEN_COLOR_KEY, [[TEAL_ROW, 0.5], [TEAL_ROW, 2.5]])
 await slide('1-line')
 await holdWithRing(NEW_PEN_COLOR_KEY)
-await slide('2-hold')
+await before('2-color')
 await pickPenColor(p, NEW_PEN_COLOR_KEY, NEW_COLOR)
 await unring()
-await slide('3-color')
+await animatedSlide('2-color')
 await holdWithRing(NEW_PEN_COLOR_KEY)
 await unring()
 
-// 4 to 6. A solid line, then dashed and arrow lines on the next pages.
+// 3 to 5. A solid line, then dashed and arrow lines on the next pages.
 await line(SOLID_PEN, [[SOLID_ROW, 0], [SOLID_ROW, 3]])
-await slide('4-solid')
+await slide('3-solid')
 await turnPage()
 await line(SOLID_PEN, [[DASHED_ROW, 0], [DASHED_ROW, 3]])
-await slide('5-dashed')
+await slide('4-dashed')
 await turnPage()
 await line(SOLID_PEN, [[ARROW_ROW, 0], [ARROW_ROW, 3]])
-await slide('6-arrow')
+await slide('5-arrow')
 await turnPage()
 
-// 7. Four edges, clicked once to four times: an X, a circle and an arrow each way. The arrows are on cells' bottom edges, so they stay inside the picture.
+// 6. Four edges, clicked once to four times: an X, a circle and an arrow each way. The arrows are on cells' bottom edges, so they stay inside the picture.
 await pick(EDGE_PEN)
 // Each edge's last click gives the pen value of the mark it names: the right edge's X is 3 and its circle j, the bottom edge's arrows k and l.
 for (const [col, down, clicks, what, value] of [[0, false, 1, 'an X', '3'], [1, false, 2, 'a circle', 'j'], [0, true, 3, 'an arrow', 'k'], [2, true, 4, 'the arrow turned round', 'l']]) {
@@ -212,31 +221,33 @@ for (const [col, down, clicks, what, value] of [[0, false, 1, 'an X', '3'], [1, 
   const edge = down ? [ex, ey + ew / 2 - EDGE_INSET_PX] : [ex + ew / 2 - EDGE_INSET_PX, ey]
   await clickMark(edge, clicks, `${what} on the edge of column ${col}`, value)
 }
-await slide('7-edges')
+await slide('6-edges')
 
-// 8. Two grid corners, clicked once and twice: an X and a circle.
+// 7. Two grid corners, clicked once and twice: an X and a circle.
 await pick(CORNER_PEN)
 // An inner corner is stored as the X u or the circle x.
 for (const [at, clicks, what, value] of [[[3, 1], 2, 'a circle', 'x'], [[3, 2], 1, 'an X', 'u']]) {
   const corner = await gridPoint(p, at)
   await clickMark(corner, clicks, `${what} on the corner ${at}`, value)
 }
-await slide('8-corner')
+await slide('7-corner')
 
-// 9. Three cell centers in the bottom row, clicked once to three times: the cell marks: a circle, a cross and a dot, in SudokuPad's own cell values 5 and 6 and the script's z.
+// 8. Three cell centers in the bottom row, clicked once to three times: the cell marks: a circle, a cross and a dot, in SudokuPad's own cell values 5 and 6 and the script's z.
 await pick(CENTER_PEN)
 for (const [col, clicks, what, value] of [[0, 1, 'a circle', '5'], [1, 2, 'a cross', '6'], [2, 3, 'a dot', 'z']]) {
   const [cx, cy] = await cellCentre(p, CELL_MARK_ROW, col)
   await clickMark([cx, cy], clicks, `${what} in the cell of column ${col}`, value)
 }
-await slide('9-center')
+await slide('8-center')
+// The board as it is now, with every setting at its default, is the before of the Thickness and Opacity slides.
+await before('9-thickness')
 
-// 10 and 11. The sliders change every line and mark already drawn.
+// 9 and 10. The sliders change every line and mark already drawn.
 await sliderValue(THICKNESS, 12)
-await slide('10-thickness')
+await animatedSlide('9-thickness')
 await sliderValue(THICKNESS, 5)
 await sliderValue(OPACITY, 30)
-await slide('11-opacity')
+await animatedSlide('10-opacity', '9-thickness')
 await sliderValue(OPACITY, 80)
 
 // The outline line runs through the bottom row's cell centers, so the cell marks are clicked on to empty first (a circle takes three more clicks, a cross two, a dot one).
@@ -247,28 +258,28 @@ for (const [col, clicks] of [[0, 3], [1, 2], [2, 1]]) {
 const leftOver = (await penValuesNoColor(p)).filter((v) => ['5', '6', 'z'].includes(v))
 if (leftOver.length > 0) throw new Error(`the cell marks were not cleared: ${leftOver}`)
 
-// 12 and 13. A line across dark cells, White outlines off and then on.
+// 11. A line across dark cells, White outlines off and then on.
 for (const col of [0, 1, 2]) await colorCell(DARK_ROW, col, DARK_CELL_KEY)
 await line(OUTLINE_PEN, [[OUTLINE_ROW, 0.5], [OUTLINE_ROW, 2.5]])
 await setOutline(false)
-await slide('12-outline-off')
+await before('11-outline')
 await setOutline(true)
-await slide('13-outline-on')
+await animatedSlide('11-outline')
 
-// 14 and 15. A right press on the first line shows no preview; letting go erases the whole line.
-const before = await penCount()
+// 12. A right press on the first line shows no preview; letting go erases the whole line.
+const penValuesBefore = await penCount()
 const [lx, ly] = await gridPoint(p, [TEAL_ROW, 1.5])
 await ring(lx, ly)
 await p.mouse.move(lx, ly)
 await p.mouse.down({ button: 'right' })
-await slide('14-erase')
+await before('12-erase')
 await p.mouse.up({ button: 'right' })
 await unring()
 await park()
-await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, before, { timeout: SETTLE_TIMEOUT_MS })
-await slide('15-erased')
+await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, penValuesBefore, { timeout: SETTLE_TIMEOUT_MS })
+await animatedSlide('12-erase')
 
-// 16. The settings button, and the dialog it opens.
+// 13. The settings button, and the dialog it opens.
 const sheetSize = JSON.parse(readFileSync(new URL('../../../site/slideshows.json', import.meta.url), 'utf8'))['pen-tool-extras']
 const gear = await p.locator(SETTINGS_BUTTON).boundingBox()
 await ring(gear.x + gear.width / 2, gear.y + gear.height / 2)
@@ -283,9 +294,9 @@ await dialog.waitFor({ state: 'visible' })
 // The dialog fades in; a picture taken mid-fade is a shade off.
 await p.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)))
 await dialog.screenshot({ path: join(frames, 'dialog.png') })
-const settingsJoined = spawnSync('python3', ['-I', '-c', SETTINGS_JOIN, join(frames, 'panel.png'), join(frames, 'dialog.png'), target('16-settings'), String(GAP_PX), String(sheetSize.width), String(sheetSize.height)], { encoding: 'utf8' })
-if (settingsJoined.status !== 0) throw new Error(`joining slide 16-settings failed: ${settingsJoined.error ?? settingsJoined.stderr}`)
-console.log(`wrote ${target('16-settings')}`)
+const settingsJoined = spawnSync('python3', ['-I', '-c', SETTINGS_JOIN, join(frames, 'panel.png'), join(frames, 'dialog.png'), target('13-settings'), String(GAP_PX), String(sheetSize.width), String(sheetSize.height)], { encoding: 'utf8' })
+if (settingsJoined.status !== 0) throw new Error(`joining slide 13-settings failed: ${settingsJoined.error ?? settingsJoined.stderr}`)
+console.log(`wrote ${target('13-settings')}`)
 await closeExtrasEditorWith(p, 'Cancel')
 
 rmSync(frames, { recursive: true })
