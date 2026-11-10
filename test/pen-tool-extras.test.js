@@ -1057,7 +1057,7 @@ test('every slider in the settings table has one dialog row, with the label and 
   const html = renderEditor(editorState())
   const sliders = Object.entries(SETTINGS).filter(([, row]) => row.range)
   assert.deepEqual(sliders.map(([name, row]) => [name, row.dialog.label]), [
-    ['thickness', 'Thickness'], ['opacity', 'Opacity (%)'], ['dash', 'Dash length'], ['arrowSpacing', 'Arrow spacing'], ['outlineWidth', 'Outline width']
+    ['thickness', 'Thickness'], ['opacity', 'Opacity'], ['dash', 'Dash length'], ['arrowSpacing', 'Arrow spacing'], ['outlineWidth', 'Outline width']
   ])
   for (const [name, { range, dialog }] of sliders) {
     const row = rowOf(html, name)

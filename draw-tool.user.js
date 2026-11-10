@@ -103,6 +103,12 @@
     return { colors, missing }
   }
 
+  function missingColorsText (missing, fromPreset) {
+    const page = PAGE_PRESETS.indexOf(fromPreset) + 1
+    const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
+    return `Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.`
+  }
+
   function paletteOptions (pageCount) {
     return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
   }
@@ -1134,8 +1140,9 @@
 
   // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
   function presetColors (preset, pages, readCell, readPen) {
-    if (preset === PEN_PRESET) return copiedPenColors(readPen)
-    return { ...paletteColors(preset, pages, readCell).colors }
+    if (preset === PEN_PRESET) return { colors: copiedPenColors(readPen), missing: [] }
+    const { colors, missing } = paletteColors(preset, pages, readCell)
+    return { colors: { ...colors }, missing }
   }
 
   // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `validator` a pasted value must pass or be skipped.
@@ -2462,6 +2469,9 @@
   let colors = null
   // The preset `colors` came from, or null for Custom.
   let colorsPreset = null
+  // The pens of `colors` the page preset left with SudokuPad's own, and that preset, for the dialog's note until the page reloads; a Custom set keeps them.
+  let colorsMissing = []
+  let colorsFromPreset = null
   let panelParts = []
 
   const keypad = () => document.querySelector('.controls-input')
@@ -2505,10 +2515,14 @@
   const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...lookKeys(LOOKS)], () => {
     const wasColors = colors
     const wasPreset = colorsPreset
+    const wasMissing = colorsMissing
+    const wasFromPreset = colorsFromPreset
     const wasLooks = { ...look }
     return () => {
       colors = wasColors
       colorsPreset = wasPreset
+      colorsMissing = wasMissing
+      colorsFromPreset = wasFromPreset
       Object.assign(look, wasLooks)
       showPanelValues()
       showColors()
@@ -2518,9 +2532,11 @@
   })
 
   // A set saved with no preset is Custom.
-  function saveColors (next, preset = null) {
+  function saveColors (next, preset = null, missing = [], fromPreset = null) {
     colors = next
     colorsPreset = preset
+    colorsMissing = missing
+    colorsFromPreset = fromPreset
     savedData.setData(COLORS_KEY, storedNoteColors(colors, preset))
     showColors()
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
@@ -2569,6 +2585,8 @@
     // Null is Custom.
     let chosen = colors ? colorsPreset : PEN_PRESET
     let colorsEdited = false
+    let draftMissing = colorsMissing
+    let pickedPreset = colorsFromPreset
     let draftLooks = { ...look }
     let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
     let pages = []
@@ -2595,7 +2613,7 @@
       snapshot: snapshotSave,
       feature: settingsUi,
       save: () => {
-        if (colorsEdited) saveColors(draft, chosen)
+        if (colorsEdited) saveColors(draft, chosen, draftMissing, pickedPreset)
         for (const { name } of editedLooks()) setLook(name, draftLooks[name])
       },
       copyPaste: {
@@ -2610,6 +2628,7 @@
           if (BOX_KEY in values) draftCustom = savedHex(look.boxColor) ?? draftCustom
           if (COLORS_KEY in values) {
             draft = colors
+            draftMissing = []
             chosen = colorsPreset
             colorsEdited = false
           }
@@ -2624,6 +2643,7 @@
       draftLooks = { ...draftLooks, ...dialogDefaults() }
       draft = copiedPenColors(readPenColor)
       chosen = PEN_PRESET
+      draftMissing = []
       colorsEdited = true
       draw()
     }
@@ -2632,6 +2652,7 @@
       box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
+        (draftMissing.length ? `<div data-role="missing-note">${missingColorsText(draftMissing, pickedPreset)}</div>` : '') +
         `<div class="${CLASS_PREFIX}section-title">Font</div>${renderFontChoice(draftLooks.noteFont)}` +
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft[color] })
     }
@@ -2640,7 +2661,8 @@
       const target = event.target
       if (target.matches('[data-role="color-choice"]')) {
         chosen = target.value
-        draft = presetColors(chosen, pages, readCellColor, readPenColor)
+        ;({ colors: draft, missing: draftMissing } = presetColors(chosen, pages, readCellColor, readPenColor))
+        pickedPreset = chosen
         colorsEdited = true
         draw()
       } else if (target.matches('[data-role="font-choice"]')) {
@@ -2651,6 +2673,7 @@
         draw()
       } else if (target.matches('input[data-role="swatch"]')) {
         draft = editedColor(draft, Number(target.dataset.key), target.value)
+        draftMissing = draftMissing.filter((n) => String(n) !== target.dataset.key)
         chosen = null
         colorsEdited = true
         draw()
@@ -2794,7 +2817,7 @@
 
   // A hold on a color button toggles a color picker over each, and a picker recolors its color number at once: every note in it reads the variable.
   function installColorPickers () {
-    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value)), guard: (toggle) => textTool.run(toggle) })
+    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value), null, colorsMissing.filter((m) => String(m) !== String(n)), colorsFromPreset), guard: (toggle) => textTool.run(toggle) })
   }
 
   // A left press in progress: `start` is the index of the note it began on, or -1 for none; `points` its points on the screen, and `pending` those its
