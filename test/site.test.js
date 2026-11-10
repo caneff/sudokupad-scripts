@@ -481,7 +481,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Formatting Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and ->, != or sum typed as → ≠ Σ. One note below shows every style, and the text that made it.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',
-    'Colors, size and opacity Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make the selected notes one Size step bigger or smaller. A size, opacity or color you set also becomes the setting for the next note.',
+    'Colors, size and opacity Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make the selected notes, or the next note, one Size step bigger or smaller. A color, size, opacity or Background you set on a note also becomes the setting for the next note.',
     'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
     'Key to switch on Press T to pick the Text tool (not while you are typing in a note, a dialog or the Letter tool).',
     'Hide all notes The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.',

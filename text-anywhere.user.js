@@ -681,7 +681,7 @@
   // Where the note at index `index` sits after the notes `keep` marks false went, or -1 when it went (or was never saved, as a new note's -1).
   const indexAfterKeep = (index, keep) => index < 0 || !keep[index] ? -1 : keep.slice(0, index).filter(Boolean).length
 
-  // Which notes a change of color, size, opacity or Background reaches: the open note, else the selected ones, else the next one typed.
+  // Which notes a change of color, size, opacity or Background reaches besides the next note's setting: the open note, else the selected ones, else none.
   const lookTarget = (editing, selected) => editing ? 'open' : selected.length ? 'selected' : 'next'
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)

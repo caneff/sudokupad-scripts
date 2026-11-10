@@ -1,6 +1,6 @@
 // Live check of text-anywhere.user.js's selection on sudokupad.app: a click selects a note and a double-click edits it, a drag on empty space selects every
 // note its rectangle touches, Shift+click adds or removes one, a click on empty space or Escape ends the selection, the panel's colors, Size slider and
-// Background change only the selected notes, a drag on a selected note moves them all and keeps every one reachable, a right-click erase or leaving the
+// Background change the selected notes and are also the next note's settings, a drag on a selected note moves them all and keeps every one reachable, a right-click erase or leaving the
 // tool keeps the selection right, and Clear all, Delete and Backspace delete only the selection. Real mouse and keyboard input throughout, at a desktop size.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

@@ -130,7 +130,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
     assert.equal(await bgCount(), 1)
   })
 
-  it('pressing Background on a note whose box differs from the setting turns that note\'s box over in one press and leaves the setting alone', async () => {
+  it('pressing Background on a note whose box differs from the setting turns that note\'s box over in one press and the state pressed is also the setting', async () => {
     assert.equal(await storedSetting(), false)
     await openAt(SPOTS[1])
     assert.equal(await pressed(), 'true', 'the button shows the open note, not the setting')
@@ -139,8 +139,21 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
     assert.equal(await boxFilled(), false)
     await finishNote(p)
     assert.deepEqual(await savedBgs(), { a: false, b: false, c: false, d: false })
-    assert.equal(await storedSetting(), false, 'the setting is unchanged')
+    assert.equal(await storedSetting(), false, 'the press turned the box off, so the setting is off')
     assert.equal(await pressed(), 'false', 'with no note open the button shows the setting')
+  })
+
+  it('pressing Background on an open note whose box is off turns it on and makes the setting on, and a second press puts both back', async () => {
+    await openAt(SPOTS[0])
+    assert.equal(await pressed(), 'false')
+    await p.click(BACKGROUND_BUTTON)
+    assert.equal(await boxFilled(), true)
+    assert.equal(await storedSetting(), true, 'the state pressed is also the setting')
+    await p.click(BACKGROUND_BUTTON)
+    assert.equal(await boxFilled(), false)
+    assert.equal(await storedSetting(), false)
+    await finishNote(p)
+    assert.deepEqual(await savedBgs(), { a: false, b: false, c: false, d: false })
   })
 
   it('turning Background on for an open note moves its handles with the padded box', async () => {

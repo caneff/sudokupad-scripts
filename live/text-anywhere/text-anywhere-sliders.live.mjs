@@ -1,6 +1,6 @@
 // Live check of text-anywhere.user.js's Size and Opacity sliders on sudokupad.app in headless Chromium at 1280x720: the two sliders under the controls in the shared
-// style (no Size or Outline button), a drag that follows the pointer, a move with nothing selected (the next note, saved), with notes selected (those only), with a note
-// open, and a saved size off the old menu's six that is kept. Real mouse input.
+// style (no Size or Outline button), a drag that follows the pointer, a move with nothing selected (the next note, saved), with notes selected (those, and the next note too), with a note
+// open (that note, and the next note too), and a saved size off the old menu's six that is kept. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
@@ -13,6 +13,8 @@ const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, SLIDERS, TEXT_BOX, 
 const A = [1.5, 1.5]
 const B = [1.5, 3.5]
 const C = [5.5, 5.5]
+// Empty board space, where a click ends a selection without opening a note.
+const OFF = [7.5, 3.5]
 
 const browser = useBrowser()
 
@@ -33,7 +35,7 @@ describe('Text Anywhere\'s Size and Opacity sliders', { concurrency: false }, ()
   })
   after(async () => { await context.close() })
 
-  it('the panel shows a Size slider and a Opacity slider under the controls, and no Size or Outline button', async () => {
+  it('the panel shows a Size slider and an Opacity slider under the controls, and no Size or Outline button', async () => {
     assert.equal(await p.locator(`${SLIDERS} input[type=range]`).count(), 2)
     assert.equal(await p.locator('.text-anywhere-menu-row, .text-anywhere-menu-button, .text-anywhere-menu').count(), 0, 'no Size or Outline menu button')
     const rect = (selector) => p.locator(selector).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.x, right: r.right, y: r.y, bottom: r.bottom } })
@@ -114,7 +116,7 @@ describe('Text Anywhere\'s Size and Opacity sliders', { concurrency: false }, ()
   it('a size dragged on a selected note sticks: clicking off leaves the panel on it, and a new note has it', async () => {
     await clickAt(p, A)
     await slideTo(p, SIZE_SLIDER, 7)
-    await finishNote(p)
+    await clickAt(p, OFF)
     assert.equal(await valueOf(p, SIZE_SLIDER), 7, 'the panel still shows the dragged size after clicking off')
     await typeText(p, [3.5, 5.5], 'new')
     assert.equal((await savedNote('new')).size, (await savedNote('Ax')).size, 'a new note has the dragged size')
@@ -124,7 +126,7 @@ describe('Text Anywhere\'s Size and Opacity sliders', { concurrency: false }, ()
     const next = await stored(WIDTH_KEY)
     await clickAt(p, B)
     assert.notEqual(await valueOf(p, SIZE_SLIDER), next, 'the panel shows the selected note\'s own size')
-    await finishNote(p)
+    await clickAt(p, OFF)
     assert.equal(await stored(WIDTH_KEY), next, 'the next-note size was not touched')
     assert.equal(await valueOf(p, SIZE_SLIDER), next)
   })

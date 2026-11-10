@@ -68,9 +68,11 @@ describe('Text Anywhere\'s panel while a note is open', { concurrency: false }, 
   })
 
   it('opening a note and finishing it changes no next-note setting', async () => {
+    const color = await stored(COLOR_KEY)
     await openAt()
     assert.equal(await stored(WIDTH_KEY), null)
     await finishNote(p)
+    assert.equal(await stored(COLOR_KEY), color, 'the next-note color is as it was')
     assert.equal(await stored(WIDTH_KEY), null)
     assert.equal(await stored(OPACITY_KEY), null)
   })
