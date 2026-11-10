@@ -4,9 +4,9 @@ import { quietPage } from './fake-target.mjs'
 import { RULES, ruleViolations } from './rules.mjs'
 
 const rule = (name) => RULES.find((r) => r.name === name)
-// `earlier` is the step before `before` as overrides of its page: `{ action, page }`, with its own `earlier` the same way.
+// `earlier` is the step before `before` as overrides of its page: `{ action, page, penSinceReload }`, with its own `earlier` the same way.
 const check = (name, now, { before = {}, action = 'click cell', earlier = null } = {}) => {
-  const step = (e) => e && { action: e.action, before: { page: quietPage(e.page) }, earlier: step(e.earlier) }
+  const step = (e) => e && { action: e.action, penSinceReload: e.penSinceReload, before: { page: quietPage(e.page) }, earlier: step(e.earlier) }
   const earlierStep = step(earlier)
   return rule(name).check({ now: { page: quietPage(now) }, before: { page: quietPage(before) }, action, earlier: earlierStep })
 }
@@ -122,7 +122,7 @@ describe('the rules', () => {
     })
     // SudokuPad serializes a pen entry, color included, after its cell's fifth slash.
     const penned = (color, mode = 'Digit') => ({ ...board, cells: ['5///5', `/////2${color}`, ''], penState: [`pen-2 pencolor-${color}`], penDrawn: [`pen-2 pencolor-${color}`], colorByDigit: colorByDigit(mode, [['5', ['5']], [''], ['']]) })
-    const afterPen = { before: penned(2), action: 'reload', earlier: { action: 'pen drag, second button', page: board } }
+    const afterPen = { before: penned(2), action: 'reload', earlier: { action: 'pen drag, second button', page: board, penSinceReload: true } }
     it('holds when a reload right after a pen action draws every stroke in color 1, in every Color by Digit mode (SudokuPad alone does it, #681)', () => {
       for (const mode of ['Cell', 'Digit', 'Both', 'Off']) assert.deepEqual(check('reload-changes-nothing', penned(1, mode), { ...afterPen, before: penned(2, mode) }), [], mode)
     })
@@ -131,8 +131,14 @@ describe('the rules', () => {
       assert.equal(check('reload-changes-nothing', { ...penned(1), penState: ['pen-5 pencolor-1'], penDrawn: ['pen-5 pencolor-1'] }, afterPen).length, 2)
     })
     it('fails on the color reset after any action but a pen action, which a script could cause', () => {
-      assert.equal(check('reload-changes-nothing', penned(1), { ...afterPen, earlier: { action: 'click cell', page: board } }).length, 3)
+      assert.equal(check('reload-changes-nothing', penned(1), { ...afterPen, earlier: { action: 'click cell', page: board, penSinceReload: false } }).length, 3)
       assert.equal(check('reload-changes-nothing', penned(1), { ...afterPen, earlier: null }).length, 3)
+    })
+    it('holds when a key press came between the stroke and the reload (#743)', () => {
+      assert.deepEqual(check('reload-changes-nothing', penned(1), { ...afterPen, earlier: { action: 'press z', page: board, penSinceReload: true } }), [])
+    })
+    it('fails on the color reset when no pen action came since the last reload', () => {
+      assert.equal(check('reload-changes-nothing', penned(1), { ...afterPen, earlier: { action: 'press z', page: board, penSinceReload: false } }).length, 3)
     })
     it('still compares the marks of a cell when it ignores the pen colors', () => {
       assert.equal(check('reload-changes-nothing', { ...penned(1), cells: ['6///5', '/////21', ''] }, afterPen).length, 1)

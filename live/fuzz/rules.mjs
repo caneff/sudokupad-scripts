@@ -136,8 +136,8 @@ export const RULES = [
     // All scripts: what the player sees after a reload is what they saw before it, as far as `reloadView` reads. The exception: `resetToColorOne`.
     check: ({ now, before, action, earlier }) => {
       if (action !== 'reload') return []
-      // Only straight after a pen action: the bug needs the reload within about half a second of a stroke.
-      const ignorePenColors = /^pen/.test(earlier?.action ?? '') && resetToColorOne(now.page)
+      // Only after a pen action since the last reload: the bug needs the reload soon after a stroke, and a key press can come between the two.
+      const ignorePenColors = earlier?.penSinceReload === true && resetToColorOne(now.page)
       return viewDifferences(reloadView(before.page, ignorePenColors), reloadView(now.page, ignorePenColors))
     }
   },

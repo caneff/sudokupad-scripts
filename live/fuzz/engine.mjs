@@ -37,7 +37,7 @@ async function runList (openTarget, actions, landMs, settleMs) {
   const target = await openTarget()
   try {
     let before = await target.snapshot()
-    // The step before the current one, for a rule that reads two steps (undo, then redo).
+    // The step before the current one, for a rule that reads two steps (undo, then redo). `penSinceReload`: a pen action came since the last reload.
     let earlier = null
     const checked = (action) => ({
       check: (model) => action.check(model),
@@ -48,7 +48,8 @@ async function runList (openTarget, actions, landMs, settleMs) {
         const now = await target.snapshot()
         assertClean(now, `after "${action}"`)
         assertRules(now, before, action.cmd.kind, `after "${action}"`, earlier)
-        earlier = { action: action.cmd.kind, before, earlier: earlier && { action: earlier.action, before: earlier.before } }
+        const penSinceReload = action.cmd.kind !== 'reload' && (earlier?.penSinceReload === true || /^pen/.test(action.cmd.kind))
+        earlier = { action: action.cmd.kind, before, penSinceReload, earlier: earlier && { action: earlier.action, before: earlier.before } }
         before = now
       }
     })
