@@ -7,6 +7,7 @@ const path = require('node:path')
 
 const { RAW, pictureTags, tagOf } = require('../tag-pictures.js')
 const { scriptFiles } = require('../sync-lib.js')
+const { headerField } = require('./header-version.js')
 const SCRIPT_SUFFIX = '.user.js'
 const ROOT = path.join(__dirname, '..')
 const SITE_DIR = path.join(ROOT, 'site')
@@ -134,8 +135,10 @@ for (const { page: file, script, name } of DETAIL_PAGES) {
   })
 }
 
-// The warning sits directly under the page title, so it is read before any install link.
+// The warning sits directly under the page title, so it is read before any install link. On the homepage the title is a sticker
+// that holds the intro as its subtitle, so the warning follows the whole sticker.
 const WARNING = /<\/h1>\s*<p class="warning">([\s\S]*?)<\/p>/
+const HOME_WARNING = /<\/header>\s*<p class="warning">([\s\S]*?)<\/p>/
 // Every script runs on the shared SudokuPad guard (lib/sudokupad.js), whose bar each details page names.
 const DETAILS_WARNING = "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad. When an update breaks one part, only that part turns off, and a bar at the bottom of the page names it with a link to report it."
 const WARNINGS = {
@@ -148,8 +151,8 @@ const WARNINGS = {
 for (const [name, text] of Object.entries(WARNINGS)) {
   test(`${name} has its warning directly under the title, above the first install link`, () => {
     const page = read(name)
-    const m = page.match(WARNING)
-    assert.ok(m, `site/${name} has no <p class="warning"> directly after its <h1>`)
+    const m = page.match(name === HOME ? HOME_WARNING : WARNING)
+    assert.ok(m, `site/${name} has no <p class="warning"> directly after its ${name === HOME ? '<header class="banner">' : '<h1>'}`)
     assert.equal(plain(m[1]), text)
     // Install links are found as the rest of this file finds them: by the script they point at.
     const firstInstall = page.search(/href="[^"]*\.user\.js"/)
@@ -157,6 +160,40 @@ for (const [name, text] of Object.entries(WARNINGS)) {
     assert.ok(m.index < firstInstall, `site/${name} has an install link above its warning`)
   })
 }
+
+test(`${HOME} opens with the title sticker: the title, which reads ChinStrap's, then the intro as its subtitle`, () => {
+  const m = read(HOME).match(/<body>\s*<header class="banner">\s*<h1>([^<]*)<\/h1>\s*<p class="lede">([\s\S]*?)<\/p>\s*<\/header>/)
+  assert.ok(m, `site/${HOME} does not open with a <header class="banner"> holding the <h1> and then the lede`)
+  assert.equal(m[1], "ChinStrap's SudokuPad scripts")
+  assert.equal(plain(m[2]), "Small userscripts for SudokuPad. Install Tampermonkey, click a script's Install button, and Tampermonkey asks if you want it.")
+  assert.match(read(HOME), /<title>ChinStrap's SudokuPad scripts<\/title>/)
+})
+
+// Chris ruled dark mode out of the site (#808): it is light only, whatever the browser asks for.
+const STYLE = () => fs.readFileSync(path.join(SITE_DIR, 'style.css'), 'utf8')
+test('no page of the site has a prefers-color-scheme: dark rule, and the site declares itself light only', () => {
+  for (const [name, text] of [['style.css', STYLE()], ...PAGES.map(name => [name, read(name)])]) {
+    assert.doesNotMatch(text, /prefers-color-scheme:\s*dark/, `site/${name} has a prefers-color-scheme: dark rule`)
+  }
+  assert.match(STYLE(), /:root \{[^}]*color-scheme: light;/)
+  assert.doesNotMatch(STYLE(), /color-scheme: light dark/)
+})
+
+test('the theme fonts, Fredoka and Nunito, are served from site/ beside their OFL license files', () => {
+  const faces = [...STYLE().matchAll(/@font-face \{ font-family: (\w+); src: url\("([^"]+)"\)/g)].map(m => [m[1], m[2]])
+  assert.deepEqual(faces.map(([family]) => family).sort(), ['Fredoka', 'Nunito'])
+  for (const [family, file] of faces) {
+    assert.ok(fs.existsSync(path.join(SITE_DIR, file)), `site/${file} (${family}) is missing`)
+    assert.match(fs.readFileSync(path.join(SITE_DIR, `OFL-${family}.txt`), 'utf8'), /SIL OPEN FONT LICENSE/i, `site/OFL-${family}.txt is missing or not the OFL`)
+  }
+})
+
+test('every script but the frozen handover names ChinStrap as its @author', () => {
+  // scriptFiles() leaves out the handover, draw-tool.user.js, which stays frozen (#800).
+  for (const s of scriptFiles()) {
+    assert.equal(headerField(fs.readFileSync(path.join(ROOT, s), 'utf8'), 'author'), 'ChinStrap', s)
+  }
+})
 
 // The details page text is pinned word for word: "What it adds" says what you can do.
 const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
@@ -261,8 +298,11 @@ const SHOWS = [
 const showOf = html => html.split('<div class="slideshow">')[1].split(/<h2>What it adds<\/h2>|<\/section>/)[0]
 const homeShow = heading => showOf(rowsOf(read(HOME)).find(r => r.includes(`<h2>${heading}</h2>`)))
 
+// Text Anywhere's details page has a second slideshow, of one note before and after, which the homepage does not show.
+const FORMATTING = 'text-anywhere-formatting'
+
 test('slideshows.json names exactly the slideshows the site shows', () => {
-  assert.deepEqual(Object.keys(SOURCE).sort(), SHOWS.map(s => s.id).sort())
+  assert.deepEqual(Object.keys(SOURCE).sort(), [...SHOWS.map(s => s.id), FORMATTING].sort())
 })
 
 for (const { heading, page: file, id } of SHOWS) {
@@ -527,15 +567,20 @@ test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated pictur
   assert.match(alt, /press 1 to 9/)
 })
 
-test(`${DRAW} shows one figure: the finished note, the same note open for typing, and a caption`, () => {
-  const m = read(DRAW).match(/<h2>One note, every style<\/h2>\s*<div class="figure">([\s\S]*?)<\/div>\s*<h2>/)
-  assert.ok(m, `site/${DRAW} has no figure under <h2>One note, every style</h2>`)
-  const found = imgs(m[1])
-  assert.deepEqual(found.map(img => withoutTag(img).match(/src="([^"]*)"/)[1]), ['text-anywhere-formatting.png', 'text-anywhere-formatting-raw.png'].map(f => `${RAW}docs/research/text-anywhere/${f}`))
-  for (const [i, words] of [['bold italics', 'underlined', 'struck through', 'nested bullet', 'numbered', 'ticked', 'code block', '→ ← ≠ ≤ ≥ Σ'], ['# Header one', '-# subtext', '***bold italics***', '~~struck through~~', '- [x] a ticked item', '```']].entries()) {
-    for (const word of words) assert.ok(altOf(found[i]).includes(word), `the ${i ? 'second' : 'first'} picture's alt text does not name "${word}"`)
+test(`${DRAW} shows one note, every style, as a two-slide slideshow: the note open for typing, then the finished note`, () => {
+  const raw = fs.readFileSync(path.join(SITE_DIR, DRAW), 'utf8')
+  assert.match(raw, new RegExp(`<h2>One note, every style</h2>\\s*<!-- slideshow:${FORMATTING} -->`), `site/${DRAW} has no <!-- slideshow:${FORMATTING} --> block under <h2>One note, every style</h2>`)
+  assert.deepEqual(syncText(raw), { text: raw, problems: [] })
+  const { dir, slides } = SOURCE[FORMATTING]
+  assert.equal(dir, 'docs/research/text-anywhere/')
+  assert.deepEqual(slides.map(({ picture, caption }) => [picture, caption]), [
+    ['text-anywhere-formatting-raw.png', 'Before: what you type'],
+    ['text-anywhere-formatting.png', 'After: what the note shows. Click a checklist box to tick it.']
+  ])
+  for (const [i, words] of [['# Header one', '-# subtext', '***bold italics***', '~~struck through~~', '- [x] a ticked item', '```'], ['bold italics', 'underlined', 'struck through', 'nested bullet', 'numbered', 'ticked', 'code block', '→ ← ≠ ≤ ≥ Σ']].entries()) {
+    for (const word of words) assert.ok(slides[i].alt.includes(word), `slide ${i + 1}'s alt text does not name "${word}"`)
   }
-  assert.match(m[1], /<p class="caption">[^<]+<\/p>/)
+  assert.doesNotMatch(read(DRAW), /<div class="figure">\s*<img[^>]*text-anywhere-formatting/, 'the formatting pictures are still a figure')
 })
 
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {

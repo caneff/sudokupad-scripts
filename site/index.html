@@ -3,27 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SudokuPad scripts</title>
+<title>ChinStrap's SudokuPad scripts</title>
 <link rel="stylesheet" href="style.css">
 <style>
   body { max-width: 72rem; }
-  .lede { max-width: 46rem; }
-  .rows { margin: 1.75rem 0; border-top: 1px solid var(--frame-edge); }
-  .row { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.5rem 0; border-bottom: 1px solid var(--frame-edge); }
+  /* The title sticker: the title and the intro as its subtitle, tilted like the stream's banner. Its left edge lines up with the
+     warning's (its halo is 1px wider), and it stands over the warning so only their two white halos meet. */
+  .banner { position: relative; z-index: 2; display: inline-block; max-width: 46rem; margin: .5rem 0 14px 1px; padding: .7rem 1.4rem .8rem; background: var(--lavender-fill); border: 10px solid var(--lavender); border-radius: 24px; box-shadow: var(--title-halo); transform: rotate(-1deg); }
+  .banner h1 { margin: 0 0 .25rem; }
+  .banner .lede { margin: 0; font-size: 1.05rem; }
+  /* Gaps between stickers are --halo-gap, halo to halo: the warning's halo is 5px and a card's 7px. */
+  .warning { position: relative; z-index: 1; margin: 0 0 calc(var(--halo-gap) + 12px); padding-top: .9rem; }
+  .rows { display: flex; flex-direction: column; gap: calc(var(--halo-gap) + 14px); }
+  /* Each script is a sticker card in its own stream color. */
+  .row { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.2rem 1.4rem; background: #fff; border: 12px solid var(--card); border-radius: 30px; box-shadow: var(--card-halo); }
+  .row:nth-of-type(1) { --card: var(--blue); }
+  .row:nth-of-type(2) { --card: var(--pink); }
+  .row:nth-of-type(3) { --card: var(--yellow); }
+  .row:nth-of-type(4) { --card: var(--mint); }
+  .row:nth-of-type(5) { --card: var(--lavender); }
+  .row:nth-of-type(6) { --card: var(--peach); }
   .row-plain { grid-template-columns: 1fr; }
   .row-text { max-width: 36rem; }
   .row h2 { font-size: 1.25rem; margin-bottom: .35rem; }
   .row-text p { margin-bottom: .75rem; }
   .actions { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  footer { margin-top: 1.5rem; font-size: .95rem; }
+  footer { margin-top: calc(var(--halo-gap) + 7px); font-size: .95rem; }
   @media (max-width: 44rem) { .row { grid-template-columns: 1fr; gap: .9rem; } }
 </style>
 </head>
 <body>
-  <h1>SudokuPad scripts</h1>
+  <header class="banner">
+    <h1>ChinStrap's SudokuPad scripts</h1>
+    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.</p>
+  </header>
   <p class="warning">These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.</p>
-  <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.</p>
   <div class="rows">
   <section class="row">
     <!-- slideshow:pen-tool-extras -->
