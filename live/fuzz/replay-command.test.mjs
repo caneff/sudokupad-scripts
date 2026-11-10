@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { DEFAULT_CONFIG } from './configs.mjs'
 import { replayCommand } from './replay-command.mjs'
 
 describe('the replay command (#724)', () => {
@@ -13,6 +14,13 @@ describe('the replay command (#724)', () => {
 
   it('still carries the plant options', () => {
     assert.equal(replayCommand({ seed: 1, path: 'p', planted: true, plant: { id: 'x' } }), 'npm run test:fuzz -- --seed 1 --path p --plant-escape-error --plant x')
+  })
+})
+
+describe('the configuration in the replay command (#725, #726)', () => {
+  it('names a configuration other than the default, which a path replays only under', () => {
+    assert.equal(replayCommand({ seed: 1, path: 'p', config: 'varied-wait' }), 'npm run test:fuzz -- --seed 1 --path p --config varied-wait')
+    assert.equal(replayCommand({ seed: 1, path: 'p', config: DEFAULT_CONFIG }), 'npm run test:fuzz -- --seed 1 --path p')
   })
 })
 
