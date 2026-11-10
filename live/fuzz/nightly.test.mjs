@@ -3,7 +3,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileIssue, run } from '../watch.mjs'
-import { FUZZ_MINUTES, FUZZ_TIMEOUT_MS, MINUTE_MS, didNotRunIssue, failureTitle, fuzzProcess, nightly, parseFuzzOutput } from './nightly.mjs'
+import { FUZZ_MINUTES, FUZZ_TIMEOUT_MS, MINUTE_MS, NIGHTLY_CONFIG, didNotRunIssue, failureTitle, fuzzProcess, nightly, parseFuzzOutput } from './nightly.mjs'
+import { CONFIGS } from './configs.mjs'
 
 const failedOutput = (seed, error, steps = ['click cell 3', 'digit 5']) => [
   `fuzz FAILED on the 9x9 puzzle (seed ${seed}) after 41 s`,
@@ -236,7 +237,7 @@ describe('the fuzz process', () => {
   it('is started with the run\'s seed and minutes, and killed at the timeout it is given', async () => {
     const calls = []
     await fuzzProcess(7, { minutes: 12.5, timeoutMs: 99 }, async (...a) => { calls.push(a); return { ok: true, output: '' } })
-    assert.deepEqual(calls, [['node', ['live/fuzz/run.mjs', '--seed', '7', '--minutes', '12.5'], { mergeStderr: true, timeout: 99 }]])
+    assert.deepEqual(calls, [['node', ['live/fuzz/run.mjs', '--seed', '7', '--minutes', '12.5', '--config', 'busy-start'], { mergeStderr: true, timeout: 99 }]])
   })
 })
 
@@ -252,4 +253,8 @@ describe('the real run', () => {
     assert.equal(r.ok, false)
     assert.equal(parseFuzzOutput(r.output), null)
   })
+})
+
+it('the nightly hunts with a configuration the fuzz knows, so a renamed one fails here and not at 07:47', () => {
+  assert.ok(Object.keys(CONFIGS).includes(NIGHTLY_CONFIG), `no configuration "${NIGHTLY_CONFIG}"`)
 })

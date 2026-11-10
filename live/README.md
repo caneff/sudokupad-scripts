@@ -144,8 +144,16 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
   a blur, or the pointer leaving the window); and page events (blur and focus, a reload, a window resize, the Dark Page dialog saved or cancelled
   with a dark color: Dark Page has no off switch). Every action leaves the mouse up, so a shrunk list is plain steps and replays from numbers alone.
 - **A crash signal** (`signals.mjs`) after every action, and once more 200 ms after the last (fast-check issue #462, so a late error still fails and
-  still shrinks): an uncaught page error, a `console.error`, a skip line, or a row in the notice bar. Each action also waits 40 ms before it is read, so
-  a late error is blamed on the action that caused it: fast-check never removes the last action of a list while shrinking.
+  still shrinks): an uncaught page error, a `console.error`, a skip line, or a row in the notice bar. Each action also waits before it is read, so
+  a late error is blamed on the action that caused it: fast-check never removes the last action of a list while shrinking. The wait is 40 ms by default and, under
+  `--config varied-wait` (#725), drawn per list from 40, 0 and 300 ms, so a bug that shows only when two inputs come close together or after a pause can appear; the wait is part of the
+  list, so a replay and a shrink keep it (a shrink that does not need it ends on 40 ms). A 0 ms list that finds fault reads the page again after 40 ms before it blames the action,
+  and an error that lands late, so that a 0 ms list reads it only at a later step, is still blamed on the step that caused it: after the shrink, the list's beginnings are run
+  again with their last step given 40 ms, and the shortest that still fails names the step (one page more for each step it looks back).
+  `--config busy-start` (#726) gives some lists a start of up to 30 steps (digits, marks, colors, pen lines, notes, saved settings), printed `(start) ...` ahead of the actions and dropped by a
+  shrink that does not need it. Its steps are actions of the list (`START_KINDS` of `actions.mjs`): what they put in SudokuPad's state (digits, marks, colors, pen lines) rides the
+  undo stack, and the rest (notes, settings, Dark Page) is what `undo-to-start` leaves out, so the rules hold unchanged and `undo-to-start` still compares with an empty board, not with the start. `--config` names one of `live/fuzz/configs.mjs`; a path replays
+  only under the configuration it was found with, and the replay command names it.
 - **The rules** (`rules.mjs`, #594) say what "working" means for each script, as pure functions over a snapshot of the page (`page-state.mjs` reads it) checked after
   every action, and once more after the last. They are: after undoing back to the start (an empty undo stack, which a new action `undo back to the start`
   reaches) SudokuPad's state holds nothing; Pen Tool Extras: every pen entry in the state is drawn and nothing else is; Text Anywhere: the saved notes are the
@@ -182,26 +190,31 @@ Each failure the run finds is fixed in a ticket of its own, whose PR adds the sh
 
 ## Measuring the fuzz: planted bugs
 
-`npm run fuzz:plants` (`live/fuzz/plants-run.mjs`, #678) answers "can the fuzz catch a bug at all". It injects one planted bug at a time in place of the real script, fuzzes
-it, and prints a table of which plants were caught, how fast, and the shrunk steps. It is not in `npm test`; the first results are in `docs/research/fuzz-planted-bugs.md`.
+`npm run fuzz:plants` (`live/fuzz/plants-run.mjs`, #678, #727) answers "can the fuzz catch a bug at all, and does a change catch more". It injects one planted bug at a time in place of the real script and
+fuzzes it on K seeds with a short budget each, and prints per plant the fraction of seeds that caught it and the median time to catch (a miss counts as slower than any catch, so a median that is a
+miss prints `> <budget> s`), with a total. It is not in `npm test`; the baseline is in `docs/research/fuzz-planted-bugs.md`.
 
 ```
-npm run fuzz:plants -- [--minutes <m per plant>] [--shrink-minutes <m>] [--seed <n>] [--plant <id> ...]
+npm run fuzz:plants -- [--seeds <k>] [--budget <seconds per hunt>] [--seed <first seed>] [--shrink-minutes <m>] [--plant <id> ...] [--config <name> ...] [--no-replay-check]
 ```
 
-- **The plants** (`plants.mjs`) are 11 one-line bugs, each `{ id, file, kind, bug, find, replace, expect }` (`bug` says it in words): `find` and `replace` are applied to the text of the script read
+- **Compare**: `--config` twice or more runs each plant on the same seeds under each configuration (`live/fuzz/configs.mjs`: `current`, `varied-wait`, `busy-start`, `varied-wait+busy-start`) and prints them side by side.
+  A name that is no configuration, or one named twice, stops the run before the browser starts.
+- **Replay check**: each catch is run again from its own path, and the table says how many did not fail again. A failure that depends on timing may not repeat.
+- **One line per run** prints as it finishes, so a killed run keeps what it found; run it under `job-run`. A failed hunt's line ends with its `replay:` command, and a
+  failure that is not the plant's (a bug the shipped scripts already have) prints its error too: the table counts it only as a miss.
+- **The plants** (`plants.mjs`) are 12 one-line bugs, each `{ id, file, kind, bug, find, replace, expect }` (`bug` says it in words): `find` and `replace` are applied to the text of the script read
   from disk and injected by `installAll`, so the root `*.user.js` never hold a bug. A `find` that matches anywhere but once fails the run before any page opens
   (`plants.test.mjs` checks every plant against the shipped scripts in `npm test`). `kind` is `rule` or `crash`; `expect` matches the failure message that counts as a catch (a crash plant names its own error text), so a
   failure the real scripts already have (it prints as "other failure") is not scored.
-- **The budget** is 4 minutes a plant by default, 2 on each of two seeds, each over the whole puzzle set (#679; the first run in `docs/research/fuzz-planted-bugs.md` was on the 9x9 and the 6x6 only), plus a shrink of up to 2 minutes. All eleven take about 45 minutes
-  on one core and one Chromium; run it under `job-run`.
+- **The budget** is 60 seconds a plant on each of 5 seeds, each hunt over the whole puzzle set (#679), plus a short shrink of each catch for the replay check. A hunt ends at its first failure, so the
+  12 plants take about 45 minutes per configuration on one core and one Chromium (the third run in `docs/research/fuzz-planted-bugs.md` took 2 h 08 min for three).
 - **A miss** is read for its likely reason: no rule sees it, no action reaches it, the board is too empty, or timing. Add a plant by adding an entry to `plants.mjs`.
-- **Replaying a catch**: the table prints each catch's `replay:` command, `npm run test:fuzz -- --seed <n> --path <path> --plant <id>`, which replays that one list with the plant in.
-- **A run that fails midway** still prints the table of the plants done so far.
+- **Replaying a catch**: the per-run line's `replay:` command, `npm run test:fuzz -- --seed <n> --path <path> --plant <id> [--config <name>]`, replays that one list with the plant in.
 
 ## The nightly fuzz
 
-`npm run fuzz:nightly` (`live/fuzz/nightly.mjs`, #595) runs `live/fuzz/run.mjs` with a fresh random seed and files what it finds, on GitHub Actions
+`npm run fuzz:nightly` (`live/fuzz/nightly.mjs`, #595) runs `live/fuzz/run.mjs` with a fresh random seed and the `busy-start` configuration (`NIGHTLY_CONFIG`, the best of the four in `docs/research/fuzz-planted-bugs.md`) and files what it finds, on GitHub Actions
 in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `workflow_dispatch` runs it by hand). It is a workflow of its own, not a job of
 `watch.yml`, so 30 minutes of fuzzing never holds up the watch and the two keep separate concurrency groups.
 

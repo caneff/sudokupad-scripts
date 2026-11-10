@@ -1,7 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { applyPlant, PLANTS, plantById, plantPatch } from './plants.mjs'
-import { plantTable } from './plant-table.mjs'
 import { scriptSource } from '../session.mjs'
 
 const occurrences = (text, find) => text.split(find).length - 1
@@ -55,29 +54,5 @@ describe('the plants against the shipped scripts', () => {
 
   it('no shipped script holds a replacement', () => {
     for (const plant of PLANTS) assert.equal(occurrences(scriptSource(plant.file), plant.replace), 0, `${plant.id}: ${plant.file} holds the bug`)
-  })
-})
-
-describe('plantTable', () => {
-  const a = { id: 'a-bug', kind: 'rule', expect: /rule-a/ }
-  const b = { id: 'b-bug', kind: 'crash', expect: /crash signal/ }
-  const c = { id: 'c-bug', kind: 'rule', expect: /rule-c/ }
-  const text = plantTable([
-    { plant: a, caught: true, puzzle: '6x6', seconds: 12, runs: 9, error: 'rule broken after "undo": rule-a: x', sequence: ['click r1c1', 'undo'], replayCommand: 'npm run test:fuzz -- --seed 7 --path 1:2@x --plant a-bug' },
-    { plant: b, caught: false, seconds: 90, runs: 40 },
-    { plant: c, caught: false, other: true, seconds: 30, runs: 5, error: 'rule broken after "reload": other-rule: y' }
-  ])
-
-  it('says which were caught, how fast and with what steps', () => {
-    assert.match(text, /a-bug +rule +CAUGHT +6x6 +12 s/)
-    assert.match(text, /a-bug: shrunk to 2 steps\n {2}1\. click r1c1\n {2}2\. undo/)
-    assert.match(text, /\n {2}replay: npm run test:fuzz -- --seed 7 --path 1:2@x --plant a-bug\n/)
-    assert.match(text, /1 of 3 planted bugs caught/)
-  })
-
-  it('a miss shows its lists, and a failure that is not the plant\'s is not a catch', () => {
-    assert.match(text, /b-bug +crash +missed +- +90 s, 40 lists/)
-    assert.match(text, /c-bug +rule +other failure/)
-    assert.match(text, /c-bug: a failure that is not the plant's: rule broken after "reload": other-rule: y/)
   })
 })
