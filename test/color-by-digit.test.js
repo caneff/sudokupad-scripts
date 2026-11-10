@@ -10,7 +10,7 @@ const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { startScript, withScript, withoutPath } = require('./unit-start.js')
-const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 
 // The chips a profile pair draws in `style`; the digit profile is the cell profile unless given.
 const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
@@ -2056,11 +2056,63 @@ test('createModeHistory: Undo to a length below a step gives the mode before the
   history.record(12, 'cell', 'digit')
   history.record(18, 'digit', 'both')
   assert.equal(history.undo(18), undefined)
-  assert.equal(history.undo(5), 'off')
+  assert.equal(history.undo(5).mode, 'off')
   assert.equal(history.redo(5), undefined)
-  assert.equal(history.redo(18), 'both')
-  assert.equal(history.undo(11), 'cell')
-  assert.equal(history.undo(0), 'off')
+  assert.equal(history.redo(18).mode, 'both')
+  assert.equal(history.undo(11).mode, 'cell')
+  assert.equal(history.undo(0).mode, 'off')
+})
+
+test('createModeHistory: Undo gives the cell profile before the earliest step taken back, Redo the one after the latest put back, across several steps at once', () => {
+  const history = createModeHistory()
+  const a = { name: 'A' }
+  const b = { name: 'B' }
+  const c = { name: 'C' }
+  history.record(6, 'cell', 'cell', { from: a, to: b })
+  history.record(12, 'cell', 'cell', { from: b, to: c })
+  assert.deepEqual(history.undo(5).profile, a)
+  assert.deepEqual(history.redo(12).profile, c)
+  assert.deepEqual(history.undo(11).profile, b)
+  assert.deepEqual(history.redo(12).profile, c)
+})
+
+test('createModeHistory: a step with no profile between two that have one is skipped, and a step with none alone gives none', () => {
+  const history = createModeHistory()
+  const a = { name: 'A' }
+  const b = { name: 'B' }
+  history.record(6, 'cell', 'cell', { from: a, to: b })
+  history.record(12, 'cell', 'digit')
+  history.record(18, 'digit', 'digit', { from: b, to: a })
+  assert.deepEqual(history.undo(0), { mode: 'cell', profile: a })
+  assert.deepEqual(history.redo(18), { mode: 'digit', profile: a })
+  assert.deepEqual(history.undo(17), { mode: 'digit', profile: b })
+  assert.equal(history.undo(11).profile, undefined)
+})
+
+test('withCellProfile: makes the named profile active, with its groups put back when the step holds them, and leaves the others', () => {
+  const state = { profiles: [{ name: 'A', groups: [{ key: 'a', digits: ['1'] }] }, { name: 'B', groups: [{ key: 'b', digits: ['2'] }] }], active: 1 }
+  const named = withCellProfile(state, { name: 'A' })
+  assert.equal(named.active, 0)
+  assert.deepEqual(named.profiles, state.profiles)
+  const put = withCellProfile(state, { name: 'A', groups: [{ key: 'x', digits: ['9'] }] })
+  assert.equal(put.active, 0)
+  assert.deepEqual(put.profiles[0].groups, [{ key: 'x', digits: ['9'] }])
+  assert.deepEqual(put.profiles[1], state.profiles[1])
+})
+
+test('withCellProfile: finds the profile by name after a Save moved or deleted others, and prefers the same-named one holding the step\'s groups', () => {
+  const ones = [{ key: 'a', digits: ['1'] }]
+  const twos = [{ key: 'b', digits: ['2'] }]
+  const moved = { profiles: [{ name: 'C', groups: twos }, { name: 'B', groups: twos }, { name: 'A', groups: ones }], active: 1 }
+  assert.equal(withCellProfile(moved, { name: 'A', groups: ones }).active, 2)
+  assert.deepEqual(withCellProfile(moved, { name: 'A', groups: ones }).profiles, moved.profiles)
+  const twins = { profiles: [{ name: 'A', groups: twos }, { name: 'A', groups: ones }], active: 0 }
+  assert.equal(withCellProfile(twins, { name: 'A', groups: ones }).active, 1)
+})
+
+test('withCellProfile: a name no profile bears leaves the state as it is', () => {
+  const state = { profiles: [{ name: 'A', groups: [{ key: 'a', digits: ['1'] }] }], active: 0 }
+  assert.deepEqual(withCellProfile(state, { name: 'Gone', groups: [] }), state)
 })
 
 test('createModeHistory: a new step or forgetRedo drops the steps that could have been redone', () => {
@@ -2081,9 +2133,9 @@ test('createModeHistory: a restart sets the steps aside, and the Undo that loads
   history.restart()
   assert.equal(history.undo(0), undefined)
   history.restoreBeforeRestart()
-  assert.equal(history.undo(0), 'off')
+  assert.equal(history.undo(0).mode, 'off')
   history.restart()
   history.restart()
   history.restoreBeforeRestart()
-  assert.equal(history.redo(99), 'cell')
+  assert.equal(history.redo(99).mode, 'cell')
 })
