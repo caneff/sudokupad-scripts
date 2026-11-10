@@ -118,7 +118,7 @@
   cross and dot (pen values 5, 6 and z) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle), a grid-corner mark and the cell dot
   are always half of it, so every width scales by one factor. Above 5 an edge or grid-corner mark or the cell dot also grows in size (the **mark growth**: a CSS scale about its own middle, 1 at 5 and 1.6 at 16, its stroke width divided by the scale so it stays as thick); lines never grow.
-- **thickness keys** — the + (also =, and the keypad's) and - keys, which with the pen tool on move the Thickness slider one step (half a unit) and save it as a slider move is, as Text Anywhere's keys move its **Size slider**. A held key steps once, because SudokuPad drops key repeats before any tool.
+- **thickness keys** — the + (also =, and the keypad's) and - keys, which with the pen tool on move the Thickness slider one step (half a unit) and save it as a slider move is, as Text Anywhere's keys move its **Size slider**. They do nothing while a dialog is open. A held key steps once, because the script ignores a repeat.
 - **pen panel sliders** — Thickness and Opacity, drawn in the pen tool's panel across its full width in the row under the **controls row**. SudokuPad gives its
   line mode pulldown (`.penlinemode`) the panel's last row, which the script hides. They sit with the controls row on a **tray**. They exist only while the pen tool is on, and have no Save or Cancel. The settings
   dialog also holds both sliders (drafts, applied on Save), each in a row of Line settings with a **slider box** on a sub-line under it,

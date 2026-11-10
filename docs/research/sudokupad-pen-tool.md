@@ -255,5 +255,6 @@ Run in the pen tool with `Framework.app.tool === 'pen'`, by `keyboard.press` of 
 - The one difference after `Shift+Equal` is the selected pen color read back as the number `1` instead of the string `"1"`. It comes from the Shift keydown, not the +: the Shift switches the tool to Corner (`tempKey`) until it is released.
 - So the `+` keydown of `Shift+Equal` arrives with `Framework.app.tool === 'corner'` and `Framework.app.prevTool === 'pen'`. A script that wants the + checks both.
 - A held key sends keydowns with `repeat: true`; SudokuPad's `App.handleKeydown` drops them before any tool sees them, so a tool's `handleKeydown` is called once. A listener on `window` in the capture or bubble phase still sees them.
+- Run later: SudokuPad does not ask a tool for a key while a dialog is open (the digit key 3 did nothing in Pen Tool Extras' own dialog), so a script's `window` listener has to check for `.dialog` itself.
 - No other script in this repo handles + or - outside Text Anywhere's Size keys.
 - Checked in `live/pen-tool-extras/pen-tool-extras-thickness-keys.live.mjs`.

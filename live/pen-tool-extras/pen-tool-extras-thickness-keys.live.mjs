@@ -1,11 +1,13 @@
 // Live check of Pen Tool Extras' + and - keys, which step the Thickness slider, on sudokupad.app in headless Chromium at 1280x720:
-// each key (with the keypad's), a held key, the limits, a focused field and the pen tool being off.
+// each key (with the keypad's), a held key, the limits, Alt held, a focused field, an open dialog, a hidden slider and the pen tool being off.
 // docs/research/sudokupad-pen-tool.md § + and - holds what SudokuPad's own pen tool does with them.
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
 import * as extras from './pen-tool-extras-fixtures.mjs'
+import { setInputValue } from '../pen.mjs'
 import { readUntil } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
+import { openExtrasEditor, closeExtrasEditorWith } from '../settings.mjs'
 import { slideTo } from '../slider.mjs'
 
 const THICKNESS = '#pen-tool-extras-thickness'
@@ -26,7 +28,7 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
   const slider = () => p.evaluate((s) => Number(document.querySelector(s).value), THICKNESS)
   const saved = () => p.evaluate((key) => Framework.getData(key), THICKNESS_KEY)
   const undoDepth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
-  const setThickness = (value) => p.evaluate(([s, v]) => { const el = document.querySelector(s); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) }, [THICKNESS, value])
+  const setThickness = (value) => setInputValue(p.locator(THICKNESS), value)
 
   it('+, = and the keypad\'s + step the slider up, - and the keypad\'s - down, each by one step, and the step is saved and not an undo step', async () => {
     await setThickness(8)
@@ -41,7 +43,7 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
     assert.equal(await undoDepth(), undo, 'no undo step')
   })
 
-  it('a held key steps once, as SudokuPad passes on no repeat', async () => {
+  it('a held key steps once, because the script ignores a repeat', async () => {
     await setThickness(8)
     await p.keyboard.down('Minus')
     await p.keyboard.down('Minus')
@@ -51,19 +53,21 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
     assert.equal(await saved(), 8 - RANGE.step)
   })
 
-  it('stops at the ends of the range', async () => {
+  it('stops at the ends of the range, in the saved value as well as the slider', async () => {
     await setThickness(RANGE.max)
     await p.keyboard.press('Equal')
-    await p.keyboard.press('Equal')
     assert.equal(await slider(), RANGE.max)
+    assert.equal(await saved(), RANGE.max)
     await setThickness(RANGE.min)
     await p.keyboard.press('Minus')
     assert.equal(await slider(), RANGE.min)
+    assert.equal(await saved(), RANGE.min)
   })
 
-  it('does nothing with Ctrl held, which is the browser\'s zoom', async () => {
+  // Left Alt keeps the pen tool current, so the script's own check is what refuses the key (Ctrl switches the tool, and the unit test holds that case).
+  it('does nothing with Alt held', async () => {
     await setThickness(8)
-    await p.keyboard.press('Control+Minus')
+    await p.keyboard.press('Alt+Minus')
     assert.equal(await slider(), 8)
     assert.equal(await saved(), 8)
   })
@@ -77,10 +81,17 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
       field.focus()
     })
     await p.keyboard.press('Minus')
-    await p.keyboard.press('Equal')
     assert.equal(await slider(), 8)
     assert.equal(await saved(), 8)
     await p.evaluate(() => document.getElementById('thickness-keys-field').remove())
+  })
+
+  it('does nothing while a dialog is open, so a Save does not undo it', async () => {
+    await setThickness(8)
+    await openExtrasEditor(p)
+    await p.keyboard.press('Minus')
+    assert.equal(await saved(), 8)
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('steps from the value a mouse move on the slider left', async () => {
@@ -97,6 +108,13 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
     await p.keyboard.press('Minus')
     assert.equal(await saved(), 8)
     assert.equal(await p.evaluate(() => Framework.app.tool), 'normal')
+  })
+
+  it('does nothing while the Thickness slider is hidden from the panel', async () => {
+    await p.evaluate(([key, sliders]) => { Framework.setData(key, 8); Framework.setData(sliders, { thickness: false, opacity: true }) }, [THICKNESS_KEY, 'PenColor_sliders'])
+    await extras.reload(p)
+    await p.keyboard.press('Minus')
+    assert.equal(await saved(), 8)
   })
 
   it('raised no page errors', () => assert.deepEqual(errors, []))
