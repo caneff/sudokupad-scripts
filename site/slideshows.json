@@ -5,15 +5,10 @@
     "height": 430,
     "slides": [
       {
-        "picture": "pen-tool-extras-slide-1-line.png",
-        "alt": "A gray line drawn across the top row of the board, with the pen panel beside it",
-        "caption": "Draw a line"
-      },
-      {
-        "picture": "pen-tool-extras-slide-2-color.png",
-        "animation": "pen-tool-extras-slide-2-color.webp",
-        "alt": "A red ring on the first pen color button, which a hold has turned into an edit mode with a color picker on every pen button, then the button and the line recolored to teal after a color is picked",
-        "caption": "Hold a color button, then pick a color"
+        "picture": "pen-tool-extras-slide-1-color.png",
+        "animation": "pen-tool-extras-slide-1-color.webp",
+        "alt": "A teal line across the top row of the board, beside the pen panel whose first color button is now teal. Animated, the slide steps from the empty board to the line drawn in gray, to a red ring on the first color button held down so every pen button shows a color picker, to the teal picked",
+        "caption": "Draw a line, hold its button to recolor"
       },
       {
         "picture": "pen-tool-extras-slide-3-solid.png",

@@ -1,9 +1,9 @@
-// Takes the 13 slides of Pen Tool Extras' slideshow (site/index.html and site/pen-tool-extras.html), from the real script on the live page, on a
+// Takes the 12 slides of Pen Tool Extras' slideshow (site/index.html and site/pen-tool-extras.html), from the real script on the live page, on a
 // blank grid. Each slide is the board patch in use beside the pen panel, cropped tight, with no caption drawn in (the captions are page text).
 // A slide that shows a before and an after is also an animated WebP (docs/research/site/slide-animation.py): the before, a crossfade, the after,
-// a crossfade back. Its PNG is the after, the still a visitor who prefers reduced motion sees. A * marks those slides.
-//   pen-tool-extras-slide-1-line.png       a line drawn in the first pen
-//   pen-tool-extras-slide-2-color.png    * a hold on a pen color button (edit mode, a color picker under each pen button), then a color picked: the button and the line recolored
+// a crossfade back (slide 1 crossfades through four steps). Its PNG is the last picture, the still a visitor who prefers reduced motion sees. A * marks those slides.
+//   pen-tool-extras-slide-1-color.png    * four steps: the empty board, a line drawn in the first pen, a hold on its color button (edit mode, a color
+//                                          picker under each pen button), then a color picked: the button and the line recolored
 //   pen-tool-extras-slide-3-solid.png      a solid line
 //   pen-tool-extras-slide-4-dashed.png     a dashed line
 //   pen-tool-extras-slide-5-arrow.png      an arrow line
@@ -191,14 +191,17 @@ const DIALOG_VIEWPORT = { width: 1200, height: 900 }
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
 
-// 1 and 2. Recolor pen 1 in edit mode.
+// 1. Draw a line, then recolor its pen in edit mode: four steps of one animation.
+const steps = ['blank', 'line', 'hold'].map((step) => join(frames, `step-${step}.png`))
+await shoot(steps[0])
 await line(NEW_PEN_COLOR_KEY, [[TEAL_ROW, 0.5], [TEAL_ROW, 2.5]])
-await slide('1-line')
+await shoot(steps[1])
 await holdWithRing(NEW_PEN_COLOR_KEY)
-await before('2-color')
+await shoot(steps[2])
 await pickPenColor(p, NEW_PEN_COLOR_KEY, NEW_COLOR)
 await unring()
-await animatedSlide('2-color')
+await slide('1-color')
+writeAnimation(...steps, target('1-color'), target('1-color', 'webp'))
 await holdWithRing(NEW_PEN_COLOR_KEY)
 await unring()
 
