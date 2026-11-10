@@ -280,10 +280,11 @@ describe('focusing the actions on a script (#724)', () => {
     assert.deepEqual(KIND_NAMES.filter((k) => !focused[k]), [], 'every kind appears')
   })
 
-  it('a script is named by its file or its short name, and an unknown name is refused', () => {
-    assert.deepEqual(focusFiles(['pen-tool-extras', 'text-anywhere.user.js']), [PEN, 'text-anywhere.user.js'])
+  it('a script is named by its short name, and any other name is refused', () => {
+    assert.deepEqual(focusFiles(['pen-tool-extras', 'text-anywhere']), [PEN, 'text-anywhere.user.js'])
     assert.deepEqual(focusFiles(undefined), [])
     assert.throws(() => focusFiles(['pen-tool']), /pen-tool.*pen-tool-extras/)
-    assert.throws(() => focusFiles(['draw-tool']), /draw-tool/)
+    assert.throws(() => focusFiles(['nonesuch']), /nonesuch/)
+    assert.throws(() => focusFiles(['pen-tool-extras.user.js']), /is no script/)
   })
 })

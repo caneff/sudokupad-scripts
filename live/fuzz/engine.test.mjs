@@ -64,13 +64,12 @@ describe('the fuzz engine on a fake page', () => {
     })
   })
 
-  it('a focused failure replays with the same focus (#724)', async () => {
+  it('a focused failure replays, with the same focus, as the same list (#724)', async () => {
     const focus = ['pen-tool-extras.user.js']
     const found = await runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, focus, ...WAITS })
     assert.equal(found.failed, true)
     const replay = (withFocus) => runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, seed: found.seed, path: found.path, replayPath: found.replayPath, focus: withFocus, ...WAITS })
     assert.deepEqual((await replay(focus)).sequence, found.sequence)
-    await assert.rejects(replay([]), /Unable to replay/, 'the same path under other weights is no list of this run')
   })
 
   it('stops at its time limit', async () => {

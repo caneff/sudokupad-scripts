@@ -77,12 +77,15 @@ describe('fuzz-pr.yml (#724)', () => {
 
   it('fuzzes for 5 minutes with the changed scripts in focus, and files no issue and runs no other live test', () => {
     assert.match(yml, /npm run test:fuzz -- --minutes 5 /)
-    assert.match(yml, /--focus "\$script"/)
+    assert.match(yml, /changed=\$\(git diff --name-only "origin\/\$BASE_REF\.\.\.HEAD" -- '\*\.user\.js'\)/)
+    assert.match(yml, /focus\+=\(--focus "\$\{file%\.user\.js\}"\)/)
+    assert.match(yml, /set -o pipefail/, 'without it tee hides the fuzz exit code from the default shell')
     assert.doesNotMatch(yml, /file-issue-once|gh issue/)
     assert.doesNotMatch(yml, /test:tampermonkey|test:live/)
   })
 
   it('puts a failure into the job summary', () => {
     assert.match(yml, />> "\$GITHUB_STEP_SUMMARY"/)
+    assert.match(yml, /if: \$\{\{ failure\(\) && steps\.fuzz\.outcome == 'failure' \}\}/)
   })
 })

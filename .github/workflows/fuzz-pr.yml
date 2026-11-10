@@ -41,9 +41,12 @@ jobs:
       - id: fuzz
         run: |
           set -o pipefail
+          # An assignment, so a git error fails the step (`bash -e`) instead of reading as "nothing changed".
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- '*.user.js')
           focus=()
-          for script in auto-rules-resizer color-by-digit dark-page pen-tool-extras text-anywhere ui-tweaks; do
-            if ! git diff --quiet "origin/$BASE_REF...HEAD" -- "$script.user.js"; then focus+=(--focus "$script"); fi
+          for file in $changed; do
+            # draw-tool.user.js is a frozen handover that no fuzz page installs.
+            [ "$file" = draw-tool.user.js ] || focus+=(--focus "${file%.user.js}")
           done
           echo "focus: ${focus[*]:-none (a change to lib/ or the fuzz only)}"
           npm run test:fuzz -- --minutes 5 --shrink-minutes 3 "${focus[@]}" 2>&1 | tee "$RUNNER_TEMP/fuzz.out"

@@ -4,6 +4,7 @@
 //   npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--plant-escape-error] [--plant <id>] [--focus <script> ...]
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright'
+import { focusFiles } from './actions.mjs'
 import { numberOption } from './cli-number.mjs'
 import { fuzz } from './fuzz.mjs'
 import { plantById } from './plants.mjs'
@@ -15,6 +16,8 @@ const { values } = parseArgs({
 const number = (name, fallback, options) => numberOption(values, name, fallback, options)
 
 const seed = number('seed', Math.floor(Math.random() * 2 ** 31), { integer: true })
+// Before the browser starts: a name that is no script stops the run at once.
+const focus = focusFiles(values.focus)
 const started = Date.now()
 const browser = await chromium.launch()
 try {
@@ -27,7 +30,7 @@ try {
     path: values.path,
     planted: values['plant-escape-error'],
     plant: values.plant && plantById(values.plant),
-    focus: values.focus
+    focus
   })
   const seconds = Math.round((Date.now() - started) / 1000)
   if (!r.failed) {

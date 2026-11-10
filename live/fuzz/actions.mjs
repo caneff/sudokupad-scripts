@@ -356,62 +356,69 @@ const commandOf = (k, puzzle, arg) => ({
   toString: () => k.label(arg, nameTarget(puzzle))
 })
 
-// The scripts each kind exercises, by file name: what `--focus` raises. A kind that only reaches a script through SudokuPad (a click, an undo) names none.
-const PEN = 'pen-tool-extras.user.js'
-const NOTES = 'text-anywhere.user.js'
+// A script's file name from its short name, which is what `--focus` takes and a replay command prints.
+export const scriptFile = (name) => `${name}.user.js`
+export const scriptName = (file) => file.replace(/\.user\.js$/, '')
+const AUTO_RULES_RESIZER = scriptFile('auto-rules-resizer')
+const COLOR_BY_DIGIT = scriptFile('color-by-digit')
+const DARK_PAGE = scriptFile('dark-page')
+const PEN_TOOL_EXTRAS = scriptFile('pen-tool-extras')
+const TEXT_ANYWHERE = scriptFile('text-anywhere')
+const UI_TWEAKS = scriptFile('ui-tweaks')
+
+// The scripts each kind exercises, by file name: what `--focus` raises. A kind that reaches a script only through SudokuPad (a click on a cell, a window blur) names none.
 export const KIND_SCRIPTS = {
   'click cell': [],
-  'type digit': ['color-by-digit.user.js'],
-  'enter digit': ['color-by-digit.user.js'],
-  undo: [PEN, NOTES],
-  'undo all': [PEN, NOTES],
-  redo: [PEN, NOTES],
-  'tool key': ['color-by-digit.user.js', 'ui-tweaks.user.js'],
-  tab: ['ui-tweaks.user.js'],
-  'pen line': [PEN],
-  'pen erase': [PEN],
-  'pen page': [PEN],
-  'place note': [NOTES],
-  'move note': [NOTES],
-  'pen settings': [PEN],
-  'slider drag': [PEN, NOTES],
-  'slider keys': [PEN, NOTES],
-  'pen settings values': [PEN],
-  'note box color': [NOTES],
-  'note background': [NOTES],
-  'boxed note': [NOTES],
-  'arrow line': [PEN],
-  'color mode': ['color-by-digit.user.js'],
-  'pen drag, Escape': [PEN],
-  'pen drag, tool key': [PEN],
-  'pen drag, undo': [PEN],
-  'pen drag, resize': [PEN, 'auto-rules-resizer.user.js'],
-  'pen drag, second button': [PEN],
-  'pen drag, blur': [PEN],
-  'pen drag, leave window': [PEN],
-  'erase held, Escape': [PEN],
-  'erase held, tool key': [PEN],
-  'erase held, left button': [PEN],
-  'note drag, Escape': [NOTES],
-  'note drag, Delete': [NOTES],
-  'note drag, undo': [NOTES],
-  'note drag, resize': [NOTES, 'auto-rules-resizer.user.js'],
+  'type digit': [COLOR_BY_DIGIT],
+  'enter digit': [COLOR_BY_DIGIT],
+  undo: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  'undo all': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  redo: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  'tool key': [COLOR_BY_DIGIT, UI_TWEAKS],
+  tab: [UI_TWEAKS],
+  'pen line': [PEN_TOOL_EXTRAS],
+  'pen erase': [PEN_TOOL_EXTRAS],
+  'pen page': [PEN_TOOL_EXTRAS],
+  'place note': [TEXT_ANYWHERE],
+  'move note': [TEXT_ANYWHERE],
+  'pen settings': [PEN_TOOL_EXTRAS],
+  'slider drag': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  'slider keys': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+  'pen settings values': [PEN_TOOL_EXTRAS],
+  'note box color': [TEXT_ANYWHERE],
+  'note background': [TEXT_ANYWHERE],
+  'boxed note': [TEXT_ANYWHERE],
+  'arrow line': [PEN_TOOL_EXTRAS],
+  'color mode': [COLOR_BY_DIGIT],
+  'pen drag, Escape': [PEN_TOOL_EXTRAS],
+  'pen drag, tool key': [PEN_TOOL_EXTRAS],
+  'pen drag, undo': [PEN_TOOL_EXTRAS],
+  'pen drag, resize': [PEN_TOOL_EXTRAS, AUTO_RULES_RESIZER],
+  'pen drag, second button': [PEN_TOOL_EXTRAS],
+  'pen drag, blur': [PEN_TOOL_EXTRAS],
+  'pen drag, leave window': [PEN_TOOL_EXTRAS],
+  'erase held, Escape': [PEN_TOOL_EXTRAS],
+  'erase held, tool key': [PEN_TOOL_EXTRAS],
+  'erase held, left button': [PEN_TOOL_EXTRAS],
+  'note drag, Escape': [TEXT_ANYWHERE],
+  'note drag, Delete': [TEXT_ANYWHERE],
+  'note drag, undo': [TEXT_ANYWHERE],
+  'note drag, resize': [TEXT_ANYWHERE, AUTO_RULES_RESIZER],
   'blur and focus': [],
-  reload: scriptFiles(),
-  resize: ['auto-rules-resizer.user.js'],
-  'dark page': ['dark-page.user.js']
+  reload: [],
+  resize: [AUTO_RULES_RESIZER],
+  'dark page': [DARK_PAGE]
 }
 
 // How much a focused script's kinds weigh over their own weight: a kind is raised, never silenced, so the others still come up.
 export const FOCUS_FACTOR = 4
 
-// The script files `--focus` names (a file name or its name without `.user.js`); a name that is no script is refused, naming the ones that are.
+// The script files `--focus` names (short names); a name that is no script is refused, naming the ones that are.
 export function focusFiles (names = []) {
   const files = scriptFiles()
   return names.map((name) => {
-    const file = name.endsWith('.user.js') ? name : `${name}.user.js`
-    if (!files.includes(file)) throw new Error(`--focus ${name} is no script; the scripts are ${files.map((f) => f.replace('.user.js', '')).join(', ')}`)
-    return file
+    if (!files.includes(scriptFile(name))) throw new Error(`--focus ${name} is no script; the scripts are ${files.map(scriptName).join(', ')}`)
+    return scriptFile(name)
   })
 }
 
