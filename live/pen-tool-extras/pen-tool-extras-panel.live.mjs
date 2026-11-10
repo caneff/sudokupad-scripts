@@ -218,12 +218,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await saved(THICKNESS_KEY), null, 'a panel slider at its default removes its key')
   })
 
-  it('Thickness moves in half steps: a drag to the thin end and one step on lands on 1.5, which draws a 1.5 wide line and saves', async () => {
+  // SudokuPad cancels every arrow key, so the slider never steps from the keyboard; the half step is reached by dragging the thumb to a pixel that rounds to 1.5.
+  const dragToValue = async (selector, wanted) => {
+    const box = await p.locator(selector).boundingBox()
+    const { min, max } = await p.locator(selector).evaluate((el) => ({ min: Number(el.min), max: Number(el.max) }))
+    const thumb = 1.1 * 16
+    await dragSlider(selector, box.x + thumb / 2 + ((wanted - min) / (max - min)) * (box.width - thumb))
+  }
+
+  it('Thickness moves in half steps: a drag to the thin end and one on to 1.5 lands on 1.5, which draws a 1.5 wide line and saves', async () => {
     await openPenTool(p)
     await dragSlider(THICKNESS, GRID_X)
     assert.equal(await sliderValue(THICKNESS), '1')
-    await p.locator(THICKNESS).focus()
-    await p.keyboard.press('ArrowRight')
+    await dragToValue(THICKNESS, 1.5)
     assert.equal(await sliderValue(THICKNESS), '1.5')
     assert.equal(await settle(lineWidth, 1.5), 1.5)
     assert.equal(await saved(THICKNESS_KEY), 1.5)
