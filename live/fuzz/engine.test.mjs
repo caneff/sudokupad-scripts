@@ -17,7 +17,9 @@ const BUSY_SEED = 1
 // The seeds whose lists put a Tab after a blur, and whose busy start is two clicks; the action set decides them too.
 const BLUR_SEED = 1
 const START_SEED = 93
+// The seeds of two tests that each need one particular shrunk list: a blur with a step after it that the page whitens late, and a planted race that shrinks to two Tabs and one stray step. The action set decides them.
 const WAIT_BLAME_SEED = 2
+const STRAY_STEP_SEED = 6
 // The engine's fixed wait after an action, and a landing wait of 1 ms: the fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const FIXED_WAIT = { landMs: 1, settleMs: ACTION_SETTLE_MS }
 
@@ -256,9 +258,9 @@ describe('the fuzz engine on a fake page', () => {
     })
 
     it('a race whose shrink keeps a stray step after the two Tabs still blames the second Tab, not the stray step', async () => {
-      // Seed 6 shrinks to the two Tabs and one step after them, which a list that does not wait reads the late error after.
+      // This seed shrinks to the two Tabs and one step after them, which a list that does not wait reads the late error after.
       const { openTarget } = fakeTargets({ raceOnFastTabs: true })
-      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: 6, runs: 600, ...VARIED })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: STRAY_STEP_SEED, runs: 600, ...VARIED })
       assert.deepEqual({ waitMs: found.waitMs, steps: found.sequence.length, tabs: found.sequence.slice(0, 2) }, { waitMs: 0, steps: 3, tabs: ['press Tab', 'press Tab'] })
       assert.equal(found.error, 'crash signal after "press Tab": page error or console error: Error: planted race')
     })

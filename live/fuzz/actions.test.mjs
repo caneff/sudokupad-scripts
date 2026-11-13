@@ -756,7 +756,8 @@ describe('focusing the actions on a script (#724)', () => {
       const seen = new Set()
       for (const a of kindOf('rules font')) {
         const [, step, times] = calls((await runOn(a)).log, 'rulesFont')[0]
-        assert.ok(Math.abs(step) === 1 && times >= 1 && times <= 3, `${step} x ${times}`)
+        assert.equal(Math.abs(step), 1)
+        assert.ok(times >= 1 && times <= 3, `${times} presses`)
         seen.add(`${step} x ${times}`)
       }
       assert.equal(seen.size, 6)

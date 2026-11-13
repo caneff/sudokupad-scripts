@@ -7,6 +7,7 @@ import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
+import { rulesWidth } from '../attacks.mjs'
 import { penDrawnCount } from '../pen.mjs'
 import { scriptedList } from './actions.mjs'
 import { ownedSettings, SETTINGS_SCRIPTS } from '../settings.mjs'
@@ -277,19 +278,33 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     const saved = async (p) => Object.fromEntries(Object.entries(await ownedSettings(p, script)).map(([k, v]) => [k.replace(/^(?:svencodes_)?AutoRulesResizer_/, '').replace(/^sizing_.*/, 'sizing'), JSON.parse(v).data]))
     const sizing = async (p) => (await saved(p)).sizing
 
-    it('a corner drag saves a box, f+ and f- save a font offset, and Restore defaults saves neither', async () => {
-      const dragged = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]]], sizing)
-      assert.notEqual(dragged.box.w, 0, 'the drag widened the box')
-      const font = await afterSteps(puzzle, [['rules font', [1, 2]]], sizing)
-      assert.equal(font.nudgePx, 2, 'two f+ presses')
+    it('each corner saves its own box: the bottom-left one grows the box left and down, the top-right one right and up', async () => {
+      const box = (...steps) => afterSteps(puzzle, steps, async (p) => (await sizing(p)).box)
+      const left = await box(['rules drag', ['dl', -150, 0]])
+      assert.ok(left.w > 0 && left.x < 0, `dl sideways: ${JSON.stringify(left)}`)
+      const down = await box(['rules drag', ['dl', 0, 80]])
+      assert.ok(down.h > 0 && down.y === 0, `dl down: ${JSON.stringify(down)}`)
+      const up = await box(['rules drag', ['ur', 0, -60]])
+      assert.ok(up.h > 0 && up.y < 0 && up.x === 0, `ur up: ${JSON.stringify(up)}`)
+      const right = await box(['rules drag', ['ur', 100, 0]])
+      assert.ok(right.w > 0 && right.x === 0, `ur right: ${JSON.stringify(right)}`)
+    })
+
+    it('f+ saves a font offset of the number of presses, f- the same below zero', async () => {
+      const offset = (...steps) => afterSteps(puzzle, steps, async (p) => (await sizing(p)).nudgePx)
+      assert.equal(await offset(['rules font', [1, 2]]), 2)
+      assert.equal(await offset(['rules font', [-1, 2]]), -2)
+      assert.equal(await offset(['rules font', [1, 3]], ['rules font', [-1, 1]]), 2)
+    })
+
+    it('Restore defaults saves no sizing at all', async () => {
       assert.equal(await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['rules font', [-1, 1]], ['rules dialog', ['', '', true, false]]], sizing), undefined)
     })
 
     it('a saved box is read back when the page loads again: the pane is as wide as after the drag, and wider than undragged', async () => {
-      const width = (p) => p.locator('.puzzle-rules').evaluate((e) => e.offsetWidth)
-      const dragged = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]]], width)
-      const reloaded = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['reload', null]], width)
-      const undragged = await afterSteps(puzzle, [], width)
+      const dragged = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]]], rulesWidth)
+      const reloaded = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['reload', null]], rulesWidth)
+      const undragged = await afterSteps(puzzle, [], rulesWidth)
       assert.equal(reloaded, dragged)
       assert.ok(dragged > undragged, `${dragged} > ${undragged}`)
     })

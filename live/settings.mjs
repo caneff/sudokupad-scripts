@@ -2,6 +2,7 @@
 // entry, the version in a script's header, and the Copy settings and Paste settings buttons of the scripts with a dialog. Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import { createRequire } from 'node:module'
+import { MAX_WIDTH_INPUT } from './auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 
 // The label of the group every script's settings entry is in.
 const GROUP_LABEL = 'Experimental'
@@ -65,7 +66,7 @@ const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', d
 // `saved` is a value the script saves under `key`, inside a `{ v, data }` envelope where `enveloped` is set; `badKey` and `bad` are a value the script's reader refuses.
 export const SETTINGS_SCRIPTS = [
   { file: 'dark-page.user.js', owns: /^DarkPage_/, entry: 'Dark Page', editor: '#dark-page-input', key: 'DarkPage_color', saved: '#336699', asDefault: '#000000', badKey: 'DarkPage_color', bad: 'blue' },
-  { file: 'auto-rules-resizer.user.js', owns: /^AutoRulesResizer_/, entry: 'Auto Rules Resizer', editor: '#auto-rules-resizer-max-width', key: 'AutoRulesResizer_maxWidth', saved: 640, enveloped: true, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
+  { file: 'auto-rules-resizer.user.js', owns: /^AutoRulesResizer_/, entry: 'Auto Rules Resizer', editor: MAX_WIDTH_INPUT, key: 'AutoRulesResizer_maxWidth', saved: 640, enveloped: true, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
   { file: 'color-by-digit.user.js', owns: /^ColorByDigit_/, entry: 'Color by Digit', editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, enveloped: true, badKey: 'ColorByDigit_mode', bad: 'sideways' },
   { file: 'text-anywhere.user.js', owns: /^TextAnywhere_/, entry: 'Text Anywhere', editor: '#text-anywhere-dialog', key: 'TextAnywhere_width', saved: 3.5, badKey: 'TextAnywhere_width', bad: 500 },
   { file: 'pen-tool-extras.user.js', owns: /^(PenColor_|EdgeMarks_)/, entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 }

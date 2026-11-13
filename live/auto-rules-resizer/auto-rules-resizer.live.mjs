@@ -8,6 +8,7 @@ import { undoDepth } from '../board.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
+import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, STYLE } from './auto-rules-resizer-fixtures.mjs'
 
 const SCRIPT_FILE = 'auto-rules-resizer.user.js'
 const script = scriptSource(SCRIPT_FILE)
@@ -26,18 +27,13 @@ const WIDE_RULES = Array(12).fill(RULES).join(' ')
 const FILLING_RULES = Array(5).fill(RULES).join(' ')
 const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
 const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
-const MAX_WIDTH_INPUT = '#auto-rules-resizer-max-width'
-const MAX_HEIGHT_INPUT = '#auto-rules-resizer-max-height'
 // SudokuPad's own rules font (1.1rem), and the gap the script keeps to the window's right edge.
 const SUDOKUPAD_FONT_PX = 17.6
 const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7
 const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5
 const EDGE_PX = 8
 const PORTRAIT = { width: 800, height: 1100 }
-const STYLE = '#auto-rules-resizer-style'
-const FONT_BAR = '#auto-rules-resizer-font'
 const WARNING = /^auto-rules-resizer: /
-const CORNER = (corner) => `#auto-rules-resizer-drag-${corner}`
 
 const browser = useBrowser()
 
