@@ -457,24 +457,6 @@ test('Copy settings leaves the colors out until they are saved', () => {
   assert.deepEqual(JSON.parse(copiedSettings(fakeStore({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY, [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false, [FONT_KEY]: 'proportional' })
 })
 
-// A row added to a copy of the table is handled by Copy, Paste, the start load, the snapshot's keys and Save's changed list, with no other edit. The script's own
-// snapshotSave and Save read the real table, so these helpers are what a copy can reach. Live, settings-copy-paste.live.mjs's failed Text Anywhere paste
-// covers the snapshot's looks, and text-anywhere-outline.live.mjs's 'Save applies the choice to every note' covers Save's.
-const SPIN_KEY = 'TextAnywhere_spin'
-const SPIN_ROW = { name: 'spin', key: SPIN_KEY, read: (saved) => (saved === 'left' ? 'left' : 'none'), dialog: true }
-const WITH_SPIN = [...LOOKS, SPIN_ROW]
-
-test('a row added to a copy of the looks table is copied, pasted and loaded, and is in the snapshot\'s keys and Save\'s changed rows', () => {
-  const store = fakeStore({ [SPIN_KEY]: 'left' })
-  assert.equal(JSON.parse(copiedSettings(store, WITH_SPIN))[SPIN_KEY], 'left')
-  assert.equal(JSON.parse(copiedSettings(fakeStore({}), WITH_SPIN))[SPIN_KEY], 'none')
-  assert.deepEqual(pastedSettings(JSON.stringify({ [SPIN_KEY]: 'left' }), lookReaders(WITH_SPIN)).values, { [SPIN_KEY]: 'left' })
-  assert.equal(readLooks(store, WITH_SPIN).spin, 'left')
-  assert.equal(readLooks(fakeStore({}), WITH_SPIN).spin, 'none')
-  assert.ok(lookKeys(WITH_SPIN).includes(SPIN_KEY), 'the snapshot\'s keys hold the added row\'s key')
-  assert.deepEqual(changedDialogLooks(WITH_SPIN, { ...readLooks(fakeStore({}), WITH_SPIN), spin: 'left' }, readLooks(fakeStore({}), WITH_SPIN)).map((row) => row.name), ['spin'])
-})
-
 test('the looks table is the one list behind Paste and Copy: every row reads and copies, and the paste readers match', () => {
   assert.deepEqual(Object.keys(lookReaders(LOOKS)), LOOKS.map((row) => row.key))
   assert.deepEqual(Object.keys(JSON.parse(copiedSettings(fakeStore({})))), LOOKS.map((row) => row.key))

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.15
+// @version      0.46.16
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.15'
+  const VERSION = '0.46.16'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -791,6 +791,44 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:store>
+  // <lib:settings-table>
+  // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  /* global isPlainObject */ // eslint-disable-line no-redeclare
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent) and `dialog` (the settings dialog sets it).
+  function sameValue (a, b) {
+    return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
+  }
+
+  const tableKeys = (rows) => rows.map((row) => row.key)
+
+  const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], row.read(store.getData(row.key))]))
+
+  // Every row as `store` holds it, by name.
+  const readTable = (rows, store) => readByField(rows, store, 'name')
+
+  // The same values by stored key, defaults included, so a paste can put a setting back to its default.
+  const copiedTable = (rows, store) => readByField(rows, store, 'key')
+
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+
+  // The rows whose draft differs from the value in force.
+  const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
+
+  // A paste puts the pasted rows' values (read from `now`, once saved) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+
+  // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
+  function saveRow (store, row, value) {
+    if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else store.setData(row.key, value)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-table>
 
   // <lib:color-math>
   // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
@@ -1153,24 +1191,23 @@
   // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `validator` a pasted value must pass or be skipped.
   // `dialog` marks the looks the settings dialog sets and the notes are drawn again in; the others are the panel's sliders.
   // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
+  const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })
   const LOOKS = [
-    { name: 'width', key: WIDTH_KEY, read: readWidth, validator: isWidth },
-    { name: 'opacity', key: OPACITY_KEY, read: readOpacity, validator: isOpacity },
-    { name: 'outline', key: OUTLINE_KEY, read: readOutline, dialog: true },
-    { name: 'boxColor', key: BOX_KEY, read: readBoxColor, dialog: true },
-    { name: 'frame', key: FRAME_KEY, read: readFrame, dialog: true },
-    { name: 'noteFont', key: FONT_KEY, read: readFont, dialog: true }
+    lookRowOf('width', WIDTH_KEY, readWidth, { paste: (data) => (isWidth(data) ? data : undefined) }),
+    lookRowOf('opacity', OPACITY_KEY, readOpacity, { paste: (data) => (isOpacity(data) ? data : undefined) }),
+    lookRowOf('outline', OUTLINE_KEY, readOutline, { dialog: true }),
+    lookRowOf('boxColor', BOX_KEY, readBoxColor, { dialog: true }),
+    lookRowOf('frame', FRAME_KEY, readFrame, { dialog: true }),
+    lookRowOf('noteFont', FONT_KEY, readFont, { dialog: true })
   ]
-  const lookKeys = (looks) => looks.map((row) => row.key)
-  const lookReaders = (looks) => Object.fromEntries(looks.map(({ key, read, validator }) => [key, validator ? (data) => validator(data) ? data : undefined : read]))
-  // Every look as `store` holds it, keyed by each row's `by` field: its name for the looks in force, its stored key for Copy.
-  const readLooks = (store, looks = LOOKS, by = 'name') => Object.fromEntries(looks.map((row) => [row[by], row.read(store.getData(row.key))]))
   const lookRow = (name) => LOOKS.find((row) => row.name === name)
-  // The dialog's rows whose draft differs from the value in force.
-  const changedDialogLooks = (looks, draft, now) => looks.filter((row) => row.dialog && draft[row.name] !== now[row.name])
-  const dialogDefaults = () => Object.fromEntries(LOOKS.filter((row) => row.dialog).map((row) => [row.name, row.read(undefined)]))
-  // A paste puts the pasted looks (read from `now`, once saved) into the draft and leaves every other look as the draft has it.
-  const draftWithPasted = (looks, draft, now, values) => ({ ...draft, ...Object.fromEntries(looks.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+  const lookKeys = tableKeys
+  const lookReaders = pasteReaders
+  const readLooks = (store, looks = LOOKS) => readTable(looks, store)
+  const dialogLooks = (looks) => looks.filter((row) => row.dialog)
+  const changedDialogLooks = (looks, draft, now) => changedRows(dialogLooks(looks), draft, now)
+  const dialogDefaults = () => tableDefaults(dialogLooks(LOOKS))
+  const draftWithPasted = withPasted
 
   // Copy and Paste carry the colors, size, opacity, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? storedNoteColors(readNoteColors(data), readNotePreset(data)) : undefined
@@ -1178,7 +1215,7 @@
 
   // The looks in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store, looks = LOOKS) {
-    const copied = readLooks(store, looks, 'key')
+    const copied = copiedTable(looks, store)
     const savedColors = readNoteColors(store.getData(COLORS_KEY))
     if (savedColors) copied[COLORS_KEY] = storedNoteColors(savedColors, readNotePreset(store.getData(COLORS_KEY)))
     return JSON.stringify(copied)
