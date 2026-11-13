@@ -9,6 +9,7 @@ import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
 import { penDrawnCount } from '../pen.mjs'
 import { scriptedList } from './actions.mjs'
+import { ownedSettings, SETTINGS_SCRIPTS } from '../settings.mjs'
 import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
@@ -266,6 +267,32 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"blue"}', false]]), null)
       assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"#101030"}', true]], ['dark page defaults', ['#002010', true]]), null)
       assert.equal(await after(['dark page defaults', ['#002010', false]]), null, 'Cancel after Restore defaults saves nothing')
+    })
+  })
+
+  describe('the rules box of Auto Rules Resizer (#818)', () => {
+    const puzzle = puzzleByName('recorded 9x9')
+    const script = SETTINGS_SCRIPTS.find((s) => s.file === 'auto-rules-resizer.user.js')
+    // What the script saved, by key without the prefix: the limits are plain, a puzzle's sizing is the one key that starts with `sizing_`.
+    const saved = async (p) => Object.fromEntries(Object.entries(await ownedSettings(p, script)).map(([k, v]) => [k.replace(/^(?:svencodes_)?AutoRulesResizer_/, '').replace(/^sizing_.*/, 'sizing'), JSON.parse(v).data]))
+    const sizing = async (p) => (await saved(p)).sizing
+
+    it('a corner drag saves a box, f+ and f- save a font offset, and Restore defaults saves neither', async () => {
+      const dragged = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]]], sizing)
+      assert.notEqual(dragged.box.w, 0, 'the drag widened the box')
+      const font = await afterSteps(puzzle, [['rules font', [1, 2]]], sizing)
+      assert.equal(font.nudgePx, 2, 'two f+ presses')
+      assert.equal(await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['rules font', [-1, 1]], ['rules dialog', ['', '', true, false]]], sizing), undefined)
+    })
+
+    it('a puzzle with no rules text has no box to drag, and the actions do nothing', async () => {
+      assert.deepEqual(await afterSteps(puzzleByName('4x4'), [['rules drag', ['ur', 100, -100]], ['rules font', [1, 3]]], saved), {})
+    })
+
+    it('Save keeps both limits, a blank clears one, a number that is no size keeps the one before, and Cancel keeps none', async () => {
+      assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, true]]], saved), { maxWidth: 400, maxHeight: 300 })
+      assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, true]], ['rules dialog', ['', '0', false, true]]], saved), { maxHeight: 300 })
+      assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, false]]], saved), {})
     })
   })
 
