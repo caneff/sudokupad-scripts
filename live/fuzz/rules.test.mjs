@@ -229,6 +229,13 @@ describe('the rules', () => {
     it('checks every cell when the mode just changed', () => {
       assert.equal(check('digit-cells-colored', { colorByDigit: colorByDigit('Cell', [['7', []]]) }, { before: { colorByDigit: colorByDigit('Off', [['7', []]]) } }).length, 1)
     })
+    it('checks every cell when the groups just changed, as a profile switch or a saved dialog does (#814)', () => {
+      const cells = [['7', ['9']]]
+      const now = colorByDigit('Cell', cells)
+      const switched = { ...now, groups: [{ key: '5', digits: ['7'] }] }
+      assert.equal(check('digit-cells-colored', { colorByDigit: switched }, { before: { colorByDigit: now } }).length, 1)
+      assert.deepEqual(check('digit-cells-colored', { colorByDigit: now }, { before: { colorByDigit: now } }), [])
+    })
     it('leaves a given and a digit no group holds alone', () => {
       assert.deepEqual(check('digit-cells-colored', { colorByDigit: colorByDigit('Cell', [['7', [], true], ['1', []]]) }, { before: { colorByDigit: colorByDigit('Cell', [[''], ['']]) } }), [])
     })

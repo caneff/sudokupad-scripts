@@ -233,3 +233,9 @@ What the lists show, by whether an action could reach it:
 **The cost.** The same seed and minutes without `--coverage` gave 35 action lists in 4 minutes against 43 with it (42 on a rerun after the review fixes), so the tag and the coverage cost nothing the run-to-run spread
 does not hide. The plant table is the same with and without (`fuzz-planted-bugs.md` § Coverage and mutants), so the nightly passes `--coverage`: `parseFuzzOutput` reads only the lines of a verdict and ignores the list
 printed after it (`nightly.test.mjs` checks it).
+
+### After #814 (Color by Digit's profile editor, pad menu and Restart)
+
+Three kinds: `profile editor` (opens the dialog from the settings or from the pad menu's Edit profiles…, makes up to four edits of new, rename, delete, move, select, paint a digit, cell profile, digit profile, then Save or Cancel),
+`profile switch` (the pad menu) and `restart`; the rule `digit-cells-colored` now also reads every cell when the groups change. Rerun 2026-11-13, same seed, minutes and config (`--seed 729 --minutes 4 --config busy-start --coverage`), 38 lists, passed:
+`color-by-digit.user.js` 99 of 528 never ran (164 of 424 before; the script grew). Of #814's names, all left the list but `restoreBeforeRestart`, which runs on an Undo right after a Restart. The `restart` kind draws an Undo straight after the Restart half the time ("restart the puzzle then undo"); a final rerun with that (same seed, 38 lists, passed, 100 of 528) still did not reach it in 38 lists, so it needs a longer run.
