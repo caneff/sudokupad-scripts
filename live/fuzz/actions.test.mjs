@@ -582,6 +582,11 @@ describe('focusing the actions on a script (#724)', () => {
         } else {
           assert.equal(picked.length, 0)
         }
+        const [, key] = calls(log, 'keyboard.press').at(-1) ?? []
+        if (/ press Escape$/.test(step)) assert.deepEqual([key, calls(log, 'mouse.click').length, calls(log, 'turnPenPage').length], ['Escape', 0, 0], step)
+        if (/ click r\d+c\d+$/.test(step)) assert.deepEqual([calls(log, 'keyboard.press').length, calls(log, 'mouse.click').length, calls(log, 'turnPenPage').length], [0, 1, 0], step)
+        if (/ press [cvxz]$/.test(step)) assert.deepEqual([key, calls(log, 'mouse.click').length], [step.slice(-1), 0], step)
+        if (/ turn the pen page$/.test(step)) assert.deepEqual([calls(log, 'keyboard.press').length, calls(log, 'mouse.click').length, calls(log, 'turnPenPage').length], [0, 0, 1], step)
         assert.ok(names(log).indexOf('holdPenColor') < Math.max(names(log).indexOf('setPenPicker'), names(log).indexOf('keyboard.press'), names(log).indexOf('mouse.click'), names(log).indexOf('turnPenPage')), 'the hold comes first')
       }
       assert.deepEqual([...ends].sort(), ['click a cell', 'press a tool key', 'press Escape', 'recolor it and press Escape', 'turn the pen page'].sort())

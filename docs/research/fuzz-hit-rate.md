@@ -258,4 +258,4 @@ the first three kinds can be in a busy start, `pen color edit` cannot (a hold is
 Three stay, none for want of an action:
 - `palettePages` has no caller in `pen-tool-extras.user.js` (`rg palettePages` finds only its definition), so no action can reach it; a follow-up for the script, not for the fuzz.
 - `putStockPenBack` runs only when the pen pages step switches itself off (`steps.pages` `onSkip`), which takes a broken SudokuPad internal, not a player's action.
-- `endPenEditMode` runs when `setSelectedColor` changes the pen page while edit mode is open. The `pen color edit` page-turn ending presses the page button during edit mode, and 31 lists did not reach it; it needs a longer run.
+- `endPenEditMode` is the name of the stand-in `let endPenEditMode = () => {}` (line 1258), which `installPenPickers` replaces at startup with the installed `endEditMode`; coverage lists the stand-in, which runs only on a page change before that or with the colors step off. No player action reaches it, so a longer run will not either. The `pen color edit` page-turn ending still runs the installed `endEditMode` through `setSelectedColor`.

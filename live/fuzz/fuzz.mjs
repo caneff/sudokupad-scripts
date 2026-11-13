@@ -7,7 +7,7 @@ import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
 import { animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
-import { HOLD_TO_EDIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
+import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
@@ -53,12 +53,10 @@ const TRACK_MARGIN_PX = 6
 const BOX_TIMEOUT_MS = 2000
 
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
-const COLOR_PICKERS = '.pen-tool-extras-picker'
+export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
 // A click this far (in cells) inside the edge of a cell is an edge click, and a corner's own point is a corner click.
 const EDGE_INSET = 0.04
-// After the button has been down for the hold, the pickers have this long to show.
-const PICKERS_SHOW_MS = HOLD_TO_EDIT_MS + 5000
 
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
 // with nothing to undo) is pressed like a user presses it, and nothing happens. An element that is not there is a crash: a script lost its control.
@@ -221,7 +219,7 @@ function envFor (p, puzzle, { beforeReload }) {
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
       await p.mouse.down()
       try {
-        await p.locator(COLOR_PICKERS).first().waitFor({ state: 'attached', timeout: PICKERS_SHOW_MS })
+        await p.locator(COLOR_PICKERS).first().waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
       } finally {
         await p.mouse.up()
       }
@@ -232,8 +230,9 @@ function envFor (p, puzzle, { beforeReload }) {
       if (restore) {
         await dialogButton(p, 'Restore defaults').click()
       } else {
-        const choices = p.locator(`${COLOR_CHOICE} option`)
-        await p.locator(COLOR_CHOICE).selectOption({ index: pick % await choices.count() })
+        // The Custom option is disabled (and selected) after a hand edit, and a disabled option cannot be picked.
+        const values = await p.locator(COLOR_CHOICE).evaluate((el) => [...el.options].filter((o) => !o.disabled).map((o) => o.value))
+        await p.locator(COLOR_CHOICE).selectOption(values[pick % values.length])
       }
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
