@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, scriptedList } from './actions.mjs'
+import { actionList, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MAX_PROFILE_EDITS, MAX_PROFILES, scriptedList } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
@@ -187,9 +187,9 @@ describe('the action vocabulary', () => {
   describe("Color by Digit's profile editor, menu and Restart (#814)", () => {
     const calls = (log, name) => log.filter(([n]) => n === name)
     const kindOf = (kind) => actionsOf(sample(21, 600)).filter((x) => x.kind === kind)
-    const editorCalls = async (n = 200) => {
+    const editorCalls = async () => {
       const seen = []
-      for (const a of kindOf('profile editor').slice(0, n)) seen.push({ step: String(a), call: calls((await runOn(a)).log, 'profileEditor')[0] })
+      for (const a of kindOf('profile editor').slice(0, 200)) seen.push({ step: String(a), call: calls((await runOn(a)).log, 'profileEditor')[0] })
       return seen
     }
 
@@ -199,9 +199,10 @@ describe('the action vocabulary', () => {
       const ops = new Set()
       const saves = new Set()
       const menus = new Set()
-      for (const { call: [, edits, save, fromMenu] } of seen) {
+      for (const { step, call: [, edits, save, fromMenu] } of seen) {
+        assert.equal(edits.length, (step.match(/ then /g) ?? []).length, `every drawn edit reaches the page: ${step}`)
         menus.add(fromMenu)
-        assert.ok(edits.length <= 4)
+        assert.ok(edits.length <= MAX_PROFILE_EDITS)
         for (const [op] of edits) ops.add(op)
         saves.add(save)
       }
@@ -218,14 +219,22 @@ describe('the action vocabulary', () => {
     })
 
     it('the switch action picks a profile from the pad menu, and the restart action restarts the puzzle', async () => {
-      const [pick] = kindOf('profile switch')
-      const [restart] = kindOf('restart')
-      const picked = calls((await runOn(pick)).log, 'pickProfile')
-      assert.equal(picked.length, 1)
-      assert.ok(Number.isInteger(picked[0][1]) && picked[0][1] >= 0 && picked[0][1] < 6)
-      assert.match(String(pick), /^pick profile \d from the pad menu$/)
-      assert.equal(calls((await runOn(restart)).log, 'restartPuzzle').length, 1)
-      assert.equal(String(restart), 'restart the puzzle')
+      const picks = new Set()
+      for (const pick of kindOf('profile switch')) {
+        const picked = calls((await runOn(pick)).log, 'pickProfile')
+        assert.equal(picked.length, 1)
+        assert.match(String(pick), /^pick profile \d from the pad menu$/)
+        picks.add(picked[0][1])
+      }
+      assert.deepEqual([...picks].sort(), Array.from({ length: MAX_PROFILES }, (_, i) => i), 'every profile row of a full dialog, and none past it')
+      const restarts = kindOf('restart')
+      for (const restart of restarts) {
+        const { log } = await runOn(restart)
+        assert.equal(calls(log, 'restartPuzzle').length, 1)
+        assert.equal(calls(log, 'undo').length, String(restart).endsWith(' then undo') ? 1 : 0)
+        if (calls(log, 'undo').length) assert.ok(log.findIndex(([n]) => n === 'undo') > log.findIndex(([n]) => n === 'restartPuzzle'), 'the undo follows the restart')
+      }
+      assert.deepEqual([...new Set(restarts.map(String))].sort(), ['restart the puzzle', 'restart the puzzle then undo'])
     })
 
     it('a restart clears the selected cell, so a digit is not typed into nothing', async () => {

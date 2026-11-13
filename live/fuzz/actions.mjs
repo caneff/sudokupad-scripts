@@ -48,8 +48,8 @@ const THICKNESS_STEPS = { min: THICKNESS.min / THICKNESS.step, max: THICKNESS.ma
 // Color by Digit's profile editor (#814): the names a rename types, and the edits a dialog action makes before it saves or cancels. A row, a brush and a profile
 // are counted from 0 and wrapped by the env to what the dialog holds (six profiles at the most), so a list replays on a dialog of any size.
 export const PROFILE_NAMES = ['Mine', 'Tens', 'A B', 'x', 'Twenty four letters long!']
-const PROFILE_ROWS = 6
-const PROFILE_BRUSHES = 9
+export const MAX_PROFILES = 6
+const PROFILE_BRUSHES = 10
 const DIGITS = '0123456789'
 export const MAX_PROFILE_EDITS = 4
 
@@ -64,8 +64,8 @@ function buildKinds () {
   const digit = (puzzle) => fc.constantFrom(...puzzle.keys)
   const color = fc.integer({ min: 1, max: 9 })
   const toolKey = fc.constantFrom(...TOOL_KEYS)
-  const row = fc.nat(PROFILE_ROWS - 1)
-  // One edit of the profiles dialog: `[op, ...numbers]`. `cell profile` and `digit profile` choose a pulldown's option; the digit pulldown's 0 is Same as cell, 1 None, then the profiles.
+  const row = fc.nat(MAX_PROFILES - 1)
+  // One edit of the profiles dialog: `[op, ...numbers]`. `cell profile` and `digit profile` choose a pulldown's option, counted from 0 and wrapped to the options there are; the digit pulldown lists Same as cell, then the profiles, then None.
   const profileEdit = fc.oneof(
     fc.constant(['new']),
     fc.tuple(fc.constant('rename'), fc.nat(PROFILE_NAMES.length - 1)),
@@ -74,7 +74,7 @@ function buildKinds () {
     fc.tuple(fc.constant('select'), row),
     fc.tuple(fc.constant('paint'), fc.nat(DIGITS.length - 1), fc.nat(PROFILE_BRUSHES - 1)),
     fc.tuple(fc.constant('cell profile'), row),
-    fc.tuple(fc.constant('digit profile'), fc.nat(PROFILE_ROWS + 1))
+    fc.tuple(fc.constant('digit profile'), fc.nat(MAX_PROFILES + 1))
   )
   const profileEditWords = ([op, a, b]) => ({
     new: () => 'new profile',
@@ -334,7 +334,7 @@ function buildKinds () {
       kind: 'profile switch',
       group: 'ordinary',
       weight: 2,
-      arg: () => fc.nat(PROFILE_ROWS - 1),
+      arg: () => fc.nat(MAX_PROFILES - 1),
       label: (i) => `pick profile ${i} from the pad menu`,
       run: (env, i) => env.pickProfile(i)
     },
@@ -377,7 +377,19 @@ function buildKinds () {
     // Page-level events.
     { kind: 'blur and focus', group: 'page', weight: 1, arg: () => fc.constant(null), label: () => 'window blur and focus', run: (env) => env.blurFocus() },
     { kind: 'reload', group: 'page', weight: 1, arg: () => fc.constant(null), label: () => 'reload the page', run: (env, _, model) => { model.selected = false; return env.reload() } },
-    { kind: 'restart', group: 'page', weight: 1, arg: () => fc.constant(null), label: () => 'restart the puzzle', run: (env, _, model) => { model.selected = false; return env.restartPuzzle() } },
+    {
+      kind: 'restart',
+      group: 'page',
+      weight: 1,
+      // With `thenUndo`, the Undo that follows is the first one after the Restart, which brings back the board from before it (`restoreBeforeRestart`).
+      arg: () => fc.boolean(),
+      label: (thenUndo) => `restart the puzzle${thenUndo ? ' then undo' : ''}`,
+      run: async (env, thenUndo, model) => {
+        model.selected = false
+        await env.restartPuzzle()
+        if (thenUndo) await env.undo()
+      }
+    },
     { kind: 'resize', group: 'page', weight: 1, arg: () => fc.constantFrom(...WINDOW_SIZES), label: ({ width, height }) => `resize the window to ${width}x${height}`, run: (env, size) => env.resize(size) },
     {
       kind: 'dark page',

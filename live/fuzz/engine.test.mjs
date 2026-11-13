@@ -12,7 +12,7 @@ const CELLS = Array.from({ length: 12 }, (_, i) => [Math.floor(i / 4), i % 4])
 const PUZZLES = [{ name: 'fake', rows: 3, cols: 4, keys: ['1', '2', '3', '4'], free: CELLS, cells: CELLS }]
 const SEED = 7
 // The seeds that shrink a planted race to its two Tabs alone, and that find a failure needing the busy board; the action set decides them, so a new kind can move them.
-const RACE_SEED = 6
+const RACE_SEED = 10
 const BUSY_SEED = 1
 // The engine's fixed wait after an action, and a landing wait of 1 ms: the fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const FIXED_WAIT = { landMs: 1, settleMs: ACTION_SETTLE_MS }
