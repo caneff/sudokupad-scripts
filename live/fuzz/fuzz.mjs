@@ -7,7 +7,7 @@ import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
 import { animationsDone, closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
-import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
@@ -48,10 +48,13 @@ for (const name of SLIDERS) if (!SLIDER_SELECTORS[name]) throw new Error(`action
 // A press on a track this far in from its end is on the track, not on the edge pixel that belongs to the next element.
 const TRACK_MARGIN_PX = 6
 
+// How long a script's element is waited for before it counts as lost.
+const BOX_TIMEOUT_MS = 2000
+
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
 // with nothing to undo) is pressed like a user presses it, and nothing happens. An element that is not there is a crash: a script lost its control.
 async function clickIn (p, selector) {
-  const box = await p.locator(selector).first().boundingBox({ timeout: 2000 })
+  const box = await p.locator(selector).first().boundingBox({ timeout: BOX_TIMEOUT_MS })
   if (!box) throw new Error(`no ${selector} on the page to click`)
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 }
@@ -182,7 +185,7 @@ function envFor (p, puzzle, { beforeReload }) {
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
     async sliderPoint (name, fraction) {
-      const box = await (await sliderFor(name)).boundingBox({ timeout: 2000 })
+      const box = await (await sliderFor(name)).boundingBox({ timeout: BOX_TIMEOUT_MS })
       if (!box) throw new Error(`the ${name} slider is not on the page`)
       return [box.x + TRACK_MARGIN_PX + (box.width - 2 * TRACK_MARGIN_PX) * fraction, box.y + box.height / 2]
     },
@@ -196,6 +199,25 @@ function envFor (p, puzzle, { beforeReload }) {
       if (choice === 'custom') await p.locator(BOX_CUSTOM_INPUT).fill(color)
       await closeDialogWith(p, save ? 'Save' : 'Cancel', SETTINGS_EDITOR)
     },
+    async noteHandle (corner) {
+      const handles = p.locator(HANDLES)
+      return await handles.count() === 0 ? null : middleOf(await handles.nth(corner).boundingBox({ timeout: BOX_TIMEOUT_MS }))
+    },
+    async checkBoxPoint () {
+      const boxes = p.locator(CHECK_BOXES)
+      return await boxes.count() === 0 ? null : middleOf(await boxes.first().boundingBox({ timeout: BOX_TIMEOUT_MS }))
+    },
+    // With a note selected the button deletes it and asks nothing; otherwise it asks, and the question is answered like a player does.
+    async clearNotes (ok) {
+      // Picking the tool again ends the selection, which a clear after a click on a note needs kept.
+      if (await noteTool(p) !== 'textanywhere') await pickNotes()
+      const asks = await p.locator(SELECTED).count() === 0
+      await clickIn(p, CLEAR_BUTTON)
+      if (asks) await closeDialogWith(p, ok ? 'OK' : 'Cancel', DIALOG)
+    },
+    // A key held down is time passing, not a verdict waited on a clock.
+    holdFor: (ms) => sleep(ms),
+    finishNote: () => finishNote(p),
     async setNoteBackground (on) {
       await pickNotes()
       if (await p.locator(BACKGROUND_BUTTON).getAttribute('aria-pressed') !== String(on)) await clickIn(p, BACKGROUND_BUTTON)

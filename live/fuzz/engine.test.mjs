@@ -12,8 +12,11 @@ const CELLS = Array.from({ length: 12 }, (_, i) => [Math.floor(i / 4), i % 4])
 const PUZZLES = [{ name: 'fake', rows: 3, cols: 4, keys: ['1', '2', '3', '4'], free: CELLS, cells: CELLS }]
 const SEED = 7
 // The seeds that shrink a planted race to its two Tabs alone, and that find a failure needing the busy board; the action set decides them, so a new kind can move them.
-const RACE_SEED = 10
+const RACE_SEED = 21
 const BUSY_SEED = 1
+// The seeds whose lists put a Tab after a blur, and whose busy start is two clicks; the action set decides them too.
+const BLUR_SEED = 1
+const START_SEED = 17
 // The engine's fixed wait after an action, and a landing wait of 1 ms: the fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const FIXED_WAIT = { landMs: 1, settleMs: ACTION_SETTLE_MS }
 
@@ -192,7 +195,7 @@ describe('the fuzz engine on a fake page', () => {
     it('each rule compares an action with the snapshot just before it, not the one at the start of the list', async () => {
       // Letters from a blur on are no Tab's doing: a Tab after it sees letters before and after.
       const { openTarget, targets } = fakeTargets({ lettersOnBlur: true })
-      const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 300, ...FIXED_WAIT })
+      const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: BLUR_SEED, runs: 300, ...FIXED_WAIT })
       assert.equal(result.failed, false, result.error)
       // The case the title names was built: some list has a blur followed later by a Tab.
       assert.ok(targets.some((t) => { const i = t.log.findIndex(([n]) => n === 'blurFocus'); return i >= 0 && t.log.slice(i).some(([n, k]) => n === 'keyboard.press' && k === 'Tab') }), 'a list with a blur and a later Tab was run')
@@ -351,13 +354,13 @@ describe('the fuzz engine on a fake page', () => {
 
     it('a failure inside the start, whose actions never ran, prints the start\'s steps alone', async () => {
       const { openTarget } = fakeTargets({ errorAtClicks: 2 })
-      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 300, ...BUSY })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: START_SEED, runs: 300, ...BUSY })
       assert.deepEqual(found.sequence, ['(start) click r1c1', '(start) click r1c1'])
     })
 
     it('a failure that does not need it shrinks to no start at all', async () => {
       const { openTarget } = fakeTargets({ plantEscapeError: true })
-      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 300, ...BUSY })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: START_SEED, runs: 300, ...BUSY })
       assert.equal(found.failed, true)
       assert.deepEqual(found.sequence.filter((s) => s.startsWith('(start) ')), [])
       assert.equal(found.sequence.length, 1)

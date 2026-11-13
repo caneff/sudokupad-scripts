@@ -6,12 +6,11 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
 
-const { TEXT_BOX, TEXTS } = textAnywhere
+const { CHECK_BOXES, TEXT_BOX, TEXTS } = textAnywhere
 const SYMBOLS_AT = [1.5, 1.5]
 const TRAILING_AT = [3.5, 3.5]
 const MOVED_AT = [7.5, 6.5]
 const BY = [1, 2]
-const CHECK_BOX = `${TEXTS} .text-anywhere-check`
 
 const browser = useBrowser()
 
@@ -90,15 +89,15 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
   it('a click on a checklist box ticks it and saves the note, a reload keeps it, and the note does not open', async () => {
     await textAnywhere.plantNotes(p, [{ kind: 'text', color: 1, size: 20, opacity: 100, text: '- [ ] one\n- [x] two', at: [352, 288] }])
     await reload()
-    assert.equal(await p.locator(CHECK_BOX).count(), 2)
-    const first = p.locator(CHECK_BOX).first()
+    assert.equal(await p.locator(CHECK_BOXES).count(), 2)
+    const first = p.locator(CHECK_BOXES).first()
     await first.click()
     assert.deepEqual(await savedTexts(), ['- [x] one\n- [x] two'])
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
-    assert.equal(await p.locator(`${CHECK_BOX}.text-anywhere-check-done`).count(), 2)
+    assert.equal(await p.locator(`${CHECK_BOXES}.text-anywhere-check-done`).count(), 2)
     await reload()
-    assert.equal(await p.locator(`${CHECK_BOX}.text-anywhere-check-done`).count(), 2, 'the tick survives a reload')
-    await p.locator(CHECK_BOX).nth(1).click()
+    assert.equal(await p.locator(`${CHECK_BOXES}.text-anywhere-check-done`).count(), 2, 'the tick survives a reload')
+    await p.locator(CHECK_BOXES).nth(1).click()
     assert.deepEqual(await savedTexts(), ['- [x] one\n- [ ] two'])
   })
 
@@ -110,17 +109,17 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     await p.keyboard.type('- [ ] ')
     await finishNote(p)
     assert.deepEqual(await savedTexts(), ['[] milk\n- [ ]'])
-    assert.equal(await p.locator(CHECK_BOX).count(), 2)
-    await p.locator(CHECK_BOX).nth(1).click()
+    assert.equal(await p.locator(CHECK_BOXES).count(), 2)
+    await p.locator(CHECK_BOXES).nth(1).click()
     assert.deepEqual(await savedTexts(), ['[] milk\n- [x]'])
-    await p.locator(CHECK_BOX).first().click()
+    await p.locator(CHECK_BOXES).first().click()
     assert.deepEqual(await savedTexts(), ['[x] milk\n- [x]'])
-    assert.equal(await p.locator(`${CHECK_BOX}.text-anywhere-check-done`).count(), 2)
+    assert.equal(await p.locator(`${CHECK_BOXES}.text-anywhere-check-done`).count(), 2)
   })
 
   it('a press on a box that moves the pointer starts no drag: the note stays where it was', async () => {
     const before = (await textAnywhere.saved(p))[0].at
-    const box = await p.locator(CHECK_BOX).first().boundingBox()
+    const box = await p.locator(CHECK_BOXES).first().boundingBox()
     await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     await p.mouse.down()
     await p.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2 + 40, { steps: 6 })
