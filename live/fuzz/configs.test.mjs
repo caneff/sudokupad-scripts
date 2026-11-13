@@ -7,16 +7,20 @@ import { CONFIGS, configNames, configOptions } from './configs.mjs'
 const NO_BROWSER = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: '/nonexistent-playwright-browsers' }
 const runCommand = (file, args) => spawnSync(process.execPath, [new URL(file, import.meta.url).pathname, ...args], { encoding: 'utf8', timeout: 20000, env: NO_BROWSER })
 
-describe('the configurations (#725, #726, #727, #728, #730)', () => {
+describe('the configurations (#725, #726, #727, #730)', () => {
   it('a name that is no configuration is refused, naming the known ones', () => {
     assert.throws(() => configOptions('varied-wiat'), /no configuration "varied-wiat"; known: current, varied-wait/)
   })
 
-  it('the swarm and long-list configurations name the options of the generator', () => {
-    assert.deepEqual(CONFIGS.swarm, { swarm: true })
+  it('the long-list configurations name the options of the generator', () => {
     assert.deepEqual(CONFIGS['long-40'], { maxCommands: 40, nonEmpty: true })
     assert.deepEqual(CONFIGS['long-50'], { maxCommands: 50, nonEmpty: true })
     assert.deepEqual(CONFIGS['busy-start+long-40'], { busyStart: true, maxCommands: 40, nonEmpty: true })
+  })
+
+  it('swarm is no configuration (#850)', () => {
+    assert.throws(() => configOptions('swarm'), /no configuration "swarm"/)
+    assert.ok(!Object.keys(CONFIGS).includes('swarm'))
   })
 
   it('a configuration named twice is refused', () => {
