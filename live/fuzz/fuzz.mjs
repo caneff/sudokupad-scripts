@@ -6,13 +6,14 @@ import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzz
 import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
-import { animationsDone, closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
+import { animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
+import { HOLD_TO_EDIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
-import { PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
+import { MARK_BOXES, PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
@@ -50,6 +51,14 @@ const TRACK_MARGIN_PX = 6
 
 // How long a script's element is waited for before it counts as lost.
 const BOX_TIMEOUT_MS = 2000
+
+const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
+const COLOR_PICKERS = '.pen-tool-extras-picker'
+const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
+// A click this far (in cells) inside the edge of a cell is an edge click, and a corner's own point is a corner click.
+const EDGE_INSET = 0.04
+// After the button has been down for the hold, the pickers have this long to show.
+const PICKERS_SHOW_MS = HOLD_TO_EDIT_MS + 5000
 
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
 // with nothing to undo) is pressed like a user presses it, and nothing happens. An element that is not there is a crash: a script lost its control.
@@ -188,6 +197,45 @@ function envFor (p, puzzle, { beforeReload }) {
       const box = await (await sliderFor(name)).boundingBox({ timeout: BOX_TIMEOUT_MS })
       if (!box) throw new Error(`the ${name} slider is not on the page`)
       return [box.x + TRACK_MARGIN_PX + (box.width - 2 * TRACK_MARGIN_PX) * fraction, box.y + box.height / 2]
+    },
+    async stepLineMode () {
+      await openPen()
+      await clickIn(p, LINE_MODE_BUTTON)
+    },
+    async tickMarks (names) {
+      await openExtrasEditor(p)
+      for (const name of MARK_BOXES) await p.locator(`${EXTRAS_EDITOR} input[data-box="marks.${name}"]`).setChecked(names.includes(name))
+      await closeExtrasEditorWith(p, 'Save')
+    },
+    // A cell outside the grid is the nearest one in it; the target's side is the cell's own edge or corner.
+    async markPoint (i, side) {
+      const row = Math.min(Math.max(puzzle.cells[i][0], 0), puzzle.rows - 1)
+      const col = Math.min(Math.max(puzzle.cells[i][1], 0), puzzle.cols - 1)
+      const at = [[row + EDGE_INSET, col + 0.5], [row + 0.5, col + 1 - EDGE_INSET], [row + 1 - EDGE_INSET, col + 0.5], [row + 0.5, col + EDGE_INSET], [row, col], [row, col + 1], [row + 1, col], [row + 1, col + 1]]
+      return gridPoint(p, at[side])
+    },
+    // The button is let go whatever happens, and a hold that shows no pickers is a failure: the player's hold opens them.
+    async holdPenColor (color) {
+      const box = await p.locator(`.tool-pen button[data-key="${color}"]`).boundingBox({ timeout: BOX_TIMEOUT_MS })
+      if (!box) throw new Error(`pen color ${color}'s button is not on the page`)
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await p.mouse.down()
+      try {
+        await p.locator(COLOR_PICKERS).first().waitFor({ state: 'attached', timeout: PICKERS_SHOW_MS })
+      } finally {
+        await p.mouse.up()
+      }
+    },
+    setPenPicker: (color, hex) => p.locator(`${COLOR_PICKERS} input[data-key="${color}"]`).fill(hex),
+    async penPresets (pick, restore, save) {
+      await openExtrasEditor(p)
+      if (restore) {
+        await dialogButton(p, 'Restore defaults').click()
+      } else {
+        const choices = p.locator(`${COLOR_CHOICE} option`)
+        await p.locator(COLOR_CHOICE).selectOption({ index: pick % await choices.count() })
+      }
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
     async focusSlider (name) { await (await sliderFor(name)).focus() },
     async leaveSlider (name) { await p.locator(SLIDER_SELECTORS[name].selector).evaluate((el) => el.blur()) },

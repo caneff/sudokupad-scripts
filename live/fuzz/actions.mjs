@@ -26,6 +26,12 @@
 //   env.clearNotes(ok)                       presses Text Anywhere's Clear all button, and answers the question it asks (when a note is selected it asks none) with OK or Cancel
 //   env.holdFor(ms)                          lets `ms` of the page's time pass while a key stays down
 //   env.finishNote()                         finishes the open note with Escape
+//   env.stepLineMode()                       opens the pen tool and presses the pen panel's line mode button once
+//   env.tickMarks(names)                     opens Pen Tool Extras' settings dialog, ticks exactly the mark boxes `names` (`MARK_BOXES`) and presses Save
+//   env.markPoint(i, where) -> [x, y]        the page point at side `where` of target `i`: 0 to 3 an edge (top, right, bottom, left) a click reads as an edge click, 4 to 7 a corner (top left, top right, bottom left, bottom right)
+//   env.holdPenColor(color)                  holds the left button on the pen's color button `color` until the nine color pickers show, then lets go
+//   env.setPenPicker(color, hex)             sets the open color picker of pen `color` to `hex`
+//   env.penPresets(pick, restore, save)      opens Pen Tool Extras' settings dialog, picks the color preset at position `pick` (wrapped to the pulldown's options) or, when `restore`, presses Restore defaults, and presses Save or Cancel
 //   env.resize({ width, height })  env.blurFocus()  env.reload()  env.darkPage(color, save)
 import { createRequire } from 'node:module'
 import fc from 'fast-check'
@@ -70,6 +76,13 @@ const MAX_NUDGE_TAPS = 4
 // A held arrow key repeats once it has been down NUDGE_REPEAT_MS; this much longer is a few repeats.
 const NUDGE_HOLD_EXTRA_MS = 200
 const jsonWords = (text) => JSON.stringify(text).replace(/,/g, ';')
+
+// Pen Tool Extras' mark boxes (the checkboxes of its marks table), by the name the dialog's `data-box` path has after `marks.`.
+export const MARK_BOXES = ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot']
+const MARK_SIDES = 8
+const MAX_LINE_MODE_PRESSES = 3
+const COLOR_PRESET_PICKS = 6
+const PEN_EDIT_ENDS = 4
 
 const NOTE_DRAG = [70, 40]
 const ownColor = (rgb) => `#${rgb.toString(16).padStart(6, '0')}`
@@ -271,6 +284,53 @@ function buildKinds () {
         await dragNote(env, centre)
         await env.page.mouse.up()
       }
+    },
+    {
+      kind: 'pen line mode',
+      group: 'ordinary',
+      weight: 3,
+      arg: (puzzle) => fc.tuple(fc.integer({ min: 1, max: MAX_LINE_MODE_PRESSES }), cell(puzzle), cell(puzzle), color),
+      label: ([presses, a, b, c], at) => `press the pen line mode button ${presses} time${presses === 1 ? '' : 's'} then pen line ${at(a)} -> ${at(b)} color ${c}`,
+      run: async (env, [presses, a, b, c]) => {
+        for (let i = 0; i < presses; i++) await env.stepLineMode()
+        await penDragStart(env, [a, b, c])
+        await env.page.mouse.up()
+      }
+    },
+    {
+      kind: 'pen mark',
+      group: 'ordinary',
+      weight: 3,
+      arg: (puzzle) => fc.tuple(fc.subarray(MARK_BOXES), cell(puzzle), fc.nat(MARK_SIDES - 1), color),
+      label: ([boxes, a, side, c], at) => `tick the mark boxes ${boxes.join(' ') || 'none'} then click side ${side} of ${at(a)} with pen ${c}`,
+      run: async (env, [boxes, a, side, c]) => {
+        await env.tickMarks(boxes)
+        await env.usePen(c)
+        await env.page.mouse.click(...await env.markPoint(a, side))
+      }
+    },
+    {
+      kind: 'pen color edit',
+      group: 'ordinary',
+      weight: 2,
+      arg: (puzzle) => fc.tuple(color, fc.nat(PEN_EDIT_ENDS - 1), fc.integer({ min: 0, max: 0xffffff }), cell(puzzle), toolKey),
+      label: ([c, end, rgb, a, key], at) => `hold pen color ${c} to edit its color then ${['press Escape', `recolor it to ${ownColor(rgb)} and press Escape`, `click ${at(a)}`, `press ${key}`][end]}`,
+      run: async (env, [c, end, rgb, a, key]) => {
+        await env.usePen(c)
+        await env.holdPenColor(c)
+        if (end === 1) await env.setPenPicker(c, ownColor(rgb))
+        if (end === 2) await env.page.mouse.click(...await env.cellPoint(a))
+        else if (end === 3) await env.page.keyboard.press(key)
+        else await env.page.keyboard.press('Escape')
+      }
+    },
+    {
+      kind: 'pen colors dialog',
+      group: 'ordinary',
+      weight: 2,
+      arg: () => fc.tuple(fc.nat(COLOR_PRESET_PICKS - 1), fc.boolean(), fc.boolean()),
+      label: ([pick, restore, save]) => `Pen Tool Extras colors: ${restore ? 'Restore defaults' : `preset ${pick}`} ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [pick, restore, save]) => env.penPresets(pick, restore, save)
     },
     {
       kind: 'pen settings',
@@ -588,6 +648,10 @@ export const KIND_SCRIPTS = {
   'slider drag': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
   'slider keys': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
   'pen settings values': [PEN_TOOL_EXTRAS],
+  'pen line mode': [PEN_TOOL_EXTRAS],
+  'pen mark': [PEN_TOOL_EXTRAS],
+  'pen color edit': [PEN_TOOL_EXTRAS],
+  'pen colors dialog': [PEN_TOOL_EXTRAS],
   'note box color': [TEXT_ANYWHERE],
   'note background': [TEXT_ANYWHERE],
   'boxed note': [TEXT_ANYWHERE],
@@ -646,7 +710,7 @@ function actionArbitrary (puzzle, weights, kinds = KINDS) {
 
 // The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
 // Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
-export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page']
+export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page']
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 

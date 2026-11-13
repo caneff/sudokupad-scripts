@@ -184,6 +184,48 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     })
   })
 
+  describe("Pen Tool Extras' line modes, marks, color editing and presets (#816)", () => {
+    const puzzle = puzzleByName('recorded 9x9')
+    const at = (row, col) => puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+    const saved = (key) => (p) => p.evaluate((k) => Framework.getData(k), key)
+
+    it('the line mode button steps the saved mode: both, then center only, then edge only, then both again, and a line is drawn in it', async () => {
+      const modeAfter = (presses) => afterSteps(puzzle, [['pen line mode', [presses, at(2, 3), at(6, 5), 1]]], async (p) => [await saved('ToolPen_linemode')(p), (await p.locator('#cell-pen .cell-pen').count()) > 0])
+      assert.deepEqual(await modeAfter(1), ['centeronly', true])
+      assert.deepEqual(await modeAfter(2), ['edgeonly', true])
+      assert.deepEqual((await modeAfter(3))[0], 'both')
+    })
+
+    it('ticked mark boxes are saved, and a click on a cell edge then adds a mark to the cell', async () => {
+      const after = await afterSteps(puzzle, [['pen mark', [['x'], at(3, 3), 1, 1]]], async (p) => ({ marks: await saved('EdgeMarks_marks')(p), strokes: await p.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen).length) }))
+      assert.equal(after.marks.x, true)
+      assert.equal(after.marks.cornerX, false)
+      assert.equal(after.strokes, 1, 'the edge click marked the cell')
+    })
+
+    it('a corner click with a corner mark ticked adds a mark', async () => {
+      const strokes = await afterSteps(puzzle, [['pen mark', [['cornerX'], at(3, 3), 7, 1]]], (p) => p.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen).length))
+      assert.equal(strokes, 1)
+    })
+
+    it('a hold on a pen color opens the pickers, a recolor there is saved for that pen, and the hold ends clean on Escape, a cell click or a tool key', async () => {
+      const colorAfter = (edit) => afterSteps(puzzle, [['pen color edit', edit]], async (p) => ({ colors: await saved('PenColor_colors')(p), pickers: await p.locator('.pen-tool-extras-picker').count() }))
+      const recolored = await colorAfter([3, 1, 0x123456, at(1, 1), 'z'])
+      assert.equal(recolored.colors[3], '#123456')
+      assert.equal(recolored.pickers, 0, 'the pickers are gone')
+      for (const end of [0, 2, 3]) assert.equal((await colorAfter([3, end, 0x123456, at(1, 1), 'z'])).pickers, 0, `end ${end} leaves no pickers`)
+    })
+
+    it('a color preset is saved on Save and not on Cancel, and Restore defaults saves the first preset', async () => {
+      const presetAfter = (dialog) => afterSteps(puzzle, [['pen colors dialog', dialog]], async (p) => (await saved('PenColor_colors')(p))?.preset)
+      const before = await presetAfter([0, false, false])
+      const picked = await presetAfter([1, false, true])
+      assert.notEqual(picked, before, 'a pick saved')
+      assert.equal(await presetAfter([1, false, false]), before, 'Cancel left the colors')
+      assert.ok(typeof await presetAfter([0, true, true]) === 'string')
+    })
+  })
+
   describe('a page error planted on Escape during a drag', () => {
     let found
 
