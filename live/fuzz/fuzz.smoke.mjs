@@ -285,6 +285,15 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.equal(await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['rules font', [-1, 1]], ['rules dialog', ['', '', true, false]]], sizing), undefined)
     })
 
+    it('a saved box is read back when the page loads again: the pane is as wide as after the drag, and wider than undragged', async () => {
+      const width = (p) => p.locator('.puzzle-rules').evaluate((e) => e.offsetWidth)
+      const dragged = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]]], width)
+      const reloaded = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['reload', null]], width)
+      const undragged = await afterSteps(puzzle, [], width)
+      assert.equal(reloaded, dragged)
+      assert.ok(dragged > undragged, `${dragged} > ${undragged}`)
+    })
+
     it('a puzzle with no rules text has no box to drag, and the actions do nothing', async () => {
       assert.deepEqual(await afterSteps(puzzleByName('4x4'), [['rules drag', ['ur', 100, -100]], ['rules font', [1, 3]]], saved), {})
     })
