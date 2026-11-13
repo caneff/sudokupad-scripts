@@ -766,24 +766,36 @@ export const MAX_START_STEPS = 30
 // The arbitrary of a busy start's steps over `puzzle`: commands like a list's, weighted alike (`--focus` included), run first, each printed with `(start) ` before it.
 const startArbitrary = (puzzle, weights) => fc.array(actionArbitrary(puzzle, weights, KINDS.filter((k) => START_KINDS.includes(k.kind))), { maxLength: MAX_START_STEPS, size: 'max' })
 
-// The generator of whole lists, each `{ puzzle, start, commands, waitMs }`: a puzzle of `puzzles`, then (with `busyStart`, #726) a start of up to `MAX_START_STEPS` steps that builds a
+// The most actions a list has unless a configuration says more.
+export const DEFAULT_MAX_COMMANDS = 20
+
+// The generator of whole lists, each `{ puzzle, kinds, start, commands, waitMs }`: a puzzle of `puzzles`, then (with `busyStart`, #726) a start of up to `MAX_START_STEPS` steps that builds a
 // busy board, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list (what `String()` of a failing list prints, which is the start's steps and then the
 // actions'); the puzzle is drawn first, so the same path gives the same puzzle. `focus` is script files (`focusFiles`) whose actions weigh more; a path replays only with the
 // focus it was found with. A start is an array, so a shrink drops its steps and leaves a list that begins on the empty board when the failure does not need it.
 // `waits` (#725) is the milliseconds the engine may wait after each action: each list draws its own, beside its actions, so a path replays it and a shrink moves it
 // to the first of the set; with none, `waitMs` is undefined and the engine's own wait stands.
-export const actionList = (puzzles, { maxCommands = 20, replayPath, focus = [], waits = [], busyStart = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
+// `swarm` (#728) draws each list a random non-empty subset of the kinds, `kinds` (the names), and generates its actions only from it, so a list without undo-all or a reload keeps
+// what it builds; a shrink keeps the subset and drops steps. Without it `kinds` is every kind. `nonEmpty` (#730) refuses a list with no action, which fast-check otherwise draws 1 time in `maxCommands + 1`.
+export const actionList = (puzzles, { maxCommands = DEFAULT_MAX_COMMANDS, replayPath, focus = [], waits = [], busyStart = false, swarm = false, nonEmpty = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
   const weights = kindWeights(focus)
-  const commands = fc.commands([actionArbitrary(puzzle, weights)], { maxCommands, size: 'max', replayPath })
+  const commandsOf = (kinds) => {
+    const drawn = fc.commands([actionArbitrary(puzzle, weights, kinds)], { maxCommands, size: 'max', replayPath })
+    return (nonEmpty ? drawn.filter((c) => [...c].length > 0) : drawn).map((commands) => ({ kinds: kinds.map((k) => k.kind), commands }))
+  }
+  // Without a swarm the commands are drawn as one part of the tuple, not chained, so a shrink treats the wait, the start and the actions alone, as before.
+  // The subset does not shrink: a shrunk subset would draw its actions again, and `replayPath` describes the list the path ended on, so a replay would stop on `Too short replayPath`.
+  const drawn = swarm ? fc.noShrink(fc.subarray(KINDS, { minLength: 1 })).chain(commandsOf) : commandsOf(KINDS)
   // A single wait is a constant, which draws nothing, so its lists are those of no set.
   const waitMs = waits.length > 1 ? fc.constantFrom(...waits) : fc.constant(waits[0])
   const start = busyStart ? startArbitrary(puzzle, weights) : fc.constant([])
-  return fc.tuple(waitMs, start, commands).map(([wait, steps, c]) => ({
+  return fc.tuple(waitMs, start, drawn).map(([wait, steps, { kinds, commands }]) => ({
     puzzle,
+    kinds,
     start: steps,
-    commands: c,
+    commands,
     waitMs: wait,
-    toString: () => [...steps.map((step) => `(start) ${step}`), String(c)].join(',')
+    toString: () => [...steps.map((step) => `(start) ${step}`), String(commands)].join(',')
   }))
 })
 

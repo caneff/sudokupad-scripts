@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, scriptedList, START_KINDS, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, scriptedList, START_KINDS, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
@@ -712,5 +712,61 @@ describe('focusing the actions on a script (#724)', () => {
     it('busy starts can hold the saved settings of both scripts, so a saved option or color is there to restore', () => {
       for (const kind of Object.keys(NEW_KINDS)) assert.ok(START_KINDS.includes(kind), kind)
     })
+  })
+})
+
+describe('swarm lists (#728)', () => {
+  const swarm = (seed, count = 150, options = {}) => fc.sample(actionList(FUZZ_PUZZLES, { swarm: true, ...options }), { seed, numRuns: count })
+  const kindsOfList = (list) => new Set([...list.commands].map((w) => w.cmd.kind))
+
+  it('a list holds only the kinds of its own subset, and the subset is never empty', () => {
+    for (const list of swarm(21)) {
+      assert.ok(list.kinds.length > 0, 'a non-empty subset')
+      assert.deepEqual([...kindsOfList(list)].filter((k) => !list.kinds.includes(k)), [], 'no kind outside the subset')
+      assert.deepEqual(list.kinds.filter((k) => !KIND_NAMES.includes(k)), [], 'the subset names real kinds')
+    }
+  })
+
+  it('the subsets differ from list to list, and across lists every kind still comes up', () => {
+    const lists = swarm(22, 300)
+    assert.ok(new Set(lists.map((l) => l.kinds.join('|'))).size > 100, 'the subsets differ')
+    assert.ok(lists.some((l) => l.kinds.length < KIND_NAMES.length / 2), 'some list has under half the kinds')
+    const seen = new Set(lists.flatMap((l) => [...kindsOfList(l)]))
+    assert.deepEqual(KIND_NAMES.filter((k) => !seen.has(k)), [])
+  })
+
+  it('some lists leave out the kinds that wipe the board, so a deeper state survives', () => {
+    const lists = swarm(23, 300)
+    const wipes = (l) => l.kinds.includes('undo all') || l.kinds.includes('reload')
+    assert.ok(lists.some((l) => !wipes(l) && [...l.commands].length > 10), 'a long list with neither undo all nor reload')
+  })
+
+  it('a list with no swarm draws from every kind', () => {
+    for (const list of fc.sample(actionList(FUZZ_PUZZLES), { seed: 24, numRuns: 20 })) assert.deepEqual(list.kinds, KIND_NAMES)
+  })
+
+  it('a start of a busy-start list is still drawn from the start kinds, whatever the subset', () => {
+    for (const list of swarm(25, 100, { busyStart: true })) assert.ok(list.start.length <= 30)
+  })
+})
+
+describe('longer lists and no empty list (#730)', () => {
+  const lengths = (options, count = 300) => fc.sample(actionList(FUZZ_PUZZLES, options), { seed: 31, numRuns: count }).map((l) => [...l.commands].length)
+
+  it('with no nonEmpty, some lists are empty, as fast-check draws the length from 0', () => {
+    assert.ok(lengths({ maxCommands: 20 }).includes(0))
+  })
+
+  it('with nonEmpty, no generated list is empty', () => {
+    assert.equal(Math.min(...lengths({ maxCommands: 20, nonEmpty: true })), 1)
+    assert.equal(Math.min(...lengths({ maxCommands: 50, nonEmpty: true, swarm: true })), 1)
+  })
+
+  it('maxCommands sets the longest list, and the default is the old 20', () => {
+    assert.equal(DEFAULT_MAX_COMMANDS, 20)
+    assert.equal(Math.max(...lengths({})), 20)
+    const long = lengths({ maxCommands: 50, nonEmpty: true })
+    assert.equal(Math.max(...long), 50)
+    assert.ok(long.filter((n) => n > 20).length > 100, 'most lists are past the old limit')
   })
 })
