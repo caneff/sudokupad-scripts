@@ -12,7 +12,7 @@ export const quietPage = (overrides = {}) => ({
   notesSeen: [],
   colorByDigit: { mode: 'Cell', groups: [{ key: '1', digits: ['1', '2'] }], cells: [{ digit: '', given: false, colours: [] }, { digit: '', given: false, colours: [] }, { digit: '', given: false, colours: [] }] },
   pageColor: 'rgb(0, 0, 0)',
-  rulesPane: { fontPx: 17.6, ownFontPx: 17.6, scrollHeight: 300, clientHeight: 300 },
+  rulesPane: { fontPx: 17.6, ownFontPx: 17.6, scrollHeight: 300, clientHeight: 300, fontOffsetPx: 0 },
   letterMode: false,
   noteBoxes: [],
   ...overrides
@@ -102,6 +102,9 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       resize: rec('resize'),
       blurFocus: async (...a) => { log.push(['blurFocus', ...a]); if (whitenOnBlur) pageColor = 'rgb(255, 255, 255)'; if (whitenOnWait) whitenPending = true; if (lettersOnBlur) letterMode = true; if (whiteForWaits) { pageColor = 'rgb(255, 255, 255)'; whiteWaitsLeft = whiteForWaits } },
       reload: rec('reload'),
+      dragRules: rec('dragRules'),
+      rulesFont: rec('rulesFont'),
+      rulesDialog: rec('rulesDialog'),
       darkPage: rec('darkPage'),
       settingsText: rec('settingsText'),
       uiTweaks: rec('uiTweaks')

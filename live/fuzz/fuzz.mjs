@@ -7,6 +7,7 @@ import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
 import { actButton, animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog, paste, STATUS } from '../settings.mjs'
+import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, RULES_PANE } from '../auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
@@ -63,6 +64,13 @@ const isSettingsObject = (text) => {
   } catch {
     return false
   }
+}
+// The pointer's way onto the rules pane, so the corners and the bar show; false when the page shows no rules (a puzzle with no rules text).
+async function hoverRules (p) {
+  if (!await p.locator(RULES_PANE).isVisible()) return false
+  const box = await p.locator(RULES_PANE).boundingBox()
+  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  return true
 }
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
@@ -294,6 +302,32 @@ function envFor (p, puzzle, { beforeReload }) {
       await startPuzzle(p)
       await resumeAfterHistory(p)
       await showRules(p, puzzle)
+    },
+    async dragRules (corner, dx, dy) {
+      if (!await hoverRules(p)) return
+      await p.locator(CORNER(corner)).waitFor({ state: 'visible', timeout: BOX_TIMEOUT_MS })
+      const box = await p.locator(CORNER(corner)).boundingBox()
+      const x = box.x + box.width / 2
+      const y = box.y + box.height / 2
+      await p.mouse.move(x, y)
+      await p.mouse.down()
+      await p.mouse.move(x + dx, y + dy, { steps: 6 })
+      await p.mouse.up()
+    },
+    async rulesFont (step, times) {
+      for (let i = 0; i < times; i++) {
+        // Each press refits the pane and moves the bar, so the pointer goes back over the pane first: the bar shows only while it is there.
+        if (!await hoverRules(p)) return
+        await p.locator(`${FONT_BAR} button`).filter({ hasText: step > 0 ? 'f+' : 'f-' }).click({ timeout: BOX_TIMEOUT_MS })
+      }
+    },
+    // A limit typed is a limit saved only on Save; Restore defaults clears this puzzle's sizing at once, so a Cancel after it still keeps the clearing.
+    async rulesDialog ({ maxWidth, maxHeight, restore }, save) {
+      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
+      await p.locator(MAX_WIDTH_INPUT).fill(maxWidth)
+      await p.locator(MAX_HEIGHT_INPUT).fill(maxHeight)
+      if (restore) await dialogButton(p, 'Restore defaults').click()
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', MAX_WIDTH_INPUT)
     },
     // `restore` presses Restore defaults after the color is picked.
     async darkPage (color, save, restore = false) {

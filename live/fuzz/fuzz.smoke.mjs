@@ -7,8 +7,10 @@ import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
+import { rulesWidth } from '../attacks.mjs'
 import { penDrawnCount } from '../pen.mjs'
 import { scriptedList } from './actions.mjs'
+import { ownedSettings, SETTINGS_SCRIPTS } from '../settings.mjs'
 import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
@@ -266,6 +268,63 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"blue"}', false]]), null)
       assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"#101030"}', true]], ['dark page defaults', ['#002010', true]]), null)
       assert.equal(await after(['dark page defaults', ['#002010', false]]), null, 'Cancel after Restore defaults saves nothing')
+    })
+  })
+
+  describe('the rules box of Auto Rules Resizer (#818)', () => {
+    const puzzle = puzzleByName('recorded 9x9')
+    const script = SETTINGS_SCRIPTS.find((s) => s.file === 'auto-rules-resizer.user.js')
+    // What the script saved, by key without the prefix: the limits are plain, a puzzle's sizing is the one key that starts with `sizing_`.
+    const saved = async (p) => Object.fromEntries(Object.entries(await ownedSettings(p, script)).map(([k, v]) => [k.replace(/^(?:svencodes_)?AutoRulesResizer_/, '').replace(/^sizing_.*/, 'sizing'), JSON.parse(v).data]))
+    const sizing = async (p) => (await saved(p)).sizing
+
+    it('each corner saves its own box: the bottom-left one grows the box left and down, the top-right one right and up', async () => {
+      const box = (...steps) => afterSteps(puzzle, steps, async (p) => (await sizing(p)).box)
+      const left = await box(['rules drag', ['dl', -150, 0]])
+      assert.ok(left.w > 0 && left.x < 0, `dl sideways: ${JSON.stringify(left)}`)
+      const down = await box(['rules drag', ['dl', 0, 80]])
+      assert.ok(down.h > 0 && down.y === 0, `dl down: ${JSON.stringify(down)}`)
+      const up = await box(['rules drag', ['ur', 0, -60]])
+      assert.ok(up.h > 0 && up.y < 0 && up.x === 0, `ur up: ${JSON.stringify(up)}`)
+      const right = await box(['rules drag', ['ur', 100, 0]])
+      assert.ok(right.w > 0 && right.x === 0, `ur right: ${JSON.stringify(right)}`)
+    })
+
+    it('f+ saves a font offset of the number of presses, f- the same below zero', async () => {
+      const offset = (...steps) => afterSteps(puzzle, steps, async (p) => (await sizing(p)).nudgePx)
+      assert.equal(await offset(['rules font', [1, 2]]), 2)
+      assert.equal(await offset(['rules font', [-1, 2]]), -2)
+      assert.equal(await offset(['rules font', [1, 3]], ['rules font', [-1, 1]]), 2)
+    })
+
+    it('the page state carries the font offset f+ and f- saved, 0 for a puzzle never resized, and one f+ on the 16x16 puzzle passes every rule (#828)', async () => {
+      const offsetOf = (p) => readPageState(p, { expectRules: true }).then((page) => page.rulesPane.fontOffsetPx)
+      assert.equal(await afterSteps(puzzle, [], offsetOf), 0)
+      assert.equal(await afterSteps(puzzle, [['rules font', [1, 2]]], offsetOf), 2)
+      assert.equal(await afterSteps(puzzle, [['rules font', [-1, 1]]], offsetOf), -1)
+      await fuzzScripted({ browser: browser(), puzzle: puzzleByName('16x16'), steps: [['rules font', [1, 1]]] })
+    })
+
+    it('Restore defaults saves no sizing at all', async () => {
+      assert.equal(await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['rules font', [-1, 1]], ['rules dialog', ['', '', true, false]]], sizing), undefined)
+    })
+
+    it('a saved box is read back when the page loads again: the pane is as wide as after the drag, and wider than undragged', async () => {
+      const dragged = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]]], rulesWidth)
+      const reloaded = await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['reload', null]], rulesWidth)
+      const undragged = await afterSteps(puzzle, [], rulesWidth)
+      assert.equal(reloaded, dragged)
+      assert.ok(dragged > undragged, `${dragged} > ${undragged}`)
+    })
+
+    it('a puzzle with no rules text has no box to drag, and the actions do nothing', async () => {
+      assert.deepEqual(await afterSteps(puzzleByName('4x4'), [['rules drag', ['ur', 100, -100]], ['rules font', [1, 3]]], saved), {})
+    })
+
+    it('Save keeps both limits, a blank clears one, a number that is no size keeps the one before, and Cancel keeps none', async () => {
+      assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, true]]], saved), { maxWidth: 400, maxHeight: 300 })
+      assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, true]], ['rules dialog', ['', '0', false, true]]], saved), { maxHeight: 300 })
+      assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, false]]], saved), {})
     })
   })
 

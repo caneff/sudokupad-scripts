@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, scriptedList, START_KINDS, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, START_KINDS, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
@@ -16,6 +16,7 @@ const stepsOf = (lists) => actionsOf(lists).map(String)
 const { THICKNESS, DASH, ARROW_SPACING } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
 const UI_TWEAKS = createRequire(import.meta.url)('../../ui-tweaks.user.js')
 const DARK_PAGE = createRequire(import.meta.url)('../../dark-page.user.js')
+const AUTO_RULES_RESIZER = createRequire(import.meta.url)('../../auto-rules-resizer.user.js')
 const { BOX_LINES, NUDGE_REPEAT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
 const runOn = async (action, options) => {
@@ -711,6 +712,82 @@ describe('focusing the actions on a script (#724)', () => {
 
     it('busy starts can hold the saved settings of both scripts, so a saved option or color is there to restore', () => {
       for (const kind of Object.keys(NEW_KINDS)) assert.ok(START_KINDS.includes(kind), kind)
+    })
+  })
+
+  describe('the rules box of Auto Rules Resizer (#818)', () => {
+    const calls = (log, name) => log.filter(([n]) => n === name)
+    const kindOf = (kind) => actionsOf(sample(41, 800)).filter((x) => x.kind === kind)
+    const NEW_KINDS = ['rules drag', 'rules font', 'rules dialog']
+    const AUTO = 'auto-rules-resizer.user.js'
+
+    it('each kind exercises Auto Rules Resizer, is generated, is page use and can sit in a busy start', () => {
+      for (const kind of NEW_KINDS) {
+        assert.deepEqual(KIND_SCRIPTS[kind], [AUTO], kind)
+        assert.equal(KIND_GROUPS[kind], 'page', kind)
+        assert.ok(kindOf(kind).length > 3, `${kind} is drawn`)
+        assert.ok(START_KINDS.includes(kind), kind)
+      }
+    })
+
+    it('a drag action presses either corner and moves it up to the reach in every direction', async () => {
+      const corners = new Set()
+      const moves = []
+      for (const a of kindOf('rules drag')) {
+        const [, corner, dx, dy] = calls((await runOn(a)).log, 'dragRules')[0]
+        corners.add(corner)
+        moves.push(dx, dy)
+        assert.ok(Math.abs(dx) <= RULES_DRAG_REACH_PX && Math.abs(dy) <= RULES_DRAG_REACH_PX, `${dx} x ${dy}`)
+      }
+      assert.deepEqual([...corners].sort(), [...RULES_CORNERS].sort())
+      assert.ok(moves.some((n) => n < 0) && moves.some((n) => n > 0), 'both directions')
+      const step = (arg) => String(scriptedList(puzzleByName('4x4'), [['rules drag', arg]])[0])
+      assert.equal(step(['ur', 120, -40]), 'drag the top-right corner of the rules box by 120 x -40')
+      assert.equal(step(['dl', -200, 80]), 'drag the bottom-left corner of the rules box by -200 x 80')
+    })
+
+    it('the corners are the script\'s own: it takes each and refuses any other', () => {
+      const drag = (corner) => AUTO_RULES_RESIZER.dragRulesBox({ w: 0, h: 0, x: 0, y: 0 }, corner, 10, 10, { width: 400, height: 300 }, { width: 240, height: 112 })
+      for (const corner of RULES_CORNERS) assert.doesNotThrow(() => drag(corner), corner)
+      assert.throws(() => drag('ul'), /no corner/)
+    })
+
+    it('a font action presses f+ or f- one to three times', async () => {
+      const seen = new Set()
+      for (const a of kindOf('rules font')) {
+        const [, step, times] = calls((await runOn(a)).log, 'rulesFont')[0]
+        assert.equal(Math.abs(step), 1)
+        assert.ok(times >= 1 && times <= 3, `${times} presses`)
+        seen.add(`${step} x ${times}`)
+      }
+      assert.equal(seen.size, 6)
+      const step = (arg) => String(scriptedList(puzzleByName('4x4'), [['rules font', arg]])[0])
+      assert.equal(step([1, 2]), 'press f+ on the rules box 2 times')
+      assert.equal(step([-1, 1]), 'press f- on the rules box 1 time')
+    })
+
+    // What the script makes of a typed limit is its own `limitFromBox`: the texts hold a blank, numbers, and text it takes no limit from.
+    it('the limit texts hold a blank, plain sizes and numbers that are no size', () => {
+      const parsed = RULES_LIMIT_TEXTS.map((t) => AUTO_RULES_RESIZER.limitFromBox(t, 'kept'))
+      assert.ok(parsed.includes(null), 'a blank clears the limit')
+      assert.ok(parsed.filter((n) => Number.isInteger(n)).length >= 3, 'sizes')
+      assert.ok(parsed.includes('kept'), 'a text that is no size keeps the limit')
+    })
+
+    it('a dialog action types both limits, may press Restore defaults, and presses Save or Cancel', async () => {
+      const seen = { width: new Set(), height: new Set(), restore: new Set(), save: new Set() }
+      for (const a of kindOf('rules dialog')) {
+        const [, limits, save] = calls((await runOn(a)).log, 'rulesDialog')[0]
+        assert.deepEqual(Object.keys(limits).sort(), ['maxHeight', 'maxWidth', 'restore'])
+        seen.width.add(limits.maxWidth); seen.height.add(limits.maxHeight); seen.restore.add(limits.restore); seen.save.add(save)
+      }
+      assert.deepEqual([...seen.width].sort(), [...RULES_LIMIT_TEXTS].sort())
+      assert.deepEqual([...seen.height].sort(), [...RULES_LIMIT_TEXTS].sort())
+      assert.deepEqual([...seen.restore].sort(), [false, true])
+      assert.deepEqual([...seen.save].sort(), [false, true])
+      const step = (arg) => String(scriptedList(puzzleByName('4x4'), [['rules dialog', arg]])[0])
+      assert.equal(step(['400', '', true, false]), 'Auto Rules Resizer dialog: max width 400 max height none Restore defaults Cancel')
+      assert.equal(step(['', '0', false, true]), 'Auto Rules Resizer dialog: max width none max height 0 Save')
     })
   })
 })
