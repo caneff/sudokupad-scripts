@@ -271,7 +271,7 @@ describe('the rules', () => {
       assert.deepEqual(check('rules-fit-pane', { rulesPane: null }), [])
     })
 
-    const pane = (over) => ({ fontPx: 17.6, ownFontPx: 17.6, scrollHeight: 300, clientHeight: 300, ...over })
+    const pane = (over) => ({ fontPx: 17.6, ownFontPx: 17.6, scrollHeight: 300, clientHeight: 300, fontOffsetPx: 0, ...over })
     it('holds when the rules fit', () => {
       assert.deepEqual(check('rules-fit-pane', { rulesPane: pane() }), [])
     })
@@ -286,6 +286,11 @@ describe('the rules', () => {
     })
     it('fails when the rules scroll one step above the smallest font', () => {
       assert.equal(check('rules-fit-pane', { rulesPane: pane({ scrollHeight: 1000, fontPx: 13 }) }).length, 1)
+    })
+    // f+ grows the font past what the widest pane holds, as the script's own test says (#828): the font is the player's pick there.
+    it('holds when the rules scroll at a font the player raised with f+, and fails for one f- lowered or left alone (#828)', () => {
+      assert.deepEqual(check('rules-fit-pane', { rulesPane: pane({ scrollHeight: 698, clientHeight: 688, fontPx: 16, fontOffsetPx: 1 }) }), [])
+      for (const fontOffsetPx of [0, -1]) assert.equal(check('rules-fit-pane', { rulesPane: pane({ scrollHeight: 698, clientHeight: 688, fontPx: 16, fontOffsetPx }) }).length, 1, `offset ${fontOffsetPx}`)
     })
   })
 

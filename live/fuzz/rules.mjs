@@ -13,7 +13,7 @@
 //   notesSeen     the same plus the text typed so far in the note open for typing, which is not yet in notesSaved
 //   colorByDigit  { mode: 'Cell' | 'Digit' | 'Both' | 'Off', groups: [{ key, digits }], cells: [{ digit, given, colours }] with `colours` the keys the cell holds }
 //   pageColor     the page's background as a computed `rgb(r, g, b)`
-//   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight }; null on a puzzle with no rules text (#679)
+//   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight, fontOffsetPx }; null on a puzzle with no rules text (#679)
 //   letterMode    whether the number pad shows letters
 //   noteBoxes     one { text, fill, expected } per finished note with a box: its computed fill, and the fill of the box color Text Anywhere has saved (`boxFill` of the stored value and the note's color), both as computed rgb text
 import { createRequire } from 'node:module'
@@ -87,8 +87,9 @@ const reloadView = (page, ignorePenColors) => {
   return colorsCells(mode) ? base : { ...base, cells: shown.cells, colours: cells.map((cell) => cell.colours) }
 }
 
+// A positive font offset (f+) is a font the player asked for, which the script grows past what the widest pane holds (`fitRulesPane`'s test, "then only the font grows"), so it may scroll.
 export function rulesPaneFits (pane) {
-  return pane.scrollHeight - pane.clientHeight <= SCROLL_TOLERANCE_PX || pane.fontPx <= pane.ownFontPx * MIN_FONT_RATIO + FONT_TOLERANCE_PX
+  return pane.scrollHeight - pane.clientHeight <= SCROLL_TOLERANCE_PX || pane.fontPx <= pane.ownFontPx * MIN_FONT_RATIO + FONT_TOLERANCE_PX || pane.fontOffsetPx > 0
 }
 
 export const RULES = [

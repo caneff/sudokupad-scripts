@@ -10,12 +10,14 @@ import { rulesPaneFits } from './rules.mjs'
 const { stateFromStored, activeGroups } = createRequire(import.meta.url)('../../color-by-digit.user.js')
 const { boxFill, readBoxColor } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
+// The saved sizing's key before the puzzle's own part (`SIZING_KEY_PREFIX` of auto-rules-resizer.user.js, typed out like the keys of the other scripts' fixtures).
+const SIZING_KEY_PREFIX = 'AutoRulesResizer_sizing_'
 const COLOR_BUTTON_TITLE = /^Color by digit: (\w+)$/
 // Auto Rules Resizer refits 100 ms after the last resize, and the rules are read once they fit or this long has passed: a wait on a condition, so a slow box
 // reads the finished fit, and a pane that never fits is still read and reported.
 const RULES_FIT_MS = 2000
 
-const readDom = ({ texts, seenTexts, boxedTexts, boxKey, profilesKey, expectRules }) => {
+const readDom = ({ texts, seenTexts, boxedTexts, boxKey, profilesKey, sizingKeyPrefix, expectRules }) => {
   const puzzle = Framework.app.puzzle
   const strokeOf = (names) => `pen-${names[0]} pencolor-${names.slice(1)}`
   const rules = document.querySelector('.puzzle-rules')
@@ -33,6 +35,9 @@ const readDom = ({ texts, seenTexts, boxedTexts, boxKey, profilesKey, expectRule
     ownFontPx = parseFloat(window.getComputedStyle(bare).fontSize)
     bare.remove()
   }
+  // The puzzle's saved sizing (`{ v, data: { nudgePx } }`, under a key of the puzzle's own), whose `nudgePx` is the font offset f+ and f- keep; none saved is 0.
+  const sizingKey = Object.keys(window.localStorage).find((k) => k.replace(/^svencodes_/, '').startsWith(sizingKeyPrefix))
+  const fontOffsetPx = sizingKey ? JSON.parse(window.localStorage.getItem(sizingKey)).data.nudgePx : 0
   return {
     undoDepth: puzzle.undoStack.length,
     cells: JSON.parse(puzzle.serializeState()).cells,
@@ -48,7 +53,7 @@ const readDom = ({ texts, seenTexts, boxedTexts, boxKey, profilesKey, expectRule
     profiles: Framework.getData(profilesKey),
     digits: puzzle.cells.map((cell) => ({ digit: String(cell.value || ''), given: Boolean(cell.given), colours: cell.colours.map(String) })),
     pageColor: window.getComputedStyle(document.body).backgroundColor,
-    rulesPane: !shown ? null : { fontPx: parseFloat(window.getComputedStyle(rules).fontSize), ownFontPx, scrollHeight: rules.scrollHeight, clientHeight: rules.clientHeight },
+    rulesPane: !shown ? null : { fontPx: parseFloat(window.getComputedStyle(rules).fontSize), ownFontPx, scrollHeight: rules.scrollHeight, clientHeight: rules.clientHeight, fontOffsetPx },
     letterMode: controls.classList.contains('input-letter')
   }
 }
@@ -65,7 +70,7 @@ const withExpectedFills = (p, boxedNotes, boxColor) => p.evaluate(([notes, wante
 
 // `expectRules` says whether the puzzle has rules text. A puzzle that does must show the pane (or the read throws); the snapshot's `rulesPane` is null when no pane is shown.
 export async function readPageState (p, { expectRules }) {
-  const args = { texts: TEXTS, seenTexts: SEEN_TEXTS, boxedTexts: TEXT_BGS, boxKey: BOX_KEY, profilesKey: PROFILES_KEY, expectRules }
+  const args = { texts: TEXTS, seenTexts: SEEN_TEXTS, boxedTexts: TEXT_BGS, boxKey: BOX_KEY, profilesKey: PROFILES_KEY, sizingKeyPrefix: SIZING_KEY_PREFIX, expectRules }
   let dom = await p.evaluate(readDom, args)
   for (const deadline = Date.now() + RULES_FIT_MS; dom.rulesPane !== null && !rulesPaneFits(dom.rulesPane) && Date.now() < deadline;) {
     await sleep(POLL_MS)

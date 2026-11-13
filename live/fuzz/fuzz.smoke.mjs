@@ -297,6 +297,14 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.equal(await offset(['rules font', [1, 3]], ['rules font', [-1, 1]]), 2)
     })
 
+    it('the page state carries the font offset f+ and f- saved, 0 for a puzzle never resized, and one f+ on the 16x16 puzzle passes every rule (#828)', async () => {
+      const offsetOf = (p) => readPageState(p, { expectRules: true }).then((page) => page.rulesPane.fontOffsetPx)
+      assert.equal(await afterSteps(puzzle, [], offsetOf), 0)
+      assert.equal(await afterSteps(puzzle, [['rules font', [1, 2]]], offsetOf), 2)
+      assert.equal(await afterSteps(puzzle, [['rules font', [-1, 1]]], offsetOf), -1)
+      await fuzzScripted({ browser: browser(), puzzle: puzzleByName('16x16'), steps: [['rules font', [1, 1]]] })
+    })
+
     it('Restore defaults saves no sizing at all', async () => {
       assert.equal(await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['rules font', [-1, 1]], ['rules dialog', ['', '', true, false]]], sizing), undefined)
     })
