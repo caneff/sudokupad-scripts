@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.17
+// @version      1.32.18
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.17'
+  const VERSION = '1.32.18'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -61,6 +61,44 @@
   const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
   /* eslint-enable no-unused-vars */
   // </lib:plain>
+  // <lib:settings-table>
+  // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  /* global isPlainObject */ // eslint-disable-line no-redeclare
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent) and `dialog` (the settings dialog sets it).
+  function sameValue (a, b) {
+    return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
+  }
+
+  const tableKeys = (rows) => rows.map((row) => row.key)
+
+  const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], row.read(store.getData(row.key))]))
+
+  // Every row as `store` holds it, by name.
+  const readTable = (rows, store) => readByField(rows, store, 'name')
+
+  // The same values by stored key, defaults included, so a paste can put a setting back to its default.
+  const copiedTable = (rows, store) => readByField(rows, store, 'key')
+
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+
+  // The rows whose draft differs from the value in force.
+  const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
+
+  // A paste puts the pasted rows' values (read from `now`, once saved) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+
+  // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
+  function saveRow (store, row, value) {
+    if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else store.setData(row.key, value)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-table>
 
   // <lib:slider-keys>
   // Generated from lib/slider-keys.js; edit that file and run node sync-lib.js.
@@ -814,27 +852,14 @@
     return { ...draft, [name]: flagName === undefined ? checked : { ...draft[name], [flagName]: checked } }
   }
 
-  function sameValue (a, b) {
-    return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
-  }
-
-  function settingDefaults () {
-    return Object.fromEntries(SETTING_NAMES.map((name) => [name, SETTINGS[name].fallback]))
-  }
-
-  function readSettings (store) {
-    return Object.fromEntries(SETTING_NAMES.map((name) => [name, SETTINGS[name].normalize(store.getData(SETTINGS[name].key))]))
-  }
-
-  function changedSettings (draft, current) {
-    return SETTING_NAMES.filter((name) => !sameValue(draft[name], current[name]))
-  }
-
-  // A value at its default removes its key, so a default that changes later reaches everyone who never chose another.
-  function saveSetting (store, setting, value) {
-    if (sameValue(value, setting.fallback)) store.removeData(setting.key)
-    else store.setData(setting.key, value)
-  }
+  const SETTING_ROWS = SETTING_NAMES.map((name) => {
+    const { key, fallback, normalize, accepts } = SETTINGS[name]
+    return { name, key, fallback, read: normalize, paste: (data) => (accepts(data) ? normalize(data) : undefined) }
+  })
+  const settingDefaults = () => tableDefaults(SETTING_ROWS)
+  const readSettings = (store) => readTable(SETTING_ROWS, store)
+  const changedSettings = (draft, current) => changedRows(SETTING_ROWS, draft, current).map((row) => row.name)
+  const saveSetting = saveRow
 
   // A write that throws leaves `current` as it was, so a retry finds the same settings changed and their effects still run.
   function saveChangedSettings (store, draft, current) {
@@ -1172,13 +1197,12 @@
   }
 
   const READERS = {
-    ...Object.fromEntries(SETTING_NAMES.map((name) => [SETTINGS[name].key, (data) => (SETTINGS[name].accepts(data) ? SETTINGS[name].normalize(data) : undefined)])),
+    ...pasteReaders(SETTING_ROWS),
     [COLORS_KEY]: readPastedColors
   }
   // Every setting at the value in force, defaults included, so a paste can put one back to its default; the pen colors only once they are saved.
   function copiedSettings (store) {
-    const settings = readSettings(store)
-    const copied = Object.fromEntries(SETTING_NAMES.map((name) => [SETTINGS[name].key, settings[name]]))
+    const copied = copiedTable(SETTING_ROWS, store)
     const colors = readPenColors(store.getData(COLORS_KEY))
     if (colors) copied[COLORS_KEY] = storedPenColors(colors)
     return JSON.stringify(copied)
@@ -1544,7 +1568,7 @@
     adoptColors(set, pickedPreset)
   }
 
-  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...SETTING_NAMES.map((name) => SETTINGS[name].key)], () => {
+  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...tableKeys(SETTING_ROWS)], () => {
     const wasActive = active
     const wasPicked = activePickedPreset
     const wasSettings = { ...inForce }
@@ -3135,7 +3159,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
           // The draft takes the paste only once every write is done, so a paste the snapshot put back leaves the draft as the dialog shows it.
           const pastedSet = COLORS_KEY in values ? readPenColors(values[COLORS_KEY]) : null
           if (pastedSet) saveColors(pastedSet)
-          draft = { ...draft, ...Object.fromEntries(pasted.map((name) => [name, next[name]])) }
+          draft = withPasted(SETTING_ROWS, draft, next, values)
           if (pastedSet) {
             set = pastedSet
             pickedPreset = pastedSet.preset
