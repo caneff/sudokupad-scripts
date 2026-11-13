@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, scriptedList, START_KINDS } from './actions.mjs'
+import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, scriptedList, START_KINDS, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
@@ -14,6 +14,8 @@ const actionsOf = (lists) => lists.flatMap((l) => [...l.commands].map((wrapped) 
 const stepsOf = (lists) => actionsOf(lists).map(String)
 
 const { THICKNESS, DASH, ARROW_SPACING } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
+const UI_TWEAKS = createRequire(import.meta.url)('../../ui-tweaks.user.js')
+const DARK_PAGE = createRequire(import.meta.url)('../../dark-page.user.js')
 const { BOX_LINES, NUDGE_REPEAT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
 const runOn = async (action, options) => {
@@ -609,6 +611,106 @@ describe('focusing the actions on a script (#724)', () => {
     it('busy starts can hold a line mode, a mark and a colors dialog, so a saved line mode or palette is there to restore', () => {
       for (const kind of ['pen line mode', 'pen mark', 'pen colors dialog']) assert.ok(START_KINDS.includes(kind), kind)
       assert.ok(!START_KINDS.includes('pen color edit'), 'a hold is a gesture a busy start leaves out')
+    })
+  })
+
+  describe('the settings dialogs of UI Tweaks and Dark Page (#817)', () => {
+    const calls = (log, name) => log.filter(([n]) => n === name)
+    const kindOf = (kind) => actionsOf(sample(41, 800)).filter((x) => x.kind === kind)
+    const NEW_KINDS = { 'ui tweaks dialog': 'ui-tweaks.user.js', 'ui tweaks settings text': 'ui-tweaks.user.js', 'dark page settings text': 'dark-page.user.js', 'dark page defaults': 'dark-page.user.js' }
+
+    it('each kind exercises its script, is generated, and is page use', () => {
+      for (const [kind, file] of Object.entries(NEW_KINDS)) {
+        assert.deepEqual(KIND_SCRIPTS[kind], [file], kind)
+        assert.equal(KIND_GROUPS[kind], 'page', kind)
+        assert.ok(kindOf(kind).length > 3, `${kind} is drawn`)
+      }
+    })
+
+    it('a UI Tweaks dialog action sets the two options, clicks the Tab option off and on, may press Restore defaults, and presses Save or Cancel', async () => {
+      const seen = { hide: new Set(), wrap: new Set(), tab: new Set(), restore: new Set(), save: new Set() }
+      for (const a of kindOf('ui tweaks dialog')) {
+        const [, options, save] = calls((await runOn(a)).log, 'uiTweaks')[0]
+        assert.deepEqual(Object.keys(options).sort(), ['hideSelect', 'restore', 'toggleTab', 'wrapButtons'])
+        seen.hide.add(options.hideSelect); seen.wrap.add(options.wrapButtons); seen.tab.add(options.toggleTab); seen.restore.add(options.restore); seen.save.add(save)
+      }
+      for (const [name, set] of Object.entries(seen)) assert.deepEqual([...set].sort(), [false, true], name)
+      const step = (arg) => String(scriptedList(puzzleByName('4x4'), [['ui tweaks dialog', arg]])[0])
+      assert.equal(step([true, false, true, true, false]), 'UI Tweaks dialog: select hidden buttons in one row Tab option off and on Restore defaults Cancel')
+      assert.equal(step([false, true, false, false, true]), 'UI Tweaks dialog: select shown buttons wrapped Save')
+    })
+
+    // The dialog action clicks the Tab box back (`fuzz.smoke.mjs` checks it saves on); the texts are the other way the option could be turned off.
+    it('no pasted text turns the Tab option off, since a rule says Tab never switches to letters', () => {
+      for (const text of UI_TWEAKS_TEXTS.filter((t) => t !== null)) {
+        try {
+          assert.notEqual(UI_TWEAKS.pastedSettings(text, UI_TWEAKS.READERS).values.UiTweaks_tab, false, text)
+        } catch (error) {
+          if (!/^the clipboard text is not/.test(error.message)) throw error
+        }
+      }
+    })
+
+    // What each script takes is its own reader's say, so a "valid" text is one its `pastedSettings` takes a setting from, and a refused one is no text it takes any from.
+    const taken = (script, text) => { try { return Object.keys(script.pastedSettings(text, script.READERS).values).length } catch { return 0 } }
+    const SCRIPTS = [['UI Tweaks', UI_TWEAKS, UI_TWEAKS_TEXTS], ['Dark Page', DARK_PAGE, DARK_PAGE_TEXTS]]
+
+    it('the texts hold Copy, texts each script takes a setting from, and texts it takes none from', () => {
+      for (const [name, script, texts] of SCRIPTS) {
+        const pastes = texts.filter((t) => t !== null)
+        assert.ok(texts.includes(null), `${name}: Copy`)
+        assert.ok(pastes.filter((t) => taken(script, t) > 0).length >= 2, `${name}: texts it takes`)
+        for (const refused of ['', 'not json', '[]']) assert.ok(pastes.includes(refused), `${name}: ${JSON.stringify(refused)}`)
+        assert.ok(pastes.filter((t) => taken(script, t) === 0).length >= 5, `${name}: texts it refuses`)
+      }
+      assert.equal(taken(UI_TWEAKS, '{"UiTweaks_hideSelect":"yes"}'), 0)
+      assert.equal(taken(DARK_PAGE, '{"DarkPage_color":"blue"}'), 0)
+      assert.ok(DARK_PAGE_TEXTS.includes('{"DarkPage_color":"blue"}'), 'a color the reader refuses')
+    })
+
+    it('every color Dark Page can be pasted is one of the dark colors', () => {
+      for (const t of DARK_PAGE_TEXTS.filter((x) => taken(DARK_PAGE, x ?? '') > 0)) assert.ok(DARK_COLORS.includes(DARK_PAGE.READERS.DarkPage_color(JSON.parse(t).DarkPage_color)), t)
+    })
+
+    it('a settings text action opens the script\'s dialog and copies or pastes one text, then Save or Cancel', async () => {
+      const pasted = { 'ui tweaks settings text': new Set(), 'dark page settings text': new Set() }
+      const saves = new Set()
+      for (const kind of Object.keys(pasted)) {
+        for (const a of kindOf(kind)) {
+          const [, script, text, save] = calls((await runOn(a)).log, 'settingsText')[0]
+          assert.equal(script, kind === 'ui tweaks settings text' ? 'ui tweaks' : 'dark page')
+          pasted[kind].add(text)
+          saves.add(save)
+        }
+      }
+      assert.deepEqual([...pasted['ui tweaks settings text']].sort(), [...UI_TWEAKS_TEXTS].sort())
+      assert.deepEqual([...pasted['dark page settings text']].sort(), [...DARK_PAGE_TEXTS].sort())
+      assert.deepEqual([...saves].sort(), [false, true])
+      const step = (kind, arg) => String(scriptedList(puzzleByName('4x4'), [[kind, arg]])[0])
+      assert.equal(step('ui tweaks settings text', [null, true]), 'UI Tweaks dialog: Copy settings Save')
+      assert.equal(step('dark page settings text', ['{"DarkPage_color":"#101030"}', false]), 'Dark Page dialog: Paste settings "{\\"DarkPage_color\\":\\"#101030\\"}" Cancel')
+    })
+
+    it('Copy settings is drawn about as often as three other texts together', () => {
+      const texts = actionsOf(sample(41, 800)).filter((x) => x.kind === 'ui tweaks settings text').map((x) => /Copy/.test(String(x)))
+      const share = texts.filter(Boolean).length / texts.length
+      assert.ok(share > 0.15 && share < 0.45, `Copy settings share ${share}`)
+    })
+
+    it('a Dark Page defaults action picks a dark color, presses Restore defaults, and presses Save or Cancel', async () => {
+      const saves = new Set()
+      for (const a of kindOf('dark page defaults')) {
+        const [, color, save, restore] = calls((await runOn(a)).log, 'darkPage')[0]
+        saves.add(save)
+        assert.ok(DARK_COLORS.includes(color), color)
+        assert.equal(restore, true)
+        assert.equal(String(a), `Dark Page dialog: ${color} then Restore defaults ${save ? 'Save' : 'Cancel'}`)
+      }
+      assert.deepEqual([...saves].sort(), [false, true])
+    })
+
+    it('busy starts can hold the saved settings of both scripts, so a saved option or color is there to restore', () => {
+      for (const kind of Object.keys(NEW_KINDS)) assert.ok(START_KINDS.includes(kind), kind)
     })
   })
 })
