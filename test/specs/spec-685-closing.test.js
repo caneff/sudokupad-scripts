@@ -32,7 +32,7 @@ const framework = (saved, failOn) => ({
   removeData: (key) => { delete saved[key] }
 })
 const Framework = {}
-const lib = loadLib(['sudokupad', 'settings-dialog', 'settings-transfer'], ['createGuard', 'snapshotStore', 'showSettingsDialog', 'SUDOKUPAD_PURPLE'], { Framework })
+const lib = loadLib(['sudokupad', 'write-style', 'settings-dialog', 'settings-transfer'], ['createGuard', 'snapshotStore', 'showSettingsDialog', 'SUDOKUPAD_PURPLE'], { Framework })
 
 // SudokuPad's dialog as the settings dialog sees it: `showDialog` keeps the buttons, and the dialog holds the status line and the
 // title row's click listener. `save()` presses Save, and `paste()` presses Paste settings.
@@ -166,9 +166,10 @@ test('each script carries only the lib code it runs: Pen Tool Extras alone has t
   assert.deepEqual(naming, [join('test', 'pen-tool-extras.test.js'), 'pen-tool-extras.user.js'].sort())
   for (const file of SCRIPTS) {
     const source = read(file)
-    const own = ownCode(file)
-    for (const helper of ['wrapIndex', 'writeStyle']) {
-      if (new RegExp(`(?:function|const) ${helper}\\b`).test(source)) assert.ok(new RegExp(`\\b${helper}\\(`).test(own), `${file} carries ${helper} and never calls it`)
+    // A call from the script's own code or from another module it carries; the helper's own block does not count.
+    for (const [helper, block] of [['wrapIndex', 'wrap-index'], ['writeStyle', 'write-style']]) {
+      const others = source.replace(new RegExp(`^\\s*// <lib:${block}>\\n[\\s\\S]*?// </lib:${block}>\\n`, 'm'), '')
+      if (new RegExp(`(?:function|const) ${helper}\\b`).test(source)) assert.ok(new RegExp(`\\b${helper}\\(`).test(others), `${file} carries ${helper} and never calls it`)
     }
   }
 })
