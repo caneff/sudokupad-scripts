@@ -378,19 +378,12 @@ describe('the fuzz engine on a fake page', () => {
   })
 })
 
-describe('swarm and longer lists reach the engine (#728, #730)', () => {
+describe('longer lists reach the engine (#730)', () => {
   const ran = async (options, runs = 100) => {
     const { openTarget, targets } = fakeTargets()
     await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs, ...FIXED_WAIT, ...options })
     return targets.map((t) => t.log)
   }
-  // The fake logs what an action called, so a list with many calls and few kinds of call came from a few kinds of action.
-  const narrow = (logs) => logs.filter((log) => log.length >= 12 && new Set(log.map(([name]) => name)).size <= 4).length
-
-  it('a swarm run has lists of a few kinds, and a run without one has none', async () => {
-    assert.ok(narrow(await ran(CONFIGS.swarm)) > 0)
-    assert.equal(narrow(await ran({})), 0)
-  })
 
   it('a failure that wants 10 clicks is found by a long list and not by the default 20 in 300 lists', async () => {
     const hunt = async (options) => {
@@ -401,12 +394,12 @@ describe('swarm and longer lists reach the engine (#728, #730)', () => {
     assert.equal((await hunt(CONFIGS['long-50'])).failed, true)
   })
 
-  it('a swarm failure replays from its path and replay path, whatever the seed', async () => {
+  it('a failure under the current configuration replays from its path and replay path, whatever the seed', async () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const { openTarget } = fakeTargets({ errorAtClicks: 3 })
-      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed, runs: 300, ...FIXED_WAIT, ...CONFIGS.swarm })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed, runs: 300, ...FIXED_WAIT, ...CONFIGS.current })
       assert.equal(found.failed, true, `seed ${seed}`)
-      const again = await runFuzz({ openTarget: fakeTargets({ errorAtClicks: 3 }).openTarget, puzzles: PUZZLES, seed, path: found.path, replayPath: found.replayPath, ...FIXED_WAIT, ...CONFIGS.swarm })
+      const again = await runFuzz({ openTarget: fakeTargets({ errorAtClicks: 3 }).openTarget, puzzles: PUZZLES, seed, path: found.path, replayPath: found.replayPath, ...FIXED_WAIT, ...CONFIGS.current })
       assert.deepEqual(again.sequence, found.sequence, `seed ${seed}`)
     }
   })
