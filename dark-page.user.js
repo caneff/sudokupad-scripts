@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.18
+// @version      0.7.19
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.18'
+  const VERSION = '0.7.19'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -283,20 +283,22 @@
     swallowRelease(win)
   }
 
+  // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
+
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
-    framework.addSetting({
+  // The entry is added, and `open` runs, under `feature` (a guard feature), so a throw from either turns that feature off.
+  function addSettingsEntry (framework, feature, { name, content, open }) {
+    feature.run(() => framework.addSetting({
       tag: 'button',
       name,
       group: SETTINGS_GROUP,
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(() => {
-          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
-        }, 0)
+        setTimeout(() => feature.run(open), 0)
       }
-    })
+    }))
   }
 
   const COPY_PASTE_PICTURES = {
@@ -859,9 +861,7 @@
       label: 'settings entry',
       needs: {
         'Framework.getApp': 'function',
-        'Framework.addSetting': 'function',
-        'Framework.showDialog': 'function',
-        'Framework.closeDialog': 'function',
+        ...SETTINGS_DIALOG_NEEDS,
         'Framework.setData': 'function',
         'Framework.removeData': 'function'
       }
@@ -974,7 +974,7 @@
       style.textContent = buildCss(pageColor)
     }
     settingsEntry.run(() => Framework.getApp().then(() => {
-      settingsEntry.run(() => addSettingsEntry(dialogs, { name: 'darkpage', content: 'Dark Page', open: () => settingsEntry.run(openDialog) }))
+      addSettingsEntry(dialogs, settingsEntry, { name: 'darkpage', content: 'Dark Page', open: openDialog })
     }))
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)

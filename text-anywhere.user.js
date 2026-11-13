@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.13
+// @version      0.46.14
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.13'
+  const VERSION = '0.46.14'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -1393,20 +1393,22 @@
     swallowRelease(win)
   }
 
+  // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
+
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
-    framework.addSetting({
+  // The entry is added, and `open` runs, under `feature` (a guard feature), so a throw from either turns that feature off.
+  function addSettingsEntry (framework, feature, { name, content, open }) {
+    feature.run(() => framework.addSetting({
       tag: 'button',
       name,
       group: SETTINGS_GROUP,
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(() => {
-          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
-        }, 0)
+        setTimeout(() => feature.run(open), 0)
       }
-    })
+    }))
   }
 
   const COPY_PASTE_PICTURES = {
@@ -1989,7 +1991,7 @@
     },
     settings: {
       label: 'settings',
-      needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' },
+      needs: SETTINGS_DIALOG_NEEDS,
       onSkip () {
         document.querySelector(`.${SETTINGS_CLASS}`)?.remove()
         Framework.closeDialog()
@@ -4293,7 +4295,7 @@
       onWindow(textTool, 'pagehide', saveOpenNote)
       document.addEventListener('visibilitychange', under(textTool, () => { if (document.visibilityState === 'hidden') saveOpenNote() }))
     })
-    settingsUi.run(() => addSettingsEntry(dialogs, { name: 'textanywhere', content: 'Text Anywhere', open: under(settingsUi, openDialog) }))
+    addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: 'Text Anywhere', open: openDialog })
     boardNotes.run(() => {
       app.puzzle.on('loaded', under(boardNotes, showSavedNotes))
       app.on('restarted', under(boardNotes, restartNotes))
