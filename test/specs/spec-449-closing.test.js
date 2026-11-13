@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { runOnBrokenSudokuPad, SudokuPadChanged } = require('./broken-sudokupad.js')
-const { guardId, scriptFiles } = require('../../sync-lib.js')
+const { guardId, scriptFiles, withoutLibBlocks } = require('../../sync-lib.js')
 const ROOT = join(__dirname, '..', '..')
 
 const SCRIPTS = scriptFiles()
@@ -19,7 +19,7 @@ test('every script declares its features through the shared guard', () => {
   assert.equal(SCRIPTS.length, 6, SCRIPTS.join(', '))
   for (const file of SCRIPTS) {
     const source = readFileSync(join(ROOT, file), 'utf8')
-    const own = source.replace(/\/\/ <lib:[a-z-]+>[\s\S]*?\/\/ <\/lib:[a-z-]+>/g, '')
+    const own = withoutLibBlocks(source)
     assert.match(source, /\/\/ <lib:sudokupad>/, file)
     assert.match(own, /createGuard\(\{ script: '[a-z-]+', [^\n]*features: FEATURES \}\)/, file)
     const { FEATURES, lackingInternals } = require(join(ROOT, file))

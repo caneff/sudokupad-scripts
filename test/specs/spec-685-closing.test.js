@@ -5,16 +5,15 @@ const { readdirSync, readFileSync, existsSync } = require('node:fs')
 const { join } = require('node:path')
 const { loadLib } = require('../load-lib.js')
 const { memoryStorage } = require('../fake-page-storage.js')
-const { syncText, readLib, libNamesOnDisk, scriptFiles } = require('../../sync-lib.js')
+const { syncText, readLib, libNamesOnDisk, scriptFiles, libBlockNames, withoutLibBlocks } = require('../../sync-lib.js')
 const ROOT = join(__dirname, '..', '..')
 
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const SCRIPTS = scriptFiles()
-const LIB_BLOCK = /\/\/ <lib:([a-z-]+)>[\s\S]*?\/\/ <\/lib:\1>/g
 // A script's own code: its text with every block sync-lib.js pastes in taken out.
-const ownCode = (file) => read(file).replace(LIB_BLOCK, '')
+const ownCode = (file) => withoutLibBlocks(read(file))
 // The lib modules a script carries.
-const carried = (file) => [...read(file).matchAll(LIB_BLOCK)].map((match) => match[1])
+const carried = (file) => libBlockNames(read(file))
 
 // The files a stray copy could hide in: the repo's root, `lib/`, `test/` and `live/`, so never `docs/research/` or `site/`.
 const filesIn = (dir) => readdirSync(join(ROOT, dir), { withFileTypes: true }).filter((entry) => entry.isFile() && /\.m?js$/.test(entry.name)).map((entry) => join(dir, entry.name))

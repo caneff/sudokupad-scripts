@@ -6,7 +6,7 @@ const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
 
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
-const { syncText, readLib, libNamesOnDisk, RUN } = require('../../sync-lib.js')
+const { syncText, readLib, libNamesOnDisk, RUN, withoutLibBlocks } = require('../../sync-lib.js')
 // Color by Digit and Pen Tool Extras export their copy of lib/color-math.js; the sync check below holds every copy to the module.
 const COLOR_EXPORTERS = ['color-by-digit', 'pen-tool-extras'].map((script) => require(`../../${script}.user.js`))
 
@@ -23,13 +23,6 @@ const CARRIES = {
 // Names a module provides, which no script may define again outside its blocks.
 const MODULE_NAMES = ['parseColor', 'darkenColor', 'toHex', 'isTransparent', 'GAMUT_EDGE', 'LIGHTNESS_FACTOR', 'pastedSettings', 'pasteReport',
   'SUDOKUPAD_PEN_COLORS', 'PEN_COLOR_NUMBERS', 'darkerPageColors', 'isPlainObject', 'rem', 'installSliderGuards']
-
-const outsideBlocks = (source) => source.split('\n').filter(((inside) => (line) => {
-  if (/\/\/ <lib:/.test(line)) inside = true
-  const keep = !inside
-  if (/\/\/ <\/lib:/.test(line)) inside = false
-  return keep
-})(false)).join('\n')
 
 // Spec 334's acceptance as one pass at `npm test`: the six modules in lib/, each copied whole into exactly the scripts the spec
 // names and in step with lib/ (the sync check, naming its command), no script keeping its own copy of a module's names, one
@@ -57,7 +50,7 @@ test('spec 334: shared lib/ modules copied into each script, kept in sync by nod
     assert.deepEqual(synced.problems, [], `${file}: ${RUN}`)
     assert.deepEqual(synced.changed, [], `${file}: blocks out of date; run ${RUN}`)
     // No module name is defined again outside the blocks.
-    const own = outsideBlocks(source)
+    const own = withoutLibBlocks(source)
     for (const name of MODULE_NAMES) {
       assert.doesNotMatch(own, new RegExp(`^\\s*(?:function\\s+${name}\\b|(?:const|let|var)\\s+${name}\\b)`, 'm'), `${file} defines ${name} outside lib/`)
     }

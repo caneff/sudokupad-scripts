@@ -4,8 +4,11 @@
 const fs = require('node:fs')
 const path = require('node:path')
 
-const OPEN = /^(\s*)\/\/ <lib:([a-z][a-z0-9-]*)>\s*$/
-const CLOSE = /^\s*\/\/ <\/lib:([a-z][a-z0-9-]*)>\s*$/
+const LIB_NAME = '[a-z][a-z0-9-]*'
+const OPEN = new RegExp(`^(\\s*)\\/\\/ <lib:(${LIB_NAME})>\\s*$`)
+const CLOSE = new RegExp(`^\\s*\\/\\/ <\\/lib:(${LIB_NAME})>\\s*$`)
+// A whole block, from its opening marker to the closing one of the same name, for tests that read a script without running syncText.
+const blockPattern = () => new RegExp(`\\/\\/ <lib:(${LIB_NAME})>[\\s\\S]*?\\/\\/ <\\/lib:\\1>`, 'g')
 const MARKER_WORD = /<\/?lib:/
 const RUN = 'node sync-lib.js'
 const SCRIPT_VERSION = /^(\/\/ @version\s+)(\d+)\.(\d+)\.(\d+)(\s*)$/m
@@ -125,6 +128,11 @@ const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
 // The scripts: every *.user.js at the root but a handover.
 const scriptFiles = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js') && !(f in HANDOVERS)).sort()
 
+// The names of the lib blocks a script carries, in order.
+const libBlockNames = (source) => [...source.matchAll(blockPattern())].map((match) => match[1])
+// A script's own code: its text with every lib block taken out.
+const withoutLibBlocks = (source) => source.replace(blockPattern(), '')
+
 // The id a script's source hands the shared guard (lib/sudokupad.js `createGuard`), which starts each of its warnings.
 function guardId (source) {
   const found = /createGuard\(\{ script: '([a-z-]+)'/.exec(source)
@@ -145,4 +153,4 @@ if (require.main === module) {
   if (failed) process.exit(1)
 }
 
-module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, HANDOVERS, guardId, generatedLine, RUN }
+module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, HANDOVERS, guardId, generatedLine, RUN, libBlockNames, withoutLibBlocks }
