@@ -612,7 +612,7 @@ describe('focusing the actions on a script (#724)', () => {
     })
   })
 
-  describe("the settings dialogs of UI Tweaks and Dark Page (#817)", () => {
+  describe('the settings dialogs of UI Tweaks and Dark Page (#817)', () => {
     const calls = (log, name) => log.filter(([n]) => n === name)
     const kindOf = (kind) => actionsOf(sample(41, 800)).filter((x) => x.kind === kind)
     const NEW_KINDS = { 'ui tweaks dialog': 'ui-tweaks.user.js', 'ui tweaks settings text': 'ui-tweaks.user.js', 'dark page settings text': 'dark-page.user.js', 'dark page defaults': 'dark-page.user.js' }

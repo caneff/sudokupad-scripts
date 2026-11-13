@@ -256,7 +256,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
     it('a pasted UI Tweaks text is applied on the spot, and a refused one changes nothing', async () => {
       const after = (text) => afterSteps(puzzle, [['ui tweaks settings text', [text, false]]], tweaks)
-      assert.deepEqual(await after(UI_TWEAKS_TEXTS[2]), [true, false, true], "a paste saves every option, the unpasted Tab at its current value")
+      assert.deepEqual(await after(UI_TWEAKS_TEXTS[2]), [true, false, true], 'a paste saves every option, the unpasted Tab at its current value')
       assert.deepEqual(await after('{"UiTweaks_hideSelect":"yes"}'), [null, null, null])
       assert.deepEqual(await after(null), [null, null, null], 'Copy settings saves nothing')
     })
