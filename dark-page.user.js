@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.20
+// @version      0.7.21
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.20'
+  const VERSION = '0.7.21'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -43,8 +43,62 @@
     return typeof data === 'string' && HEX_COLOR.test(data) ? data.toLowerCase() : null
   }
 
-  // Throws when storage cannot be read.
-  const readSaved = (store) => pageColorOf(store.getData(DATA_KEY))
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
+
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
+  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
+  /* eslint-enable no-unused-vars */
+  // </lib:plain>
+  // <lib:settings-table>
+  // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  /* global isPlainObject */ // eslint-disable-line no-redeclare
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent) and `dialog` (the settings dialog sets it).
+  function sameValue (a, b) {
+    return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
+  }
+
+  const tableKeys = (rows) => rows.map((row) => row.key)
+
+  const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], row.read(store.getData(row.key))]))
+
+  // Every row as `store` holds it, by name.
+  const readTable = (rows, store) => readByField(rows, store, 'name')
+
+  // The same values by stored key, defaults included, so a paste can put a setting back to its default.
+  const copiedTable = (rows, store) => readByField(rows, store, 'key')
+
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+
+  // The rows whose draft differs from the value in force.
+  const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
+
+  // A paste puts the pasted rows' values (read from `now`, once saved) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+
+  // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
+  function saveRow (store, row, value) {
+    if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else store.setData(row.key, value)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-table>
+
+  const COLOR_ROWS = [{ name: 'color', key: DATA_KEY, fallback: DEFAULT_COLOR, read: (data) => pageColorOf(data) ?? DEFAULT_COLOR, paste: (data) => pageColorOf(data) ?? undefined }]
+
+  // The saved color, the default when none is saved. Throws when storage cannot be read.
+  const readSaved = (store) => readTable(COLOR_ROWS, store).color
 
   // Framework keeps its saved data in localStorage under `<Framework.LocalDataPrefix>_<name>` (`makeDataKey`), a color as
   // the plain string: the live checks in § at document-start fail if SudokuPad changes either.
@@ -52,10 +106,10 @@
   // The saved color read straight from storage, for when Framework does not exist yet. Throws when storage is blocked.
   const earlyColor = (storage) => pageColorOf(storage.getItem(LOCAL_DATA_KEY))
 
-  const READERS = { [DATA_KEY]: (data) => pageColorOf(data) ?? undefined }
+  const READERS = pasteReaders(COLOR_ROWS)
 
   // The color in force, the default included, so a paste can put a page back to the default.
-  const copiedSettings = (store) => JSON.stringify({ [DATA_KEY]: readSaved(store) ?? DEFAULT_COLOR })
+  const copiedSettings = (store) => JSON.stringify(copiedTable(COLOR_ROWS, store))
 
   // <lib:color-math>
   // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
@@ -909,9 +963,7 @@
   const savedSettings = guard.storeFor(settingsEntry)
 
   function saveColor (color) {
-    // The default is kept as nothing saved, so it follows any later change of the default.
-    if (color === DEFAULT_COLOR) savedSettings.removeData(DATA_KEY)
-    else savedSettings.setData(DATA_KEY, color)
+    saveRow(savedSettings, COLOR_ROWS[0], color)
     pageColor = color
     style.textContent = buildCss(pageColor)
   }
@@ -920,7 +972,7 @@
   const DIALOG_ID = 'dark-page-dialog'
   const dialogs = guard.dialogsFor(settingsEntry)
   // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
-  const snapshotColor = () => snapshotStore(savedSettings, [DATA_KEY])
+  const snapshotColor = () => snapshotStore(savedSettings, tableKeys(COLOR_ROWS))
 
   function openDialog () {
     let picked = pageColor
@@ -974,8 +1026,7 @@
     // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the default color.
     if (typeof Framework === 'undefined') return
     guard.probe({ roots: { Framework }, store: Framework })
-    const read = savedPageColor.run(() => ({ color: readSaved(Framework) }), () => null)
-    const saved = read ? read.color || DEFAULT_COLOR : pageColor
+    const saved = savedPageColor.run(() => readSaved(Framework), () => pageColor)
     if (saved !== pageColor) {
       pageColor = saved
       style.textContent = buildCss(pageColor)

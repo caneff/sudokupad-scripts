@@ -39,6 +39,18 @@ test('saveOptions keeps every option as a boolean under its own key, and savedOp
   assert.deepEqual(savedOptions(store), chosen)
 })
 
+test('saveOptions leaves no key for an option at its default, and removes one saved earlier', () => {
+  const store = fakeStore({ UiTweaks_tab: false, UiTweaks_hideSelect: true })
+  saveOptions(store, { tab: true, hideSelect: true, wrapButtons: false })
+  assert.deepEqual(store.data, { UiTweaks_hideSelect: true })
+})
+
+test('saveOptions leaves a key already saved at its default until the next Save', () => {
+  const store = fakeStore({ UiTweaks_tab: true })
+  assert.deepEqual(savedOptions(store), DEFAULT_OPTIONS)
+  assert.deepEqual(store.data, { UiTweaks_tab: true })
+})
+
 test('the storage keys are UiTweaks_ names', () => {
   assert.deepEqual(Object.fromEntries(OPTIONS.map((option) => [option.id, option.key])), { tab: 'UiTweaks_tab', hideSelect: 'UiTweaks_hideSelect', wrapButtons: 'UiTweaks_wrapButtons' })
 })

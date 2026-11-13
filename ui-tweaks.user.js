@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.17
+// @version      0.1.18
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Toggle Selection button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.17'
+  const VERSION = '0.1.18'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -29,22 +29,76 @@
     { id: 'hideSelect', key: 'UiTweaks_hideSelect', label: 'Hide the Toggle Selection button', hint: 'The other buttons in the row close up.', default: false },
     { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after 5.', default: false }
   ]
-  const DEFAULT_OPTIONS = Object.fromEntries(OPTIONS.map((option) => [option.id, option.default]))
-
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
 
-  const savedOptions = (store) => Object.fromEntries(OPTIONS.map((option) => [option.id, savedBoolean(store.getData(option.key)) ?? option.default]))
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
 
-  function saveOptions (store, options) {
-    OPTIONS.forEach((option) => store.setData(option.key, options[option.id]))
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
+  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
+  /* eslint-enable no-unused-vars */
+  // </lib:plain>
+  // <lib:settings-table>
+  // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  /* global isPlainObject */ // eslint-disable-line no-redeclare
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent) and `dialog` (the settings dialog sets it).
+  function sameValue (a, b) {
+    return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
 
-  const READERS = Object.fromEntries(OPTIONS.map((option) => [option.key, savedBoolean]))
+  const tableKeys = (rows) => rows.map((row) => row.key)
 
-  const copiedSettings = (store) => JSON.stringify(Object.fromEntries(OPTIONS.map((option) => [option.key, savedOptions(store)[option.id]])))
+  const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], row.read(store.getData(row.key))]))
+
+  // Every row as `store` holds it, by name.
+  const readTable = (rows, store) => readByField(rows, store, 'name')
+
+  // The same values by stored key, defaults included, so a paste can put a setting back to its default.
+  const copiedTable = (rows, store) => readByField(rows, store, 'key')
+
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+
+  // The rows whose draft differs from the value in force.
+  const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
+
+  // A paste puts the pasted rows' values (read from `now`, once saved) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+
+  // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
+  function saveRow (store, row, value) {
+    if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else store.setData(row.key, value)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-table>
+
+  const OPTION_ROWS = OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: (data) => savedBoolean(data) ?? option.default, paste: savedBoolean }))
+  const DEFAULT_OPTIONS = tableDefaults(OPTION_ROWS)
+
+  const savedOptions = (store) => readTable(OPTION_ROWS, store)
+
+  // An option at its default leaves no key, so a default that changes later reaches everyone who never chose another.
+  function saveOptions (store, options) {
+    OPTION_ROWS.forEach((row) => saveRow(store, row, options[row.name]))
+  }
+
+  const READERS = pasteReaders(OPTION_ROWS)
+
+  const copiedSettings = (store) => JSON.stringify(copiedTable(OPTION_ROWS, store))
 
   // What a paste leaves in force: the options now saved, with only the pasted ones changed, so a box ticked in the dialog and not saved is not saved by it.
-  const pastedOptions = (current, values) => ({ ...current, ...Object.fromEntries(OPTIONS.filter((option) => option.key in values).map((option) => [option.id, values[option.key]])) })
+  const pastedOptions = (current, values) => withPasted(OPTION_ROWS, current, Object.fromEntries(OPTION_ROWS.map((row) => [row.name, values[row.key]])), values)
 
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
@@ -804,7 +858,7 @@
   // The options are written only from the dialog, so a write that fails reaches its status line with the settings entry still on.
   const savedSettings = guard.storeFor(settingsEntry)
   // Every option's key and the options in force, as a function that puts them back after a Save or Paste that failed half-way.
-  const snapshotOptions = () => snapshotStore(savedSettings, OPTIONS.map((option) => option.key), () => {
+  const snapshotOptions = () => snapshotStore(savedSettings, tableKeys(OPTION_ROWS), () => {
     const was = options
     return () => applyOptions(was)
   })
@@ -822,7 +876,7 @@
       bodyId: DIALOG_ID,
       styleId: 'ui-tweaks-dialog-style',
       css: DIALOG_CSS,
-      changed: () => OPTIONS.some((option) => draft[option.id] !== options[option.id]),
+      changed: () => changedRows(OPTION_ROWS, draft, options).length > 0,
       snapshot: snapshotOptions,
       feature: settingsEntry,
       save: () => {
@@ -836,9 +890,9 @@
           const next = pastedOptions(options, values)
           saveOptions(savedSettings, next)
           applyOptions(next)
-          OPTIONS.filter((option) => option.key in values).forEach((option) => {
-            draft[option.id] = next[option.id]
-            box(option.id).checked = next[option.id]
+          OPTION_ROWS.filter((row) => row.key in values).forEach((row) => {
+            draft[row.name] = next[row.name]
+            box(row.name).checked = next[row.name]
           })
         }
       },
