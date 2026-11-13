@@ -16,7 +16,7 @@ const RACE_SEED = 5
 const BUSY_SEED = 1
 // The seeds whose lists put a Tab after a blur, and whose busy start is two clicks; the action set decides them too.
 const BLUR_SEED = 1
-const START_SEED = 86
+const START_SEED = 14
 // The engine's fixed wait after an action, and a landing wait of 1 ms: the fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const FIXED_WAIT = { landMs: 1, settleMs: ACTION_SETTLE_MS }
 

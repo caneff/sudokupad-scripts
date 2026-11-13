@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
 import { penDrawnCount } from '../pen.mjs'
-import { scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { scriptedList } from './actions.mjs'
 import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
@@ -241,9 +241,8 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
   describe('the settings dialogs of UI Tweaks and Dark Page (#817)', () => {
     const puzzle = puzzleByName('4x4')
-    const saved = (key) => (p) => p.evaluate((k) => Framework.getData(k), key)
     const tweaks = (p) => p.evaluate(() => ['tab', 'hideSelect', 'wrapButtons'].map((id) => Framework.getData(`UiTweaks_${id}`)))
-    const colorOf = saved('DarkPage_color')
+    const colorOf = (p) => p.evaluate(() => Framework.getData('DarkPage_color'))
 
     it('Save keeps the two options and a Tab option clicked off and on again, and Cancel keeps none', async () => {
       assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, true, false, true]]], tweaks), [true, true, true])
@@ -256,7 +255,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
     it('a pasted UI Tweaks text is applied on the spot, and a refused one changes nothing', async () => {
       const after = (text) => afterSteps(puzzle, [['ui tweaks settings text', [text, false]]], tweaks)
-      assert.deepEqual(await after(UI_TWEAKS_TEXTS[2]), [true, false, true], 'a paste saves every option, the unpasted Tab at its current value')
+      assert.deepEqual(await after('{"UiTweaks_wrapButtons":true,"UiTweaks_hideSelect":false}'), [true, false, true], 'a paste saves every option, the unpasted Tab at its current value')
       assert.deepEqual(await after('{"UiTweaks_hideSelect":"yes"}'), [null, null, null])
       assert.deepEqual(await after(null), [null, null, null], 'Copy settings saves nothing')
     })

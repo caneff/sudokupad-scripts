@@ -34,8 +34,8 @@
 //   env.penPresets(pick, restore, save)      opens Pen Tool Extras' settings dialog, picks the color preset at position `pick` (wrapped to the pulldown's options) or, when `restore`, presses Restore defaults, and presses Save or Cancel
 //   env.uiTweaks({ hideSelect, wrapButtons, toggleTab, restore }, save)   opens UI Tweaks' dialog, sets the Hide the Toggle Selection button and Wrap buttons boxes, clicks the Tab box off and on again, presses Restore defaults when `restore`, and presses Save or Cancel
 //   env.settingsText(script, text, save)     opens the dialog of `script` ('ui tweaks' or 'dark page'), presses Copy settings when `text` is null and else puts `text` on the clipboard and presses Paste settings, then presses Save or Cancel
-//   env.darkPageDefaults(color, save)        opens Dark Page's dialog, picks `color`, presses Restore defaults, and presses Save or Cancel
-//   env.resize({ width, height })  env.blurFocus()  env.reload()  env.darkPage(color, save)
+//   env.resize({ width, height })  env.blurFocus()  env.reload()
+//   env.darkPage(color, save, restore)       opens Dark Page's dialog, picks `color`, presses Restore defaults when `restore`, and presses Save or Cancel
 import { createRequire } from 'node:module'
 import fc from 'fast-check'
 
@@ -48,7 +48,10 @@ export const TOOL_KEYS = ['z', 'x', 'c', 'v']
 const WINDOW_SIZES = [{ width: 1024, height: 600 }, { width: 1200, height: 900 }, { width: 1400, height: 1000 }]
 const NOTE_TEXTS = ['15', 'a->b', 'sum 12', '!= 3', 'x\ny']
 // Dark colors only: Dark Page has no off switch, its page color is the setting, and a rule says it stays dark (#590).
-const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
+export const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
+// How much likelier a press of Copy settings is than any one text: it is one of the nine, and a 4-minute run drew it too rarely for UI Tweaks (#817).
+const COPY_WEIGHT = 3
+const textOrCopy = (texts) => fc.oneof({ weight: COPY_WEIGHT, arbitrary: fc.constant(null) }, { weight: texts.length - 1, arbitrary: fc.constantFrom(...texts.filter((t) => t !== null)) })
 // The text Copy settings and Paste settings of UI Tweaks and Dark Page work on (#817): null is a press of Copy settings, the rest is put on the clipboard and pasted.
 // No text turns UI Tweaks' Tab option off (a rule says Tab never switches to letters), and no valid text gives Dark Page a color that is not dark (the rule of #590);
 // a text each script refuses (a wrong type, a color that is no hex, a foreign key, not JSON, empty, not an object) is the other half.
@@ -616,13 +619,13 @@ function buildKinds () {
       weight: 1,
       arg: () => fc.tuple(fc.constantFrom(...DARK_COLORS), fc.boolean()),
       label: ([color, save]) => `Dark Page dialog: ${color} then Restore defaults ${save ? 'Save' : 'Cancel'}`,
-      run: (env, [color, save]) => env.darkPageDefaults(color, save)
+      run: (env, [color, save]) => env.darkPage(color, save, true)
     },
     {
       kind: 'dark page settings text',
       group: 'page',
       weight: 1,
-      arg: () => fc.tuple(fc.constantFrom(...DARK_PAGE_TEXTS), fc.boolean()),
+      arg: () => fc.tuple(textOrCopy(DARK_PAGE_TEXTS), fc.boolean()),
       label: ([text, save]) => settingsTextLabel('Dark Page', text, save),
       run: (env, [text, save]) => env.settingsText('dark page', text, save)
     },
@@ -638,7 +641,7 @@ function buildKinds () {
       kind: 'ui tweaks settings text',
       group: 'page',
       weight: 1,
-      arg: () => fc.tuple(fc.constantFrom(...UI_TWEAKS_TEXTS), fc.boolean()),
+      arg: () => fc.tuple(textOrCopy(UI_TWEAKS_TEXTS), fc.boolean()),
       label: ([text, save]) => settingsTextLabel('UI Tweaks', text, save),
       run: (env, [text, save]) => env.settingsText('ui tweaks', text, save)
     }
@@ -756,7 +759,7 @@ function actionArbitrary (puzzle, weights, kinds = KINDS) {
 
 // The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
 // Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
-export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page', 'dark page defaults', 'dark page settings text', 'ui tweaks dialog', 'ui tweaks settings text']
+export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page']
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 

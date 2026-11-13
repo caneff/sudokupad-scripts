@@ -53,9 +53,17 @@ const TRACK_MARGIN_PX = 6
 const BOX_TIMEOUT_MS = 2000
 
 const UI_TWEAKS_DIALOG = '#ui-tweaks-dialog'
-const DARK_PAGE_INPUT = '.dialog input[type=color]'
+const DARK_PAGE_INPUT = '#dark-page-input'
 // The two scripts whose Copy settings and Paste settings the fuzz presses: the entry's name, and the editor that shows while its dialog is open.
 const SETTINGS_DIALOGS = { 'ui tweaks': ['UI Tweaks', UI_TWEAKS_DIALOG], 'dark page': ['Dark Page', DARK_PAGE_INPUT] }
+const isSettingsObject = (text) => {
+  try {
+    const data = JSON.parse(text)
+    return data !== null && typeof data === 'object' && !Array.isArray(data)
+  } catch {
+    return false
+  }
+}
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
@@ -287,16 +295,11 @@ function envFor (p, puzzle, { beforeReload }) {
       await resumeAfterHistory(p)
       await showRules(p, puzzle)
     },
-    async darkPage (color, save) {
-      await openScriptDialog(p, 'Dark Page', 'input[type=color]')
-      await p.locator('.dialog input[type=color]').fill(color)
-      await p.locator('.dialog').getByRole('button', { name: save ? 'Save' : 'Cancel', exact: true }).click()
-      await p.locator('.dialog').waitFor({ state: 'detached' })
-    },
-    async darkPageDefaults (color, save) {
+    // `restore` presses Restore defaults after the color is picked.
+    async darkPage (color, save, restore = false) {
       await openScriptDialog(p, 'Dark Page', DARK_PAGE_INPUT)
       await p.locator(DARK_PAGE_INPUT).fill(color)
-      await dialogButton(p, 'Restore defaults').click()
+      if (restore) await dialogButton(p, 'Restore defaults').click()
       await closeDialogWith(p, save ? 'Save' : 'Cancel', DARK_PAGE_INPUT)
     },
     // Copy settings answers on the dialog's status line, which is waited for: a press with no answer is a failure. Paste settings is `paste` of settings.mjs, which waits for the same line.
@@ -307,7 +310,9 @@ function envFor (p, puzzle, { beforeReload }) {
         await actButton(p, 'copy-settings').click()
         await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
       } else {
-        await paste(p, text)
+        // A refused text is answered with a "Could not paste", which is the answer; a settings object the script should take is not.
+        const status = await paste(p, text)
+        if (/^Could not paste/.test(status) && isSettingsObject(text)) throw new Error(`pasting ${text} into ${entry} failed: ${status}`)
       }
       await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
     },

@@ -103,7 +103,6 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       blurFocus: async (...a) => { log.push(['blurFocus', ...a]); if (whitenOnBlur) pageColor = 'rgb(255, 255, 255)'; if (whitenOnWait) whitenPending = true; if (lettersOnBlur) letterMode = true; if (whiteForWaits) { pageColor = 'rgb(255, 255, 255)'; whiteWaitsLeft = whiteForWaits } },
       reload: rec('reload'),
       darkPage: rec('darkPage'),
-      darkPageDefaults: rec('darkPageDefaults'),
       settingsText: rec('settingsText'),
       uiTweaks: rec('uiTweaks')
     }
