@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.16
+// @version      0.46.17
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.16'
+  const VERSION = '0.46.17'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -797,7 +797,8 @@
   // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
-  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent) and `dialog` (the settings dialog sets it).
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -806,7 +807,9 @@
 
   const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
 
-  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], row.read(store.getData(row.key))]))
+  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
   // Every row as `store` holds it, by name.
   const readTable = (rows, store) => readByField(rows, store, 'name')
@@ -825,6 +828,7 @@
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
   function saveRow (store, row, value) {
     if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else if (row.envelope) row.envelope.save(store, row.key, value)
     else store.setData(row.key, value)
   }
   /* eslint-enable no-unused-vars */

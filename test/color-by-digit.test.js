@@ -1469,8 +1469,8 @@ test('copiedSettings: the profiles and the mode in force, groups saved before pr
   assert.equal(copied.ColorByDigit_profiles.profiles[copied.ColorByDigit_profiles.active].groups[0].key, '3')
   assert.equal(copied.ColorByDigit_mode, 'cell')
   assert.equal('ColorByDigit_auto' in copied, false)
-  assert.equal('ColorByDigit_addedPreloads' in copied, false)
-  assert.equal('ColorByDigit_addedEachDigit' in copied, false)
+  assert.equal(copied.ColorByDigit_addedPreloads, false, 'a preload mark not set copies as false, so a paste can clear one')
+  assert.equal(copied.ColorByDigit_addedEachDigit, false)
   assert.equal(JSON.parse(copiedSettings({ getData: (key) => ({ ColorByDigit_auto: false }[key] ?? null) })).ColorByDigit_mode, 'off')
 })
 
