@@ -11,6 +11,9 @@ import { FUZZ_PUZZLES } from './puzzle-set.mjs'
 const CELLS = Array.from({ length: 12 }, (_, i) => [Math.floor(i / 4), i % 4])
 const PUZZLES = [{ name: 'fake', rows: 3, cols: 4, keys: ['1', '2', '3', '4'], free: CELLS, cells: CELLS }]
 const SEED = 7
+// The seeds that shrink a planted race to its two Tabs alone, and that find a failure needing the busy board; the action set decides them, so a new kind can move them.
+const RACE_SEED = 6
+const BUSY_SEED = 1
 // The engine's fixed wait after an action, and a landing wait of 1 ms: the fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const FIXED_WAIT = { landMs: 1, settleMs: ACTION_SETTLE_MS }
 
@@ -219,7 +222,7 @@ describe('the fuzz engine on a fake page', () => {
 
     it('a planted error that needs two Tabs within 10 ms is never caught at the fixed wait', async () => {
       const { openTarget } = fakeTargets({ raceOnFastTabs: true })
-      const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 600, landMs: 1, settleMs: 40 })
+      const result = await runFuzz({ openTarget, puzzles: PUZZLES, seed: RACE_SEED, runs: 600, landMs: 1, settleMs: 40 })
       assert.equal(result.failed, false)
     })
 
@@ -228,7 +231,7 @@ describe('the fuzz engine on a fake page', () => {
 
       it('catches it, and reports the 0 ms wait that exposed it', async () => {
         const { openTarget } = fakeTargets({ raceOnFastTabs: true })
-        found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 600, ...VARIED })
+        found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: RACE_SEED, runs: 600, ...VARIED })
         assert.equal(found.failed, true)
         assert.equal(found.waitMs, 0)
       })
@@ -328,7 +331,7 @@ describe('the fuzz engine on a fake page', () => {
       it('is caught, with the start steps it needs among the shrunk steps', async () => {
         // 16 clicks do not come from the 20 actions of one list alone (none was found in 1500 lists without a start).
         const { openTarget } = fakeTargets({ errorAtClicks: 16 })
-        found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 1500, ...BUSY })
+        found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: BUSY_SEED, runs: 1500, ...BUSY })
         assert.equal(found.failed, true)
         assert.ok(found.sequence.some((s) => s.startsWith('(start) ')), found.sequence.join(' | '))
       })
@@ -343,7 +346,7 @@ describe('the fuzz engine on a fake page', () => {
 
     it('the same lists without a start never reach that failure, so the start is what finds it', async () => {
       const { openTarget } = fakeTargets({ errorAtClicks: 16 })
-      assert.equal((await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 1500, ...FIXED_WAIT })).failed, false)
+      assert.equal((await runFuzz({ openTarget, puzzles: PUZZLES, seed: BUSY_SEED, runs: 1500, ...FIXED_WAIT })).failed, false)
     })
 
     it('a failure inside the start, whose actions never ran, prints the start\'s steps alone', async () => {

@@ -184,6 +184,62 @@ describe('the action vocabulary', () => {
     })
   })
 
+  describe("Color by Digit's profile editor, menu and Restart (#814)", () => {
+    const calls = (log, name) => log.filter(([n]) => n === name)
+    const kindOf = (kind) => actionsOf(sample(21, 600)).filter((x) => x.kind === kind)
+    const editorCalls = async (n = 200) => {
+      const seen = []
+      for (const a of kindOf('profile editor').slice(0, n)) seen.push({ step: String(a), call: calls((await runOn(a)).log, 'profileEditor')[0] })
+      return seen
+    }
+
+    it('the editor action opens the dialog, makes up to four edits, and saves or cancels', async () => {
+      const seen = await editorCalls()
+      assert.ok(seen.length > 20)
+      const ops = new Set()
+      const saves = new Set()
+      const menus = new Set()
+      for (const { call: [, edits, save, fromMenu] } of seen) {
+        menus.add(fromMenu)
+        assert.ok(edits.length <= 4)
+        for (const [op] of edits) ops.add(op)
+        saves.add(save)
+      }
+      assert.deepEqual([...ops].sort(), ['cell profile', 'delete', 'digit profile', 'move', 'new', 'paint', 'rename', 'select'])
+      assert.deepEqual([...saves].sort(), [false, true])
+      assert.deepEqual([...menus].sort(), [false, true], 'opened from the settings and from the pad menu')
+    })
+
+    it('its steps name each edit and Save or Cancel, as plain words', async () => {
+      const steps = (await editorCalls()).map(({ step }) => step)
+      for (const step of steps) assert.match(step, /^Color by Digit profiles dialog(?: from the pad menu)?: .*(?:Save|Cancel)$/)
+      const all = steps.join(' | ')
+      for (const word of ['new profile', 'rename to ', 'delete profile ', 'move profile ', 'select profile ', 'paint digit ', 'cell profile ', 'digit profile ']) assert.ok(all.includes(word), word)
+    })
+
+    it('the switch action picks a profile from the pad menu, and the restart action restarts the puzzle', async () => {
+      const [pick] = kindOf('profile switch')
+      const [restart] = kindOf('restart')
+      const picked = calls((await runOn(pick)).log, 'pickProfile')
+      assert.equal(picked.length, 1)
+      assert.ok(Number.isInteger(picked[0][1]) && picked[0][1] >= 0 && picked[0][1] < 6)
+      assert.match(String(pick), /^pick profile \d from the pad menu$/)
+      assert.equal(calls((await runOn(restart)).log, 'restartPuzzle').length, 1)
+      assert.equal(String(restart), 'restart the puzzle')
+    })
+
+    it('a restart clears the selected cell, so a digit is not typed into nothing', async () => {
+      const [restart] = kindOf('restart')
+      const model = { selected: true }
+      await restart.run(model, { env: (await fakeTargets().openTarget()).env })
+      assert.equal(model.selected, false)
+    })
+
+    it('all three kinds exercise Color by Digit', () => {
+      for (const kind of ['profile editor', 'profile switch', 'restart']) assert.deepEqual(KIND_SCRIPTS[kind], ['color-by-digit.user.js'])
+    })
+  })
+
   describe('the puzzle of a list (#679)', () => {
     it('every puzzle of the set is generated', () => {
       const names = new Set(sample(8, 200).map((l) => l.puzzle.name))

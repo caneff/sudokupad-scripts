@@ -6,12 +6,13 @@ import { ERROR_LOG_KEY, captureConsoleErrors, openPage, startPuzzle } from '../p
 import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
-import { closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
+import { animationsDone, closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { ARROW, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
-import { scriptedList, SLIDERS } from './actions.mjs'
+import { PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
@@ -53,6 +54,65 @@ async function clickIn (p, selector) {
   const box = await p.locator(selector).first().boundingBox({ timeout: 2000 })
   if (!box) throw new Error(`no ${selector} on the page to click`)
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+}
+
+// Color by Digit's profiles dialog (#814): opens it the way a user finds it, makes each edit of `actions.mjs`'s `profileEdit` on the dialog as it stands (a row, a
+// swatch or an option is counted from 0 and wrapped to how many there are, an edit the dialog's state does not allow, such as a delete of the only profile, is
+// not made), and presses Save or Cancel.
+async function editProfiles (p, edits, save, fromMenu) {
+  if (fromMenu) {
+    await clickIn(p, ARROW)
+    await p.locator(PROFILE_MENU).waitFor({ state: 'visible' })
+    await p.locator(`${PROFILE_MENU} [data-act=edit]`).click()
+    await p.locator(PROFILE_EDITOR).waitFor({ state: 'visible' })
+    await animationsDone(p.locator(PROFILE_EDITOR))
+  } else {
+    await openScriptDialog(p, 'Color by Digit', PROFILE_EDITOR)
+  }
+  const wrapped = async (locator, n) => {
+    const count = await locator.count()
+    return count === 0 ? null : locator.nth(n % count)
+  }
+  const rows = p.locator(PROFILE_ROWS)
+  for (const [op, a, b] of edits) {
+    if (op === 'new') {
+      const add = p.locator(`${PROFILE_EDITOR} [data-act=new-profile]`)
+      if (await add.isEnabled()) await add.click()
+    } else if (op === 'rename') {
+      await typeProfileName(p, PROFILE_NAMES[a])
+    } else if (op === 'delete') {
+      const row = await wrapped(rows, a)
+      // A row's x shows only while its row is hovered or selected.
+      await row.hover(ROW_CORNER)
+      const del = row.locator('button[data-act=delete]')
+      if (await del.isEnabled()) await del.click()
+    } else if (op === 'move') {
+      const count = await rows.count()
+      await dragProfileRow(p, a % count, b % count)
+    } else if (op === 'select') {
+      await (await wrapped(rows, a)).click(ROW_CORNER)
+    } else if (op === 'paint') {
+      const swatch = await wrapped(p.locator(`${PROFILE_EDITOR} button[data-role=swatch]`), b)
+      if (swatch) {
+        await swatch.click()
+        await p.locator(`${PROFILE_EDITOR} button[data-act=digit][data-digit="${a}"]`).click()
+      }
+    } else {
+      const select = p.locator(`${PROFILE_EDITOR} select[data-role=${op === 'cell profile' ? 'cell-profile' : 'digit-profile'}]`)
+      const options = await select.locator('option').count()
+      await select.selectOption({ index: a % options })
+    }
+  }
+  await closeDialogWith(p, save ? 'Save' : 'Cancel', PROFILE_EDITOR)
+}
+
+// Picks the profile at row `i` (wrapped) for the cells from the menu on the Color by Digit button's arrow; with a separate digit profile the menu has a dot column per target, and the cells' one is picked.
+async function pickProfileFromMenu (p, i) {
+  await clickIn(p, ARROW)
+  await p.locator(PROFILE_MENU).waitFor({ state: 'visible' })
+  const picks = p.locator(`${PROFILE_MENU} [data-act=pick][data-target=cells]`)
+  await picks.nth(i % await picks.count()).click()
+  await p.locator(PROFILE_MENU).waitFor({ state: 'detached' })
 }
 
 // The env `actions.mjs` runs on, over a real page showing `puzzle`.
@@ -99,6 +159,9 @@ function envFor (p, puzzle, { beforeReload }) {
     redo: () => clickIn(p, '#control-redo'),
     undoAll: () => undoAll(p),
     clickColorMode: () => clickIn(p, '#control-colorbydigit'),
+    profileEditor: (edits, save, fromMenu) => editProfiles(p, edits, save, fromMenu),
+    pickProfile: (i) => pickProfileFromMenu(p, i),
+    restartPuzzle: () => p.evaluate(() => Framework.app.restartPuzzle()),
     async placeNote (text, i) {
       await pickNotes()
       await p.mouse.click(...await this.cellPoint(i))
