@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { syncText, readLib, scriptFiles, generatedLine, libNamesOnDisk, HANDOVERS, guardId } = require('../sync-lib.js')
+const { syncText, readLib, scriptFiles, generatedLine, libNamesOnDisk, HANDOVERS, guardId, libBlockNames, withoutLibBlocks } = require('../sync-lib.js')
 
 const syncPlain = (source, readModule) => syncText(source, readModule, [])
 const modules = { plain: 'const a = 1\n\nconst b = 2\n' }
@@ -167,4 +167,10 @@ test('every script\'s lib blocks match lib/ (run node sync-lib.js to fix)', () =
     assert.deepEqual(problems, [], `${file}: fix the markers, then run node sync-lib.js`)
     assert.deepEqual(changed, [], `${file}: block(s) out of date with lib/; run node sync-lib.js`)
   }
+})
+
+test('libBlockNames and withoutLibBlocks read a block whose name has a digit, the same grammar syncText uses', () => {
+  const source = '// own\n  // <lib:color-2>\n  body\n  // </lib:color-2>\n// <lib:plain>\nx\n// </lib:plain>\n// tail\n'
+  assert.deepEqual(libBlockNames(source), ['color-2', 'plain'])
+  assert.equal(withoutLibBlocks(source), '// own\n  \n\n// tail\n')
 })
