@@ -1,17 +1,20 @@
 // The fuzz from the command line: `npm run test:fuzz`. Random action lists on real SudokuPad with every script installed, for 2 minutes by default;
 // a crash signal (a skip line, a page error, a console error, the notice bar) fails the run, which is shrunk to the shortest list that still fails
 // and printed with the seed and the command that replays it. Exits 1 on a failure.
-//   npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--plant-escape-error] [--plant <id>] [--focus <script> ...] [--config <name>]
+//   npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--plant-escape-error] [--plant <id>] [--focus <script> ...] [--config <name>] [--coverage]
+// `--coverage` also prints the functions of each script that no list of the run made run (`coverage.mjs`, #729).
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright'
 import { focusFiles } from './actions.mjs'
 import { numberOption } from './cli-number.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
+import { createCoverage, neverRunReport } from './coverage.mjs'
 import { fuzz } from './fuzz.mjs'
 import { plantById } from './plants.mjs'
+import { SCRIPT_FILES } from '../session.mjs'
 
 const { values } = parseArgs({
-  options: { seed: { type: 'string' }, minutes: { type: 'string' }, runs: { type: 'string' }, path: { type: 'string' }, 'shrink-minutes': { type: 'string' }, 'plant-escape-error': { type: 'boolean' }, plant: { type: 'string' }, config: { type: 'string' }, focus: { type: 'string', multiple: true } }
+  options: { seed: { type: 'string' }, minutes: { type: 'string' }, runs: { type: 'string' }, path: { type: 'string' }, 'shrink-minutes': { type: 'string' }, 'plant-escape-error': { type: 'boolean' }, plant: { type: 'string' }, config: { type: 'string' }, coverage: { type: 'boolean' }, focus: { type: 'string', multiple: true } }
 })
 
 const number = (name, fallback, options) => numberOption(values, name, fallback, options)
@@ -21,6 +24,7 @@ const seed = number('seed', Math.floor(Math.random() * 2 ** 31), { integer: true
 const focus = focusFiles(values.focus)
 const config = values.config ?? DEFAULT_CONFIG
 configOptions(config)
+const coverage = values.coverage ? createCoverage(SCRIPT_FILES) : undefined
 const started = Date.now()
 const browser = await chromium.launch()
 try {
@@ -34,7 +38,8 @@ try {
     planted: values['plant-escape-error'],
     plant: values.plant && plantById(values.plant),
     focus,
-    config
+    config,
+    coverage
   })
   const seconds = Math.round((Date.now() - started) / 1000)
   if (!r.failed) {
@@ -53,6 +58,7 @@ try {
       console.log('shared error log: empty')
     }
   }
+  if (coverage) neverRunReport(coverage.neverRun()).forEach((line) => console.log(line))
   process.exitCode = r.failed ? 1 : 0
 } finally {
   await browser.close()

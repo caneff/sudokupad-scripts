@@ -413,11 +413,11 @@ export const KIND_SCRIPTS = {
 // How much a focused script's kinds weigh over their own weight: a kind is raised, never silenced, so the others still come up.
 export const FOCUS_FACTOR = 4
 
-// The script files `--focus` names (short names); a name that is no script is refused, naming the ones that are.
-export function focusFiles (names = []) {
+// The script files `flag` (`--focus`, `--file`) names (short names); a name that is no script is refused, naming the ones that are.
+export function focusFiles (names = [], flag = '--focus') {
   const files = scriptFiles()
   return names.map((name) => {
-    if (!files.includes(scriptFile(name))) throw new Error(`--focus ${name} is no script; the scripts are ${files.map(scriptName).join(', ')}`)
+    if (!files.includes(scriptFile(name))) throw new Error(`${flag} ${name} is no script; the scripts are ${files.map(scriptName).join(', ')}`)
     return scriptFile(name)
   })
 }

@@ -28,11 +28,11 @@ export function plantStats (runs) {
   }))
 }
 
-const secondsText = (median, budget) => (median === null ? `> ${budget} s` : `${Math.round(median * 10) / 10} s`)
+export const secondsText = (median, budget) => (median === null ? `> ${budget} s` : `${Math.round(median * 10) / 10} s`)
 const cell = ({ caught, total, median }, budget) => `${caught}/${total} ${secondsText(median, budget)}`
 const totalOf = (runs) => ({ caught: runs.filter((r) => r.caught).length, total: runs.length, median: medianSeconds(runs) })
 
-function layout (header, rows) {
+export function layout (header, rows) {
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)))
   const line = (cells) => cells.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd()
   return [line(header), line(widths.map((w) => '-'.repeat(w))), ...rows.map(line)]

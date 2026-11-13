@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { applyPlant, PLANTS, plantById, plantPatch } from './plants.mjs'
 import { scriptSource } from '../session.mjs'
+import { mutantsOf } from './mutants.mjs'
 
 const occurrences = (text, find) => text.split(find).length - 1
 
@@ -24,6 +25,17 @@ describe('applyPlant', () => {
     const patch = plantPatch(plant)
     assert.equal(patch('a.user.js', 'alpha'), 'beta')
     assert.equal(patch('b.user.js', 'alpha'), 'alpha')
+  })
+
+  it('a plant with its own apply makes its own edit, and plantById finds a mutant again by its id', () => {
+    assert.equal(applyPlant({ id: 'm', apply: (code) => code.toUpperCase() }, 'abc'), 'ABC')
+    const file = 'dark-page.user.js'
+    const code = scriptSource(file)
+    const [mutant] = mutantsOf(file, code)
+    const found = plantById(mutant.id)
+    assert.equal(found.file, file)
+    assert.notEqual(applyPlant(found, code), code)
+    assert.throws(() => plantById('mutant:dark-page.user.js:1-2:relational'), /no mutant/)
   })
 
   it('plantById names the known ids when asked for another', () => {
