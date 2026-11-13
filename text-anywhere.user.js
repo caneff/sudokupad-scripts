@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.17
+// @version      0.46.18
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.17'
+  const VERSION = '0.46.18'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -29,6 +29,8 @@
   const MIN_OPACITY = 20
   const MAX_OPACITY = 100
   const OPACITY_STEP = 5
+  const WIDTH_RANGE = { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }
+  const OPACITY_RANGE = { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }
   const DEFAULT_OPACITY = 100
   // An item saves its color as a number, 1 to 9, the number of one of the nine colors, so a recolor recolors it.
   const NOTE_COLOR_COUNT = 9
@@ -612,9 +614,8 @@
     return Number.isInteger(n) && n >= 1 && n <= NOTE_COLOR_COUNT ? n : undefined
   }
   const readColor = (saved) => noteColorNumber(saved) ?? DEFAULT_COLOR
-  const onSlider = (value, min, max, step) => isNumber(value) && value >= min && value <= max && Number.isInteger((value - min) / step)
-  const isWidth = (value) => onSlider(value, MIN_WIDTH, MAX_WIDTH, WIDTH_STEP)
-  const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
+  const isWidth = (value) => onSliderStep(WIDTH_RANGE, value)
+  const isOpacity = (value) => onSliderStep(OPACITY_RANGE, value)
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
   const readFlag = (saved) => saved === true
   const readBackground = readFlag
@@ -670,7 +671,7 @@
   const TEXT_SIZE_PER_WIDTH = 2
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
-  const sizeStep = (width, direction) => steppedSlider({ min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width, direction)
+  const sizeStep = (width, direction) => steppedSlider(WIDTH_RANGE, width, direction)
   // A note steps from its own size, not from the width the panel shows for the first selected note.
   const steppedNote = (item, direction) => ({ ...item, size: textSizeFor(sizeStep(widthFor(item.size), direction)) })
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
@@ -716,6 +717,8 @@
   // The keys that step a panel slider: + (also =, and the keypad's) up and - down.
   const SLIDER_STEP_KEYS = { '+': 1, '=': 1, '-': -1 }
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
+  // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
+  const onSliderStep = ({ min, max, step }, value) => typeof value === 'number' && value >= min && value <= max && Number.isInteger((value - min) / step)
   /* eslint-enable no-unused-vars */
   // </lib:slider-keys>
 
@@ -2353,6 +2356,13 @@
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${SUDOKUPAD_PURPLE};`
 
+  // A slider row of `panelCss`'s `sliderRow` class: the range input, or an empty placeholder when hidden. Neither input takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
+  function sliderRowMarkup (sliderRow, shown, { id, label, range, value }) {
+    return shown
+      ? `<div class="${sliderRow}" title="${label}"><input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
+      : `<div class="${sliderRow}" data-empty></div>`
+  }
+
   // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders` and `sliderRow` are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
   function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
@@ -2772,17 +2782,6 @@
     return notes ? panelLooks(notes) : { color, width: look.width, opacity: look.opacity }
   }
 
-  function sliderRow (id, label, range, value) {
-    const row = document.createElement('div')
-    row.className = SLIDER_ROW_CLASS
-    row.title = label
-    const input = document.createElement('input')
-    Object.assign(input, { type: 'range', id, min: range.min, max: range.max, step: range.step, value, tabIndex: -1 })
-    input.setAttribute('aria-label', label)
-    row.append(input)
-    return row
-  }
-
   // The look each slider sets, read by its row in LOOKS, and how it changes a note.
   const SLIDER_LOOKS = {
     [SIZE_SLIDER]: { name: 'width', change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
@@ -2828,7 +2827,8 @@
     hideAll.addEventListener('click', under(textTool, () => setNotesHidden(!notesHidden)))
     const sliderRows = document.createElement('div')
     sliderRows.className = SLIDER_ROWS_CLASS
-    sliderRows.append(sliderRow(SIZE_SLIDER, SIZE_LABEL, { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, look.width), sliderRow(OPACITY_SLIDER, OPACITY_LABEL, { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }, look.opacity))
+    sliderRows.innerHTML = sliderRowMarkup(SLIDER_ROW_CLASS, true, { id: SIZE_SLIDER, label: SIZE_LABEL, range: WIDTH_RANGE, value: look.width }) +
+      sliderRowMarkup(SLIDER_ROW_CLASS, true, { id: OPACITY_SLIDER, label: OPACITY_LABEL, range: OPACITY_RANGE, value: look.opacity })
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
     sliders.append(sliderRows, hideAll)
