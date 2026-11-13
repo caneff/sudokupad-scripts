@@ -99,3 +99,135 @@ Every catch replayed from its path (0 of 37, 0 of 39 and 0 of 41 did not).
 - **So the nightly hunts with `busy-start`** (`NIGHTLY_CONFIG` in `live/fuzz/nightly.mjs`), the most catches and the fastest. The cost: no nightly reaches the race plant,
   which only the varied wait does; `--config varied-wait` stays a command away. The default of `npm run test:fuzz` stays `current`, so a replay command printed before
   this change, which names no configuration, still replays the same lists.
+
+## Coverage and mutants (#729, #723)
+
+### Does the sourceURL tag and the coverage change what the fuzz catches? (#729)
+
+`--coverage` tags every injected script and turns on V8 coverage (`live/fuzz/coverage.mjs`). The plant harness took the same seeds with and without it (2026-11-10, `--seeds 3 --seed 300 --budget 30 --config busy-start
+--no-replay-check`, six plants, two runs one after the other; `--coverage` of `plants-run.mjs` is the only difference, so this is `--config`'s compare run done as two runs):
+
+| plant | kind | without coverage | with coverage |
+| --- | --- | --- | --- |
+| tab-turns-pad-to-letters | rule | 1/3 > 30 s | 1/3 > 30 s |
+| digit-five-wrong-group | rule | 1/3 > 30 s | 1/3 > 30 s |
+| note-dropped-on-load | rule | 1/3 > 30 s | 1/3 > 30 s |
+| dark-page-saves-light | rule | 2/3 17.4 s | 2/3 18.1 s |
+| rules-always-fit | rule | 3/3 5.2 s | 3/3 5.2 s |
+| redraw-typo | crash | 2/3 6.9 s | 2/3 6.7 s |
+| **total** | | **10/18, 19 s** | **10/18, 19.4 s** |
+
+The same 10 of 18 runs caught, on the same seeds (every run's own line matches: the catch seconds differ by under a second). So the tag changes no catch. The never-run count (the harness measure of #729) is in
+`fuzz-hit-rate.md` § The first never-run list; the cost, 35 lists in 4 minutes without coverage against 43 with, is there too. This ran on the first version of the coverage code; the review fixes changed how pages
+merge, not what a page runs.
+
+### Mutants: what the fuzz catches among bugs nobody chose (#723)
+
+`npm run fuzz:mutants` (`live/README.md` § Measuring the fuzz: mutants) was run on 2026-11-10, on commit f91cf57, as two runs side by side on one box (both started 17:09 UTC):
+
+```
+node live/fuzz/mutants-run.mjs --file ui-tweaks --file dark-page --file auto-rules-resizer --seed 1000 --config busy-start
+node live/fuzz/mutants-run.mjs --file color-by-digit --file pen-tool-extras --file text-anywhere --seed 2000 --config busy-start
+```
+
+The rest are the defaults: a coverage hunt of 40 action lists with sample seed 723, 30 mutants per script, 2 seeds per mutant (1000 and 1001, then 2000 and 2001), 30 s per hunt,
+shrinks of 0.1 minutes. The first run took 73 minutes, the second 90. Both coverage hunts printed the same never-run counts (the same seed and lists), and each script had far more
+mutants than the sample:
+
+| script | mutants | in code the coverage hunt ran | sampled |
+| --- | --- | --- | --- |
+| `ui-tweaks.user.js` | 335 | 81 | 30 |
+| `dark-page.user.js` | 365 | 134 | 30 |
+| `auto-rules-resizer.user.js` | 595 | 209 | 30 |
+| `color-by-digit.user.js` | 1347 | 430 | 30 |
+| `pen-tool-extras.user.js` | 1165 | 772 | 30 |
+| `text-anywhere.user.js` | 2092 | 1216 | 30 |
+
+The tables as printed. "seeds caught" counts only the mutants fuzzed to a verdict (caught or missed), 2 hunts each; the median counts a miss as slower than the 30 s budget.
+
+```
+ui-tweaks.user.js
+family       mutants  caught  missed  unreachable  load-error  seeds caught  median
+-----------  -------  ------  ------  -----------  ----------  ------------  ------
+relational   10       0       4       0            6           0/8           > 30 s
+conditional  10       0       4       1            5           0/8           > 30 s
+deletion     10       0       9       1            0           0/18          > 30 s
+total        30       0       17      2            11          0/34          > 30 s
+
+dark-page.user.js
+family       mutants  caught  missed  unreachable  load-error  seeds caught  median
+-----------  -------  ------  ------  -----------  ----------  ------------  ------
+relational   10       1       5       0            4           2/12          > 30 s
+conditional  10       0       6       1            3           0/12          > 30 s
+deletion     10       1       8       0            1           2/18          > 30 s
+total        30       2       19      1            8           4/42          > 30 s
+
+auto-rules-resizer.user.js
+family       mutants  caught  missed  unreachable  load-error  seeds caught  median
+-----------  -------  ------  ------  -----------  ----------  ------------  ------
+relational   10       1       8       0            1           2/18          > 30 s
+conditional  10       1       3       5            1           2/8           > 30 s
+deletion     10       0       7       1            2           0/14          > 30 s
+total        30       2       18      6            4           4/40          > 30 s
+
+color-by-digit.user.js
+family       mutants  caught  missed  unreachable  load-error  seeds caught  median
+-----------  -------  ------  ------  -----------  ----------  ------------  ------
+relational   10       3       5       1            1           6/16          > 30 s
+conditional  10       5       3       2            0           8/16          > 30 s
+deletion     10       1       9       0            0           1/20          > 30 s
+total        30       9       17      3            1           15/52         > 30 s
+
+pen-tool-extras.user.js
+family       mutants  caught  missed  unreachable  load-error  seeds caught  median
+-----------  -------  ------  ------  -----------  ----------  ------------  ------
+relational   10       3       7       0            0           6/20          > 30 s
+conditional  10       2       6       0            2           4/16          > 30 s
+deletion     10       1       7       2            0           2/16          > 30 s
+total        30       6       20      2            2           12/52         > 30 s
+
+text-anywhere.user.js
+family       mutants  caught  missed  unreachable  load-error  seeds caught  median
+-----------  -------  ------  ------  -----------  ----------  ------------  ------
+relational   10       2       7       0            1           4/18          > 30 s
+conditional  10       0       7       2            1           0/14          > 30 s
+deletion     10       1       8       1            0           2/18          > 30 s
+total        30       3       22      3            2           6/50          > 30 s
+```
+
+Every catch replayed from its path: the first run printed "0 of 8 catches did not replay from their path", the second "0 of 33".
+
+**Totals** (summed from the six tables): of 180 mutants, 22 caught, 113 missed, 17 unreachable, 28 load errors. So 22 of the 135 mutants fuzzed to a verdict were caught (16%),
+on 41 of 270 hunts. By family: relational 10 caught, 36 missed, 1 unreachable, 13 load errors; conditional 8, 29, 11, 12; deletion 4, 48, 5, 3.
+Catches were fast when they came: 32 of the 41 catching hunts took under 10 s, and the slowest took 27.6 s.
+
+**What the mutants say.** Read from each mutant's lines in the progress files:
+
+- **Caught: a flipped test in code that draws or colors the board.** 10 of the 22 are `===` and `!==` swapped, 6 a negated condition, 2 an `&&` and `||` swap, 4 a deleted
+  statement. Most are in Color by Digit's coloring and Pen Tool Extras' drawing, where a wrong result shows on the board and a rule reads it. Color by Digit (9 of 30) and Pen
+  Tool Extras (6) give the most; UI Tweaks gives none.
+- **Missed: no boundary flip was caught.** All 8 sampled `<` to `<=`, `>` to `>=` (and back) were missed.
+- **Missed: what no rule looks at.** Most of the 48 missed deletions drop an attribute or a detail (`link.rel = 'noopener'`, `aria-label`, `style.id`, `tray.className`,
+  `button.dataset.role`), a listener (`pointermove`, `pagehide`, a settings `click`), or a save (`savedData.setData(PEN_KEY, pen)`). Their effect shows only after a later
+  action, a reload, or not on the page at all.
+- **Load errors are mostly startup checks working.** 18 of the 28 are a script's own "skipped because SudokuPad changed" line or its notice bar, 9 an uncaught error or a
+  "startup failed" line, and 1 (Color by Digit, line 280) a button that never appeared within 30 s. A mutant that breaks startup is loud in every run, so these are not counted
+  as catches or misses.
+- **The small scripts are mostly startup.** Of UI Tweaks' 30, 11 broke loading and none was caught; Dark Page's misses are mostly its settings dialog, whose code ran in one seed's
+  hunts and not the other's.
+
+**A flaw in the unreachable count.** 10 of the 17 unreachable mutants are `&&` and `||` swaps (10 of the 16 such swaps sampled). The generator places such a mutant at the
+operator, and V8 counts the operator as part of the right-hand side: a probe in Node (`a || g(b)` called with `a` true) gave the range of `|| g(b)` a count of 0. So "reached" for a
+swap asks whether the right-hand side ran, and a swap changes exactly that. Those 10 are likely misses read as unreachable. The fix is to check the start of the whole
+expression for this family; it was not made or rerun here.
+
+**What the sample shows, and what it does not.**
+
+- It shows that the fuzz with 30 s per seed catches about 1 in 6 of the mutants it reaches, almost all through a wrong board, and none of the boundary flips.
+- It shows every catch repeats from its path, as the hand plants did.
+- It does not give a rate per script or per family: each cell is 10 mutants and 2 seeds, and Color by Digit's 9 is most of the total. The mutants are a sample of 180 out of
+  the 2,842 in reached code.
+- It does not compare with the hand plants. Those were run for 60 s per seed (§ Third run: 41 of 60 hunts under `busy-start`), these for 30 s, and the hand plants were written
+  to be seen by a rule. A miss here may need a longer hunt, not a new rule; the run did not test that.
+- Some missed mutants may change nothing a user would see (a deleted `link.rel` or `style.id`); the run cannot tell such a mutant from a real miss.
+- The two runs shared one box, so the time to catch may be slower than on an idle one.

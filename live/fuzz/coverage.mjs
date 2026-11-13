@@ -1,4 +1,4 @@
-// V8 coverage of the scripts over a fuzz run (#729): which functions of each script no action of the run made run. Pure, so `coverage.test.mjs` tests it; `fuzz.mjs` feeds it what
+// V8 coverage of the scripts over a fuzz run (#729): which functions of each script no action of the run made run. Pure, so `coverage.test.mjs` tests it. An entry is what
 // Playwright's `page.coverage.stopJSCoverage()` returns, `[{ url, source, functions: [{ functionName, ranges: [{ startOffset, endOffset, count }] }] }]`, a function's own range
 // first and the blocks inside it after. Not a check itself.
 
