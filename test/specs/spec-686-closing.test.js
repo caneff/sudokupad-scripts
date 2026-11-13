@@ -1,6 +1,6 @@
 'use strict'
 // Spec #686's closing test: Text Anywhere's looks table, its one look target, the notes list that follows a deletion, the note-changed rule, the one drag cleanup,
-// the panel style through addStyleOnce and `?.` in the skip hooks, driven at the `npm test` seam over text-anywhere.user.js's pure functions and its own source.
+// the panel style through writeStyle and `?.` in the skip hooks, driven at the `npm test` seam over text-anywhere.user.js's pure functions and its own source.
 // Blind to real SudokuPad: the Framework calls, rendering and undo. The live suites cover them on sudokupad.app: text-anywhere-settings (Copy and Paste of every look),
 // settings-copy-paste (the failed-paste snapshot of the looks), text-anywhere-outline (Save), text-anywhere-background and text-anywhere-sliders (the look target, Background
 // on an open note), text-anywhere-resize (Delete while a handle is held), text-anywhere-saved (Restart and its Undo), text-anywhere-move (the drag's ends) and text-anywhere-panel
