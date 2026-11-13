@@ -16,6 +16,7 @@ describe('the configurations (#725, #726, #727, #728, #730)', () => {
     assert.deepEqual(CONFIGS.swarm, { swarm: true })
     assert.deepEqual(CONFIGS['long-40'], { maxCommands: 40, nonEmpty: true })
     assert.deepEqual(CONFIGS['long-50'], { maxCommands: 50, nonEmpty: true })
+    assert.deepEqual(CONFIGS['busy-start+long-40'], { busyStart: true, maxCommands: 40, nonEmpty: true })
   })
 
   it('a configuration named twice is refused', () => {

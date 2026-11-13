@@ -12,7 +12,8 @@ export const CONFIGS = {
   'varied-wait+busy-start': { waits: WAITS, busyStart: true },
   swarm: { swarm: true },
   'long-40': { maxCommands: 40, nonEmpty: true },
-  'long-50': { maxCommands: 50, nonEmpty: true }
+  'long-50': { maxCommands: 50, nonEmpty: true },
+  'busy-start+long-40': { busyStart: true, maxCommands: 40, nonEmpty: true }
 }
 
 // The configuration of a run that names none.
