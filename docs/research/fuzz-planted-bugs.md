@@ -100,6 +100,46 @@ Every catch replayed from its path (0 of 37, 0 of 39 and 0 of 41 did not).
   which only the varied wait does; `--config varied-wait` stays a command away. The default of `npm run test:fuzz` stays `current`, so a replay command printed before
   this change, which names no configuration, still replays the same lists.
 
+## Fourth run: swarm lists and longer lists (#728, #730)
+
+Four more configurations (`live/fuzz/configs.mjs`), each on the same seeds and flags as the third run (`--seeds 5 --budget 60 --seed 200 --shrink-minutes 0.3`, 12 plants):
+
+- `swarm` (#728): each list first draws a random non-empty subset of the action kinds and generates its actions only from it. The subset does not shrink, so a swarm failure's path replays.
+- `long-40` and `long-50` (#730): up to 40 or 50 actions a list instead of 20, and never an empty list.
+- `busy-start+long-40`: the busy start of the third run with lists of up to 40.
+
+`long-40` and `long-50` ran on 2026-11-10 side by side; `swarm` and `busy-start+long-40` on 2026-11-13, one after the other, while a drain worker ran beside them. The third run's
+`current` and `busy-start` columns are repeated for comparison.
+
+| plant | kind | current | busy-start | swarm | long-40 | long-50 | busy-start+long-40 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| tab-turns-pad-to-letters | rule | 2/5 > 60 s | 2/5 > 60 s | 0/5 > 60 s | 2/5 > 60 s | 1/5 > 60 s | 0/5 > 60 s |
+| tab-handler-typo | crash | 3/5 55.1 s | 2/5 > 60 s | 0/5 > 60 s | 5/5 9.1 s | 4/5 33.9 s | 1/5 > 60 s |
+| digit-five-wrong-group | rule | 4/5 20.5 s | 5/5 40.6 s | 3/5 54.5 s | 3/5 43.4 s | 3/5 8.2 s | 5/5 10.6 s |
+| mode-not-saved | rule | 1/5 > 60 s | 1/5 > 60 s | 0/5 > 60 s | 2/5 > 60 s | 3/5 52.1 s | 3/5 54.6 s |
+| note-dropped-on-load | rule | 4/5 37 s | 3/5 18.5 s | 1/5 > 60 s | 5/5 13.6 s | 5/5 19.4 s | 5/5 20.5 s |
+| load-logs-console-error | crash | 5/5 1 s | 5/5 0.9 s | 5/5 0.9 s | 5/5 1.1 s | 5/5 1.1 s | 5/5 1.1 s |
+| box-color-stale | rule | 3/5 46 s | 4/5 18.9 s | 1/5 > 60 s | 3/5 40.6 s | 5/5 21.8 s | 5/5 5.4 s |
+| dark-page-saves-light | rule | 2/5 > 60 s | 4/5 7.6 s | 3/5 48.5 s | 2/5 > 60 s | 2/5 > 60 s | 3/5 40.3 s |
+| rules-always-fit | rule | 5/5 5.1 s | 5/5 5 s | 5/5 5.1 s | 5/5 5.1 s | 5/5 5.1 s | 5/5 5.3 s |
+| page-three-line-not-drawn | rule | 5/5 8.1 s | 5/5 2.2 s | 5/5 5.2 s | 5/5 8 s | 5/5 13.5 s | 5/5 4.7 s |
+| quick-digit-not-colored | rule | 0/5 > 60 s | 0/5 > 60 s | 0/5 > 60 s | 0/5 > 60 s | 0/5 > 60 s | 0/5 > 60 s |
+| redraw-typo | crash | 3/5 27 s | 5/5 20.4 s | 3/5 26.9 s | 5/5 18.9 s | 5/5 24.2 s | 4/5 25.1 s |
+| **total** | | **37/60, 39 s** | **41/60, 21 s** | **26/60, > 60 s** | **42/60, 18.8 s** | **43/60, 23 s** | **41/60, 25 s** |
+
+Every catch replayed from its path (0 of 26, 42, 43 and 41 did not).
+
+- **Swarm is the worst configuration measured** (26 of 60, against 37 for `current`). It lost most on the plants that need two kinds in one list: `tab-handler-typo` and
+  `mode-not-saved` (0 of 5), `note-dropped-on-load` and `box-color-stale` (1 of 5). Groce et al. measured swarm on compilers, where a test is cheap and a missing feature
+  removes a whole class of input; here a list is a few seconds of a real page, and leaving out a kind mostly removes the action a plant needs. `fuzz-hit-rate.md` ranked it the
+  cheapest gain from outside evidence; this run does not bear that out.
+- **Longer lists match the busy start** (42 and 43 of 60 against 41), but catch different plants: long lists take `tab-handler-typo` to 5 of 5, the busy start takes
+  `dark-page-saves-light` to 4 of 5. One or two catches out of 60 is within what 5 seeds a plant can tell apart.
+- **Both together are no better than either** (41 of 60, median 25 s): `busy-start+long-40` lost `tab-turns-pad-to-letters` and most of `tab-handler-typo`. The same
+  happened when the varied wait was combined with the busy start (third run).
+- **So the nightly stays on `busy-start`.** The default of `npm run test:fuzz` stays `current` (20 actions, empty lists possible), not raised as #730 asked, because a replay
+  command printed before this change names no configuration and must still replay the same lists. `long-40`, `long-50` and `swarm` are a `--config` away.
+
 ## Coverage and mutants (#729, #723)
 
 ### Does the sourceURL tag and the coverage change what the fuzz catches? (#729)
