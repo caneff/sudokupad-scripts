@@ -202,7 +202,7 @@ miss prints `> <budget> s`), with a total. It is not in `npm test`; the baseline
 npm run fuzz:plants -- [--seeds <k>] [--budget <seconds per hunt>] [--seed <first seed>] [--shrink-minutes <m>] [--plant <id> ...] [--config <name> ...] [--no-replay-check] [--coverage]
 ```
 
-- **Compare**: `--config` twice or more runs each plant on the same seeds under each configuration (`live/fuzz/configs.mjs`: `current`, `varied-wait`, `busy-start`, `varied-wait+busy-start`) and prints them side by side.
+- **Compare**: `--config` twice or more runs each plant on the same seeds under each configuration (`live/fuzz/configs.mjs`: `current`, `varied-wait`, `busy-start`, `varied-wait+busy-start`, `swarm`, `long-40`, `long-50`, `busy-start+long-40`) and prints them side by side.
   A name that is no configuration, or one named twice, stops the run before the browser starts.
 - **`--coverage`** (#729) runs every hunt with the scripts tagged and coverage on, to compare a run with and without it on the same seeds: the tag and the coverage must change no catch.
 - **Replay check**: each catch is run again from its own path, and the table says how many did not fail again. A failure that depends on timing may not repeat.
@@ -219,7 +219,7 @@ npm run fuzz:plants -- [--seeds <k>] [--budget <seconds per hunt>] [--seed <firs
 
 ## The nightly fuzz
 
-`npm run fuzz:nightly` (`live/fuzz/nightly.mjs`, #595) runs `live/fuzz/run.mjs` with a fresh random seed and the `busy-start` configuration (`NIGHTLY_CONFIG`, the best of the four in `docs/research/fuzz-planted-bugs.md`) and files what it finds, on GitHub Actions
+`npm run fuzz:nightly` (`live/fuzz/nightly.mjs`, #595) runs `live/fuzz/run.mjs` with a fresh random seed and the `busy-start` configuration (`NIGHTLY_CONFIG`, chosen over the other seven measured in `docs/research/fuzz-planted-bugs.md`) and files what it finds, on GitHub Actions
 in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `workflow_dispatch` runs it by hand). It is a workflow of its own, not a job of
 `watch.yml`, so 30 minutes of fuzzing never holds up the watch and the two keep separate concurrency groups.
 

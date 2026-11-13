@@ -12,6 +12,8 @@ test. The fast-check facts marked "source" were read from `node_modules/fast-che
   `actionList` of `actions.mjs`, it has the strongest outside evidence of anything here (42% more distinct compiler crashes in the same week, Groce et al. 2012),
   and Hypothesis ships it in its own stateful testing. The current vocabulary is 33 kinds with weights from 1 to 8, so a rare pair (two pen-page turns, then a line)
   is very rare in a 10-step list.
+  **Measured 2026-11-13 (#728), not borne out**: swarm caught 26 of 60 planted-bug hunts against 37 for the plain fuzz and 41 for the busy start
+  (`fuzz-planted-bugs.md` § Fourth run).
 - **The next is to see what the actions never reach**: V8 coverage of the six scripts during a fuzz run. The one missed plant (`redraw-typo`) sat in code no action
   reached; a coverage report names every such function at once, with no plant written. The scripts are injected as inline `<script>` text with no URL, so they need a
   `//# sourceURL=` tag to show up in Playwright's coverage (the repo already does this in `live/redraw-probe.mjs`).
