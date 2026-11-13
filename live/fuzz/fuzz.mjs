@@ -7,7 +7,7 @@ import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
 import { animationsDone, closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
-import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
@@ -196,6 +196,25 @@ function envFor (p, puzzle, { beforeReload }) {
       if (choice === 'custom') await p.locator(BOX_CUSTOM_INPUT).fill(color)
       await closeDialogWith(p, save ? 'Save' : 'Cancel', SETTINGS_EDITOR)
     },
+    async noteHandle (corner) {
+      const handles = p.locator(HANDLES)
+      return await handles.count() === 0 ? null : middleOf(await handles.nth(corner).boundingBox({ timeout: 2000 }))
+    },
+    async checkBoxPoint () {
+      const boxes = p.locator(CHECK_BOXES)
+      return await boxes.count() === 0 ? null : middleOf(await boxes.first().boundingBox({ timeout: 2000 }))
+    },
+    // With a note selected the button deletes it and asks nothing; otherwise it asks, and the question is answered like a player does.
+    async clearNotes (ok) {
+      // Picking the tool again ends the selection, which a clear after a click on a note needs kept.
+      if (await noteTool(p) !== 'textanywhere') await pickNotes()
+      const asks = await p.locator(SELECTED).count() === 0
+      await clickIn(p, CLEAR_BUTTON)
+      if (asks) await closeDialogWith(p, ok ? 'OK' : 'Cancel', DIALOG)
+    },
+    // A key held down is time passing, not a verdict waited on a clock.
+    holdFor: (ms) => sleep(ms),
+    finishNote: () => finishNote(p),
     async setNoteBackground (on) {
       await pickNotes()
       if (await p.locator(BACKGROUND_BUTTON).getAttribute('aria-pressed') !== String(on)) await clickIn(p, BACKGROUND_BUTTON)

@@ -47,10 +47,14 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
         move: rec('mouse.move'),
         click: async (...a) => { log.push(['mouse.click', ...a]); if (errorAtClicks && log.filter(([n]) => n === 'mouse.click').length === errorAtClicks) pending.push('Error: planted busy-board error') },
         down: async (...a) => { down++; log.push(['mouse.down', ...a]) },
-        up: async (...a) => { down = Math.max(0, down - 1); log.push(['mouse.up', ...a]) }
+        up: async (...a) => { down = Math.max(0, down - 1); log.push(['mouse.up', ...a]) },
+        dblclick: rec('mouse.dblclick'),
+        wheel: rec('mouse.wheel')
       },
       keyboard: {
         type: rec('keyboard.type'),
+        down: rec('keyboard.down'),
+        up: rec('keyboard.up'),
         press: async (key) => {
           log.push(['keyboard.press', key])
           if (lettersOnTab && key === 'Tab') letterMode = true
@@ -68,6 +72,11 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       noteCentre: async () => { log.push(['noteCentre']); return notes ? [200, 200] : null },
       usePen: rec('usePen'),
       useNotes: rec('useNotes'),
+      noteHandle: rec('noteHandle', [300, 320]),
+      checkBoxPoint: rec('checkBoxPoint', [250, 260]),
+      clearNotes: rec('clearNotes'),
+      holdFor: rec('holdFor'),
+      finishNote: rec('finishNote'),
       turnPenPage: rec('turnPenPage'),
       undo: async () => { log.push(['undo']); undoDepth = Math.max(0, undoDepth - 1) },
       redo: async () => { log.push(['redo']); undoDepth++; if (lettersOnRedo) letterMode = true },

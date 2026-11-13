@@ -106,6 +106,54 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     assert.deepEqual(errors, [])
   })
 
+  describe("Text Anywhere's resize, selection, nudge, clear and rich notes (#815)", () => {
+    const puzzle = puzzleByName('recorded 9x9')
+    const at = (row, col) => {
+      const i = puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+      assert.notEqual(i, -1, `r${row + 1}c${col + 1} is no cell of the ${puzzle.name} puzzle`)
+      return i
+    }
+    const NOTE_AT = at(4, 4)
+    const NOTE = ['place note', [0, NOTE_AT]]
+    const savedTexts = (page) => (page.notesSaved ?? []).filter((item) => item.kind === 'text').map((item) => item.text)
+    const savedFirst = (page) => page.notesSaved.find((item) => item.kind === 'text')
+
+    it('a nudge moves the saved note, and a held arrow key moves it further than the taps do', async () => {
+      const start = savedFirst((await snapshotAfter(puzzle, [NOTE])).page)
+      const tapped = savedFirst((await snapshotAfter(puzzle, [NOTE, ['note nudge', [[0, NOTE_AT], 1, false, 3]]])).page)
+      const held = savedFirst((await snapshotAfter(puzzle, [NOTE, ['note nudge', [[0, NOTE_AT], 1, false, 0]]])).page)
+      const farther = (item) => Math.hypot(...[0, 1].map((i) => item.at[i] - start.at[i]))
+      assert.ok(farther(tapped) > 0, 'the taps moved it')
+      assert.ok(farther(held) > farther(tapped), `held ${farther(held)} past taps ${farther(tapped)}`)
+    })
+
+    it('a resize drag gives the saved note a box of its own', async () => {
+      assert.equal(savedFirst((await snapshotAfter(puzzle, [NOTE])).page).box, undefined)
+      const resized = savedFirst((await snapshotAfter(puzzle, [NOTE, ['note resize', [[0, NOTE_AT], 3, 40, 30]]])).page)
+      assert.ok(Array.isArray(resized.box), JSON.stringify(resized))
+    })
+
+    it('Clear all with OK removes every note, Cancel keeps them, and with a note selected it deletes just that one with no question', async () => {
+      const two = [NOTE, ['place note', [1, at(1, 1)]]]
+      assert.deepEqual(savedTexts((await snapshotAfter(puzzle, [...two, ['clear notes', [[0, NOTE_AT], false, true]]])).page), [])
+      assert.equal(savedTexts((await snapshotAfter(puzzle, [...two, ['clear notes', [[0, NOTE_AT], false, false]]])).page).length, 2)
+      assert.equal(savedTexts((await snapshotAfter(puzzle, [...two, ['clear notes', [[0, NOTE_AT], true, true]]])).page).length, 1)
+    })
+
+    it('a tick on a rich note\'s check box is saved, and a rectangle over the board selects the note it covers so a nudge moves it', async () => {
+      const boxed = [['rich note', [1, NOTE_AT]], ['tick check box', null]]
+      assert.deepEqual(savedTexts((await snapshotAfter(puzzle, boxed)).page), ['- [x] buy\n- [x] sold'])
+      const start = savedFirst((await snapshotAfter(puzzle, [NOTE])).page)
+      const moved = savedFirst((await snapshotAfter(puzzle, [NOTE, ['note rectangle', [at(2, 3), at(6, 5), false]], ['note nudge', [[0, NOTE_AT], 0, true, 1]]])).page)
+      assert.notDeepEqual(moved.at, start.at)
+    })
+
+    it('a wheel over a tall note scrolls it, a reopen finishes it, and the rest of the new kinds raise nothing', async () => {
+      const { errors } = await snapshotAfter(puzzle, [['rich note', [3, NOTE_AT]], ['note wheel', [NOTE_AT, 400]], ['reopen note', [0, NOTE_AT]], ['rich note', [0, at(1, 1)]], ['rich note', [2, at(6, 5)]], ['restart', false]])
+      assert.deepEqual(errors, [])
+    })
+  })
+
   describe('a page error planted on Escape during a drag', () => {
     let found
 

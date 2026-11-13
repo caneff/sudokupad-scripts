@@ -4,7 +4,7 @@
 // generates, so its path replays on the same puzzle, and an action reads the digit keys and the targets from the puzzle it runs on. Not a check itself.
 //
 // An action runs on an `env`, never on Playwright directly, so the unit tests drive the same code with a fake one (`fake-target.mjs`). The env is:
-//   env.page.mouse {move, down, up, click}   env.page.keyboard {press, type}      Playwright's, used as they are
+//   env.page.mouse {move, down, up, click, dblclick, wheel}   env.page.keyboard {press, type, down, up}      Playwright's, used as they are
 //   env.cellPoint(i) -> [x, y]               the page point at the centre of target `i` of the puzzle (a free cell, or a cell just outside the grid)
 //   env.usePen(color)                        opens the pen tool and picks its pen color 1 to 9
 //   env.useNotes()                           picks Text Anywhere's tool
@@ -21,13 +21,18 @@
 //   env.profileEditor(edits, save, fromMenu) opens Color by Digit's settings dialog (from the pad menu's Edit profiles when `fromMenu`, else from the settings), makes each edit (`[op, ...numbers]`, `PROFILE_EDITS`) and presses Save or Cancel
 //   env.pickProfile(i)                       picks profile `i` (counted from 0, wrapped to the profiles there are) from the pad button's menu
 //   env.restartPuzzle()                      restarts the puzzle, as SudokuPad's own Restart does
+//   env.noteHandle(corner) -> [x, y] | null  the middle of the resize handle at `corner` (0 to 3) of the one note selected; null when the page shows no four handles
+//   env.checkBoxPoint() -> [x, y] | null     the middle of the first check box drawn in a note
+//   env.clearNotes(ok)                       presses Text Anywhere's Clear all button, and answers the question it asks (when a note is selected it asks none) with OK or Cancel
+//   env.holdFor(ms)                          lets `ms` of the page's time pass while a key stays down
+//   env.finishNote()                         finishes the open note with Escape
 //   env.resize({ width, height })  env.blurFocus()  env.reload()  env.darkPage(color, save)
 import { createRequire } from 'node:module'
 import fc from 'fast-check'
 
 const require = createRequire(import.meta.url)
 const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.js')
-const { BOX_PRESETS } = require('../../text-anywhere.user.js')
+const { BOX_PRESETS, CORNERS, NUDGE_REPEAT_MS } = require('../../text-anywhere.user.js')
 const { scriptFiles } = require('../../sync-lib.js')
 
 export const TOOL_KEYS = ['z', 'x', 'c', 'v']
@@ -52,6 +57,18 @@ export const MAX_PROFILES = 6
 const PROFILE_BRUSHES = 10
 const DIGITS = '0123456789'
 export const MAX_PROFILE_EDITS = 4
+
+// Notes whose text draws as a list, a check box, a code block, and a note taller than its box (#815), which the wheel scrolls.
+export const RICH_NOTES = ['- one\n- **two**', '- [ ] buy\n- [x] sold', '```\nsum ->\n  x=1\n```', Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n')]
+const TALL_NOTE = RICH_NOTES[RICH_NOTES.length - 1]
+const RESIZE_CORNERS = Object.keys(CORNERS).length
+const RESIZE_REACH_PX = 80
+const WHEEL_DELTAS = [-400, -120, 120, 400, 1200]
+const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
+const MAX_NUDGE_TAPS = 4
+// A held arrow key repeats once it has been down NUDGE_REPEAT_MS; this much longer is a few repeats.
+const NUDGE_HOLD_EXTRA_MS = 200
+const jsonWords = (text) => JSON.stringify(text).replace(/,/g, ';')
 
 const NOTE_DRAG = [70, 40]
 const ownColor = (rgb) => `#${rgb.toString(16).padStart(6, '0')}`
@@ -138,9 +155,21 @@ function buildKinds () {
     await env.page.mouse.down()
     await env.page.mouse.move(centre[0] + NOTE_DRAG[0], centre[1] + NOTE_DRAG[1], { steps: 6 })
   }
-  async function noteDragStart (env, [t, a]) {
-    await dragNote(env, await env.noteCentre() ?? (await env.placeNote(NOTE_TEXTS[t], a), await env.noteCentre()))
+  // The middle of the first note drawn; with none, one with `text` is placed at cell `a` first.
+  async function firstNote (env, text, a) {
+    return await env.noteCentre() ?? (await env.placeNote(text, a), await env.noteCentre())
   }
+  async function noteDragStart (env, [t, a]) {
+    await dragNote(env, await firstNote(env, NOTE_TEXTS[t], a))
+  }
+  // Selects the first note with a click of the notes tool, and gives its middle.
+  async function selectFirstNote (env, text, a) {
+    const centre = await firstNote(env, text, a)
+    await env.useNotes()
+    await env.page.mouse.click(...centre)
+    return centre
+  }
+  const ifNone = (t, a, at) => `(note ${jsonWords(NOTE_TEXTS[t])} at ${at(a)} if none)`
   const noteDrag = (kind, words, interrupt) => ({
     kind,
     group: 'interruption',
@@ -323,6 +352,114 @@ function buildKinds () {
       }
     },
     {
+      kind: 'rich note',
+      group: 'ordinary',
+      weight: 2,
+      arg: (puzzle) => fc.tuple(fc.nat(RICH_NOTES.length - 1), cell(puzzle)),
+      label: ([t, a], at) => `note ${jsonWords(RICH_NOTES[t])} at ${at(a)}`,
+      run: (env, [t, a]) => env.placeNote(RICH_NOTES[t], a)
+    },
+    {
+      kind: 'note resize',
+      group: 'ordinary',
+      weight: 2,
+      arg: (puzzle) => fc.tuple(note(puzzle), fc.nat(RESIZE_CORNERS - 1), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX }), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX })),
+      label: ([[t, a], corner, dx, dy], at) => `drag corner ${corner} of the first note ${ifNone(t, a, at)} by ${dx} x ${dy}`,
+      run: async (env, [[t, a], corner, dx, dy]) => {
+        await selectFirstNote(env, NOTE_TEXTS[t], a)
+        // A click that selected no one note leaves no handles to press.
+        const handle = await env.noteHandle(corner)
+        if (!handle) return
+        await env.page.mouse.move(...handle)
+        await env.page.mouse.down()
+        await env.page.mouse.move(handle[0] + dx, handle[1] + dy, { steps: 6 })
+        await env.page.mouse.up()
+      }
+    },
+    {
+      kind: 'note wheel',
+      group: 'ordinary',
+      weight: 1,
+      arg: (puzzle) => fc.tuple(cell(puzzle), fc.constantFrom(...WHEEL_DELTAS)),
+      label: ([a, dy], at) => `wheel ${dy} over the first note (a tall note at ${at(a)} if none)`,
+      run: async (env, [a, dy]) => {
+        await env.page.mouse.move(...await firstNote(env, TALL_NOTE, a))
+        await env.page.mouse.wheel(0, dy)
+      }
+    },
+    {
+      kind: 'note rectangle',
+      group: 'ordinary',
+      weight: 2,
+      arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), fc.boolean()),
+      label: ([a, b, shift], at) => `drag a selection rectangle ${at(a)} -> ${at(b)}${shift ? ' holding Shift' : ''}`,
+      run: async (env, [a, b, shift]) => {
+        const [from, to] = [await env.cellPoint(a), await env.cellPoint(b)]
+        await env.useNotes()
+        if (shift) await env.page.keyboard.down('Shift')
+        await env.page.mouse.move(...from)
+        await env.page.mouse.down()
+        await env.page.mouse.move(...to, { steps: 6 })
+        await env.page.mouse.up()
+        if (shift) await env.page.keyboard.up('Shift')
+      }
+    },
+    {
+      kind: 'note nudge',
+      group: 'ordinary',
+      weight: 2,
+      arg: (puzzle) => fc.tuple(note(puzzle), fc.nat(ARROW_KEYS.length - 1), fc.boolean(), fc.option(fc.integer({ min: 1, max: MAX_NUDGE_TAPS }), { nil: 0 })),
+      label: ([[t, a], k, shift, taps], at) => `nudge the first note ${ifNone(t, a, at)} with ${shift ? 'Shift+' : ''}${ARROW_KEYS[k]} ${taps ? `${taps} times` : 'held'}`,
+      run: async (env, [[t, a], k, shift, taps]) => {
+        await selectFirstNote(env, NOTE_TEXTS[t], a)
+        if (shift) await env.page.keyboard.down('Shift')
+        if (taps) {
+          for (let i = 0; i < taps; i++) await env.page.keyboard.press(ARROW_KEYS[k])
+        } else {
+          await env.page.keyboard.down(ARROW_KEYS[k])
+          await env.holdFor(NUDGE_REPEAT_MS + NUDGE_HOLD_EXTRA_MS)
+          await env.page.keyboard.up(ARROW_KEYS[k])
+        }
+        if (shift) await env.page.keyboard.up('Shift')
+      }
+    },
+    {
+      kind: 'clear notes',
+      group: 'ordinary',
+      weight: 1,
+      arg: (puzzle) => fc.tuple(note(puzzle), fc.boolean(), fc.boolean()),
+      label: ([[t, a], selectFirst, ok], at) => `press Clear all${selectFirst ? ` with the first note selected ${ifNone(t, a, at)}` : ''}: ${ok ? 'OK' : 'Cancel'}`,
+      run: async (env, [[t, a], selectFirst, ok]) => {
+        if (selectFirst) await selectFirstNote(env, NOTE_TEXTS[t], a)
+        await env.clearNotes(ok)
+      }
+    },
+    {
+      kind: 'tick check box',
+      group: 'ordinary',
+      weight: 2,
+      arg: () => fc.constant(null),
+      label: () => 'tick the first check box of a note',
+      run: async (env) => {
+        await env.useNotes()
+        const point = await env.checkBoxPoint()
+        if (point) await env.page.mouse.click(...point)
+      }
+    },
+    {
+      kind: 'reopen note',
+      group: 'ordinary',
+      weight: 1,
+      arg: note,
+      label: ([t, a], at) => `double-click the first note ${ifNone(t, a, at)} and finish it`,
+      run: async (env, [t, a]) => {
+        const centre = await firstNote(env, NOTE_TEXTS[t], a)
+        await env.useNotes()
+        await env.page.mouse.dblclick(...centre)
+        await env.finishNote()
+      }
+    },
+    {
       kind: 'profile editor',
       group: 'ordinary',
       weight: 1,
@@ -451,6 +588,14 @@ export const KIND_SCRIPTS = {
   'note background': [TEXT_ANYWHERE],
   'boxed note': [TEXT_ANYWHERE],
   'arrow line': [PEN_TOOL_EXTRAS],
+  'rich note': [TEXT_ANYWHERE],
+  'note resize': [TEXT_ANYWHERE],
+  'note wheel': [TEXT_ANYWHERE],
+  'note rectangle': [TEXT_ANYWHERE],
+  'note nudge': [TEXT_ANYWHERE],
+  'clear notes': [TEXT_ANYWHERE],
+  'tick check box': [TEXT_ANYWHERE],
+  'reopen note': [TEXT_ANYWHERE],
   'color mode': [COLOR_BY_DIGIT],
   'profile editor': [COLOR_BY_DIGIT],
   'profile switch': [COLOR_BY_DIGIT],
@@ -470,7 +615,7 @@ export const KIND_SCRIPTS = {
   'note drag, resize': [TEXT_ANYWHERE, AUTO_RULES_RESIZER],
   'blur and focus': [],
   reload: [],
-  restart: [COLOR_BY_DIGIT],
+  restart: [COLOR_BY_DIGIT, TEXT_ANYWHERE],
   resize: [AUTO_RULES_RESIZER],
   'dark page': [DARK_PAGE]
 }
@@ -497,7 +642,7 @@ function actionArbitrary (puzzle, weights, kinds = KINDS) {
 
 // The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
 // Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
-export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'place note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page']
+export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page']
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 
