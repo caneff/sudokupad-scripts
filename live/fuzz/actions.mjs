@@ -60,6 +60,7 @@ export const MAX_PROFILE_EDITS = 4
 
 // Notes whose text draws as a list, a check box, a code block, and a note taller than its box (#815), which the wheel scrolls.
 export const RICH_NOTES = ['- one\n- **two**', '- [ ] buy\n- [x] sold', '```\nsum ->\n  x=1\n```', Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n')]
+const CHECK_BOX_NOTE = RICH_NOTES[1]
 const TALL_NOTE = RICH_NOTES[RICH_NOTES.length - 1]
 const RESIZE_CORNERS = Object.keys(CORNERS).length
 const RESIZE_REACH_PX = 80
@@ -162,9 +163,10 @@ function buildKinds () {
   async function noteDragStart (env, [t, a]) {
     await dragNote(env, await firstNote(env, NOTE_TEXTS[t], a))
   }
-  // Selects the first note with a click of the notes tool, and gives its middle.
+  // Selects the first note with a click of the notes tool, and gives its middle; null when placing the note opened none (a click that landed on a note selects it instead), and nothing is clicked.
   async function selectFirstNote (env, text, a) {
     const centre = await firstNote(env, text, a)
+    if (!centre) return null
     await env.useNotes()
     await env.page.mouse.click(...centre)
     return centre
@@ -175,7 +177,7 @@ function buildKinds () {
     group: 'interruption',
     weight: 1,
     arg: note,
-    label: ([t, a], at) => `note drag (note ${JSON.stringify(NOTE_TEXTS[t]).replace(/,/g, ';')} at ${at(a)} if none) then ${words} then release`,
+    label: ([t, a], at) => `note drag ${ifNone(t, a, at)} then ${words} then release`,
     run: async (env, arg) => {
       await noteDragStart(env, arg)
       await interrupt(env, arg)
@@ -254,7 +256,7 @@ function buildKinds () {
       group: 'ordinary',
       weight: 3,
       arg: note,
-      label: ([t, a], at) => `note ${JSON.stringify(NOTE_TEXTS[t]).replace(/,/g, ';')} at ${at(a)}`,
+      label: ([t, a], at) => `note ${jsonWords(NOTE_TEXTS[t])} at ${at(a)}`,
       run: (env, [t, a]) => env.placeNote(NOTE_TEXTS[t], a)
     },
     {
@@ -334,7 +336,7 @@ function buildKinds () {
       group: 'ordinary',
       weight: 3,
       arg: note,
-      label: ([t, a], at) => `note ${JSON.stringify(NOTE_TEXTS[t]).replace(/,/g, ';')} with a box at ${at(a)}`,
+      label: ([t, a], at) => `note ${jsonWords(NOTE_TEXTS[t])} with a box at ${at(a)}`,
       run: async (env, [t, a]) => {
         await env.setNoteBackground(true)
         await env.placeNote(NOTE_TEXTS[t], a)
@@ -366,9 +368,8 @@ function buildKinds () {
       arg: (puzzle) => fc.tuple(note(puzzle), fc.nat(RESIZE_CORNERS - 1), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX }), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX })),
       label: ([[t, a], corner, dx, dy], at) => `drag corner ${corner} of the first note ${ifNone(t, a, at)} by ${dx} x ${dy}`,
       run: async (env, [[t, a], corner, dx, dy]) => {
-        await selectFirstNote(env, NOTE_TEXTS[t], a)
-        // A click that selected no one note leaves no handles to press.
-        const handle = await env.noteHandle(corner)
+        // With no note, or a click that selected no one note, there are no handles to press.
+        const handle = await selectFirstNote(env, NOTE_TEXTS[t], a) && await env.noteHandle(corner)
         if (!handle) return
         await env.page.mouse.move(...handle)
         await env.page.mouse.down()
@@ -383,7 +384,9 @@ function buildKinds () {
       arg: (puzzle) => fc.tuple(cell(puzzle), fc.constantFrom(...WHEEL_DELTAS)),
       label: ([a, dy], at) => `wheel ${dy} over the first note (a tall note at ${at(a)} if none)`,
       run: async (env, [a, dy]) => {
-        await env.page.mouse.move(...await firstNote(env, TALL_NOTE, a))
+        const centre = await firstNote(env, TALL_NOTE, a)
+        if (!centre) return
+        await env.page.mouse.move(...centre)
         await env.page.mouse.wheel(0, dy)
       }
     },
@@ -411,7 +414,7 @@ function buildKinds () {
       arg: (puzzle) => fc.tuple(note(puzzle), fc.nat(ARROW_KEYS.length - 1), fc.boolean(), fc.option(fc.integer({ min: 1, max: MAX_NUDGE_TAPS }), { nil: 0 })),
       label: ([[t, a], k, shift, taps], at) => `nudge the first note ${ifNone(t, a, at)} with ${shift ? 'Shift+' : ''}${ARROW_KEYS[k]} ${taps ? `${taps} times` : 'held'}`,
       run: async (env, [[t, a], k, shift, taps]) => {
-        await selectFirstNote(env, NOTE_TEXTS[t], a)
+        if (!await selectFirstNote(env, NOTE_TEXTS[t], a)) return
         if (shift) await env.page.keyboard.down('Shift')
         if (taps) {
           for (let i = 0; i < taps; i++) await env.page.keyboard.press(ARROW_KEYS[k])
@@ -438,11 +441,11 @@ function buildKinds () {
       kind: 'tick check box',
       group: 'ordinary',
       weight: 2,
-      arg: () => fc.constant(null),
-      label: () => 'tick the first check box of a note',
-      run: async (env) => {
+      arg: cell,
+      label: (a, at) => `tick the first check box of a note (a check box note at ${at(a)} if none)`,
+      run: async (env, a) => {
         await env.useNotes()
-        const point = await env.checkBoxPoint()
+        const point = await env.checkBoxPoint() ?? (await env.placeNote(CHECK_BOX_NOTE, a), await env.checkBoxPoint())
         if (point) await env.page.mouse.click(...point)
       }
     },
@@ -454,6 +457,7 @@ function buildKinds () {
       label: ([t, a], at) => `double-click the first note ${ifNone(t, a, at)} and finish it`,
       run: async (env, [t, a]) => {
         const centre = await firstNote(env, NOTE_TEXTS[t], a)
+        if (!centre) return
         await env.useNotes()
         await env.page.mouse.dblclick(...centre)
         await env.finishNote()

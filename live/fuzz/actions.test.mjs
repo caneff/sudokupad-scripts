@@ -266,7 +266,6 @@ describe('the action vocabulary', () => {
         assert.equal(KIND_GROUPS[kind], 'ordinary', kind)
         assert.ok(kindOf(kind).length > 3, `${kind} is drawn`)
       }
-      assert.ok(KIND_SCRIPTS.restart.includes('text-anywhere.user.js'), 'a restart clears the notes (restartNotes)')
     })
 
     it('the rich notes hold a list, a check box, a code block and a note taller than its box, and the rich note action places them', async () => {
@@ -287,10 +286,7 @@ describe('the action vocabulary', () => {
     it('a resize drag selects the first note, takes a corner handle to a point and lets go, on every corner', async () => {
       const corners = new Set()
       for (const a of kindOf('note resize')) {
-        const target = await fakeTargets().openTarget()
-        target.env.noteHandle = async (corner) => { target.log.push(['noteHandle', corner]); return [300, 320] }
-        await a.run({ selected: true }, { env: target.env })
-        const { log } = target
+        const { log } = await runOn(a)
         const [, corner] = calls(log, 'noteHandle')[0]
         corners.add(corner)
         assert.match(String(a), new RegExp(`corner ${corner}\\b`))
@@ -361,7 +357,8 @@ describe('the action vocabulary', () => {
           assert.ok(held[0][1] > NUDGE_REPEAT_MS, 'held past the delay before repeating')
           assert.equal(keyCalls.length, 1)
         }
-        seen.shift.add(calls(log, 'keyboard.down').some(([, k]) => k === 'Shift') || calls(log, 'keyboard.press').some(([, k]) => k.startsWith('Shift+')))
+        seen.shift.add(calls(log, 'keyboard.down').some(([, k]) => k === 'Shift'))
+        for (const [i, [n, k]] of log.entries()) if (n === 'keyboard.down') assert.ok(log.slice(i + 1).some(([m, j]) => m === 'keyboard.up' && j === k), `${k} is let go`)
         assert.ok(names(log).includes('mouse.click'), 'the note is selected first')
       }
       assert.deepEqual([...seen.keys].sort(), ['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp'])
@@ -381,23 +378,41 @@ describe('the action vocabulary', () => {
       assert.deepEqual([...seen].sort(), ['false false', 'false true', 'true false', 'true true'])
     })
 
-    it('a check box tick clicks the first check box under the notes tool, and does nothing when there is none', async () => {
+    it('a check box tick clicks the first check box under the notes tool, and places a check box note first when there is none', async () => {
       const [a] = kindOf('tick check box')
-      const withBox = await fakeTargets().openTarget()
-      withBox.env.checkBoxPoint = async () => [250, 260]
-      await a.run({ selected: true }, { env: withBox.env })
+      const withBox = await runOn(a)
       assert.deepEqual(calls(withBox.log, 'mouse.click'), [['mouse.click', 250, 260]])
       assert.ok(names(withBox.log).includes('useNotes'))
-      const none = await fakeTargets().openTarget()
-      none.env.checkBoxPoint = async () => null
-      await a.run({ selected: true }, { env: none.env })
-      assert.deepEqual(calls(none.log, 'mouse.click'), [])
+      assert.ok(!names(withBox.log).includes('placeNote'), 'used the box there')
+      const target = await fakeTargets().openTarget()
+      let placed = false
+      target.env.placeNote = async (text) => { target.log.push(['placeNote', text]); placed = true }
+      target.env.checkBoxPoint = async () => placed ? [250, 260] : null
+      await a.run({ selected: true }, { env: target.env })
+      const [place] = calls(target.log, 'placeNote')
+      assert.match(place[1], /^- \[ \] /m, 'a note with a check box')
+      assert.deepEqual(calls(target.log, 'mouse.click'), [['mouse.click', 250, 260]])
+      const nothing = await fakeTargets().openTarget()
+      nothing.env.checkBoxPoint = async () => null
+      await a.run({ selected: true }, { env: nothing.env })
+      assert.deepEqual(calls(nothing.log, 'mouse.click'), [], 'no box even after placing a note: nothing is clicked')
+    })
+
+    it('a note action whose note could not be placed does nothing more, rather than click at nothing', async () => {
+      for (const kind of ['note resize', 'note wheel', 'note nudge', 'reopen note']) {
+        const [a] = kindOf(kind)
+        const target = await fakeTargets({ withNote: false }).openTarget()
+        target.env.placeNote = async () => {}
+        await a.run({ selected: true }, { env: target.env })
+        assert.deepEqual(calls(target.log, 'mouse.click').concat(calls(target.log, 'mouse.down'), calls(target.log, 'mouse.wheel'), calls(target.log, 'mouse.dblclick'), calls(target.log, 'keyboard.press')), [], kind)
+      }
     })
 
     it('reopening a note double-clicks the first note under the notes tool, places one when there is none, and finishes it', async () => {
       const [a] = kindOf('reopen note')
       const { log } = await runOn(a, { withNote: false })
       assert.ok(names(log).includes('placeNote'))
+      assert.ok(names(log).includes('useNotes'))
       assert.deepEqual(calls(log, 'mouse.dblclick')[0].slice(1), [200, 200])
       assert.deepEqual(calls(log, 'finishNote').length, 1)
     })

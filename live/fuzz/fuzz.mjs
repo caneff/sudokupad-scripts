@@ -48,10 +48,13 @@ for (const name of SLIDERS) if (!SLIDER_SELECTORS[name]) throw new Error(`action
 // A press on a track this far in from its end is on the track, not on the edge pixel that belongs to the next element.
 const TRACK_MARGIN_PX = 6
 
+// How long a script's element is waited for before it counts as lost.
+const BOX_TIMEOUT_MS = 2000
+
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
 // with nothing to undo) is pressed like a user presses it, and nothing happens. An element that is not there is a crash: a script lost its control.
 async function clickIn (p, selector) {
-  const box = await p.locator(selector).first().boundingBox({ timeout: 2000 })
+  const box = await p.locator(selector).first().boundingBox({ timeout: BOX_TIMEOUT_MS })
   if (!box) throw new Error(`no ${selector} on the page to click`)
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 }
@@ -182,7 +185,7 @@ function envFor (p, puzzle, { beforeReload }) {
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
     async sliderPoint (name, fraction) {
-      const box = await (await sliderFor(name)).boundingBox({ timeout: 2000 })
+      const box = await (await sliderFor(name)).boundingBox({ timeout: BOX_TIMEOUT_MS })
       if (!box) throw new Error(`the ${name} slider is not on the page`)
       return [box.x + TRACK_MARGIN_PX + (box.width - 2 * TRACK_MARGIN_PX) * fraction, box.y + box.height / 2]
     },
@@ -198,11 +201,11 @@ function envFor (p, puzzle, { beforeReload }) {
     },
     async noteHandle (corner) {
       const handles = p.locator(HANDLES)
-      return await handles.count() === 0 ? null : middleOf(await handles.nth(corner).boundingBox({ timeout: 2000 }))
+      return await handles.count() === 0 ? null : middleOf(await handles.nth(corner).boundingBox({ timeout: BOX_TIMEOUT_MS }))
     },
     async checkBoxPoint () {
       const boxes = p.locator(CHECK_BOXES)
-      return await boxes.count() === 0 ? null : middleOf(await boxes.first().boundingBox({ timeout: 2000 }))
+      return await boxes.count() === 0 ? null : middleOf(await boxes.first().boundingBox({ timeout: BOX_TIMEOUT_MS }))
     },
     // With a note selected the button deletes it and asks nothing; otherwise it asks, and the question is answered like a player does.
     async clearNotes (ok) {

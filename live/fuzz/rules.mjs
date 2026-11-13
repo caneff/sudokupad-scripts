@@ -32,10 +32,12 @@ const SCROLL_TOLERANCE_PX = 1
 // A computed font size is a float: this much above the smallest font is the smallest font.
 const FONT_TOLERANCE_PX = 0.01
 
-// The lines in `a` and not in `b`, counting repeats: [x, x] against [x] leaves one x.
-// A note's letters and digits alone, after the check box markers a list line carries (`- [x] `), which are drawn as boxes.
-const wordsOf = (text) => text.replace(/^\s*[-*+] \[[ xX]\] /gm, '').replace(/[^\p{L}\p{N}]/gu, '')
+// A note's letters and digits alone, after the check box markers a line carries, which are drawn as boxes. The marker is `CHECK_MARK`'s in text-anywhere.user.js: the dash is optional and the box may end the line.
+const wordsOf = (text) => text.replace(/^\s*(?:[-*+] )?\[[ xX]?\](?: |$)/gm, '').replace(/[^\p{L}\p{N}]/gu, '')
+// Whether Text Anywhere draws a note's text other than as typed: a list line, a check box, a code fence, bold or inline code.
+const hasMarkup = (text) => /^\s*(?:[-*+] |(?:[-*+] )?\[[ xX]?\](?: |$)|```)|\*\*|`/m.test(text)
 
+// The lines in `a` and not in `b`, counting repeats: [x, x] against [x] leaves one x.
 function without (a, b) {
   const left = [...b]
   return a.filter((item) => {
@@ -115,13 +117,19 @@ export const RULES = [
   {
     name: 'notes-saved-match-drawn',
     // Text Anywhere: no open note at a snapshot (every action finishes the note it opened), so the saved notes are exactly the ones on the board.
-    // A saved note is its raw text and a drawn one the text left after its markup (bullets, check boxes, fences, bold), so both sides are compared as their letters and digits, and a message names that.
+    // A plain note is drawn as it was typed. A note with markup is drawn with the markup left out, so a saved one that finds no drawn twin as typed is matched to one with the same letters and digits (`wordsOf`).
     check: ({ now }) => {
-      const saved = (now.page.notesSaved ?? []).filter((item) => item.kind === 'text').map((item) => wordsOf(item.text))
-      const drawn = now.page.notesDrawn.map(wordsOf)
+      const saved = (now.page.notesSaved ?? []).filter((item) => item.kind === 'text').map((item) => item.text)
+      const unmatchedSaved = without(saved, now.page.notesDrawn)
+      const unmatchedDrawn = without(now.page.notesDrawn, saved)
+      const stillSaved = unmatchedSaved.filter((text) => {
+        const twin = hasMarkup(text) ? unmatchedDrawn.findIndex((drawn) => wordsOf(drawn) === wordsOf(text)) : -1
+        if (twin >= 0) unmatchedDrawn.splice(twin, 1)
+        return twin < 0
+      })
       return [
-        ...without(saved, drawn).map((t) => `saved but not drawn: ${JSON.stringify(t)}`),
-        ...without(drawn, saved).map((t) => `drawn but not saved: ${JSON.stringify(t)}`)
+        ...stillSaved.map((t) => `saved but not drawn: ${JSON.stringify(t)}`),
+        ...unmatchedDrawn.map((t) => `drawn but not saved: ${JSON.stringify(t)}`)
       ]
     }
   },
