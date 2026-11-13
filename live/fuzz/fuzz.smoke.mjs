@@ -12,6 +12,7 @@ import { fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
+import { SELECTED, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 
 const run = promisify(execFile)
 const PASSING_SEEDS = [2, 3]
@@ -92,6 +93,17 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     }
   }
 
+  // Runs `steps` on a fresh page of `puzzle` and gives `read` the page.
+  async function afterSteps (puzzle, steps, read) {
+    const target = await openTarget(browser(), puzzle, {})
+    try {
+      for (const step of scriptedList(puzzle, steps)) await step.run({ selected: true }, { env: target.env })
+      return await read(target.env.page)
+    } finally {
+      await target.close()
+    }
+  }
+
   it('the box color rule reads real notes (#713): a note with a box, then Yellow saved, is read as one boxed note filled with the yellow it should have', async () => {
     const puzzle = puzzleByName('recorded 9x9')
     const { page } = await snapshotAfter(puzzle, [['boxed note', [0, 0]], ['note box color', ['yellow', 0, true]]])
@@ -104,6 +116,72 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     assert.ok(page.penState.length > 0, 'the line is on the board')
     assert.ok(page.penState.every((stroke) => /pencolor-[jlnprtvxz]$/.test(stroke)), page.penState.join(' | '))
     assert.deepEqual(errors, [])
+  })
+
+  describe("Text Anywhere's resize, selection, nudge, clear and rich notes (#815)", () => {
+    const puzzle = puzzleByName('recorded 9x9')
+    const at = (row, col) => {
+      const i = puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+      assert.notEqual(i, -1, `r${row + 1}c${col + 1} is no cell of the ${puzzle.name} puzzle`)
+      return i
+    }
+    const NOTE_AT = at(4, 4)
+    const NOTE = ['place note', [0, NOTE_AT]]
+    const savedTexts = (page) => (page.notesSaved ?? []).filter((item) => item.kind === 'text').map((item) => item.text)
+    const savedFirst = (page) => page.notesSaved.find((item) => item.kind === 'text')
+
+    it('a nudge moves the saved note, and a held arrow key moves it further than the taps do', async () => {
+      const start = savedFirst((await snapshotAfter(puzzle, [NOTE])).page)
+      const tapped = savedFirst((await snapshotAfter(puzzle, [NOTE, ['note nudge', [[0, NOTE_AT], 1, false, 3]]])).page)
+      const held = savedFirst((await snapshotAfter(puzzle, [NOTE, ['note nudge', [[0, NOTE_AT], 1, false, 0]]])).page)
+      const farther = (item) => Math.hypot(...[0, 1].map((i) => item.at[i] - start.at[i]))
+      assert.ok(farther(tapped) > 0, 'the taps moved it')
+      assert.ok(farther(held) > farther(tapped), `held ${farther(held)} past taps ${farther(tapped)}`)
+    })
+
+    it('a resize drag gives the saved note a box of its own', async () => {
+      assert.equal(savedFirst((await snapshotAfter(puzzle, [NOTE])).page).box, undefined)
+      const resized = savedFirst((await snapshotAfter(puzzle, [NOTE, ['note resize', [[0, NOTE_AT], 3, 40, 30]]])).page)
+      assert.ok(Array.isArray(resized.box), JSON.stringify(resized))
+    })
+
+    it('Clear all with OK removes every note, Cancel keeps them, and with a note selected it deletes just that one with no question', async () => {
+      const two = [NOTE, ['place note', [1, at(1, 1)]]]
+      assert.deepEqual(savedTexts((await snapshotAfter(puzzle, [...two, ['clear notes', [[0, NOTE_AT], false, true]]])).page), [])
+      assert.equal(savedTexts((await snapshotAfter(puzzle, [...two, ['clear notes', [[0, NOTE_AT], false, false]]])).page).length, 2)
+      assert.equal(savedTexts((await snapshotAfter(puzzle, [...two, ['clear notes', [[0, NOTE_AT], true, true]]])).page).length, 1)
+    })
+
+    it('a tick on a rich note\'s check box is saved', async () => {
+      assert.deepEqual(savedTexts((await snapshotAfter(puzzle, [['rich note', [1, NOTE_AT]], ['tick check box', NOTE_AT]])).page), ['- [x] buy\n- [x] sold'])
+    })
+
+    it('the tick places a check box note when the board has none, and ticks it', async () => {
+      assert.deepEqual(savedTexts((await snapshotAfter(puzzle, [['tick check box', NOTE_AT]])).page), ['- [x] buy\n- [x] sold'])
+    })
+
+    it('a rectangle over the board selects the note it covers, and one clear of it selects none', async () => {
+      const selectedAfter = (rectangle) => afterSteps(puzzle, [NOTE, ['note rectangle', rectangle]], (p) => p.locator(SELECTED).count())
+      assert.equal(await selectedAfter([at(2, 3), at(6, 5), false]), 1)
+      assert.equal(await selectedAfter([at(0, 2), at(1, 6), false]), 0)
+    })
+
+    it('a wheel over a tall note scrolls it', async () => {
+      const scrolled = await afterSteps(puzzle, [['rich note', [3, NOTE_AT]], ['note wheel', [NOTE_AT, 400]]], (p) => p.locator(TEXTS).first().evaluate((e) => e.scrollTop))
+      assert.ok(scrolled > 0, `scrollTop ${scrolled}`)
+    })
+
+    it('reopening a note leaves it saved and no box open', async () => {
+      const { page, errors } = await snapshotAfter(puzzle, [NOTE, ['reopen note', [0, NOTE_AT]]])
+      assert.deepEqual(savedTexts(page), ['15'])
+      assert.deepEqual(page.notesSeen, ['15'], 'the note is drawn and nothing is open for typing')
+      assert.deepEqual(errors, [])
+    })
+
+    it('rich notes and a restart raise no page error', async () => {
+      const { errors } = await snapshotAfter(puzzle, [['rich note', [0, at(1, 1)]], ['rich note', [2, at(6, 5)]], ['restart', false]])
+      assert.deepEqual(errors, [])
+    })
   })
 
   describe('a page error planted on Escape during a drag', () => {

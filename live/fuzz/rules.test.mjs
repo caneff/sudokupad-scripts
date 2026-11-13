@@ -79,6 +79,19 @@ describe('the rules', () => {
     it('fails for a note whose saved text differs from the drawn one', () => {
       assert.equal(check('notes-saved-match-drawn', { notesSaved: items('15'), notesDrawn: ['51'] }).length, 2)
     })
+    it('holds for a list, a check box and a code block, whose drawn text has the markup left out (#815)', () => {
+      const saved = items('- one\n- **two**', '- [ ] buy\n- [x] sold', '```\nsum ->\n  x=1\n```')
+      assert.deepEqual(check('notes-saved-match-drawn', { notesSaved: saved, notesDrawn: ['•one•two', 'buysold', 'sum ->\n  x=1'] }), [])
+    })
+    it('holds for a check box with no dash, and one that ends its line, as the script draws them (#815)', () => {
+      assert.deepEqual(check('notes-saved-match-drawn', { notesSaved: items('[x] milk', '- [x]'), notesDrawn: ['milk', ''] }), [])
+    })
+    it('still fails for a rich note whose words differ from the drawn ones (#815)', () => {
+      assert.equal(check('notes-saved-match-drawn', { notesSaved: items('- one\n- **two**'), notesDrawn: ['•one•three'] }).length, 2)
+    })
+    it('still fails for a plain note drawn with a symbol, a space or a line break changed (#815)', () => {
+      for (const [saved, drawn] of [['a->b', 'a b'], ['!= 3', '3'], ['x\ny', 'xy']]) assert.equal(check('notes-saved-match-drawn', { notesSaved: items(saved), notesDrawn: [drawn] }).length, 2, saved)
+    })
   })
 
   describe('notes-survive-reload', () => {

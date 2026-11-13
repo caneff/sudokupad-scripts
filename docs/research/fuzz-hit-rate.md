@@ -239,3 +239,12 @@ printed after it (`nightly.test.mjs` checks it).
 Three kinds: `profile editor` (opens the dialog from the settings or from the pad menu's Edit profiles…, makes up to four edits of new, rename, delete, move, select, paint a digit, cell profile, digit profile, then Save or Cancel),
 `profile switch` (the pad menu) and `restart`; the rule `digit-cells-colored` now also reads every cell when the groups change. Rerun 2026-11-13, same seed, minutes and config (`--seed 729 --minutes 4 --config busy-start --coverage`), 38 lists, passed:
 `color-by-digit.user.js` 99 of 528 never ran (164 of 424 before; the script grew). Of #814's names, all left the list but `restoreBeforeRestart`, which runs on an Undo right after a Restart. The `restart` kind draws an Undo straight after the Restart half the time ("restart the puzzle then undo"); a final rerun with that (same seed, 38 lists, passed, 100 of 528) still did not reach it in 38 lists, so it needs a longer run.
+
+### After #815 (Text Anywhere's resize, rectangle select, nudge, clear and rich notes)
+
+Eight kinds: `rich note` (a list, a check box, a code block, a 12-line note), `note resize` (a corner handle dragged), `note wheel`, `note rectangle` (with or without Shift), `note nudge` (taps, or an arrow held past the repeat delay), `clear notes` (OK or Cancel; with a note selected it deletes just that one),
+`tick check box` and `reopen note` (a double-click, which takes the caret to the click); `restart` now also names Text Anywhere, since it clears the notes. Rerun 2026-11-13, same seed, minutes and config (`--seed 729 --minutes 4 --config busy-start --coverage`), 43 lists, passed:
+`text-anywhere.user.js` 137 of 701 never ran (178 of 684 before). Of #815's names, all left the list but `tickCheck`; that run was made before the tick action placed a check box note of its own when the board has none, which the live smoke test checks (the rerun after the review fixes is below).
+The first rerun failed on the rule `notes-saved-match-drawn`, which compared a saved note's raw text with its drawn text; a saved note with markup that finds no drawn twin as typed is now matched to one with the same letters and digits (`rules.mjs`), so a plain note is compared as before and only a note with markup is compared more loosely.
+
+Final rerun after the review fixes (same seed, minutes and config, 40 lists, passed): `text-anywhere.user.js` 135 of 704 never ran, and none of #815's 19 names is on the list, `tickCheck` included.

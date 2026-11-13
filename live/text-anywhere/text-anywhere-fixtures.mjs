@@ -30,6 +30,8 @@ export const SEEN_TEXTS = '#text-anywhere-layer .text-anywhere-text'
 export const STRIKE_PIECE = '.text-anywhere-strike-piece'
 const STRIKES = `${TEXTS} .text-anywhere-strike`
 export const STRIKE_PIECES = `${STRIKES} ${STRIKE_PIECE}`
+// A check box drawn in a finished note.
+export const CHECK_BOXES = `${TEXTS} .text-anywhere-check`
 export const TEXT_BOX = '#text-anywhere-layer .text-anywhere-textbox'
 export const SLIDERS = '.text-anywhere-sliders'
 export const TRAY = '.text-anywhere-tray'
