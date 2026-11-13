@@ -7,6 +7,7 @@
     "test:live:files": "node --test --test-concurrency=4 --test-timeout=1200000",
     "test:fuzz": "node live/fuzz/run.mjs",
     "fuzz:plants": "node live/fuzz/plants-run.mjs",
+    "fuzz:mutants": "node live/fuzz/mutants-run.mjs",
     "fuzz:nightly": "node live/fuzz/nightly.mjs",
     "test:fuzz:smoke": "node --test live/fuzz/fuzz.smoke.mjs",
     "watch:live": "node live/watch.mjs",
@@ -14,6 +15,7 @@
     "lint": "standard"
   },
   "devDependencies": {
+    "acorn": "^8.19.0",
     "fast-check": "^4.10.2",
     "playwright": "^1.64.1",
     "standard": "^17.1.2"

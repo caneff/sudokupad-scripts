@@ -2,17 +2,19 @@
 // DOMContentLoaded of every load, so a reload keeps them), gives the engine (`engine.mjs`) a page of its own for every action list, and reads the crash
 // signals (`signals.mjs`) from it. Each list names its puzzle (`puzzle-set.mjs`, #679). Not a check itself; `fuzz.smoke.mjs` is the test, `run.mjs` the command line.
 import { setTimeout as sleep } from 'node:timers/promises'
-import { ERROR_LOG_KEY, captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
+import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
-import { closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
+import { animationsDone, closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
-import { scriptedList, SLIDERS } from './actions.mjs'
+import { PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
+import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
 import { replayCommand } from './replay-command.mjs'
 import { FUZZ_PUZZLES, insideGrid, rulesTextFor } from './puzzle-set.mjs'
@@ -54,8 +56,67 @@ async function clickIn (p, selector) {
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 }
 
+// Color by Digit's profiles dialog (#814): opens it the way a user finds it, makes each edit of `actions.mjs`'s `profileEdit` on the dialog as it stands (a row, a
+// swatch or an option is counted from 0 and wrapped to how many there are, an edit the dialog's state does not allow, such as a delete of the only profile, is
+// not made), and presses Save or Cancel.
+// Opens the menu on the Color by Digit button's arrow.
+async function openPadMenu (p) {
+  await clickIn(p, ARROW)
+  await p.locator(PROFILE_MENU).waitFor({ state: 'visible' })
+}
+
+async function editProfiles (p, edits, save, fromMenu) {
+  if (fromMenu) {
+    await openPadMenu(p)
+    await p.locator(`${PROFILE_MENU} [data-act=edit]`).click()
+    await p.locator(PROFILE_EDITOR).waitFor({ state: 'visible' })
+    await animationsDone(p.locator(PROFILE_EDITOR))
+  } else {
+    await openScriptDialog(p, 'Color by Digit', PROFILE_EDITOR)
+  }
+  const wrapped = async (locator, n) => {
+    const count = await locator.count()
+    if (count === 0) throw new Error(`the profiles dialog has none of ${locator} to pick`)
+    return locator.nth(n % count)
+  }
+  const rows = p.locator(PROFILE_ROWS)
+  for (const [op, a, b] of edits) {
+    if (op === 'new') {
+      const add = p.locator(`${PROFILE_EDITOR} [data-act=new-profile]`)
+      if (await add.isEnabled()) await add.click()
+    } else if (op === 'rename') {
+      await typeProfileName(p, PROFILE_NAMES[a])
+    } else if (op === 'delete') {
+      await wrapped(rows, 0)
+      const n = a % await rows.count()
+      if (await p.locator(`${PROFILE_ROWS}:nth-child(${n + 1}) button[data-act=delete]`).isEnabled()) await deleteProfileRow(p, n + 1)
+    } else if (op === 'move') {
+      await wrapped(rows, 0)
+      const count = await rows.count()
+      await dragProfileRow(p, a % count, b % count)
+    } else if (op === 'select') {
+      await (await wrapped(rows, a)).click(ROW_CORNER)
+    } else if (op === 'paint') {
+      await (await wrapped(p.locator(`${PROFILE_EDITOR} button[data-role=swatch]`), b)).click()
+      await p.locator(`${PROFILE_EDITOR} button[data-act=digit][data-digit="${a}"]`).click()
+    } else {
+      const select = p.locator(`${PROFILE_EDITOR} select[data-role=${op === 'cell profile' ? 'cell-profile' : 'digit-profile'}]`)
+      await select.selectOption({ index: a % await select.locator('option').count() })
+    }
+  }
+  await closeDialogWith(p, save ? 'Save' : 'Cancel', PROFILE_EDITOR)
+}
+
+// Picks the profile at row `i` (wrapped) for the cells from the menu on the Color by Digit button's arrow; with a separate digit profile the menu has a dot column per target, and the cells' one is picked.
+async function pickProfileFromMenu (p, i) {
+  await openPadMenu(p)
+  const picks = p.locator(`${PROFILE_MENU} [data-act=pick][data-target=cells]`)
+  await picks.nth(i % await picks.count()).click()
+  await p.locator(PROFILE_MENU).waitFor({ state: 'detached' })
+}
+
 // The env `actions.mjs` runs on, over a real page showing `puzzle`.
-function envFor (p, puzzle) {
+function envFor (p, puzzle, { beforeReload }) {
   const openPen = async () => {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
   }
@@ -98,6 +159,9 @@ function envFor (p, puzzle) {
     redo: () => clickIn(p, '#control-redo'),
     undoAll: () => undoAll(p),
     clickColorMode: () => clickIn(p, '#control-colorbydigit'),
+    profileEditor: (edits, save, fromMenu) => editProfiles(p, edits, save, fromMenu),
+    pickProfile: (i) => pickProfileFromMenu(p, i),
+    restartPuzzle: () => restartPuzzle(p),
     async placeNote (text, i) {
       await pickNotes()
       await p.mouse.click(...await this.cellPoint(i))
@@ -143,6 +207,7 @@ function envFor (p, puzzle) {
       window.dispatchEvent(new Event('focus'))
     }),
     async reload () {
+      await beforeReload()
       await p.reload({ waitUntil: 'load' })
       // The intro dialog (Resume Puzzle) can show after the board does, which `resumeAfterHistory` alone would not wait for.
       await startPuzzle(p)
@@ -158,14 +223,19 @@ function envFor (p, puzzle) {
   }
 }
 
-export async function openTarget (browser, puzzle, { planted, plant }) {
+// `coverage` (`coverage.mjs`'s `createCoverage`) hears the coverage of the scripts on this page: V8 keeps it per script load, so it is read before a reload and at the end.
+export async function openTarget (browser, puzzle, { planted, plant, coverage }) {
+  const patch = plant && plantPatch(plant)
   const { context, p, errors } = await openPage(browser, {
     seed: async (page, collected) => {
       captureConsoleErrors(page, collected)
       if (planted) await plantEscapeError(page)
-      await installAll(page, plant && plantPatch(plant))
+      if (coverage) await page.coverage.startJSCoverage({ resetOnNavigation: false })
+      await installAll(page, coverage ? (file, code) => tagSource(file, patch ? patch(file, code) : code) : patch)
     }
   })
+  const readCoverage = async () => { if (coverage) coverage.add(await p.coverage.stopJSCoverage()) }
+  const restartCoverage = async () => { if (coverage) await p.coverage.startJSCoverage({ resetOnNavigation: false }) }
   try {
     if (puzzle.data) await openPuzzleId(p, await puzzleIdFor(p, puzzle.data))
     else await startWithTools(p)
@@ -176,11 +246,17 @@ export async function openTarget (browser, puzzle, { planted, plant }) {
     const onPage = await freeCells(p)
     if (JSON.stringify(sortedCells(onPage)) !== JSON.stringify(sortedCells(puzzle.free))) throw new Error(`the ${puzzle.name} puzzle opened with ${onPage.length} free cells that are not the ${puzzle.free.length} of puzzle-set.mjs`)
     return {
-      env: envFor(p, puzzle),
+      env: envFor(p, puzzle, { beforeReload: async () => { await readCoverage(); await restartCoverage() } }),
       snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR), page: await readPageState(p, { expectRules: rulesTextFor(puzzle) !== null }) }),
       wait: (ms) => sleep(ms),
       errorLog: async () => newestErrorRecords(await p.evaluate((key) => window.localStorage.getItem(key), ERROR_LOG_KEY)),
-      close: () => context.close()
+      close: async () => {
+        try {
+          await readCoverage()
+        } finally {
+          await context.close()
+        }
+      }
     }
   } catch (error) {
     await context.close()
@@ -192,11 +268,12 @@ const freeCells = (p) => p.evaluate(() => Framework.app.puzzle.cells.filter((c) 
 const sortedCells = (cells) => [...cells].sort(([r1, c1], [r2, c2]) => r1 - r2 || c1 - c2)
 
 // Fuzzes with `seed` (a number) for `minutes` or `runs` action lists, each on a puzzle of the set that the list names, then shrinks a failure. `path` is a printed replay
-// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug. `config` names the generator's configuration (`configs.mjs`). `focus` is script files (`focusFiles` of `actions.mjs`) whose actions come up more often.
-export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant, focus, config = DEFAULT_CONFIG }) {
+// path, `<fast-check path>@<command path>`, which replays that one failure on its puzzle. `planted` plants the Escape-during-drag page error; `plant` (`plants.mjs`) swaps one script's text for a planted bug. `config` names the generator's configuration (`configs.mjs`). `coverage` is a `createCoverage` that hears the scripts' V8 coverage of every page (`coverage.mjs`). `focus` is script files (`focusFiles` of `actions.mjs`) whose actions come up more often.
+export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path, planted = false, plant, focus, config = DEFAULT_CONFIG, coverage }) {
   const [fcPath, replayPath] = path == null ? [] : path.split('@')
+  const tracked = trackClosing((puzzle) => openTarget(browser, puzzle, { planted, plant, coverage }))
   const result = await runFuzz({
-    openTarget: (puzzle) => openTarget(browser, puzzle, { planted, plant }),
+    openTarget: tracked.open,
     puzzles: FUZZ_PUZZLES,
     seed,
     runs,
@@ -207,6 +284,8 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
     focus,
     ...configOptions(config)
   })
+  // The time limit returns while the last list goes on; its page's coverage comes with its close.
+  if (coverage) await tracked.allClosed()
   if (!result.failed) return result
   return { ...result, path: `${result.path}@${result.replayPath}`, replayCommand: replayCommand({ seed: result.seed, path: `${result.path}@${result.replayPath}`, planted, plant, focus, config }) }
 }

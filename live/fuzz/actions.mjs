@@ -18,6 +18,9 @@
 //   env.useArrowPen(color)                   opens the pen tool, turns it to the arrow lines page (page 3) and picks its pen color 1 to 9
 //   env.placeNote(text, i)                   a note with `text` at cell `i`, finished with Escape
 //   env.noteCentre() -> [x, y] | null        the middle of the first note drawn
+//   env.profileEditor(edits, save, fromMenu) opens Color by Digit's settings dialog (from the pad menu's Edit profiles when `fromMenu`, else from the settings), makes each edit (`[op, ...numbers]`, `PROFILE_EDITS`) and presses Save or Cancel
+//   env.pickProfile(i)                       picks profile `i` (counted from 0, wrapped to the profiles there are) from the pad button's menu
+//   env.restartPuzzle()                      restarts the puzzle, as SudokuPad's own Restart does
 //   env.resize({ width, height })  env.blurFocus()  env.reload()  env.darkPage(color, save)
 import { createRequire } from 'node:module'
 import fc from 'fast-check'
@@ -42,6 +45,14 @@ const SLIDER_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 
 // The dialog's thickness slider moves in steps of `THICKNESS.step`, so it is drawn as a count of steps.
 const THICKNESS_STEPS = { min: THICKNESS.min / THICKNESS.step, max: THICKNESS.max / THICKNESS.step }
 
+// Color by Digit's profile editor (#814): the names a rename types, and the edits a dialog action makes before it saves or cancels. A row, a brush and a profile
+// are counted from 0 and wrapped by the env to what the dialog holds (six profiles at the most), so a list replays on a dialog of any size.
+export const PROFILE_NAMES = ['Mine', 'Tens', 'A B', 'x', 'Twenty four letters long!']
+export const MAX_PROFILES = 6
+const PROFILE_BRUSHES = 10
+const DIGITS = '0123456789'
+export const MAX_PROFILE_EDITS = 4
+
 const NOTE_DRAG = [70, 40]
 const ownColor = (rgb) => `#${rgb.toString(16).padStart(6, '0')}`
 const OUTSIDE = [-5, -5]
@@ -53,6 +64,28 @@ function buildKinds () {
   const digit = (puzzle) => fc.constantFrom(...puzzle.keys)
   const color = fc.integer({ min: 1, max: 9 })
   const toolKey = fc.constantFrom(...TOOL_KEYS)
+  const row = fc.nat(MAX_PROFILES - 1)
+  // One edit of the profiles dialog: `[op, ...numbers]`. `cell profile` and `digit profile` choose a pulldown's option, counted from 0 and wrapped to the options there are; the digit pulldown lists Same as cell, then the profiles, then None.
+  const profileEdit = fc.oneof(
+    fc.constant(['new']),
+    fc.tuple(fc.constant('rename'), fc.nat(PROFILE_NAMES.length - 1)),
+    fc.tuple(fc.constant('delete'), row),
+    fc.tuple(fc.constant('move'), row, row),
+    fc.tuple(fc.constant('select'), row),
+    fc.tuple(fc.constant('paint'), fc.nat(DIGITS.length - 1), fc.nat(PROFILE_BRUSHES - 1)),
+    fc.tuple(fc.constant('cell profile'), row),
+    fc.tuple(fc.constant('digit profile'), fc.nat(MAX_PROFILES + 1))
+  )
+  const profileEditWords = ([op, a, b]) => ({
+    new: () => 'new profile',
+    rename: () => `rename to ${PROFILE_NAMES[a]}`,
+    delete: () => `delete profile ${a}`,
+    move: () => `move profile ${a} to ${b}`,
+    select: () => `select profile ${a}`,
+    paint: () => `paint digit ${DIGITS[a]} with swatch ${b}`,
+    'cell profile': () => `cell profile ${a}`,
+    'digit profile': () => `digit profile ${a}`
+  })[op]()
   const note = (puzzle) => fc.tuple(fc.nat(NOTE_TEXTS.length - 1), cell(puzzle))
 
   // A pen drag from cell `a` to cell `b` with the left button still down.
@@ -289,6 +322,22 @@ function buildKinds () {
         await env.page.mouse.up()
       }
     },
+    {
+      kind: 'profile editor',
+      group: 'ordinary',
+      weight: 1,
+      arg: () => fc.tuple(fc.array(profileEdit, { maxLength: MAX_PROFILE_EDITS, size: 'max' }), fc.boolean(), fc.boolean()),
+      label: ([edits, save, fromMenu]) => `Color by Digit profiles dialog${fromMenu ? ' from the pad menu' : ''}: ${edits.map(profileEditWords).map((w) => `${w} then `).join('')}${save ? 'Save' : 'Cancel'}`,
+      run: (env, [edits, save, fromMenu]) => env.profileEditor(edits, save, fromMenu)
+    },
+    {
+      kind: 'profile switch',
+      group: 'ordinary',
+      weight: 2,
+      arg: () => fc.nat(MAX_PROFILES - 1),
+      label: (i) => `pick profile ${i} from the pad menu`,
+      run: (env, i) => env.pickProfile(i)
+    },
     { kind: 'color mode', group: 'ordinary', weight: 2, arg: () => fc.constant(null), label: () => 'press the Color by Digit button', run: (env) => env.clickColorMode() },
 
     // Interruptions in the middle of a gesture: a key, Escape, a tool switch, undo, a window resize, a second button, the pointer leaving the window.
@@ -328,6 +377,19 @@ function buildKinds () {
     // Page-level events.
     { kind: 'blur and focus', group: 'page', weight: 1, arg: () => fc.constant(null), label: () => 'window blur and focus', run: (env) => env.blurFocus() },
     { kind: 'reload', group: 'page', weight: 1, arg: () => fc.constant(null), label: () => 'reload the page', run: (env, _, model) => { model.selected = false; return env.reload() } },
+    {
+      kind: 'restart',
+      group: 'page',
+      weight: 1,
+      // With `thenUndo`, the Undo that follows is the first one after the Restart, which brings back the board from before it (`restoreBeforeRestart`).
+      arg: () => fc.boolean(),
+      label: (thenUndo) => `restart the puzzle${thenUndo ? ' then undo' : ''}`,
+      run: async (env, thenUndo, model) => {
+        model.selected = false
+        await env.restartPuzzle()
+        if (thenUndo) await env.undo()
+      }
+    },
     { kind: 'resize', group: 'page', weight: 1, arg: () => fc.constantFrom(...WINDOW_SIZES), label: ({ width, height }) => `resize the window to ${width}x${height}`, run: (env, size) => env.resize(size) },
     {
       kind: 'dark page',
@@ -390,6 +452,8 @@ export const KIND_SCRIPTS = {
   'boxed note': [TEXT_ANYWHERE],
   'arrow line': [PEN_TOOL_EXTRAS],
   'color mode': [COLOR_BY_DIGIT],
+  'profile editor': [COLOR_BY_DIGIT],
+  'profile switch': [COLOR_BY_DIGIT],
   'pen drag, Escape': [PEN_TOOL_EXTRAS],
   'pen drag, tool key': [PEN_TOOL_EXTRAS],
   'pen drag, undo': [PEN_TOOL_EXTRAS],
@@ -406,6 +470,7 @@ export const KIND_SCRIPTS = {
   'note drag, resize': [TEXT_ANYWHERE, AUTO_RULES_RESIZER],
   'blur and focus': [],
   reload: [],
+  restart: [COLOR_BY_DIGIT],
   resize: [AUTO_RULES_RESIZER],
   'dark page': [DARK_PAGE]
 }
@@ -413,11 +478,11 @@ export const KIND_SCRIPTS = {
 // How much a focused script's kinds weigh over their own weight: a kind is raised, never silenced, so the others still come up.
 export const FOCUS_FACTOR = 4
 
-// The script files `--focus` names (short names); a name that is no script is refused, naming the ones that are.
-export function focusFiles (names = []) {
+// The script files `flag` (`--focus`, `--file`) names (short names); a name that is no script is refused, naming the ones that are.
+export function focusFiles (names = [], flag = '--focus') {
   const files = scriptFiles()
   return names.map((name) => {
-    if (!files.includes(scriptFile(name))) throw new Error(`--focus ${name} is no script; the scripts are ${files.map(scriptName).join(', ')}`)
+    if (!files.includes(scriptFile(name))) throw new Error(`${flag} ${name} is no script; the scripts are ${files.map(scriptName).join(', ')}`)
     return scriptFile(name)
   })
 }
@@ -432,7 +497,7 @@ function actionArbitrary (puzzle, weights, kinds = KINDS) {
 
 // The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
 // Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
-export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'place note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'dark page']
+export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'place note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page']
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 

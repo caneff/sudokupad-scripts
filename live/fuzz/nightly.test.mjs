@@ -219,6 +219,12 @@ describe('failureTitle', () => {
 })
 
 describe('parseFuzzOutput', () => {
+  it('reads a verdict the same with a never-run list printed after it', () => {
+    const list = 'ui-tweaks.user.js: 2 of 9 functions never ran\n  saveOptions (line 4, column 3)\n  (anonymous) (line 9, column 7)\n'
+    assert.deepEqual(parseFuzzOutput(failedOutput(9, RULE) + list), parseFuzzOutput(failedOutput(9, RULE)))
+    assert.deepEqual(parseFuzzOutput('fuzz passed: 3 action lists over 2 puzzles in 4 s (seed 1)\n' + list), { passed: true })
+  })
+
   it('reads the failure the run prints', () => {
     const f = parseFuzzOutput(failedOutput(9, RULE))
     assert.deepEqual([f.seed, f.puzzle, f.steps, f.error], [9, '9x9', ['click cell 3', 'digit 5'], RULE])
@@ -237,7 +243,7 @@ describe('the fuzz process', () => {
   it('is started with the run\'s seed and minutes, and killed at the timeout it is given', async () => {
     const calls = []
     await fuzzProcess(7, { minutes: 12.5, timeoutMs: 99 }, async (...a) => { calls.push(a); return { ok: true, output: '' } })
-    assert.deepEqual(calls, [['node', ['live/fuzz/run.mjs', '--seed', '7', '--minutes', '12.5', '--config', 'busy-start'], { mergeStderr: true, timeout: 99 }]])
+    assert.deepEqual(calls, [['node', ['live/fuzz/run.mjs', '--seed', '7', '--minutes', '12.5', '--config', 'busy-start', '--coverage'], { mergeStderr: true, timeout: 99 }]])
   })
 })
 

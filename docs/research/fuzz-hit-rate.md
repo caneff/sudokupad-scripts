@@ -203,3 +203,39 @@ snapshot; a failure is replayed by index and shrunk for at most 10 minutes.
   page was read.
 - Whether 3 or 4 Chromium contexts at once fit the 4-CPU runner without timeouts, and how much `page.coverage` slows a list, were not measured.
 - fast-check's `chain` shrinking behavior for the swarm subset was inferred from the source's general shape, not traced line by line or tested.
+
+## The first never-run list (#729)
+
+`npm run test:fuzz -- --coverage` (`live/fuzz/coverage.mjs`) is row 2 built: each injected script carries `//# sourceURL=<file>`, `page.coverage.startJSCoverage({ resetOnNavigation: false })` runs on every page,
+a page's coverage is read before its reload and at its end, and the functions with a count of 0 on every page of the run are printed per script. V8 names the script by the `sourceURL` text as given, so the six scripts
+match by file name. A function inside a never-run one is not listed (V8 never compiles it), so the counts below are a floor.
+
+First run, 2026-11-10: `--seed 729 --minutes 4 --config busy-start`, 43 action lists over the 12 puzzles, passed. Functions that never ran, of all the script has:
+
+| script | never ran | functions |
+| --- | --- | --- |
+| `color-by-digit.user.js` | 164 | 424 |
+| `text-anywhere.user.js` | 178 | 684 |
+| `auto-rules-resizer.user.js` | 88 | 174 |
+| `dark-page.user.js` | 51 | 147 |
+| `pen-tool-extras.user.js` | 86 | 561 |
+| `ui-tweaks.user.js` | 54 | 98 |
+
+What the lists show, by whether an action could reach it:
+
+- **Action gaps, one ticket each** (the names are the ticket's evidence): Color by Digit's profile editor, menu and Restart (#814); Text Anywhere's resize, rectangle select, nudge and clear (#815); Pen Tool Extras' line modes and
+  pen color editing (#816); the settings dialogs of UI Tweaks and Dark Page, with Copy, Paste and Restore defaults (#817); Auto Rules Resizer's rules box drag and limits (#818).
+- **The shared error log and notice** (`readErrorLog`, `formatErrorLog`, `renderErrorLogRow`, `noticeHost`, `dismissButton`, `recordFeatureOff`, `skip`, `fallback`, `onSkip`, in every script) run only when a feature fails,
+  which is what the fuzz looks for, so no action reaches them and none is proposed (the live suite plants skip lines itself, `expectedSkips` of `live/session.mjs`).
+- **The shared settings-dialog scaffolding** (`copiedSettings`, `pastedSettings`, `pasteReport`, `wireCopyPaste`, `setDialogStatus`, `closeDialogKeepingGrid`) is repeated in each script, so every dialog gap in the tickets counts six times in the totals.
+- **`redraw-typo`'s functions ran**: `redrawCells`, `redrawArrowLines`, `adoptThickness` and `adoptArrowSpacing` are not in the list, so the slider actions of #713 close the gap that plant found.
+
+**The cost.** The same seed and minutes without `--coverage` gave 35 action lists in 4 minutes against 43 with it (42 on a rerun after the review fixes), so the tag and the coverage cost nothing the run-to-run spread
+does not hide. The plant table is the same with and without (`fuzz-planted-bugs.md` § Coverage and mutants), so the nightly passes `--coverage`: `parseFuzzOutput` reads only the lines of a verdict and ignores the list
+printed after it (`nightly.test.mjs` checks it).
+
+### After #814 (Color by Digit's profile editor, pad menu and Restart)
+
+Three kinds: `profile editor` (opens the dialog from the settings or from the pad menu's Edit profiles…, makes up to four edits of new, rename, delete, move, select, paint a digit, cell profile, digit profile, then Save or Cancel),
+`profile switch` (the pad menu) and `restart`; the rule `digit-cells-colored` now also reads every cell when the groups change. Rerun 2026-11-13, same seed, minutes and config (`--seed 729 --minutes 4 --config busy-start --coverage`), 38 lists, passed:
+`color-by-digit.user.js` 99 of 528 never ran (164 of 424 before; the script grew). Of #814's names, all left the list but `restoreBeforeRestart`, which runs on an Undo right after a Restart. The `restart` kind draws an Undo straight after the Restart half the time ("restart the puzzle then undo"); a final rerun with that (same seed, 38 lists, passed, 100 of 528) still did not reach it in 38 lists, so it needs a longer run.
