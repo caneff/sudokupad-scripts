@@ -40,7 +40,7 @@ function assertRules (now, before, action, when, earlier, step) {
 
 // Whether a stroke was drawn or erased since the last reload, once `kind` has run after `earlier`. The reload bug of #681 needs a reload soon after a stroke, and
 // the engine has no clock for actions, so any such action since the last reload counts; the settings, the page turn and the notes draw no stroke.
-const STROKE_KIND = /^(pen (line|erase|drag)|arrow line)/
+const STROKE_KIND = /^(pen (line|erase|drag|mark)|arrow line)/
 export const strokeSinceReload = (kind, earlier) => kind !== 'reload' && (earlier?.strokeSinceReload || STROKE_KIND.test(kind))
 
 // Runs one generated list on a page of its own. A page is never reused between runs: Restart empties the replay but leaves the earlier digits

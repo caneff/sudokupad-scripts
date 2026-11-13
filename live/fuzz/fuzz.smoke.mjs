@@ -7,8 +7,9 @@ import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
+import { penDrawnCount } from '../pen.mjs'
 import { scriptedList } from './actions.mjs'
-import { fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
+import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
@@ -104,6 +105,11 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     }
   }
 
+  it('Undo back to the start after a Restart ends with an empty undo stack, though the first Undo brings the board from before the Restart back', async () => {
+    const puzzle = puzzleByName('4x4')
+    assert.equal(await afterSteps(puzzle, [['restart', false], ['undo all', null]], (p) => p.evaluate(() => Framework.app.puzzle.undoStack.length)), 0)
+  })
+
   it('the box color rule reads real notes (#713): a note with a box, then Yellow saved, is read as one boxed note filled with the yellow it should have', async () => {
     const puzzle = puzzleByName('recorded 9x9')
     const { page } = await snapshotAfter(puzzle, [['boxed note', [0, 0]], ['note box color', ['yellow', 0, true]]])
@@ -181,6 +187,85 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     it('rich notes and a restart raise no page error', async () => {
       const { errors } = await snapshotAfter(puzzle, [['rich note', [0, at(1, 1)]], ['rich note', [2, at(6, 5)]], ['restart', false]])
       assert.deepEqual(errors, [])
+    })
+  })
+
+  describe("Pen Tool Extras' line modes, marks, color editing and presets (#816)", () => {
+    const puzzle = puzzleByName('recorded 9x9')
+    const at = (row, col) => puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+    const saved = (key) => (p) => p.evaluate((k) => Framework.getData(k), key)
+    const penStrokes = (p) => p.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen).length)
+
+    it('the line mode button steps the saved mode: both, then center only, then edge only, then both again, and a line is drawn in it', async () => {
+      const modeAfter = (presses) => afterSteps(puzzle, [['pen line mode', [presses, at(2, 3), at(6, 5), 1]]], async (p) => [await saved('ToolPen_linemode')(p), (await penDrawnCount(p)) > 0])
+      assert.deepEqual(await modeAfter(1), ['centeronly', true])
+      assert.deepEqual(await modeAfter(2), ['edgeonly', true])
+      assert.deepEqual((await modeAfter(3))[0], 'both')
+    })
+
+    it('ticked mark boxes are saved, and a click on a cell edge then adds a mark to the cell', async () => {
+      const after = await afterSteps(puzzle, [['pen mark', [['x'], at(3, 3), 1, 1]]], async (p) => ({ marks: await saved('EdgeMarks_marks')(p), strokes: await penStrokes(p) }))
+      assert.equal(after.marks.x, true)
+      assert.equal(after.marks.cornerX, false)
+      assert.equal(after.strokes, 1, 'the edge click marked the cell')
+    })
+
+    it('a click on a grid corner with a corner X mark ticked adds a mark', async () => {
+      const strokes = await afterSteps(puzzle, [['pen mark', [['cornerX'], at(3, 3), 7, 1]]], penStrokes)
+      assert.equal(strokes, 1)
+    })
+
+    it('a hold on a pen color opens the pickers, a recolor there is saved for that pen, and the hold ends clean on Escape, a cell click, a tool key or a page turn', async () => {
+      const colorAfter = (edit) => afterSteps(puzzle, [['pen color edit', edit]], async (p) => ({ colors: await saved('PenColor_colors')(p), pickers: await p.locator(COLOR_PICKERS).count() }))
+      const recolored = await colorAfter([3, 1, 0x123456, at(1, 1), 'z'])
+      assert.equal(recolored.colors[3], '#123456')
+      assert.equal(recolored.pickers, 0, 'the pickers are gone')
+      for (const end of [0, 2, 3, 4]) assert.equal((await colorAfter([3, end, 0x123456, at(1, 1), 'z'])).pickers, 0, `end ${end} leaves no pickers`)
+    })
+
+    it('a colors dialog after a recolor (when the Custom option is disabled and selected) still picks a preset', async () => {
+      const preset = await afterSteps(puzzle, [['pen color edit', [3, 1, 0x123456, at(1, 1), 'z']], ['pen colors dialog', [0, false, true]]], async (p) => (await saved('PenColor_colors')(p)).preset)
+      assert.equal(preset, 'page-1')
+    })
+
+    it('a color preset is saved on Save and not on Cancel, and Restore defaults saves the first preset again', async () => {
+      const presetAfter = (...dialogs) => afterSteps(puzzle, dialogs.map((d) => ['pen colors dialog', d]), async (p) => (await saved('PenColor_colors')(p)).preset)
+      const first = await presetAfter([0, false, false])
+      assert.equal(first, 'page-1', 'the install save starts on the first preset')
+      const picked = await presetAfter([3, false, true])
+      assert.notEqual(picked, first, 'a pick saved')
+      assert.equal(await presetAfter([3, false, false]), first, 'Cancel left the colors')
+      assert.equal(await presetAfter([3, false, true], [0, true, true]), first, 'Restore defaults went back to the first preset')
+    })
+  })
+
+  describe('the settings dialogs of UI Tweaks and Dark Page (#817)', () => {
+    const puzzle = puzzleByName('4x4')
+    const tweaks = (p) => p.evaluate(() => ['tab', 'hideSelect', 'wrapButtons'].map((id) => Framework.getData(`UiTweaks_${id}`)))
+    const colorOf = (p) => p.evaluate(() => Framework.getData('DarkPage_color'))
+
+    it('Save keeps the two options and a Tab option clicked off and on again, and Cancel keeps none', async () => {
+      assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, true, false, true]]], tweaks), [true, true, true])
+      assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, true, false, false]]], tweaks), [null, null, null])
+    })
+
+    it('Restore defaults then Save puts the options back to the defaults', async () => {
+      assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, false, false, true]], ['ui tweaks dialog', [true, true, false, true, true]]], tweaks), [true, false, false])
+    })
+
+    it('a pasted UI Tweaks text is applied on the spot, and a refused one changes nothing', async () => {
+      const after = (text) => afterSteps(puzzle, [['ui tweaks settings text', [text, false]]], tweaks)
+      assert.deepEqual(await after('{"UiTweaks_wrapButtons":true,"UiTweaks_hideSelect":false}'), [true, false, true], 'a paste saves every option, the unpasted Tab at its current value')
+      assert.deepEqual(await after('{"UiTweaks_hideSelect":"yes"}'), [null, null, null])
+      assert.deepEqual(await after(null), [null, null, null], 'Copy settings saves nothing')
+    })
+
+    it('a pasted Dark Page color is saved even on Cancel, a color it refuses is not, and Restore defaults then Save saves the default as no key', async () => {
+      const after = (...steps) => afterSteps(puzzle, steps, colorOf)
+      assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"#101030"}', false]]), '#101030')
+      assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"blue"}', false]]), null)
+      assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"#101030"}', true]], ['dark page defaults', ['#002010', true]]), null)
+      assert.equal(await after(['dark page defaults', ['#002010', false]]), null, 'Cancel after Restore defaults saves nothing')
     })
   })
 

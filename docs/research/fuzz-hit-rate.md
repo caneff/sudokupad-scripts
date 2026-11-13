@@ -250,3 +250,22 @@ Eight kinds: `rich note` (a list, a check box, a code block, a 12-line note), `n
 The first rerun failed on the rule `notes-saved-match-drawn`, which compared a saved note's raw text with its drawn text; a saved note with markup that finds no drawn twin as typed is now matched to one with the same letters and digits (`rules.mjs`), so a plain note is compared as before and only a note with markup is compared more loosely.
 
 Final rerun after the review fixes (same seed, minutes and config, 40 lists, passed): `text-anywhere.user.js` 135 of 704 never ran, and none of #815's 19 names is on the list, `tickCheck` included.
+
+### After #816 (Pen Tool Extras' line modes, marks, pen color editing and presets)
+
+Four kinds: `pen line mode` (the panel's line mode button pressed one to three times, then a pen line), `pen mark` (ticks some of the eight mark boxes in the dialog and saves, then clicks an edge or a corner of a cell with the pen),
+`pen color edit` (holds a pen color until the pickers show, then recolors one, or ends edit mode with Escape, a click on a cell, a tool key or a page turn) and `pen colors dialog` (picks a color preset or presses Restore defaults, then Save or Cancel);
+the first three kinds can be in a busy start, `pen color edit` cannot (a hold is a gesture). Rerun 2026-11-13, same seed, minutes and config (`--seed 729 --minutes 4 --config busy-start --coverage`), 31 lists, passed:
+`pen-tool-extras.user.js` 64 of 575 never ran. Of #816's 11 names, 8 left the list: `nextLineMode`, `applyLineMode`, `cornerPoint`, `edgeMidpoint`, `tickedCorner`, `savePenColor`, `pickPreset`, `restoreDefaults`.
+Three stay, none for want of an action:
+- `palettePages` has no caller in `pen-tool-extras.user.js` (`rg palettePages` finds only its definition), so no action can reach it; a follow-up for the script, not for the fuzz.
+- `putStockPenBack` runs only when the pen pages step switches itself off (`steps.pages` `onSkip`), which takes a broken SudokuPad internal, not a player's action.
+- `endPenEditMode` is the name of the stand-in `let endPenEditMode = () => {}` (line 1258), which `installPenPickers` replaces at startup with the installed `endEditMode`; coverage lists the stand-in, which runs only on a page change before that or with the colors step off. No player action reaches it, so a longer run will not either. The `pen color edit` page-turn ending still runs the installed `endEditMode` through `setSelectedColor`.
+
+### After #817 (the settings dialogs of UI Tweaks and Dark Page)
+
+Four kinds, all page use and all in busy starts: `ui tweaks dialog` (sets the Hide the Toggle Selection button and Wrap buttons boxes, clicks the Tab box off and on again, may press Restore defaults, then Save or Cancel), `ui tweaks settings text` and `dark page settings text` (Copy settings, drawn about 3 times in 11, or one text from `UI_TWEAKS_TEXTS` / `DARK_PAGE_TEXTS` pasted with Paste settings, then Save or Cancel) and `dark page defaults` (picks a color, presses Restore defaults, then Save or Cancel).
+No text and no click leaves the Tab option off (the rule `tab-not-letters`), and no valid text gives Dark Page a color that is not dark. The run's browser context now grants the clipboard.
+Rerun 2026-11-13, same seed, minutes and config (`--seed 729 --minutes 4 --config busy-start --coverage`), 27 lists, passed: `ui-tweaks.user.js` 28 of 144 never ran (30 of 142 before) and `dark-page.user.js` 38 of 152 (38 of 147 before). Every name of the ticket left the list but one: `darkenColor`, whose Oklab helpers (`toOklab`, `fromOklabLinear`, `inGamut`, `toHex`, `toLinear`, `fromLinear`, `clamp255`) are the same `color-math` lib block's copy, and nothing in `dark-page.user.js` calls `darkenColor` (`rg darkenColor dark-page.user.js` finds only its definition and its own body), so no action can reach it. `pen-tool-extras.user.js` uses it for its palette presets.
+Two earlier reruns of the same config showed the run is chancy for a kind of weight 1: with the four kinds left out of busy starts (29 lists) the paste actions (`pastedSettings`, `apply`) of both scripts did not run, and with Copy settings one text of nine (28 lists) UI Tweaks' `copiedSettings` and `copied` did not.
+Lists per run held at 27 to 29 in all three, so the dialogs do not slow the run; the drop from 43 lists came with the earlier dialog kinds.

@@ -6,13 +6,14 @@ import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzz
 import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
-import { animationsDone, closeDialogWith, closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
+import { actButton, animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog, paste, STATUS } from '../settings.mjs'
+import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
-import { PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
+import { MARK_BOXES, PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
@@ -50,6 +51,24 @@ const TRACK_MARGIN_PX = 6
 
 // How long a script's element is waited for before it counts as lost.
 const BOX_TIMEOUT_MS = 2000
+
+const UI_TWEAKS_DIALOG = '#ui-tweaks-dialog'
+const DARK_PAGE_INPUT = '#dark-page-input'
+// The two scripts whose Copy settings and Paste settings the fuzz presses: the entry's name, and the editor that shows while its dialog is open.
+const SETTINGS_DIALOGS = { 'ui tweaks': ['UI Tweaks', UI_TWEAKS_DIALOG], 'dark page': ['Dark Page', DARK_PAGE_INPUT] }
+const isSettingsObject = (text) => {
+  try {
+    const data = JSON.parse(text)
+    return data !== null && typeof data === 'object' && !Array.isArray(data)
+  } catch {
+    return false
+  }
+}
+const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
+export const COLOR_PICKERS = '.pen-tool-extras-picker'
+const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
+// A click this far (in cells) inside the edge of a cell is an edge click, and a corner's own point is a corner click.
+const EDGE_INSET = 0.04
 
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
 // with nothing to undo) is pressed like a user presses it, and nothing happens. An element that is not there is a crash: a script lost its control.
@@ -189,6 +208,46 @@ function envFor (p, puzzle, { beforeReload }) {
       if (!box) throw new Error(`the ${name} slider is not on the page`)
       return [box.x + TRACK_MARGIN_PX + (box.width - 2 * TRACK_MARGIN_PX) * fraction, box.y + box.height / 2]
     },
+    async stepLineMode () {
+      await openPen()
+      await clickIn(p, LINE_MODE_BUTTON)
+    },
+    async tickMarks (names) {
+      await openExtrasEditor(p)
+      for (const name of MARK_BOXES) await p.locator(`${EXTRAS_EDITOR} input[data-box="marks.${name}"]`).setChecked(names.includes(name))
+      await closeExtrasEditorWith(p, 'Save')
+    },
+    // A cell outside the grid is the nearest one in it; the target's side is the cell's own edge or corner.
+    async markPoint (i, side) {
+      const row = Math.min(Math.max(puzzle.cells[i][0], 0), puzzle.rows - 1)
+      const col = Math.min(Math.max(puzzle.cells[i][1], 0), puzzle.cols - 1)
+      const at = [[row + EDGE_INSET, col + 0.5], [row + 0.5, col + 1 - EDGE_INSET], [row + 1 - EDGE_INSET, col + 0.5], [row + 0.5, col + EDGE_INSET], [row, col], [row, col + 1], [row + 1, col], [row + 1, col + 1]]
+      return gridPoint(p, at[side])
+    },
+    // The button is let go whatever happens, and a hold that shows no pickers is a failure: the player's hold opens them.
+    async holdPenColor (color) {
+      const box = await p.locator(`.tool-pen button[data-key="${color}"]`).boundingBox({ timeout: BOX_TIMEOUT_MS })
+      if (!box) throw new Error(`pen color ${color}'s button is not on the page`)
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await p.mouse.down()
+      try {
+        await p.locator(COLOR_PICKERS).first().waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
+      } finally {
+        await p.mouse.up()
+      }
+    },
+    setPenPicker: (color, hex) => p.locator(`${COLOR_PICKERS} input[data-key="${color}"]`).fill(hex),
+    async penPresets (pick, restore, save) {
+      await openExtrasEditor(p)
+      if (restore) {
+        await dialogButton(p, 'Restore defaults').click()
+      } else {
+        // The Custom option is disabled (and selected) after a hand edit, and a disabled option cannot be picked.
+        const values = await p.locator(COLOR_CHOICE).evaluate((el) => [...el.options].filter((o) => !o.disabled).map((o) => o.value))
+        await p.locator(COLOR_CHOICE).selectOption(values[pick % values.length])
+      }
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
+    },
     async focusSlider (name) { await (await sliderFor(name)).focus() },
     async leaveSlider (name) { await p.locator(SLIDER_SELECTORS[name].selector).evaluate((el) => el.blur()) },
     async noteBoxDialog (choice, color, save) {
@@ -236,11 +295,40 @@ function envFor (p, puzzle, { beforeReload }) {
       await resumeAfterHistory(p)
       await showRules(p, puzzle)
     },
-    async darkPage (color, save) {
-      await openScriptDialog(p, 'Dark Page', 'input[type=color]')
-      await p.locator('.dialog input[type=color]').fill(color)
-      await p.locator('.dialog').getByRole('button', { name: save ? 'Save' : 'Cancel', exact: true }).click()
-      await p.locator('.dialog').waitFor({ state: 'detached' })
+    // `restore` presses Restore defaults after the color is picked.
+    async darkPage (color, save, restore = false) {
+      await openScriptDialog(p, 'Dark Page', DARK_PAGE_INPUT)
+      await p.locator(DARK_PAGE_INPUT).fill(color)
+      if (restore) await dialogButton(p, 'Restore defaults').click()
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', DARK_PAGE_INPUT)
+    },
+    // Copy settings answers on the dialog's status line, which is waited for: a press with no answer is a failure. Paste settings is `paste` of settings.mjs, which waits for the same line.
+    async settingsText (script, text, save) {
+      const [entry, editor] = SETTINGS_DIALOGS[script]
+      await openScriptDialog(p, entry, editor)
+      if (text === null) {
+        await actButton(p, 'copy-settings').click()
+        await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
+      } else {
+        // A refused text is answered with a "Could not paste", which is the answer; a settings object the script should take is not.
+        const status = await paste(p, text)
+        if (/^Could not paste/.test(status) && isSettingsObject(text)) throw new Error(`pasting ${text} into ${entry} failed: ${status}`)
+      }
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    async uiTweaks ({ hideSelect, wrapButtons, toggleTab, restore }, save) {
+      await openScriptDialog(p, 'UI Tweaks', UI_TWEAKS_DIALOG)
+      const box = (id) => p.locator(`${UI_TWEAKS_DIALOG} input[data-option="${id}"]`)
+      await box('hideSelect').setChecked(hideSelect)
+      await box('wrapButtons').setChecked(wrapButtons)
+      // The Tab option ends where it began: a rule says Tab never switches to letters.
+      if (toggleTab) {
+        const was = await box('tab').isChecked()
+        await box('tab').setChecked(!was)
+        await box('tab').setChecked(was)
+      }
+      if (restore) await dialogButton(p, 'Restore defaults').click()
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', UI_TWEAKS_DIALOG)
     }
   }
 }
@@ -249,6 +337,8 @@ function envFor (p, puzzle, { beforeReload }) {
 export async function openTarget (browser, puzzle, { planted, plant, coverage }) {
   const patch = plant && plantPatch(plant)
   const { context, p, errors } = await openPage(browser, {
+    // Copy settings and Paste settings of the dialogs use the clipboard.
+    contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] },
     seed: async (page, collected) => {
       captureConsoleErrors(page, collected)
       if (planted) await plantEscapeError(page)

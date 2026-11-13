@@ -78,6 +78,12 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       holdFor: rec('holdFor'),
       finishNote: rec('finishNote'),
       turnPenPage: rec('turnPenPage'),
+      stepLineMode: rec('stepLineMode'),
+      tickMarks: rec('tickMarks'),
+      markPoint: rec('markPoint', [120, 140]),
+      holdPenColor: rec('holdPenColor'),
+      setPenPicker: rec('setPenPicker'),
+      penPresets: rec('penPresets'),
       undo: async () => { log.push(['undo']); undoDepth = Math.max(0, undoDepth - 1) },
       redo: async () => { log.push(['redo']); undoDepth++; if (lettersOnRedo) letterMode = true },
       undoAll: async () => { log.push(['undoAll']); undoDepth = 0 },
@@ -96,7 +102,9 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       resize: rec('resize'),
       blurFocus: async (...a) => { log.push(['blurFocus', ...a]); if (whitenOnBlur) pageColor = 'rgb(255, 255, 255)'; if (whitenOnWait) whitenPending = true; if (lettersOnBlur) letterMode = true; if (whiteForWaits) { pageColor = 'rgb(255, 255, 255)'; whiteWaitsLeft = whiteForWaits } },
       reload: rec('reload'),
-      darkPage: rec('darkPage')
+      darkPage: rec('darkPage'),
+      settingsText: rec('settingsText'),
+      uiTweaks: rec('uiTweaks')
     }
     const target = {
       env,

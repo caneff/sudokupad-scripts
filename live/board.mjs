@@ -31,11 +31,11 @@ export async function mouseDrag (page, points, { button = 'left' } = {}) {
 // How many steps SudokuPad's undo stack holds.
 export const undoDepth = (page) => page.evaluate(() => Framework.app.puzzle.undoStack.length)
 
-// Presses Undo until the undo stack is empty, each press taking at least one step.
+// Presses Undo until the undo stack is empty, each press changing its depth. The first Undo after a Restart brings the board from before it back, which grows the stack.
 export async function undoAll (page) {
   for (let now = await undoDepth(page); now > 0; now = await undoDepth(page)) {
     await page.click('#control-undo')
-    assert.equal(await settle(async () => (await undoDepth(page)) < now, true), true, 'an undo takes a step')
+    assert.equal(await settle(async () => (await undoDepth(page)) !== now, true), true, 'an undo changes the undo stack')
   }
 }
 
