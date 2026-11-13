@@ -759,7 +759,7 @@ function actionArbitrary (puzzle, weights, kinds = KINDS) {
 
 // The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
 // Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
-export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page']
+export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page', 'dark page defaults', 'dark page settings text', 'ui tweaks dialog', 'ui tweaks settings text']
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 

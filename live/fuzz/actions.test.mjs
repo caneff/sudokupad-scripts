@@ -709,8 +709,8 @@ describe('focusing the actions on a script (#724)', () => {
       assert.deepEqual([...saves].sort(), [false, true])
     })
 
-    it('busy starts leave the four dialog kinds out: they are slow, and a start only needs what a reload must restore', () => {
-      for (const kind of Object.keys(NEW_KINDS)) assert.ok(!START_KINDS.includes(kind), kind)
+    it('busy starts can hold the saved settings of both scripts, so a saved option or color is there to restore', () => {
+      for (const kind of Object.keys(NEW_KINDS)) assert.ok(START_KINDS.includes(kind), kind)
     })
   })
 })
