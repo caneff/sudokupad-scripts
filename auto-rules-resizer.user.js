@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.8
+// @version      0.7.9
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.8'
+  const VERSION = '0.7.9'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -360,12 +360,27 @@
     })
   }
 
+  // <lib:write-style>
+  // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The page's style element `id`, added on the first call, holds `css`.
+  function writeStyle (id, css, doc = document) {
+    let style = doc.getElementById(id)
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = id
+      doc.head.appendChild(style)
+    }
+    style.textContent = css
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:write-style>
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer. A script
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
   // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste */ // eslint-disable-line no-redeclare
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -537,14 +552,6 @@
     ].join('\n')
   }
 
-  function addStyleOnce (id, css, doc = document) {
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = css
-    doc.head.appendChild(style)
-  }
-
   // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
   function buttonRowCss (bodyId) {
     const row = `.dialog:has(#${bodyId}) .dialog-options`
@@ -577,8 +584,8 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
-    if (css) addStyleOnce(styleId, css, doc)
+    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
@@ -1486,7 +1493,7 @@
       limits = readLimits(Framework)
     })
     addSettingsEntry(dialogs, maxSizeSettings, { name: 'rulesresizer', content: 'Auto Rules Resizer', open: openDialog })
-    addStyleOnce(`${ID}-style`, STYLE)
+    writeStyle(`${ID}-style`, STYLE)
     addFontBar()
     for (const corner of CORNERS) addCorner(corner)
     // SudokuPad calls resize on every layout: a new puzzle, a resize, a turn of the device. It scales the controls column to fit the

@@ -1,6 +1,6 @@
 'use strict'
 // Spec #686's closing test: Text Anywhere's looks table, its one look target, the notes list that follows a deletion, the note-changed rule, the one drag cleanup,
-// the panel style through addStyleOnce and `?.` in the skip hooks, driven at the `npm test` seam over text-anywhere.user.js's pure functions and its own source.
+// the panel style through writeStyle and `?.` in the skip hooks, driven at the `npm test` seam over text-anywhere.user.js's pure functions and its own source.
 // Blind to real SudokuPad: the Framework calls, rendering and undo. The live suites cover them on sudokupad.app: text-anywhere-settings (Copy and Paste of every look),
 // settings-copy-paste (the failed-paste snapshot of the looks), text-anywhere-outline (Save), text-anywhere-background and text-anywhere-sliders (the look target, Background
 // on an open note), text-anywhere-resize (Delete while a handle is held), text-anywhere-saved (Restart and its Undo), text-anywhere-move (the drag's ends) and text-anywhere-panel
@@ -65,9 +65,9 @@ test('#695: a deletion moves every index after it down, and the note-changed rul
     ['background', [{ ...saved, bg: true }, 'a']], ['box', [{ ...saved, box: [12, 4] }, 'a']]]) assert.equal(noteChanged(...changed, saved), true, part)
 })
 
-test('#696: one clearDrag ends every drag, the panel style goes through addStyleOnce, and the skip hooks use ?.', () => {
+test('#696: one clearDrag ends every drag, the panel style goes through writeStyle, and the skip hooks use ?.', () => {
   for (const end of ['endDrag', 'cancelDrag', 'cancelInput']) assert.match(body(end), /clearDrag\(/, `${end} uses clearDrag`)
-  assert.match(SOURCE, /addStyleOnce\(PANEL_STYLE_ID, PANEL_CSS\)/)
+  assert.match(SOURCE, /writeStyle\(PANEL_STYLE_ID, PANEL_CSS\)/)
   for (const [name, { onSkip }] of Object.entries(FEATURES)) if (onSkip) assert.doesNotMatch(String(onSkip), /if \(\w+\) \w+\./, `${name}'s onSkip`)
   const saved = globalThis.document
   globalThis.document = { getElementById: () => null }
