@@ -105,6 +105,11 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     }
   }
 
+  it('Undo back to the start after a Restart ends with an empty undo stack, though the first Undo brings the board from before the Restart back', async () => {
+    const puzzle = puzzleByName('4x4')
+    assert.equal(await afterSteps(puzzle, [['restart', false], ['undo all', null]], (p) => p.evaluate(() => Framework.app.puzzle.undoStack.length)), 0)
+  })
+
   it('the box color rule reads real notes (#713): a note with a box, then Yellow saved, is read as one boxed note filled with the yellow it should have', async () => {
     const puzzle = puzzleByName('recorded 9x9')
     const { page } = await snapshotAfter(puzzle, [['boxed note', [0, 0]], ['note box color', ['yellow', 0, true]]])
