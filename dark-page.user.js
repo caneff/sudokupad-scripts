@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.21
+// @version      0.7.22
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.21'
+  const VERSION = '0.7.22'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -62,7 +62,8 @@
   // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
-  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent) and `dialog` (the settings dialog sets it).
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -71,7 +72,9 @@
 
   const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
 
-  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], row.read(store.getData(row.key))]))
+  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
   // Every row as `store` holds it, by name.
   const readTable = (rows, store) => readByField(rows, store, 'name')
@@ -90,6 +93,7 @@
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
   function saveRow (store, row, value) {
     if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else if (row.envelope) row.envelope.save(store, row.key, value)
     else store.setData(row.key, value)
   }
   /* eslint-enable no-unused-vars */
