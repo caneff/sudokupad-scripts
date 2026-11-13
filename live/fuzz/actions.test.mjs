@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, scriptedList, START_KINDS } from './actions.mjs'
+import { actionList, DARK_PAGE_TEXTS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, scriptedList, START_KINDS, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
@@ -609,6 +609,78 @@ describe('focusing the actions on a script (#724)', () => {
     it('busy starts can hold a line mode, a mark and a colors dialog, so a saved line mode or palette is there to restore', () => {
       for (const kind of ['pen line mode', 'pen mark', 'pen colors dialog']) assert.ok(START_KINDS.includes(kind), kind)
       assert.ok(!START_KINDS.includes('pen color edit'), 'a hold is a gesture a busy start leaves out')
+    })
+  })
+
+  describe("the settings dialogs of UI Tweaks and Dark Page (#817)", () => {
+    const calls = (log, name) => log.filter(([n]) => n === name)
+    const kindOf = (kind) => actionsOf(sample(41, 800)).filter((x) => x.kind === kind)
+    const NEW_KINDS = { 'ui tweaks dialog': 'ui-tweaks.user.js', 'ui tweaks settings text': 'ui-tweaks.user.js', 'dark page settings text': 'dark-page.user.js', 'dark page defaults': 'dark-page.user.js' }
+
+    it('each kind exercises its script, is generated, and is page use', () => {
+      for (const [kind, file] of Object.entries(NEW_KINDS)) {
+        assert.deepEqual(KIND_SCRIPTS[kind], [file], kind)
+        assert.equal(KIND_GROUPS[kind], 'page', kind)
+        assert.ok(kindOf(kind).length > 3, `${kind} is drawn`)
+      }
+    })
+
+    it('a UI Tweaks dialog action sets the two options, clicks the Tab option off and on, may press Restore defaults, and presses Save or Cancel', async () => {
+      const seen = { hide: new Set(), wrap: new Set(), tab: new Set(), restore: new Set(), save: new Set() }
+      for (const a of kindOf('ui tweaks dialog')) {
+        const [, options, save] = calls((await runOn(a)).log, 'uiTweaks')[0]
+        assert.deepEqual(Object.keys(options).sort(), ['hideSelect', 'restore', 'toggleTab', 'wrapButtons'])
+        seen.hide.add(options.hideSelect); seen.wrap.add(options.wrapButtons); seen.tab.add(options.toggleTab); seen.restore.add(options.restore); seen.save.add(save)
+        assert.match(String(a), new RegExp(`^UI Tweaks dialog: select ${options.hideSelect ? 'hidden' : 'shown'} buttons ${options.wrapButtons ? 'wrapped' : 'in one row'}${options.toggleTab ? ' Tab option off and on' : ''}${options.restore ? ' Restore defaults' : ''} ${save ? 'Save' : 'Cancel'}$`))
+      }
+      for (const [name, set] of Object.entries(seen)) assert.deepEqual([...set].sort(), [false, true], name)
+    })
+
+    it('no action leaves the Tab option off, since a rule says Tab never switches to letters', () => {
+      for (const text of UI_TWEAKS_TEXTS) assert.doesNotMatch(text ?? '', /UiTweaks_tab"\s*:\s*(false|0|null)/)
+    })
+
+    it('the texts hold Copy, valid settings and text the script refuses, for each script', () => {
+      for (const texts of [UI_TWEAKS_TEXTS, DARK_PAGE_TEXTS]) {
+        assert.ok(texts.includes(null), 'Copy')
+        const valid = texts.filter((t) => t !== null && (() => { try { return Object.keys(JSON.parse(t)).length > 0 } catch { return false } })())
+        assert.ok(valid.length >= 2, 'valid objects')
+        assert.ok(texts.includes('') && texts.includes('not json') && texts.includes('[]'), 'not JSON, empty and not an object')
+      }
+      assert.ok(DARK_PAGE_TEXTS.some((t) => /"DarkPage_color":"blue"/.test(t)), 'a color the reader refuses')
+      for (const t of DARK_PAGE_TEXTS.filter((x) => x !== null && /#/.test(x))) assert.ok(['#101030', '#002010', '#201010', '#000000'].some((c) => t.includes(c)), `${t} is a dark color`)
+    })
+
+    it('a settings text action opens the script\'s dialog and copies or pastes one text, then Save or Cancel', async () => {
+      const pasted = { 'ui tweaks settings text': new Set(), 'dark page settings text': new Set() }
+      const saves = new Set()
+      for (const kind of Object.keys(pasted)) {
+        for (const a of kindOf(kind)) {
+          const [, script, text, save] = calls((await runOn(a)).log, 'settingsText')[0]
+          assert.equal(script, kind === 'ui tweaks settings text' ? 'ui tweaks' : 'dark page')
+          pasted[kind].add(text)
+          saves.add(save)
+          assert.match(String(a), new RegExp(`^${script === 'ui tweaks' ? 'UI Tweaks' : 'Dark Page'} dialog: ${text === null ? 'Copy settings' : 'Paste settings .*'} ${save ? 'Save' : 'Cancel'}$`))
+        }
+      }
+      assert.deepEqual([...pasted['ui tweaks settings text']].sort(), [...UI_TWEAKS_TEXTS].sort())
+      assert.deepEqual([...pasted['dark page settings text']].sort(), [...DARK_PAGE_TEXTS].sort())
+      assert.deepEqual([...saves].sort(), [false, true])
+    })
+
+    it('a Dark Page defaults action picks a color, presses Restore defaults, and presses Save or Cancel', async () => {
+      const saves = new Set()
+      for (const a of kindOf('dark page defaults')) {
+        const [, color, save] = calls((await runOn(a)).log, 'darkPageDefaults')[0]
+        saves.add(save)
+        assert.match(color, /^#[0-9a-f]{6}$/)
+        assert.equal(String(a), `Dark Page dialog: ${color} then Restore defaults ${save ? 'Save' : 'Cancel'}`)
+      }
+      assert.deepEqual([...saves].sort(), [false, true])
+    })
+
+    it('busy starts can hold the saved settings of both scripts', () => {
+      for (const kind of Object.keys(NEW_KINDS)) assert.ok(START_KINDS.includes(kind), kind)
     })
   })
 })

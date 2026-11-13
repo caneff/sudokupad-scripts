@@ -6,7 +6,7 @@ import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzz
 import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
-import { animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog } from '../settings.mjs'
+import { actButton, animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog, paste, STATUS } from '../settings.mjs'
 import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
@@ -52,6 +52,10 @@ const TRACK_MARGIN_PX = 6
 // How long a script's element is waited for before it counts as lost.
 const BOX_TIMEOUT_MS = 2000
 
+const UI_TWEAKS_DIALOG = '#ui-tweaks-dialog'
+const DARK_PAGE_INPUT = '.dialog input[type=color]'
+// The two scripts whose Copy settings and Paste settings the fuzz presses: the entry's name, and the editor that shows while its dialog is open.
+const SETTINGS_DIALOGS = { 'ui tweaks': ['UI Tweaks', UI_TWEAKS_DIALOG], 'dark page': ['Dark Page', DARK_PAGE_INPUT] }
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
@@ -288,6 +292,38 @@ function envFor (p, puzzle, { beforeReload }) {
       await p.locator('.dialog input[type=color]').fill(color)
       await p.locator('.dialog').getByRole('button', { name: save ? 'Save' : 'Cancel', exact: true }).click()
       await p.locator('.dialog').waitFor({ state: 'detached' })
+    },
+    async darkPageDefaults (color, save) {
+      await openScriptDialog(p, 'Dark Page', DARK_PAGE_INPUT)
+      await p.locator(DARK_PAGE_INPUT).fill(color)
+      await dialogButton(p, 'Restore defaults').click()
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', DARK_PAGE_INPUT)
+    },
+    // Copy settings answers on the dialog's status line, which is waited for: a press with no answer is a failure. Paste settings is `paste` of settings.mjs, which waits for the same line.
+    async settingsText (script, text, save) {
+      const [entry, editor] = SETTINGS_DIALOGS[script]
+      await openScriptDialog(p, entry, editor)
+      if (text === null) {
+        await actButton(p, 'copy-settings').click()
+        await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
+      } else {
+        await paste(p, text)
+      }
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    async uiTweaks ({ hideSelect, wrapButtons, toggleTab, restore }, save) {
+      await openScriptDialog(p, 'UI Tweaks', UI_TWEAKS_DIALOG)
+      const box = (id) => p.locator(`${UI_TWEAKS_DIALOG} input[data-option="${id}"]`)
+      await box('hideSelect').setChecked(hideSelect)
+      await box('wrapButtons').setChecked(wrapButtons)
+      // The Tab option ends where it began: a rule says Tab never switches to letters.
+      if (toggleTab) {
+        const was = await box('tab').isChecked()
+        await box('tab').setChecked(!was)
+        await box('tab').setChecked(was)
+      }
+      if (restore) await dialogButton(p, 'Restore defaults').click()
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', UI_TWEAKS_DIALOG)
     }
   }
 }
@@ -296,6 +332,8 @@ function envFor (p, puzzle, { beforeReload }) {
 export async function openTarget (browser, puzzle, { planted, plant, coverage }) {
   const patch = plant && plantPatch(plant)
   const { context, p, errors } = await openPage(browser, {
+    // Copy settings and Paste settings of the dialogs use the clipboard.
+    contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] },
     seed: async (page, collected) => {
       captureConsoleErrors(page, collected)
       if (planted) await plantEscapeError(page)

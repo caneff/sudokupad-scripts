@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
 import { penDrawnCount } from '../pen.mjs'
-import { scriptedList } from './actions.mjs'
+import { scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
@@ -236,6 +236,37 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.notEqual(picked, first, 'a pick saved')
       assert.equal(await presetAfter([3, false, false]), first, 'Cancel left the colors')
       assert.equal(await presetAfter([3, false, true], [0, true, true]), first, 'Restore defaults went back to the first preset')
+    })
+  })
+
+  describe('the settings dialogs of UI Tweaks and Dark Page (#817)', () => {
+    const puzzle = puzzleByName('4x4')
+    const saved = (key) => (p) => p.evaluate((k) => Framework.getData(k), key)
+    const tweaks = (p) => p.evaluate(() => ['tab', 'hideSelect', 'wrapButtons'].map((id) => Framework.getData(`UiTweaks_${id}`)))
+    const colorOf = saved('DarkPage_color')
+
+    it('Save keeps the two options and a Tab option clicked off and on again, and Cancel keeps none', async () => {
+      assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, true, false, true]]], tweaks), [true, true, true])
+      assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, true, false, false]]], tweaks), [null, null, null])
+    })
+
+    it('Restore defaults then Save puts the options back to the defaults', async () => {
+      assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, false, false, true]], ['ui tweaks dialog', [true, true, false, true, true]]], tweaks), [true, false, false])
+    })
+
+    it('a pasted UI Tweaks text is applied on the spot, and a refused one changes nothing', async () => {
+      const after = (text) => afterSteps(puzzle, [['ui tweaks settings text', [text, false]]], tweaks)
+      assert.deepEqual(await after(UI_TWEAKS_TEXTS[2]), [true, false, true], "a paste saves every option, the unpasted Tab at its current value")
+      assert.deepEqual(await after('{"UiTweaks_hideSelect":"yes"}'), [null, null, null])
+      assert.deepEqual(await after(null), [null, null, null], 'Copy settings saves nothing')
+    })
+
+    it('a pasted Dark Page color is saved even on Cancel, a color it refuses is not, and Restore defaults then Save saves the default as no key', async () => {
+      const after = (...steps) => afterSteps(puzzle, steps, colorOf)
+      assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"#101030"}', false]]), '#101030')
+      assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"blue"}', false]]), null)
+      assert.equal(await after(['dark page settings text', ['{"DarkPage_color":"#101030"}', true]], ['dark page defaults', ['#002010', true]]), null)
+      assert.equal(await after(['dark page defaults', ['#002010', false]]), null, 'Cancel after Restore defaults saves nothing')
     })
   })
 

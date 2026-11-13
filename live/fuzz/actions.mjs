@@ -32,6 +32,9 @@
 //   env.holdPenColor(color)                  holds the left button on the pen's color button `color` until the nine color pickers show, then lets go
 //   env.setPenPicker(color, hex)             sets the open color picker of pen `color` to `hex`
 //   env.penPresets(pick, restore, save)      opens Pen Tool Extras' settings dialog, picks the color preset at position `pick` (wrapped to the pulldown's options) or, when `restore`, presses Restore defaults, and presses Save or Cancel
+//   env.uiTweaks({ hideSelect, wrapButtons, toggleTab, restore }, save)   opens UI Tweaks' dialog, sets the Hide the Toggle Selection button and Wrap buttons boxes, clicks the Tab box off and on again, presses Restore defaults when `restore`, and presses Save or Cancel
+//   env.settingsText(script, text, save)     opens the dialog of `script` ('ui tweaks' or 'dark page'), presses Copy settings when `text` is null and else puts `text` on the clipboard and presses Paste settings, then presses Save or Cancel
+//   env.darkPageDefaults(color, save)        opens Dark Page's dialog, picks `color`, presses Restore defaults, and presses Save or Cancel
 //   env.resize({ width, height })  env.blurFocus()  env.reload()  env.darkPage(color, save)
 import { createRequire } from 'node:module'
 import fc from 'fast-check'
@@ -46,6 +49,12 @@ const WINDOW_SIZES = [{ width: 1024, height: 600 }, { width: 1200, height: 900 }
 const NOTE_TEXTS = ['15', 'a->b', 'sum 12', '!= 3', 'x\ny']
 // Dark colors only: Dark Page has no off switch, its page color is the setting, and a rule says it stays dark (#590).
 const DARK_COLORS = ['#000000', '#101030', '#002010', '#201010']
+// The text Copy settings and Paste settings of UI Tweaks and Dark Page work on (#817): null is a press of Copy settings, the rest is put on the clipboard and pasted.
+// No text turns UI Tweaks' Tab option off (a rule says Tab never switches to letters), and no valid text gives Dark Page a color that is not dark (the rule of #590);
+// a text each script refuses (a wrong type, a color that is no hex, a foreign key, not JSON, empty, not an object) is the other half.
+export const UI_TWEAKS_TEXTS = [null, '{"UiTweaks_hideSelect":true}', '{"UiTweaks_wrapButtons":true,"UiTweaks_hideSelect":false}', '{"UiTweaks_tab":true,"UiTweaks_hideSelect":true,"UiTweaks_wrapButtons":true}', '{"UiTweaks_hideSelect":"yes"}', '{"Other_key":1}', '[]', 'not json', '']
+export const DARK_PAGE_TEXTS = [null, '{"DarkPage_color":"#101030"}', '{"DarkPage_color":"#002010"}', '{"DarkPage_color":"#000000","Other_key":1}', '{"DarkPage_color":"blue"}', '{"Other_key":1}', '[]', 'not json', '']
+const settingsTextLabel = (name, text, save) => `${name} dialog: ${text === null ? 'Copy settings' : `Paste settings ${jsonWords(text)}`} ${save ? 'Save' : 'Cancel'}`
 
 // The four sliders of the pen panel and the notes panel, by the name a step prints.
 export const SLIDERS = ['pen thickness', 'pen opacity', 'note size', 'note opacity']
@@ -600,6 +609,38 @@ function buildKinds () {
       arg: () => fc.tuple(fc.constantFrom(...DARK_COLORS), fc.boolean()),
       label: ([color, save]) => `Dark Page dialog: ${save ? 'Save' : 'Cancel'} ${color}`,
       run: (env, [color, save]) => env.darkPage(color, save)
+    },
+    {
+      kind: 'dark page defaults',
+      group: 'page',
+      weight: 1,
+      arg: () => fc.tuple(fc.constantFrom(...DARK_COLORS), fc.boolean()),
+      label: ([color, save]) => `Dark Page dialog: ${color} then Restore defaults ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [color, save]) => env.darkPageDefaults(color, save)
+    },
+    {
+      kind: 'dark page settings text',
+      group: 'page',
+      weight: 1,
+      arg: () => fc.tuple(fc.constantFrom(...DARK_PAGE_TEXTS), fc.boolean()),
+      label: ([text, save]) => settingsTextLabel('Dark Page', text, save),
+      run: (env, [text, save]) => env.settingsText('dark page', text, save)
+    },
+    {
+      kind: 'ui tweaks dialog',
+      group: 'page',
+      weight: 1,
+      arg: () => fc.tuple(fc.boolean(), fc.boolean(), fc.boolean(), fc.boolean(), fc.boolean()),
+      label: ([hideSelect, wrapButtons, toggleTab, restore, save]) => `UI Tweaks dialog: select ${hideSelect ? 'hidden' : 'shown'} buttons ${wrapButtons ? 'wrapped' : 'in one row'}${toggleTab ? ' Tab option off and on' : ''}${restore ? ' Restore defaults' : ''} ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [hideSelect, wrapButtons, toggleTab, restore, save]) => env.uiTweaks({ hideSelect, wrapButtons, toggleTab, restore }, save)
+    },
+    {
+      kind: 'ui tweaks settings text',
+      group: 'page',
+      weight: 1,
+      arg: () => fc.tuple(fc.constantFrom(...UI_TWEAKS_TEXTS), fc.boolean()),
+      label: ([text, save]) => settingsTextLabel('UI Tweaks', text, save),
+      run: (env, [text, save]) => env.settingsText('ui tweaks', text, save)
     }
   ]
 }
@@ -686,7 +727,11 @@ export const KIND_SCRIPTS = {
   reload: [],
   restart: [COLOR_BY_DIGIT, TEXT_ANYWHERE],
   resize: [AUTO_RULES_RESIZER],
-  'dark page': [DARK_PAGE]
+  'dark page': [DARK_PAGE],
+  'dark page defaults': [DARK_PAGE],
+  'dark page settings text': [DARK_PAGE],
+  'ui tweaks dialog': [UI_TWEAKS],
+  'ui tweaks settings text': [UI_TWEAKS]
 }
 
 // How much a focused script's kinds weigh over their own weight: a kind is raised, never silenced, so the others still come up.
@@ -711,7 +756,7 @@ function actionArbitrary (puzzle, weights, kinds = KINDS) {
 
 // The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
 // Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
-export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page']
+export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page', 'dark page defaults', 'dark page settings text', 'ui tweaks dialog', 'ui tweaks settings text']
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 
