@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.45
+// @version      0.25.46
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.45'
+  const VERSION = '0.25.46'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1604,20 +1604,22 @@
     swallowRelease(win)
   }
 
+  // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
+
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
-    framework.addSetting({
+  // The entry is added, and `open` runs, under `feature` (a guard feature), so a throw from either turns that feature off.
+  function addSettingsEntry (framework, feature, { name, content, open }) {
+    feature.run(() => framework.addSetting({
       tag: 'button',
       name,
       group: SETTINGS_GROUP,
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(() => {
-          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
-        }, 0)
+        setTimeout(() => feature.run(open), 0)
       }
-    })
+    }))
   }
 
   const COPY_PASTE_PICTURES = {
@@ -2155,7 +2157,7 @@
     },
     editor: {
       label: 'editor',
-      needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function', 'Framework.app.tools.colour': 'object' },
+      needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', ...SETTINGS_DIALOG_NEEDS, 'Framework.app.tools.colour': 'object' },
       onSkip () {
         Framework.closeDialog()
       }
@@ -2963,7 +2965,7 @@
       setTimeout(() => editor.run(() => openDialog(app)), 0)
     })
     // The features are independent: one that fails to install costs the others nothing.
-    editor.run(() => addSettingsEntry(dialogs, { name: 'colorbydigit', content: 'Color by Digit', open: () => editor.run(() => openDialog(app)) }))
+    addSettingsEntry(dialogs, editor, { name: 'colorbydigit', content: 'Color by Digit', open: () => openDialog(app) })
     addPreloadsOnce()
     const state = loadState()
     mode = allowedMode(startingMode(savedData.getData(MODE_KEY), savedData.getData(AUTO_KEY)), usesDigitColors(state))
