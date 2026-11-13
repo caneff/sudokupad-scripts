@@ -33,6 +33,9 @@ const SCROLL_TOLERANCE_PX = 1
 const FONT_TOLERANCE_PX = 0.01
 
 // The lines in `a` and not in `b`, counting repeats: [x, x] against [x] leaves one x.
+// A note's letters and digits alone, after the check box markers a list line carries (`- [x] `), which are drawn as boxes.
+const wordsOf = (text) => text.replace(/^\s*[-*+] \[[ xX]\] /gm, '').replace(/[^\p{L}\p{N}]/gu, '')
+
 function without (a, b) {
   const left = [...b]
   return a.filter((item) => {
@@ -112,11 +115,13 @@ export const RULES = [
   {
     name: 'notes-saved-match-drawn',
     // Text Anywhere: no open note at a snapshot (every action finishes the note it opened), so the saved notes are exactly the ones on the board.
+    // A saved note is its raw text and a drawn one the text left after its markup (bullets, check boxes, fences, bold), so both sides are compared as their letters and digits, and a message names that.
     check: ({ now }) => {
-      const saved = (now.page.notesSaved ?? []).filter((item) => item.kind === 'text').map((item) => item.text)
+      const saved = (now.page.notesSaved ?? []).filter((item) => item.kind === 'text').map((item) => wordsOf(item.text))
+      const drawn = now.page.notesDrawn.map(wordsOf)
       return [
-        ...without(saved, now.page.notesDrawn).map((t) => `saved but not drawn: ${JSON.stringify(t)}`),
-        ...without(now.page.notesDrawn, saved).map((t) => `drawn but not saved: ${JSON.stringify(t)}`)
+        ...without(saved, drawn).map((t) => `saved but not drawn: ${JSON.stringify(t)}`),
+        ...without(drawn, saved).map((t) => `drawn but not saved: ${JSON.stringify(t)}`)
       ]
     }
   },
