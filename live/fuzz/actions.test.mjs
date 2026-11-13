@@ -565,7 +565,7 @@ describe('focusing the actions on a script (#724)', () => {
       assert.deepEqual([...seen.where].sort(), [0, 1, 2, 3, 4, 5, 6, 7], 'four edges and four corners')
     })
 
-    it('a color edit holds a pen color to open the pickers, then recolors one, presses Escape, clicks a cell or presses a tool key', async () => {
+    it('a color edit holds a pen color to open the pickers, then recolors one, presses Escape, clicks a cell, presses a tool key or turns the pen page', async () => {
       const ends = new Set()
       for (const a of kindOf('pen color edit')) {
         const { log } = await runOn(a)
@@ -582,9 +582,9 @@ describe('focusing the actions on a script (#724)', () => {
         } else {
           assert.equal(picked.length, 0)
         }
-        assert.ok(names(log).indexOf('holdPenColor') < Math.max(names(log).indexOf('setPenPicker'), names(log).indexOf('keyboard.press'), names(log).indexOf('mouse.click')), 'the hold comes first')
+        assert.ok(names(log).indexOf('holdPenColor') < Math.max(names(log).indexOf('setPenPicker'), names(log).indexOf('keyboard.press'), names(log).indexOf('mouse.click'), names(log).indexOf('turnPenPage')), 'the hold comes first')
       }
-      assert.deepEqual([...ends].sort(), ['click a cell', 'press a tool key', 'press Escape', 'recolor it and press Escape'].sort())
+      assert.deepEqual([...ends].sort(), ['click a cell', 'press a tool key', 'press Escape', 'recolor it and press Escape', 'turn the pen page'].sort())
     })
 
     it('the colors dialog action picks a preset or presses Restore defaults, then Save or Cancel', async () => {

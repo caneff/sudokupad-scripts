@@ -208,12 +208,12 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.equal(strokes, 1)
     })
 
-    it('a hold on a pen color opens the pickers, a recolor there is saved for that pen, and the hold ends clean on Escape, a cell click or a tool key', async () => {
+    it('a hold on a pen color opens the pickers, a recolor there is saved for that pen, and the hold ends clean on Escape, a cell click, a tool key or a page turn', async () => {
       const colorAfter = (edit) => afterSteps(puzzle, [['pen color edit', edit]], async (p) => ({ colors: await saved('PenColor_colors')(p), pickers: await p.locator('.pen-tool-extras-picker').count() }))
       const recolored = await colorAfter([3, 1, 0x123456, at(1, 1), 'z'])
       assert.equal(recolored.colors[3], '#123456')
       assert.equal(recolored.pickers, 0, 'the pickers are gone')
-      for (const end of [0, 2, 3]) assert.equal((await colorAfter([3, end, 0x123456, at(1, 1), 'z'])).pickers, 0, `end ${end} leaves no pickers`)
+      for (const end of [0, 2, 3, 4]) assert.equal((await colorAfter([3, end, 0x123456, at(1, 1), 'z'])).pickers, 0, `end ${end} leaves no pickers`)
     })
 
     it('a color preset is saved on Save and not on Cancel, and Restore defaults saves the first preset', async () => {

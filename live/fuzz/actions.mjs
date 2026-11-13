@@ -82,7 +82,7 @@ export const MARK_BOXES = ['x', 'directions', 'circle', 'cornerX', 'cornerCircle
 const MARK_SIDES = 8
 const MAX_LINE_MODE_PRESSES = 3
 const COLOR_PRESET_PICKS = 6
-const PEN_EDIT_ENDS = 4
+const PEN_EDIT_ENDS = 5
 
 const NOTE_DRAG = [70, 40]
 const ownColor = (rgb) => `#${rgb.toString(16).padStart(6, '0')}`
@@ -314,13 +314,14 @@ function buildKinds () {
       group: 'ordinary',
       weight: 2,
       arg: (puzzle) => fc.tuple(color, fc.nat(PEN_EDIT_ENDS - 1), fc.integer({ min: 0, max: 0xffffff }), cell(puzzle), toolKey),
-      label: ([c, end, rgb, a, key], at) => `hold pen color ${c} to edit its color then ${['press Escape', `recolor it to ${ownColor(rgb)} and press Escape`, `click ${at(a)}`, `press ${key}`][end]}`,
+      label: ([c, end, rgb, a, key], at) => `hold pen color ${c} to edit its color then ${['press Escape', `recolor it to ${ownColor(rgb)} and press Escape`, `click ${at(a)}`, `press ${key}`, 'turn the pen page'][end]}`,
       run: async (env, [c, end, rgb, a, key]) => {
         await env.usePen(c)
         await env.holdPenColor(c)
         if (end === 1) await env.setPenPicker(c, ownColor(rgb))
         if (end === 2) await env.page.mouse.click(...await env.cellPoint(a))
         else if (end === 3) await env.page.keyboard.press(key)
+        else if (end === 4) await env.turnPenPage()
         else await env.page.keyboard.press('Escape')
       }
     },
