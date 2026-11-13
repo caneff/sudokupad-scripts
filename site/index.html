@@ -3,36 +3,49 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SudokuPad scripts</title>
+<title>ChinStrap's SudokuPad scripts</title>
 <link rel="stylesheet" href="style.css">
 <style>
-  body { max-width: 72rem; }
-  .lede { max-width: 46rem; }
-  .rows { margin: 1.75rem 0; border-top: 1px solid var(--frame-edge); }
-  .row { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.5rem 0; border-bottom: 1px solid var(--frame-edge); }
+  /* The title sticker (style.css) holds the title and the intro as its subtitle, tilted like the stream's banner. Its left edge
+     lines up with the warning's, and it stands over the warning; the 14px under it is the mockup's, where with the tilt only the
+     two white rings meet. */
+  .banner { position: relative; z-index: 2; display: inline-block; max-width: 46rem; margin: .5rem 0 14px calc(var(--title-ring-width) - var(--warn-ring-width)); padding: .7rem 1.4rem .8rem; transform: rotate(-1deg); }
+  .banner h1 { margin: 0 0 .25rem; }
+  .banner .lede { margin: 0; font-size: 1.05rem; }
+  .warning { position: relative; z-index: 1; margin: 0 0 calc(var(--ring-gap) + var(--warn-ring-width) + var(--card-ring-width)); padding-top: .9rem; }
+  .rows { display: flex; flex-direction: column; gap: calc(var(--ring-gap) + 2 * var(--card-ring-width)); }
+  /* Each script is a sticker card, in the six stream colors in turn. */
+  .row { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.2rem 1.4rem; background: #fff; border: 12px solid var(--card); border-radius: 30px; box-shadow: var(--card-ring); }
+  .row:nth-of-type(6n+1) { --card: var(--blue); }
+  .row:nth-of-type(6n+2) { --card: var(--pink); }
+  .row:nth-of-type(6n+3) { --card: var(--yellow); }
+  .row:nth-of-type(6n+4) { --card: var(--mint); }
+  .row:nth-of-type(6n+5) { --card: var(--lavender); }
+  .row:nth-of-type(6n+6) { --card: var(--peach); }
   .row-plain { grid-template-columns: 1fr; }
   .row-text { max-width: 36rem; }
   .row h2 { font-size: 1.25rem; margin-bottom: .35rem; }
   .row-text p { margin-bottom: .75rem; }
   .actions { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  footer { margin-top: 1.5rem; font-size: .95rem; }
+  footer { margin-top: calc(var(--ring-gap) + var(--card-ring-width)); font-size: .95rem; }
   @media (max-width: 44rem) { .row { grid-template-columns: 1fr; gap: .9rem; } }
 </style>
 </head>
 <body>
-  <h1>SudokuPad scripts</h1>
+  <header class="banner">
+    <h1>ChinStrap's SudokuPad scripts</h1>
+    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.</p>
+  </header>
   <p class="warning">These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.</p>
-  <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.</p>
   <div class="rows">
   <section class="row">
     <!-- slideshow:pen-tool-extras -->
     <div class="slideshow">
       <div class="slide-frame">
-        <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-1-line.png?v=763ec7e" alt="A gray line drawn across the top row of the board, with the pen panel beside it" width="684" height="430">
         <picture>
-          <source media="(prefers-reduced-motion: no-preference)" srcset="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-2-color.webp?v=d1eaab6">
-          <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-2-color.png?v=f93f5e1" alt="A red ring on the first pen color button, which a hold has turned into an edit mode with a color picker on every pen button, then the button and the line recolored to teal after a color is picked" width="684" height="430">
+          <source media="(prefers-reduced-motion: no-preference)" srcset="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-1-color.webp?v=b603fcd">
+          <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-1-color.png?v=f93f5e1" alt="A teal line across the top row of the board, beside the pen panel whose first color button is now teal. Animated, the slide steps from the empty board to the line drawn in gray, to a red ring on the first color button held down so every pen button shows a color picker, to the teal picked" width="684" height="430">
         </picture>
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-3-solid.png?v=a10df3e" alt="A solid brown line drawn across the board in the first row of pens" width="684" height="430">
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-4-dashed.png?v=b21c6c1" alt="A dashed brown line drawn across the board, from the second page of pens" width="684" height="430">
@@ -56,12 +69,11 @@
           <source media="(prefers-reduced-motion: no-preference)" srcset="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-12-erase.webp?v=5d6cef2">
           <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-12-erase.png?v=aa3a9a1" alt="A red ring on the first line, where a right press is held, then the board with that whole line gone and every other line and mark still there" width="684" height="430">
         </picture>
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-13-settings.png?v=b0687d9" alt="A red ring on the settings button in the pen panel, beside the Pen Tool Extras settings dialog it opens: pen color presets, Thickness and Opacity, line styles, the marks each click cycles through, White outlines, and Save, Cancel and Restore defaults" width="684" height="430">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-13-settings.png?v=995f289" alt="A red ring on the settings button in the pen panel, beside the Pen Tool Extras settings dialog it opens: pen color presets, Thickness and Opacity, line styles, the marks each click cycles through, White outlines, and Save, Cancel and Restore defaults" width="684" height="430">
       </div>
       <div class="slide-bar">
         <div class="slide-captions">
-          <p class="slide-caption current">Draw a line</p>
-          <p class="slide-caption">Hold a color button, then pick a color</p>
+          <p class="slide-caption current">Draw a line, hold its button to recolor</p>
           <p class="slide-caption">A solid line</p>
           <p class="slide-caption">A dashed line</p>
           <p class="slide-caption">An arrow line</p>
@@ -189,7 +201,7 @@
   </section>
   <section class="row">
     <div>
-      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/ui-tweaks/ui-tweaks.png?v=5645296" alt="The UI Tweaks settings dialog with its three options, beside SudokuPad's controls with the bottom row of buttons wrapped onto a second line after five" width="1000" height="520"></div>
+      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/ui-tweaks/ui-tweaks.png?v=bf72fc4" alt="The UI Tweaks settings dialog with its three options, beside SudokuPad's controls with the bottom row of buttons wrapped onto a second line after five" width="1000" height="520"></div>
     </div>
     <div class="row-text">
       <h2>UI Tweaks</h2>

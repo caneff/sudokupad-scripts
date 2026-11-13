@@ -35,7 +35,7 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
   it('the Experimental settings entry opens it, with the version from the script header beside the heading', async () => {
     await openScriptDialog(p, 'Text Anywhere', EDITOR)
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Text Anywhere')
-    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
+    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)} by ChinStrap`)
     assert.equal(await p.locator(`${EDITOR} input[type=color]`).count(), 9)
     await closeDialogWith(p, 'Cancel', EDITOR)
   })

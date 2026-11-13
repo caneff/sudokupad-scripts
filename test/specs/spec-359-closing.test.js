@@ -115,9 +115,10 @@ test('spec 359: the homepage is rows of slideshows, the details pages carry the 
   next()
   assert.deepEqual(shown(), { slide: 0, caption: 0, count: '1 / 5', currentSlides: 1 })
 
-  // Theme: the frame follows the system theme, only the current slide and caption show, and the caption is 1.1rem on the homepage and 1.25rem on details pages.
+  // Theme: the frame takes the theme's frame color, only the current slide and caption show, and the caption is 1.1rem on the homepage and
+  // 1.25rem on details pages.
   const css = read('style.css')
-  assert.match(css, /prefers-color-scheme: dark\) \{[^}]*--frame-bg/)
+  assert.match(css, /\.slide-frame \{[^}]*background: var\(--frame-bg\)/)
   assert.match(css, /\.slideshow \.slide:not\(\.current\) \{ visibility: hidden/)
   assert.match(css, /\.slide-caption \{[^}]*font-size: 1\.1rem/)
   assert.match(css, /\.details \.slide-caption \{ font-size: 1\.25rem/)

@@ -1,6 +1,7 @@
-"""Writes a slide's animated WebP from its before and after pictures: a hold on the before, a crossfade, a hold on the after, a crossfade back,
-looping. Nothing else moves. Run: python3 -I slide-animation.py before.png after.png target.webp
-The slideshow's still picture is the after picture, which a visitor who prefers reduced motion sees (site/slideshows.json's `animation` field)."""
+"""Writes a slide's animated WebP from its pictures in order: a hold on each, a crossfade to the next, and from the last a crossfade back to the
+first, looping. Nothing else moves. Two pictures are a before and an after; more are the steps of one action, shown in turn.
+Run: python3 -I slide-animation.py first.png [more.png ...] last.png target.webp
+The slideshow's still picture is the last picture, which a visitor who prefers reduced motion sees (site/slideshows.json's `animation` field)."""
 import sys
 from PIL import Image
 
@@ -9,10 +10,15 @@ FADE_STEPS = 3
 FADE_STEP_MS = 100
 QUALITY = 95
 
-before, after = (Image.open(path).convert('RGB') for path in sys.argv[1:3])
-if before.size != after.size:
-    sys.exit(f'the before picture is {before.size} and the after {after.size}: a crossfade needs one size')
-fade = [Image.blend(before, after, i / (FADE_STEPS + 1)) for i in range(1, FADE_STEPS + 1)]
-frames = [before, *fade, after, *reversed(fade)]
-durations = [HOLD_MS] + [FADE_STEP_MS] * FADE_STEPS + [HOLD_MS] + [FADE_STEP_MS] * FADE_STEPS
-frames[0].save(sys.argv[3], save_all=True, append_images=frames[1:], duration=durations, loop=0, quality=QUALITY, method=6)
+*paths, target = sys.argv[1:]
+if len(paths) < 2:
+    sys.exit('an animation needs at least two pictures and a target')
+pictures = [Image.open(path).convert('RGB') for path in paths]
+if len({picture.size for picture in pictures}) > 1:
+    sys.exit(f'the pictures are {[picture.size for picture in pictures]}: a crossfade needs one size')
+frames, durations = [], []
+for i, picture in enumerate(pictures):
+    after = pictures[(i + 1) % len(pictures)]
+    frames += [picture, *(Image.blend(picture, after, k / (FADE_STEPS + 1)) for k in range(1, FADE_STEPS + 1))]
+    durations += [HOLD_MS] + [FADE_STEP_MS] * FADE_STEPS
+frames[0].save(target, save_all=True, append_images=frames[1:], duration=durations, loop=0, quality=QUALITY, method=6)

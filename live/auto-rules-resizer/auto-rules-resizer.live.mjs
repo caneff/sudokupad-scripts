@@ -467,7 +467,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
       assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Auto Rules Resizer')
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
-      assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
+      assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)} by ChinStrap`)
       const depthBefore = await undoDepth(p)
       await p.locator(MAX_WIDTH_INPUT).click()
       await p.keyboard.type('500')

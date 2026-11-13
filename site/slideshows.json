@@ -5,15 +5,10 @@
     "height": 430,
     "slides": [
       {
-        "picture": "pen-tool-extras-slide-1-line.png",
-        "alt": "A gray line drawn across the top row of the board, with the pen panel beside it",
-        "caption": "Draw a line"
-      },
-      {
-        "picture": "pen-tool-extras-slide-2-color.png",
-        "animation": "pen-tool-extras-slide-2-color.webp",
-        "alt": "A red ring on the first pen color button, which a hold has turned into an edit mode with a color picker on every pen button, then the button and the line recolored to teal after a color is picked",
-        "caption": "Hold a color button, then pick a color"
+        "picture": "pen-tool-extras-slide-1-color.png",
+        "animation": "pen-tool-extras-slide-1-color.webp",
+        "alt": "A teal line across the top row of the board, beside the pen panel whose first color button is now teal. Animated, the slide steps from the empty board to the line drawn in gray, to a red ring on the first color button held down so every pen button shows a color picker, to the teal picked",
+        "caption": "Draw a line, hold its button to recolor"
       },
       {
         "picture": "pen-tool-extras-slide-3-solid.png",
@@ -186,6 +181,23 @@
         "picture": "text-anywhere-slide-9-settings.png",
         "alt": "Two green notes on the board in a fixed-width font, r4: 2,7 with a thick white halo over a grid line and A=B+5 in a yellow box, beside the settings dialog's Font, Halo, Box color and Box border rows with Fixed width, Thick and Yellow picked",
         "caption": "Settings: font, halo, box and colors"
+      }
+    ]
+  },
+  "text-anywhere-formatting": {
+    "dir": "docs/research/text-anywhere/",
+    "width": 777,
+    "height": 716,
+    "slides": [
+      {
+        "picture": "text-anywhere-formatting-raw.png",
+        "alt": "One large note on the board, beside the grid, open for typing and showing the text typed: # Header one, ## Header two, ### Header three, -# subtext, **bold**, *italic*, _italic_, ***bold italics***, __underlined__ and its combinations, ~~struck through~~, - a bullet, an indented - nested bullet, 1. and 2. numbered items, - [x] a ticked item, - [ ] an empty item, `inline code`, a block between two lines of ```, and the keys for the symbols, -> <- != <= >= sum",
+        "caption": "Before: what you type"
+      },
+      {
+        "picture": "text-anywhere-formatting.png",
+        "alt": "The same note finished, showing every style rendered: three headers of falling size, small faded subtext, bold, italic and bold italics, underlined, underlined italics, underlined bold and underlined bold italics, struck through, a bullet with a nested bullet, a numbered list of two items, a ticked checklist item and an empty one, inline code and a code block in monospace, and the symbols → ← ≠ ≤ ≥ Σ",
+        "caption": "After: what the note shows. Click a checklist box to tick it."
       }
     ]
   }
