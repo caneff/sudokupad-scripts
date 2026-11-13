@@ -12,11 +12,11 @@ const CELLS = Array.from({ length: 12 }, (_, i) => [Math.floor(i / 4), i % 4])
 const PUZZLES = [{ name: 'fake', rows: 3, cols: 4, keys: ['1', '2', '3', '4'], free: CELLS, cells: CELLS }]
 const SEED = 7
 // The seeds that shrink a planted race to its two Tabs alone, and that find a failure needing the busy board; the action set decides them, so a new kind can move them.
-const RACE_SEED = 21
+const RACE_SEED = 25
 const BUSY_SEED = 1
 // The seeds whose lists put a Tab after a blur, and whose busy start is two clicks; the action set decides them too.
 const BLUR_SEED = 1
-const START_SEED = 17
+const START_SEED = 39
 // The engine's fixed wait after an action, and a landing wait of 1 ms: the fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const FIXED_WAIT = { landMs: 1, settleMs: ACTION_SETTLE_MS }
 
@@ -30,8 +30,8 @@ describe('strokeSinceReload (#743)', () => {
     assert.equal(strokeSinceReload('tool key', { strokeSinceReload: false }), false)
   })
   it('counts every action that draws or erases a stroke, and no action that draws none', () => {
-    for (const kind of ['pen line', 'pen erase', 'pen drag, blur', 'pen drag, leave window', 'arrow line']) assert.equal(strokeSinceReload(kind, null), true, kind)
-    for (const kind of ['pen settings', 'pen settings values', 'pen page', 'place note', 'click cell']) assert.equal(strokeSinceReload(kind, null), false, kind)
+    for (const kind of ['pen line', 'pen line mode', 'pen mark', 'pen erase', 'pen drag, blur', 'pen drag, leave window', 'arrow line']) assert.equal(strokeSinceReload(kind, null), true, kind)
+    for (const kind of ['pen settings', 'pen settings values', 'pen colors dialog', 'pen color edit', 'pen page', 'place note', 'click cell']) assert.equal(strokeSinceReload(kind, null), false, kind)
   })
 })
 

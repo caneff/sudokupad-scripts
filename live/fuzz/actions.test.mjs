@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, scriptedList, START_KINDS } from './actions.mjs'
+import { actionList, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, scriptedList, START_KINDS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
@@ -520,5 +520,95 @@ describe('focusing the actions on a script (#724)', () => {
     assert.throws(() => focusFiles(['pen-tool']), /pen-tool.*pen-tool-extras/)
     assert.throws(() => focusFiles(['nonesuch']), /nonesuch/)
     assert.throws(() => focusFiles(['pen-tool-extras.user.js']), /is no script/)
+  })
+  describe("Pen Tool Extras' line modes, marks, color editing and presets (#816)", () => {
+    const calls = (log, name) => log.filter(([n]) => n === name)
+    const names = (log) => log.map(([n]) => n)
+    const kindOf = (kind) => actionsOf(sample(41, 800)).filter((x) => x.kind === kind)
+    const NEW_KINDS = ['pen line mode', 'pen mark', 'pen color edit', 'pen colors dialog']
+
+    it('all four kinds exercise Pen Tool Extras, are generated, and are ordinary use', () => {
+      for (const kind of NEW_KINDS) {
+        assert.deepEqual(KIND_SCRIPTS[kind], ['pen-tool-extras.user.js'], kind)
+        assert.equal(KIND_GROUPS[kind], 'ordinary', kind)
+        assert.ok(kindOf(kind).length > 3, `${kind} is drawn`)
+      }
+    })
+
+    it('a line mode action presses the line mode button one to three times, then draws a line with the pen', async () => {
+      const presses = new Set()
+      for (const a of kindOf('pen line mode')) {
+        const { log } = await runOn(a)
+        const n = calls(log, 'stepLineMode').length
+        presses.add(n)
+        assert.match(String(a), new RegExp(`^press the pen line mode button ${n} times? then pen line r\\d+c\\d+ -> r\\d+c\\d+ color \\d$`))
+        assert.ok(names(log).lastIndexOf('stepLineMode') < names(log).indexOf('usePen'), 'the presses come before the line')
+        assert.equal(calls(log, 'mouse.down').length, 1)
+        assert.equal(calls(log, 'mouse.up').length, 1)
+      }
+      assert.deepEqual([...presses].sort(), [1, 2, 3])
+    })
+
+    it('a mark action ticks a set of the eight mark boxes in the dialog, then clicks a cell edge or corner with the pen', async () => {
+      const seen = { boxes: new Set(), where: new Set() }
+      for (const a of kindOf('pen mark')) {
+        const { log } = await runOn(a)
+        const [, boxes] = calls(log, 'tickMarks')[0]
+        const [, , where] = calls(log, 'markPoint')[0]
+        for (const b of boxes) seen.boxes.add(b)
+        seen.where.add(where)
+        assert.ok(boxes.every((b) => MARK_BOXES.includes(b)), String(a))
+        assert.ok(names(log).indexOf('tickMarks') < names(log).indexOf('usePen') && names(log).indexOf('usePen') < names(log).indexOf('mouse.click'), 'ticked, then the pen, then the click')
+        assert.equal(calls(log, 'mouse.click').length, 1)
+      }
+      assert.deepEqual([...seen.boxes].sort(), [...MARK_BOXES].sort())
+      assert.deepEqual([...seen.where].sort(), [0, 1, 2, 3, 4, 5, 6, 7], 'four edges and four corners')
+    })
+
+    it('a color edit holds a pen color to open the pickers, then recolors one, presses Escape, clicks a cell, presses a tool key or turns the pen page', async () => {
+      const ends = new Set()
+      for (const a of kindOf('pen color edit')) {
+        const { log } = await runOn(a)
+        assert.equal(calls(log, 'holdPenColor').length, 1)
+        const picked = calls(log, 'setPenPicker')
+        const step = String(a)
+        assert.match(step, /^hold pen color \d to edit its color then /)
+        ends.add(step.replace(/^.* then /, '').replace(/ to #[0-9a-f]{6}/, '').replace(/^click r\d+c\d+$/, 'click a cell').replace(/^press [cvxz]$/, 'press a tool key'))
+        if (/recolor/.test(step)) {
+          assert.equal(picked.length, 1)
+          assert.match(picked[0][2], /^#[0-9a-f]{6}$/)
+          assert.equal(picked[0][1], calls(log, 'holdPenColor')[0][1], 'the held color is the one recolored')
+          assert.ok(step.includes(picked[0][2]))
+        } else {
+          assert.equal(picked.length, 0)
+        }
+        const [, key] = calls(log, 'keyboard.press').at(-1) ?? []
+        if (/ press Escape$/.test(step)) assert.deepEqual([key, calls(log, 'mouse.click').length, calls(log, 'turnPenPage').length], ['Escape', 0, 0], step)
+        if (/ click r\d+c\d+$/.test(step)) assert.deepEqual([calls(log, 'keyboard.press').length, calls(log, 'mouse.click').length, calls(log, 'turnPenPage').length], [0, 1, 0], step)
+        if (/ press [cvxz]$/.test(step)) assert.deepEqual([key, calls(log, 'mouse.click').length], [step.slice(-1), 0], step)
+        if (/ turn the pen page$/.test(step)) assert.deepEqual([calls(log, 'keyboard.press').length, calls(log, 'mouse.click').length, calls(log, 'turnPenPage').length], [0, 0, 1], step)
+        assert.ok(names(log).indexOf('holdPenColor') < Math.max(names(log).indexOf('setPenPicker'), names(log).indexOf('keyboard.press'), names(log).indexOf('mouse.click'), names(log).indexOf('turnPenPage')), 'the hold comes first')
+      }
+      assert.deepEqual([...ends].sort(), ['click a cell', 'press a tool key', 'press Escape', 'recolor it and press Escape', 'turn the pen page'].sort())
+    })
+
+    it('the colors dialog action picks a preset or presses Restore defaults, then Save or Cancel', async () => {
+      const seen = { restore: new Set(), save: new Set(), picks: new Set() }
+      for (const a of kindOf('pen colors dialog')) {
+        const [, pick, restore, save] = calls((await runOn(a)).log, 'penPresets')[0]
+        seen.restore.add(restore)
+        seen.save.add(save)
+        seen.picks.add(pick)
+        assert.match(String(a), new RegExp(`^Pen Tool Extras colors: ${restore ? 'Restore defaults' : `preset ${pick}`} ${save ? 'Save' : 'Cancel'}$`))
+      }
+      assert.deepEqual([...seen.restore].sort(), [false, true])
+      assert.deepEqual([...seen.save].sort(), [false, true])
+      assert.ok(seen.picks.size >= 3, 'several presets are picked')
+    })
+
+    it('busy starts can hold a line mode, a mark and a colors dialog, so a saved line mode or palette is there to restore', () => {
+      for (const kind of ['pen line mode', 'pen mark', 'pen colors dialog']) assert.ok(START_KINDS.includes(kind), kind)
+      assert.ok(!START_KINDS.includes('pen color edit'), 'a hold is a gesture a busy start leaves out')
+    })
   })
 })
