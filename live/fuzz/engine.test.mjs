@@ -12,11 +12,12 @@ const CELLS = Array.from({ length: 12 }, (_, i) => [Math.floor(i / 4), i % 4])
 const PUZZLES = [{ name: 'fake', rows: 3, cols: 4, keys: ['1', '2', '3', '4'], free: CELLS, cells: CELLS }]
 const SEED = 7
 // The seeds that shrink a planted race to its two Tabs alone, and that find a failure needing the busy board; the action set decides them, so a new kind can move them.
-const RACE_SEED = 5
+const RACE_SEED = 22
 const BUSY_SEED = 1
 // The seeds whose lists put a Tab after a blur, and whose busy start is two clicks; the action set decides them too.
 const BLUR_SEED = 1
-const START_SEED = 86
+const START_SEED = 93
+const WAIT_BLAME_SEED = 2
 // The engine's fixed wait after an action, and a landing wait of 1 ms: the fake waits for nothing, and its planted error lands on the first wait of more than 0 ms.
 const FIXED_WAIT = { landMs: 1, settleMs: ACTION_SETTLE_MS }
 
@@ -185,7 +186,7 @@ describe('the fuzz engine on a fake page', () => {
   describe('where a broken rule is read', () => {
     it('a rule broken only after a wait, in a list that does not wait, is blamed on the blur that broke it, not on a step after it', async () => {
       const { openTarget } = fakeTargets({ whitenOnWait: true })
-      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: SEED, runs: 200, landMs: 1, settleMs: 0 })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: WAIT_BLAME_SEED, runs: 200, landMs: 1, settleMs: 0 })
       assert.equal(found.failed, true)
       const blur = found.sequence.findIndex((step) => /blur/.test(step))
       assert.ok(blur < found.sequence.length - 1, `the shrink left a step after the blur: ${found.sequence.join(' | ')}`)
@@ -255,9 +256,9 @@ describe('the fuzz engine on a fake page', () => {
     })
 
     it('a race whose shrink keeps a stray step after the two Tabs still blames the second Tab, not the stray step', async () => {
-      // Seed 4 shrinks to the two Tabs and one step after them, which a list that does not wait reads the late error after.
+      // Seed 6 shrinks to the two Tabs and one step after them, which a list that does not wait reads the late error after.
       const { openTarget } = fakeTargets({ raceOnFastTabs: true })
-      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: 4, runs: 600, ...VARIED })
+      const found = await runFuzz({ openTarget, puzzles: PUZZLES, seed: 6, runs: 600, ...VARIED })
       assert.deepEqual({ waitMs: found.waitMs, steps: found.sequence.length, tabs: found.sequence.slice(0, 2) }, { waitMs: 0, steps: 3, tabs: ['press Tab', 'press Tab'] })
       assert.equal(found.error, 'crash signal after "press Tab": page error or console error: Error: planted race')
     })

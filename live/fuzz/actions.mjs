@@ -34,6 +34,9 @@
 //   env.penPresets(pick, restore, save)      opens Pen Tool Extras' settings dialog, picks the color preset at position `pick` (wrapped to the pulldown's options) or, when `restore`, presses Restore defaults, and presses Save or Cancel
 //   env.uiTweaks({ hideSelect, wrapButtons, toggleTab, restore }, save)   opens UI Tweaks' dialog, sets the Hide the Toggle Selection button and Wrap buttons boxes, clicks the Tab box off and on again, presses Restore defaults when `restore`, and presses Save or Cancel
 //   env.settingsText(script, text, save)     opens the dialog of `script` ('ui tweaks' or 'dark page'), presses Copy settings when `text` is null and else puts `text` on the clipboard and presses Paste settings, then presses Save or Cancel
+//   env.dragRules(corner, dx, dy)            hovers the rules box, presses its `corner` ('ur' or 'dl') and moves it by (dx, dy), then lets go; does nothing on a page with no rules box
+//   env.rulesFont(step, times)               presses the rules box's f+ (step 1) or f- (step -1) `times` times; does nothing on a page with no rules box
+//   env.rulesDialog({ maxWidth, maxHeight, restore }, save)   opens Auto Rules Resizer's dialog, types both limits (text, as a user types them), presses Restore defaults when `restore`, and presses Save or Cancel
 //   env.resize({ width, height })  env.blurFocus()  env.reload()
 //   env.darkPage(color, save, restore)       opens Dark Page's dialog, picks `color`, presses Restore defaults when `restore`, and presses Save or Cancel
 import { createRequire } from 'node:module'
@@ -58,6 +61,16 @@ const textOrCopy = (texts) => fc.oneof({ weight: COPY_WEIGHT, arbitrary: fc.cons
 export const UI_TWEAKS_TEXTS = [null, '{"UiTweaks_hideSelect":true}', '{"UiTweaks_wrapButtons":true,"UiTweaks_hideSelect":false}', '{"UiTweaks_tab":true,"UiTweaks_hideSelect":true,"UiTweaks_wrapButtons":true}', '{"UiTweaks_hideSelect":"yes"}', '{"Other_key":1}', '[]', 'not json', '']
 export const DARK_PAGE_TEXTS = [null, '{"DarkPage_color":"#101030"}', '{"DarkPage_color":"#002010"}', '{"DarkPage_color":"#000000","Other_key":1}', '{"DarkPage_color":"blue"}', '{"Other_key":1}', '[]', 'not json', '']
 const settingsTextLabel = (name, text, save) => `${name} dialog: ${text === null ? 'Copy settings' : `Paste settings ${jsonWords(text)}`} ${save ? 'Save' : 'Cancel'}`
+
+// The rules box's two drag corners (`CORNERS` of auto-rules-resizer.user.js, which does not export it; the fake-page test checks them against `dragRulesBox`), and how far a drag goes either way:
+// far enough to grow the box past the window and to shrink it to its floor, so the script's clamps get reached.
+export const RULES_CORNERS = ['ur', 'dl']
+export const RULES_DRAG_REACH_PX = 500
+const CORNER_NAMES = { ur: 'top-right', dl: 'bottom-left' }
+// What is typed into a Max auto width or height box (a number box, which takes digits, a minus sign and an e): blank (no limit), sizes from under the rules box's floor to wider than the window,
+// and numbers that are no size (0 and a negative), which keep the limit as it was.
+export const RULES_LIMIT_TEXTS = ['', '200', '400', '700', '2000', '0', '-5']
+const limitWords = (text) => (text === '' ? 'none' : text)
 
 // The four sliders of the pen panel and the notes panel, by the name a step prints.
 export const SLIDERS = ['pen thickness', 'pen opacity', 'note size', 'note opacity']
@@ -614,6 +627,30 @@ function buildKinds () {
       run: (env, [color, save]) => env.darkPage(color, save)
     },
     {
+      kind: 'rules drag',
+      group: 'page',
+      weight: 2,
+      arg: () => fc.tuple(fc.constantFrom(...RULES_CORNERS), fc.integer({ min: -RULES_DRAG_REACH_PX, max: RULES_DRAG_REACH_PX }), fc.integer({ min: -RULES_DRAG_REACH_PX, max: RULES_DRAG_REACH_PX })),
+      label: ([corner, dx, dy]) => `drag the ${CORNER_NAMES[corner]} corner of the rules box by ${dx} x ${dy}`,
+      run: (env, [corner, dx, dy]) => env.dragRules(corner, dx, dy)
+    },
+    {
+      kind: 'rules font',
+      group: 'page',
+      weight: 1,
+      arg: () => fc.tuple(fc.constantFrom(1, -1), fc.integer({ min: 1, max: 3 })),
+      label: ([step, times]) => `press ${step > 0 ? 'f+' : 'f-'} on the rules box ${times} time${times === 1 ? '' : 's'}`,
+      run: (env, [step, times]) => env.rulesFont(step, times)
+    },
+    {
+      kind: 'rules dialog',
+      group: 'page',
+      weight: 1,
+      arg: () => fc.tuple(fc.constantFrom(...RULES_LIMIT_TEXTS), fc.constantFrom(...RULES_LIMIT_TEXTS), fc.boolean(), fc.boolean()),
+      label: ([maxWidth, maxHeight, restore, save]) => `Auto Rules Resizer dialog: max width ${limitWords(maxWidth)} max height ${limitWords(maxHeight)}${restore ? ' Restore defaults' : ''} ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [maxWidth, maxHeight, restore, save]) => env.rulesDialog({ maxWidth, maxHeight, restore }, save)
+    },
+    {
       kind: 'dark page defaults',
       group: 'page',
       weight: 1,
@@ -730,6 +767,9 @@ export const KIND_SCRIPTS = {
   reload: [],
   restart: [COLOR_BY_DIGIT, TEXT_ANYWHERE],
   resize: [AUTO_RULES_RESIZER],
+  'rules drag': [AUTO_RULES_RESIZER],
+  'rules font': [AUTO_RULES_RESIZER],
+  'rules dialog': [AUTO_RULES_RESIZER],
   'dark page': [DARK_PAGE],
   'dark page defaults': [DARK_PAGE],
   'dark page settings text': [DARK_PAGE],
@@ -759,7 +799,7 @@ function actionArbitrary (puzzle, weights, kinds = KINDS) {
 
 // The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
 // Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
-export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page', 'dark page defaults', 'dark page settings text', 'ui tweaks dialog', 'ui tweaks settings text']
+export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page', 'dark page defaults', 'dark page settings text', 'ui tweaks dialog', 'ui tweaks settings text', 'rules drag', 'rules font', 'rules dialog']
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 

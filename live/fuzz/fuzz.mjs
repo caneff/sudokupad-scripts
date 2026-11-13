@@ -64,6 +64,19 @@ const isSettingsObject = (text) => {
     return false
   }
 }
+// Auto Rules Resizer's own elements: the rules pane the fit sizes, its drag corners, the f+ and f- bar, and the two limit boxes of its dialog. The bar and the corners show only while the pointer is over the pane.
+const RULES_PANE = '.puzzle-rules'
+const RULES_CORNER = (corner) => `#auto-rules-resizer-drag-${corner}`
+const RULES_FONT_BAR = '#auto-rules-resizer-font'
+const RULES_MAX_WIDTH = '#auto-rules-resizer-max-width'
+const RULES_MAX_HEIGHT = '#auto-rules-resizer-max-height'
+// The pointer's way onto the rules pane, so the corners and the bar show; false when the page shows no rules (a puzzle with no rules text).
+async function hoverRules (p) {
+  if (!await p.locator(RULES_PANE).isVisible()) return false
+  const box = await p.locator(RULES_PANE).boundingBox()
+  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  return true
+}
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
@@ -294,6 +307,32 @@ function envFor (p, puzzle, { beforeReload }) {
       await startPuzzle(p)
       await resumeAfterHistory(p)
       await showRules(p, puzzle)
+    },
+    async dragRules (corner, dx, dy) {
+      if (!await hoverRules(p)) return
+      await p.locator(RULES_CORNER(corner)).waitFor({ state: 'visible', timeout: BOX_TIMEOUT_MS })
+      const box = await p.locator(RULES_CORNER(corner)).boundingBox()
+      const x = box.x + box.width / 2
+      const y = box.y + box.height / 2
+      await p.mouse.move(x, y)
+      await p.mouse.down()
+      await p.mouse.move(x + dx, y + dy, { steps: 6 })
+      await p.mouse.up()
+    },
+    async rulesFont (step, times) {
+      for (let i = 0; i < times; i++) {
+        // The first press needs the pointer over the pane; the bar keeps showing while the pointer is on it.
+        if (!await hoverRules(p)) return
+        await p.locator(`${RULES_FONT_BAR} button`).filter({ hasText: step > 0 ? 'f+' : 'f-' }).click({ timeout: BOX_TIMEOUT_MS })
+      }
+    },
+    // A limit typed is a limit saved only on Save; Restore defaults clears this puzzle's sizing at once, so a Cancel after it still keeps the clearing.
+    async rulesDialog ({ maxWidth, maxHeight, restore }, save) {
+      await openScriptDialog(p, 'Auto Rules Resizer', RULES_MAX_WIDTH)
+      await p.locator(RULES_MAX_WIDTH).fill(maxWidth)
+      await p.locator(RULES_MAX_HEIGHT).fill(maxHeight)
+      if (restore) await dialogButton(p, 'Restore defaults').click()
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', RULES_MAX_WIDTH)
     },
     // `restore` presses Restore defaults after the color is picked.
     async darkPage (color, save, restore = false) {
