@@ -832,7 +832,6 @@ const commandOf = (k, puzzle, arg) => ({
   toString: () => k.label(arg, nameTarget(puzzle))
 })
 
-
 // How much a focused script's kinds weigh over their own weight: a kind is raised, never silenced, so the others still come up.
 export const FOCUS_FACTOR = 4
 
