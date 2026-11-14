@@ -120,9 +120,18 @@ describe('the profile menu\'s fade after a pick, injected after Start Puzzle', {
 
   it('while it fades, a click on the arrow box opens the list again', async () => {
     await openMenuOn(p)
-    await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Odd/Even' }).click()
-    // A fading menu already counts as closed: the next click opens a fresh one, which is the only one left.
-    await p.click(ARROW)
+    // A fading menu already counts as closed: the next click opens a fresh one, which is the only one left. The page waits for the
+    // old menu's fade to start and clicks the arrow in that same step, so the click is known to land mid-fade, whatever the box's load.
+    const fading = await p.evaluate(async ({ menu, arrow }) => {
+      const old = document.querySelector(menu)
+      ;[...old.querySelectorAll('[data-act=pick]')].find((row) => row.textContent.includes('Odd/Even')).click()
+      const start = performance.now()
+      while (!old.classList.contains('cbd-closing') && old.isConnected && performance.now() - start < 1000) await new Promise((resolve) => window.requestAnimationFrame(resolve))
+      const midFade = old.isConnected && old.classList.contains('cbd-closing')
+      document.querySelector(arrow).click()
+      return midFade
+    }, { menu: MENU, arrow: ARROW })
+    assert.equal(fading, true, 'the arrow was clicked while the old menu was fading')
     await p.locator(`${MENU}:not(.cbd-closing)`).waitFor({ state: 'visible' })
     assert.equal(await p.locator(MENU).count(), 1)
   })

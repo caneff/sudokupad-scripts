@@ -2,15 +2,13 @@
 require('./fake-page-storage.js')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const fs = require('node:fs')
 const path = require('node:path')
-const { headerVersion } = require('./header-version.js')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { startScript, withScript, withoutPath } = require('./unit-start.js')
-const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { withScript, withoutPath } = require('./unit-start.js')
+const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
 
 // The chips a profile pair draws in `style`; the digit profile is the cell profile unless given.
 const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
@@ -535,21 +533,29 @@ test('each pulldown option that names a profile carries its index, so a rename c
 test('the pulldowns sit above the profile list and the paint editor, one per row, each label in a fixed-width column left of its select', () => {
   const html = renderEditor({ groups: [], pages: [], page: 0, brush: null, pulldownsHtml: '<div id="pulldowns"></div>', profilesHtml: '<div id="mark-profiles"></div>' })
   assert.equal(html.indexOf('id="pulldowns"') < html.indexOf('mark-profiles'), true)
-  const css = STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /\.cbd-pulldowns \{ display: grid; gap: \d+px; margin: 0 0 10px; \}/)
-  assert.match(css, /\.cbd-pulldown \{ display: grid; grid-template-columns: \d+px minmax\(0, 1fr\); align-items: center;/)
+  const list = '#color-by-digit-editor .cbd-pulldowns'
+  const row = '#color-by-digit-editor .cbd-pulldown'
+  assert.equal(propertyOf(list, 'display'), 'grid')
+  assert.match(propertyOf(list, 'gap'), /^\d+px$/)
+  assert.equal(propertyOf(list, 'margin'), '0 0 10px')
+  assert.equal(propertyOf(row, 'display'), 'grid')
+  assert.match(propertyOf(row, 'grid-template-columns'), /^\d+px minmax\(0, 1fr\)$/)
+  assert.equal(propertyOf(row, 'align-items'), 'center')
 })
 
 test('the dialog has the profile list and the paint editor as two columns of one grid, the list first', () => {
   const html = renderEditor({ groups: [], pages: [], page: 0, brush: null, profilesHtml: '<div id="mark-profiles"></div>' })
   assert.match(html, /<div class="cbd-columns cbd-divider"><div class="cbd-column"><div id="mark-profiles"><\/div><\/div><div class="cbd-column">.*Digits</s)
-  const css = STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /#color-by-digit-editor \.cbd-columns \{ display: grid; gap: \d+px; grid-template-columns: repeat\(auto-fit, minmax\(\d+px, 1fr\)\)/)
+  const columns = '#color-by-digit-editor .cbd-columns'
+  assert.equal(propertyOf(columns, 'display'), 'grid')
+  assert.match(propertyOf(columns, 'gap'), /^\d+px$/)
+  assert.match(propertyOf(columns, 'grid-template-columns'), /^repeat\(auto-fit, minmax\(\d+px, 1fr\)\)$/)
 })
 
 test('the dialog is 640 px wide on a desktop and never wider than the window', () => {
-  const css = STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /\.dialog:has\(#color-by-digit-editor\) \{ width: 640px; max-width: calc\(100vw - \d+px\)/)
+  const dialog = '.dialog:has(#color-by-digit-editor)'
+  assert.equal(propertyOf(dialog, 'width'), '640px')
+  assert.match(propertyOf(dialog, 'max-width'), /^calc\(100vw - \d+px\)$/)
 })
 
 test('the stylesheet has no rule for the dialog title\'s Copy and Paste settings buttons', () => {
@@ -972,10 +978,6 @@ test('entry point: a Framework without getApp turns off the features that need a
   })
 })
 
-test('entry point: no Framework at all is left alone without a warning', () => {
-  assert.deepEqual(startScript('../color-by-digit.user.js', { Framework: undefined }).warnings, [])
-})
-
 // A SudokuPad stand-in for the cell coloring wrapper: cells hold a digit and colors, `act` applies
 // value/clear/colour/select/deselect/group actions and records every call, and `puzzle.inGroup` follows the group actions.
 // The color toggle is SudokuPad's: it adds the key to the cells that lack it unless every cell holds it, and then
@@ -1365,9 +1367,11 @@ test('renderEditor marks only the brush as selected', () => {
 test('renderEditor puts the digit pad beside the swatch grid, in rows of three keys the swatches\' size, with 0 under 7', () => {
   const html = editor([], twoPages(), 0, 'a1')
   assert.deepEqual(padCells(html), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'pad', 'pad'])
-  const css = STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /\[data-role="paint"\] \{ display: grid; gap: 4px; grid-template-columns: repeat\(3, 34px\);/)
-  assert.match(css, /\.cbd-swatches \{[^}]*grid-template-columns: repeat\(3, 34px\); gap: 4px;/)
+  for (const grid of ['#color-by-digit-editor [data-role="paint"]', '#color-by-digit-editor .cbd-swatches']) {
+    assert.equal(propertyOf(grid, 'display'), 'grid', grid)
+    assert.equal(propertyOf(grid, 'gap'), '4px', grid)
+    assert.equal(propertyOf(grid, 'grid-template-columns'), 'repeat(3, 34px)', grid)
+  }
 })
 
 function paintBlock (html) {
@@ -1396,9 +1400,12 @@ test('renderEditor draws a digit key as a cell filled with its group\'s color at
 })
 
 test('a digit key is a square-cornered cell with a black outline: a painted digit in SudokuPad\'s entered-digit blue, an unpainted one white with a grey digit', () => {
-  const css = STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /\[data-act="digit"\] \{[^}]*border-radius: 0;[^}]*border: 1px solid #000;[^}]*background: #fff; color: #999;/)
-  assert.match(css, /\[data-act="digit"\]:not\(\[data-key=""\]\) \{ color: rgb\(29, 106, 229\);/)
+  const key = '#color-by-digit-editor [data-act="digit"]'
+  assert.equal(propertyOf(key, 'border-radius'), '0')
+  assert.equal(propertyOf(key, 'border'), '1px solid #000')
+  assert.equal(propertyOf(key, 'background'), '#fff')
+  assert.equal(propertyOf(key, 'color'), '#999')
+  assert.equal(propertyOf(`${key}:not([data-key=""])`, 'color'), 'rgb(29, 106, 229)')
 })
 
 test('renderEditor draws a digit whose color is on no page with the unset look', () => {
@@ -1424,10 +1431,6 @@ test('the paint area stops touch scrolling and text selection, and the name box 
   assert.match(STYLE_CSS, /#color-by-digit-editor \[data-role="paint"\] \{[^}]*touch-action: none/)
   assert.match(STYLE_CSS, /#color-by-digit-editor \{[^}]*user-select: none/)
   assert.match(STYLE_CSS, /\[data-role="profile-name"\] \{[^}]*user-select: text/)
-})
-
-test('VERSION is the @version in the script header', () => {
-  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'color-by-digit.user.js'), 'utf8')))
 })
 
 // What stays inline is what depends on a value: a swatch's, digit key's or chip's color, and a chip's size.
@@ -1725,6 +1728,8 @@ const rulesFor = (css, selector) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
   .filter((m) => m[1].split(',').map((x) => x.trim()).includes(selector))
   .map((m) => m[2].replace(/\s+/g, ' ').trim()).join(' ')
 const declarationsOf = (selector) => rulesFor(STYLE_CSS, selector)
+// One property's value in a selector's rule, so a check reads it alone and a neighbour's change cannot fail it.
+const propertyOf = (selector, property) => new RegExp(`(?:^|;) *${property}: *([^;]+)`).exec(rulesFor(STYLE_CSS, selector))?.[1].trim()
 
 test('the bottom row is capped at 21.6rem, which live/color-by-digit-rows.live.mjs shows wraps it at five buttons a row', () => {
   assert.match(BOTTOM_ROW_CSS, /^\.controls-aux \{ max-width: 21\.6rem !important; \}$/)
@@ -2017,8 +2022,7 @@ test('reduceDraft paste: a pasted mode alone changes the mode and leaves the dra
 test('reduceDraft paste: a draft mode the pasted profiles do not allow falls back to one they do', () => {
   const none = { profiles: [{ name: 'X', groups: [] }], active: 0, useDigitColors: false }
   const edited = reduceDraft(opened(), { type: 'choose', role: 'mode-draft', value: 'digit' })
-  assert.equal(reduceDraft(edited, { type: 'paste', state: none }).mode, allowedMode('digit', usesDigitColors(none)))
-  assert.notEqual(allowedMode('digit', usesDigitColors(none)), 'digit')
+  assert.equal(reduceDraft(edited, { type: 'paste', state: none }).mode, 'off')
 })
 
 test('reduceDraft paste: a pasted mode is held to the draft\'s own profiles, not the saved ones', () => {

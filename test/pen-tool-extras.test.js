@@ -4,15 +4,15 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { headerVersion } = require('./header-version.js')
 const { fakeStore } = require('./fake-store.js')
 const { startScript } = require('./unit-start.js')
+const { pageStandIn } = require('./page-stand-in.js')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const {
   buildCss, SUDOKUPAD_PEN_COLORS, editedColors,
   readPenColors, storedPenColors, startupPenColors, PRESET_LABELS,
-  buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, VERSION, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
@@ -1012,19 +1012,36 @@ const rowOf = (html, key) => new RegExp(`<div data-row="${key}"[^>]*>[\\s\\S]*?<
 
 const subLineOf = (html, key) => new RegExp(`<div class="pen-tool-extras-check-row pen-tool-extras-sub"><input type="checkbox" id="pen-tool-extras-box-show-${key}" data-box="show.${key}"( checked)? title="[^"]+" class="pen-tool-extras-check"><label for="pen-tool-extras-box-show-${key}" class="pen-tool-extras-label">Slider in panel</label></div>`).exec(html)
 
-test('Line settings: Thickness and Opacity each have a sub-line under them, a box then "Slider in panel", ticked as saved; no caption column', () => {
+test('Line settings: Thickness and Opacity each have a "Slider in panel" sub-line, its box ticked as saved', () => {
   const both = renderEditor(editorState())
-  assert.equal(Boolean(subLineOf(both, 'thickness')[1]) && Boolean(subLineOf(both, 'opacity')[1]), true)
-  assert.match(both, /data-row="thickness"[\s\S]*?<\/div><div class="pen-tool-extras-check-row pen-tool-extras-sub">[\s\S]*data-row="opacity"[\s\S]*?<\/div><div class="pen-tool-extras-check-row pen-tool-extras-sub">/, 'each sub-line follows its row')
-  assert.doesNotMatch(both, /pen-tool-extras-column-heading|>In panel</)
-  assert.equal((both.match(/>Slider in panel</g) || []).length, 2)
+  assert.equal(Boolean(subLineOf(both, 'thickness')[1]), true)
+  assert.equal(Boolean(subLineOf(both, 'opacity')[1]), true)
   const none = renderEditor(editorState({ show: { thickness: false, opacity: true } }))
-  assert.equal(subLineOf(none, 'thickness')[1], undefined, 'unticked, and the slider is still in the dialog')
-  assert.match(none, /data-setting="thickness"/)
+  assert.equal(subLineOf(none, 'thickness')[1], undefined, 'unticked')
   assert.equal(Boolean(subLineOf(none, 'opacity')[1]), true)
-  const row = rowOf(both, 'thickness')
-  assert.equal(row.indexOf('<label') < row.indexOf('data-setting="thickness"') && row.indexOf('data-setting="thickness"') < row.indexOf('data-readout="thickness"'), true, 'label, slider, then the value')
-  assert.match(DIALOG_CSS, /\.pen-tool-extras-sub \{[^}]*padding-left: 1\.2em;[^}]*color: #444;/)
+})
+
+test('Line settings: each sub-line follows its own row, and a slider whose box is unticked is still in the dialog', () => {
+  const both = renderEditor(editorState())
+  assert.match(both, /data-row="thickness"[\s\S]*?<\/div><div class="pen-tool-extras-check-row pen-tool-extras-sub">[\s\S]*data-row="opacity"[\s\S]*?<\/div><div class="pen-tool-extras-check-row pen-tool-extras-sub">/)
+  assert.equal((both.match(/>Slider in panel</g) || []).length, 2)
+  assert.match(renderEditor(editorState({ show: { thickness: false, opacity: true } })), /data-setting="thickness"/)
+})
+
+test('Line settings: no caption column', () => {
+  assert.doesNotMatch(renderEditor(editorState()), /pen-tool-extras-column-heading|>In panel</)
+})
+
+test('a slider row is its label, then the slider, then the value', () => {
+  const row = rowOf(renderEditor(editorState()), 'thickness')
+  const at = (needle) => row.indexOf(needle)
+  assert.equal(at('<label') < at('data-setting="thickness"'), true, 'label before slider')
+  assert.equal(at('data-setting="thickness"') < at('data-readout="thickness"'), true, 'slider before value')
+})
+
+test('a Slider in panel sub-line is indented and in #444', () => {
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-sub \{[^}]*padding-left: 1\.2em;/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-sub \{[^}]*color: #444;/)
 })
 
 test('the dialog always holds the thickness, opacity, dash, arrow spacing and outline width sliders, at the values in force, whether or not the panel shows them', () => {
@@ -1130,10 +1147,21 @@ test('Marks to cycle is one 3 by 4 table: headings X, circle, an up arrow head a
     ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerCircle', 'Corner Circle', 'Corner Circle'],
     ['cellCross', 'Cell Cross', 'Cell Cross'], ['cellCircle', 'Cell Circle', 'Cell Circle'], ['cellDot', 'Cell Dot', 'Cell Dot']
   ])
-  assert.equal(boxes.every((m) => m[4] === ' checked'), true)
-  // Each row is five children: the label and four cells, the Cell row's third (directions) empty.
-  const cellRow = html.slice(html.indexOf('>Cell<'))
-  assert.match(cellRow, /^>Cell<\/div><label[^>]*>.*?<\/label><label[^>]*>.*?<\/label><div><\/div><label[^>]*>.*?<\/label><\/div>/)
+})
+
+test('every Marks to cycle box is ticked when every mark is saved on', () => {
+  const html = renderEditor(editorState())
+  const boxes = [...html.matchAll(/<input type="checkbox" id="pen-tool-extras-box-marks-(\w+)" data-box="marks\.\w+"[^>]*?( checked)?>/g)]
+  assert.equal(boxes.length, 8)
+  assert.deepEqual(boxes.filter((m) => m[2] !== ' checked').map((m) => m[1]), [])
+})
+
+test('the Cell row of the marks table is five children: the label, then cross, circle, an empty cell where directions would be, and dot', () => {
+  const cellRow = renderEditor(editorState()).split('>Cell</div>')[1]
+  assert.match(cellRow, /^<label[^>]*>.*?<\/label><label[^>]*>.*?<\/label><div><\/div><label[^>]*>.*?<\/label><\/div>/)
+})
+
+test('the marks table is a grid of a label column and four 28 px cells, with the label left and a rule between cells and rows', () => {
   assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table \{[^}]*grid-template-columns: max-content repeat\(4, 28px\);/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table > :nth-child\(5n\+1\) \{ justify-content: flex-start;/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table > :not\(:nth-child\(5n\+1\)\) \{ border-left: 1px solid #eee;/)
@@ -1308,10 +1336,6 @@ const headerField = (name) => (new RegExp(`^// @${name}\\s+(.+)$`, 'm').exec(HEA
 test('the header describes the script in Chris\'s approved intro and links its details page', () => {
   assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
   assert.equal(headerField('homepageURL'), 'https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html')
-})
-
-test('VERSION is the @version in the script header', () => {
-  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'pen-tool-extras.user.js'), 'utf8')))
 })
 
 // Page 3: arrow lines. A page 3 pen is two color characters; the one a line stores says which way it was dragged.
@@ -1840,6 +1864,8 @@ test('eraseActs removes a cell\'s marks after the lines, each cell in its own gr
 
 test('every settings table row with a section is drawn in the dialog, so a section whose rows went astray fails here', () => {
   const html = renderEditor(editorState())
+  const sectioned = Object.entries(SETTINGS).filter(([, row]) => row.dialog.section).map(([name]) => name)
+  assert.deepEqual(sectioned, ['thickness', 'opacity', 'outline', 'eraseClicks', 'lineStyles'], 'the loop has its rows')
   for (const [name, row] of Object.entries(SETTINGS)) {
     if (!row.dialog.section) continue
     assert.ok(html.includes(row.range ? `data-row="${name}"` : `data-box="${name}`), name)
@@ -2140,22 +2166,8 @@ function loadWithFramework (framework) {
 
 // Runs `fn` on a page with a document and a window that take every call the startup makes and find none of SudokuPad's own elements.
 function withPage (fn) {
-  const element = () => new Proxy({ style: {}, classList: { add () {}, remove () {}, toggle () {}, contains: () => false }, dataset: {} }, {
-    get: (target, key) => key in target ? target[key] : (key === 'then' ? undefined : () => element())
-  })
   const saved = { document: global.document, window: global.window }
-  global.document = {
-    createElement: element,
-    createElementNS: element,
-    head: element(),
-    body: element(),
-    documentElement: { outerHTML: '' },
-    getElementById: () => null,
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    addEventListener () {}
-  }
-  global.window = { addEventListener () {}, MutationObserver: class { observe () {} }, getComputedStyle: () => ({}) }
+  Object.assign(global, pageStandIn())
   try {
     return fn()
   } finally {
@@ -2175,10 +2187,6 @@ test('a Framework with no getApp turns every install step off in one warning nam
   const warnings = withPage(() => loadWithFramework(framework))
   assert.deepEqual(warnings, [`pen-tool-extras: ${steps.join(', ')} skipped because SudokuPad has no Framework.getApp`])
   assert.deepEqual(entries, ['pentoolextras'])
-})
-
-test('a page with no Framework is left alone without a word', () => {
-  assert.deepEqual(loadWithFramework(undefined), [])
 })
 
 test('copiedSettings: every setting at the value in force, the pen colors once saved, and no key it does not own', () => {

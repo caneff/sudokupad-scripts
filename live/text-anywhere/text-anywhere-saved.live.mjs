@@ -3,10 +3,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { settle } from '../settle.mjs'
+import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 import { addPage, useBrowser } from '../session.mjs'
 import { loadInPlace } from '../puzzles.mjs'
-import { finishNote, gridPoint, mouseDrag, restart, typeText } from '../board.mjs'
+import { finishNote, gridPoint, mouseDrag, restart, selectCell, typeText } from '../board.mjs'
 
 const { DIALOG, DIGIT_BUTTON, NOTES_PREFIX, INDEX_KEY, NOT_NOTES, RESTARTED_PREFIX, TEXTS } = textAnywhere
 
@@ -41,8 +41,26 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   const savedTexts = async () => ((await saved()) ?? []).map((item) => item.text)
   const enterDigit = async (digit) => {
     await p.click(DIGIT_BUTTON)
-    await p.mouse.click(...await gridPoint(p, EMPTY_CELL.map((v) => v + 0.5)))
+    await selectCell(p, ...EMPTY_CELL)
     await p.keyboard.press(digit)
+  }
+  // text-anywhere restores kept notes only on an Undo taken while SudokuPad's undo stack is empty, which is the Undo of the Restart itself. A click right after a reload can be dead,
+  // and a digit entered before the Restart does not survive the reload to witness the Undo, so the puzzle's own `act` event is: Undo clicks until it has reported an undo, and only then is "nothing came back" read.
+  const restartThenReload = async () => {
+    await restart(p)
+    assert.deepEqual(await settle(texts, []), [])
+    assert.notEqual(await kept(), null, 'Restart keeps the notes')
+    await reload()
+    assert.equal(await kept(), null, 'the reload drops them')
+  }
+  const undoTakesRestart = async () => {
+    await read(() => {
+      window.undoActs = 0
+      Framework.app.puzzle.on('act', (_, action) => { if (action?.type === 'undo') window.undoActs++ })
+    })
+    const taken = () => read(() => window.undoActs > 0)
+    assert.equal(await clickUntil(undo, taken, true, SETTLE_MS), true, 'the puzzle reported the Undo')
+    await textAnywhere.frames(p)
   }
   const digit = () => read(([row, col]) => Framework.app.grid.getCell(row, col).propGet('normal') ?? null, EMPTY_CELL)
 
@@ -168,13 +186,8 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   })
 
   it('a reload after Restart drops the kept notes: Undo then brings nothing back', async () => {
-    await restart(p)
-    assert.deepEqual(await settle(texts, []), [])
-    assert.notEqual(await kept(), null)
-    await reload()
-    assert.equal(await kept(), null)
-    await undo()
-    await textAnywhere.frames(p)
+    await restartThenReload()
+    await undoTakesRestart()
     assert.deepEqual(await texts(), [])
     assert.equal(await saved(), null)
   })
@@ -203,8 +216,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await kept(), null, 'the new note drops them')
     await reload()
     assert.deepEqual(await settle(texts, ['9']), ['9'])
-    await undo()
-    await textAnywhere.frames(p)
+    await undoTakesRestart()
     assert.deepEqual(await texts(), ['9'])
     assert.deepEqual(await savedTexts(), ['9'])
   })
@@ -408,6 +420,8 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await pickTextAnywhere()
     await typeText(p, [2.5, 2.5], '15')
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+    const storedNotes = async () => textAnywhere.notesOf(await read((k) => Framework.getData(k), NOTES_PREFIX + a))
+    const [{ at: atBefore }] = await storedNotes()
     await p.keyboard.down('ArrowRight')
     // The puzzle's id is watched: the moment it becomes B's, the key goes up, before the puzzle triggers 'loaded'.
     await read((bId) => {
@@ -430,7 +444,10 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await read(() => window.keyupInGap), true, 'the key went up between B\'s id and its load')
     assert.deepEqual(await settle(texts, []), [], 'puzzle B shows no notes')
     assert.equal(await read((k) => Framework.getData(k), NOTES_PREFIX + B_ID), null, 'nothing is saved under B')
-    assert.deepEqual(textAnywhere.notesOf(await read((k) => Framework.getData(k), NOTES_PREFIX + a)).map((item) => item.text), ['15'], 'A keeps its note')
+    // A's note moving in storage is the witness that the save landed in the gap, and landed under A.
+    const [{ text, at: atAfter }] = await storedNotes()
+    assert.equal(text, '15', 'A keeps its note')
+    assert.ok(atAfter[0] > atBefore[0], `the gap save moved A's note right: x ${atBefore[0]} to ${atAfter[0]}`)
   })
 
   it('the page raised no error', () => {

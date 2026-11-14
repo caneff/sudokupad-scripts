@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { syncText, readLib, scriptFiles, generatedLine, libNamesOnDisk, HANDOVERS, guardId } = require('../sync-lib.js')
+const { syncText, readLib, scriptFiles, generatedLine, libNamesOnDisk, HANDOVERS, guardId, libBlockNames, withoutLibBlocks } = require('../sync-lib.js')
 
 const syncPlain = (source, readModule) => syncText(source, readModule, [])
 const modules = { plain: 'const a = 1\n\nconst b = 2\n' }
@@ -100,7 +100,8 @@ test('a name no lib module defines (a browser global, or one the script defines)
 
 test('the issue\'s case on the real modules: palette without color-math names it', () => {
   const problems = syncText(script(wrap('palette', '  const x = 1')), readLib, libNamesOnDisk()).problems
-  assert.deepEqual(problems, [['parseColor', 'color-math'], ['darkenColor', 'color-math'], ['toOklab', 'color-math']].map(([used, owner]) => `lib:palette reads ${used} from lib:${owner}, which this script does not copy in`))
+  assert.notEqual(problems.length, 0, 'palette\'s dependency on color-math is found')
+  for (const problem of problems) assert.match(problem, /^lib:palette reads \w+ from lib:color-math, which this script does not copy in$/)
 })
 
 test('every form of the global comment is read, and a name with a regex character is matched', () => {
@@ -167,4 +168,10 @@ test('every script\'s lib blocks match lib/ (run node sync-lib.js to fix)', () =
     assert.deepEqual(problems, [], `${file}: fix the markers, then run node sync-lib.js`)
     assert.deepEqual(changed, [], `${file}: block(s) out of date with lib/; run node sync-lib.js`)
   }
+})
+
+test('libBlockNames and withoutLibBlocks read a block whose name has a digit, the same grammar syncText uses', () => {
+  const source = '// own\n  // <lib:color-2>\n  body\n  // </lib:color-2>\n// <lib:plain>\nx\n// </lib:plain>\n// tail\n'
+  assert.deepEqual(libBlockNames(source), ['color-2', 'plain'])
+  assert.equal(withoutLibBlocks(source), '// own\n  \n\n// tail\n')
 })

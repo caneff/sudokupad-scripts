@@ -242,20 +242,22 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await undoAll(p)
       await p.mouse.click(5, 5) // as above
     })
-  })
 
-  it('page 3: an arrow pen\'s erasing drag has the red solid hint and no arrowheads', async () => {
-    await restartPuzzle(p)
-    await selectPenOnPage(p, 3, 3)
-    await drag(p, [[2.5, 2.5], [2.5, 4.5]])
-    await p.mouse.click(5, 5) // a click off the grid, or a drag started right after a release draws nothing
-    await p.mouse.move(...await gridPoint(p, [2.5, 2.5]))
-    await p.mouse.down()
-    for (let i = 0; i < 20 && (await read(() => document.querySelector('.penhint'))) === null; i++) await p.mouse.move(...await gridPoint(p, [2.5, 4.5]), { steps: 10 })
-    const erasing = await read(() => ({ red: document.querySelector('.penhint').classList.contains('pencolor-erase'), heads: document.querySelectorAll('.pen-tool-extras-hint-arrows').length }))
-    assert.deepEqual(erasing, { red: true, heads: 0 })
-    await p.mouse.up()
-    await undoAll(p)
+    it('page 3: an arrow pen\'s erasing drag has the red solid hint and no arrowheads', async () => {
+      await restartPuzzle(p)
+      await selectPenOnPage(p, 3, 3)
+      // Proof first that this drag is long enough to draw heads: the same drag on an empty grid does, and it leaves the stroke the next drag erases.
+      await holdDrag([[2.5, 2.5], [2.5, 4.5]])
+      assert.equal(await settle(async () => (await hint())?.headsD != null, true), true, 'the drag draws arrowheads on an empty grid')
+      await p.mouse.up()
+      await holdDrag([[2.5, 2.5], [2.5, 4.5]])
+      assert.equal(await settle(async () => (await hint())?.linePen, 'erase'), 'erase', 'the drag over the stroke shows the red hint')
+      // A "nothing happened" wait: the heads, if the erasing drag wrongly drew them, would show well within it.
+      await sleep(200)
+      assert.equal((await hint()).headsD, null, 'no arrowheads on the erasing drag')
+      await p.mouse.up()
+      await undoAll(p)
+    })
   })
 
   it('no page error was raised in the whole group', () => {

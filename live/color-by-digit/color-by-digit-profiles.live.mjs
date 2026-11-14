@@ -2,7 +2,7 @@
 // the button, switching profile, the button's icon, the dialog's profile list, and migration.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
@@ -736,7 +736,10 @@ describe('opening the editor and saving with no edit, injected after Start Puzzl
   it('every preload comes back unchanged, in its order, with the active profile kept', async () => {
     await openEditorOn(p)
     await closeDialogWith(p, 'Save', EDITOR)
-    assert.deepEqual(await settle(async () => savedState(await p.evaluate((key) => Framework.getData(key), PROFILES_KEY)), PRELOAD_PROFILES), PRELOAD_PROFILES)
+    // The raw saved value, not the state read through the envelope: a no-edit Save writes nothing, so the value stays exactly as seeded
+    // (bare, with no `{ v, data }` envelope). A Save that rewrote the profiles would wrap them and fail this.
+    const raw = () => p.evaluate((key) => Framework.getData(key), PROFILES_KEY)
+    assert.deepEqual(await settle(raw, PRELOAD_PROFILES), PRELOAD_PROFILES)
   })
 
   it('no uncaught page errors', () => {
