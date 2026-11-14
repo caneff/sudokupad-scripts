@@ -2,7 +2,9 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, styleOn, watch, selectCell, reloadSession } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, styleOn, watch, reloadSession } from './color-by-digit-fixtures.mjs'
+import { selectCell, undoDepth } from '../board.mjs'
+import { loadInPlace } from '../puzzles.mjs'
 import { PUZZLE_URL } from '../page.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -51,7 +53,6 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   const allFills = (place, digit, conflict) => allFillsOn(p, place, digit, conflict)
   const coloredCount = () => coloredCountOn(p)
   const givensColored = () => givensColoredOn(p)
-  const undoSteps = () => read(() => Framework.app.puzzle.undoStack.length)
   const label = () => labelOn(p)
 
   const circles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].map((c) => {
@@ -429,13 +430,8 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     // Loads through the page's own loader (fetchPuzzle, parsePuzzleData, loadCTCPuzzle), which
     // rebuilds the board in place. The repo holds one puzzle URL, so it is the same puzzle again.
     it('the board rebuilt in the page without a reload still gets the shades', async () => {
-      // PuzzleLoader is a top-level binding of the page's script, not a window property.
-      await p.evaluate(() => { window.pageLoader = PuzzleLoader }) // eslint-disable-line no-undef
       await read(() => document.querySelectorAll('#cell-givens text').forEach((e) => e.setAttribute('data-old-board', '')))
-      await read(async (id) => {
-        const { parsePuzzleData, fetchPuzzle } = window.pageLoader
-        await Framework.app.loadCTCPuzzle(await parsePuzzleData(await fetchPuzzle(id)))
-      }, PUZZLE_URL.replace(/^https?:\/\/[^/]+\//, ''))
+      await loadInPlace(p, undefined, { source: PUZZLE_URL.replace(/^https?:\/\/[^/]+\//, '') })
       // The old givens are gone once the new board is drawn.
       await p.waitForFunction(() => document.querySelectorAll('#cell-givens text:not([data-old-board])').length > 0)
       await enter(0, 3, '4')
@@ -456,7 +452,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     await p.click(ARROW)
     await p.keyboard.press('Escape')
     await p.locator(MENU).waitFor({ state: 'detached' })
-    const steps = await undoSteps()
+    const steps = await undoDepth(p)
     await pickProfile(1)
     // Odd/Even: 4 is even (key 2), 9 and 5 odd (key 1); 6 and 7, in no group of Split, now take a shade too.
     assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[2]]), [SHADE[2]])
@@ -464,7 +460,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     assert.deepEqual(await allFills('corner', '6')(), [SHADE[2]])
     assert.deepEqual(await allFills('centre', '7')(), [SHADE[1]])
     assert.deepEqual(await allFills('corner', '5', true)(), [SHADE[1]])
-    assert.equal(await undoSteps(), steps)
+    assert.equal(await undoDepth(p), steps)
     assert.deepEqual(await watch(coloredCount), [0])
     await pickProfile(0)
     assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[4]]), [SHADE[4]])

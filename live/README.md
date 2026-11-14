@@ -28,8 +28,9 @@ the test's own such as a script with a break planted (`scriptSource(file)` reads
 same context and `reloadWith` reloads one. A script's own fixtures wrap them with what shows the script is up, as Text Anywhere's
 and Pen Tool Extras' (`live/pen-tool-extras/pen-tool-extras-fixtures.mjs`, which also turns the pen tool on and opens it) `open` and `reload` do. `live/board.mjs` holds what every suite does to the board: where a cell is, a click and a drag there,
 Undo back to the start, Restart, and a Text Anywhere note typed (`typeText`) or placed with the tool picked first (`placeNote`).
-The settings dialogs' selectors, buttons and keys are `live/settings.mjs`'s (`STATUS`, `actButton`, `SETTINGS_SCRIPTS`), and each
-script's editor is its fixtures'.
+The settings dialogs' buttons are `live/settings.mjs`'s (`STATUS`, `actButton`). Each script with a dialog has one record in `live/scripts.mjs`
+(`SETTINGS_SCRIPTS`: entry, editor, owned-key pattern, typed-out keys, `open`), which the settings-shell, copy-paste and storage suites loop over;
+`live/scripts.test.mjs` fails when a script that copies in `lib:settings-dialog` has none.
 
 ## Injection time
 
@@ -108,7 +109,7 @@ an id with the page's own compression (`puzzleIdFor`) and opens it by that id in
 served from the recording whatever the path, so no new recording is needed. Give every built puzzle its own `id`: an inline `scl` puzzle has none
 and SudokuPad then saves its progress under `progress_undefined`, shared by every such puzzle. `installAll` runs all six scripts at
 `DOMContentLoaded` of every load, as a userscript manager does, and answers the requests the recording lacks for the solved dialog (two icons) and for Tag
-Manager with empty files. A history move (Back, Forward) or a second puzzle leaves the pen and replay tools off again, which `startWithTools` and
+Manager with empty files. `loadInPlace(p, id)` loads a second puzzle in the same tab through the page's own loader, with no reload, and answers Tag Manager's second load, which leaves a page error otherwise. A history move (Back, Forward) or a second puzzle leaves the pen and replay tools off again, which `startWithTools` and
 `resumeAfterHistory` turn on.
 
 ## The fuzz run
@@ -127,7 +128,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 
 - **`--focus <script>`** (#724) raises the weight of the actions that exercise that script, by `FOCUS_FACTOR` (4), so a run spends its time where a change is. It takes a script's name
   without `.user.js` (`pen-tool-extras`); another name stops the run before the browser starts and repeats for several. Every other action keeps its weight, so every action still comes up. Which script an action exercises is
-  `KIND_SCRIPTS` of `live/fuzz/actions.mjs`; a new action kind needs an entry, which `actions.test.mjs` checks. The weights change the lists a seed gives, so a failure's printed replay
+  the `scripts` its kind declares in `KINDS` of `live/fuzz/actions.mjs`; a new kind declares it, which `actions.test.mjs` checks. The weights change the lists a seed gives, so a failure's printed replay
   command carries the same `--focus`, and a `--path` replays only with it.
 
 - **Each action list names its puzzle** (#679), drawn first from the set in `puzzle-set.mjs`, so one run covers them all and a printed `--path` replays on the
@@ -155,7 +156,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
   and an error that lands late, so that a 0 ms list reads it only at a later step, is still blamed on the step that caused it: after the shrink, the list's beginnings are run
   again with their last step given 40 ms, and the shortest that still fails names the step (one page more for each step it looks back).
   `--config busy-start` (#726) gives some lists a start of up to 30 steps (digits, marks, colors, pen lines, notes, saved settings), printed `(start) ...` ahead of the actions and dropped by a
-  shrink that does not need it. Its steps are actions of the list (`START_KINDS` of `actions.mjs`): what they put in SudokuPad's state (digits, marks, colors, pen lines) rides the
+  shrink that does not need it. Its steps are actions of the list (the kinds whose `KINDS` entry in `actions.mjs` declares `start`): what they put in SudokuPad's state (digits, marks, colors, pen lines) rides the
   undo stack, and the rest (notes, settings, Dark Page) is what `undo-to-start` leaves out, so the rules hold unchanged and `undo-to-start` still compares with an empty board, not with the start. `--config` names one of `live/fuzz/configs.mjs`; a path replays
   only under the configuration it was found with, and the replay command names it.
 - **The rules** (`rules.mjs`, #594) say what "working" means for each script, as pure functions over a snapshot of the page (`page-state.mjs` reads it) checked after
@@ -202,7 +203,7 @@ miss prints `> <budget> s`), with a total. It is not in `npm test`; the baseline
 npm run fuzz:plants -- [--seeds <k>] [--budget <seconds per hunt>] [--seed <first seed>] [--shrink-minutes <m>] [--plant <id> ...] [--config <name> ...] [--no-replay-check] [--coverage]
 ```
 
-- **Compare**: `--config` twice or more runs each plant on the same seeds under each configuration (`live/fuzz/configs.mjs`: `current`, `varied-wait`, `busy-start`, `varied-wait+busy-start`, `swarm`, `long-40`, `long-50`, `busy-start+long-40`) and prints them side by side.
+- **Compare**: `--config` twice or more runs each plant on the same seeds under each configuration (`live/fuzz/configs.mjs`: `current`, `varied-wait`, `busy-start`, `varied-wait+busy-start`, `long-40`, `long-50`, `busy-start+long-40`) and prints them side by side.
   A name that is no configuration, or one named twice, stops the run before the browser starts.
 - **`--coverage`** (#729) runs every hunt with the scripts tagged and coverage on, to compare a run with and without it on the same seeds: the tag and the coverage must change no catch.
 - **Replay check**: each catch is run again from its own path, and the table says how many did not fail again. A failure that depends on timing may not repeat.

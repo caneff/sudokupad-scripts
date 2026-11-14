@@ -10,8 +10,8 @@ import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
-import { cellCentre } from '../board.mjs'
-import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_ONE, PAGE_THREE, PAGE_TWO, padValues, penStrings, setSlider } from '../pen.mjs'
+import { cellCentre, undoDepth } from '../board.mjs'
+import { goToPenPage, openPenTool, padValues, PAGE_BUTTON, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penStrings, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { addPage, addScripts, openWith, useBrowser } from '../session.mjs'
 
@@ -27,14 +27,11 @@ const browser = useBrowser()
 
 function group (title, extra = []) {
   describe(title, { concurrency: false }, () => {
-    let context, p, errors
+    let context, p, errors, read, editor
 
-    const read = (fn, arg) => p.evaluate(fn, arg)
     const saved = (key) => read((k) => Framework.getData(k), key)
     const selected = () => read(() => ToolPen.tool.selectedColor)
     const currentButtonKey = () => read(() => { const b = document.querySelector('.tool-pen button.current'); return b && b.dataset.key })
-    const strokeCount = () => read(() => document.querySelectorAll('#cell-pen .cell-pen').length)
-    const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
     const styleOf = (selector) => read((s) => { const st = window.getComputedStyle(document.querySelector(s)); return { dash: st.strokeDasharray, stroke: st.stroke, width: st.strokeWidth } }, selector)
     const pageErrors = () => errors.slice()
 
@@ -44,17 +41,16 @@ function group (title, extra = []) {
     }
 
     const drawFromColumn2 = async (row) => {
-      const before = await strokeCount()
+      const before = await penDrawnCount(p)
       const [x, y] = await cellCentre(p, row, 2)
       await p.mouse.move(x, y)
       await p.mouse.down()
       await p.mouse.move(x + 110, y + 4, { steps: 6 })
       await p.mouse.up()
-      assert.equal(await settle(async () => (await strokeCount()) > before, true), true, 'a stroke appeared')
+      assert.equal(await settle(async () => (await penDrawnCount(p)) > before, true), true, 'a stroke appeared')
     }
 
     const goToPage = (values) => goToPenPage(p, values)
-    const editor = () => p.locator('#pen-tool-extras-editor')
     const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
     const turnPageWithWheel = async (deltaY) => {
       const box = await p.locator(PAGE_BUTTON).boundingBox()
@@ -68,6 +64,7 @@ function group (title, extra = []) {
 
     before(async () => {
       ;({ context, p, errors } = await extras.open(browser(), { scripts, settings }))
+      ;({ read, editor } = extras.tools(p))
       await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, LINE_STYLES_KEY, 'ToolPen_color', 'ToolLetter_letterMode'])
       await press(1)
     })
@@ -149,11 +146,11 @@ function group (title, extra = []) {
 
     it('undo removes the page 2 marks, and the replay draws them again, dashed', async () => {
       const replay = await read(() => Framework.app.getReplay())
-      const total = await strokeCount()
-      for (let i = await undoDepth(); i > 0; i--) await p.click('#control-undo')
-      assert.equal(await settle(strokeCount, 0), 0)
+      const total = await penDrawnCount(p)
+      for (let i = await undoDepth(p); i > 0; i--) await p.click('#control-undo')
+      assert.equal(await settle(() => penDrawnCount(p), 0), 0)
       await read((r) => Framework.app.loadReplay(r), replay)
-      assert.equal(await settle(strokeCount, total), total)
+      assert.equal(await settle(() => penDrawnCount(p), total), total)
       assert.deepEqual((await penStrings(p)).filter((v) => v.endsWith('c')), ['1c', '5c'])
       assert.notEqual((await styleOf('#cell-pen .cell-pen.pencolor-c')).dash, 'none')
     })
@@ -239,13 +236,13 @@ function group (title, extra = []) {
       const before = await colorOf3()
       assert.notEqual(before, own[2], 'the colors in force are not SudokuPad\'s own')
       const marks = await penStrings(p)
-      const depth = await undoDepth()
+      const depth = await undoDepth(p)
       await openExtrasEditor(p)
       assert.notDeepEqual(await pickers(), own)
       await pickSudokuPad()
       assert.deepEqual(await pickers(), own)
       assert.deepEqual(await penStrings(p), marks, 'the pick left no pen mark')
-      assert.equal(await undoDepth(), depth, 'the pick is no undo step')
+      assert.equal(await undoDepth(p), depth, 'the pick is no undo step')
       await closeExtrasEditorWith(p, 'Cancel')
       assert.equal(await colorOf3(), before, 'Cancel leaves the colors as they were')
       assert.deepEqual(await saved(COLORS_KEY), installed)

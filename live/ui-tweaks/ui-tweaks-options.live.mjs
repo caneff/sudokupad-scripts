@@ -3,7 +3,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { numberPadText } from '../scripts.mjs'
-import { keydownDefaults } from '../pen.mjs'
+import { keydownDefaults } from '../input.mjs'
 import { closeDialogWith, dialogButton, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 import { openWith, reloadWith, useBrowser } from '../session.mjs'

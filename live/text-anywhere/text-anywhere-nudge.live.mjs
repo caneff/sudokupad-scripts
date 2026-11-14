@@ -21,12 +21,11 @@ const NEAR_UNITS = 1.5
 const browser = useBrowser()
 
 describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, noteBox
 
   const saved = () => textAnywhere.saved(p)
   const savedAt = async (text) => (await saved()).find((item) => item.text === text).at
   const cursor = () => p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => [c.row, c.col]))
-  const noteBox = (text) => p.locator(TEXTS).filter({ hasText: new RegExp(`^${text}$`) }).boundingBox()
   // SudokuPad's cell cursor is set under the digit tool, then Text Anywhere is picked again with nothing selected.
   const putCursorAt = async (at) => {
     await p.click(textAnywhere.DIGIT_BUTTON)
@@ -37,6 +36,7 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 } } }))
+    ;({ noteBox } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await reload()
     await p.mouse.click(...await gridPoint(p, NOTE_AT))

@@ -9,7 +9,8 @@ import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllS
 import { captureConsoleErrors } from './page.mjs'
 import { mouseDrag, typeText } from './board.mjs'
 import { openPenTool, penEntries, setSlider } from './pen.mjs'
-import { closeDialogWith, openScriptDialog, ownedSettings, paste, SETTINGS_SCRIPTS } from './settings.mjs'
+import { closeDialogWith, ownedSettings, paste } from './settings.mjs'
+import { SETTINGS_SCRIPTS } from './scripts.mjs'
 import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
@@ -85,7 +86,7 @@ describe('attacks on storage', { concurrency: false }, () => {
   it('attack 74: settings pasted as malformed text, from an older version and a megabyte large change nothing they should not, and answer in time', async () => {
     for (const script of SETTINGS_SCRIPTS) {
       ;({ context, p, errors } = await openWith(browser(), [script.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
-      await openScriptDialog(p, script.entry, script.editor)
+      await script.open(p)
       const owned = () => ownedSettings(p, script)
       const timed = async (text) => {
         const started = Date.now()

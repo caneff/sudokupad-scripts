@@ -8,7 +8,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { cellCentre, finishNote, gridPoint } from '../board.mjs'
 
-const { TEXT_BOX, TEXTS } = textAnywhere
+const { TEXT_BOX } = textAnywhere
 const { SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const SELECTION = '#text-anywhere-layer .text-anywhere-selection'
 const GUIDE_X = '#text-anywhere-layer .text-anywhere-snap-guide[data-axis="x"]'
@@ -28,14 +28,13 @@ const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [
 const browser = useBrowser()
 
 describe('Text Anywhere\'s snap', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, noteBox
 
   const lineX = async (k) => {
     const [x0, , size] = await cellCentre(p, 0, 0)
     return x0 - size / 2 + k * size
   }
   const outlineLeft = async () => (await p.locator(SELECTION).boundingBox()).x - OUTLINE_MIDDLE_PX
-  const noteBox = (text) => p.locator(TEXTS, { hasText: text }).boundingBox()
   // Presses the note '15' and drags it by `dx` px along the row, then `wiggle` px further, reading its outline and the x guide before the release. The moves
   // arrive at once, which is a fast drag: a drag that `snaps` is read once the pointer has stood still long enough for the pull to show.
   const dragBy = async (dx, wiggle = 0, snaps = false) => {
@@ -62,6 +61,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser()))
+    ;({ noteBox } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await textAnywhere.reloadOnTextAnywhere(p)
     await p.mouse.click(...await gridPoint(p, TEXT_AT))

@@ -2,13 +2,17 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, START_KINDS, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
 
+// What each real kind declares, by name.
+const KIND_SCRIPTS = Object.fromEntries(KINDS.map((k) => [k.kind, k.scripts]))
+const START_KINDS = KINDS.filter((k) => k.start).map((k) => k.kind)
+
 // The lists a seed gives (each `{ puzzle, commands }`) over the whole puzzle set, or over `puzzles`.
-const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList(puzzles, { maxCommands: 20 }), { seed, numRuns: count })
+const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList(puzzles, { kinds: KINDS, maxCommands: 20 }), { seed, numRuns: count })
 // fast-check wraps each generated command (`.cmd`), and prints a list only once it ran, so the steps are read from the commands.
 const actionsOf = (lists) => lists.flatMap((l) => [...l.commands].map((wrapped) => wrapped.cmd))
 const stepsOf = (lists) => actionsOf(lists).map(String)
@@ -485,21 +489,37 @@ describe('focusing the actions on a script (#724)', () => {
   const kindsOf = (file) => KIND_NAMES.filter((k) => KIND_SCRIPTS[k].includes(file))
   const counts = (focus) => {
     const seen = Object.fromEntries(KIND_NAMES.map((k) => [k, 0]))
-    for (const a of actionsOf(fc.sample(actionList(FUZZ_PUZZLES, { maxCommands: 20, focus }), { seed: 11, numRuns: 300 }))) seen[a.kind]++
+    for (const a of actionsOf(fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS, maxCommands: 20, focus }), { seed: 11, numRuns: 300 }))) seen[a.kind]++
     return seen
   }
   const share = (seen, kinds) => kinds.reduce((sum, k) => sum + seen[k], 0) / Object.values(seen).reduce((a, b) => a + b, 0)
 
-  it('names only real kinds and real scripts, and every script has a kind', () => {
-    assert.deepEqual(Object.keys(KIND_SCRIPTS).sort(), [...KIND_NAMES].sort())
+  it('every real kind declares its facts: its scripts (real ones), whether it draws a stroke and whether a list may start with it', () => {
     const files = new Set(scriptFiles())
-    for (const [kind, scripts] of Object.entries(KIND_SCRIPTS)) for (const f of scripts) assert.ok(files.has(f), `${kind}: ${f} is no script`)
+    for (const k of KINDS) {
+      assert.ok(Array.isArray(k.scripts), `${k.kind}: scripts is no array`)
+      for (const f of k.scripts) assert.ok(files.has(f), `${k.kind}: ${f} is no script`)
+      assert.equal(typeof k.start, 'boolean', `${k.kind}: start`)
+      assert.equal(typeof k.stroke, 'boolean', `${k.kind}: stroke`)
+    }
+  })
+
+  it('a kind that draws a stroke is one of the pen\'s, and a command carries the fact the engine reads', () => {
+    const strokes = KINDS.filter((k) => k.stroke).map((k) => k.kind)
+    assert.deepEqual(strokes, ['pen line', 'pen erase', 'pen line mode', 'pen mark', 'arrow line', 'pen drag, Escape', 'pen drag, tool key', 'pen drag, undo', 'pen drag, resize', 'pen drag, second button', 'pen drag, blur', 'pen drag, leave window'])
+    const commands = actionsOf(sample(5, 20))
+    assert.ok(commands.length > 0)
+    for (const c of commands) assert.equal(c.stroke, strokes.includes(c.kind), c.kind)
+  })
+
+  it('names every script a kind exercises, and every script has a kind', () => {
+    const files = new Set(scriptFiles())
     for (const f of files) assert.ok(kindsOf(f).length > 0, `${f} has no action that exercises it`)
   })
 
   it('a focused script\'s kinds weigh FOCUS_FACTOR times their own weight and every other kind keeps it', () => {
-    const plain = kindWeights([])
-    const focused = kindWeights([PEN])
+    const plain = kindWeights(KINDS, [])
+    const focused = kindWeights(KINDS, [PEN])
     for (const k of KIND_NAMES) assert.equal(focused[k], kindsOf(PEN).includes(k) ? plain[k] * FOCUS_FACTOR : plain[k], k)
     assert.ok(FOCUS_FACTOR > 1)
   })
@@ -507,8 +527,8 @@ describe('focusing the actions on a script (#724)', () => {
   it('a kind of two focused scripts is raised once, not twice', () => {
     const both = KIND_NAMES.find((k) => KIND_SCRIPTS[k].length > 1)
     assert.ok(both, 'some kind exercises two scripts')
-    const weights = kindWeights(KIND_SCRIPTS[both])
-    assert.equal(weights[both], kindWeights([])[both] * FOCUS_FACTOR)
+    const weights = kindWeights(KINDS, KIND_SCRIPTS[both])
+    assert.equal(weights[both], kindWeights(KINDS, [])[both] * FOCUS_FACTOR)
   })
 
   it('a focused run draws the focused script\'s actions more often, and still draws every kind', () => {
@@ -653,7 +673,12 @@ describe('focusing the actions on a script (#724)', () => {
     })
 
     // What each script takes is its own reader's say, so a "valid" text is one its `pastedSettings` takes a setting from, and a refused one is no text it takes any from.
-    const taken = (script, text) => { try { return Object.keys(script.pastedSettings(text, script.READERS).values).length } catch { return 0 } }
+    const taken = (script, text) => {
+      try { return Object.keys(script.pastedSettings(text, script.READERS).values).length } catch (error) {
+        if (!/^the clipboard text is not/.test(error.message)) throw error
+        return 0
+      }
+    }
     const SCRIPTS = [['UI Tweaks', UI_TWEAKS, UI_TWEAKS_TEXTS], ['Dark Page', DARK_PAGE, DARK_PAGE_TEXTS]]
 
     it('the texts hold Copy, texts each script takes a setting from, and texts it takes none from', () => {
@@ -667,6 +692,13 @@ describe('focusing the actions on a script (#724)', () => {
       assert.equal(taken(UI_TWEAKS, '{"UiTweaks_hideSelect":"yes"}'), 0)
       assert.equal(taken(DARK_PAGE, '{"DarkPage_color":"blue"}'), 0)
       assert.ok(DARK_PAGE_TEXTS.includes('{"DarkPage_color":"blue"}'), 'a color the reader refuses')
+    })
+
+    it('a reader that throws anything but the clipboard refusal fails the check with that error', () => {
+      const broken = { READERS: {}, pastedSettings: () => { throw new TypeError('reader crashed') } }
+      assert.throws(() => taken(broken, '{}'), TypeError)
+      const refusing = { READERS: {}, pastedSettings: () => { throw new Error('the clipboard text is not a settings object') } }
+      assert.equal(taken(refusing, '[]'), 0)
     })
 
     it('every color Dark Page can be pasted is one of the dark colors', () => {
@@ -792,43 +824,8 @@ describe('focusing the actions on a script (#724)', () => {
   })
 })
 
-describe('swarm lists (#728)', () => {
-  const swarm = (seed, count = 150, options = {}) => fc.sample(actionList(FUZZ_PUZZLES, { swarm: true, ...options }), { seed, numRuns: count })
-  const kindsOfList = (list) => new Set([...list.commands].map((w) => w.cmd.kind))
-
-  it('a list holds only the kinds of its own subset, and the subset is never empty', () => {
-    for (const list of swarm(21)) {
-      assert.ok(list.kinds.length > 0, 'a non-empty subset')
-      assert.deepEqual([...kindsOfList(list)].filter((k) => !list.kinds.includes(k)), [], 'no kind outside the subset')
-      assert.deepEqual(list.kinds.filter((k) => !KIND_NAMES.includes(k)), [], 'the subset names real kinds')
-    }
-  })
-
-  it('the subsets differ from list to list, and across lists every kind still comes up', () => {
-    const lists = swarm(22, 300)
-    assert.ok(new Set(lists.map((l) => l.kinds.join('|'))).size > 100, 'the subsets differ')
-    assert.ok(lists.some((l) => l.kinds.length < KIND_NAMES.length / 2), 'some list has under half the kinds')
-    const seen = new Set(lists.flatMap((l) => [...kindsOfList(l)]))
-    assert.deepEqual(KIND_NAMES.filter((k) => !seen.has(k)), [])
-  })
-
-  it('some lists leave out the kinds that wipe the board, so a deeper state survives', () => {
-    const lists = swarm(23, 300)
-    const wipes = (l) => l.kinds.includes('undo all') || l.kinds.includes('reload')
-    assert.ok(lists.some((l) => !wipes(l) && [...l.commands].length > 10), 'a long list with neither undo all nor reload')
-  })
-
-  it('a list with no swarm draws from every kind', () => {
-    for (const list of fc.sample(actionList(FUZZ_PUZZLES), { seed: 24, numRuns: 20 })) assert.deepEqual(list.kinds, KIND_NAMES)
-  })
-
-  it('a start of a busy-start list is still drawn from the start kinds, whatever the subset', () => {
-    for (const list of swarm(25, 100, { busyStart: true })) assert.ok(list.start.length <= 30)
-  })
-})
-
 describe('longer lists and no empty list (#730)', () => {
-  const lengths = (options, count = 300) => fc.sample(actionList(FUZZ_PUZZLES, options), { seed: 31, numRuns: count }).map((l) => [...l.commands].length)
+  const lengths = (options, count = 300) => fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS, ...options }), { seed: 31, numRuns: count }).map((l) => [...l.commands].length)
 
   it('with no nonEmpty, some lists are empty, as fast-check draws the length from 0', () => {
     assert.ok(lengths({ maxCommands: 20 }).includes(0))
@@ -836,7 +833,7 @@ describe('longer lists and no empty list (#730)', () => {
 
   it('with nonEmpty, no generated list is empty', () => {
     assert.equal(Math.min(...lengths({ maxCommands: 20, nonEmpty: true })), 1)
-    assert.equal(Math.min(...lengths({ maxCommands: 50, nonEmpty: true, swarm: true })), 1)
+    assert.equal(Math.min(...lengths({ maxCommands: 50, nonEmpty: true })), 1)
   })
 
   it('maxCommands sets the longest list, and the default is the old 20', () => {

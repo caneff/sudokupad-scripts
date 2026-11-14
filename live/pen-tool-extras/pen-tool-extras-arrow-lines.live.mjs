@@ -6,10 +6,11 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
+import { setInputValue } from '../input.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from '../settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
 import { cellCentre, undoAll } from '../board.mjs'
-import { drag, goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, padValues, penEntries, setSlider } from '../pen.mjs'
+import { drag, goToPenPage, openPenTool, padValues, PAGE_ONE, PAGE_THREE, penDrawnCount, penEntries, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
@@ -38,9 +39,8 @@ const headings = (arrowsPath) => {
 }
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, read, editor
 
-  const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = (key) => read((k) => Framework.getData(k), key)
   const selected = () => read(() => String(ToolPen.tool.selectedColor))
   const penOf = async (cells) => (await penEntries(p)).filter((v) => cells.some((c) => v.startsWith(`${c}:`)))
@@ -48,7 +48,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const [line, arrows] = ['line', 'arrows'].map((name) => g.querySelector(`[data-arrow-line-part="${name}"]`))
     return { cls: g.getAttribute('class'), arrows: arrows.getAttribute('d'), line: line.getAttribute('d'), lineWidth: Number(line.getAttribute('stroke-width')) }
   }))
-  const strokeCount = () => read(() => document.querySelectorAll('#cell-pen .cell-pen').length)
   const pageErrors = () => errors.slice()
 
   const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
@@ -68,6 +67,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   before(async () => {
     // the script reports a drag it could not read the ways of with console.error and sends it unsplit, which no check would see
     ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors }))
+    ;({ read, editor } = extras.tools(p))
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, THICKNESS_KEY, OPACITY_KEY, ARROW_SPACING_KEY, 'ToolPen_color'])
     await selectArrowLinePen(3)
   })
@@ -124,13 +124,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const byClass = async (cls) => (await arrowLineGroups()).filter((g) => g.cls === cls)
     assert.equal((await byClass('cell-pen pen-2 pencolor-n')).length, 1)
     assert.deepEqual([...new Set(headings((await byClass('cell-pen pen-2 pencolor-n'))[0].arrows))], ['S'])
-    const before = await strokeCount()
+    const before = await penDrawnCount(p)
     await undo()
-    assert.equal(await settle(strokeCount, before - 5), before - 5, 'one undo takes the whole drag back')
+    assert.equal(await settle(() => penDrawnCount(p), before - 5), before - 5, 'one undo takes the whole drag back')
     assert.deepEqual(await penOf(['6,2', '6,3', '6,4', '7,2', '7,3']), [])
     assert.deepEqual(await penOf(['2,2', '4,2']), ['2,2:1n', '4,2:1o'], 'the earlier lines stay')
     await p.click('#control-redo')
-    assert.equal(await settle(strokeCount, before), before, 'redo draws it again')
+    assert.equal(await settle(() => penDrawnCount(p), before), before, 'redo draws it again')
     assert.deepEqual(await penOf(['6,2', '6,3', '6,4', '7,2', '7,3']), ['6,2:1n', '6,3:1n', '6,4:2n', '7,2:1o', '7,3:1o'])
   })
 
@@ -185,7 +185,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const groups = await arrowLineGroups()
     const replay = await read(() => Framework.app.getReplay())
     await undoAll(p)
-    assert.equal(await settle(strokeCount, 0), 0)
+    assert.equal(await settle(() => penDrawnCount(p), 0), 0)
     await read((r) => Framework.app.loadReplay(r), replay)
     assert.deepEqual(await settle(() => penEntries(p), values), values)
     const again = await arrowLineGroups()
@@ -268,9 +268,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       return (decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule)[1]).match(/Z/g) || []).length
     })
     assert.equal(await swatchArrows(), 2)
-    const editor = () => p.locator('#pen-tool-extras-editor')
     const slider = () => editor().locator('input[data-setting="arrowSpacing"]')
-    const setSpacing = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+    const setSpacing = (value) => setInputValue(slider(), value)
     await openExtrasEditor(p)
     assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), [String(ARROW_SPACING.min), String(ARROW_SPACING.max), String(ARROW_SPACING.step), String(ARROW_SPACING.fallback)])
     await setSpacing(12)
@@ -304,7 +303,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('the Opacity slider fades the arrow lines with the pen layer: the group and its parts show at the slider\'s value', async () => {
-    const shown = async (selector) => [...new Set(await effectiveOpacities(p, selector))]
+    const shown = async (selector) => [...new Set(await extras.effectiveOpacities(p, selector))]
     await setSlider(p, '#pen-tool-extras-opacity', 50)
     assert.deepEqual(await settle(() => shown('#cell-pen > g.cell-pen'), [0.5]), [0.5])
     assert.deepEqual(await shown('#cell-pen > g.cell-pen > path'), [0.5])
@@ -345,7 +344,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(drawn, [['cell-pen pen-1 pencolor-0', 'W'], ['cell-pen pen-1 pencolor-0', 'W'], ['cell-pen pen-1 pencolor-z', 'E'], ['cell-pen pen-1 pencolor-z', 'E']])
     const replay = await read(() => Framework.app.getReplay())
     await undoAll(p)
-    assert.equal(await settle(strokeCount, 0), 0)
+    assert.equal(await settle(() => penDrawnCount(p), 0), 0)
     await read((r) => Framework.app.loadReplay(r), replay)
     assert.deepEqual(await settle(async () => (await penEntries(p)).filter((v) => /:1[z0]$/.test(v)), want), want)
     await reload()

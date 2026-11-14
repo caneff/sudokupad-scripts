@@ -6,7 +6,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { openPenTool } from '../pen.mjs'
-import { dialogButton, openExtrasEditor } from '../settings.mjs'
+import { dialogButton, EXTRAS_EDITOR, openExtrasEditor } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
 const { HOLD_WAIT_MS } = extras
@@ -168,9 +168,9 @@ describe('the pen panel layout', { concurrency: false }, () => {
 
   const setSliderBoxes = async (shown) => {
     await openExtrasEditor(p)
-    for (const key of ['thickness', 'opacity']) await p.locator(`#pen-tool-extras-editor input[data-box="show.${key}"]`).setChecked(shown)
+    for (const key of ['thickness', 'opacity']) await p.locator(`${EXTRAS_EDITOR} input[data-box="show.${key}"]`).setChecked(shown)
     await dialogButton(p, 'Save').click()
-    await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
+    await p.locator(EXTRAS_EDITOR).waitFor({ state: 'detached' })
   }
 
   it('with both sliders hidden, the tray ends under the controls with the same 6.6 px of padding on every side', async () => {

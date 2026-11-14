@@ -5,7 +5,7 @@
 import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { STATUS, closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
+import { closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, STATUS } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
 const SLIDERS = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth']
@@ -14,13 +14,13 @@ const HALF_PIXEL = 0.5
 const browser = useBrowser()
 
 describe('the settings dialog layout', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, editor
 
-  const editor = () => p.locator('#pen-tool-extras-editor')
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
 
   before(async () => {
     ;({ context, p, errors } = await extras.open(browser(), { contextOptions: { viewport: { width: 1200, height: 1000 } }, penTool: false }))
+    ;({ editor } = extras.tools(p))
   })
   after(async () => { await context.close() })
 
@@ -46,7 +46,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   afterEach(async () => { if (await editor().count()) await closeExtrasEditorWith(p, 'Cancel') })
   const rect = (selector) => p.locator(selector).first().evaluate((el) => { const { left, right, top, bottom, width, height } = el.getBoundingClientRect(); return { left, right, top, bottom, width, height } })
   const near = (actual, expected, message) => assert.equal(Math.abs(actual - expected) <= HALF_PIXEL, true, `${message}: ${actual} vs ${expected}`)
-  const cells = () => p.locator('#pen-tool-extras-editor .pen-tool-extras-cell').evaluateAll((els) => els.map((el) => { const { left, right, top, bottom } = el.getBoundingClientRect(); return { left, right, top, bottom, text: el.querySelector('.pen-tool-extras-section-title').textContent } }))
+  const cells = () => p.locator(`${EXTRAS_EDITOR} .pen-tool-extras-cell`).evaluateAll((els) => els.map((el) => { const { left, right, top, bottom } = el.getBoundingClientRect(); return { left, right, top, bottom, text: el.querySelector('.pen-tool-extras-section-title').textContent } }))
 
   it('the sections are a two by two grid: Pen colors | Line settings above Line styles, then Marks to cycle | Other', async () => {
     await openSettledEditor(p)
@@ -63,12 +63,12 @@ describe('the settings dialog layout', { concurrency: false }, () => {
 
   it('the vertical line runs from the title line to the footer line, and the Line settings / Line styles divider starts at it', async () => {
     await openSettledEditor(p)
-    const layout = await rect('#pen-tool-extras-editor .pen-tool-extras-layout')
+    const layout = await rect(`${EXTRAS_EDITOR} .pen-tool-extras-layout`)
     const [, lines, , other] = await cells()
     const footer = await rect('.dialog-options')
     near(lines.top, layout.top, 'the vertical line starts at the title line')
     near(other.bottom, footer.top, 'the vertical line ends at the footer line')
-    const divider = await rect('#pen-tool-extras-editor .pen-tool-extras-divider')
+    const divider = await rect(`${EXTRAS_EDITOR} .pen-tool-extras-divider`)
     near(divider.left, lines.left, 'the inner divider starts at the vertical line')
     // The lines themselves: a top line on every cell (the title line and the line between the rows) and a left line on the right-hand cells.
     const borders = await editor().locator('.pen-tool-extras-cell').evaluateAll((els) => els.map((el) => { const style = window.getComputedStyle(el); return { top: style.borderTopWidth, left: style.borderLeftWidth, colour: style.borderTopColor } }))
@@ -87,25 +87,25 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     for (const box of boxes) { assert.equal(box.width >= 34 - HALF_PIXEL, true, `width ${box.width} is at least 34`); near(box.height, box.width, 'square') }
     near(boxes[1].left - boxes[0].right, 4, 'across gap')
     near(boxes[3].top - (boxes[0].top + boxes[0].height), 4, 'down gap')
-    const pulldown = await rect('#pen-tool-extras-editor select[data-role="color-choice"]')
+    const pulldown = await rect(`${EXTRAS_EDITOR} select[data-role="color-choice"]`)
     near(pulldown.left, boxes[0].left, 'the pulldown and the grid share their left edge')
     near(pulldown.right, boxes[2].right, 'the pulldown and the grid share their right edge')
-    const grid = await rect('#pen-tool-extras-editor .pen-tool-extras-swatches')
+    const grid = await rect(`${EXTRAS_EDITOR} .pen-tool-extras-swatches`)
     near(grid.width, pulldown.width, 'the grid is as wide as the pulldown')
     assert.equal(await editor().locator('.pen-tool-extras-swatches b').count(), 0)
-    const lastMarksColumn = await rect('#pen-tool-extras-editor .pen-tool-extras-marks-table > :nth-child(5)')
+    const lastMarksColumn = await rect(`${EXTRAS_EDITOR} .pen-tool-extras-marks-table > :nth-child(5)`)
     near(pulldown.right, lastMarksColumn.right, 'the pulldown fills the column the marks table sets, and does not widen it')
     // A select is as wide as its longest option, so the longest label a preset could have must not move the column.
     await editor().locator('select[data-role="color-choice"] option').first().evaluate((option) => { option.textContent = 'A preset name much longer than the column is wide' })
-    const widened = await rect('#pen-tool-extras-editor select[data-role="color-choice"]')
+    const widened = await rect(`${EXTRAS_EDITOR} select[data-role="color-choice"]`)
     near(widened.right, lastMarksColumn.right, 'a long option leaves the pulldown at the column\'s width')
-    near((await rect('#pen-tool-extras-editor .pen-tool-extras-marks-table > :nth-child(5)')).right, lastMarksColumn.right, 'and the column where it was')
+    near((await rect(`${EXTRAS_EDITOR} .pen-tool-extras-marks-table > :nth-child(5)`)).right, lastMarksColumn.right, 'and the column where it was')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('all five sliders start at one x and are 96px long; Slider in panel sub-lines sit under Thickness and Opacity in grey #444', async () => {
     await openSettledEditor(p)
-    const sliders = await Promise.all(SLIDERS.map((key) => rect(`#pen-tool-extras-editor input[data-setting="${key}"]`)))
+    const sliders = await Promise.all(SLIDERS.map((key) => rect(`${EXTRAS_EDITOR} input[data-setting="${key}"]`)))
     sliders.forEach((slider, i) => near(slider.left, sliders[0].left, `${SLIDERS[i]} left`))
     sliders.forEach((slider, i) => near(slider.width, 96, `${SLIDERS[i]} width`))
     for (const [key, next] of [['thickness', 'opacity'], ['opacity', 'dash']]) {
@@ -174,7 +174,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   it('the dialog is sized to its content and centred in the window, not over the board', async () => {
     await openSettledEditor(p)
     const dialog = await rect('.dialog')
-    const layout = await rect('#pen-tool-extras-editor .pen-tool-extras-layout')
+    const layout = await rect(`${EXTRAS_EDITOR} .pen-tool-extras-layout`)
     assert.equal(dialog.width < layout.width + 100, true, `dialog ${dialog.width}px wide for ${layout.width}px of content`)
     assert.equal(Math.abs((dialog.left + dialog.right) / 2 - p.viewportSize().width / 2) <= 4, true, `centred at ${(dialog.left + dialog.right) / 2}`)
     assert.equal(dialog.left >= 0, true)
@@ -269,12 +269,12 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await p.setViewportSize({ width: 500, height: 1000 })
     try {
       await openSettledEditor(p)
-      const fits = await p.evaluate(() => {
+      const fits = await p.evaluate((selector) => {
         const dialog = document.querySelector('.dialog').getBoundingClientRect()
-        const editor = document.getElementById('pen-tool-extras-editor')
+        const editor = document.querySelector(selector)
         const overflowing = [...editor.querySelectorAll('input, button, select, output')].filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
         return { dialogRight: Math.round(dialog.right), width: window.innerWidth, overflowing: overflowing.map((el) => el.outerHTML.slice(0, 60)) }
-      })
+      }, EXTRAS_EDITOR)
       assert.equal(fits.dialogRight <= fits.width + 1, true, JSON.stringify(fits))
       assert.deepEqual(fits.overflowing, [])
       await closeExtrasEditorWith(p, 'Cancel')

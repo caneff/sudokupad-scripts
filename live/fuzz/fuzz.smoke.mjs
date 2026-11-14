@@ -10,7 +10,8 @@ import { useBrowser } from '../session.mjs'
 import { rulesWidth } from '../attacks.mjs'
 import { penDrawnCount } from '../pen.mjs'
 import { scriptedList } from './actions.mjs'
-import { ownedSettings, SETTINGS_SCRIPTS } from '../settings.mjs'
+import { ownedSettings } from '../settings.mjs'
+import { settingsScript } from '../scripts.mjs'
 import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
@@ -277,7 +278,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
   describe('the rules box of Auto Rules Resizer (#818)', () => {
     const puzzle = puzzleByName('recorded 9x9')
-    const script = SETTINGS_SCRIPTS.find((s) => s.file === 'auto-rules-resizer.user.js')
+    const script = settingsScript('auto-rules-resizer.user.js')
     // What the script saved, by key without the prefix: the limits are plain, a puzzle's sizing is the one key that starts with `sizing_`.
     const saved = async (p) => Object.fromEntries(Object.entries(await ownedSettings(p, script)).map(([k, v]) => [k.replace(/^(?:svencodes_)?AutoRulesResizer_/, '').replace(/^sizing_.*/, 'sizing'), JSON.parse(v).data]))
     const sizing = async (p) => (await saved(p)).sizing

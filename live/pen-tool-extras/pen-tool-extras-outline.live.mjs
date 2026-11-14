@@ -8,7 +8,8 @@ import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
 import { cellCentre } from '../board.mjs'
-import { draw as drawLine, openPenTool, setInputValue } from '../pen.mjs'
+import { draw as drawLine, openPenTool } from '../pen.mjs'
+import { setInputValue } from '../input.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
@@ -27,11 +28,9 @@ const DASH_KEY = 'PenColor_dash'
 const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
-  let context, p, reader, errors
+  let context, p, reader, errors, read, editor
 
-  const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = (key) => read((k) => Framework.getData(k), key)
-  const editor = () => p.locator('#pen-tool-extras-editor')
   const outlineBox = () => editor().locator('input[data-box="outline"]')
   const layerFilter = () => read(() => window.getComputedStyle(document.querySelector('#cell-pen')).filter)
   const FILTER_ON = 'url("#pen-tool-extras-outline-filter")'
@@ -89,6 +88,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await extras.open(browser()))
+    ;({ read, editor } = extras.tools(p))
     reader = await context.newPage()
     await clearSaved()
     await drawCenterOnlyLine()

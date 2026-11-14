@@ -29,10 +29,9 @@ const NEAR_UNITS = 4
 const browser = useBrowser()
 
 describe('Text Anywhere\'s selection', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, savedNote
 
   const saved = () => textAnywhere.saved(p)
-  const savedNote = async (text) => (await saved()).find((item) => item.text === text)
   const selectedTexts = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent).sort(), SELECTED)
   // A press on the note that starts at cell spot `at` lands in its middle, and a drag keeps the offset between that and the spot.
   const noteAt = async (at) => textAnywhere.middleAt(p, await gridPoint(p, at))
@@ -64,6 +63,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 } } }))
+    ;({ savedNote } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await reload()
     for (const [text, at] of Object.entries(NOTES)) await typeText(p, at, text)

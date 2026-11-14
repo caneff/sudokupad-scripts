@@ -4,11 +4,12 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { setInputValue } from '../pen.mjs'
+import { setInputValue } from '../input.mjs'
 import { readUntil } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { openExtrasEditor, closeExtrasEditorWith } from '../settings.mjs'
 import { slideTo } from '../slider.mjs'
+import { undoDepth } from '../board.mjs'
 
 const THICKNESS = '#pen-tool-extras-thickness'
 const THICKNESS_KEY = 'PenColor_thickness'
@@ -27,12 +28,11 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
 
   const slider = () => p.evaluate((s) => Number(document.querySelector(s).value), THICKNESS)
   const saved = () => p.evaluate((key) => Framework.getData(key), THICKNESS_KEY)
-  const undoDepth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
   const setThickness = (value) => setInputValue(p.locator(THICKNESS), value)
 
   it('+, = and the keypad\'s + step the slider up, - and the keypad\'s - down, each by one step, and the step is saved and not an undo step', async () => {
     await setThickness(8)
-    const undo = await undoDepth()
+    const undo = await undoDepth(p)
     let expected = 8
     for (const [key, direction] of [['Shift+Equal', 1], ['Equal', 1], ['NumpadAdd', 1], ['Minus', -1], ['NumpadSubtract', -1]]) {
       await p.keyboard.press(key)
@@ -40,7 +40,7 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
       await readUntil(slider, (v) => v === expected)
       assert.equal(await saved(), expected, `${key} is saved as a slider move is`)
     }
-    assert.equal(await undoDepth(), undo, 'no undo step')
+    assert.equal(await undoDepth(p), undo, 'no undo step')
   })
 
   it('a held key steps once, because the script ignores a repeat', async () => {
