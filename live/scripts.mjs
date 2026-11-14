@@ -19,12 +19,15 @@ const settingsEntry = async (p, text) => {
   await group.locator('button, [role=button]').filter({ hasText: text }).first().waitFor({ state: 'visible' })
 }
 
+const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
+
 // Per script: its file, what shows it has started (`ready`), its control (`control`) and one representative action (`act`).
 // `ready` runs after Start Puzzle and the injection, `act` and then `control` after `ready`.
 export const SCRIPTS = [
   {
     name: 'Color by Digit',
     file: 'color-by-digit.user.js',
+    dialog: { owns: /^ColorByDigit_/, editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, enveloped: true, badKey: 'ColorByDigit_mode', bad: 'sideways' },
     ready: (p) => p.locator('#control-colorbydigit').waitFor({ state: 'attached' }),
     control: (p) => p.locator('#control-colorbydigit').waitFor({ state: 'visible' }),
     // A fresh install starts in Cell, which colors the board's givens, and a press steps it to Digit, which takes them off.
@@ -41,6 +44,7 @@ export const SCRIPTS = [
   {
     name: 'Dark Page',
     file: 'dark-page.user.js',
+    dialog: { owns: /^DarkPage_/, editor: '#dark-page-dialog', key: 'DarkPage_color', saved: '#336699', asDefault: '#000000', badKey: 'DarkPage_color', bad: 'blue' },
     ready: (p) => p.locator('#dark-page-style').waitFor({ state: 'attached' }),
     control: (p) => settingsEntry(p, /^\s*Dark Page\s*$/),
     act: async (p) => {
@@ -51,6 +55,7 @@ export const SCRIPTS = [
   {
     name: 'UI Tweaks',
     file: 'ui-tweaks.user.js',
+    dialog: { owns: /^UiTweaks_/, editor: '#ui-tweaks-dialog', key: 'UiTweaks_hideSelect', saved: true, asDefault: false, badKey: 'UiTweaks_hideSelect', bad: 'yes' },
     // The letter tool's own button, which the Tab option leaves in place, shows once the tool is on.
     ready: async (p) => {
       await p.locator('#ui-tweaks-style').waitFor({ state: 'attached' })
@@ -76,6 +81,7 @@ export const SCRIPTS = [
   {
     name: 'Auto Rules Resizer',
     file: 'auto-rules-resizer.user.js',
+    dialog: { owns: /^AutoRulesResizer_/, editor: '#rules-resizer-dialog', key: 'AutoRulesResizer_maxWidth', saved: 640, enveloped: true, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
     // The recorded puzzle has no rules: SudokuPad is given some, and its own layout calls the script's fit.
     ready: async (p) => {
       await p.locator('#auto-rules-resizer-style').waitFor({ state: 'attached' })
@@ -98,6 +104,7 @@ export const SCRIPTS = [
   {
     name: 'Pen Tool Extras',
     file: 'pen-tool-extras.user.js',
+    dialog: { owns: /^(PenColor_|EdgeMarks_)/, editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 },
     ready: async (p) => {
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
       await p.evaluate(() => Framework.setSetting('toolpen', true))
@@ -123,8 +130,21 @@ export const SCRIPTS = [
   {
     name: 'Text Anywhere',
     file: 'text-anywhere.user.js',
+    dialog: { owns: /^TextAnywhere_/, editor: '#text-anywhere-dialog', key: 'TextAnywhere_width', saved: 3.5, badKey: 'TextAnywhere_width', bad: 500 },
     ready: (p) => p.locator(TEXT_ANYWHERE_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(TEXT_ANYWHERE_BUTTON).waitFor({ state: 'visible' }),
     act: (p) => placeNote(p, [2.5, 2.5], '15')
   }
 ]
+
+// The scripts with a settings dialog, one flat record each, in the order SCRIPTS lists them; `open` opens the dialog the way a user finds it.
+export const SETTINGS_SCRIPTS = SCRIPTS.filter((script) => script.dialog).map(({ name, file, dialog }) => ({
+  file,
+  entry: name,
+  ...dialog,
+  open: (p) => openScriptDialog(p, name, dialog.editor)
+}))
+
+export const settingsScript = (file) => SETTINGS_SCRIPTS.find((script) => script.file === file)
+
+export const COLOR_BY_DIGIT_DIALOG = settingsScript('color-by-digit.user.js')

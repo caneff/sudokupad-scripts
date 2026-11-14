@@ -5,7 +5,8 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EDITOR, openSession, paintedKeys, PROFILES_KEY, SEED, savedState } from './color-by-digit-fixtures.mjs'
-import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { closeDialogWith } from '../settings.mjs'
+import { COLOR_BY_DIGIT_DIALOG } from '../scripts.mjs'
 import { captureConsoleErrors } from '../page.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -24,7 +25,7 @@ describe('Color by Digit\'s editor paint drag, interrupted', { concurrency: fals
   // Hovering first waits for the dialog to stop moving, so the box read is where the key is.
   const centre = async (digit) => { await digitKey(digit).hover(); const b = await digitKey(digit).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
   const savedProfiles = async () => savedState(await p.evaluate((key) => Framework.getData(key), PROFILES_KEY))
-  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
+  const openEditor = () => COLOR_BY_DIGIT_DIALOG.open(p)
 
   before(async () => {
     ;({ context, p, errors } = await openSession(browser(), script, { seed: captureConsoleErrors }))

@@ -5,7 +5,8 @@
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { closeDialogWith } from '../settings.mjs'
+import { COLOR_BY_DIGIT_DIALOG } from '../scripts.mjs'
 import { settle } from '../settle.mjs'
 import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, savedState, typeProfileName, wrongCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
@@ -31,7 +32,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
   const coloredCount = () => coloredCountOn(p)
   const undo = () => p.click('#control-undo')
   const editor = () => p.locator(EDITOR)
-  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
+  const openEditor = () => COLOR_BY_DIGIT_DIALOG.open(p)
   const closeEditor = (text) => closeDialogWith(p, text, EDITOR)
   const getState = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
   const activeName = async () => { const state = await getState(); return state.profiles[state.active].name }
