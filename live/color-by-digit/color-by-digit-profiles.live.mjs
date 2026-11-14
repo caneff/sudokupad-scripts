@@ -2,7 +2,7 @@
 // the button, switching profile, the button's icon, the dialog's profile list, and migration.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'

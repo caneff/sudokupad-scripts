@@ -126,7 +126,7 @@ describe('the profile menu\'s fade after a pick, injected after Start Puzzle', {
       const old = document.querySelector(menu)
       ;[...old.querySelectorAll('[data-act=pick]')].find((row) => row.textContent.includes('Odd/Even')).click()
       const start = performance.now()
-      while (!old.classList.contains('cbd-closing') && old.isConnected && performance.now() - start < 1000) await new Promise(requestAnimationFrame)
+      while (!old.classList.contains('cbd-closing') && old.isConnected && performance.now() - start < 1000) await new Promise((resolve) => window.requestAnimationFrame(resolve))
       const midFade = old.isConnected && old.classList.contains('cbd-closing')
       document.querySelector(arrow).click()
       return midFade
