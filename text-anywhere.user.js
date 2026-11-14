@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.21
+// @version      0.46.23
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.21'
+  const VERSION = '0.46.23'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -689,11 +689,32 @@
   const noteChanged = (item, text, before) => text !== (before?.text ?? '') ||
     (before !== null && (item.color !== before.color || item.size !== before.size || itemOpacity(item) !== itemOpacity(before) || Boolean(item.bg) !== Boolean(before.bg) || String(item.box) !== String(before.box)))
 
+  // `index` is -1 for a note never saved. The index returned is -1 when the closing note left nothing.
+  const notesAfterClose = (notes, index, item, text) => {
+    if (text === '') return { notes: notes.filter((_, i) => i !== index), index: -1 }
+    if (index === -1) return { notes: [...notes, { ...item, text }], index: notes.length }
+    return { notes: notes.map((note, i) => i === index ? { ...item, text } : note), index }
+  }
+
   // Where the note at index `index` sits after the notes `keep` marks false went, or -1 when it went (or was never saved, as a new note's -1).
   const indexAfterKeep = (index, keep) => index < 0 || !keep[index] ? -1 : keep.slice(0, index).filter(Boolean).length
 
+  // The open note's index, a resize and a move after the notes `marks` marks false went. An open note that went is unsaved (-1, so closing it adds it back with what was typed),
+  // and so is its resize. A selected note's resize whose note went is cancelled, so its release saves nothing; a move leaves the notes that went, and a move left with none is
+  // `dragCancelled`. `textBoxIndex`, `resizing` and `move` are null when there is none.
+  function followKept ({ textBoxIndex, resizing, move }, marks) {
+    const index = resizing && indexAfterKeep(resizing.index, marks)
+    const moved = move && move.map((entry) => ({ ...entry, index: indexAfterKeep(entry.index, marks) })).filter((entry) => entry.index !== -1)
+    return {
+      textBoxIndex: textBoxIndex === null ? null : indexAfterKeep(textBoxIndex, marks),
+      resizing: resizing && { ...resizing, index, cancelled: resizing.cancelled || (textBoxIndex === null && index === -1) },
+      move: moved,
+      dragCancelled: moved !== null && moved.length === 0
+    }
+  }
+
   // Which notes a change of color, size, opacity or Background reaches besides the next note's setting: the open note, else the selected ones, else none.
-  const lookTarget = (editing, selected) => editing ? 'open' : selected.length ? 'selected' : 'next'
+  const lookTarget = (textBox, selected) => textBox ? 'open' : selected.length ? 'selected' : 'next'
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
   // <lib:plain>
@@ -1190,6 +1211,18 @@
     if (!hex) throw new RangeError(`text-anywhere: ${value} is not a color`)
     return { ...colors, [n]: hex }
   }
+
+  // A color set is one record: the nine `colors`, their `preset` (null for Custom), the `missing` pens a page preset left with SudokuPad's own, and the
+  // preset `fromPreset` the dialog names them for until the page reloads; a Custom set keeps them. Every change makes a whole new record.
+  const penColorSet = (readPen) => ({ colors: copiedPenColors(readPen), preset: PEN_PRESET, missing: [], fromPreset: null })
+  const presetColorSet = (preset, pages, readCell, readPen) => ({ ...presetColors(preset, pages, readCell, readPen), preset, fromPreset: preset })
+  // null when nothing is saved, as for `readNoteColors`.
+  const savedColorSet = (saved) => {
+    const colors = readNoteColors(saved)
+    return colors && { colors, preset: readNotePreset(saved), missing: [], fromPreset: null }
+  }
+  const editedColorSet = (set, n, value) => ({ ...set, colors: editedColor(set.colors, n, value), preset: null, missing: set.missing.filter((m) => String(m) !== String(n)) })
+  const storedColorSet = (set) => storedNoteColors(set.colors, set.preset)
 
   // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
   const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  ${colorVar(n)}: ${colors[n]};`), '}'].join('\n')
@@ -2114,7 +2147,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet }
   }
   if (typeof document === 'undefined') return
 
@@ -2523,13 +2556,8 @@
   const look = readLooks({ getData: () => null })
   // Whether the next note is made with a background. The Background button turns it on and off, and it is remembered.
   let background = false
-  // Text Anywhere's nine colors, or null until they are first copied from the pen colors.
-  let colors = null
-  // The preset `colors` came from, or null for Custom.
-  let colorsPreset = null
-  // The pens of `colors` the page preset left with SudokuPad's own, and that preset, for the dialog's note until the page reloads; a Custom set keeps them.
-  let colorsMissing = []
-  let colorsFromPreset = null
+  // Text Anywhere's color set, or null until its colors are first copied from the pen colors.
+  let colorSet = null
   let panelParts = []
 
   const keypad = () => document.querySelector('.controls-input')
@@ -2538,8 +2566,7 @@
 
   // The open note's own look changes.
   function changeOpen (change) {
-    editing.item = change(editing.item)
-    showEditing(boardMap())
+    writeNote(textBox.index, change(textBox.item))
     showPanelValues()
   }
 
@@ -2551,7 +2578,7 @@
   // An explicit change reaches the notes `lookTarget` names and is also the next note's setting (`setNext`); selecting or opening a note sets nothing.
   function applyLook (change, setNext) {
     setNext()
-    const target = lookTarget(editing, selected)
+    const target = lookTarget(textBox, selected)
     if (target === 'open') changeOpen(change)
     else if (target === 'selected') changeSelected(change)
     else showPanelValues()
@@ -2559,45 +2586,35 @@
 
   // The notes `lookTarget` names as a list, or null for the next note.
   function targetNotes () {
-    const target = lookTarget(editing, selected)
-    return target === 'open' ? [editing.item] : target === 'selected' ? selectedNotes() : null
+    const target = lookTarget(textBox, selected)
+    return target === 'open' ? [textBox.item] : target === 'selected' ? selectedNotes() : null
   }
 
   const pickColor = (next) => applyLook((item) => ({ ...item, color: next }), () => setColor(next))
 
   function showColors () {
-    writeStyle(COLORS_STYLE_ID, colors ? colorsCss(colors) : '')
+    writeStyle(COLORS_STYLE_ID, colorSet ? colorsCss(colorSet.colors) : '')
   }
 
   // The colors and every look as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
   const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...tableKeys(LOOKS)], () => {
-    const wasColors = colors
-    const wasPreset = colorsPreset
-    const wasMissing = colorsMissing
-    const wasFromPreset = colorsFromPreset
+    const wasColorSet = colorSet
     const wasLooks = { ...look }
     return () => {
-      colors = wasColors
-      colorsPreset = wasPreset
-      colorsMissing = wasMissing
-      colorsFromPreset = wasFromPreset
+      colorSet = wasColorSet
       Object.assign(look, wasLooks)
       showPanelValues()
       showColors()
-      if (colors) refreshPickers(CLASS_PREFIX, (n) => colors[n])
+      if (colorSet) refreshPickers(CLASS_PREFIX, (n) => colorSet.colors[n])
       showBoxes()
     }
   })
 
-  // A set saved with no preset is Custom.
-  function saveColors (next, preset = null, missing = [], fromPreset = null) {
-    colors = next
-    colorsPreset = preset
-    colorsMissing = missing
-    colorsFromPreset = fromPreset
-    savedData.setData(COLORS_KEY, storedNoteColors(colors, preset))
+  function saveColors (next) {
+    colorSet = next
+    savedData.setData(COLORS_KEY, storedColorSet(colorSet))
     showColors()
-    refreshPickers(CLASS_PREFIX, (n) => colors[n])
+    refreshPickers(CLASS_PREFIX, (n) => colorSet.colors[n])
   }
 
   function showBoxes () {
@@ -2634,19 +2651,15 @@
 
   // A pasted value is saved and shown at once, whether or not Text Anywhere is current.
   function applyPasted (values) {
-    if (COLORS_KEY in values) saveColors(readNoteColors(values[COLORS_KEY]), readNotePreset(values[COLORS_KEY]))
+    if (COLORS_KEY in values) saveColors(savedColorSet(values[COLORS_KEY]))
     for (const { name, key } of LOOKS) if (key in values) setLook(name, values[key])
     showPanelValues()
   }
 
   function openDialog () {
     // Until the colors are first copied, the draft is the pen colors a first use would copy.
-    let draft = colors ?? copiedPenColors(readPenColor)
-    // Null is Custom.
-    let chosen = colors ? colorsPreset : PEN_PRESET
+    let draft = colorSet ?? penColorSet(readPenColor)
     let colorsEdited = false
-    let draftMissing = colorsMissing
-    let pickedPreset = colorsFromPreset
     let draftLooks = { ...look }
     let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
     let pages = []
@@ -2673,7 +2686,7 @@
       snapshot: snapshotSave,
       feature: settingsUi,
       save: () => {
-        if (colorsEdited) saveColors(draft, chosen, draftMissing, pickedPreset)
+        if (colorsEdited) saveColors(draft)
         for (const { name } of editedLooks()) setLook(name, draftLooks[name])
       },
       copyPaste: {
@@ -2687,9 +2700,7 @@
           draftLooks = withPasted(LOOKS, draftLooks, look, values)
           if (BOX_KEY in values) draftCustom = savedHex(look.boxColor) ?? draftCustom
           if (COLORS_KEY in values) {
-            draft = colors
-            draftMissing = []
-            chosen = colorsPreset
+            draft = colorSet
             colorsEdited = false
           }
           draw()
@@ -2701,28 +2712,24 @@
     // Like Pen Tool Extras: the draft takes the defaults, and Save or Cancel decides.
     const restoreDefaults = () => {
       draftLooks = { ...draftLooks, ...dialogDefaults() }
-      draft = copiedPenColors(readPenColor)
-      chosen = PEN_PRESET
-      draftMissing = []
+      draft = penColorSet(readPenColor)
       colorsEdited = true
       draw()
     }
     const draw = () => {
-      const options = presetChoices(chosen ?? CUSTOM, presetOptions(pages.length), PRESET_LABELS)
+      const options = presetChoices(draft.preset ?? CUSTOM, presetOptions(pages.length), PRESET_LABELS)
       box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
-        renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
+        renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft.colors[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
-        (draftMissing.length ? `<div data-role="missing-note">${missingColorsText(draftMissing, pickedPreset)}</div>` : '') +
+        (draft.missing.length ? `<div data-role="missing-note">${missingColorsText(draft.missing, draft.fromPreset)}</div>` : '') +
         `<div class="${CLASS_PREFIX}section-title">Font</div>${renderFontChoice(draftLooks.noteFont)}` +
-        renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft[color] })
+        renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft.colors[color] })
     }
     draw()
     box.addEventListener('change', under(settingsUi, (event) => {
       const target = event.target
       if (target.matches('[data-role="color-choice"]')) {
-        chosen = target.value
-        ;({ colors: draft, missing: draftMissing } = presetColors(chosen, pages, readCellColor, readPenColor))
-        pickedPreset = chosen
+        draft = presetColorSet(target.value, pages, readCellColor, readPenColor)
         colorsEdited = true
         draw()
       } else if (target.matches('[data-role="font-choice"]')) {
@@ -2732,9 +2739,7 @@
         draftCustom = draftLooks.boxColor = hexColor(target.value)
         draw()
       } else if (target.matches('input[data-role="swatch"]')) {
-        draft = editedColor(draft, Number(target.dataset.key), target.value)
-        draftMissing = draftMissing.filter((n) => String(n) !== target.dataset.key)
-        chosen = null
+        draft = editedColorSet(draft, Number(target.dataset.key), target.value)
         colorsEdited = true
         draw()
       }
@@ -2867,7 +2872,7 @@
 
   // A hold on a color button toggles a color picker over each, and a picker recolors its color number at once: every note in it reads the variable.
   function installColorPickers () {
-    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value), null, colorsMissing.filter((m) => String(m) !== String(n)), colorsFromPreset), guard: (toggle) => textTool.run(toggle) })
+    installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colorSet.colors[n], save: (n, value) => saveColors(editedColorSet(colorSet, Number(n), value)), guard: (toggle) => textTool.run(toggle) })
   }
 
   // A left press in progress: `start` is the index of the note it began on, or -1 for none; `points` its points on the screen, and `pending` those its
@@ -2879,7 +2884,7 @@
   // The right button's `buttons` bit holds it.
   let erasing = null
   // The note open for typing: the index of the text it reopened, or -1 for a new one, the item and its element, which the solver types in.
-  let editing = null
+  let textBox = null
   // The four resize handles of the open note, or of the one note selected, each with the corner of CORNERS it sits on; none when no note shows them.
   let handles = []
   // A drag of a resize handle: the note's index in `puzzleNotes`, its item at the press, the corner dragged, the opposite corner on
@@ -3030,7 +3035,7 @@
     placeBoardGroup(map)
     const claimed = new Set()
     const notes = puzzleNotes.flatMap((item, index) => {
-      if (item.kind !== TEXT_KIND || (editing && editing.index === index)) return []
+      if (item.kind !== TEXT_KIND || (textBox && textBox.index === index)) return []
       if (!item[NOTE_ELEMENT] || claimed.has(item[NOTE_ELEMENT])) item[NOTE_ELEMENT] = Object.assign(document.createElement('div'), { className: TEXT_CLASS })
       const element = item[NOTE_ELEMENT]
       claimed.add(element)
@@ -3043,7 +3048,7 @@
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
     if (!drag?.move && !resizing) showFixedReachable(notes, map)
     if (drag?.move) showMove(drag, map)
-    if (editing) showEditing(map)
+    if (textBox) showTextBox(map)
     else showHandles(drag?.move ? null : selectedBox(map))
     if (!drag?.move) showSelection(map)
     if (hoverPoint) showHover()
@@ -3074,9 +3079,9 @@
   }
 
   // Restyles the open note and puts the handles on its corners. The note is shown moved in from the window's edge when its box would cross it: the view of it,
-  // `editing.shift`, is a translation of its element, and its item's point is never changed.
-  function showEditing (map) {
-    const { element, item } = editing
+  // `textBox.shift`, is a translation of its element, and its item's point is never changed.
+  function showTextBox (map) {
+    const { element, item } = textBox
     element.style.translate = ''
     styleNote(element, item, map)
     element.classList.toggle(EMPTY_CLASS, typedText(element) === '')
@@ -3084,9 +3089,9 @@
     const { left, top, right, bottom } = element.getBoundingClientRect()
     const shift = viewShift({ left, top, right, bottom }, { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight })
     element.style.translate = `${shift[0]}px ${shift[1]}px`
-    editing.shift = shift
-    editing.box = { left: left + shift[0], top: top + shift[1], right: right + shift[0], bottom: bottom + shift[1] }
-    showHandles(editing.box)
+    textBox.shift = shift
+    textBox.box = { left: left + shift[0], top: top + shift[1], right: right + shift[0], bottom: bottom + shift[1] }
+    showHandles(textBox.box)
     showSelection(map)
     showEdgeCursor(hoverPoint)
   }
@@ -3100,7 +3105,7 @@
   }
 
   function showSelection (map, offset = [0, 0]) {
-    const outlines = editing ? [{ box: editing.box, color: itemColor(editing.item.color) }] : selected.map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
+    const outlines = textBox ? [{ box: textBox.box, color: itemColor(textBox.item.color) }] : selected.map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
     const layer = notesLayer()
     const shown = [...layer.querySelectorAll(`.${SELECTION_CLASS}`)]
     for (const element of shown.slice(outlines.length)) element.remove()
@@ -3158,7 +3163,20 @@
     return { left: left + pad('Left'), top: top + pad('Top'), right: right - pad('Right'), bottom: bottom - pad('Bottom') }
   }
 
-  const resizedIndex = () => editing ? editing.index : selected.length === 1 ? selected[0] : null
+  // The note being typed in, else the note at `index`: one rule for where the open note lives.
+  const readNote = (index) => textBox ? textBox.item : puzzleNotes[index]
+
+  function writeNote (index, item) {
+    if (textBox) {
+      textBox.item = item
+      showTextBox(boardMap())
+    } else {
+      puzzleNotes[index] = item
+      renderNotes()
+    }
+  }
+
+  const resizedIndex = () => textBox ? textBox.index : selected.length === 1 ? selected[0] : null
 
   // A press on a handle, with any button, keeps the note's focus and never reaches SudokuPad; only the left button resizes.
   function startResize (event, corner) {
@@ -3166,12 +3184,12 @@
     event.stopPropagation()
     const index = resizedIndex()
     if (event.button !== PRIMARY_BUTTON || index === null) return
-    const item = editing ? editing.item : puzzleNotes[index]
-    const element = editing ? editing.element : item[NOTE_ELEMENT]
-    const unit = editing || item.fixed ? 1 : boardMap().scale
+    const item = readNote(index)
+    const element = textBox ? textBox.element : item[NOTE_ELEMENT]
+    const unit = textBox || item.fixed ? 1 : boardMap().scale
     const box = contentBox(element, unit)
     const [x, y] = eventPoint(event)
-    const shift = editing?.shift ?? [0, 0]
+    const shift = textBox?.shift ?? [0, 0]
     const grabbed = cornerPoint(box, corner)
     const anchor = cornerPoint(box, corner, true).map((v, i) => v - shift[i])
     const autoSize = unresizedSize(element, unit)
@@ -3210,15 +3228,9 @@
     const { index, item, corner, anchor, offset, autoSize, to } = resizing
     const map = boardMap()
     // The anchor is where the note's box lies without the view shift of an open note, so the pointer is taken out of that shift too.
-    const shift = editing?.shift ?? [0, 0]
+    const shift = textBox?.shift ?? [0, 0]
     const resized = resizedItem(item, anchor, [to[0] + offset[0] - shift[0], to[1] + offset[1] - shift[1]], map, corner, autoSize)
-    if (editing) {
-      editing.item = resized
-      showEditing(map)
-    } else {
-      puzzleNotes[index] = resized
-      renderNotes()
-    }
+    writeNote(index, resized)
   }
 
   function endResize (event) {
@@ -3228,7 +3240,7 @@
     const { index, item, cancelled } = resizing
     resizing = null
     holdCursor(null)
-    if (cancelled || editing || String(puzzleNotes[index]?.box) === String(item.box)) return
+    if (cancelled || textBox || String(puzzleNotes[index]?.box) === String(item.box)) return
     keepDrawnPoints([index], boardMap())
     renderNotes()
     snapToPixels([index])
@@ -3238,12 +3250,10 @@
   function resetSize () {
     const index = resizedIndex()
     if (index === null) return
-    if (editing) {
-      editing.item = autoSized(editing.item)
-      showEditing(boardMap())
-    } else if (puzzleNotes[index].box) {
-      puzzleNotes[index] = autoSized(puzzleNotes[index])
-      renderNotes()
+    const note = readNote(index)
+    if (!textBox && !note.box) return
+    writeNote(index, autoSized(note))
+    if (!textBox) {
       snapToPixels([index])
       saveNotes()
     }
@@ -3271,7 +3281,7 @@
   // Hiding closes the open note and ends the selection, so nothing is left to act on unseen. A hidden note can be neither hit nor snapped to: no gesture can reach one.
   function setNotesHidden (hide) {
     if (hide === notesHidden) return
-    if (hide && editing) finishText()
+    if (hide && textBox) finishText()
     notesHidden = hide
     notesLayer().classList.toggle(HIDDEN_CLASS, hide)
     if (hide) select([])
@@ -3406,24 +3416,17 @@
     const removed = kept.length !== puzzleNotes.length
     puzzleNotes = kept
     selected = stillSelected
-    if (removed) followKept(marks)
+    if (removed) keepMarked(marks)
     return removed
   }
 
-  // The open note, a resize and a move in progress follow their notes to the places the others' removal left them. An open note that went is unsaved (-1, so closing
-  // it adds it back with what was typed), and so is its resize. A selected note's resize whose note went is cancelled, so its release saves nothing; a move leaves the
-  // notes that went, and a move left with none is cancelled.
-  function followKept (marks) {
-    if (editing) editing.index = indexAfterKeep(editing.index, marks)
-    if (resizing) {
-      const index = indexAfterKeep(resizing.index, marks)
-      if (!editing && index === -1) resizing.cancelled = true
-      resizing.index = index
-    }
+  function keepMarked (marks) {
+    const next = followKept({ textBoxIndex: textBox ? textBox.index : null, resizing, move: drag?.move ?? null }, marks)
+    if (textBox) textBox.index = next.textBoxIndex
+    resizing = next.resizing
     if (!drag?.move) return
-    const move = drag.move.map((entry) => ({ ...entry, index: indexAfterKeep(entry.index, marks) })).filter(({ index }) => index !== -1)
-    if (move.length === 0) cancelDrag()
-    else drag.move = move
+    if (next.dragCancelled) cancelDrag()
+    else drag.move = next.move
   }
 
   function deleteSelected () {
@@ -3490,23 +3493,23 @@
     // As SudokuPad's own buttons do: a press in the note is the note's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) element.addEventListener(type, (event) => event.stopPropagation())
     element.addEventListener('blur', under(textTool, (event) => {
-      if (!editing || editing.element !== element) return
-      if (isPanelControl(event.relatedTarget)) editing.caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null
+      if (!textBox || textBox.element !== element) return
+      if (isPanelControl(event.relatedTarget)) textBox.caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null
       else finishText()
     }))
     // Typing grows the box, which carries the handles and may start the text scrolling.
     element.addEventListener('input', under(textTool, (event) => {
-      if (!editing || editing.element !== element) return
+      if (!textBox || textBox.element !== element) return
       // Only a typed character completes a symbol: deleting, pasting and Undo leave the text as it is.
       if (event.inputType === 'insertText') {
         replaceTypedSymbol()
         splitTypingUndo()
       }
-      showEditing(boardMap())
+      showTextBox(boardMap())
       clearTimeout(openNoteSaveTimer)
       openNoteSaveTimer = setTimeout(under(textTool, saveOpenNote), OPEN_NOTE_SAVE_MS)
     }))
-    editing = { index, item, element }
+    textBox = { index, item, element }
     notesLayer().append(element)
     redraw()
     element.focus()
@@ -3519,13 +3522,13 @@
   function replaceTypedSymbol () {
     const selection = window.getSelection()
     const { anchorNode, anchorOffset } = selection
-    if (!selection.isCollapsed || anchorNode?.nodeType !== window.Node.TEXT_NODE || !editing.element.contains(anchorNode)) return
+    if (!selection.isCollapsed || anchorNode?.nodeType !== window.Node.TEXT_NODE || !textBox.element.contains(anchorNode)) return
     // A line break is a text node of its own, so the whole note is read, for whether the caret is in code, and the pair is then found in the caret's node.
     const toCaret = document.createRange()
-    toCaret.setStart(editing.element, 0)
+    toCaret.setStart(textBox.element, 0)
     toCaret.setEnd(anchorNode, anchorOffset)
     const nodeStart = toCaret.toString().length - anchorOffset
-    const found = symbolJustTyped(editing.element.textContent, nodeStart + anchorOffset)
+    const found = symbolJustTyped(textBox.element.textContent, nodeStart + anchorOffset)
     if (!found || found.start < nodeStart) return
     const range = document.createRange()
     range.setStart(anchorNode, found.start - nodeStart)
@@ -3548,9 +3551,9 @@
 
   // The focus went to a panel button (`caret` was saved then, null with no caret); the note takes it back, once.
   function returnFocusToNote () {
-    if (!editing || !('caret' in editing)) return
-    const { element, caret } = editing
-    delete editing.caret
+    if (!textBox || !('caret' in textBox)) return
+    const { element, caret } = textBox
+    delete textBox.caret
     element.focus()
     if (!caret) return
     const selection = window.getSelection()
@@ -3577,19 +3580,18 @@
   // An empty note is saved as no note, which is what closing it does; one never saved leaves the saved notes as they are.
   function saveOpenNote () {
     clearTimeout(openNoteSaveTimer)
-    if (!editing) return
-    const text = closingText(editing)
-    if (text === '' && !editing.saved) return
-    const { index, item } = editing
-    editing.saved = true
-    if (text === '') writeNotes(puzzleNotes.filter((_, i) => i !== index))
-    else writeNotes(index === -1 ? [...puzzleNotes, { ...item, text }] : puzzleNotes.map((note, i) => i === index ? { ...item, text } : note))
+    if (!textBox) return
+    const text = closingText(textBox)
+    if (text === '' && !textBox.saved) return
+    const { index, item } = textBox
+    textBox.saved = true
+    writeNotes(notesAfterClose(puzzleNotes, index, item, text).notes)
   }
 
-  function closeEditing () {
+  function closeTextBox () {
     clearTimeout(openNoteSaveTimer)
-    const open = editing
-    editing = null
+    const open = textBox
+    textBox = null
     resizing = null
     holdCursor(null)
     open.element.remove()
@@ -3599,19 +3601,13 @@
 
   // Closes the open note. The index of the note it leaves, or -1 when there is none (it was empty).
   function finishText () {
-    const open = closeEditing()
+    const open = closeTextBox()
     const { index, item, saved } = open
     const text = closingText(open)
     const resized = index !== -1 && String(item.box) !== String(puzzleNotes[index].box)
     let left = index
     const changed = noteChanged(item, text, index === -1 ? null : puzzleNotes[index])
-    if (changed) {
-      if (text === '') {
-        puzzleNotes.splice(index, 1)
-        left = -1
-      } else if (index === -1) left = puzzleNotes.push({ ...item, text }) - 1
-      else puzzleNotes[index] = { ...item, text }
-    }
+    if (changed) ({ notes: puzzleNotes, index: left } = notesAfterClose(puzzleNotes, index, item, text))
     renderNotes()
     if (changed && resized && text !== '') snapToPixels([index])
     // A save made while typing is written over, even when the note ended as it began; that is no edit, so it leaves what Undo can bring back after a Restart.
@@ -3633,7 +3629,7 @@
       event.stopImmediatePropagation()
       return
     }
-    if (!editing || event.target !== editing.element) return
+    if (!textBox || event.target !== textBox.element) return
     event.stopImmediatePropagation()
     if (event.type !== 'keydown' || event.isComposing) return
     if (event.key === 'Tab') event.preventDefault()
@@ -3668,7 +3664,7 @@
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
-    if (!editing || editing.element.contains(event.target) || isHandle(event.target) || isPanelControl(event.target)) return
+    if (!textBox || textBox.element.contains(event.target) || isHandle(event.target) || isPanelControl(event.target)) return
     // A left press on another note goes on to select it, and to drag it. So does one on the open note's edge, on the note as it closes: its closed box is not the open one's
     // (trailing blank lines go, and the open one may be shifted clear of the window's edge), so it is not looked for again by position.
     const left = event.button === PRIMARY_BUTTON
@@ -3685,7 +3681,7 @@
   let edgeNote = null
 
   // The band round the open note, outside its box and within HIT_MARGIN_PX of it: a press there moves the note, as one inside selects its text.
-  const onOpenEdge = (point) => Boolean(editing) && inBox(point, grownBox(editing.box, HIT_MARGIN_PX)) && !inBox(point, editing.box)
+  const onOpenEdge = (point) => Boolean(textBox) && inBox(point, grownBox(textBox.box, HIT_MARGIN_PX)) && !inBox(point, textBox.box)
 
   // The move cursor over the open note's edge, which lies outside its element and so cannot carry a cursor of its own.
   let edgeCursor = false
@@ -3698,7 +3694,7 @@
   // A press on a panel button keeps the focus in the open note, so its caret stays. A slider takes the focus, and the note gets it back when the
   // pointer is released, even when the slider did not move.
   function keepNoteFocus (event) {
-    if (editing && isPanelControl(event.target) && !event.target.closest(`.${SLIDERS_CLASS} input`)) event.preventDefault()
+    if (textBox && isPanelControl(event.target) && !event.target.closest(`.${SLIDERS_CLASS} input`)) event.preventDefault()
   }
 
   function tickCheck (note, box) {
@@ -3746,13 +3742,7 @@
   function cancelResize () {
     const { index, item } = resizing
     resizing.cancelled = true
-    if (editing) {
-      editing.item = item
-      showEditing(boardMap())
-    } else {
-      puzzleNotes[index] = item
-      renderNotes()
-    }
+    writeNote(index, item)
   }
 
   // A press that never moved opens no text box. A lost pointer (a blur, a tool switch, a move with the button up) cancels an erase, so nothing goes that the release never confirmed.
@@ -4008,7 +3998,10 @@
     redraw()
   }
 
+  // An unsaved nudge is dropped too: saving it later would overwrite the notes Undo keeps after a Restart.
   function cancelInput () {
+    stopHold()
+    nudged = false
     if (drag?.move) clearMove(drag)
     if (drag) clearDrag(drag)
     drag = null
@@ -4017,7 +4010,7 @@
     resizing = null
     holdCursor(null)
     selected = []
-    if (editing) closeEditing()
+    if (textBox) closeTextBox()
   }
 
   // Saved notes the script cannot read are the browser's data and not SudokuPad's, so they are left as they are and never turn the saved data off.
@@ -4206,7 +4199,7 @@
       return true
     },
     handleToolEnter () {
-      if (!colors) saveColors(copiedPenColors(readPenColor), PEN_PRESET)
+      if (!colorSet) saveColors(penColorSet(readPenColor))
       notesLayer().classList.add(ACTIVE_CLASS)
       showPanel()
     },
@@ -4216,7 +4209,7 @@
       showHover()
       showChrome()
       endGesture()
-      if (editing) finishText()
+      if (textBox) finishText()
       selected = []
       renderNotes()
       hidePanel()
@@ -4253,13 +4246,13 @@
         cancelResize()
         return true
       }
-      if (event.key === 'Enter' && !hasChord(event) && !event.shiftKey && selected.length === 1 && !editing && !drag) {
+      if (event.key === 'Enter' && !hasChord(event) && !event.shiftKey && selected.length === 1 && !textBox && !drag) {
         event.preventDefault()
         openText(selected[0])
         return true
       }
       const sizeDirection = hasChord(event) ? undefined : SLIDER_STEP_KEYS[event.key]
-      if (sizeDirection && !editing) {
+      if (sizeDirection && !textBox) {
         // A gesture holds its notes as they were at the press, and its release would put the old size back.
         if (!drag && !resizing) stepSize(sizeDirection)
         return true
@@ -4292,8 +4285,7 @@
     color = readColor(savedData.getData(COLOR_KEY))
     Object.assign(look, readLooks(savedData))
     background = readBackground(savedData.getData(BACKGROUND_KEY))
-    colors = readNoteColors(savedData.getData(COLORS_KEY))
-    colorsPreset = readNotePreset(savedData.getData(COLORS_KEY))
+    colorSet = savedColorSet(savedData.getData(COLORS_KEY))
     showColors()
     // The features are independent: one that fails to install costs the others nothing.
     textTool.run(() => {

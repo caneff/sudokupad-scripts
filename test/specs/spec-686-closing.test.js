@@ -12,7 +12,7 @@ const { join } = require('node:path')
 const { fakeStore } = require('../fake-store.js')
 const {
   LOOKS, READERS, tableKeys, pasteReaders, readLooks, changedDialogLooks, copiedSettings, pastedSettings, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BOX_KEY,
-  FRAME_KEY, FONT_KEY, lookTarget, indexAfterKeep, noteChanged, textItem, FEATURES
+  FRAME_KEY, FONT_KEY, lookTarget, indexAfterKeep, followKept, noteChanged, textItem, FEATURES
 } = require('../../text-anywhere.user.js')
 
 const SOURCE = readFileSync(join(__dirname, '..', '..', 'text-anywhere.user.js'), 'utf8')
@@ -55,9 +55,11 @@ test('#695: a deletion moves every index after it down, and the note-changed rul
   const keep = [true, false, true]
   assert.equal(indexAfterKeep(2, keep), 1, 'the open note follows the deletion before it')
   assert.equal(indexAfterKeep(1, keep), -1, 'the note deleted has none')
-  const remap = body('followKept')
-  for (const held of ['editing.index', 'resizing.index', 'entry.index']) assert.match(remap, new RegExp(`${held.replace('.', '\\.')}`), held)
-  assert.match(body('keepItems'), /followKept\(marks\)/, 'keepItems remaps them')
+  const followed = followKept({ textBoxIndex: 2, resizing: { index: 2 }, move: [{ index: 2 }] }, keep)
+  assert.equal(followed.textBoxIndex, 1, 'the open note follows')
+  assert.equal(followed.resizing.index, 1, 'its resize follows')
+  assert.deepEqual(followed.move, [{ index: 1 }], 'a move follows')
+  assert.match(body('keepItems'), /keepMarked\(marks\)/, 'keepItems remaps them')
 
   const saved = { ...textItem([0, 0], 'a', 1, 20), box: [10, 4] }
   assert.equal(noteChanged({ ...saved }, 'a', saved), false)
