@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.12
+// @version      0.7.14
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,13 +18,13 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.12'
+  const VERSION = '0.7.14'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
-  const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
-  const MIN_FONT_RATIO = 0.7 // the smallest font, as a share of SudokuPad's own
-  const MAX_FONT_RATIO = 1.5 // the largest font, as a share of SudokuPad's own
-  const READABLE_CHARS = 90 // characters a line, on average, that rules too long to fit are widened to
+  const EDGE_PX = 8
+  const MIN_FONT_RATIO = 0.7
+  const MAX_FONT_RATIO = 1.5
+  const READABLE_CHARS = 90
   const REM_PX = 16
   const RULES_MIN = { width: 15 * REM_PX, height: 7 * REM_PX } // the pane's floor under a drag, css px
   const RESIZE_MS = 100
@@ -221,7 +221,6 @@
     return px < ownPx && fits(px) ? px : floor
   }
 
-  // The automatic size moved by the font offset (f+ and f-), inside 70% to 150% of SudokuPad's own.
   function offsetFontPx (autoPx, fontOffsetPx, ownPx) {
     return Math.min(ownPx * MAX_FONT_RATIO, Math.max(ownPx * MIN_FONT_RATIO, autoPx + fontOffsetPx))
   }
@@ -309,8 +308,6 @@
     }
   }
 
-  // A puzzle's sizing (GLOSSARY.md) is its font offset and its dragged box, saved under its own key; a puzzle never resized has none,
-  // and starts at the default. Each call names the puzzle: nothing here holds one.
   const SIZING_KEY_PREFIX = 'AutoRulesResizer_sizing_'
   const noSizing = () => ({ fontOffsetPx: 0, box: noRulesDrag() })
   const isDefaultSizing = ({ fontOffsetPx, box }) => fontOffsetPx === 0 && Object.values(box).every((n) => n === 0)
@@ -323,10 +320,8 @@
     return [w, h, x, y].every(Number.isFinite) ? { fontOffsetPx: data.nudgePx, box: { w, h, x, y } } : undefined
   }
 
-  // A saved sizing that cannot be read is kept aside by `load`, and the puzzle starts at the default.
   const loadSizing = (store, puzzle) => load(store, { key: SIZING_KEY_PREFIX + puzzle, read: readSizing }).value ?? noSizing()
 
-  // The default is no key, so a puzzle never resized saves nothing; a sizing already saved as it is is not written again.
   function saveSizing (store, puzzle, sizing) {
     const key = SIZING_KEY_PREFIX + puzzle
     const { w, h, x, y } = sizing.box
@@ -339,7 +334,6 @@
   // SudokuPad's own rule in App.resize.
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
-  // Every style property the fit writes on the pane; it also moves the controls column by its `translate`.
   const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY']
 
   function clearFit (rules, controls) {
@@ -473,7 +467,6 @@
   // <lib:write-style>
   // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The page's style element `id`, added on the first call, holds `css`.
   function writeStyle (id, css, doc = document) {
     let style = doc.getElementById(id)
     if (!style) {
@@ -488,8 +481,7 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
-  // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
@@ -531,8 +523,6 @@
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
-  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
-  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
   function writeOrRestore (snapshot, write) {
     const restore = snapshot()
     try {
@@ -589,7 +579,7 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // Every script's maker, as its @author header says; the dialog names it after the version.
+  // As each script's @author header says.
   const AUTHOR = 'ChinStrap'
 
   // The title rules travel with the row, so they are in the page exactly while the dialog is.
@@ -651,7 +641,6 @@
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
       `.${prefix}off-note:empty { display: none; }`,
-      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
@@ -688,9 +677,6 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
-  // `off` is `guard.off`; a missing one throws, since it would read as nothing being off.
-  // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
@@ -743,7 +729,7 @@
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global setDialogStatus, errorText, writeOrRestore */
-  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  // `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -819,10 +805,8 @@
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global Framework */
-  // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
-  // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
-  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring, and the site's --accent.
+  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
@@ -1139,7 +1123,6 @@
       }
     }
 
-    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
     const dialogsFor = (feature) => ({
       addSetting: (setting) => Framework.addSetting(setting),
       showDialog: (options) => Framework.showDialog(options),
@@ -1150,8 +1133,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
-  // The fit reads the puzzle's id; SudokuPad calls resize on every layout; the limits dialog and their saved values are SudokuPad's settings entry, dialog and storage.
-  // The fit and the refit start once `Framework.getApp` says the app is ready, so without it they are off and the settings start alone.
   const FEATURES = {
     fit: {
       label: 'rules fit',
@@ -1227,15 +1208,15 @@
   const ID = 'auto-rules-resizer'
   const FONT_BAR_ID = `${ID}-font`
   const CORNER_CLASS = `${ID}-corner`
-  const SHOWN_CLASS = `${ID}-shown` // on the body while the pane is fitted: the font bar shows
-  const DRAG_CLASS = `${ID}-dragging` // on the body while a corner drag is under way: the corners and the bar stay shown
+  const SHOWN_CLASS = `${ID}-shown`
+  const DRAG_CLASS = `${ID}-dragging`
   const MAX_WIDTH_INPUT_ID = `${ID}-max-width`
   const MAX_HEIGHT_INPUT_ID = `${ID}-max-height`
   const CORNER_PX = 28
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
   const cornerId = (corner) => `${ID}-drag-${corner}`
 
-  const COPY_ICON = '.rules-copy' // SudokuPad's copy-rules icon
+  const COPY_ICON = '.rules-copy'
   // On the pane while it is fitted, so the fit measures the text as it will be set. A stylesheet rule, not inline, leaves a
   // reader's own text-spacing override the last word.
   const TEXT_CLASS = `${ID}-text`
@@ -1395,7 +1376,6 @@
     rules.scrollTop += (line - (contentTop(rules) - place.above)) / paneScale(rules)
   }
 
-  // Visual px per css px of the pane: SudokuPad scales the whole controls column.
   const paneScale = (rules) => (rules.offsetWidth > 0 ? rules.getBoundingClientRect().width / rules.offsetWidth : 1)
 
   // The pane's width in css px that sets the rules' average character READABLE_CHARS wide at `fontPx`. The average is the
@@ -1460,7 +1440,6 @@
   const dialogs = guard.dialogsFor(maxSizeSettings)
   // The limits are written only from the dialog, so a write that fails reaches its status line with the max size settings still on.
   const savedLimits = guard.storeFor(maxSizeSettings)
-  // Both Max Size keys and the limits mirroring them, as a function that puts them back after a Save or Paste that failed half-way.
   const snapshotLimits = () => snapshotStore(savedLimits, tableKeys(LIMIT_ROWS), () => {
     const was = limits
     return () => { limits = was }

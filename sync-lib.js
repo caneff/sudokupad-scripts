@@ -34,7 +34,6 @@ const blockLines = (name, module, indent) => {
 
 const ANY_CONST_VERSION = /^\s*const VERSION =/m
 
-// Raises the patch of @version, and of `const VERSION` where the script has one; null when either is not a plain X.Y.Z it can raise.
 function bumpPatch (source) {
   if (!SCRIPT_VERSION.test(source) || (ANY_CONST_VERSION.test(source) && !CONST_VERSION.test(source))) return null
   return [SCRIPT_VERSION, CONST_VERSION].reduce(
@@ -45,7 +44,7 @@ function bumpPatch (source) {
 const GLOBAL_COMMENT = /\/\*\s*globals?\s([^*]*)\*\//g
 const ESCAPE = /[.*+?^${}()|[\]\\]/g
 
-// Names a module reads from other modules, per its `/* global */` comments (ESLint's `name:writable` form included).
+// Includes ESLint's `name:writable` form.
 const globalNames = (module) => [...module.matchAll(GLOBAL_COMMENT)]
   .flatMap((comment) => comment[1].split(','))
   .map((name) => name.split(':')[0].trim())
@@ -67,9 +66,6 @@ function dependencyProblems (copied, readModule, libNames) {
   return problems
 }
 
-// Rewrites every lib block of one script from readModule(name) (undefined for a missing module).
-// libNames lists every module in lib/, so a block's dependencies can be found.
-// Returns the new text, the names of the blocks that changed, and the problems found; a script with a problem is left as it was.
 function syncText (source, readModule, libNames) {
   const lines = source.split('\n')
   const out = []
@@ -125,7 +121,6 @@ const libNamesOnDisk = () => fs.readdirSync(LIB_DIR).filter((f) => f.endsWith('.
 // docs/research/tampermonkey-in-playwright.md § Driving an update check has what is known of how).
 // It is no script of its own: scriptFiles() leaves it out, so this file never syncs it.
 const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
-// The scripts: every *.user.js at the root but a handover.
 const scriptFiles = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js') && !(f in HANDOVERS)).sort()
 
 // The names of the lib blocks a script carries, in order.
@@ -133,7 +128,6 @@ const libBlockNames = (source) => [...source.matchAll(BLOCK)].map((match) => mat
 // A script's own code: its text with every lib block taken out.
 const withoutLibBlocks = (source) => source.replace(BLOCK, '')
 
-// The id a script's source hands the shared guard (lib/sudokupad.js `createGuard`), which starts each of its warnings.
 function guardId (source) {
   const found = /createGuard\(\{ script: '([a-z-]+)'/.exec(source)
   if (found === null) throw new Error("no createGuard({ script: '<id>' ... }) call in the script")

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.23
+// @version      0.46.25
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.23'
+  const VERSION = '0.46.25'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -25,7 +25,6 @@
   const MAX_WIDTH = 16
   const WIDTH_STEP = 0.5
   const DEFAULT_WIDTH = 6
-  // Percent. The Opacity slider sets it; a note saved without one reads as the default.
   const MIN_OPACITY = 20
   const MAX_OPACITY = 100
   const OPACITY_STEP = 5
@@ -169,7 +168,6 @@
     [PEN_PRESET]: 'Pen colors',
     ...PALETTE_PRESET_LABELS
   }
-  // The next note's size is saved as a width; a text size is 2 x the width + 8.
   const WIDTH_KEY = KEY_PREFIX + 'width'
   const OUTLINE_KEY = KEY_PREFIX + 'outline'
   const OPACITY_KEY = KEY_PREFIX + 'opacity'
@@ -182,16 +180,13 @@
   // A line's height as a share of the text size, in the font's own spacing, so a note's box is as tall as the note drawn.
   const LINE_HEIGHT = 1.15
   const SELECTION_TINT_PERCENT = 25
-  // A note never resized wraps at this many em and stops growing at this many lines, then scrolls.
   const BOX_WIDTH_EM = 16
   const BOX_LINES = 8
-  // The smallest box a resize handle leaves, in em, unless the note's auto size is smaller.
   const MIN_BOX_EM = [3, LINE_HEIGHT]
   // The least a resize leaves of any note, in em, so a box stays a target for its handles even when the note is empty.
   const GRABBABLE_EM = 0.25
-  // How far, in screen pixels, the mouse may move between press and release and the press still be a click.
+  // In screen pixels.
   const CLICK_SLOP = 4
-  // A selection rectangle smaller than this, in screen pixels both ways, that selects nothing is a click that slipped.
   const RECTANGLE_CLICK_PX = 8
   const TEXT_BOX_CLASS = 'text-anywhere-textbox'
   const CLEAR_CLASS = 'text-anywhere-clear'
@@ -217,7 +212,6 @@
   const EMPTY_CLASS = 'text-anywhere-empty'
   // A handle is made with this class and loses it a frame later, which is what starts its fade in.
   const ENTERING_CLASS = 'text-anywhere-entering'
-  // While a note is moved or a handle dragged, every element on the page shows the cursor this property holds.
   const HELD_CURSOR_CLASS = 'text-anywhere-holding-cursor'
   const HELD_CURSOR_VAR = '--text-anywhere-held-cursor'
   // The notes' two groups in the layer: the notes on the board, in board units under the board's own transform, and the fixed notes, in screen pixels,
@@ -227,12 +221,10 @@
   // One screen pixel in the units of a note's group, so a note's frame is as thin on the board as off it.
   const PIXEL_VAR = '--text-anywhere-px'
   const SCROLLS_CLASS = 'text-anywhere-scrolls'
-  // On the layer while Text Anywhere is current: only then do the notes take the pointer.
   const ACTIVE_CLASS = 'text-anywhere-active'
   const HANDLE_CLASS = 'text-anywhere-resize'
   const SELECTION_CLASS = 'text-anywhere-selection'
   const NUDGING_CLASS = 'text-anywhere-nudging'
-  // On a note within the hit margin of the pointer but not under it, for its hover look.
   const HOVERED_CLASS = 'text-anywhere-hovered'
   const GUIDE_CLASS = 'text-anywhere-snap-guide'
   const GUIDE_PX = 1
@@ -265,7 +257,6 @@
   // The notes a Restart cleared, kept until Undo straight after it brings them back.
   const RESTARTED_PREFIX = KEY_PREFIX + 'restarted_'
   const KEPT_PUZZLES = 50
-  // How far, in screen pixels, past a note's drawn box a press, a hover or an erase still hits it.
   const HIT_MARGIN_PX = 4
   const PRIMARY_BUTTON = 0
   const SECONDARY_BUTTON = 2
@@ -276,7 +267,6 @@
   // The tool button is a sticky note; the Background button shows the letter.
   const STICKY_NOTE = '<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h5"/>'
   const BUTTON_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${STICKY_NOTE}</svg>`
-  // The box behind a note with a background: the text's own box grown by these shares of the text size, with rounded corners.
   const BACKGROUND_PAD_X = 0.35
   const BACKGROUND_PAD_Y = 0.15
   const BACKGROUND_RADIUS = 0.3
@@ -432,8 +422,6 @@
   // A note that ends in the word `sum` has no character typed after it to complete it, so closing the note does.
   const closedSymbols = (text) => inCode(text, text.length - 1, false) ? text : text.replace(/\bsum$/, SYMBOLS.sum)
 
-  // What a closed note keeps of its typed text: trailing spaces and tabs go from every line, and blank lines before and after the text go, so a note of
-  // only spaces is empty. Line breaks inside the text stay.
   const closedText = (typed) => typed.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').replace(/^\n+|\n+$/g, '')
 
   // The symbol the character just typed before `caret` completed, or null. A pair is complete at the caret; `sum` only once a character that is not part of a word follows it.
@@ -449,7 +437,6 @@
 
   const isBullet = (runs) => Boolean(runs[0]?.bullet)
   const BULLET_INDENT_EM = 1.2
-  // A number wider than "1." (two characters) pushes its text right by this much for each character more.
   const NUMBER_DIGIT_EM = 0.5
   const HEADER_SCALES = [1.5, 1.25, 1.1]
   const SUBTEXT_SCALE = 0.8
@@ -475,7 +462,6 @@
 
   const shownLength = (runs) => runs.reduce((sum, run) => sum + run.text.length, 0)
 
-  // A line's width in characters of the note's size: a list marker's indent is wider than the text its run holds, and a header's characters are larger.
   function lineChars (runs) {
     const markerChars = isBullet(runs) ? (levelIndentEm(runs[0]) + markerIndentEm(runs[0])) / CHAR_WIDTH - runs[0].text.length : 0
     return (shownLength(runs) + markerChars) * lineScale(runs)
@@ -556,8 +542,6 @@
 
   const screenPoint = (item, toScreen) => item.fixed ? drawnPoint(item) : toScreen(item.at)
 
-  // The box a note's element takes on the screen, padding included, worked out from its item rather than measured: `map` has the maps between board
-  // units and the screen.
   function noteScreenBox (item, map, outline) {
     const box = textRect(boardView(item, map.toBoard))
     const [padX, padY] = notePadding(item, outline)
@@ -684,8 +668,6 @@
     return { color: shared(items.map((item) => item.color)), width: widthFor(items[0].size), opacity: itemOpacity(items[0]), bg: shared(items.map((item) => Boolean(item.bg))) }
   }
 
-  // Whether closing the open note `item` with `text` changes the saved note `before` (null for a new note, which began empty): its text, or its color, size,
-  // opacity, background or box.
   const noteChanged = (item, text, before) => text !== (before?.text ?? '') ||
     (before !== null && (item.color !== before.color || item.size !== before.size || itemOpacity(item) !== itemOpacity(before) || Boolean(item.bg) !== Boolean(before.bg) || String(item.box) !== String(before.box)))
 
@@ -696,7 +678,6 @@
     return { notes: notes.map((note, i) => i === index ? { ...item, text } : note), index }
   }
 
-  // Where the note at index `index` sits after the notes `keep` marks false went, or -1 when it went (or was never saved, as a new note's -1).
   const indexAfterKeep = (index, keep) => index < 0 || !keep[index] ? -1 : keep.slice(0, index).filter(Boolean).length
 
   // The open note's index, a resize and a move after the notes `marks` marks false went. An open note that went is unsaved (-1, so closing it adds it back with what was typed),
@@ -713,7 +694,6 @@
     }
   }
 
-  // Which notes a change of color, size, opacity or Background reaches besides the next note's setting: the open note, else the selected ones, else none.
   const lookTarget = (textBox, selected) => textBox ? 'open' : selected.length ? 'selected' : 'next'
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
@@ -734,7 +714,6 @@
   // <lib:slider-keys>
   // Generated from lib/slider-keys.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The keys that step a panel slider: + (also =, and the keypad's) up and - down.
   const SLIDER_STEP_KEYS = { '+': 1, '=': 1, '-': -1 }
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
   // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
@@ -745,7 +724,6 @@
   // <lib:write-style>
   // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The page's style element `id`, added on the first call, holds `css`.
   function writeStyle (id, css, doc = document) {
     let style = doc.getElementById(id)
     if (!style) {
@@ -975,7 +953,6 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
-  // `light` or `dark` (LIGHT_TEXT and DARK_TEXT unless given), whichever contrasts more with the background color (any parseColor text).
   function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
@@ -1202,7 +1179,6 @@
   const readNotePreset = (saved) => isPlainObject(saved) && NOTE_PRESETS.includes(saved.preset) ? saved.preset : null
   const storedNoteColors = (colors, preset) => preset ? { ...colors, preset } : { ...colors }
 
-  // `readPenColor(n)` reads pen color n as the browser computes it.
   const copiedPenColors = (readPenColor) => Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hexColor(readPenColor(n)) ?? SUDOKUPAD_PEN_COLORS[n]]))
 
   function editedColor (colors, n, value) {
@@ -1238,7 +1214,7 @@
 
   // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `paste` (the reader a pasted value goes through, `read` when absent; it gives undefined for a value to skip).
   // `dialog` marks the looks the settings dialog sets and the notes are drawn again in; the others are the panel's sliders.
-  // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
+  // An invalid pasted outline reads as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
   const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })
   const LOOKS = [
     lookRowOf('width', WIDTH_KEY, readWidth, { paste: (data) => (isWidth(data) ? data : undefined) }),
@@ -1266,7 +1242,6 @@
     return JSON.stringify(copied)
   }
 
-  // A note is a text item. `bg` is set only on a note made with the Background button on, so a note saved without it has no box.
   const textItem = ([x, y], text, color, size, background, opacity = DEFAULT_OPACITY) => ({ kind: TEXT_KIND, color, size, opacity, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
 
   // A saved note is checked against the stored format only, not the panel's slider ranges, so a later change to a slider cannot make a note saved before it unreadable.
@@ -1277,7 +1252,6 @@
   const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && noteColorNumber(item.color) !== undefined && isStoredOpacity(item.opacity) &&
     (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isStoredSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
-  // Saved notes can hold the strokes and shapes of an earlier version. They are kept in storage as they are and never drawn, so they are not read further.
   const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
 
   // A puzzle with nothing saved has no notes; saved data that is not a list throws rather than read as none. The list is read note by note:
@@ -1311,7 +1285,6 @@
   const notesKey = (key) => NOTES_PREFIX + key
   const restartedKey = (key) => RESTARTED_PREFIX + key
 
-  // A puzzle dropped from the index loses its notes and the ones its Restart kept.
   function forgetPuzzle (store, key) {
     store.removeData(notesKey(key))
     store.removeData(restartedKey(key))
@@ -1399,8 +1372,7 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
-  // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
@@ -1442,8 +1414,6 @@
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
-  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
-  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
   function writeOrRestore (snapshot, write) {
     const restore = snapshot()
     try {
@@ -1500,7 +1470,7 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // Every script's maker, as its @author header says; the dialog names it after the version.
+  // As each script's @author header says.
   const AUTHOR = 'ChinStrap'
 
   // The title rules travel with the row, so they are in the page exactly while the dialog is.
@@ -1562,7 +1532,6 @@
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
       `.${prefix}off-note:empty { display: none; }`,
-      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
@@ -1599,9 +1568,6 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
-  // `off` is `guard.off`; a missing one throws, since it would read as nothing being off.
-  // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
@@ -1654,7 +1620,7 @@
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global setDialogStatus, errorText, writeOrRestore */
-  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  // `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -1707,10 +1673,8 @@
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global Framework */
-  // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
-  // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
-  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring, and the site's --accent.
+  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
@@ -2027,7 +1991,6 @@
       }
     }
 
-    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
     const dialogsFor = (feature) => ({
       addSetting: (setting) => Framework.addSetting(setting),
       showDialog: (options) => Framework.showDialog(options),
@@ -2043,9 +2006,7 @@
   // `currentPuzzle` (a puzzle not loaded has neither), and `Framework.app.tool`, a name and not a kind the guard checks.
   const BOARD = { 'Framework.getApp': 'function', 'Framework.app.svgRenderer.getElem': 'function', 'Framework.app.puzzle': 'object', 'app.puzzle.on': 'function', 'app.on': 'function' }
   const FEATURES = {
-    // Without these the script starts from its defaults and keeps nothing: the notes and settings last until the page reloads.
     saved: { label: 'saved notes and settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' } },
-    // The notes already saved, drawn on the board and kept in place as the board moves; with the Text tool off they show and cannot be changed.
     notes: {
       label: 'notes on the board',
       needs: BOARD,
@@ -2167,7 +2128,6 @@
   // What is drawn above the notes' layer: an open dialog, the menu drawer and any script's popup menu (a role="menu" element on the page).
   const ABOVE_NOTES = '.dialog-overlay, #appmenu, [role="menu"]'
 
-  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the top bar, the menu drawer, an open dialog and any script's popup menu.
   const CONTROLS = `.topbar, ${ABOVE_NOTES}, button, a, input, select, textarea`
   // The control panel's box is larger than what is drawn in it: a div with no text, fill or picture of its own is only layout.
   const CONTROLS_BOX = '#controls'
@@ -2201,7 +2161,6 @@
 
   const eventPoint = (event) => [event.clientX, event.clientY]
 
-  // The board as the notes see it now: its screen box, the maps between screen points and board units, and screen pixels per board unit.
   function boardMap () {
     const svg = boardSvg()
     const ctm = svg.getScreenCTM()
@@ -2252,7 +2211,6 @@
     }
   }
 
-  // The open note sits in the layer itself, in screen pixels, on the board or off it.
   function styleNote (element, item, map) {
     applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale))
     element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
@@ -2357,7 +2315,7 @@
   // <lib:panel>
   // Generated from lib/panel.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads rem from plain, and SUDOKUPAD_PURPLE from sudokupad. A script that copies in settings-dialog as well has a second `global` naming
+  // A script that copies in settings-dialog as well has a second `global` naming
   // SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global rem, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
   // A tool's purple panel: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
@@ -2467,7 +2425,6 @@
   const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
   const hoverShare = (percent) => `color-mix(in srgb, ${SUDOKUPAD_PURPLE} min(100%, calc(${percent}% / var(${NOTE_OPACITY_VAR}))), transparent)`
   const hoverLook = (outlinePercent, fillPercent) => `outline: 1px solid ${hoverShare(outlinePercent)}; outline-offset: 2px; background-image: linear-gradient(${hoverShare(fillPercent)}, ${hoverShare(fillPercent)});`
-  // A closed note that is not selected, under Text Anywhere: the one that shows a hover outline.
   const IDLE_NOTE = `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS})`
   const PANEL_CSS = [
     ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, pressButtons: HIDE_ALL, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
@@ -2554,7 +2511,6 @@
   // The looks in force, by `LOOKS` name: width and opacity are the next note's as the sliders set them, and remembered; the rest are
   // the outline and font of every note and the box color and frame of every note with a box, as the settings dialog sets them.
   const look = readLooks({ getData: () => null })
-  // Whether the next note is made with a background. The Background button turns it on and off, and it is remembered.
   let background = false
   // Text Anywhere's color set, or null until its colors are first copied from the pen colors.
   let colorSet = null
@@ -2564,7 +2520,6 @@
 
   const unmarkColor = () => { for (const button of keypad().querySelectorAll('button.digit.current')) button.classList.remove('current') }
 
-  // The open note's own look changes.
   function changeOpen (change) {
     writeNote(textBox.index, change(textBox.item))
     showPanelValues()
@@ -2584,7 +2539,6 @@
     else showPanelValues()
   }
 
-  // The notes `lookTarget` names as a list, or null for the next note.
   function targetNotes () {
     const target = lookTarget(textBox, selected)
     return target === 'open' ? [textBox.item] : target === 'selected' ? selectedNotes() : null
@@ -2621,7 +2575,6 @@
     boardNotes.run(() => { if (Framework.app.puzzle.currentPuzzle) redraw() })
   }
 
-  // A look is stored and kept, then the notes are drawn again in it when it is one of the dialog's.
   function setLook (name, value) {
     const row = lookRow(name)
     look[name] = value
@@ -2629,7 +2582,6 @@
     if (row.dialog) showBoxes()
   }
 
-  // The dialog's pickers fill a draft that Save writes; Copy and Paste settings act at once.
   const DIALOG_ID = 'text-anywhere-dialog'
   const DIALOG_STYLE_ID = 'text-anywhere-dialog-style'
   const DIALOG_CSS = [
@@ -2657,7 +2609,6 @@
   }
 
   function openDialog () {
-    // Until the colors are first copied, the draft is the pen colors a first use would copy.
     let draft = colorSet ?? penColorSet(readPenColor)
     let colorsEdited = false
     let draftLooks = { ...look }
@@ -2792,7 +2743,6 @@
     return notes ? panelLooks(notes) : { color, width: look.width, opacity: look.opacity }
   }
 
-  // The look each slider sets, read by its row in LOOKS, and how it changes a note.
   const SLIDER_LOOKS = {
     [SIZE_SLIDER]: { name: 'width', change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
     [OPACITY_SLIDER]: { name: 'opacity', change: (value) => (item) => ({ ...item, opacity: value }) }
@@ -2885,19 +2835,15 @@
   let erasing = null
   // The note open for typing: the index of the text it reopened, or -1 for a new one, the item and its element, which the solver types in.
   let textBox = null
-  // The four resize handles of the open note, or of the one note selected, each with the corner of CORNERS it sits on; none when no note shows them.
   let handles = []
   // A drag of a resize handle: the note's index in `puzzleNotes`, its item at the press, the corner dragged, the opposite corner on
   // the screen, the dragged corner's offset from the pointer at the press, and the point the last move reached, or null.
   let resizing = null
   // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
-  // Set when Ctrl+Enter or Cmd+Enter closes a note, until that Enter is released or another key is pressed.
   let endedByEnter = false
   let puzzleNotes = []
-  // The saved entries that are not notes, strokes or shapes (a note that failed its check, say): never drawn, and saved back as they were.
   let keptEntries = []
-  // The indices of the selected notes in `puzzleNotes`, in order.
   let selected = []
   // False while this puzzle's saved notes cannot be read: no save writes over them but an explicit wipe's.
   let savable = true
@@ -2906,9 +2852,7 @@
   // its element and no save stores it. Its scroll position is kept the same way, for an element put back in the page, which starts unscrolled.
   const NOTE_ELEMENT = Symbol('note element')
   const SCROLL = Symbol('scroll')
-  // What each drawn note's element shows now: its item, its text, its look, and what its size was last measured for.
   const shownNotes = new WeakMap()
-  // The layer's two groups of notes, made at the first redraw, with the style the board group carries.
   let groups = null
   let layerFont = ''
   let lastLayout = ''
@@ -3390,7 +3334,7 @@
     }
   }
 
-  // Saves an edit to the notes. Any edit after a Restart ends what Undo can bring back.
+  // Any edit after a Restart ends what Undo can bring back.
   function saveNotes () {
     forgetRestarted()
     writeNotes()
@@ -3561,7 +3505,6 @@
     selection.addRange(caret)
   }
 
-  // The controls that work on the open note: a press on one leaves the note open.
   const isPanelControl = (target) => Boolean(target?.closest?.(`${PANEL} button.digit[data-key], ${PANEL} .${SLIDERS_CLASS}, ${PANEL} .${BACKGROUND_CLASS}`))
 
   const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
@@ -3677,10 +3620,8 @@
 
   const isHandle = (target) => handles.some(({ element }) => element === target)
 
-  // The note whose edge the press that closed it was on; the press goes on to select it and to drag it.
   let edgeNote = null
 
-  // The band round the open note, outside its box and within HIT_MARGIN_PX of it: a press there moves the note, as one inside selects its text.
   const onOpenEdge = (point) => Boolean(textBox) && inBox(point, grownBox(textBox.box, HIT_MARGIN_PX)) && !inBox(point, textBox.box)
 
   // The move cursor over the open note's edge, which lies outside its element and so cannot carry a cursor of its own.
@@ -3713,7 +3654,6 @@
     if (d.move) d.settle = setTimeout(() => { if (drag === d) inFrame('drag', dragMoves) }, SPEED_WINDOW_MS + SETTLE_SLACK_MS)
   }
 
-  // What every end of a drag takes down: its settle timer, then `between` (the cursor, for the ends that release it), then its selection rectangle.
   function clearDrag (d, between = () => {}) {
     clearTimeout(d.settle)
     between()
@@ -3863,7 +3803,6 @@
     } else if (d.start === -1) showRectangle(d)
   }
 
-  // `middle` is where the note's middle then is, which is what has to stay reachable.
   const movedBy = (moves, [dx, dy], map) => moves.map(({ index, item }) => {
     const [x, y] = screenPoint(item, map.toScreen)
     const [middleX, middleY] = noteMiddle(item, map, look.outline)
@@ -3901,7 +3840,6 @@
   const moveKeepsReachable = (d, point, map) => movedBy(d.move, dragOffset(d, point), map).every(({ middle }) => reachable(middle))
 
   const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
-  // Whether a nudge has moved notes that are not saved yet; the release of the key saves it.
   let nudged = false
 
   function nudgeSelected (direction, step) {
@@ -4091,7 +4029,6 @@
     else redraw()
   }
 
-  // Adds to the erase's touched notes every note the drag from `from` to `to`, in board units, passes through or within HIT_MARGIN_PX of.
   function touchAlong (from, to, map) {
     const [a, b] = [from, to].map(map.toScreen)
     for (const item of puzzleNotes) {

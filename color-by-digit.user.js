@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.52
+// @version      0.25.54
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.52'
+  const VERSION = '0.25.54'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -40,7 +40,6 @@
     { key: 'ColorByDigit_addedPreloads', names: ['Entropic', 'Modular'] },
     { key: 'ColorByDigit_addedEachDigit', names: ['Each digit'] }
   ]
-  // SudokuPad's numpad order: 1 to 9 in rows of three, then 0.
   const NUMPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
@@ -415,7 +414,6 @@
   }
 
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
-  // The profiles of an install with nothing saved.
   const preloadedState = () => makeState(preloadProfiles(), 0, undefined, true)
 
   const stateFromStored = (store) => load(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
@@ -546,7 +544,6 @@
     const strip = shownGroups(cellGroups, CHIP_MAX_GROUPS).map((g) => g.digit)
     if (mode !== 'both') return shownGroups(mode === 'digit' ? digitGroups : cellGroups, CHIP_MAX_GROUPS).map((g) => chipOf(g.digit))
     const count = Math.min(Math.max(cellGroups.length, digitGroups.length), CHIP_MAX_GROUPS)
-    // 0 is set aside, as in a group's shown digit, unless a group holds nothing else.
     const zeroAlone = [...cellGroups, ...digitGroups].some((g) => g.digits.length === 1 && g.digits[0] === '0')
     const covered = DIGITS.filter((d) => (d in cellKeyOf || d in digitKeyOf) && (d !== '0' || zeroAlone))
     const reached = (set, keyOf) => new Set(set.map((d) => keyOf[d]).filter((k) => k !== undefined)).size
@@ -575,10 +572,8 @@
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global Framework */
-  // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
-  // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
-  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring, and the site's --accent.
+  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
@@ -895,7 +890,6 @@
       }
     }
 
-    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
     const dialogsFor = (feature) => ({
       addSetting: (setting) => Framework.addSetting(setting),
       showDialog: (options) => Framework.showDialog(options),
@@ -1018,7 +1012,6 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
-  // `light` or `dark` (LIGHT_TEXT and DARK_TEXT unless given), whichever contrasts more with the background color (any parseColor text).
   function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
@@ -1445,7 +1438,6 @@
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // SudokuPad's bottom row of tool buttons.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button. !important because an inline max-width on the row beats a stylesheet cap.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem !important; }`
@@ -1661,8 +1653,7 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
-  // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
@@ -1704,8 +1695,6 @@
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
-  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
-  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
   function writeOrRestore (snapshot, write) {
     const restore = snapshot()
     try {
@@ -1762,7 +1751,7 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // Every script's maker, as its @author header says; the dialog names it after the version.
+  // As each script's @author header says.
   const AUTHOR = 'ChinStrap'
 
   // The title rules travel with the row, so they are in the page exactly while the dialog is.
@@ -1824,7 +1813,6 @@
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
       `.${prefix}off-note:empty { display: none; }`,
-      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
@@ -1861,9 +1849,6 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
-  // `off` is `guard.off`; a missing one throws, since it would read as nothing being off.
-  // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
@@ -2016,7 +2001,6 @@
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
   const DIALOG = `.dialog:has(${EDITOR})`
-  // Only for someone who has not asked the system for less motion; a fading menu takes no clicks.
   const MENU_FADE_MS = 100
   const ROW_SLIDE_MS = 80
   const MOTION_CSS = [
@@ -2085,7 +2069,7 @@
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global setDialogStatus, errorText, writeOrRestore */
-  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  // `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -2138,7 +2122,6 @@
   // <lib:wrap-index>
   // Generated from lib/wrap-index.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The index `delta` steps from `index` in a list of `count`, going round past either end.
   const wrapIndex = (index, delta, count) => (((index + delta) % count) + count) % count
   /* eslint-enable no-unused-vars */
   // </lib:wrap-index>
@@ -2146,7 +2129,6 @@
   // <lib:write-style>
   // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The page's style element `id`, added on the first call, holds `css`.
   function writeStyle (id, css, doc = document) {
     let style = doc.getElementById(id)
     if (!style) {
@@ -2389,7 +2371,6 @@
   const DIGIT_STYLE_ID = 'color-by-digit-digits'
   const SVG_NS = 'http://www.w3.org/2000/svg'
 
-  // An entered digit's text element has no digit attribute; marks have `data-val`.
   function stampEnteredDigits () {
     document.querySelectorAll('#cell-values .cell-value').forEach((el) => {
       const digit = digitOfText(el.textContent)
@@ -2913,7 +2894,6 @@
       const rows = [...box.querySelectorAll('[data-role="profile-row"]')]
       const mids = rows.map((row) => { const r = row.getBoundingClientRect(); return r.top + r.height / 2 })
       let to = from
-      // The rows between the dragged one and its drop place move one row aside; the dragged row follows the pointer, with no slide of its own.
       const step = rows.length > 1 ? mids[1] - mids[0] : 0
       Object.assign(rows[from].style, { opacity: '0.5', transition: 'none', position: 'relative', zIndex: '1' })
       box.classList.add(DRAGGING_CLASS)
@@ -3007,12 +2987,10 @@
         edit({ type: 'key-paint', digit: el.dataset.digit })
       }
       draw()
-      // The redraw replaced the button; a keyboard user keeps the focus on its successor.
       if (event.detail === 0 && act === 'digit') focusDigitKey(el.dataset.digit)
     })
   }
 
-  // Without getApp there is no app: the features that need one are off, and the rest start without it.
   const start = (app) => {
     guard.probe({ roots: { Framework, app }, store: Framework })
     const openEditor = () => editor.run(() => {
@@ -3033,7 +3011,6 @@
     installCellColoring(app)
     modeButton.run(() => listenForButton(app, openEditor))
     digitColors.run(watchBoard)
-    // The puzzle's own palette is in the page's colors once it has loaded: the icon and the digit shades show those.
     whenProgressLoaded(app, redraw)
     if (colorsCells(mode)) whenProgressLoaded(app, () => colorEnteredCells(app))
   }
