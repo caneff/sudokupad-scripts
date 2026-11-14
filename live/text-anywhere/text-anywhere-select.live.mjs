@@ -32,7 +32,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   let context, p, errors
 
   const saved = () => textAnywhere.saved(p)
-  const savedNote = async (text) => (await saved()).find((item) => item.text === text)
+  const savedNote = (text) => textAnywhere.savedNote(p, text)
   const selectedTexts = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent).sort(), SELECTED)
   // A press on the note that starts at cell spot `at` lands in its middle, and a drag keeps the offset between that and the spot.
   const noteAt = async (at) => textAnywhere.middleAt(p, await gridPoint(p, at))

@@ -1,5 +1,5 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
-/* global Framework, loadFPuzzle */
+/* global Framework, loadFPuzzle, PuzzleLoader */
 import { LOAD_MS } from './cache.mjs'
 import { startPuzzle, START } from './page.mjs'
 import { pickTool, texts } from './board.mjs'
@@ -66,6 +66,24 @@ export async function puzzleIdFor (p, data) {
 export async function openPuzzleId (p, id) {
   await p.goto(SUDOKUPAD + id, { waitUntil: 'load', timeout: LOAD_MS })
   await startWithTools(p)
+}
+
+// Loads a puzzle in the tab again through the page's own loader, in place and with no reload, as the puzzle with `id` (none: under its own).
+// `source` is the page's first path, which a load in place changes, so a second call on one page passes it; the default is the current one.
+// SudokuPad loads Tag Manager again on a second puzzle in a tab (it has saved progress by then) and the harness aborts it, which leaves an
+// uncaught `Event` rejection no script caused, so Tag Manager is answered with an empty script first, as `installAll` does.
+export async function loadInPlace (p, id, { source = new URL(p.url()).pathname.slice(1) } = {}) {
+  await p.route(/googletagmanager/, (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }))
+  await p.evaluate(async ([key, as]) => {
+    const { parsePuzzleData, fetchPuzzle } = PuzzleLoader
+    const data = await parsePuzzleData(await fetchPuzzle(key))
+    if (as !== undefined) {
+      data.id = as
+      Framework.app.puzzle.puzzleId = as
+    }
+    await Framework.app.loadCTCPuzzle(data)
+  }, [source, id])
+  if (id !== undefined) await p.waitForFunction((as) => Framework.app.puzzle.puzzleId === as, id)
 }
 
 export const boardOf = async (p) => ({

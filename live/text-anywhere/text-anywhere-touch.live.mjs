@@ -29,11 +29,11 @@ const browser = useBrowser()
 describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   let context, p, errors
 
-  const noteBox = (text) => p.locator(TEXTS).filter({ hasText: new RegExp(`^${text}$`) }).boundingBox()
-  const savedNote = async (text) => (await textAnywhere.saved(p)).find((item) => item.text === text)
+  const noteBox = (text) => textAnywhere.noteBox(p, text)
+  const savedNote = (text) => textAnywhere.savedNote(p, text)
   const visible = (selector) => p.evaluate((s) => [...document.querySelectorAll(s)].map((e) => window.getComputedStyle(e).visibility), selector)
   const middle = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
-  const selectedCount = () => p.locator(`${TEXTS}.text-anywhere-selected`).count()
+  const selectedCount = () => textAnywhere.selectedCount(p)
   const onlySelected = async (text) => (await p.locator(`${TEXTS}.text-anywhere-selected`).allTextContents()).join() === text
   const boardPoint = (point) => p.evaluate(([x, y]) => {
     const m = Framework.app.svgRenderer.getElem().getScreenCTM().inverse()
@@ -77,7 +77,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
       }, `${SELECTION}, ${HANDLES}`)
       const hiddenFor = await p.evaluate(() => window.__backAt - window.__lastNudgeAt)
       assert.equal(hiddenFor >= CHROME_BACK_MS, true, `they come back ${CHROME_BACK_MS} ms after the last nudge, not sooner: after ${hiddenFor} ms`)
-      assert.equal(await p.locator(`${TEXTS}.text-anywhere-selected`).count(), 1, 'the note is still selected')
+      assert.equal(await selectedCount(), 1, 'the note is still selected')
     })
 
     it('come back at once on a pointer move', async () => {

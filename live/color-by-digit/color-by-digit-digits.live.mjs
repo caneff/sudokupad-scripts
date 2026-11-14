@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, styleOn, watch, reloadSession } from './color-by-digit-fixtures.mjs'
 import { selectCell, undoDepth } from '../board.mjs'
+import { loadInPlace } from '../puzzles.mjs'
 import { PUZZLE_URL } from '../page.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -429,13 +430,8 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     // Loads through the page's own loader (fetchPuzzle, parsePuzzleData, loadCTCPuzzle), which
     // rebuilds the board in place. The repo holds one puzzle URL, so it is the same puzzle again.
     it('the board rebuilt in the page without a reload still gets the shades', async () => {
-      // PuzzleLoader is a top-level binding of the page's script, not a window property.
-      await p.evaluate(() => { window.pageLoader = PuzzleLoader }) // eslint-disable-line no-undef
       await read(() => document.querySelectorAll('#cell-givens text').forEach((e) => e.setAttribute('data-old-board', '')))
-      await read(async (id) => {
-        const { parsePuzzleData, fetchPuzzle } = window.pageLoader
-        await Framework.app.loadCTCPuzzle(await parsePuzzleData(await fetchPuzzle(id)))
-      }, PUZZLE_URL.replace(/^https?:\/\/[^/]+\//, ''))
+      await loadInPlace(p, undefined, { source: PUZZLE_URL.replace(/^https?:\/\/[^/]+\//, '') })
       // The old givens are gone once the new board is drawn.
       await p.waitForFunction(() => document.querySelectorAll('#cell-givens text:not([data-old-board])').length > 0)
       await enter(0, 3, '4')

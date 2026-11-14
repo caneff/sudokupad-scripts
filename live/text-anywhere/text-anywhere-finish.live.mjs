@@ -28,7 +28,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   let context, p, errors
 
   const saved = () => textAnywhere.saved(p)
-  const savedNote = async (text) => (await saved()).find((item) => item.text === text)
+  const savedNote = (text) => textAnywhere.savedNote(p, text)
   const texts = () => textAnywhere.texts(p)
   const selectedTexts = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent).sort(), SELECTED)
   const cellState = () => p.evaluate(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))

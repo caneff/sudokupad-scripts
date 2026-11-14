@@ -99,6 +99,15 @@ export const notesOf = (value) => {
 }
 export const saved = async (p) => notesOf(await p.evaluate((key) => Framework.getData(key), NOTES_PREFIX + await puzzleKey(p)))
 
+// One note of the saved list, by its text.
+export const savedNote = async (p, text) => (await saved(p)).find((item) => item.text === text)
+// The text in the open note box.
+export const boxText = (p) => p.locator(TEXT_BOX).textContent()
+// The screen box of the closed note whose whole text is `text`.
+export const noteBox = (p, text) => p.locator(TEXTS).filter({ hasText: new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }).boundingBox()
+// How many notes are selected.
+export const selectedCount = (p) => p.locator(SELECTED).count()
+
 export const noteLooks = (p) => p.evaluate((selector) => {
   const scale = Framework.app.svgRenderer.getElem().getScreenCTM().a
   return [...document.querySelectorAll(selector)].map((e) => {
