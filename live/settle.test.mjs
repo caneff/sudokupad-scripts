@@ -76,10 +76,11 @@ describe('stable', () => {
   })
 
   it('does not count slow reads as a held value: two samples a poll apart that each took longer than the quiet window', async () => {
-    const t0 = Date.now()
-    // samples at its start, then takes longer than the quiet window to return; the value flips while the second read is out
+    // The first two reads return 'a', every later one 'b', and each takes longer than the quiet window. Driven by read count,
+    // not the clock, so a slow box cannot move the flip. A hold measured from before the first read would return 'a' at read 2.
+    let reads = 0
     const read = async () => {
-      const sampled = Date.now() - t0 >= 500 ? 'b' : 'a'
+      const sampled = ++reads <= 2 ? 'a' : 'b'
       await new Promise((resolve) => setTimeout(resolve, STABLE_MS + 100))
       return sampled
     }
