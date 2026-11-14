@@ -6,6 +6,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
+import { setInputValue } from '../input.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
 import { cellCentre, undoAll } from '../board.mjs'
@@ -268,7 +269,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
     assert.equal(await swatchArrows(), 2)
     const slider = () => editor().locator('input[data-setting="arrowSpacing"]')
-    const setSpacing = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+    const setSpacing = (value) => setInputValue(slider(), value)
     await openExtrasEditor(p)
     assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), [String(ARROW_SPACING.min), String(ARROW_SPACING.max), String(ARROW_SPACING.step), String(ARROW_SPACING.fallback)])
     await setSpacing(12)

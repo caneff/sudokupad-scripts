@@ -2,9 +2,9 @@
 // the button, switching profile, the button's icon, the dialog's profile list, and migration.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, watch, cellsStateOn, wrongCountOn, reloadSession, openEditorOn, openMenuOn } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
-import { closeDialogWith, dialogButton, openScriptDialog } from '../settings.mjs'
+import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -30,15 +30,11 @@ const openProfiles = (saved, contextOptions = {}) => openSession(browser(), scri
 const savedOff = (saved) => ({ ...saved, [MODE_STORAGE_KEY]: 'off' })
 
 const tools = (p) => {
-  const read = (fn, arg) => p.evaluate(fn, arg)
-  const cellsState = () => cellsStateOn(p)
-  const coloredCount = () => coloredCountOn(p)
+  const { read, label, cellsState, coloredCount, getState, undo } = pageTools(p)
   const coloursOf = async () => JSON.stringify((await cellsState()).map((x) => x.colours))
   const wrongCount = (groups) => wrongCountOn(p, groups)
-  const getState = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
   const names = async () => (await getState()).profiles.map((x) => x.name)
   const valueAt = (r, c) => read(([r, c]) => String(Framework.app.grid.getCell(r, c).value || ''), [r, c])
-  const undo = () => p.click('#control-undo')
   const menu = () => p.locator(MENU)
   const menuRows = () => p.$$eval(`${MENU} [data-act=pick]`, (es) => es.map((e) => ({ name: e.querySelector('[data-role=name]').textContent, active: e.getAttribute('aria-checked') === 'true' })))
   const iconShownDigits = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
@@ -47,7 +43,6 @@ const tools = (p) => {
   const selectedRow = () => p.$$eval(ROWS, (es) => es.findIndex((e) => e.getAttribute('aria-checked') === 'true'))
   const cellProfile = () => p.locator(`${EDITOR} select[data-role=cell-profile]`).inputValue()
   const pulldownNames = (role) => p.$$eval(`${EDITOR} select[data-role=${role}] option`, (es) => es.map((e) => e.textContent))
-  const label = () => labelOn(p)
   const pick = async (name) => {
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: name }).click()
     await menu().waitFor({ state: 'detached' })
@@ -739,7 +734,7 @@ describe('opening the editor and saving with no edit, injected after Start Puzzl
   after(async () => { await context.close() })
 
   it('every preload comes back unchanged, in its order, with the active profile kept', async () => {
-    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    await openEditorOn(p)
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await settle(async () => savedState(await p.evaluate((key) => Framework.getData(key), PROFILES_KEY)), PRELOAD_PROFILES), PRELOAD_PROFILES)
   })

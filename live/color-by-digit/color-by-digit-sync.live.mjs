@@ -3,7 +3,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { allFillsOn, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, savedState, shadeReaders, watch, reloadSession, openEditorOn, openMenuOn } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, BUTTON, DEFAULT_FILL, EDITOR, group, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, ROW_CORNER, savedProfiles, shadeReaders, watch, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { selectCell, undoDepth } from '../board.mjs'
 import { closeDialogWith } from '../settings.mjs'
 import { settle } from '../settle.mjs'
@@ -29,15 +29,11 @@ const ODD_EVEN_CELLS = [['1'], ['2']]
 const browser = useBrowser()
 
 const tools = (p) => {
-  const read = (fn, arg) => p.evaluate(fn, arg)
-  const label = () => labelOn(p)
+  const { read, label, coloredCount, getState, undo } = pageTools(p)
   const cells = () => read(() => [[0, 0], [1, 0]].map(([r, c]) => [...(Framework.app.grid.getCell(r, c).colours || [])]))
-  const coloredCount = () => coloredCountOn(p)
-  const getState = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
   const icon = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
   const shownCircles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].filter((c) => window.getComputedStyle(c.parentNode).display !== 'none').length, CIRCLES)
   const enter = async (r, c, digit) => { await selectCell(p, r, c); await p.keyboard.press(digit) }
-  const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
   const closeMenu = async () => {
     await p.keyboard.press('Escape')

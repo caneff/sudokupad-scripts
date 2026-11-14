@@ -3,9 +3,9 @@
 // during a drag, and no motion when the system asks for less.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ARROW, BUTTON, EDITOR, MENU, openSession, savedProfiles, SEED, openMenuOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, BUTTON, EDITOR, MENU, openSession, savedProfiles, SEED, openMenuOn, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
-import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { closeDialogWith } from '../settings.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -45,7 +45,7 @@ describe('chips, swatches and digit keys at 60%, an empty profile\'s blank cells
 
   before(async () => {
     ({ context, p, errors } = await openSession(browser(), script, { saved: savedProfiles({ ...THREE, active: 1 }) }))
-    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    await openEditorOn(p)
   })
   after(async () => { await context.close() })
 
@@ -137,7 +137,7 @@ describe('the profile rows sliding aside during a drag, injected after Start Puz
 
   before(async () => {
     ({ context, p, errors } = await openSession(browser(), script, { saved: savedProfiles(THREE) }))
-    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    await openEditorOn(p)
   })
   after(async () => { await context.close() })
 
@@ -191,7 +191,7 @@ describe('reduced motion, injected after Start Puzzle', { concurrency: false }, 
   })
 
   it('the profile rows have no transition', async () => {
-    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    await openEditorOn(p)
     const durations = await p.$$eval(ROWS, (rows) => rows.map((row) => window.getComputedStyle(row).transitionDuration))
     assert.deepEqual(durations, ['0s', '0s', '0s'])
   })

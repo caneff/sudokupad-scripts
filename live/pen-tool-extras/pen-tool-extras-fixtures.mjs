@@ -1,16 +1,16 @@
 // Pen Tool Extras' live fixtures: the script, its stylesheet's selector, and the helpers that open SudokuPad with it, reload it and
-// turn on and open the pen tool. Not a check itself, so `live/**/*.live.mjs` skips it.
+// turn on and open the pen tool, and the readers every suite shares: `tools` (the page's pen readers), `effectiveOpacities` (what shows
+// of a mark's opacity) and `drawnWidth` (a stroke's width as drawn, scale included). Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import { createRequire } from 'node:module'
 import { scaleOf } from '../page.mjs'
 import { openWith, reloadWith, scriptSource } from '../session.mjs'
-import { openPenTool, PAGE_BUTTON, PAGES } from '../pen.mjs'
+import { openPenTool, PAGE_BUTTON } from '../pen.mjs'
 import { EXTRAS_EDITOR } from '../settings.mjs'
 
 export const SCRIPT_FILE = 'pen-tool-extras.user.js'
 export const script = scriptSource(SCRIPT_FILE)
 export const STYLE = 'style#pen-tool-extras-style'
-export { PAGES }
 
 // What the script exports for tests, such as its constants.
 export const scriptExports = createRequire(import.meta.url)('../../pen-tool-extras.user.js')

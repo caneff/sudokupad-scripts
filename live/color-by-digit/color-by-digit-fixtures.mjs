@@ -53,6 +53,16 @@ export async function openMenuOn (p) {
   await p.locator(MENU).waitFor({ state: 'visible' })
 }
 
+// What the suites read off one page, bound to it: the session's page `p` in, its shared readers out. A suite adds its own on top.
+export const tools = (p) => ({
+  read: (fn, arg) => p.evaluate(fn, arg),
+  label: () => labelOn(p),
+  cellsState: () => cellsStateOn(p),
+  coloredCount: () => coloredCountOn(p),
+  getState: async () => savedState(await p.evaluate((key) => Framework.getData(key), PROFILES_KEY)),
+  undo: () => p.click('#control-undo')
+})
+
 // '' for a digit in no group.
 export const paintedKeys = (p) => p.$$eval(`${EDITOR} button[data-act=digit]`, (es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.dataset.key])))
 

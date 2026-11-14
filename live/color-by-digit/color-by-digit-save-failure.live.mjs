@@ -3,8 +3,8 @@
 // so the mode restore has no failing step to witness it.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { EDITOR, MODE_KEY, openSession, PROFILES_KEY, savedProfiles, SEED } from './color-by-digit-fixtures.mjs'
-import { dialogButton, openScriptDialog } from '../settings.mjs'
+import { EDITOR, MODE_KEY, openSession, PROFILES_KEY, savedProfiles, SEED, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { dialogButton } from '../settings.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -41,7 +41,7 @@ describe('Color by Digit\'s Save is all-or-nothing', { concurrency: false }, () 
         return result
       }
     }, PROFILES_KEY)
-    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    await openEditorOn(p)
     await p.hover(`${ROWS}:nth-child(2)`)
     await p.click(`${ROWS}:nth-child(2) button[data-act=delete]`)
     await dialogButton(p, 'Save').click()
