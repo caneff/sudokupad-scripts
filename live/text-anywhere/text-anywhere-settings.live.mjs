@@ -87,8 +87,11 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
 
   it('a Darker page preset sets nine colors that are not SudokuPad\'s, and Save writes them', async () => {
     await p.click(SETTINGS_BUTTON)
+    const before = await dialogColors(p)
     await p.locator(PRESET).selectOption('page-1')
     const colors = await dialogColors(p)
+    assert.equal(Object.keys(colors).length, 9)
+    assert.notDeepEqual(colors, before, 'picking the preset changed the colors')
     assert.notDeepEqual(colors, SUDOKUPAD_COLORS)
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await savedColors(p), colors)
