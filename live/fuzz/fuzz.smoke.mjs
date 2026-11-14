@@ -43,7 +43,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle, steps })
   })
 
-  it('a pick from the pad menu with Text Anywhere\'s tool current opens no note over its button (#829)', async () => {
+  it('a pick from the profile menu with Text Anywhere\'s tool current opens no note over its button (#829)', async () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['note background', false], ['profile switch', 1], ['boxed note', [0, 1]]] })
   })
 

@@ -103,7 +103,7 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     assert.equal(await boxOpen(p), false, 'the copy-rules icon opened a note')
   })
 
-  it('a press on a row of Color by Digit\'s pad menu opens no note and leaves Text Anywhere\'s button on top (#829)', async () => {
+  it('a press on a row of Color by Digit\'s profile menu opens no note and leaves Text Anywhere\'s button on top (#829)', async () => {
     await p.locator(ARROW).click()
     await p.locator(MENU).waitFor({ state: 'visible' })
     await p.locator(`${MENU} [data-act=pick][data-target=cells]`).nth(1).click()
