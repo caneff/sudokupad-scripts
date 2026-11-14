@@ -4014,7 +4014,10 @@
     redraw()
   }
 
+  // A load, Restart or Undo drops an unsaved nudge: saving it later would overwrite the notes Undo keeps.
   function cancelInput () {
+    stopHold()
+    nudged = false
     if (drag?.move) clearMove(drag)
     if (drag) clearDrag(drag)
     drag = null
