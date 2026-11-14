@@ -2,12 +2,16 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KIND_SCRIPTS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, START_KINDS, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
 
 // The lists a seed gives (each `{ puzzle, commands }`) over the whole puzzle set, or over `puzzles`.
+// What each real kind declares, by name.
+const KIND_SCRIPTS = Object.fromEntries(KINDS.map((k) => [k.kind, k.scripts]))
+const START_KINDS = KINDS.filter((k) => k.start).map((k) => k.kind)
+
 const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList(puzzles, { maxCommands: 20 }), { seed, numRuns: count })
 // fast-check wraps each generated command (`.cmd`), and prints a list only once it ran, so the steps are read from the commands.
 const actionsOf = (lists) => lists.flatMap((l) => [...l.commands].map((wrapped) => wrapped.cmd))
@@ -490,16 +494,33 @@ describe('focusing the actions on a script (#724)', () => {
   }
   const share = (seen, kinds) => kinds.reduce((sum, k) => sum + seen[k], 0) / Object.values(seen).reduce((a, b) => a + b, 0)
 
-  it('names only real kinds and real scripts, and every script has a kind', () => {
-    assert.deepEqual(Object.keys(KIND_SCRIPTS).sort(), [...KIND_NAMES].sort())
+  it('every real kind declares its facts: its scripts (real ones), whether it draws a stroke and whether a list may start with it', () => {
+    const files = new Set(scriptFiles())
+    for (const k of KINDS) {
+      assert.ok(Array.isArray(k.scripts), `${k.kind}: scripts is no array`)
+      for (const f of k.scripts) assert.ok(files.has(f), `${k.kind}: ${f} is no script`)
+      assert.equal(typeof k.start, 'boolean', `${k.kind}: start`)
+      assert.equal(typeof k.stroke, 'boolean', `${k.kind}: stroke`)
+    }
+  })
+
+  it('a kind that draws a stroke is one of the pen\'s, and a command carries the fact the engine reads', () => {
+    const strokes = KINDS.filter((k) => k.stroke).map((k) => k.kind)
+    assert.deepEqual(strokes, ['pen line', 'pen erase', 'pen line mode', 'pen mark', 'arrow line', 'pen drag, Escape', 'pen drag, tool key', 'pen drag, undo', 'pen drag, resize', 'pen drag, second button', 'pen drag, blur', 'pen drag, leave window'])
+    const commands = actionsOf(sample(5, 20))
+    assert.ok(commands.length > 0)
+    for (const c of commands) assert.equal(c.stroke, strokes.includes(c.kind), c.kind)
+  })
+
+  it('names every script a kind exercises, and every script has a kind', () => {
     const files = new Set(scriptFiles())
     for (const [kind, scripts] of Object.entries(KIND_SCRIPTS)) for (const f of scripts) assert.ok(files.has(f), `${kind}: ${f} is no script`)
     for (const f of files) assert.ok(kindsOf(f).length > 0, `${f} has no action that exercises it`)
   })
 
   it('a focused script\'s kinds weigh FOCUS_FACTOR times their own weight and every other kind keeps it', () => {
-    const plain = kindWeights([])
-    const focused = kindWeights([PEN])
+    const plain = kindWeights(KINDS, [])
+    const focused = kindWeights(KINDS, [PEN])
     for (const k of KIND_NAMES) assert.equal(focused[k], kindsOf(PEN).includes(k) ? plain[k] * FOCUS_FACTOR : plain[k], k)
     assert.ok(FOCUS_FACTOR > 1)
   })
@@ -507,8 +528,8 @@ describe('focusing the actions on a script (#724)', () => {
   it('a kind of two focused scripts is raised once, not twice', () => {
     const both = KIND_NAMES.find((k) => KIND_SCRIPTS[k].length > 1)
     assert.ok(both, 'some kind exercises two scripts')
-    const weights = kindWeights(KIND_SCRIPTS[both])
-    assert.equal(weights[both], kindWeights([])[both] * FOCUS_FACTOR)
+    const weights = kindWeights(KINDS, KIND_SCRIPTS[both])
+    assert.equal(weights[both], kindWeights(KINDS, [])[both] * FOCUS_FACTOR)
   })
 
   it('a focused run draws the focused script\'s actions more often, and still draws every kind', () => {

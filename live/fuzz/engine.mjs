@@ -38,10 +38,9 @@ function assertRules (now, before, action, when, earlier, step) {
   if (broken.length) throw Object.assign(new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`), { step })
 }
 
-// Whether a stroke was drawn or erased since the last reload, once `kind` has run after `earlier`. The reload bug of #681 needs a reload soon after a stroke, and
+// Whether a stroke was drawn or erased since the last reload, once `action` (a kind's `kind` and `stroke`) has run after `earlier`. The reload bug of #681 needs a reload soon after a stroke, and
 // the engine has no clock for actions, so any such action since the last reload counts; the settings, the page turn and the notes draw no stroke.
-const STROKE_KIND = /^(pen (line|erase|drag|mark)|arrow line)/
-export const strokeSinceReload = (kind, earlier) => kind !== 'reload' && (earlier?.strokeSinceReload || STROKE_KIND.test(kind))
+export const strokeSinceReload = ({ kind, stroke }, earlier) => kind !== 'reload' && (earlier?.strokeSinceReload || stroke)
 
 // Runs one generated list on a page of its own. A page is never reused between runs: Restart empties the replay but leaves the earlier digits
 // behind Undo, which would make a run depend on the runs before it and break replay (docs/research/ui-fuzz-tools.md). The step at index `settledStep` waits
@@ -69,7 +68,7 @@ async function runList (openTarget, actions, landMs, settleMs, settledStep = -1)
         const now = await read(action, await target.snapshot(), waitMs)
         assertClean(now, `after "${action}"`, step)
         assertRules(now, before, action.cmd.kind, `after "${action}"`, earlier, step)
-        earlier = { action: action.cmd.kind, before, strokeSinceReload: strokeSinceReload(action.cmd.kind, earlier), earlier: earlier && { action: earlier.action, before: earlier.before } }
+        earlier = { action: action.cmd.kind, before, strokeSinceReload: strokeSinceReload(action.cmd, earlier), earlier: earlier && { action: earlier.action, before: earlier.before } }
         before = now
       }
     })
@@ -104,15 +103,15 @@ async function blameLate (open, steps, { landMs, settleMs }, failure) {
 // Runs a list written by hand (`scriptedList` of `actions.mjs`) on a page of its own for `puzzle`, with the checks of every fuzz run; throws what a failing run throws.
 export const runScript = ({ openTarget, puzzle, actions }) => runList(() => openTarget(puzzle), actions, ERRORS_LAND_MS, ACTION_SETTLE_MS)
 
-// Fuzzes with `seed` over `puzzles` (each list picks one): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
+// Fuzzes with `seed` over `puzzles` (each list picks one) and the action `kinds` (`actions.mjs`: the engine's own tests pass a small fixed set, `fuzz.mjs` the real one): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
 // most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus`, `busyStart`, `waits`, `maxCommands` and `nonEmpty` shape the lists (`actionList`), so a replay
 // needs the ones it was found with. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
 // each puzzle ran, by name) or the failure: `error`, `puzzle` (its name), `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`,
 // `replayPath`, `waitMs` (the list's own wait, under `waits`), `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
-export async function runFuzz ({ openTarget, puzzles, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits, busyStart, maxCommands, nonEmpty }) {
+export async function runFuzz ({ openTarget, puzzles, kinds, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits, busyStart, maxCommands, nonEmpty }) {
   // The puzzle of every list started, in order: the hunt's lists are the first `hunt.numRuns` (a list the time limit cut off, and the shrink's, come after).
   const started = []
-  const property = fc.asyncProperty(actionList(puzzles, { replayPath, focus, waits, busyStart, maxCommands, nonEmpty }), ({ puzzle, start, commands, waitMs }) => {
+  const property = fc.asyncProperty(actionList(puzzles, { kinds, replayPath, focus, waits, busyStart, maxCommands, nonEmpty }), ({ puzzle, start, commands, waitMs }) => {
     started.push(puzzle.name)
     return runList(() => openTarget(puzzle), [...start.map(asStep), ...commands], landMs, waitMs ?? settleMs)
   })

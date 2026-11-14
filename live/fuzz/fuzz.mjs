@@ -16,7 +16,7 @@ import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
-import { MARK_BOXES, PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
+import { KINDS, MARK_BOXES, PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
@@ -424,6 +424,7 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
   const result = await runFuzz({
     openTarget: tracked.open,
     puzzles: FUZZ_PUZZLES,
+    kinds: KINDS,
     seed,
     runs,
     minutes,
