@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.19
+// @version      0.1.20
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Toggle Selection button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.19'
+  const VERSION = '0.1.20'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -75,7 +75,10 @@
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // A paste puts the pasted rows' values (read from `now`, once saved) into the draft and leaves every other row as drafted.
+  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
+  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
+
+  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
   const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
@@ -102,7 +105,7 @@
   const copiedSettings = (store) => JSON.stringify(copiedTable(OPTION_ROWS, store))
 
   // What a paste leaves in force: the options now saved, with only the pasted ones changed, so a box ticked in the dialog and not saved is not saved by it.
-  const pastedOptions = (current, values) => withPasted(OPTION_ROWS, current, Object.fromEntries(OPTION_ROWS.map((row) => [row.name, values[row.key]])), values)
+  const pastedOptions = (current, values) => withPasted(OPTION_ROWS, current, pastedByName(OPTION_ROWS, values), values)
 
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.

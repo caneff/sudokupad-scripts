@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.20
+// @version      0.46.21
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.20'
+  const VERSION = '0.46.21'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -788,7 +788,7 @@
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
-  // A value already saved as it is writes nothing: a write is a storage round trip, and a drag or a note edit repeats the same value.
+  // A value already saved as it is writes nothing: a write is a storage round trip.
   function save (store, key, data) {
     const envelope = { v: STORE_VERSION, data }
     if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
@@ -827,7 +827,10 @@
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // A paste puts the pasted rows' values (read from `now`, once saved) into the draft and leaves every other row as drafted.
+  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
+  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
+
+  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
   const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
@@ -1200,7 +1203,7 @@
     return { colors: { ...colors }, missing }
   }
 
-  // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `validator` a pasted value must pass or be skipped.
+  // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `paste` (the reader a pasted value goes through, `read` when absent; it gives undefined for a value to skip).
   // `dialog` marks the looks the settings dialog sets and the notes are drawn again in; the others are the panel's sliders.
   // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
   const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })

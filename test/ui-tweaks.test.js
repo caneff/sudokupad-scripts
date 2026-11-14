@@ -160,6 +160,29 @@ test('lackingInternals names the internal a feature lacks', () => {
   assert.deepEqual([...lackingInternals({ tab: FEATURES.tab }, { ...roots, ToolLetter: { tool: {} } })], [['ToolLetter.tool.keyHandlers', ['tab']]])
 })
 
+const completeSudokuPad = () => ({
+  Framework: { getApp () {}, app: { tools: {} }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} },
+  ToolLetter: { tool: { keyHandlers: [] } }
+})
+
+test('a complete SudokuPad lacks nothing, and without one internal only the features that need it are lacking', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeSudokuPad()), new Map())
+  const removals = [
+    ...['addSetting', 'showDialog', 'closeDialog', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, ['settings']]),
+    ['Framework.getData', (r) => { delete r.Framework.getData }, ['saved']],
+    ['ToolLetter.tool.keyHandlers', (r) => { delete r.ToolLetter.tool.keyHandlers }, ['tab']],
+    ['Framework.app.tools', (r) => { delete r.Framework.app.tools }, ['tab']]
+  ]
+  for (const [internal, remove, features] of removals) {
+    const roots = completeSudokuPad()
+    remove(roots)
+    assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[internal, features]]), internal)
+  }
+  const roots = completeSudokuPad()
+  delete roots.Framework.getApp
+  assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['tab', 'settings']]]))
+})
+
 test('the header names the script, points updates at its own file and asks for no grant, so the settings entry is its one way in', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'ui-tweaks.user.js'), 'utf8')
   assert.match(source, /^\/\/ @name\s+SudokuPad UI Tweaks$/m)

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.50
+// @version      0.25.51
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.50'
+  const VERSION = '0.25.51'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -31,6 +31,7 @@
   // Auto mode's on/off, saved before the mode existed: read only to choose the starting mode when no mode is saved.
   const AUTO_KEY = 'ColorByDigit_auto'
   const MODES = ['cell', 'digit', 'both', 'off']
+  const DEFAULT_MODE = 'cell'
   const DIGITLESS_MODES = ['cell', 'off']
   const DIGITLESS_FALLBACK = { digit: 'off', both: 'cell' }
   const MODE_NAMES = { cell: 'Cell', digit: 'Digit', both: 'Both', off: 'Off' }
@@ -115,7 +116,7 @@
   const colorsCells = (mode) => mode === 'cell' || mode === 'both'
   const colorsDigits = (mode) => mode === 'digit' || mode === 'both'
   const modeFromAuto = (auto) => (typeof auto === 'boolean' ? (auto ? 'cell' : 'off') : undefined)
-  const startingMode = (savedMode, savedAuto) => (MODES.includes(savedMode) ? savedMode : modeFromAuto(savedAuto) ?? 'cell')
+  const startingMode = (savedMode, savedAuto) => (MODES.includes(savedMode) ? savedMode : modeFromAuto(savedAuto) ?? DEFAULT_MODE)
 
   // SudokuPad's action names: `value` (digit), `candidates` (centre mark), `pencilmarks` (corner mark).
   function isEntryAction (action) {
@@ -320,7 +321,7 @@
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
-  // A value already saved as it is writes nothing: a write is a storage round trip, and a drag or a note edit repeats the same value.
+  // A value already saved as it is writes nothing: a write is a storage round trip.
   function save (store, key, data) {
     const envelope = { v: STORE_VERSION, data }
     if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
@@ -359,7 +360,10 @@
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // A paste puts the pasted rows' values (read from `now`, once saved) into the draft and leaves every other row as drafted.
+  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
+  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
+
+  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
   const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
@@ -372,7 +376,7 @@
   // </lib:settings-table>
   const readPastedFlag = (data) => (typeof data === 'boolean' ? data : undefined)
   const readPastedMode = (data) => (MODES.includes(data) ? data : undefined)
-  const MODE_ROW = { name: 'mode', key: MODE_KEY, fallback: 'cell', read: (data) => readPastedMode(data) ?? 'cell', paste: readPastedMode }
+  const MODE_ROW = { name: 'mode', key: MODE_KEY, fallback: DEFAULT_MODE, read: (data) => readPastedMode(data) ?? DEFAULT_MODE, paste: readPastedMode }
   const PRELOAD_ROWS = ADDED_PRELOADS.map(({ key }) => ({ name: key, key, fallback: false, read: (data) => data === true, paste: readPastedFlag }))
   const SETTING_ROWS = [MODE_ROW, ...PRELOAD_ROWS]
   // The profiles are no row: their fallback comes from the groups saved before them, and they are saved in the store's envelope, with their own read.
@@ -382,7 +386,12 @@
   // A mode never saved reads as auto mode's saved on/off, which came before it.
   const withLegacyMode = (store) => ({ getData: (key) => (key === MODE_KEY ? startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) : store.getData(key)) })
   // The profiles in force, which carry groups saved before profiles existed, and the mode in force, so a paste can switch either.
-  const copiedSettings = (store) => JSON.stringify({ [PROFILES_KEY]: stateFromStored(store), ...copiedTable(SETTING_ROWS, withLegacyMode(store)) })
+  // An added-preload mark is copied only when set: an unset one copied as false would let a paste remove the target's mark, and addPreloadsOnce would add back preload profiles the user deleted.
+  const copiedSettings = (store) => {
+    const copied = copiedTable(SETTING_ROWS, withLegacyMode(store))
+    for (const { key } of PRELOAD_ROWS) if (copied[key] !== true) delete copied[key]
+    return JSON.stringify({ [PROFILES_KEY]: stateFromStored(store), ...copied })
+  }
 
   const sameGroups = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -2500,6 +2509,7 @@
 
   function showMode (next) {
     mode = next
+    // The default mode is written, not removed as saveRow would: with the key gone, startingMode reads a saved ColorByDigit_auto false from before the modes as Off.
     savedData.setData(MODE_KEY, next)
     redraw()
   }

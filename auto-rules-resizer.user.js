@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.11
+// @version      0.7.12
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.11'
+  const VERSION = '0.7.12'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -123,7 +123,7 @@
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
-  // A value already saved as it is writes nothing: a write is a storage round trip, and a drag or a note edit repeats the same value.
+  // A value already saved as it is writes nothing: a write is a storage round trip.
   function save (store, key, data) {
     const envelope = { v: STORE_VERSION, data }
     if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
@@ -162,7 +162,10 @@
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // A paste puts the pasted rows' values (read from `now`, once saved) into the draft and leaves every other row as drafted.
+  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
+  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
+
+  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
   const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
@@ -1491,7 +1494,7 @@
         copied: () => maxSizeSettings.runInDialog(() => copiedSettings(Framework)),
         readers: READERS,
         apply: (values) => {
-          limits = withPasted(LIMIT_ROWS, limits, Object.fromEntries(LIMIT_ROWS.map((row) => [row.name, values[row.key]])), values)
+          limits = withPasted(LIMIT_ROWS, limits, pastedByName(LIMIT_ROWS, values), values)
           saveLimits(savedLimits, limits)
           if (MAX_WIDTH_KEY in values) document.getElementById(MAX_WIDTH_INPUT_ID).value = limits.maxWidth ?? ''
           if (MAX_HEIGHT_KEY in values) document.getElementById(MAX_HEIGHT_INPUT_ID).value = limits.maxHeight ?? ''

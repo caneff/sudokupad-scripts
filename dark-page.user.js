@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.23
+// @version      0.7.24
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.23'
+  const VERSION = '0.7.24'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -86,7 +86,10 @@
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // A paste puts the pasted rows' values (read from `now`, once saved) into the draft and leaves every other row as drafted.
+  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
+  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
+
+  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
   const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
@@ -98,10 +101,10 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
 
-  const COLOR_ROWS = [{ name: 'color', key: DATA_KEY, fallback: DEFAULT_COLOR, read: (data) => pageColorOf(data) ?? DEFAULT_COLOR, paste: (data) => pageColorOf(data) ?? undefined }]
+  const SETTING_ROWS = [{ name: 'color', key: DATA_KEY, fallback: DEFAULT_COLOR, read: (data) => pageColorOf(data) ?? DEFAULT_COLOR, paste: (data) => savedHex(data) }]
 
   // The saved color, the default when none is saved. Throws when storage cannot be read.
-  const readSaved = (store) => readTable(COLOR_ROWS, store).color
+  const readSaved = (store) => readTable(SETTING_ROWS, store).color
 
   // Framework keeps its saved data in localStorage under `<Framework.LocalDataPrefix>_<name>` (`makeDataKey`), a color as
   // the plain string: the live checks in § at document-start fail if SudokuPad changes either.
@@ -109,10 +112,10 @@
   // The saved color read straight from storage, for when Framework does not exist yet. Throws when storage is blocked.
   const earlyColor = (storage) => pageColorOf(storage.getItem(LOCAL_DATA_KEY))
 
-  const READERS = pasteReaders(COLOR_ROWS)
+  const READERS = pasteReaders(SETTING_ROWS)
 
   // The color in force, the default included, so a paste can put a page back to the default.
-  const copiedSettings = (store) => JSON.stringify(copiedTable(COLOR_ROWS, store))
+  const copiedSettings = (store) => JSON.stringify(copiedTable(SETTING_ROWS, store))
 
   // <lib:color-math>
   // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
@@ -971,7 +974,7 @@
   const savedSettings = guard.storeFor(settingsEntry)
 
   function saveColor (color) {
-    saveRow(savedSettings, COLOR_ROWS[0], color)
+    saveRow(savedSettings, SETTING_ROWS[0], color)
     pageColor = color
     style.textContent = buildCss(pageColor)
   }
@@ -980,7 +983,7 @@
   const DIALOG_ID = 'dark-page-dialog'
   const dialogs = guard.dialogsFor(settingsEntry)
   // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
-  const snapshotColor = () => snapshotStore(savedSettings, tableKeys(COLOR_ROWS))
+  const snapshotColor = () => snapshotStore(savedSettings, tableKeys(SETTING_ROWS))
 
   function openDialog () {
     let picked = pageColor
