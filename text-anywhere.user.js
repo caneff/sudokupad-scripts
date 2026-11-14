@@ -689,8 +689,7 @@
   const noteChanged = (item, text, before) => text !== (before?.text ?? '') ||
     (before !== null && (item.color !== before.color || item.size !== before.size || itemOpacity(item) !== itemOpacity(before) || Boolean(item.bg) !== Boolean(before.bg) || String(item.box) !== String(before.box)))
 
-  // The notes, and the index of the closed note among them, once the note at `index` (-1 for a new one) closes as `item` with `text`: empty text removes it, a new note
-  // is appended, any other replaces the saved one. The index is -1 when no note is left.
+  // `index` is -1 for a note never saved. The index returned is -1 when the closing note left nothing.
   const notesAfterClose = (notes, index, item, text) => {
     if (text === '') return { notes: notes.filter((_, i) => i !== index), index: -1 }
     if (index === -1) return { notes: [...notes, { ...item, text }], index: notes.length }
@@ -3999,7 +3998,7 @@
     redraw()
   }
 
-  // A load, Restart or Undo drops an unsaved nudge: saving it later would overwrite the notes Undo keeps.
+  // An unsaved nudge is dropped too: saving it later would overwrite the notes Undo keeps after a Restart.
   function cancelInput () {
     stopHold()
     nudged = false

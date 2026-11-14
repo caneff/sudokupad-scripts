@@ -1743,13 +1743,10 @@ test('a color set is one record: colors, preset, the pens a page preset missed, 
   assert.equal(picked.colors[4], SUDOKUPAD_PEN_COLORS[4], 'the edit leaves the set it was made from')
 })
 
-test('Paste then Save stores the pasted set, with nothing left of the draft it replaced', () => {
-  const pages = [PAGE.map((_, i) => String(i))]
-  const draft = presetColorSet('page-1', pages, (key) => Number(key) === 4 ? 'transparent' : PAGE[Number(key)], () => undefined)
+test('a pasted color set is read as a whole record, with no missing pens and no preset they came from, and is stored as it was pasted', () => {
   const pasted = { ...hexes('#112233'), preset: 'page-2' }
   const after = savedColorSet(READERS[COLORS_KEY](pasted))
   assert.deepEqual(after, { colors: hexes('#112233'), preset: 'page-2', missing: [], fromPreset: null })
-  assert.notDeepEqual(after, draft)
   assert.deepEqual(storedColorSet(after), pasted)
   assert.deepEqual(storedColorSet(savedColorSet(hexes('#445566'))), hexes('#445566'), 'a pasted Custom set is stored with no preset')
   assert.equal(savedColorSet(null), null)

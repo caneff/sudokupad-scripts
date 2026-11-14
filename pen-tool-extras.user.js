@@ -3248,7 +3248,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     addSettingsEntry(dialogs, steps.settings, { name: 'pentoolextras', content: 'Pen Tool Extras', open: openDialog })
     const colorsAtStart = startupPenColors(savedData.getData(COLORS_KEY), hasColorTool)
     if (colorsAtStart.load) return adoptColors(colorsAtStart.load)
-    // The install save, once. Off at startup (no Framework.getApp or Framework.setData) there is nothing to wait for or save with.
+    // The install save, once. Off (no Framework.setData) there is nothing to save with.
     if (steps.colorSave.off) return
     if (colorsAtStart.save) return saveColors(colorsAtStart.save)
     // Page 1 darkened, once the color tool holds a palette.

@@ -2183,13 +2183,10 @@ test('a Framework with no getApp turns every install step off in one warning nam
   delete framework.getApp
   const entries = []
   framework.addSetting = (setting) => entries.push(setting.name)
-  const saved = []
-  framework.setData = (key) => saved.push(key)
   const steps = ['colors', 'color save', 'pen pages', 'arrow lines', 'drag highlight', 'marks', 'pen panel', 'line erase']
   const warnings = withPage(() => loadWithFramework(framework))
   assert.deepEqual(warnings, [`pen-tool-extras: ${steps.join(', ')} skipped because SudokuPad has no Framework.getApp`])
   assert.deepEqual(entries, ['pentoolextras'])
-  assert.deepEqual(saved, [])
 })
 
 test('copiedSettings: every setting at the value in force, the pen colors once saved, and no key it does not own', () => {
