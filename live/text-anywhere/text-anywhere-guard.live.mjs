@@ -1,5 +1,3 @@
-// Live check that a SudokuPad internal missing before Text Anywhere loads turns off the feature that needs it and nothing else: the console
-// names it once, the bar at the bottom of the page names it with a Report link, and the other features work.
 // The snippet runs ahead of the script's own startup check and puts the internal back after it, so SudokuPad's own code still runs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

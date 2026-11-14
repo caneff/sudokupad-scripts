@@ -1,7 +1,4 @@
-// Attacks on Text Anywhere's gestures (#596, from #590): a move drag, a resize-handle drag, a rectangle-select drag, a slider drag and a hold on a
-// color button, each interrupted by something a user does, on sudokupad.app in headless Chromium. Every case is real input and checks the crash signals
-// (an uncaught error, a console error, a skip line), that what is drawn is what is saved (and what a reload shows), that no gesture is left
-// half done (no selection rectangle, no stuck drag), and that an ordinary gesture works afterward.
+// #596, from #590.
 /* global Framework, window */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

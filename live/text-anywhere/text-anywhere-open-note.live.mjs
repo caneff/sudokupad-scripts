@@ -1,5 +1,3 @@
-// Live check of text-anywhere.user.js's panel while a note is open: it shows the open note's color and size, a color button or the Size and Opacity sliders change that note
-// and are also the next-note settings (opening a note changes none), the press keeps the note open with its caret, and finishing the note leaves the panel on the next-note values. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

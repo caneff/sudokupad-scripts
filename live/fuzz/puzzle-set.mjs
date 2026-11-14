@@ -1,6 +1,6 @@
 // The puzzles a fuzz list can run on (#679), each built in code with `puzzleData` and opened by its id, so none costs a request to sudokupad.app, plus the
 // recorded 9x9 of `live/puzzle-url.txt`. The set is data with no browser: the generator (`actions.mjs`) reads each puzzle's targets and digit keys from it,
-// so a list names its puzzle and a replay path finds it again. `fuzz.mjs` opens a puzzle and checks the page against what is said here. Not a check itself.
+// so a list names its puzzle and a replay path finds it again.
 //
 // A puzzle is: `name` (what a report prints), `rows` and `cols`, `data` (the SCL for `puzzleData`; null for the recorded one), `rules` ('long', 'short' or 'none':
 // the rules text its page shows), `keys` (the digit keys SudokuPad takes on it), `free` (the cells a digit can go in, `[row, col]`, 0-based) and `cells`
@@ -12,12 +12,10 @@ import { CLASSIC_GIVENS, CLASSIC_SOLUTION, puzzleData } from '../puzzles.mjs'
 export const RULES_TEXT = Array(20).fill('Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.').join(' ')
 const SHORT_RULES = 'Normal sudoku rules apply. Cages sum to their clue.'
 
-// The rules text a puzzle's page shows, or null when it shows none.
 export const rulesTextFor = (puzzle) => ({ long: RULES_TEXT, short: SHORT_RULES, none: null })[puzzle.rules]
 
 const clue = (row, col, text) => ({ center: [row, col], width: 0.8, height: 0.6, text, fontSize: 18, color: '#000000' })
 
-// A 9x9 cut into nine connected regions of nine cells that are not boxes: the cells in a serpentine along two-column strips, nine to a region.
 function jigsawRegions () {
   const path = []
   for (let strip = 0; strip < 5; strip++) {
@@ -31,14 +29,12 @@ function jigsawRegions () {
   return Array.from({ length: 9 }, (_, k) => path.slice(k * 9, k * 9 + 9))
 }
 
-// Cells holding a given.
 const SIDE = 9
 const givensOf = (solution, keep) => [...solution].flatMap((d, i) => (keep(i) ? [[Math.floor(i / SIDE), i % SIDE, Number(d)]] : []))
 
 const THERMO = { thickness: 12, color: '#cccccc' }
 const bulb = (r, c) => ({ center: [r, c], width: 0.7, height: 0.7, rounded: true, backgroundColor: '#cccccc', borderColor: '#cccccc', borderThickness: 1 })
 
-// What the 9x9 with cages, arrows and thermometers holds: killer cages, an arrow with its circle, and two thermometers with their bulbs.
 const CAGES = puzzleData({
   id: 'fuzz-cages',
   givens: givensOf(CLASSIC_SOLUTION, (i) => i % 7 === 0),
@@ -102,7 +98,6 @@ export const FUZZ_PUZZLES = [
   describePuzzle({ name: 'cages 9x9, long rules', data: { ...CAGES, id: 'fuzz-cages-long' }, rules: 'long' })
 ]
 
-// Whether a target `[row, col]` of `puzzle` is a cell of the grid, not one just outside it.
 export const insideGrid = (puzzle, [row, col]) => row >= 0 && col >= 0 && row < puzzle.rows && col < puzzle.cols
 
 export const puzzleByName = (name) => {

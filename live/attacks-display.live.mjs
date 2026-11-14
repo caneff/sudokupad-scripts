@@ -1,6 +1,4 @@
-// Live attacks 76 to 78 (#628, from #590): the page's devicePixelRatio changing, SudokuPad's fullscreen going on and off, and a board with 200
-// notes and a grid full of pen lines, with Text Anywhere, Pen Tool Extras and Color by Digit installed together, on sudokupad.app in headless
-// Chromium. Each test names its attack and asserts the crash signals (no uncaught error, console error or skip line) beside what a user expects.
+// Live attacks 76 to 78 (#628, from #590).
 // Clicks, drags and keys are real input; the display changes are Chromium's own emulation.
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -18,7 +16,6 @@ const SCREEN = { width: 1600, height: 1000 }
 // The most a note's left or top may sit off a whole device pixel: Text Anywhere puts a released note on whole device pixels, and the browser's layout
 // rounds to 1/64 of a CSS pixel, up to 0.03 device pixels at a ratio of 2. A note drawn soft sits half a pixel off.
 const CRISP_EPSILON = 0.05
-// The slowest an action may take on a board with 200 notes and a full grid, from the input to the page showing its result.
 const ACTION_BUDGET_MS = 3000
 const NOTE_COUNT = 200
 
@@ -113,7 +110,6 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
   })
 
   it('attack 78: 200 notes and a grid full of pen lines: a line drawn, a note moved and an undo each stay inside the time budget', async (t) => {
-    // 200 notes in a grid of 20 across and 10 down, in board units, planted as saved notes and shown by a reload.
     await textAnywhere.plantNotes(p, Array.from({ length: NOTE_COUNT }, (_, i) => ({ kind: 'text', color: 1 + (i % 9), size: 14, opacity: 100, text: `n${i}`, at: [10 + (i % 20) * 27, 10 + Math.floor(i / 20) * 54] })))
     await reloadWithScripts(p)
     await pickTool(p, 'textanywhere')

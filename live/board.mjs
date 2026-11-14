@@ -35,7 +35,6 @@ export async function colorCell (page, [row, col], color) {
 // A real click at the centre of the cell at (`row`, `col`).
 export const clickCell = (page, row, col) => clickAt(page, [row + 0.5, col + 0.5])
 
-// The page point at the centre of the cell at [row, col], then the cell's width.
 export const cellCentre = (page, row, col) => page.evaluate(([r, c]) => {
   const box = Framework.app.puzzle.cells.find((cell) => cell.row === r && cell.col === c).elem.getBoundingClientRect()
   return [box.x + box.width / 2, box.y + box.height / 2, box.width]
@@ -47,11 +46,8 @@ export const gridPoint = async (page, [r, c]) => {
   return [x0 + (c - 0.5) * size, y0 + (r - 0.5) * size]
 }
 
-// A real click at `at`, in cells from the grid's top left; `options` go to Playwright's click.
 export const clickAt = async (page, at, options) => page.mouse.click(...await gridPoint(page, at), options)
 
-// A drag along `points` with `button` held (the left one unless given), each [row, col] in cells from the grid's top left,
-// with real mouse input and a few mouse moves between each two points.
 export async function mouseDrag (page, points, { button = 'left' } = {}) {
   await page.mouse.move(...await gridPoint(page, points[0]))
   await page.mouse.down({ button })
@@ -59,7 +55,6 @@ export async function mouseDrag (page, points, { button = 'left' } = {}) {
   await page.mouse.up({ button })
 }
 
-// How many steps SudokuPad's undo stack holds.
 export const undoDepth = (page) => page.evaluate(() => Framework.app.puzzle.undoStack.length)
 
 // Presses Undo until the undo stack is empty, each press changing its depth. The first Undo after a Restart brings the board from before it back, which grows the stack.
@@ -98,7 +93,6 @@ export async function typeText (page, at, text) {
   await finishNote(page)
 }
 
-// Picks Text Anywhere, then `typeText`, and checks the board has one note more.
 export async function placeNote (page, at, text) {
   const count = () => page.locator(TEXTS).count()
   const before = await count()

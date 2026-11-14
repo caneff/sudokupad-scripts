@@ -1,6 +1,3 @@
-// A fake page for the fuzz's unit tests (`openTarget(puzzle)` keeps the puzzle it was opened for): the env of `actions.mjs` with every call recorded, and optionally a page error or a broken rule planted on an
-// interruption. Not a check itself.
-
 // A snapshot `page` (shape in `rules.mjs`) in which every rule holds: a board with nothing on it, a dark page, rules that fit and a number pad of digits.
 export const quietPage = (overrides = {}) => ({
   undoDepth: 3,

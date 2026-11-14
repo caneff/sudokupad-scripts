@@ -1,6 +1,5 @@
-// What counts as a crash in a fuzz run, as pure functions over a snapshot of the page, so they are unit-tested with hand-built snapshots
-// (`signals.test.mjs`). The predefined attacks assert the same signals one at a time (`live/attacks.mjs`); a run needs them as a list to shrink on.
-// Not a check itself.
+// What counts as a crash in a fuzz run, as pure functions over a snapshot of the page.
+// The predefined attacks assert the same signals one at a time (`live/attacks.mjs`); a run needs them as a list to shrink on.
 
 // The crash signals in a snapshot `{ errors, notices }`: `errors` are what the page collected (uncaught page errors, `console.error`
 // lines and skip lines, `live/page.mjs`), `notices` the text of every row of the notice bar. One readable line each; none means no crash.

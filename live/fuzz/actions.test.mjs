@@ -11,7 +11,6 @@ import { scriptFiles } from '../../sync-lib.js'
 const KIND_SCRIPTS = Object.fromEntries(KINDS.map((k) => [k.kind, k.scripts]))
 const START_KINDS = KINDS.filter((k) => k.start).map((k) => k.kind)
 
-// The lists a seed gives (each `{ puzzle, commands }`) over the whole puzzle set, or over `puzzles`.
 const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList(puzzles, { kinds: KINDS, maxCommands: 20 }), { seed, numRuns: count })
 // fast-check wraps each generated command (`.cmd`), and prints a list only once it ran, so the steps are read from the commands.
 const actionsOf = (lists) => lists.flatMap((l) => [...l.commands].map((wrapped) => wrapped.cmd))

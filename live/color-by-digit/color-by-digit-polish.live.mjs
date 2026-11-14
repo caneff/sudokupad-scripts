@@ -1,5 +1,3 @@
-// Live check of Color by Digit's focus, hover and press states, hit areas, cursor and keys on sudokupad.app in headless Chromium: the keyboard focus ring, the hover and
-// press states, the mode button pressed from pointerdown, the 24 px hit areas, the grabbing cursor and the dialog's keys.
 // Desktop sizes only. How it looks is judged by sight in the PR.
 /* global document, window, getComputedStyle */
 import { after, before, describe, it } from 'node:test'

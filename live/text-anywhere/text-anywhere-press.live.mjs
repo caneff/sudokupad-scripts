@@ -1,5 +1,3 @@
-// Live check of the press state on Text Anywhere's panel buttons (lib/panel.js, shared with Pen Tool Extras): a button shrinks to 0.97 while the mouse holds it, and does not under reduced motion.
-// Every press is the real mouse.
 import { after, before, describe, it } from 'node:test'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { assertPressState } from '../page.mjs'

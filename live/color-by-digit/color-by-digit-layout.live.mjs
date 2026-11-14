@@ -1,5 +1,3 @@
-// Live check of the Color by Digit dialog's layout (#304, #333) at 1200x900 on sudokupad.app in headless Chromium: the Mode, Cell
-// and Digit pulldowns one per row with the label left of each, Copy and Paste settings as icons in the title row, two columns, with no sideways overflow; the profile list's dense rows; and the profile menu's rows, synced and not (#354).
 // How it looks is judged by sight in the PR.
 /* global document */
 import { after, before, describe, it } from 'node:test'

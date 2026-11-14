@@ -1,5 +1,4 @@
-// Live check of pen-tool-extras.user.js's settings button in the pen tool's panel, on sudokupad.app in headless Chromium.
-// A real touch screen stays untested. The clicks are real mouse input; the tap is Chromium's emulated touch.
+// A real touch screen stays untested; the tap is Chromium's emulated touch.
 /* global getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

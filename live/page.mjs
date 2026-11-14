@@ -94,7 +94,6 @@ export async function startPuzzle (p, { beforeStart } = {}) {
 // by a CSS scale, so a mark's width on screen is its stroke width times this.
 export const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
 
-// The scale of the element matching `selector` now.
 const scaleNow = async (page, selector) => scaleOf(await page.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transform, selector))
 
 // How long a held button gets to show its press before the read gives up: far inside the 1000 ms hold that opens edit mode on a color button.

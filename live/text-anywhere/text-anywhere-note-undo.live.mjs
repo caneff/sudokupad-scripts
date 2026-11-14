@@ -1,5 +1,3 @@
-// Live check of text-anywhere.user.js's undo inside an open note on sudokupad.app: Ctrl+Z and Ctrl+Y (Ctrl+Shift+Z) undo and redo the typing,
-// never reach SudokuPad, and last only while the note is open. Real keyboard input throughout.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

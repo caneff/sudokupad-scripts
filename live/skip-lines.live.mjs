@@ -9,7 +9,6 @@ const MARKER = 'color-by-digit: marker skipped because SudokuPad has no Framewor
 
 const browser = useBrowser()
 
-// Logs `SKIP` and then `MARKER` from the page the way a script does, and returns what the helper collected, `MARKER` out.
 const plant = async (options) => {
   const { context, p, errors } = await openWith(browser(), [], options)
   try {

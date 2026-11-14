@@ -1,6 +1,4 @@
-// Live check that Color by Digit's Save is all-or-nothing, on sudokupad.app in headless Chromium: a Save that throws after storing the
-// profiles leaves the stored profiles, and the mode as it was (still unsaved), exactly as they were before Save. The throw comes before the mode step, which runs under guards that swallow a throw,
-// so the mode restore has no failing step to witness it.
+// The throw comes before the mode step, which runs under guards that swallow a throw, so the mode restore has no failing step to witness it.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EDITOR, MODE_KEY, openSession, PROFILES_KEY, savedProfiles, SEED, openEditorOn } from './color-by-digit-fixtures.mjs'

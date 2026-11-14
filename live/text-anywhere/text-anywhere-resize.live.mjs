@@ -1,7 +1,3 @@
-// Live check of text-anywhere.user.js's resize handles on sudokupad.app: the open note, and a note alone selected, show a handle on each of their four
-// corners, and several selected notes show none; dragging a handle sets the box, keeping the opposite corner and the note's focus, the text wraps and
-// scrolls to fit, and the size is saved and survives a reload; the box stops at about three characters by one line, or at a short note's own size if that is smaller; a double-click on a handle sends
-// the note back to auto size; and a drag on the note's body moves it and never resizes it. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'

@@ -37,7 +37,6 @@ const KINDS = [
   }
 ]
 
-// A small fake puzzle for most tests, and the real set where the puzzle is the point.
 const CELLS = Array.from({ length: 12 }, (_, i) => [Math.floor(i / 4), i % 4])
 const PUZZLES = [{ name: 'fake', rows: 3, cols: 4, keys: ['1', '2', '3', '4'], free: CELLS, cells: CELLS }]
 const SEED = 7
@@ -281,7 +280,6 @@ describe('the fuzz engine on a fake page', () => {
   })
 
   describe('the wait between actions is part of each list (#725)', () => {
-    // The wait the engine drew for a list is one of these, 40 first so a shrink that does not need the timing ends on the old fixed wait.
     const VARIED = { waits: WAITS, landMs: 1 }
 
     it('a planted error that needs two Tabs within 10 ms is never caught at the fixed wait', async () => {

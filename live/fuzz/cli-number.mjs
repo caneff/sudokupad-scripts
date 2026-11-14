@@ -1,4 +1,4 @@
-// A number option of a fuzz command line, or `fallback` when absent. A value that is not a number stops the run, since NaN would switch a limit off.
+// A value that is not a number stops the run: NaN would switch a limit off.
 export function numberOption (values, name, fallback, { integer = false, positive = false } = {}) {
   if (values[name] == null) return fallback
   const n = Number(values[name])

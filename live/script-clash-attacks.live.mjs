@@ -1,6 +1,4 @@
-// Live attacks on clashes between the scripts (#590, attacks 57-61): all of them are loaded on one page and each test sets two
-// of them against each other, then checks the crash signals (a skip line, a page error, a console error, a notice bar)
-// plus what the player expects to see.
+// Live attacks on clashes between the scripts (#590, attacks 57-61).
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { attack, noteCount, NOTES, rulesScroll, rulesWidth, setLongRules } from './attacks.mjs'
@@ -83,7 +81,6 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
       assert.equal(await p.locator(second).count(), 0, `${name}: the second did not open on top`)
       await closeDialogWith(p, 'Cancel', first)
       assert.equal(await p.locator('.dialog-overlay').count(), 0, `${name}: Cancel left no overlay`)
-      // Each still opens by itself afterwards.
       await openScriptDialog(p, second === TEXT_EDITOR ? 'Text Anywhere' : 'Pen Tool Extras', second)
       await closeDialogWith(p, 'Cancel', second)
     }
@@ -106,7 +103,6 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     await p.keyboard.type('c')
     await p.keyboard.press('Escape')
     assert.deepEqual(await settle(() => p.locator(NOTES).evaluateAll((notes) => notes.map((n) => n.textContent)), ['abc']), ['abc'], 'the note kept typing after Tab')
-    // A settings dialog field: Tab moves focus, as it does in any dialog.
     await openExtrasEditor(p)
     const field = p.locator(`${EXTRAS_EDITOR} input`).first()
     await field.focus()
@@ -136,7 +132,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     await setLongRules(p)
     assert.equal(await settle(() => rulesScroll(p), false), false, 'the long rules do not scroll')
     await placeNote(p, [2.5, 2.5], 'over the rules')
-    // A new note cannot be started on the controls, so the note is dragged there, as Text Anywhere allows since #581.
+    // A new note cannot be started on the controls, so the note is dragged there (#581).
     const note = await p.locator(NOTES).first().boundingBox()
     const pane = await p.locator('.puzzle-rules').boundingBox()
     await p.mouse.move(note.x + note.width / 2, note.y + note.height / 2)

@@ -89,7 +89,6 @@ for (const [order, files] of INSTALL_ORDERS) {
       const count = (await penStrings(p)).length
       await p.mouse.click(x + half - 2, y)
       assert.equal(await settle(async () => (await penStrings(p)).length > count, true), true, 'an edge mark appeared')
-      // Text Anywhere: a note
       await placeNote(p, [6.2, 6.25], '15')
       assert.deepEqual(await noteTexts(p), ['15'])
       await useTool(DIGIT_BUTTON)

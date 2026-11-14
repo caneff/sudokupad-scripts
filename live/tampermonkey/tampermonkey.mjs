@@ -35,8 +35,6 @@ export function crxZip (bytes) {
   return bytes.subarray(start)
 }
 
-// The unpacked copy the `fetched` stamp names, or null when the stamp is missing or a day old, or the copy has no
-// manifest.
 function freshCopy (dir) {
   const stamp = join(dir, 'fetched')
   try {
@@ -95,8 +93,6 @@ export async function serveFiles (files) {
   return { url: `http://127.0.0.1:${server.address().port}/`, close }
 }
 
-// A Chromium with Tampermonkey loaded and allowed to run user scripts, on a fresh profile. Resolves to the
-// context, the extension's id and a `close()` that also deletes the profile.
 export async function launchTampermonkey () {
   const extension = await ensureTampermonkey()
   const profile = mkdtempSync(join(tmpdir(), 'tampermonkey-profile-'))
@@ -131,7 +127,6 @@ const isAsk = (id) => (p) => p.url().startsWith(`chrome-extension://${id}/ask.ht
 export async function installScript ({ context, id }, url) {
   let ask
   for (let i = 0; i < ASK_TRIES && !ask; i++) {
-    // Only the wait running out means no page showed; any other failure is thrown, after the opener is closed.
     const shown = context.waitForEvent('page', { predicate: isAsk(id), timeout: ASK_MS })
       .then((page) => ({ page }), (error) => { if (error instanceof errors.TimeoutError) return { page: null }; return { error } })
     const opener = await context.newPage()
@@ -147,7 +142,6 @@ export async function installScript ({ context, id }, url) {
   return clickAction(ask)
 }
 
-// Clicks the install page's action, its first button, and resolves to its label once the page has closed itself.
 async function clickAction (ask) {
   const button = ask.locator('input[type=button].install').first()
   await button.waitFor({ state: 'visible', timeout: PAGE_MS })
@@ -185,7 +179,6 @@ export async function checkForUpdate ({ context, id }) {
   }
 }
 
-// Every script Tampermonkey's dashboard lists, as `{ name, version }`, once it lists at least one.
 export async function installedScripts ({ context, id }) {
   const page = await context.newPage()
   try {

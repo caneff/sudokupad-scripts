@@ -1,6 +1,4 @@
-// Live check of text-anywhere.user.js's + and - keys on sudokupad.app: they change the selected notes' size one slider step (the slider follows, - after + returns the size),
-// or the next note's with nothing selected, type as text inside an open note, and leave SudokuPad's own - (a centre-mark range under the centre tool) alone. Real keyboard input.
-// Owed: SudokuPad's compact-marks range itself (1-5 giving 1 to 5) did not run in headless Chromium even with the setting on, with or without this script, so only that - is left untouched is checked.
+// Owed: SudokuPad's compact-marks range (1-5 giving 1 to 5) did not run in headless Chromium, so only that - is left untouched is checked.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

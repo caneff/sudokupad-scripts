@@ -1,5 +1,3 @@
-// Live check of Color by Digit's profiles on sudokupad.app, in headless Chromium: the profile menu on
-// the button, switching profile, the button's icon, the dialog's profile list, and migration.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
@@ -11,7 +9,6 @@ import { scriptSource, useBrowser } from '../session.mjs'
 const script = scriptSource('color-by-digit.user.js')
 
 const ROWS = PROFILE_ROWS
-// A row's × shows only while its row is hovered or selected, so the pointer goes onto the row first.
 const deleteRow = deleteProfileRow
 const HOLD_MS = 500
 

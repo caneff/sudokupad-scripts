@@ -1,5 +1,3 @@
-// Live check that each mode picks the button's digits (#389), on sudokupad.app in headless Chromium: Low/5/High on the
-// cells, Odd/Even on the digits. Cell and Off show 1 5 9, Digit 5 4 and Both 1 5 6.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { BUTTON, MODE_STORAGE_KEY, SEED, openSession, savedProfiles } from './color-by-digit-fixtures.mjs'

@@ -1,6 +1,4 @@
-// Live attacks 73 to 75 (#628, from #590): a full browser store, settings pasted in odd shapes and settings changed in another tab, on
-// sudokupad.app in headless Chromium. Each test names its attack and asserts the crash signals (no uncaught error, console error or
-// skip line) beside what a user expects. Clicks, drags and keys are real input.
+// Live attacks 73 to 75 (#628, from #590).
 /* global Framework, Storage */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -23,7 +21,6 @@ const THICKNESS_KEY = 'PenColor_thickness'
 const OPACITY_KEY = 'PenColor_opacity'
 const OTHER_TAB_THICKNESS = 9
 const THIS_TAB_OPACITY = 60
-// The longest a paste, even of a megabyte, gets to answer.
 const PASTE_BUDGET_MS = 5000
 const MEGABYTE = 1024 * 1024
 

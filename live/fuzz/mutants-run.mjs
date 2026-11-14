@@ -92,7 +92,6 @@ try {
   await browser.close()
 }
 
-// Why a mutant does not load: the crash signals of a page opened with it, or the error that kept the page from opening. Null when it loads clean.
 async function loadProblem (mutant) {
   let target
   try {
