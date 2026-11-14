@@ -18,7 +18,9 @@ export const currentTool = (page) => page.evaluate(() => Framework.app.tool)
 
 // Picks the tool named `name` by its button and returns once SudokuPad has it: SudokuPad binds a new button's click a moment after it appears, so the click repeats.
 export async function pickTool (page, name) {
-  assert.equal(await clickUntil(() => page.click(`#control-${name}`), () => currentTool(page), name, SETTLE_MS), name, `${name} is the current tool`)
+  const tool = await clickUntil(() => page.click(`#control-${name}`), () => currentTool(page), name, SETTLE_MS)
+  assert.equal(tool, name, `${name} is the current tool`)
+  return tool
 }
 
 // Selects the cell at (`row`, `col`) the way SudokuPad's own click does, with nothing else selected.
