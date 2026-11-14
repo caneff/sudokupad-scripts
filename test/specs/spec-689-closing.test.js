@@ -45,7 +45,7 @@ test('#709: the tool, the guard id, every saved key and the repo paths are Text 
   assert.equal(id, 'text-anywhere')
   assert.equal(ta.NOTICE_KEY, `${id}-notice`, 'the dismissal the start copies is the one the guard reads')
   assert.equal(ta.TOOL_NAME, 'textanywhere')
-  for (const key of [ta.COLOR_KEY, ta.BACKGROUND_KEY, ta.COLORS_KEY, ...ta.lookKeys(ta.LOOKS), ta.INDEX_KEY, ta.NOTES_PREFIX, ta.RESTARTED_PREFIX]) assert.match(key, /^TextAnywhere_/)
+  for (const key of [ta.COLOR_KEY, ta.BACKGROUND_KEY, ta.COLORS_KEY, ...ta.tableKeys(ta.LOOKS), ta.INDEX_KEY, ta.NOTES_PREFIX, ta.RESTARTED_PREFIX]) assert.match(key, /^TextAnywhere_/)
   for (const gone of ['live/draw-tool', 'docs/research/draw-tool', 'test/draw-tool.test.js']) assert.equal(existsSync(join(ROOT, gone)), false, gone)
   for (const kept of ['live/text-anywhere', 'docs/research/text-anywhere', 'test/text-anywhere.test.js']) assert.equal(existsSync(join(ROOT, kept)), true, kept)
 })

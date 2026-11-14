@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.18
+// @version      0.7.24
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,14 +18,13 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.18'
+  const VERSION = '0.7.24'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
   const PAGE = `body:has(#${BOARD_ID})`
   const DATA_KEY = 'DarkPage_color'
   const DEFAULT_COLOR = '#000000'
-  const HEX_COLOR = /^#[0-9a-f]{6}$/i
   // SudokuPad's own buttons are light `#eee`, which glare on a dark page. An on button (`.selected`,
   // or `.selectedperm` on Select) keeps SudokuPad's fill and gets BUTTON_ACCENT as its border.
   const BUTTON_BG = '#2a2a2a'
@@ -40,11 +39,72 @@
   const PAGE_LIGHT_TEXT = '#ffffff'
   const PAGE_DARK_TEXT = '#000000'
   function pageColorOf (data) {
-    return typeof data === 'string' && HEX_COLOR.test(data) ? data.toLowerCase() : null
+    return savedHex(data) ?? null
   }
 
-  // Throws when storage cannot be read.
-  const readSaved = (store) => pageColorOf(store.getData(DATA_KEY))
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
+
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
+  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
+  /* eslint-enable no-unused-vars */
+  // </lib:plain>
+  // <lib:settings-table>
+  // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  /* global isPlainObject */ // eslint-disable-line no-redeclare
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  function sameValue (a, b) {
+    return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
+  }
+
+  const tableKeys = (rows) => rows.map((row) => row.key)
+
+  const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
+
+  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
+
+  // Every row as `store` holds it, by name.
+  const readTable = (rows, store) => readByField(rows, store, 'name')
+
+  // The same values by stored key, defaults included, so a paste can put a setting back to its default.
+  const copiedTable = (rows, store) => readByField(rows, store, 'key')
+
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+
+  // The rows whose draft differs from the value in force.
+  const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
+
+  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
+  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
+
+  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+
+  // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
+  function saveRow (store, row, value) {
+    if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else if (row.envelope) row.envelope.save(store, row.key, value)
+    else store.setData(row.key, value)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-table>
+
+  const SETTING_ROWS = [{ name: 'color', key: DATA_KEY, fallback: DEFAULT_COLOR, read: (data) => pageColorOf(data) ?? DEFAULT_COLOR, paste: (data) => savedHex(data) }]
+
+  // The saved color, the default when none is saved. Throws when storage cannot be read.
+  const readSaved = (store) => readTable(SETTING_ROWS, store).color
 
   // Framework keeps its saved data in localStorage under `<Framework.LocalDataPrefix>_<name>` (`makeDataKey`), a color as
   // the plain string: the live checks in § at document-start fail if SudokuPad changes either.
@@ -52,10 +112,10 @@
   // The saved color read straight from storage, for when Framework does not exist yet. Throws when storage is blocked.
   const earlyColor = (storage) => pageColorOf(storage.getItem(LOCAL_DATA_KEY))
 
-  const READERS = { [DATA_KEY]: (data) => pageColorOf(data) ?? undefined }
+  const READERS = pasteReaders(SETTING_ROWS)
 
   // The color in force, the default included, so a paste can put a page back to the default.
-  const copiedSettings = (store) => JSON.stringify({ [DATA_KEY]: readSaved(store) ?? DEFAULT_COLOR })
+  const copiedSettings = (store) => JSON.stringify(copiedTable(SETTING_ROWS, store))
 
   // <lib:color-math>
   // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
@@ -71,6 +131,11 @@
   const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
+
+  const SAVED_HEX = /^#[0-9a-f]{6}$/i
+
+  // A color read back from storage: `#` and six hex digits in any case, lowercased; anything else is undefined, and the caller picks its own fallback.
+  const savedHex = (value) => typeof value === 'string' && SAVED_HEX.test(value) ? value.toLowerCase() : undefined
 
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 
@@ -204,12 +269,27 @@
     ].join('\n')
   }
 
+  // <lib:write-style>
+  // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The page's style element `id`, added on the first call, holds `css`.
+  function writeStyle (id, css, doc = document) {
+    let style = doc.getElementById(id)
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = id
+      doc.head.appendChild(style)
+    }
+    style.textContent = css
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:write-style>
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer. A script
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
   // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste */ // eslint-disable-line no-redeclare
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -283,20 +363,22 @@
     swallowRelease(win)
   }
 
+  // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
+
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
-    framework.addSetting({
+  // The entry is added, and `open` runs, under `feature` (a guard feature), so a throw from either turns that feature off.
+  function addSettingsEntry (framework, feature, { name, content, open }) {
+    feature.run(() => framework.addSetting({
       tag: 'button',
       name,
       group: SETTINGS_GROUP,
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(() => {
-          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
-        }, 0)
+        setTimeout(() => feature.run(open), 0)
       }
-    })
+    }))
   }
 
   const COPY_PASTE_PICTURES = {
@@ -379,14 +461,6 @@
     ].join('\n')
   }
 
-  function addStyleOnce (id, css, doc = document) {
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = css
-    doc.head.appendChild(style)
-  }
-
   // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
   function buttonRowCss (bodyId) {
     const row = `.dialog:has(#${bodyId}) .dialog-options`
@@ -419,8 +493,8 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
-    if (css) addStyleOnce(styleId, css, doc)
+    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
@@ -859,9 +933,7 @@
       label: 'settings entry',
       needs: {
         'Framework.getApp': 'function',
-        'Framework.addSetting': 'function',
-        'Framework.showDialog': 'function',
-        'Framework.closeDialog': 'function',
+        ...SETTINGS_DIALOG_NEEDS,
         'Framework.setData': 'function',
         'Framework.removeData': 'function'
       }
@@ -902,9 +974,7 @@
   const savedSettings = guard.storeFor(settingsEntry)
 
   function saveColor (color) {
-    // The default is kept as nothing saved, so it follows any later change of the default.
-    if (color === DEFAULT_COLOR) savedSettings.removeData(DATA_KEY)
-    else savedSettings.setData(DATA_KEY, color)
+    saveRow(savedSettings, SETTING_ROWS[0], color)
     pageColor = color
     style.textContent = buildCss(pageColor)
   }
@@ -913,7 +983,7 @@
   const DIALOG_ID = 'dark-page-dialog'
   const dialogs = guard.dialogsFor(settingsEntry)
   // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
-  const snapshotColor = () => snapshotStore(savedSettings, [DATA_KEY])
+  const snapshotColor = () => snapshotStore(savedSettings, tableKeys(SETTING_ROWS))
 
   function openDialog () {
     let picked = pageColor
@@ -967,14 +1037,13 @@
     // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the default color.
     if (typeof Framework === 'undefined') return
     guard.probe({ roots: { Framework }, store: Framework })
-    const read = savedPageColor.run(() => ({ color: readSaved(Framework) }), () => null)
-    const saved = read ? read.color || DEFAULT_COLOR : pageColor
+    const saved = savedPageColor.run(() => readSaved(Framework), () => pageColor)
     if (saved !== pageColor) {
       pageColor = saved
       style.textContent = buildCss(pageColor)
     }
     settingsEntry.run(() => Framework.getApp().then(() => {
-      settingsEntry.run(() => addSettingsEntry(dialogs, { name: 'darkpage', content: 'Dark Page', open: () => settingsEntry.run(openDialog) }))
+      addSettingsEntry(dialogs, settingsEntry, { name: 'darkpage', content: 'Dark Page', open: openDialog })
     }))
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
