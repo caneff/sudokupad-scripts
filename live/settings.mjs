@@ -57,3 +57,21 @@ export async function paste (p, text) {
   await status.waitFor()
   return status.textContent()
 }
+
+// An `afterStart` for `openWith` that hides `Framework.getData` from a script until a `console.warn` matching `warning` is logged
+// (never, with no `warning`). SudokuPad's own `F.saveSettings` frame still gets the real one: its throttled save runs on a timer.
+export const hideGetDataUntilWarn = (warning) => (p) => p.evaluate(({ source, flags }) => {
+  const getData = Framework.getData
+  const warn = console.warn
+  Object.defineProperty(Framework, 'getData', {
+    configurable: true,
+    get: () => (/\bF\.saveSettings \(/.test(new Error().stack) ? getData : undefined)
+  })
+  console.warn = function (...args) {
+    warn.apply(this, args)
+    if (source !== undefined && new RegExp(source, flags).test(String(args[0]))) {
+      Object.defineProperty(Framework, 'getData', { configurable: true, writable: true, value: getData })
+      console.warn = warn
+    }
+  }
+}, { source: warning?.source, flags: warning?.flags })
