@@ -205,7 +205,7 @@ test('pastedSettings: a valid color is kept lower-case, a bad one is skipped and
 
 const completeFramework = () => ({ Framework: { getApp () {}, getData () {}, addSetting () {}, showDialog () {}, closeDialog () {}, setData () {}, removeData () {} } })
 
-test('Dark Page declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+test('a SudokuPad with every Framework call Dark Page makes lacks none of them', () => {
   assert.deepEqual(lackingInternals(FEATURES, completeFramework()), new Map())
 })
 
