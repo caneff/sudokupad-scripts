@@ -2,7 +2,7 @@
 // The letter tool is switched on through its setting after the script is in, as a player does.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { keydownDefaults } from '../pen.mjs'
+import { keydownDefaults } from '../input.mjs'
 import { openSettings } from '../settings.mjs'
 import { LETTER_MODE_KEY as MODE_KEY, numberPadText } from '../scripts.mjs'
 import { settle } from '../settle.mjs'

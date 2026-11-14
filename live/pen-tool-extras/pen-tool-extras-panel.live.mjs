@@ -6,7 +6,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { dialogButton, effectiveOpacities, openExtrasEditor } from '../settings.mjs'
+import { dialogButton, openExtrasEditor } from '../settings.mjs'
 import { draw, drag, openPenTool, penEntries, penValuesNoColor, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { slideTo } from '../slider.mjs'
@@ -32,7 +32,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const strokeCount = () => read(() => document.querySelectorAll('#cell-pen .cell-pen').length)
   const activeElementTag = () => read(() => document.activeElement.tagName)
   const lineWidth = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pencolor-1')).strokeWidth))
-  const effectiveOpacity = async (selector) => (await effectiveOpacities(p, selector))[0]
+  const effectiveOpacity = async (selector) => (await extras.effectiveOpacities(p, selector))[0]
   const lineOpacity = () => effectiveOpacity('#cell-pen .cell-pen.pencolor-1')
   const strokeOwnOpacity = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pencolor-1')).opacity))
 

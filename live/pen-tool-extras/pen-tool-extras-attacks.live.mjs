@@ -5,10 +5,11 @@
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { captureConsoleErrors, drawnWidth } from '../page.mjs'
-import { closeExtrasEditorWith, effectiveOpacities, EXTRAS_EDITOR, openExtrasEditor } from '../settings.mjs'
+import { captureConsoleErrors } from '../page.mjs'
+import { closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor } from '../settings.mjs'
 import { cellCentre, mouseDrag, undoAll } from '../board.mjs'
-import { goToPenPage, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penEntries, penValuesAt, setInputValue } from '../pen.mjs'
+import { goToPenPage, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penEntries, penValuesAt } from '../pen.mjs'
+import { setInputValue } from '../input.mjs'
 import { readUntil, settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
@@ -141,7 +142,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
   })
 
   it('attack 39: Thickness and Opacity at their limits, with marks and lines drawn at each', async () => {
-    const strokeWidths = async () => (await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((g) => { const st = window.getComputedStyle(g); return { strokeWidth: st.strokeWidth, transform: st.transform } }))).map(drawnWidth)
+    const strokeWidths = async () => (await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((g) => { const st = window.getComputedStyle(g); return { strokeWidth: st.strokeWidth, transform: st.transform } }))).map(extras.drawnWidth)
     const widest = {}
     for (const [name, thickness, opacity] of [['min', THICKNESS_LIMITS.min, OPACITY_LIMITS.min], ['max', THICKNESS_LIMITS.max, OPACITY_LIMITS.max]]) {
       if (name === 'max') await undoAll(p)
@@ -156,7 +157,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
       assert.equal(await settle(() => penDrawnCount(p), lineCount + 1), lineCount + 1, `${name}: a line and a cell mark are drawn`)
       const widths = await strokeWidths()
       assert.ok(widths.every((w) => w > 0 && Number.isFinite(w)), `${name}: every stroke has a positive width, got ${widths}`)
-      assert.deepEqual([...new Set(await effectiveOpacities(p, '#cell-pen .cell-pen'))], [opacity / 100], `${name}: drawn at the slider's opacity`)
+      assert.deepEqual([...new Set(await extras.effectiveOpacities(p, '#cell-pen .cell-pen'))], [opacity / 100], `${name}: drawn at the slider's opacity`)
       widest[name] = Math.max(...widths)
     }
     assert.ok(widest.max > widest.min, `max thickness draws wider than min: ${widest.max} vs ${widest.min}`)

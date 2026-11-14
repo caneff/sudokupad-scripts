@@ -1,8 +1,37 @@
-// Shared by the live checks: where a cell is on the screen, a click and a drag there with the real mouse, Undo back to the start,
+/* global Framework */
+// Shared by the live checks: where a cell is on the screen, the cell actions (select, colour, click), the current tool, a click and a drag there with the real mouse, Undo back to the start,
 // Restart, and a Text Anywhere note placed. Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { pickTextAnywhere, SELECTED, TEXT_BOX, TEXTS } from './text-anywhere/text-anywhere-fixtures.mjs'
-import { settle } from './settle.mjs'
+import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
+
+// Text Anywhere's notes as the board shows them, defined here since a note helper below reads them and a shared module imports no script's fixtures.
+// The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
+export const TEXTS = '#text-anywhere-layer .text-anywhere-text:not(.text-anywhere-textbox)'
+export const TEXT_BOX = '#text-anywhere-layer .text-anywhere-textbox'
+export const SELECTED = '#text-anywhere-layer .text-anywhere-selected'
+
+// The text of each note drawn, in document order.
+export const texts = (page) => page.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
+
+// The tool SudokuPad has current.
+export const currentTool = (page) => page.evaluate(() => Framework.app.tool)
+
+// Picks the tool named `name` by its button and returns once SudokuPad has it: SudokuPad binds a new button's click a moment after it appears, so the click repeats.
+export async function pickTool (page, name) {
+  assert.equal(await clickUntil(() => page.click(`#control-${name}`), () => currentTool(page), name, SETTLE_MS), name, `${name} is the current tool`)
+}
+
+// Selects the cell at (`row`, `col`) the way SudokuPad's own click does, with nothing else selected.
+export const selectCell = (page, row, col) => page.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [row, col])
+
+// Gives the cell at [row, col] the colour `color` through SudokuPad's own colour action, then clears the selection.
+export async function colorCell (page, [row, col], color) {
+  await selectCell(page, row, col)
+  await page.evaluate((arg) => { Framework.app.act({ type: 'colour', arg }); Framework.app.deselect() }, String(color))
+}
+
+// A real click at the centre of the cell at (`row`, `col`).
+export const clickCell = (page, row, col) => clickAt(page, [row + 0.5, col + 0.5])
 
 // The page point at the centre of the cell at [row, col], then the cell's width.
 export const cellCentre = (page, row, col) => page.evaluate(([r, c]) => {
@@ -71,7 +100,7 @@ export async function typeText (page, at, text) {
 export async function placeNote (page, at, text) {
   const count = () => page.locator(TEXTS).count()
   const before = await count()
-  await pickTextAnywhere(page)
+  await pickTool(page, 'textanywhere')
   await typeText(page, at, text)
   assert.equal(await settle(count, before + 1), before + 1, 'the note was placed')
 }

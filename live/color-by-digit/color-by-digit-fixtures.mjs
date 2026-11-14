@@ -5,11 +5,12 @@
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { reloadWith, openWith } from '../session.mjs'
+import { CLASSIC_GRID } from '../puzzles.mjs'
 import { POLL_MS, settle } from '../settle.mjs'
 
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by puzzle-url.txt; the
 // 'the board holds the givens' test in color-by-digit.live.mjs checks it.
-export const GIVENS = '530070000600195000098000060800060003400803001700020006060000280000419005000080079'
+export const GIVENS = CLASSIC_GRID
 export const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 
 export const group = (key, digits) => ({ key, digits })
@@ -201,8 +202,6 @@ export const wrongCountOn = (p, groups) => wrongColorCountOn(p, (x) => {
   return digit === '' ? [] : [keyOf(groups, digit)]
 })
 
-export const selectCell = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-
 export async function dragProfileRow (p, from, to) {
   await p.locator(PROFILE_ROWS).first().scrollIntoViewIfNeeded()
   const start = await center(p.locator(`${PROFILE_ROWS} [data-role=handle]`).nth(from))
@@ -220,4 +219,10 @@ export async function typeProfileName (p, text) {
   await p.locator(PROFILE_NAME_FIELD).press('Control+a')
   if (text === '') await p.locator(PROFILE_NAME_FIELD).press('Backspace')
   else await p.locator(PROFILE_NAME_FIELD).pressSequentially(text)
+}
+
+// Saves the Odd/Even profile in Cell mode before the page loads, so odd digits take one color and even digits another.
+export const seedOddEvenCells = (p) => {
+  const entries = Object.entries({ ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'cell' }).map(([k, v]) => [k, JSON.stringify(v)])
+  return p.addInitScript((list) => list.forEach(([k, v]) => window.localStorage.setItem(k, v)), entries)
 }

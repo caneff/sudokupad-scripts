@@ -3,7 +3,6 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { drawnWidth } from '../page.mjs'
 import { EXTRAS_EDITOR, closeExtrasEditorWith, dialogButton, headerVersion, openExtrasEditor, openSettings } from '../settings.mjs'
 import { gridPoint } from '../board.mjs'
 import { openPenTool, plantUnchecked, setSlider } from '../pen.mjs'
@@ -54,7 +53,7 @@ const probeStrokeWidth = (page, value, parent) => page.evaluate(([value, parent]
   const computed = { strokeWidth: style.strokeWidth, transform: style.transform }
   path.remove()
   return computed
-}, [value, parent]).then(drawnWidth)
+}, [value, parent]).then(extras.drawnWidth)
 
 const browser = useBrowser()
 

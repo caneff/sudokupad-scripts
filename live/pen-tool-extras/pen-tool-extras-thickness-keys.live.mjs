@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { setInputValue } from '../pen.mjs'
+import { setInputValue } from '../input.mjs'
 import { readUntil } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { openExtrasEditor, closeExtrasEditorWith } from '../settings.mjs'

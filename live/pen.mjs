@@ -1,6 +1,7 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { cellCentre, mouseDrag } from './board.mjs'
+import { setInputValue } from './input.mjs'
 import { clickUntil, SETTLE_MS, settle } from './settle.mjs'
 
 // Pen Tool Extras' page button, and the values of the number pad's buttons 1 to 9 on each of its pages.
@@ -61,9 +62,6 @@ export async function setSlider (page, selector, value) {
   await setInputValue(page.locator(selector), value)
 }
 
-// Sets the input `locator` finds to `value`, with the same `input` event a user's change fires.
-export const setInputValue = (locator, value) => locator.evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
-
 // Stores `raw` (a string, possibly corrupt) as the saved value of the script's data key `key`, for a reload to read.
 // Throws, naming the key, when nothing is saved there yet: a renamed storage key would otherwise take the planted value
 // to a dead key, the script would read nothing and fall back to its defaults, and the test would pass unproven.
@@ -75,15 +73,6 @@ export const plantSaved = (page, key, raw) => page.evaluate(([k, value]) => {
 
 // Like `plantSaved`, for a setting that may not be saved yet (a default untouched since the page opened): it plants either way.
 export const plantUnchecked = (page, key, raw) => page.evaluate(([k, value]) => { window.localStorage.setItem(Framework.makeDataKey(k), value) }, [key, raw])
-
-export async function keydownDefaults (page, key) {
-  await page.evaluate(() => {
-    window.__keydowns = []
-    window.addEventListener('keydown', (e) => window.__keydowns.push(e.defaultPrevented), { once: true })
-  })
-  await page.keyboard.press(key)
-  return page.evaluate(() => window.__keydowns)
-}
 
 export async function goToPenPage (page, values) {
   for (let i = 0; i < 3 && (await padValues(page)) !== values; i++) {
