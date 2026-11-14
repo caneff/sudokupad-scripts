@@ -1,17 +1,11 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 /* global Framework */
-import assert from 'node:assert/strict'
+import { pickTool as pickToolByButton } from './board.mjs'
 import { openPenTool } from './pen.mjs'
-import { settle } from './settle.mjs'
-import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
 
 export const pickTool = async (p, name) => {
   if (name === 'pen') await openPenTool(p)
-  else if (name === 'textanywhere') await textAnywhere.pickTextAnywhere(p)
-  else {
-    await p.click(`#control-${name}`)
-    assert.equal(await settle(() => textAnywhere.tool(p), name), name, `${name} is the current tool`)
-  }
+  else await pickToolByButton(p, name)
 }
 
 export const emptyCell = (p) => p.evaluate(() => {

@@ -10,7 +10,7 @@ import { useBrowser } from '../session.mjs'
 import { boxOpen, clickAt, finishNote, gridPoint } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, STRIKE_PIECE, SIZE_SLIDER, WIDTH_KEY, valueOf } = textAnywhere
+const { COLOR_KEY, DIALOG, TEXTS, STRIKE_PIECE, SIZE_SLIDER, WIDTH_KEY, valueOf } = textAnywhere
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
@@ -23,14 +23,13 @@ const MARKDOWN_AT = [5.5, 6.5]
 const browser = useBrowser()
 
 describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, boxText
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const tool = () => textAnywhere.tool(p)
   const pickTextAnywhere = () => textAnywhere.pickTextAnywhere(p)
   const reload = () => textAnywhere.reload(p)
   const texts = () => textAnywhere.texts(p)
-  const boxText = () => p.locator(TEXT_BOX).textContent()
   // Every cell's digit, mark and colour, so a key that reached SudokuPad shows as a change.
   const cellState = () => read(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
   const saved = () => textAnywhere.saved(p)
@@ -47,6 +46,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser()))
+    ;({ boxText } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY])
     await reload()

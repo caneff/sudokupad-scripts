@@ -5,9 +5,10 @@
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { closeDialogWith } from '../settings.mjs'
 import { settle } from '../settle.mjs'
-import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, savedState, selectCell, typeProfileName, wrongCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
+import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, savedState, typeProfileName, wrongCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { selectCell } from '../board.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -30,7 +31,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
   const coloredCount = () => coloredCountOn(p)
   const undo = () => p.click('#control-undo')
   const editor = () => p.locator(EDITOR)
-  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
   const closeEditor = (text) => closeDialogWith(p, text, EDITOR)
   const getState = async () => savedState(await read((key) => Framework.getData(key), PROFILES_KEY))
   const activeName = async () => { const state = await getState(); return state.profiles[state.active].name }
@@ -147,7 +147,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     await p.locator(MENU).waitFor({ state: 'detached' })
     const lowFiveHigh = (await getState()).profiles.find((x) => x.name === 'Low/5/High').groups
     assert.equal(await settle(() => wrongCount(lowFiveHigh), 0), 0)
-    await openEditor()
+    await openEditorOn(p)
     await deleteProfileRow(p, 1)
     await closeEditor('Save')
     assert.deepEqual((await getState()).profiles.map((x) => x.name), ['Low/5/High'])
@@ -158,7 +158,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
   })
 
   it('attack 46: in the editor add, rename, copy, move and delete profiles up to six', async () => {
-    await openEditor()
+    await openEditorOn(p)
     assert.deepEqual(await rowNames(), ['Odd/Even', 'Low/5/High'])
     await p.click(`${PROFILE_ROWS}:nth-child(1)`, ROW_CORNER)
     await typeProfileName(p, '')
@@ -188,7 +188,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.deepEqual(await settle(rowNames, names), names, 'and back to the end')
     await closeEditor('Save')
     assert.deepEqual((await getState()).profiles.map((x) => x.name), names)
-    await openEditor()
+    await openEditorOn(p)
     // The last profile cannot be deleted, so the loop stops at one.
     for (let left = MAX_PROFILES; left > 1; left--) {
       await deleteProfileRow(p, 1)
@@ -204,7 +204,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
 
   it('attack 47: with the editor open, restart the puzzle; with it open, reload', async () => {
     await enter(ROW, 0, '3')
-    await openEditor()
+    await openEditorOn(p)
     await p.click(NEW_PROFILE)
     await restartPuzzle(p)
     assert.equal(await editor().count(), 1, 'the editor stays open through a restart')
@@ -212,12 +212,12 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.deepEqual(await rowNames(), ['Odd/Even', 'Low/5/High', 'Odd/Even copy'], 'the draft is as it was')
     await closeEditor('Cancel')
     assert.deepEqual((await getState()).profiles.map((x) => x.name), SEED.profiles.map((x) => x.name), 'Cancel after the restart saves nothing')
-    await openEditor()
+    await openEditorOn(p)
     await p.click(NEW_PROFILE)
     await reloadSession(p, script)
     assert.equal(await label(), 'Cell')
     assert.deepEqual((await getState()).profiles.map((x) => x.name), SEED.profiles.map((x) => x.name), 'the draft was never saved')
-    await openEditor()
+    await openEditorOn(p)
     assert.deepEqual(await rowNames(), SEED.profiles.map((x) => x.name), 'the saved profiles open as they were')
     await closeEditor('Cancel')
   })
@@ -226,7 +226,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     const painted = () => paintedKeys(p)
     await enter(ROW, 0, '3')
     await enter(ROW, 1, '4')
-    await openEditor()
+    await openEditorOn(p)
     const swatch = editor().locator('button[data-role=swatch]:not([data-empty])').nth(4)
     const key = await swatch.getAttribute('data-key')
     await swatch.click()
@@ -237,7 +237,7 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.deepEqual(state.profiles[state.active].groups.map((x) => x.key), [key], 'one group of that color')
     assert.equal(await settle(() => wrongCount([group(key, '0123456789'.split(''))]), 0), 0, 'the board shows the one color on every digit')
     assert.notEqual(await coloredCount(), 0, 'and some cells hold it')
-    await openEditor()
+    await openEditorOn(p)
     await editor().locator('button[data-act=clear]').click()
     assert.deepEqual(Object.values(await painted()), Array(10).fill(''), 'Clear all leaves every digit with no color')
     await closeEditor('Save')

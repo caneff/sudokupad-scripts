@@ -5,15 +5,18 @@
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { reloadWith, openWith } from '../session.mjs'
+import { CLASSIC_GRID } from '../puzzles.mjs'
+import { COLOR_BY_DIGIT_DIALOG, group, labelOn, modeLabel, ODD_EVEN } from '../scripts.mjs'
 import { POLL_MS, settle } from '../settle.mjs'
 
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by puzzle-url.txt; the
 // 'the board holds the givens' test in color-by-digit.live.mjs checks it.
-export const GIVENS = '530070000600195000098000060800060003400803001700020006060000280000419005000080079'
+export const GIVENS = CLASSIC_GRID
 export const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 
-export const group = (key, digits) => ({ key, digits })
-export const ODD_EVEN = [group('1', ['1', '3', '5', '7', '9']), group('2', ['0', '2', '4', '6', '8'])]
+// The group builder, the Odd/Even groups and the button's label readers are the shared record's (`live/scripts.mjs`); the suites take them from here.
+export { group, labelOn, modeLabel, ODD_EVEN }
+
 export const LOW_FIVE_HIGH = [group('1', ['0', '1', '2', '3', '4']), group('5', ['5']), group('9', ['6', '7', '8', '9'])]
 
 // The fresh install and the migration are checked in color-by-digit-profiles.live.mjs.
@@ -40,9 +43,26 @@ export const AUTO_STORAGE_KEY = storedAt(AUTO_KEY)
 export const SEEDED_OFF = { ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'off' }
 
 export const BUTTON = '#control-colorbydigit'
-export const EDITOR = '#color-by-digit-editor'
+export const EDITOR = COLOR_BY_DIGIT_DIALOG.editor
 export const ARROW = `${BUTTON} [data-role="menu"]`
 export const MENU = '#color-by-digit-menu'
+
+// Opens Color by Digit's settings dialog and the button's pulldown menu.
+export const openEditorOn = (p) => COLOR_BY_DIGIT_DIALOG.open(p)
+export async function openMenuOn (p) {
+  await p.click(ARROW)
+  await p.locator(MENU).waitFor({ state: 'visible' })
+}
+
+// What the suites read off one page, bound to it: the session's page `p` in, its shared readers out. A suite adds its own on top.
+export const tools = (p) => ({
+  read: (fn, arg) => p.evaluate(fn, arg),
+  label: () => labelOn(p),
+  cellsState: () => cellsStateOn(p),
+  coloredCount: () => coloredCountOn(p),
+  getState: async () => savedState(await p.evaluate((key) => Framework.getData(key), PROFILES_KEY)),
+  undo: () => p.click('#control-undo')
+})
 
 // '' for a digit in no group.
 export const paintedKeys = (p) => p.$$eval(`${EDITOR} button[data-act=digit]`, (es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.dataset.key])))
@@ -92,13 +112,6 @@ export async function openSession (browser, script, { saved = SEEDED_OFF, force 
 export async function reloadSession (p, script, mode = 'after-start') {
   await reloadWith(p, mode === 'document-idle' ? [] : [{ code: script }], { mode })
   await p.locator(BUTTON).waitFor({ state: 'visible' })
-}
-
-const LABEL_PREFIX = 'Color by digit: '
-export const modeLabel = (mode) => `${LABEL_PREFIX}${mode}`
-export const labelOn = async (p) => {
-  const label = await p.locator(BUTTON).getAttribute('aria-label')
-  return label?.startsWith(LABEL_PREFIX) ? label.slice(LABEL_PREFIX.length) : label
 }
 
 export const wordOn = (p) => p.locator(`${BUTTON} [data-role="mode"]`).textContent()
@@ -201,8 +214,6 @@ export const wrongCountOn = (p, groups) => wrongColorCountOn(p, (x) => {
   return digit === '' ? [] : [keyOf(groups, digit)]
 })
 
-export const selectCell = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-
 export async function dragProfileRow (p, from, to) {
   await p.locator(PROFILE_ROWS).first().scrollIntoViewIfNeeded()
   const start = await center(p.locator(`${PROFILE_ROWS} [data-role=handle]`).nth(from))
@@ -220,4 +231,10 @@ export async function typeProfileName (p, text) {
   await p.locator(PROFILE_NAME_FIELD).press('Control+a')
   if (text === '') await p.locator(PROFILE_NAME_FIELD).press('Backspace')
   else await p.locator(PROFILE_NAME_FIELD).pressSequentially(text)
+}
+
+// Saves the Odd/Even profile in Cell mode before the page loads, so odd digits take one color and even digits another.
+export const seedOddEvenCells = (p) => {
+  const entries = Object.entries({ ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'cell' }).map(([k, v]) => [k, JSON.stringify(v)])
+  return p.addInitScript((list) => list.forEach(([k, v]) => window.localStorage.setItem(k, v)), entries)
 }

@@ -1,10 +1,10 @@
 // Live check of color-by-digit.user.js on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { setTimeout as sleep } from 'node:timers/promises'
-import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, reloadSession, savedState, SEED, selectCell, watch, wrongColorCountOn } from './color-by-digit-fixtures.mjs'
-import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
-import { settle, SETTLE_MS } from '../settle.mjs'
+import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, reloadSession, savedState, SEED, watch, wrongColorCountOn, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { selectCell } from '../board.mjs'
+import { closeDialogWith, headerVersion, openSettings } from '../settings.mjs'
+import { settle, stable } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -14,8 +14,7 @@ const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 const ENTERED = { '0,2': '4', '0,3': '7' }
 const DIGIT_CELLS = GIVEN_COUNT + Object.keys(ENTERED).length
 
-// How often settledLayout re-reads the controls, and how far a bottom edge may overlap the footer's top.
-const LAYOUT_POLL_MS = 250
+// How far a bottom edge may overlap the footer's top.
 const FIT_SLACK_PX = 1
 // How many stand-in buttons another script's row gets in the wrap test; enough to fill a second row.
 const OTHER_BUTTONS = 8
@@ -57,7 +56,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const redo = () => p.click('#control-redo')
   const paint = (r, c, key) => paintOn(p, r, c, key)
   const setMultiColor = (v) => read((v) => Framework.setSetting('multicolour', v), v)
-  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
 
   before(async () => {
     ;({ context, p, errors } = await openSession(browser(), script))
@@ -82,19 +80,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       view: { width: window.innerWidth, height: window.innerHeight }
     }
   }, BUTTON)
-  // SudokuPad re-fits its controls after a throttled delay: waits until two readings agree, and
-  // fails if the row is still moving after SETTLE_MS, rather than asserting on a layout in motion.
-  const settledLayout = async () => {
-    let last = JSON.stringify(await layout())
-    const deadline = Date.now() + SETTLE_MS
-    while (Date.now() < deadline) {
-      await sleep(LAYOUT_POLL_MS)
-      const now = JSON.stringify(await layout())
-      if (now === last) return JSON.parse(now)
-      last = now
-    }
-    throw new Error(`the controls were still moving after ${SETTLE_MS} ms: ${last}`)
-  }
+  // SudokuPad re-fits its controls after a throttled delay; `stable` fails if the row is still moving after SETTLE_MS.
+  const settledLayout = () => stable(layout)
   // FIT_SLACK_PX absorbs sub-pixel rounding between the row's bottom edge and the footer's top.
   const fits = (l) => [l.button, l.row].every((r) => r.left >= 0 && r.top >= 0 && r.right <= l.view.width && r.bottom <= l.view.height) &&
     l.footer.top >= l.button.bottom - FIT_SLACK_PX && l.footer.top >= l.row.bottom - FIT_SLACK_PX
@@ -217,7 +204,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const keyOf = async (digit) => (await paintedKeys(p))[digit]
   // Hovering first waits for the dialog to stop moving, so the box read is where the key is.
   const centre = async (locator) => { await locator.hover(); const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
-  const reopen = async () => { await closeDialogWith(p, 'Cancel', EDITOR); await openEditor() }
+  const reopen = async () => { await closeDialogWith(p, 'Cancel', EDITOR); await openEditorOn(p) }
   const dragThrough = async (from, through) => {
     await p.mouse.move(from.x, from.y)
     await p.mouse.down()
@@ -226,7 +213,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   it('the settings entry opens the editor with the palette and ten digit keys filled with their colors, no group rows, and the brush on the lowest group\'s color', async () => {
-    await openEditor()
+    await openEditorOn(p)
     assert.equal(await p.locator(`${EDITOR} select[data-role=color-choice]`).count(), 1)
     assert.equal(await p.locator(`${EDITOR} button[data-act=digit]`).count(), 10)
     assert.equal(await p.locator(`${EDITOR} button[data-act=open], ${EDITOR} button[data-act=remove], ${EDITOR} button[data-act=add-group]`).count(), 0)
@@ -321,7 +308,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   describe('saved groups', { concurrency: false }, () => {
     it('Save with Low/5/High made the active profile writes it and closes the dialog', async () => {
-      await openEditor()
+      await openEditorOn(p)
       await p.selectOption(`${EDITOR} select[data-role=cell-profile]`, '1')
       await closeDialogWith(p, 'Save', EDITOR)
       const expected = { ...SEED, active: 1 }
@@ -377,7 +364,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const withMarks = (expected) => (x) => (x.r === 8 && x.c === 0 ? ['9'] : expected(x))
       await pressTo(p, 'Both')
       assert.equal(await settle(() => wrongCount(withMarks(lowFiveHigh)), 0), 0)
-      await openEditor()
+      await openEditorOn(p)
       const free = await p.$$eval(`${EDITOR} button[data-role=swatch]`, (es) => es.map((e) => e.dataset.key).find((k) => !['1', '5', '9'].includes(k)))
       await swatch(free).click()
       await digitKey('5').click()
@@ -392,7 +379,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
 
     it('Clear all empties the digit keys, Cancel restores the saved groups, Save keeps the empty list, and a step to Both colors nothing', async () => {
-      await openEditor()
+      await openEditorOn(p)
       const painted = async () => Object.values(await paintedKeys(p)).filter(Boolean).length
       assert.equal(await painted(), 10)
       assert.equal(await p.locator(`${EDITOR} [data-role=profile-row]`).count(), 2)
@@ -400,7 +387,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await painted(), 0)
       await closeDialogWith(p, 'Cancel', EDITOR)
       assert.equal((await getGroups()).length, 3)
-      await openEditor()
+      await openEditorOn(p)
       assert.equal(await painted(), 10)
       await p.click(`${EDITOR} button[data-act=clear]`)
       await closeDialogWith(p, 'Save', EDITOR)
@@ -436,7 +423,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         Framework.app.tools.colour.setPage(3)
         Framework.setData(profilesKey, { profiles: [{ name: 'Custom', groups: [{ key: '8', digits: ['1'] }, { key: '6', digits: ['2'] }, { key: 'nope', digits: ['3'] }] }], active: 0 })
       }, [original, PROFILES_KEY])
-      await openEditor()
+      await openEditorOn(p)
     })
     after(async () => {
       await read(([original, savedState, profilesKey]) => {

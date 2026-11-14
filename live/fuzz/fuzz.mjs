@@ -5,8 +5,10 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
-import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE, setInputValue } from '../pen.mjs'
-import { actButton, animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog, paste, STATUS } from '../settings.mjs'
+import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE } from '../pen.mjs'
+import { setInputValue } from '../input.mjs'
+import { actButton, animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, paste, STATUS } from '../settings.mjs'
+import { COLOR_BY_DIGIT_DIALOG, settingsScript } from '../scripts.mjs'
 import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, RULES_PANE } from '../auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
@@ -14,7 +16,7 @@ import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
-import { MARK_BOXES, PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
+import { KINDS, MARK_BOXES, PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
@@ -53,10 +55,11 @@ const TRACK_MARGIN_PX = 6
 // How long a script's element is waited for before it counts as lost.
 const BOX_TIMEOUT_MS = 2000
 
-const UI_TWEAKS_DIALOG = '#ui-tweaks-dialog'
+const UI_TWEAKS = settingsScript('ui-tweaks.user.js')
+const UI_TWEAKS_DIALOG = UI_TWEAKS.editor
 const DARK_PAGE_INPUT = '#dark-page-input'
 // The two scripts whose Copy settings and Paste settings the fuzz presses: the entry's name, and the editor that shows while its dialog is open.
-const SETTINGS_DIALOGS = { 'ui tweaks': ['UI Tweaks', UI_TWEAKS_DIALOG], 'dark page': ['Dark Page', DARK_PAGE_INPUT] }
+const SETTINGS_DIALOGS = { 'ui tweaks': UI_TWEAKS, 'dark page': settingsScript('dark-page.user.js') }
 const isSettingsObject = (text) => {
   try {
     const data = JSON.parse(text)
@@ -102,7 +105,7 @@ async function editProfiles (p, edits, save, fromMenu) {
     await p.locator(PROFILE_EDITOR).waitFor({ state: 'visible' })
     await animationsDone(p.locator(PROFILE_EDITOR))
   } else {
-    await openScriptDialog(p, 'Color by Digit', PROFILE_EDITOR)
+    await COLOR_BY_DIGIT_DIALOG.open(p)
   }
   const wrapped = async (locator, n) => {
     const count = await locator.count()
@@ -323,7 +326,7 @@ function envFor (p, puzzle, { beforeReload }) {
     },
     // A limit typed is a limit saved only on Save; Restore defaults clears this puzzle's sizing at once, so a Cancel after it still keeps the clearing.
     async rulesDialog ({ maxWidth, maxHeight, restore }, save) {
-      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
+      await settingsScript('auto-rules-resizer.user.js').open(p)
       await p.locator(MAX_WIDTH_INPUT).fill(maxWidth)
       await p.locator(MAX_HEIGHT_INPUT).fill(maxHeight)
       if (restore) await dialogButton(p, 'Restore defaults').click()
@@ -331,15 +334,15 @@ function envFor (p, puzzle, { beforeReload }) {
     },
     // `restore` presses Restore defaults after the color is picked.
     async darkPage (color, save, restore = false) {
-      await openScriptDialog(p, 'Dark Page', DARK_PAGE_INPUT)
+      await SETTINGS_DIALOGS['dark page'].open(p)
       await p.locator(DARK_PAGE_INPUT).fill(color)
       if (restore) await dialogButton(p, 'Restore defaults').click()
       await closeDialogWith(p, save ? 'Save' : 'Cancel', DARK_PAGE_INPUT)
     },
     // Copy settings answers on the dialog's status line, which is waited for: a press with no answer is a failure. Paste settings is `paste` of settings.mjs, which waits for the same line.
     async settingsText (script, text, save) {
-      const [entry, editor] = SETTINGS_DIALOGS[script]
-      await openScriptDialog(p, entry, editor)
+      const { entry, editor, open } = SETTINGS_DIALOGS[script]
+      await open(p)
       if (text === null) {
         await actButton(p, 'copy-settings').click()
         await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
@@ -351,7 +354,7 @@ function envFor (p, puzzle, { beforeReload }) {
       await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
     },
     async uiTweaks ({ hideSelect, wrapButtons, toggleTab, restore }, save) {
-      await openScriptDialog(p, 'UI Tweaks', UI_TWEAKS_DIALOG)
+      await UI_TWEAKS.open(p)
       const box = (id) => p.locator(`${UI_TWEAKS_DIALOG} input[data-option="${id}"]`)
       await box('hideSelect').setChecked(hideSelect)
       await box('wrapButtons').setChecked(wrapButtons)
@@ -421,6 +424,7 @@ export async function fuzz ({ browser, seed, runs, minutes, shrinkMinutes, path,
   const result = await runFuzz({
     openTarget: tracked.open,
     puzzles: FUZZ_PUZZLES,
+    kinds: KINDS,
     seed,
     runs,
     minutes,

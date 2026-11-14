@@ -11,10 +11,10 @@ import { captureConsoleErrors } from '../page.mjs'
 import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
-import { finishNote, gridPoint, mouseDrag, typeText } from '../board.mjs'
+import { finishNote, gridPoint, mouseDrag, typeText, undoDepth } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
 
-const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SELECTED, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
+const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const COLOR_BUTTON = `${KEYPAD} button[data-key="4"]`
 const RECTANGLE = '#text-anywhere-layer .text-anywhere-selection-rectangle'
@@ -32,7 +32,7 @@ const SMALLER_WINDOW = { width: 1100, height: 800 }
 const browser = useBrowser()
 
 describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, selectedCount
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const tool = () => textAnywhere.tool(p)
@@ -42,7 +42,6 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     return saved
   }
   const noteItems = async () => (await items()).filter((i) => i.kind === 'text')
-  const selectedCount = () => p.locator(SELECTED).count()
   const handleCount = () => p.locator(HANDLES).count()
   const noteBox = () => read((selector) => {
     const note = document.querySelector(selector).getBoundingClientRect()
@@ -103,6 +102,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { seed: captureConsoleErrors }))
+    ;({ selectedCount } = textAnywhere.tools(p))
   })
   after(async () => { await context.close() })
   beforeEach(async () => { await fresh() })
@@ -136,7 +136,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
   })
 
   it('12: a move drag, Ctrl+Z mid-drag, then the mouse-up moves the note once and leaves SudokuPad\'s undo alone', async () => {
-    const undoBefore = await read(() => Framework.app.puzzle.undoStack.length)
+    const undoBefore = await undoDepth(p)
     const [before] = await noteItems()
     await startMove()
     await p.keyboard.press('Control+z')
@@ -145,7 +145,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await textAnywhere.frames(p)
     const [after] = await noteItems()
     assert.notDeepEqual(after.at, before.at, 'the drag moved the note')
-    assert.equal(await read(() => Framework.app.puzzle.undoStack.length), undoBefore, 'SudokuPad\'s undo stack is as it was')
+    assert.equal(await undoDepth(p), undoBefore, 'SudokuPad\'s undo stack is as it was')
     await textAnywhere.reload(p)
     await pickText()
     assert.deepEqual((await noteItems())[0].at, after.at, 'a reload keeps the note where the drag put it')

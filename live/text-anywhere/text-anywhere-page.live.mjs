@@ -21,14 +21,13 @@ const OLD_NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: 'old', 
 const browser = useBrowser()
 
 describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, savedNote
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = () => textAnywhere.saved(p)
   const texts = () => textAnywhere.texts(p)
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const near = (got, want) => got.length === want.length && got.every((v, i) => Math.abs(v - want[i]) <= NEAR_PX)
-  const savedNote = async (text) => (await saved()).find((item) => item.text === text)
   const noteMiddle = (text) => read(([selector, want]) => {
     const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
     return [box.x + box.width / 2, box.y + box.height / 2]
@@ -56,6 +55,7 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser()))
+    ;({ savedNote } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await reload()
   })

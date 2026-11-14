@@ -1,12 +1,8 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
-/* global Framework, loadFPuzzle */
-import assert from 'node:assert/strict'
+/* global Framework, loadFPuzzle, PuzzleLoader */
 import { LOAD_MS } from './cache.mjs'
-import { GIVENS, MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { texts, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { startPuzzle, START } from './page.mjs'
-import { cellCentre } from './board.mjs'
-import { clickUntil, SETTLE_MS } from './settle.mjs'
+import { pickTool, texts } from './board.mjs'
 import { installAtIdle, SCRIPT_FILES, scriptSource } from './session.mjs'
 import { animationsDone } from './settings.mjs'
 
@@ -26,12 +22,6 @@ export async function installAll (p, patch = (file, code) => code) {
   await installAtIdle(p, SCRIPT_FILES.map((file) => ({ code: patch(file, scriptSource(file)) })))
 }
 
-// Saves Color by Digit's Odd/Even profile in Cell mode before the page loads, so odd digits take one color and even digits another.
-export const seedOddEvenCells = (p) => {
-  const entries = Object.entries({ ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'cell' }).map(([k, v]) => [k, JSON.stringify(v)])
-  return p.addInitScript((list) => list.forEach(([k, v]) => window.localStorage.setItem(k, v)), entries)
-}
-
 export async function startWithTools (p) {
   await startPuzzle(p)
   await enableTools(p)
@@ -48,7 +38,8 @@ async function enableTools (p) {
 
 // The recorded puzzle's givens (the classic 9x9) and its solution.
 export const CLASSIC_SOLUTION = '534678912672195348198342567859761423426853791713924856961537284287419635345286179'
-export const CLASSIC_GIVENS = [...GIVENS].flatMap((d, i) => d === '0' ? [] : [[Math.floor(i / 9), i % 9, Number(d)]])
+export const CLASSIC_GRID = '530070000600195000098000060800060003400803001700020006060000280000419005000080079'
+export const CLASSIC_GIVENS = [...CLASSIC_GRID].flatMap((d, i) => d === '0' ? [] : [[Math.floor(i / 9), i % 9, Number(d)]])
 
 // A puzzle's data; `givens` are `[row, col, value]` and `extra` (overlays, foglight) is merged in.
 // An inline `scl` puzzle has no id of its own and SudokuPad then saves its progress under `progress_undefined`, shared by every such
@@ -75,6 +66,25 @@ export async function puzzleIdFor (p, data) {
 export async function openPuzzleId (p, id) {
   await p.goto(SUDOKUPAD + id, { waitUntil: 'load', timeout: LOAD_MS })
   await startWithTools(p)
+}
+
+// Loads a puzzle in the tab again through the page's own loader, in place and with no reload, as the puzzle with `id` (none: under its own), and waits for the page's puzzleId to be that id.
+// `source` is the page's first path, which a load in place changes, so a second call on one page passes it; the default is the current one.
+// SudokuPad loads Tag Manager again on a second puzzle in a tab (it has saved progress by then) and the harness aborts it, which leaves an
+// uncaught `Event` rejection no script caused, so Tag Manager is answered with an empty script first, as `installAll` does.
+export async function loadInPlace (p, id, { source = new URL(p.url()).pathname.slice(1) } = {}) {
+  await p.route(/googletagmanager/, (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }))
+  const loaded = await p.evaluate(async ([key, as]) => {
+    const { parsePuzzleData, fetchPuzzle } = PuzzleLoader
+    const data = await parsePuzzleData(await fetchPuzzle(key))
+    if (as !== undefined) {
+      data.id = as
+      Framework.app.puzzle.puzzleId = as
+    }
+    await Framework.app.loadCTCPuzzle(data)
+    return data.id
+  }, [source, id])
+  await p.waitForFunction((as) => Framework.app.puzzle.puzzleId === as, loaded)
 }
 
 export const boardOf = async (p) => ({
@@ -111,16 +121,8 @@ export async function closePauseDialog (p, button) {
   await p.locator('.dialog').waitFor({ state: 'detached' })
 }
 
-export async function clickCell (p, row, col) {
-  const [x, y] = await cellCentre(p, row, col)
-  await p.mouse.click(x, y)
-}
-
 // Picks the tool whose button is `button` and returns once SudokuPad has it; a click in the first moments after a script is injected is dead.
-export async function useTool (p, button) {
-  const name = button.replace('#control-', '')
-  assert.equal(await clickUntil(() => p.click(button), () => tool(p), name, SETTLE_MS), name)
-}
+export const useTool = (p, button) => pickTool(p, button.replace('#control-', ''))
 
 export async function resumeAfterHistory (p) {
   const state = await p.waitForFunction(([source, flags]) => {

@@ -47,6 +47,16 @@ const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.j
 const { BOX_PRESETS, CORNERS, NUDGE_REPEAT_MS } = require('../../text-anywhere.user.js')
 const { scriptFiles } = require('../../sync-lib.js')
 
+// A script's file name from its short name, which is what `--focus` takes and a replay command prints.
+export const scriptFile = (name) => `${name}.user.js`
+export const scriptName = (file) => file.replace(/\.user\.js$/, '')
+const AUTO_RULES_RESIZER = scriptFile('auto-rules-resizer')
+const COLOR_BY_DIGIT = scriptFile('color-by-digit')
+const DARK_PAGE = scriptFile('dark-page')
+const PEN_TOOL_EXTRAS = scriptFile('pen-tool-extras')
+const TEXT_ANYWHERE = scriptFile('text-anywhere')
+const UI_TWEAKS = scriptFile('ui-tweaks')
+
 export const TOOL_KEYS = ['z', 'x', 'c', 'v']
 const WINDOW_SIZES = [{ width: 1024, height: 600 }, { width: 1200, height: 900 }, { width: 1400, height: 1000 }]
 const NOTE_TEXTS = ['15', 'a->b', 'sum 12', '!= 3', 'x\ny']
@@ -153,9 +163,12 @@ function buildKinds () {
     await env.page.mouse.down()
     await env.page.mouse.move(...to, { steps: 6 })
   }
-  const penDrag = (kind, words, interrupt, extra = fc.constant(null)) => ({
+  const penDrag = (kind, scripts, words, interrupt, extra = fc.constant(null)) => ({
     kind,
     group: 'interruption',
+    scripts,
+    start: false,
+    stroke: true,
     weight: 1,
     arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color, extra),
     label: ([a, b, c, x], at) => `pen drag ${at(a)} -> ${at(b)} color ${c} then ${words(x)} then release`,
@@ -174,9 +187,12 @@ function buildKinds () {
     await env.page.mouse.down({ button: 'right' })
     await env.page.mouse.move(...to, { steps: 4 })
   }
-  const eraseHold = (kind, words, interrupt, extra = fc.constant(null)) => ({
+  const eraseHold = (kind, scripts, words, interrupt, extra = fc.constant(null)) => ({
     kind,
     group: 'interruption',
+    scripts,
+    start: false,
+    stroke: false,
     weight: 1,
     arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), extra),
     label: ([a, b, x], at) => `right-click erase held ${at(a)} -> ${at(b)} then ${words(x)} then release`,
@@ -210,9 +226,12 @@ function buildKinds () {
     return centre
   }
   const ifNone = (t, a, at) => `(note ${jsonWords(NOTE_TEXTS[t])} at ${at(a)} if none)`
-  const noteDrag = (kind, words, interrupt) => ({
+  const noteDrag = (kind, scripts, words, interrupt) => ({
     kind,
     group: 'interruption',
+    scripts,
+    start: false,
+    stroke: false,
     weight: 1,
     arg: note,
     label: ([t, a], at) => `note drag ${ifNone(t, a, at)} then ${words} then release`,
@@ -229,6 +248,9 @@ function buildKinds () {
     {
       kind: 'click cell',
       group: 'ordinary',
+      scripts: [],
+      start: true,
+      stroke: false,
       weight: 6,
       arg: cell,
       label: (i, at) => `click ${at(i)}`,
@@ -240,6 +262,9 @@ function buildKinds () {
     {
       kind: 'type digit',
       group: 'ordinary',
+      scripts: [COLOR_BY_DIGIT],
+      start: true,
+      stroke: false,
       weight: 8,
       arg: digit,
       label: (d) => `type ${d}`,
@@ -249,6 +274,9 @@ function buildKinds () {
     {
       kind: 'enter digit',
       group: 'ordinary',
+      scripts: [COLOR_BY_DIGIT],
+      start: true,
+      stroke: false,
       weight: 5,
       arg: (puzzle) => fc.tuple(cell(puzzle), digit(puzzle)),
       label: ([i, d], at) => `enter ${d} in ${at(i)}`,
@@ -260,14 +288,17 @@ function buildKinds () {
         model.selected = true
       }
     },
-    { kind: 'undo', group: 'ordinary', weight: 3, arg: () => fc.constant(null), label: () => 'undo', run: (env) => env.undo() },
-    { kind: 'undo all', group: 'ordinary', weight: 1, arg: () => fc.constant(null), label: () => 'undo back to the start', run: (env) => env.undoAll() },
-    { kind: 'redo', group: 'ordinary', weight: 2, arg: () => fc.constant(null), label: () => 'redo', run: (env) => env.redo() },
-    { kind: 'tool key', group: 'ordinary', weight: 3, arg: () => toolKey, label: (k) => `press ${k}`, run: (env, k) => env.page.keyboard.press(k) },
-    { kind: 'tab', group: 'ordinary', weight: 1, arg: () => fc.constant(null), label: () => 'press Tab', run: (env) => env.page.keyboard.press('Tab') },
+    { kind: 'undo', group: 'ordinary', scripts: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE], start: false, stroke: false, weight: 3, arg: () => fc.constant(null), label: () => 'undo', run: (env) => env.undo() },
+    { kind: 'undo all', group: 'ordinary', scripts: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE], start: false, stroke: false, weight: 1, arg: () => fc.constant(null), label: () => 'undo back to the start', run: (env) => env.undoAll() },
+    { kind: 'redo', group: 'ordinary', scripts: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE], start: false, stroke: false, weight: 2, arg: () => fc.constant(null), label: () => 'redo', run: (env) => env.redo() },
+    { kind: 'tool key', group: 'ordinary', scripts: [COLOR_BY_DIGIT, UI_TWEAKS], start: true, stroke: false, weight: 3, arg: () => toolKey, label: (k) => `press ${k}`, run: (env, k) => env.page.keyboard.press(k) },
+    { kind: 'tab', group: 'ordinary', scripts: [UI_TWEAKS], start: false, stroke: false, weight: 1, arg: () => fc.constant(null), label: () => 'press Tab', run: (env) => env.page.keyboard.press('Tab') },
     {
       kind: 'pen line',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: true,
       weight: 4,
       arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color),
       label: ([a, b, c], at) => `pen line ${at(a)} -> ${at(b)} color ${c}`,
@@ -279,6 +310,9 @@ function buildKinds () {
     {
       kind: 'pen erase',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: false,
+      stroke: true,
       weight: 2,
       arg: cell,
       label: (i, at) => `right-click ${at(i)} with the pen`,
@@ -288,10 +322,13 @@ function buildKinds () {
         await env.page.mouse.click(...point, { button: 'right' })
       }
     },
-    { kind: 'pen page', group: 'ordinary', weight: 2, arg: () => fc.constant(null), label: () => 'turn the pen page', run: (env) => env.turnPenPage() },
+    { kind: 'pen page', group: 'ordinary', scripts: [PEN_TOOL_EXTRAS], start: true, stroke: false, weight: 2, arg: () => fc.constant(null), label: () => 'turn the pen page', run: (env) => env.turnPenPage() },
     {
       kind: 'place note',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: true,
+      stroke: false,
       weight: 3,
       arg: note,
       label: ([t, a], at) => `note ${jsonWords(NOTE_TEXTS[t])} at ${at(a)}`,
@@ -300,6 +337,9 @@ function buildKinds () {
     {
       kind: 'move note',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 2,
       arg: () => fc.constant(null),
       label: () => 'move the first note',
@@ -313,6 +353,9 @@ function buildKinds () {
     {
       kind: 'pen line mode',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: true,
       weight: 3,
       arg: (puzzle) => fc.tuple(fc.integer({ min: 1, max: MAX_LINE_MODE_PRESSES }), cell(puzzle), cell(puzzle), color),
       label: ([presses, a, b, c], at) => `press the pen line mode button ${presses} time${presses === 1 ? '' : 's'} then pen line ${at(a)} -> ${at(b)} color ${c}`,
@@ -325,6 +368,9 @@ function buildKinds () {
     {
       kind: 'pen mark',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: true,
       weight: 3,
       arg: (puzzle) => fc.tuple(fc.subarray(MARK_BOXES), cell(puzzle), fc.nat(MARK_SIDES - 1), color),
       label: ([boxes, a, side, c], at) => `tick the mark boxes ${boxes.join(' ') || 'none'} then click side ${side} of ${at(a)} with pen ${c}`,
@@ -337,6 +383,9 @@ function buildKinds () {
     {
       kind: 'pen color edit',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: false,
+      stroke: false,
       weight: 2,
       arg: (puzzle) => fc.tuple(color, fc.nat(PEN_EDIT_ENDS - 1), fc.integer({ min: 0, max: 0xffffff }), cell(puzzle), toolKey),
       label: ([c, end, rgb, a, key], at) => `hold pen color ${c} to edit its color then ${['press Escape', `recolor it to ${ownColor(rgb)} and press Escape`, `click ${at(a)}`, `press ${key}`, 'turn the pen page'][end]}`,
@@ -353,6 +402,9 @@ function buildKinds () {
     {
       kind: 'pen colors dialog',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: false,
       weight: 2,
       arg: () => fc.tuple(fc.nat(COLOR_PRESET_PICKS - 1), fc.boolean(), fc.boolean()),
       label: ([pick, restore, save]) => `Pen Tool Extras colors: ${restore ? 'Restore defaults' : `preset ${pick}`} ${save ? 'Save' : 'Cancel'}`,
@@ -361,6 +413,9 @@ function buildKinds () {
     {
       kind: 'pen settings',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: false,
+      stroke: false,
       weight: 1,
       arg: () => fc.boolean(),
       label: (save) => `Pen Tool Extras settings dialog ${save ? 'Save' : 'Cancel'}`,
@@ -369,6 +424,9 @@ function buildKinds () {
     {
       kind: 'slider drag',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 4,
       arg: () => fc.tuple(fc.nat(SLIDERS.length - 1), fc.nat(10), fc.nat(10)),
       label: ([s, from, to]) => `drag the ${SLIDERS[s]} slider from ${from * 10}% to ${to * 10}%`,
@@ -384,6 +442,9 @@ function buildKinds () {
     {
       kind: 'slider keys',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 2,
       arg: () => fc.tuple(fc.nat(SLIDERS.length - 1), fc.nat(SLIDER_KEYS.length - 1), fc.integer({ min: 1, max: 5 })),
       label: ([s, k, times]) => `press ${SLIDER_KEYS[k]} ${times} times on the ${SLIDERS[s]} slider`,
@@ -396,6 +457,9 @@ function buildKinds () {
     {
       kind: 'pen settings values',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: false,
       weight: 3,
       arg: () => fc.tuple(fc.integer({ min: ARROW_SPACING.min, max: ARROW_SPACING.max }), fc.integer({ min: DASH.min, max: DASH.max }), fc.integer(THICKNESS_STEPS), fc.boolean()),
       label: ([spacing, dash, steps, save]) => `Pen Tool Extras settings dialog: arrow spacing ${spacing} dash ${dash} thickness ${steps * THICKNESS.step} ${save ? 'Save' : 'Cancel'}`,
@@ -404,6 +468,9 @@ function buildKinds () {
     {
       kind: 'note box color',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: true,
+      stroke: false,
       weight: 3,
       arg: () => fc.tuple(fc.constantFrom(...BOX_CHOICES), fc.integer({ min: 0, max: 0xffffff }), fc.boolean()),
       label: ([choice, rgb, save]) => `Text Anywhere box color ${boxLabel(choice)}${choice === 'custom' ? ` ${ownColor(rgb)}` : ''} ${save ? 'Save' : 'Cancel'}`,
@@ -412,6 +479,9 @@ function buildKinds () {
     {
       kind: 'note background',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: true,
+      stroke: false,
       weight: 2,
       arg: () => fc.boolean(),
       label: (on) => `turn the Text Anywhere Background button ${on ? 'on' : 'off'}`,
@@ -420,6 +490,9 @@ function buildKinds () {
     {
       kind: 'boxed note',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: true,
+      stroke: false,
       weight: 3,
       arg: note,
       label: ([t, a], at) => `note ${jsonWords(NOTE_TEXTS[t])} with a box at ${at(a)}`,
@@ -431,6 +504,9 @@ function buildKinds () {
     {
       kind: 'arrow line',
       group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: true,
       weight: 3,
       arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color),
       label: ([a, b, c], at) => `arrow line ${at(a)} -> ${at(b)} color ${c}`,
@@ -442,6 +518,9 @@ function buildKinds () {
     {
       kind: 'rich note',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: true,
+      stroke: false,
       weight: 2,
       arg: (puzzle) => fc.tuple(fc.nat(RICH_NOTES.length - 1), cell(puzzle)),
       label: ([t, a], at) => `note ${jsonWords(RICH_NOTES[t])} at ${at(a)}`,
@@ -450,6 +529,9 @@ function buildKinds () {
     {
       kind: 'note resize',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 2,
       arg: (puzzle) => fc.tuple(note(puzzle), fc.nat(RESIZE_CORNERS - 1), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX }), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX })),
       label: ([[t, a], corner, dx, dy], at) => `drag corner ${corner} of the first note ${ifNone(t, a, at)} by ${dx} x ${dy}`,
@@ -466,6 +548,9 @@ function buildKinds () {
     {
       kind: 'note wheel',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 1,
       arg: (puzzle) => fc.tuple(cell(puzzle), fc.constantFrom(...WHEEL_DELTAS)),
       label: ([a, dy], at) => `wheel ${dy} over the first note (a tall note at ${at(a)} if none)`,
@@ -479,6 +564,9 @@ function buildKinds () {
     {
       kind: 'note rectangle',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 2,
       arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), fc.boolean()),
       label: ([a, b, shift], at) => `drag a selection rectangle ${at(a)} -> ${at(b)}${shift ? ' holding Shift' : ''}`,
@@ -496,6 +584,9 @@ function buildKinds () {
     {
       kind: 'note nudge',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 2,
       arg: (puzzle) => fc.tuple(note(puzzle), fc.nat(ARROW_KEYS.length - 1), fc.boolean(), fc.option(fc.integer({ min: 1, max: MAX_NUDGE_TAPS }), { nil: 0 })),
       label: ([[t, a], k, shift, taps], at) => `nudge the first note ${ifNone(t, a, at)} with ${shift ? 'Shift+' : ''}${ARROW_KEYS[k]} ${taps ? `${taps} times` : 'held'}`,
@@ -515,6 +606,9 @@ function buildKinds () {
     {
       kind: 'clear notes',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 1,
       arg: (puzzle) => fc.tuple(note(puzzle), fc.boolean(), fc.boolean()),
       label: ([[t, a], selectFirst, ok], at) => `press Clear all${selectFirst ? ` with the first note selected ${ifNone(t, a, at)}` : ''}: ${ok ? 'OK' : 'Cancel'}`,
@@ -526,6 +620,9 @@ function buildKinds () {
     {
       kind: 'tick check box',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 2,
       arg: cell,
       label: (a, at) => `tick the first check box of a note (a check box note at ${at(a)} if none)`,
@@ -538,6 +635,9 @@ function buildKinds () {
     {
       kind: 'reopen note',
       group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 1,
       arg: note,
       label: ([t, a], at) => `double-click the first note ${ifNone(t, a, at)} and finish it`,
@@ -552,6 +652,9 @@ function buildKinds () {
     {
       kind: 'profile editor',
       group: 'ordinary',
+      scripts: [COLOR_BY_DIGIT],
+      start: true,
+      stroke: false,
       weight: 1,
       arg: () => fc.tuple(fc.array(profileEdit, { maxLength: MAX_PROFILE_EDITS, size: 'max' }), fc.boolean(), fc.boolean()),
       label: ([edits, save, fromMenu]) => `Color by Digit profiles dialog${fromMenu ? ' from the pad menu' : ''}: ${edits.map(profileEditWords).map((w) => `${w} then `).join('')}${save ? 'Save' : 'Cancel'}`,
@@ -560,26 +663,32 @@ function buildKinds () {
     {
       kind: 'profile switch',
       group: 'ordinary',
+      scripts: [COLOR_BY_DIGIT],
+      start: true,
+      stroke: false,
       weight: 2,
       arg: () => fc.nat(MAX_PROFILES - 1),
       label: (i) => `pick profile ${i} from the pad menu`,
       run: (env, i) => env.pickProfile(i)
     },
-    { kind: 'color mode', group: 'ordinary', weight: 2, arg: () => fc.constant(null), label: () => 'press the Color by Digit button', run: (env) => env.clickColorMode() },
+    { kind: 'color mode', group: 'ordinary', scripts: [COLOR_BY_DIGIT], start: true, stroke: false, weight: 2, arg: () => fc.constant(null), label: () => 'press the Color by Digit button', run: (env) => env.clickColorMode() },
 
     // Interruptions in the middle of a gesture: a key, Escape, a tool switch, undo, a window resize, a second button, the pointer leaving the window.
-    penDrag('pen drag, Escape', () => 'Escape', press('Escape')),
-    penDrag('pen drag, tool key', (k) => `press ${k}`, (env, arg) => env.page.keyboard.press(arg[3]), toolKey),
-    penDrag('pen drag, undo', () => 'Ctrl+Z', press('Control+z')),
-    penDrag('pen drag, resize', ({ width, height }) => `resize the window to ${width}x${height}`, (env, arg) => env.resize(arg[3]), fc.constantFrom(...WINDOW_SIZES)),
-    penDrag('pen drag, second button', () => 'right button down and up', async (env) => {
+    penDrag('pen drag, Escape', [PEN_TOOL_EXTRAS], () => 'Escape', press('Escape')),
+    penDrag('pen drag, tool key', [PEN_TOOL_EXTRAS], (k) => `press ${k}`, (env, arg) => env.page.keyboard.press(arg[3]), toolKey),
+    penDrag('pen drag, undo', [PEN_TOOL_EXTRAS], () => 'Ctrl+Z', press('Control+z')),
+    penDrag('pen drag, resize', [PEN_TOOL_EXTRAS, AUTO_RULES_RESIZER], ({ width, height }) => `resize the window to ${width}x${height}`, (env, arg) => env.resize(arg[3]), fc.constantFrom(...WINDOW_SIZES)),
+    penDrag('pen drag, second button', [PEN_TOOL_EXTRAS], () => 'right button down and up', async (env) => {
       await env.page.mouse.down({ button: 'right' })
       await env.page.mouse.up({ button: 'right' })
     }),
-    penDrag('pen drag, blur', () => 'window blur and focus', (env) => env.blurFocus()),
+    penDrag('pen drag, blur', [PEN_TOOL_EXTRAS], () => 'window blur and focus', (env) => env.blurFocus()),
     {
       kind: 'pen drag, leave window',
       group: 'interruption',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: false,
+      stroke: true,
       weight: 1,
       arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color, cell(puzzle)),
       label: ([a, b, c, d], at) => `pen drag ${at(a)} -> ${at(b)} color ${c} then leave the window then release outside then click ${at(d)}`,
@@ -590,23 +699,26 @@ function buildKinds () {
         await env.page.mouse.click(...await env.cellPoint(arg[3]))
       }
     },
-    eraseHold('erase held, Escape', () => 'Escape', press('Escape')),
-    eraseHold('erase held, tool key', (k) => `press ${k}`, (env, arg) => env.page.keyboard.press(arg[2]), toolKey),
-    eraseHold('erase held, left button', () => 'left button down and up', async (env) => {
+    eraseHold('erase held, Escape', [PEN_TOOL_EXTRAS], () => 'Escape', press('Escape')),
+    eraseHold('erase held, tool key', [PEN_TOOL_EXTRAS], (k) => `press ${k}`, (env, arg) => env.page.keyboard.press(arg[2]), toolKey),
+    eraseHold('erase held, left button', [PEN_TOOL_EXTRAS], () => 'left button down and up', async (env) => {
       await env.page.mouse.down({ button: 'left' })
       await env.page.mouse.up({ button: 'left' })
     }),
-    noteDrag('note drag, Escape', 'Escape', press('Escape')),
-    noteDrag('note drag, Delete', 'Delete', press('Delete')),
-    noteDrag('note drag, undo', 'Ctrl+Z', press('Control+z')),
-    noteDrag('note drag, resize', `resize the window to ${WINDOW_SIZES[0].width}x${WINDOW_SIZES[0].height}`, (env) => env.resize(WINDOW_SIZES[0])),
+    noteDrag('note drag, Escape', [TEXT_ANYWHERE], 'Escape', press('Escape')),
+    noteDrag('note drag, Delete', [TEXT_ANYWHERE], 'Delete', press('Delete')),
+    noteDrag('note drag, undo', [TEXT_ANYWHERE], 'Ctrl+Z', press('Control+z')),
+    noteDrag('note drag, resize', [TEXT_ANYWHERE, AUTO_RULES_RESIZER], `resize the window to ${WINDOW_SIZES[0].width}x${WINDOW_SIZES[0].height}`, (env) => env.resize(WINDOW_SIZES[0])),
 
     // Page-level events.
-    { kind: 'blur and focus', group: 'page', weight: 1, arg: () => fc.constant(null), label: () => 'window blur and focus', run: (env) => env.blurFocus() },
-    { kind: 'reload', group: 'page', weight: 1, arg: () => fc.constant(null), label: () => 'reload the page', run: (env, _, model) => { model.selected = false; return env.reload() } },
+    { kind: 'blur and focus', group: 'page', scripts: [], start: false, stroke: false, weight: 1, arg: () => fc.constant(null), label: () => 'window blur and focus', run: (env) => env.blurFocus() },
+    { kind: 'reload', group: 'page', scripts: [], start: false, stroke: false, weight: 1, arg: () => fc.constant(null), label: () => 'reload the page', run: (env, _, model) => { model.selected = false; return env.reload() } },
     {
       kind: 'restart',
       group: 'page',
+      scripts: [COLOR_BY_DIGIT, TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
       weight: 1,
       // With `thenUndo`, the Undo that follows is the first one after the Restart, which brings back the board from before it (`restoreBeforeRestart`).
       arg: () => fc.boolean(),
@@ -617,10 +729,13 @@ function buildKinds () {
         if (thenUndo) await env.undo()
       }
     },
-    { kind: 'resize', group: 'page', weight: 1, arg: () => fc.constantFrom(...WINDOW_SIZES), label: ({ width, height }) => `resize the window to ${width}x${height}`, run: (env, size) => env.resize(size) },
+    { kind: 'resize', group: 'page', scripts: [AUTO_RULES_RESIZER], start: false, stroke: false, weight: 1, arg: () => fc.constantFrom(...WINDOW_SIZES), label: ({ width, height }) => `resize the window to ${width}x${height}`, run: (env, size) => env.resize(size) },
     {
       kind: 'dark page',
       group: 'page',
+      scripts: [DARK_PAGE],
+      start: true,
+      stroke: false,
       weight: 1,
       arg: () => fc.tuple(fc.constantFrom(...DARK_COLORS), fc.boolean()),
       label: ([color, save]) => `Dark Page dialog: ${save ? 'Save' : 'Cancel'} ${color}`,
@@ -629,6 +744,9 @@ function buildKinds () {
     {
       kind: 'rules drag',
       group: 'page',
+      scripts: [AUTO_RULES_RESIZER],
+      start: true,
+      stroke: false,
       weight: 2,
       arg: () => fc.tuple(fc.constantFrom(...RULES_CORNERS), fc.integer({ min: -RULES_DRAG_REACH_PX, max: RULES_DRAG_REACH_PX }), fc.integer({ min: -RULES_DRAG_REACH_PX, max: RULES_DRAG_REACH_PX })),
       label: ([corner, dx, dy]) => `drag the ${CORNER_NAMES[corner]} corner of the rules box by ${dx} x ${dy}`,
@@ -637,6 +755,9 @@ function buildKinds () {
     {
       kind: 'rules font',
       group: 'page',
+      scripts: [AUTO_RULES_RESIZER],
+      start: true,
+      stroke: false,
       weight: 1,
       arg: () => fc.tuple(fc.constantFrom(1, -1), fc.integer({ min: 1, max: 3 })),
       label: ([step, times]) => `press ${step > 0 ? 'f+' : 'f-'} on the rules box ${times} time${times === 1 ? '' : 's'}`,
@@ -645,6 +766,9 @@ function buildKinds () {
     {
       kind: 'rules dialog',
       group: 'page',
+      scripts: [AUTO_RULES_RESIZER],
+      start: true,
+      stroke: false,
       weight: 1,
       arg: () => fc.tuple(fc.constantFrom(...RULES_LIMIT_TEXTS), fc.constantFrom(...RULES_LIMIT_TEXTS), fc.boolean(), fc.boolean()),
       label: ([maxWidth, maxHeight, restore, save]) => `Auto Rules Resizer dialog: max width ${limitWords(maxWidth)} max height ${limitWords(maxHeight)}${restore ? ' Restore defaults' : ''} ${save ? 'Save' : 'Cancel'}`,
@@ -653,6 +777,9 @@ function buildKinds () {
     {
       kind: 'dark page defaults',
       group: 'page',
+      scripts: [DARK_PAGE],
+      start: true,
+      stroke: false,
       weight: 1,
       arg: () => fc.tuple(fc.constantFrom(...DARK_COLORS), fc.boolean()),
       label: ([color, save]) => `Dark Page dialog: ${color} then Restore defaults ${save ? 'Save' : 'Cancel'}`,
@@ -661,6 +788,9 @@ function buildKinds () {
     {
       kind: 'dark page settings text',
       group: 'page',
+      scripts: [DARK_PAGE],
+      start: true,
+      stroke: false,
       weight: 1,
       arg: () => fc.tuple(textOrCopy(DARK_PAGE_TEXTS), fc.boolean()),
       label: ([text, save]) => settingsTextLabel('Dark Page', text, save),
@@ -669,6 +799,9 @@ function buildKinds () {
     {
       kind: 'ui tweaks dialog',
       group: 'page',
+      scripts: [UI_TWEAKS],
+      start: true,
+      stroke: false,
       weight: 1,
       arg: () => fc.tuple(fc.boolean(), fc.boolean(), fc.boolean(), fc.boolean(), fc.boolean()),
       label: ([hideSelect, wrapButtons, toggleTab, restore, save]) => `UI Tweaks dialog: select ${hideSelect ? 'hidden' : 'shown'} buttons ${wrapButtons ? 'wrapped' : 'in one row'}${toggleTab ? ' Tab option off and on' : ''}${restore ? ' Restore defaults' : ''} ${save ? 'Save' : 'Cancel'}`,
@@ -677,6 +810,9 @@ function buildKinds () {
     {
       kind: 'ui tweaks settings text',
       group: 'page',
+      scripts: [UI_TWEAKS],
+      start: true,
+      stroke: false,
       weight: 1,
       arg: () => fc.tuple(textOrCopy(UI_TWEAKS_TEXTS), fc.boolean()),
       label: ([text, save]) => settingsTextLabel('UI Tweaks', text, save),
@@ -685,7 +821,7 @@ function buildKinds () {
   ]
 }
 
-const KINDS = buildKinds()
+export const KINDS = buildKinds()
 export const KIND_NAMES = KINDS.map((k) => k.kind)
 export const KIND_GROUPS = Object.fromEntries(KINDS.map((k) => [k.kind, k.group]))
 
@@ -696,86 +832,11 @@ const nameTarget = (puzzle) => (i) => `r${puzzle.cells[i][0] + 1}c${puzzle.cells
 const commandOf = (k, puzzle, arg) => ({
   kind: k.kind,
   group: k.group,
+  stroke: k.stroke,
   check: (model) => k.check ? k.check(model) : true,
   run: async (model, real) => { await k.run(real.env, arg, model) },
   toString: () => k.label(arg, nameTarget(puzzle))
 })
-
-// A script's file name from its short name, which is what `--focus` takes and a replay command prints.
-export const scriptFile = (name) => `${name}.user.js`
-export const scriptName = (file) => file.replace(/\.user\.js$/, '')
-const AUTO_RULES_RESIZER = scriptFile('auto-rules-resizer')
-const COLOR_BY_DIGIT = scriptFile('color-by-digit')
-const DARK_PAGE = scriptFile('dark-page')
-const PEN_TOOL_EXTRAS = scriptFile('pen-tool-extras')
-const TEXT_ANYWHERE = scriptFile('text-anywhere')
-const UI_TWEAKS = scriptFile('ui-tweaks')
-
-// The scripts each kind exercises, by file name: what `--focus` raises. A kind that reaches a script only through SudokuPad (a click on a cell, a window blur) names none.
-export const KIND_SCRIPTS = {
-  'click cell': [],
-  'type digit': [COLOR_BY_DIGIT],
-  'enter digit': [COLOR_BY_DIGIT],
-  undo: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
-  'undo all': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
-  redo: [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
-  'tool key': [COLOR_BY_DIGIT, UI_TWEAKS],
-  tab: [UI_TWEAKS],
-  'pen line': [PEN_TOOL_EXTRAS],
-  'pen erase': [PEN_TOOL_EXTRAS],
-  'pen page': [PEN_TOOL_EXTRAS],
-  'place note': [TEXT_ANYWHERE],
-  'move note': [TEXT_ANYWHERE],
-  'pen settings': [PEN_TOOL_EXTRAS],
-  'slider drag': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
-  'slider keys': [PEN_TOOL_EXTRAS, TEXT_ANYWHERE],
-  'pen settings values': [PEN_TOOL_EXTRAS],
-  'pen line mode': [PEN_TOOL_EXTRAS],
-  'pen mark': [PEN_TOOL_EXTRAS],
-  'pen color edit': [PEN_TOOL_EXTRAS],
-  'pen colors dialog': [PEN_TOOL_EXTRAS],
-  'note box color': [TEXT_ANYWHERE],
-  'note background': [TEXT_ANYWHERE],
-  'boxed note': [TEXT_ANYWHERE],
-  'arrow line': [PEN_TOOL_EXTRAS],
-  'rich note': [TEXT_ANYWHERE],
-  'note resize': [TEXT_ANYWHERE],
-  'note wheel': [TEXT_ANYWHERE],
-  'note rectangle': [TEXT_ANYWHERE],
-  'note nudge': [TEXT_ANYWHERE],
-  'clear notes': [TEXT_ANYWHERE],
-  'tick check box': [TEXT_ANYWHERE],
-  'reopen note': [TEXT_ANYWHERE],
-  'color mode': [COLOR_BY_DIGIT],
-  'profile editor': [COLOR_BY_DIGIT],
-  'profile switch': [COLOR_BY_DIGIT],
-  'pen drag, Escape': [PEN_TOOL_EXTRAS],
-  'pen drag, tool key': [PEN_TOOL_EXTRAS],
-  'pen drag, undo': [PEN_TOOL_EXTRAS],
-  'pen drag, resize': [PEN_TOOL_EXTRAS, AUTO_RULES_RESIZER],
-  'pen drag, second button': [PEN_TOOL_EXTRAS],
-  'pen drag, blur': [PEN_TOOL_EXTRAS],
-  'pen drag, leave window': [PEN_TOOL_EXTRAS],
-  'erase held, Escape': [PEN_TOOL_EXTRAS],
-  'erase held, tool key': [PEN_TOOL_EXTRAS],
-  'erase held, left button': [PEN_TOOL_EXTRAS],
-  'note drag, Escape': [TEXT_ANYWHERE],
-  'note drag, Delete': [TEXT_ANYWHERE],
-  'note drag, undo': [TEXT_ANYWHERE],
-  'note drag, resize': [TEXT_ANYWHERE, AUTO_RULES_RESIZER],
-  'blur and focus': [],
-  reload: [],
-  restart: [COLOR_BY_DIGIT, TEXT_ANYWHERE],
-  resize: [AUTO_RULES_RESIZER],
-  'rules drag': [AUTO_RULES_RESIZER],
-  'rules font': [AUTO_RULES_RESIZER],
-  'rules dialog': [AUTO_RULES_RESIZER],
-  'dark page': [DARK_PAGE],
-  'dark page defaults': [DARK_PAGE],
-  'dark page settings text': [DARK_PAGE],
-  'ui tweaks dialog': [UI_TWEAKS],
-  'ui tweaks settings text': [UI_TWEAKS]
-}
 
 // How much a focused script's kinds weigh over their own weight: a kind is raised, never silenced, so the others still come up.
 export const FOCUS_FACTOR = 4
@@ -789,49 +850,41 @@ export function focusFiles (names = [], flag = '--focus') {
   })
 }
 
-// The weight of every kind, by name, when the actions are focused on the script files `focus`.
-export const kindWeights = (focus = []) => Object.fromEntries(KINDS.map((k) => [k.kind, k.weight * (KIND_SCRIPTS[k.kind].some((f) => focus.includes(f)) ? FOCUS_FACTOR : 1)]))
+// The weight of every one of `kinds`, by name, when the actions are focused on the script files `focus`.
+export const kindWeights = (kinds, focus = []) => Object.fromEntries(kinds.map((k) => [k.kind, k.weight * (k.scripts.some((f) => focus.includes(f)) ? FOCUS_FACTOR : 1)]))
 
 // The arbitrary of one action of `kinds` over `puzzle` (`puzzle-set.mjs`), weighted by `weights` (`kindWeights`).
-function actionArbitrary (puzzle, weights, kinds = KINDS) {
+function actionArbitrary (puzzle, weights, kinds) {
   return fc.oneof(...kinds.map((k) => ({ weight: weights[k.kind], arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
 }
 
-// The kinds a busy start (#726) is built from: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
-// Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
-export const START_KINDS = ['click cell', 'type digit', 'enter digit', 'tool key', 'pen line', 'pen page', 'arrow line', 'pen line mode', 'pen mark', 'pen colors dialog', 'place note', 'rich note', 'boxed note', 'note box color', 'note background', 'pen settings values', 'color mode', 'profile editor', 'profile switch', 'dark page', 'dark page defaults', 'dark page settings text', 'ui tweaks dialog', 'ui tweaks settings text', 'rules drag', 'rules font', 'rules dialog']
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 
+// A busy start (#726) is built from the kinds that declare `start`: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
+// Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
 // The arbitrary of a busy start's steps over `puzzle`: commands like a list's, weighted alike (`--focus` included), run first, each printed with `(start) ` before it.
-const startArbitrary = (puzzle, weights) => fc.array(actionArbitrary(puzzle, weights, KINDS.filter((k) => START_KINDS.includes(k.kind))), { maxLength: MAX_START_STEPS, size: 'max' })
+const startArbitrary = (puzzle, weights, kinds) => fc.array(actionArbitrary(puzzle, weights, kinds.filter((k) => k.start)), { maxLength: MAX_START_STEPS, size: 'max' })
 
 // The most actions a list has unless a configuration says more.
 export const DEFAULT_MAX_COMMANDS = 20
 
-// The generator of whole lists, each `{ puzzle, kinds, start, commands, waitMs }`: a puzzle of `puzzles`, then (with `busyStart`, #726) a start of up to `MAX_START_STEPS` steps that builds a
+// The generator of whole lists, each `{ puzzle, start, commands, waitMs }`: a puzzle of `puzzles`, then (with `busyStart`, #726) a start of up to `MAX_START_STEPS` steps that builds a
 // busy board, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list (what `String()` of a failing list prints, which is the start's steps and then the
 // actions'); the puzzle is drawn first, so the same path gives the same puzzle. `focus` is script files (`focusFiles`) whose actions weigh more; a path replays only with the
 // focus it was found with. A start is an array, so a shrink drops its steps and leaves a list that begins on the empty board when the failure does not need it.
 // `waits` (#725) is the milliseconds the engine may wait after each action: each list draws its own, beside its actions, so a path replays it and a shrink moves it
 // to the first of the set; with none, `waitMs` is undefined and the engine's own wait stands.
-// `swarm` (#728) draws each list a random non-empty subset of the kinds, `kinds` (the names), and generates its actions only from it, so a list without undo-all or a reload keeps
-// what it builds; a shrink keeps the subset and drops steps. Without it `kinds` is every kind. `nonEmpty` (#730) refuses a list with no action, which fast-check otherwise draws 1 time in `maxCommands + 1`.
-export const actionList = (puzzles, { maxCommands = DEFAULT_MAX_COMMANDS, replayPath, focus = [], waits = [], busyStart = false, swarm = false, nonEmpty = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
-  const weights = kindWeights(focus)
-  const commandsOf = (kinds) => {
-    const drawn = fc.commands([actionArbitrary(puzzle, weights, kinds)], { maxCommands, size: 'max', replayPath })
-    return (nonEmpty ? drawn.filter((c) => [...c].length > 0) : drawn).map((commands) => ({ kinds: kinds.map((k) => k.kind), commands }))
-  }
-  // Without a swarm the commands are drawn as one part of the tuple, not chained, so a shrink treats the wait, the start and the actions alone, as before.
-  // The subset does not shrink: a shrunk subset would draw its actions again, and `replayPath` describes the list the path ended on, so a replay would stop on `Too short replayPath`.
-  const drawn = swarm ? fc.noShrink(fc.subarray(KINDS, { minLength: 1 })).chain(commandsOf) : commandsOf(KINDS)
+// `nonEmpty` (#730) refuses a list with no action, which fast-check otherwise draws 1 time in `maxCommands + 1`.
+export const actionList = (puzzles, { kinds, maxCommands = DEFAULT_MAX_COMMANDS, replayPath, focus = [], waits = [], busyStart = false, nonEmpty = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
+  const weights = kindWeights(kinds, focus)
+  const commands = fc.commands([actionArbitrary(puzzle, weights, kinds)], { maxCommands, size: 'max', replayPath })
+  const drawn = nonEmpty ? commands.filter((c) => [...c].length > 0) : commands
   // A single wait is a constant, which draws nothing, so its lists are those of no set.
   const waitMs = waits.length > 1 ? fc.constantFrom(...waits) : fc.constant(waits[0])
-  const start = busyStart ? startArbitrary(puzzle, weights) : fc.constant([])
-  return fc.tuple(waitMs, start, drawn).map(([wait, steps, { kinds, commands }]) => ({
+  const start = busyStart ? startArbitrary(puzzle, weights, kinds) : fc.constant([])
+  return fc.tuple(waitMs, start, drawn).map(([wait, steps, commands]) => ({
     puzzle,
-    kinds,
     start: steps,
     commands,
     waitMs: wait,

@@ -4,8 +4,8 @@
 /* global document, window, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ARROW, BUTTON, EDITOR, center, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState } from './color-by-digit-fixtures.mjs'
-import { dialogButton, openScriptDialog } from '../settings.mjs'
+import { ARROW, BUTTON, EDITOR, center, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { dialogButton } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -38,7 +38,7 @@ describe('the dialog', { concurrency: false }, () => {
   before(async () => {
     ({ context, p } = await openSession(browser(), script))
     cdp = await context.newCDPSession(p)
-    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    await openEditorOn(p)
   })
   after(async () => { await context?.close() })
 

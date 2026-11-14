@@ -6,19 +6,18 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, undoDepth } from '../board.mjs'
 
-const { TEXT_BOX } = textAnywhere
 const SPOT = [3.5, 3.5]
 
 const browser = useBrowser()
 
 describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, boxText
 
-  const boxText = () => p.locator(TEXT_BOX).textContent()
   const openNote = async () => p.mouse.click(...await gridPoint(p, SPOT))
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+    ;({ boxText } = textAnywhere.tools(p))
   })
   after(async () => { await context.close() })
   beforeEach(async () => {

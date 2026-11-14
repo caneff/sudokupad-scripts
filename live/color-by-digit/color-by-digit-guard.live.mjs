@@ -3,8 +3,7 @@
 // The snippet runs ahead of the script's own startup check and puts the internal back after it, so SudokuPad's own code still runs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { BUTTON, coloredCountOn, EDITOR, GIVEN_COUNT, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, savedProfiles, SEEDED_OFF } from './color-by-digit-fixtures.mjs'
-import { openScriptDialog } from '../settings.mjs'
+import { BUTTON, coloredCountOn, EDITOR, GIVEN_COUNT, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, savedProfiles, SEEDED_OFF, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -38,7 +37,7 @@ const CASES = [
       await pressTo(p, 'Digit')
       const css = () => p.evaluate((id) => document.getElementById(id)?.textContent ?? '', DIGIT_STYLE)
       assert.equal(await settle(async () => (await css()).length > 0, true), true, 'the digit colors are written')
-      await openScriptDialog(p, 'Color by Digit', EDITOR)
+      await openEditorOn(p)
       assert.equal(await p.locator(EDITOR).isVisible(), true)
     }
   },
@@ -53,7 +52,7 @@ const CASES = [
     works: async (p) => {
       assert.equal(await p.locator(BUTTON).count(), 0, 'no button')
       assert.equal(await settle(() => coloredCountOn(p), GIVEN_COUNT), GIVEN_COUNT, 'the givens are colored')
-      await openScriptDialog(p, 'Color by Digit', EDITOR)
+      await openEditorOn(p)
       assert.equal(await p.locator(EDITOR).isVisible(), true)
     }
   }

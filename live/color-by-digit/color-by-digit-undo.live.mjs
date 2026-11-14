@@ -2,10 +2,10 @@
 // the button and the board must agree after either.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo, selectCell } from './color-by-digit-fixtures.mjs'
+import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import * as textAnywhere from '../text-anywhere/text-anywhere-fixtures.mjs'
-import { finishNote, gridPoint } from '../board.mjs'
+import { finishNote, gridPoint, selectCell } from '../board.mjs'
 import { flushSave } from '../attacks.mjs'
 import { reloadWith, scriptSource, useBrowser } from '../session.mjs'
 

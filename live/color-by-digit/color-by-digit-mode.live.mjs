@@ -3,10 +3,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, ODD_EVEN, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, watch, wordOn, cellsStateOn, selectCell, wrongColorCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
+import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, ODD_EVEN, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, watch, wordOn, cellsStateOn, wrongColorCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { MODES } from '../page.mjs'
-import { restart } from '../board.mjs'
-import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { restart, selectCell } from '../board.mjs'
+import { closeDialogWith } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -63,7 +63,6 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   const paint = (r, c, key) => paintOn(p, r, c, key)
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
-  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
 
   before(async () => {
     ({ context, p, errors } = await openSession(browser(), script))
@@ -332,7 +331,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('the dialog\'s Mode pulldown is the first of the three at the top, offers the four modes, opens on the mode in force, and Cancel leaves the mode as it was', async () => {
-    await openEditor()
+    await openEditorOn(p)
     const roles = await p.locator(`${EDITOR} select`).evaluateAll((es) => es.slice(0, 3).map((e) => e.dataset.role))
     assert.deepEqual(roles, ['mode-draft', 'cell-profile', 'digit-profile'])
     assert.equal(await p.locator(`${EDITOR} input[type=checkbox], ${EDITOR} button[data-role="mode-draft"]`).count(), 0)
@@ -346,7 +345,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('Save with Off chosen steps to Off as a press would: every group color comes off, in one undo step', async () => {
-    await openEditor()
+    await openEditorOn(p)
     await chooseMode('off')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'Off'), 'Off')
@@ -359,7 +358,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('in Off, Save with changed groups colors nothing', async () => {
-    await openEditor()
+    await openEditorOn(p)
     await chooseProfile(1)
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await settle(getGroups, LOW_FIVE_HIGH), LOW_FIVE_HIGH)
@@ -367,7 +366,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('Save with Cell chosen steps to Cell and colors the givens', async () => {
-    await openEditor()
+    await openEditorOn(p)
     await chooseMode('cell')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'Cell'), 'Cell')
@@ -380,7 +379,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   it('in Cell, Save with changed groups recolors every cell in one undo step', async () => {
     // Low/5/High is saved; switch to Odd/Even.
     const before = await allColors()
-    await openEditor()
+    await openEditorOn(p)
     await chooseProfile(0)
     await closeDialogWith(p, 'Save', EDITOR)
     const oddEven = (x) => {
@@ -402,7 +401,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     await selectCell(p, 0, 6); await p.keyboard.press('8')
     assert.equal(await settle(() => valueAt(0, 6), '8'), '8')
     assert.deepEqual(await watch(() => colorsAt(0, 6)), [[]])
-    await openEditor()
+    await openEditorOn(p)
     await chooseProfile(1)
     await chooseMode('cell')
     await closeDialogWith(p, 'Save', EDITOR)
@@ -413,7 +412,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   it('one Save that leaves Cell and changes the groups takes the old groups\' colors off too', async () => {
     // Low/5/High is active, with keys 1, 5 and 9 on the board; Odd/Even has only 1 and 2.
     assert.deepEqual(await colorsAt(0, 0), ['5'])
-    await openEditor()
+    await openEditorOn(p)
     await chooseProfile(0)
     await chooseMode('off')
     await closeDialogWith(p, 'Save', EDITOR)
@@ -425,7 +424,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     await pressTo(p, 'Cell')
     assert.equal(await settle(label, 'Cell'), 'Cell')
     const before = await getGroups()
-    await openEditor()
+    await openEditorOn(p)
     await chooseProfile(1)
     await chooseMode('off')
     await closeDialogWith(p, 'Save', EDITOR)
@@ -439,7 +438,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('Undo of a Save that enters Cell and changes the profile ends in Off with the old profile, and Redo in Cell with the new one', async () => {
-    await openEditor()
+    await openEditorOn(p)
     await chooseProfile(0)
     await chooseMode('cell')
     await closeDialogWith(p, 'Save', EDITOR)

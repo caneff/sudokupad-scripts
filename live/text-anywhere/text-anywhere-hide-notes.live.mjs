@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { readUntil, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
+import { loadInPlace } from '../puzzles.mjs'
 import { clickAt, finishNote, gridPoint, restart, typeText } from '../board.mjs'
 
 const { HIDE_BUTTON, OPACITY_SLIDER, SIZE_SLIDER, SLIDERS, TEXTS, TEXT_BOX, noteStart, texts } = textAnywhere
@@ -15,7 +16,7 @@ const B = [3.5, 5.5]
 const browser = useBrowser()
 
 describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, selectedCount
 
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const eye = () => p.locator(HIDE_BUTTON)
@@ -25,10 +26,10 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
     const { x, y, width, height } = note.getBoundingClientRect()
     return document.elementsFromPoint(x + width / 2, y + height / 2).filter((e) => e.matches(selector))
   }).length, TEXTS)
-  const selectedCount = () => p.locator(textAnywhere.SELECTED).count()
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { contextOptions: { viewport: { width: 1280, height: 720 } } }))
+    ;({ selectedCount } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await reload()
     await typeText(p, A, 'one')
@@ -160,20 +161,12 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
     assert.deepEqual(await texts(p), ['one', 'two', 'three'])
   })
 
-  // Loads the puzzle on the page again through the page's own loader, as a puzzle with `id`, in place and with no reload.
   it('loading another puzzle in place shows its notes though the last one\'s were hidden', async () => {
     const other = 'puzzle-hide-637'
     await p.evaluate(([key, note]) => Framework.setData(key, [note]), [`${textAnywhere.NOTES_PREFIX}${other}`, { kind: 'text', color: 1, size: 20, opacity: 100, text: 'elsewhere', at: [160, 160] }])
     await eye().click()
     assert.equal(await pressed(), 'true')
-    await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
-    await p.evaluate(async ([key, as]) => {
-      const { parsePuzzleData, fetchPuzzle } = window.pageLoader
-      const data = await parsePuzzleData(await fetchPuzzle(key))
-      data.id = as
-      await Framework.app.loadCTCPuzzle(data)
-    }, [new URL(p.url()).pathname.slice(1), other])
-    await p.waitForFunction((as) => Framework.app.puzzle.puzzleId === as, other)
+    await loadInPlace(p, other)
     assert.deepEqual(await readUntil(() => texts(p), (t) => t.length === 1), ['elsewhere'])
     assert.equal(await pressed(), 'false')
     assert.equal(await painted(), 1)

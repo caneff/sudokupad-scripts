@@ -7,8 +7,8 @@ import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { gridPoint, undoAll } from '../board.mjs'
-import { drag, goToPenPage, openPenTool, penEntries } from '../pen.mjs'
+import { gridPoint, undoAll, undoDepth } from '../board.mjs'
+import { drag, penEntries, selectPenOnPage } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
@@ -18,9 +18,8 @@ const HEADS = '.pen-tool-extras-hint-arrows'
 const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
-  let context, p, errors, reader
+  let context, p, errors, reader, read
 
-  const read = (fn, arg) => p.evaluate(fn, arg)
   const moveTo = async (point) => { await p.mouse.move(...await gridPoint(p, point)) }
   // What dims a stroke while a press is held, whatever it is named: a pen stroke element outside the pen, marks and hint layers (a copy drawn beside them), or a stroke in them under 1 of its own opacity.
   const dimming = () => read(() => {
@@ -57,14 +56,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const unback = () => read(() => document.getElementById('live-backing')?.remove())
   const sameColor = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 2)
 
-  const selectPenOnPage = async (page, key) => {
-    await openPenTool(p)
-    await goToPenPage(p, extras.PAGES[page])
-    await p.locator(`.tool-pen button[data-key="${key}"]`).click()
-  }
-
   before(async () => {
     ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors }))
+    ;({ read } = extras.tools(p))
     reader = await context.newPage()
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS)
   })
@@ -76,10 +70,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   describe('row 1: the right-click erase dims nothing while the button is held', () => {
     it('a press on a line leaves every stroke at full opacity with no copy, and the release erases the whole line', async () => {
       await restartPuzzle(p)
-      await selectPenOnPage(1, 3)
+      await selectPenOnPage(p, 1, 3)
       await drag(p, [[2.5, 2.5], [2.5, 4.5]])
       const line = await penEntries(p)
-      await selectPenOnPage(1, 6)
+      await selectPenOnPage(p, 1, 6)
       await drag(p, [[6.5, 2.5], [6.5, 3.5]])
       const other = (await penEntries(p)).filter((v) => !line.includes(v))
       await moveTo([2.5, 3.0])
@@ -94,7 +88,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('a mark under the press and a line the pointer is dragged across stay at full opacity until the release erases both', async () => {
       await restartPuzzle(p)
-      await selectPenOnPage(1, 3)
+      await selectPenOnPage(p, 1, 3)
       await p.mouse.click(...await gridPoint(p, [3.5, 4.0]))
       await drag(p, [[6.5, 2.5], [6.5, 4.5]])
       const marked = await penEntries(p)
@@ -114,11 +108,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   describe('row 7: Escape while the right button is held cancels the erase', () => {
     it('nothing is erased, nothing dims, and a later release or move does nothing', async () => {
       await restartPuzzle(p)
-      await selectPenOnPage(1, 3)
+      await selectPenOnPage(p, 1, 3)
       await drag(p, [[2.5, 2.5], [2.5, 4.5]])
       await drag(p, [[5.5, 2.5], [5.5, 4.5]])
       const lines = await penEntries(p)
-      const depth = await read(() => Framework.app.puzzle.undoStack.length)
+      const depth = await undoDepth(p)
       await moveTo([2.5, 3.0])
       await p.mouse.down({ button: 'right' })
       await p.keyboard.press('Escape')
@@ -127,7 +121,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.up({ button: 'right' })
       await sleep(200) // "nothing happened in 200 ms" check
       assert.deepEqual(await penEntries(p), lines, 'nothing was erased')
-      assert.equal(await read(() => Framework.app.puzzle.undoStack.length), depth, 'no undo step')
+      assert.equal(await undoDepth(p), depth, 'no undo step')
       await p.mouse.click(5, 5)
       await undoAll(p)
     })
@@ -136,7 +130,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   describe('hovering draws nothing until the click', () => {
     it('over an edge, a grid corner and a cell middle, with the pen tool on, no stroke is added or dimmed, then the click places its mark', async () => {
       await restartPuzzle(p)
-      await selectPenOnPage(1, 3)
+      await selectPenOnPage(p, 1, 3)
       const strokes = () => read(() => document.querySelectorAll('#cell-pen .cell-pen, #pen-tool-extras-hint .cell-pen, #pen-tool-extras-marks .cell-pen').length)
       const before = await strokes()
       for (const point of [[3.5, 4.0], [7.0, 7.0], [5.5, 5.5]]) {
@@ -175,7 +169,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('page 1: a plain pen\'s hint is solid with no arrowheads', async () => {
       await restartPuzzle(p)
-      await selectPenOnPage(1, 3)
+      await selectPenOnPage(p, 1, 3)
       await holdDrag([[2.5, 2.5], [2.5, 4.5]])
       const h = await hint()
       assert.equal(h.dash, 'none')
@@ -187,7 +181,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('page 2: a dashed pen\'s hint is dashed, and an erasing drag\'s hint stays solid', async () => {
       await restartPuzzle(p)
-      await selectPenOnPage(2, 3)
+      await selectPenOnPage(p, 2, 3)
       await holdDrag([[2.5, 2.5], [2.5, 4.5]])
       const h = await hint()
       assert.notEqual(h.dash, 'none', 'dashes')
@@ -204,7 +198,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('page 3: an arrow pen\'s hint has arrowheads that point the way of the drag, and none are left when the drag ends', async () => {
       await restartPuzzle(p)
-      await selectPenOnPage(3, 3)
+      await selectPenOnPage(p, 3, 3)
       await holdDrag([[2.5, 2.5], [2.5, 4.5]])
       await settle(async () => (await hint()) !== null && (await hint()).headsD !== null, true)
       const right = await hint()
@@ -225,7 +219,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('an arrow pen\'s drag hint shows the same color where an arrowhead overlaps the line as the line alone', async () => {
       await restartPuzzle(p)
-      await selectPenOnPage(3, 3)
+      await selectPenOnPage(p, 3, 3)
       await holdDrag([[2.5, 2.5], [2.5, 4.5]])
       await settle(async () => (await hint()) !== null && (await hint()).headsD !== null, true)
       await back()
@@ -252,7 +246,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('page 3: an arrow pen\'s erasing drag has the red solid hint and no arrowheads', async () => {
     await restartPuzzle(p)
-    await selectPenOnPage(3, 3)
+    await selectPenOnPage(p, 3, 3)
     await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     await p.mouse.click(5, 5) // a click off the grid, or a drag started right after a release draws nothing
     await p.mouse.move(...await gridPoint(p, [2.5, 2.5]))

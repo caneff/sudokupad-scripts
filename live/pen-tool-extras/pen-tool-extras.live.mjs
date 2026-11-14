@@ -3,10 +3,9 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { drawnWidth } from '../page.mjs'
 import { EXTRAS_EDITOR, closeExtrasEditorWith, dialogButton, headerVersion, openExtrasEditor, openSettings } from '../settings.mjs'
-import { gridPoint } from '../board.mjs'
-import { openPenTool, plantUnchecked, setSlider } from '../pen.mjs'
+import { gridPoint, undoDepth } from '../board.mjs'
+import { openPenTool, penDrawnCount, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { addScripts, openWith, useBrowser } from '../session.mjs'
 
@@ -54,20 +53,17 @@ const probeStrokeWidth = (page, value, parent) => page.evaluate(([value, parent]
   const computed = { strokeWidth: style.strokeWidth, transform: style.transform }
   path.remove()
   return computed
-}, [value, parent]).then(drawnWidth)
+}, [value, parent]).then(extras.drawnWidth)
 
 const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, read, editor
 
-  const read = (fn, arg) => p.evaluate(fn, arg)
-  const editor = () => p.locator('#pen-tool-extras-editor')
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
 
   const strokes = (n) => read((n) => [...document.querySelectorAll(`#cell-pen .cell-pen.pencolor-${n}`)].map((e) => window.getComputedStyle(e).stroke), n)
   const allStrokes = (n) => async () => [...new Set(await strokes(n))]
-  const strokeCount = async () => (await read(() => document.querySelectorAll('#cell-pen .cell-pen').length))
   const swatch = (n) => read((n) => window.getComputedStyle(document.querySelector(`.tool-pen button[data-key="${n}"]`), ':after').backgroundColor, n)
   const swatches = async () => {
     await openPenTool(p)
@@ -111,6 +107,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await extras.open(browser(), { penTool: false }))
+    ;({ read, editor } = extras.tools(p))
   })
   after(async () => { await context.close() })
 
@@ -227,21 +224,21 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('undo removes strokes and redo brings them back, each in its pen color\'s current color', async () => {
-    const before = await strokeCount()
+    const before = await penDrawnCount(p)
     await p.click('#control-undo')
-    assert.equal(await settle(strokeCount, before - 1), before - 1)
+    assert.equal(await settle(() => penDrawnCount(p), before - 1), before - 1)
     await p.click('#control-redo')
-    assert.equal(await settle(strokeCount, before), before)
+    assert.equal(await settle(() => penDrawnCount(p), before), before)
     assert.deepEqual(await settle(allStrokes(1), [rgbOf(PAGE_PENS[0][0])]), [rgbOf(PAGE_PENS[0][0])])
     // Three more undos take the strokes drawn last (pen colors 1, 9 and 4); what remains is
     // the pen color 4 stroke drawn before the edit, still in the edited color.
     await p.click('#control-undo')
     await p.click('#control-undo')
     await p.click('#control-undo')
-    assert.equal(await settle(strokeCount, before - 3), before - 3)
+    assert.equal(await settle(() => penDrawnCount(p), before - 3), before - 3)
     assert.deepEqual(await allStrokes(4)(), [FOUR.rgb])
     for (let i = 0; i < 3; i++) await p.click('#control-redo')
-    assert.equal(await settle(strokeCount, before), before)
+    assert.equal(await settle(() => penDrawnCount(p), before), before)
     assert.deepEqual(await settle(allStrokes(9), [NINE.rgb]), [NINE.rgb])
   })
 
@@ -547,7 +544,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const pickers = () => p.locator('.tool-pen .pen-tool-extras-picker input')
     const pickerCount = () => pickers().count()
     const penPickerValues = () => pickers().evaluateAll((es) => es.map((e) => e.value))
-    const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
     const button = (n) => p.locator(`.tool-pen button[data-value="${n}"]`)
     const centre = async (locator) => {
       const box = await locator.boundingBox()
@@ -581,8 +577,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     for (const which of ['left', 'right']) {
       it(`a ${which}-button hold shows a picker over each of the nine buttons, in the swatch colors, and adds no undo entry or stroke`, async () => {
-        const depth = await undoDepth()
-        const drawn = await strokeCount()
+        const depth = await undoDepth(p)
+        const drawn = await penDrawnCount(p)
         await press(4, which)
         // A "nothing happened yet" check, so it is a sleep: well before the hold ends, no picker.
         await sleep(HOLD_TO_EDIT_MS / 3)
@@ -591,8 +587,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         await p.mouse.up({ button: which })
         assert.deepEqual(await pickers().evaluateAll((es) => es.map((e) => e.dataset.key)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
         assert.deepEqual(await penPickerValues(), PAGE_PENS[0])
-        assert.equal(await undoDepth(), depth)
-        assert.equal(await strokeCount(), drawn)
+        assert.equal(await undoDepth(p), depth)
+        assert.equal(await penDrawnCount(p), drawn)
         await leaveEditMode()
       })
     }
@@ -653,7 +649,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('a picker input event alone recolors the swatch and strokes live and saves the whole set; the dialog shows it', async () => {
       await drawInFirstColumn(4, 7)
       await holdToOpen(4)
-      const depth = await undoDepth()
+      const depth = await undoDepth(p)
       // Only an `input` event, no `change`: the color must apply while the picker is still open.
       await read((hex) => {
         const el = document.querySelector('.tool-pen .pen-tool-extras-picker input[data-key="4"]')
@@ -666,7 +662,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       // The edit saves the colors only: no thickness is written, and the lines keep SudokuPad's 5.
       assert.equal(await read((k) => Framework.getData(k), THICKNESS_KEY), null)
       assert.equal(await read(() => window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pencolor-4:not(.pen-5)')).strokeWidth), '5px')
-      assert.equal(await undoDepth(), depth)
+      assert.equal(await undoDepth(p), depth)
       await leaveEditMode()
       await openExtrasEditor(p)
       assert.deepEqual(await pickerValues(), Object.values({ ...toObject(PAGE_PENS[0]), 4: FOUR.hex }))
@@ -719,8 +715,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('a press on the board ends edit mode and does nothing else: no stroke, no undo entry', async () => {
       await holdToOpen(4)
-      const depth = await undoDepth()
-      const drawn = await strokeCount()
+      const depth = await undoDepth(p)
+      const drawn = await penDrawnCount(p)
       const selectedBefore = await p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => `${c.row},${c.col}`))
       const [x, y] = await gridPoint(p, [4, 4])
       await p.mouse.move(x, y)
@@ -728,8 +724,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.up()
       assert.equal(await settle(editModeOn, 0), 0)
       assert.equal(await pickerCount(), 0)
-      assert.equal(await undoDepth(), depth)
-      assert.equal(await strokeCount(), drawn)
+      assert.equal(await undoDepth(p), depth)
+      assert.equal(await penDrawnCount(p), drawn)
       assert.deepEqual(await p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => `${c.row},${c.col}`)), selectedBefore)
     })
 
@@ -818,7 +814,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       assert.equal(warned.length, 1, warned.join('\n'))
       assert.match(warned[0], new RegExp(`^pen-tool-extras: color save skipped because SudokuPad changed: .*the color tool not ready after ${COLOR_TOOL_TIMEOUT_MS} ms`))
       await openExtrasEditor(p)
-      const editor = p.locator('#pen-tool-extras-editor')
+      const editor = p.locator(EXTRAS_EDITOR)
       assert.deepEqual(await editor.locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value)), OWN_PEN_HEX)
       // The unsaved colors are shown first and cannot be picked, so SudokuPad colors stays pickable.
       assert.deepEqual(await editor.locator('select[data-role="color-choice"] option').evaluateAll((os) => os.map((o) => [o.value, o.disabled])), [['unsaved', true], ['sudokupad', false]])
@@ -843,7 +839,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
     try {
       await addScripts(p, [extras.SCRIPT_FILE])
       await openExtrasEditor(p)
-      await p.locator('#pen-tool-extras-editor select[data-role="color-choice"]').selectOption('sudokupad')
+      await p.locator(`${EXTRAS_EDITOR} select[data-role="color-choice"]`).selectOption('sudokupad')
       await closeExtrasEditorWith(p, 'Save')
       const own = { ...toObject(OWN_PEN_HEX), preset: 'sudokupad' }
       assert.deepEqual(await p.evaluate((k) => Framework.getData(k), DATA_KEY), own)
@@ -878,7 +874,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
     try {
       await addScripts(p, [extras.SCRIPT_FILE])
       await openExtrasEditor(p)
-      await p.locator('#pen-tool-extras-editor input[data-key="4"]').fill(FOUR.hex)
+      await p.locator(`${EXTRAS_EDITOR} input[data-key="4"]`).fill(FOUR.hex)
       await closeExtrasEditorWith(p, 'Save')
       await putBackRemovedPalette(p)
       // The script polls every 100ms, so by 1.5s it has seen the tool and decided; the check is

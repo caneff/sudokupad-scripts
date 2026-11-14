@@ -32,7 +32,7 @@ test('the page background is the color given', () => {
 
 test('readSaved reads the saved color through the Framework, and lets a Framework it cannot read throw', () => {
   assert.equal(readSaved({ getData: (key) => (key === DATA_KEY ? '#ABCDEF' : null) }), '#abcdef')
-  assert.equal(readSaved({ getData: () => null }), null)
+  assert.equal(readSaved({ getData: () => null }), DEFAULT_COLOR)
   assert.throws(() => readSaved({}), TypeError)
   assert.throws(() => readSaved({ getData: () => { throw new Error('storage blocked') } }), /storage blocked/)
 })

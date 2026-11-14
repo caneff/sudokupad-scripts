@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.45
+// @version      0.25.51
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.45'
+  const VERSION = '0.25.51'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -31,6 +31,7 @@
   // Auto mode's on/off, saved before the mode existed: read only to choose the starting mode when no mode is saved.
   const AUTO_KEY = 'ColorByDigit_auto'
   const MODES = ['cell', 'digit', 'both', 'off']
+  const DEFAULT_MODE = 'cell'
   const DIGITLESS_MODES = ['cell', 'off']
   const DIGITLESS_FALLBACK = { digit: 'off', both: 'cell' }
   const MODE_NAMES = { cell: 'Cell', digit: 'Digit', both: 'Both', off: 'Off' }
@@ -115,7 +116,7 @@
   const colorsCells = (mode) => mode === 'cell' || mode === 'both'
   const colorsDigits = (mode) => mode === 'digit' || mode === 'both'
   const modeFromAuto = (auto) => (typeof auto === 'boolean' ? (auto ? 'cell' : 'off') : undefined)
-  const startingMode = (savedMode, savedAuto) => (MODES.includes(savedMode) ? savedMode : modeFromAuto(savedAuto) ?? 'cell')
+  const startingMode = (savedMode, savedAuto) => (MODES.includes(savedMode) ? savedMode : modeFromAuto(savedAuto) ?? DEFAULT_MODE)
 
   // SudokuPad's action names: `value` (digit), `candidates` (centre mark), `pencilmarks` (corner mark).
   function isEntryAction (action) {
@@ -255,16 +256,141 @@
     return makeState(profiles, isIndex(data.active) ? data.active : 0, isIndex(data.digitActive) ? data.digitActive : undefined, data.useDigitColors !== false)
   }
 
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
+
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
+  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
+  /* eslint-enable no-unused-vars */
+  // </lib:plain>
+  // <lib:store>
+  // Generated from lib/store.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  /* global isPlainObject */
+  // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
+  // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
+  const STORE_VERSION = 0
+  const UNREADABLE_SUFFIX = '_unreadable'
+
+  const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
+
+  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
+  function keptSlot (store, key, raw) {
+    const same = JSON.stringify(raw)
+    for (let n = 1; ; n++) {
+      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const held = store.getData(slot)
+      if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
+    }
+  }
+
+  function readSaved (raw, read) {
+    if (isEnvelope(raw) && raw.v > STORE_VERSION) throw new Error(`it was saved by a later version (version ${raw.v})`)
+    const value = read(isEnvelope(raw) ? raw.data : raw)
+    if (value === undefined) throw new Error('its reader refused it')
+    return value
+  }
+
+  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
+  // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
+  function load (store, { key, read }) {
+    const raw = store.getData(key)
+    if (raw === null) return { value: undefined }
+    try {
+      return { value: readSaved(raw, read) }
+    } catch (error) {
+      const unreadable = error.message || String(error) || 'its reader threw'
+      const { slot, copied } = keptSlot(store, key, raw)
+      if (copied) {
+        if (store.keep) store.keep(slot, raw)
+        else store.setData(slot, raw)
+        console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
+      }
+      return { value: undefined, unreadable }
+    }
+  }
+
+  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
+
+  // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
+  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
+
+  // A value already saved as it is writes nothing: a write is a storage round trip.
+  function save (store, key, data) {
+    const envelope = { v: STORE_VERSION, data }
+    if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
+    store.setData(key, envelope)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:store>
+  // <lib:settings-table>
+  // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  /* global isPlainObject */ // eslint-disable-line no-redeclare
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  function sameValue (a, b) {
+    return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
+  }
+
+  const tableKeys = (rows) => rows.map((row) => row.key)
+
+  const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
+
+  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
+
+  // Every row as `store` holds it, by name.
+  const readTable = (rows, store) => readByField(rows, store, 'name')
+
+  // The same values by stored key, defaults included, so a paste can put a setting back to its default.
+  const copiedTable = (rows, store) => readByField(rows, store, 'key')
+
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+
+  // The rows whose draft differs from the value in force.
+  const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
+
+  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
+  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
+
+  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+
+  // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
+  function saveRow (store, row, value) {
+    if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else if (row.envelope) row.envelope.save(store, row.key, value)
+    else store.setData(row.key, value)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-table>
   const readPastedFlag = (data) => (typeof data === 'boolean' ? data : undefined)
   const readPastedMode = (data) => (MODES.includes(data) ? data : undefined)
-  const READERS = { [PROFILES_KEY]: readProfiles, [MODE_KEY]: readPastedMode, ...Object.fromEntries(ADDED_PRELOADS.map(({ key }) => [key, readPastedFlag])) }
+  const MODE_ROW = { name: 'mode', key: MODE_KEY, fallback: DEFAULT_MODE, read: (data) => readPastedMode(data) ?? DEFAULT_MODE, paste: readPastedMode }
+  const PRELOAD_ROWS = ADDED_PRELOADS.map(({ key }) => ({ name: key, key, fallback: false, read: (data) => data === true, paste: readPastedFlag }))
+  const SETTING_ROWS = [MODE_ROW, ...PRELOAD_ROWS]
+  // The profiles are no row: their fallback comes from the groups saved before them, and they are saved in the store's envelope, with their own read.
+  const READERS = { [PROFILES_KEY]: readProfiles, ...pasteReaders(SETTING_ROWS) }
   // Settings copied before the mode existed carry auto mode's on/off in its place.
   const withModeFromAuto = (data) => (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY) ? { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) } : data)
+  // A mode never saved reads as auto mode's saved on/off, which came before it.
+  const withLegacyMode = (store) => ({ getData: (key) => (key === MODE_KEY ? startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) : store.getData(key)) })
   // The profiles in force, which carry groups saved before profiles existed, and the mode in force, so a paste can switch either.
-  function copiedSettings (store) {
-    const copied = { [PROFILES_KEY]: stateFromStored(store), [MODE_KEY]: startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) }
-    ADDED_PRELOADS.forEach(({ key }) => { if (store.getData(key) === true) copied[key] = true })
-    return JSON.stringify(copied)
+  // An added-preload mark is copied only when set: an unset one copied as false would let a paste remove the target's mark, and addPreloadsOnce would add back preload profiles the user deleted.
+  const copiedSettings = (store) => {
+    const copied = copiedTable(SETTING_ROWS, withLegacyMode(store))
+    for (const { key } of PRELOAD_ROWS) if (copied[key] !== true) delete copied[key]
+    return JSON.stringify({ [PROFILES_KEY]: stateFromStored(store), ...copied })
   }
 
   const sameGroups = (a, b) => JSON.stringify(a) === JSON.stringify(b)
@@ -792,6 +918,11 @@
   const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
+
+  const SAVED_HEX = /^#[0-9a-f]{6}$/i
+
+  // A color read back from storage: `#` and six hex digits in any case, lowercased; anything else is undefined, and the caller picks its own fallback.
+  const savedHex = (value) => typeof value === 'string' && SAVED_HEX.test(value) ? value.toLowerCase() : undefined
 
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 
@@ -1528,9 +1659,9 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer. A script
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
   // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste */ // eslint-disable-line no-redeclare
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -1604,20 +1735,22 @@
     swallowRelease(win)
   }
 
+  // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
+
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
-    framework.addSetting({
+  // The entry is added, and `open` runs, under `feature` (a guard feature), so a throw from either turns that feature off.
+  function addSettingsEntry (framework, feature, { name, content, open }) {
+    feature.run(() => framework.addSetting({
       tag: 'button',
       name,
       group: SETTINGS_GROUP,
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(() => {
-          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
-        }, 0)
+        setTimeout(() => feature.run(open), 0)
       }
-    })
+    }))
   }
 
   const COPY_PASTE_PICTURES = {
@@ -1700,14 +1833,6 @@
     ].join('\n')
   }
 
-  function addStyleOnce (id, css, doc = document) {
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = css
-    doc.head.appendChild(style)
-  }
-
   // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
   function buttonRowCss (bodyId) {
     const row = `.dialog:has(#${bodyId}) .dialog-options`
@@ -1740,8 +1865,8 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
-    if (css) addStyleOnce(styleId, css, doc)
+    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
@@ -2007,19 +2132,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
-  // <lib:plain>
-  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-  const rem = (value) => Math.round(value * 100) / 100
-
-  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
-  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
-
-  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
-  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
-  /* eslint-enable no-unused-vars */
-  // </lib:plain>
 
   // <lib:wrap-index>
   // Generated from lib/wrap-index.js; edit that file and run node sync-lib.js.
@@ -2044,63 +2156,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:write-style>
-  // <lib:store>
-  // Generated from lib/store.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  /* global isPlainObject */
-  // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
-  // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
-  const STORE_VERSION = 0
-  const UNREADABLE_SUFFIX = '_unreadable'
-
-  const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
-
-  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
-  function keptSlot (store, key, raw) {
-    const same = JSON.stringify(raw)
-    for (let n = 1; ; n++) {
-      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
-      const held = store.getData(slot)
-      if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
-    }
-  }
-
-  function readSaved (raw, read) {
-    if (isEnvelope(raw) && raw.v > STORE_VERSION) throw new Error(`it was saved by a later version (version ${raw.v})`)
-    const value = read(isEnvelope(raw) ? raw.data : raw)
-    if (value === undefined) throw new Error('its reader refused it')
-    return value
-  }
-
-  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
-  // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
-  function load (store, { key, read }) {
-    const raw = store.getData(key)
-    if (raw === null) return { value: undefined }
-    try {
-      return { value: readSaved(raw, read) }
-    } catch (error) {
-      const unreadable = error.message || String(error) || 'its reader threw'
-      const { slot, copied } = keptSlot(store, key, raw)
-      if (copied) {
-        if (store.keep) store.keep(slot, raw)
-        else store.setData(slot, raw)
-        console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
-      }
-      return { value: undefined, unreadable }
-    }
-  }
-
-  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
-
-  // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
-  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
-
-  function save (store, key, data) {
-    store.setData(key, { v: STORE_VERSION, data })
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:store>
   // <lib:pointer-session>
   // Generated from lib/pointer-session.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -2155,7 +2210,7 @@
     },
     editor: {
       label: 'editor',
-      needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function', 'Framework.app.tools.colour': 'object' },
+      needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', ...SETTINGS_DIALOG_NEEDS, 'Framework.app.tools.colour': 'object' },
       onSkip () {
         Framework.closeDialog()
       }
@@ -2454,6 +2509,7 @@
 
   function showMode (next) {
     mode = next
+    // The default mode is written, not removed as saveRow would: with the key gone, startingMode reads a saved ColorByDigit_auto false from before the modes as Off.
     savedData.setData(MODE_KEY, next)
     redraw()
   }
@@ -2582,7 +2638,7 @@
   let leavingMenu = null
   let menuTimer = null
 
-  const addStyle = (id = STYLE_ID, css = STYLE_CSS) => addStyleOnce(id, css)
+  const addStyle = (id = STYLE_ID, css = STYLE_CSS) => writeStyle(id, css)
 
   const dropLeavingMenu = () => {
     clearTimeout(menuTimer)
@@ -2739,7 +2795,7 @@
   }
 
   // The profiles, the mode and the added-preload marks as stored, and the mode as shown, as a function that puts them back after a Save or Paste that failed half-way. Cells a failed Save already colored or cleared stay as they are, an undo step of their own.
-  const snapshotSave = () => snapshotStore(savedData, [PROFILES_KEY, MODE_KEY, ...ADDED_PRELOADS.map(({ key }) => key)], () => {
+  const snapshotSave = () => snapshotStore(savedData, [PROFILES_KEY, ...tableKeys(SETTING_ROWS)], () => {
     const was = mode
     return () => {
       mode = was
@@ -2769,7 +2825,7 @@
         readers: READERS,
         upgrade: withModeFromAuto,
         apply: (values) => {
-          ADDED_PRELOADS.forEach(({ key }) => { if (key in values) savedData.setData(key, values[key]) })
+          PRELOAD_ROWS.filter((row) => row.key in values).forEach((row) => saveRow(savedData, row, values[row.key]))
           saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
           savedState = loadState()
           edit({ type: 'paste', ...(PROFILES_KEY in values ? { state: savedState } : {}), ...(MODE_KEY in values ? { mode: values[MODE_KEY] } : {}) })
@@ -2963,7 +3019,7 @@
       setTimeout(() => editor.run(() => openDialog(app)), 0)
     })
     // The features are independent: one that fails to install costs the others nothing.
-    editor.run(() => addSettingsEntry(dialogs, { name: 'colorbydigit', content: 'Color by Digit', open: () => editor.run(() => openDialog(app)) }))
+    addSettingsEntry(dialogs, editor, { name: 'colorbydigit', content: 'Color by Digit', open: () => openDialog(app) })
     addPreloadsOnce()
     const state = loadState()
     mode = allowedMode(startingMode(savedData.getData(MODE_KEY), savedData.getData(AUTO_KEY)), usesDigitColors(state))

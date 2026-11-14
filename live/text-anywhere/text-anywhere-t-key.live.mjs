@@ -6,7 +6,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
-import { clickAt, gridPoint } from '../board.mjs'
+import { clickAt } from '../board.mjs'
 
 const { DIGIT_BUTTON, SETTINGS_EDITOR, TEXT_BOX, tool } = textAnywhere
 const A = [1.5, 1.5]
@@ -17,7 +17,6 @@ const browser = useBrowser()
 describe('Text Anywhere\'s T key', { concurrency: false }, () => {
   let context, p, errors
 
-  const selectCell = async () => p.mouse.click(...await gridPoint(p, A))
   const cellText = () => p.evaluate(() => String(Framework.app.grid.getCell(1, 1).value || ''))
 
   before(async () => {
@@ -68,7 +67,7 @@ describe('Text Anywhere\'s T key', { concurrency: false }, () => {
     await p.evaluate(() => Framework.setSetting('toolletter', true))
     await p.click('button[data-control="toggleletter"]')
     await p.locator(`${MAIN}.input-letter`).waitFor()
-    await selectCell()
+    await clickAt(p, A)
     await p.keyboard.press('t')
     assert.equal(await tool(p), 'normal')
     assert.equal(await p.locator(`${MAIN}.input-letter`).count(), 1, 'Letter mode is still on')

@@ -131,13 +131,17 @@ const isAsk = (id) => (p) => p.url().startsWith(`chrome-extension://${id}/ask.ht
 export async function installScript ({ context, id }, url) {
   let ask
   for (let i = 0; i < ASK_TRIES && !ask; i++) {
-    const shown = context.waitForEvent('page', { predicate: isAsk(id), timeout: ASK_MS }).catch(() => null)
+    // Only the wait running out means no page showed; any other failure is thrown, after the opener is closed.
+    const shown = context.waitForEvent('page', { predicate: isAsk(id), timeout: ASK_MS })
+      .then((page) => ({ page }), (error) => { if (error instanceof errors.TimeoutError) return { page: null }; return { error } })
     const opener = await context.newPage()
     // The goto fails when Tampermonkey takes the tab over, which is the expected outcome; the page that matters
     // is the install page, waited for above.
     await opener.goto(url).catch(() => {})
-    ask = await shown
+    const outcome = await shown
     if (!opener.isClosed()) await opener.close()
+    if (outcome.error) throw outcome.error
+    ask = outcome.page
   }
   if (!ask) throw new Error(`Tampermonkey showed no install page for ${url} in ${ASK_TRIES} tries`)
   return clickAction(ask)

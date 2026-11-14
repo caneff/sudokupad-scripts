@@ -5,10 +5,11 @@
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { captureConsoleErrors, drawnWidth } from '../page.mjs'
-import { closeExtrasEditorWith, effectiveOpacities, EXTRAS_EDITOR, openExtrasEditor } from '../settings.mjs'
+import { captureConsoleErrors } from '../page.mjs'
+import { closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor } from '../settings.mjs'
 import { cellCentre, mouseDrag, undoAll } from '../board.mjs'
-import { goToPenPage, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penEntries, penValuesAt, setInputValue } from '../pen.mjs'
+import { goToPenPage, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penEntries, penValuesAt } from '../pen.mjs'
+import { setInputValue } from '../input.mjs'
 import { readUntil, settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
@@ -27,10 +28,8 @@ const CELL = [4, 4]
 const browser = useBrowser()
 
 describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, read, editor
 
-  const read = (fn, arg) => p.evaluate(fn, arg)
-  const editor = () => p.locator(EXTRAS_EDITOR)
   const penStrokes = () => read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((g) => ({ cls: g.getAttribute('class'), dash: window.getComputedStyle(g).strokeDasharray, arrows: g.querySelectorAll('[data-arrow-line-part]').length })))
   const stored = (keys) => read((list) => list.map((k) => Framework.getData(k)), keys)
   const SAVED_KEYS = ['PenColor_thickness', 'PenColor_opacity', 'PenColor_dash', 'PenColor_arrowspacing', 'PenColor_outlinewidth', 'PenColor_outline', 'PenColor_linestyles', 'PenColor_sliders', 'PenColor_middleerase', 'PenColor_colors', 'PenColor_pen', 'EdgeMarks_marks', 'ToolPen_linemode']
@@ -39,6 +38,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
   // Every attack gets its own page with the script installed, default settings and the pen tool open, and ends with the crash signals clean.
   beforeEach(async () => {
     ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors }))
+    ;({ read, editor } = extras.tools(p))
   })
   afterEach(async () => {
     try {
@@ -141,7 +141,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
   })
 
   it('attack 39: Thickness and Opacity at their limits, with marks and lines drawn at each', async () => {
-    const strokeWidths = async () => (await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((g) => { const st = window.getComputedStyle(g); return { strokeWidth: st.strokeWidth, transform: st.transform } }))).map(drawnWidth)
+    const strokeWidths = async () => (await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((g) => { const st = window.getComputedStyle(g); return { strokeWidth: st.strokeWidth, transform: st.transform } }))).map(extras.drawnWidth)
     const widest = {}
     for (const [name, thickness, opacity] of [['min', THICKNESS_LIMITS.min, OPACITY_LIMITS.min], ['max', THICKNESS_LIMITS.max, OPACITY_LIMITS.max]]) {
       if (name === 'max') await undoAll(p)
@@ -156,7 +156,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
       assert.equal(await settle(() => penDrawnCount(p), lineCount + 1), lineCount + 1, `${name}: a line and a cell mark are drawn`)
       const widths = await strokeWidths()
       assert.ok(widths.every((w) => w > 0 && Number.isFinite(w)), `${name}: every stroke has a positive width, got ${widths}`)
-      assert.deepEqual([...new Set(await effectiveOpacities(p, '#cell-pen .cell-pen'))], [opacity / 100], `${name}: drawn at the slider's opacity`)
+      assert.deepEqual([...new Set(await extras.effectiveOpacities(p, '#cell-pen .cell-pen'))], [opacity / 100], `${name}: drawn at the slider's opacity`)
       widest[name] = Math.max(...widths)
     }
     assert.ok(widest.max > widest.min, `max thickness draws wider than min: ${widest.max} vs ${widest.min}`)

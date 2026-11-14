@@ -75,7 +75,7 @@ test('#700: identifiers match the glossary and no stored key changed', () => {
   uiTweaks.saveOptions(store, { tab: false, hideSelect: true, wrapButtons: true })
   assert.deepEqual(Object.keys(store.data).sort(), ['UiTweaks_hideSelect', 'UiTweaks_tab', 'UiTweaks_wrapButtons'], 'UI Tweaks\' stored keys')
   assert.equal(darkPage.DATA_KEY, 'DarkPage_color', 'Dark Page\'s stored key')
-  assert.match(source('auto-rules-resizer'), /addStyleOnce\(`\$\{ID\}-style`, STYLE\)/, 'Auto Rules Resizer adds its style through its copied addStyleOnce')
+  assert.match(source('auto-rules-resizer'), /writeStyle\(`\$\{ID\}-style`, STYLE\)/, 'Auto Rules Resizer adds its style through its copied writeStyle')
   assert.doesNotMatch(source('auto-rules-resizer'), /function addStyle \(/)
 })
 

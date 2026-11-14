@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.7
+// @version      0.7.12
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.7'
+  const VERSION = '0.7.12'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -58,26 +58,137 @@
   // would coerce is not one.
   const readLimit = (data) => (data === null || (Number.isInteger(data) && data > 0) ? data : undefined)
 
-  function readLimits (store) {
-    const limit = (key) => load(store, { key, read: readLimit }).value ?? null
-    return { maxWidth: limit(MAX_WIDTH_KEY), maxHeight: limit(MAX_HEIGHT_KEY) }
-  }
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
 
-  // No limit is no key, so a fresh install saves nothing.
-  function saveLimits (store, limits) {
-    for (const [key, px] of [[MAX_WIDTH_KEY, limits.maxWidth], [MAX_HEIGHT_KEY, limits.maxHeight]]) {
-      if (px === null) store.removeData(key)
-      else save(store, key, px)
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
+  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
+  /* eslint-enable no-unused-vars */
+  // </lib:plain>
+  // <lib:store>
+  // Generated from lib/store.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  /* global isPlainObject */
+  // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
+  // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
+  const STORE_VERSION = 0
+  const UNREADABLE_SUFFIX = '_unreadable'
+
+  const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
+
+  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
+  function keptSlot (store, key, raw) {
+    const same = JSON.stringify(raw)
+    for (let n = 1; ; n++) {
+      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const held = store.getData(slot)
+      if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
     }
   }
 
-  const READERS = { [MAX_WIDTH_KEY]: readLimit, [MAX_HEIGHT_KEY]: readLimit }
+  function readSaved (raw, read) {
+    if (isEnvelope(raw) && raw.v > STORE_VERSION) throw new Error(`it was saved by a later version (version ${raw.v})`)
+    const value = read(isEnvelope(raw) ? raw.data : raw)
+    if (value === undefined) throw new Error('its reader refused it')
+    return value
+  }
+
+  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
+  // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
+  function load (store, { key, read }) {
+    const raw = store.getData(key)
+    if (raw === null) return { value: undefined }
+    try {
+      return { value: readSaved(raw, read) }
+    } catch (error) {
+      const unreadable = error.message || String(error) || 'its reader threw'
+      const { slot, copied } = keptSlot(store, key, raw)
+      if (copied) {
+        if (store.keep) store.keep(slot, raw)
+        else store.setData(slot, raw)
+        console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
+      }
+      return { value: undefined, unreadable }
+    }
+  }
+
+  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
+
+  // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
+  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
+
+  // A value already saved as it is writes nothing: a write is a storage round trip.
+  function save (store, key, data) {
+    const envelope = { v: STORE_VERSION, data }
+    if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
+    store.setData(key, envelope)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:store>
+  // <lib:settings-table>
+  // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  /* global isPlainObject */ // eslint-disable-line no-redeclare
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  function sameValue (a, b) {
+    return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
+  }
+
+  const tableKeys = (rows) => rows.map((row) => row.key)
+
+  const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
+
+  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
+
+  // Every row as `store` holds it, by name.
+  const readTable = (rows, store) => readByField(rows, store, 'name')
+
+  // The same values by stored key, defaults included, so a paste can put a setting back to its default.
+  const copiedTable = (rows, store) => readByField(rows, store, 'key')
+
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+
+  // The rows whose draft differs from the value in force.
+  const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
+
+  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
+  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
+
+  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+
+  // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
+  function saveRow (store, row, value) {
+    if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else if (row.envelope) row.envelope.save(store, row.key, value)
+    else store.setData(row.key, value)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-table>
+  // Each limit is kept in the store's envelope; no limit is no key, so a fresh install saves nothing.
+  const LIMIT_ROWS = [['maxWidth', MAX_WIDTH_KEY], ['maxHeight', MAX_HEIGHT_KEY]].map(([name, key]) => ({ name, key, fallback: null, read: readLimit, envelope: { load, save } }))
+
+  const readLimits = (store) => readTable(LIMIT_ROWS, store)
+
+  function saveLimits (store, limits) {
+    LIMIT_ROWS.forEach((row) => saveRow(store, row, limits[row.name]))
+  }
+
+  const READERS = pasteReaders(LIMIT_ROWS)
 
   // null is no limit, so a paste can clear one.
-  function copiedSettings (store) {
-    const { maxWidth, maxHeight } = readLimits(store)
-    return JSON.stringify({ [MAX_WIDTH_KEY]: maxWidth, [MAX_HEIGHT_KEY]: maxHeight })
-  }
+  const copiedSettings = (store) => JSON.stringify(copiedTable(LIMIT_ROWS, store))
 
   function rulesRoom ({ rulesTop, containerBottom, viewportBottom, paddingBottom }) {
     return Math.max(0, Math.min(containerBottom, viewportBottom) - paddingBottom - rulesTop)
@@ -220,10 +331,9 @@
     const key = SIZING_KEY_PREFIX + puzzle
     const { w, h, x, y } = sizing.box
     const data = isDefaultSizing(sizing) ? null : { nudgePx: sizing.fontOffsetPx, box: { w, h, x, y } }
-    const held = store.getData(key)
-    if (data === null ? held === null : JSON.stringify(held) === JSON.stringify({ v: STORE_VERSION, data })) return
-    if (data === null) store.removeData(key)
-    else save(store, key, data)
+    if (data === null) {
+      if (store.getData(key) !== null) store.removeData(key)
+    } else save(store, key, data)
   }
 
   // SudokuPad's own rule in App.resize.
@@ -306,11 +416,11 @@
     const sideways = Boolean(applied.w && !applied.h)
     let startRoom = autoRoom
     if (dragging) startRoom = rules.offsetHeight
-    const fitted = draggedPane({ width, room: startRoom, box: applied, scale })
-    if (dragging) rules.style.maxHeight = `${fitted.room}px`
+    const sized = draggedPane({ width, room: startRoom, box: applied, scale })
+    if (dragging) rules.style.maxHeight = `${sized.room}px`
     if (applied.x || applied.y || lift) controls.style.translate = `${applied.x}px ${applied.y - lift}px`
-    setPaneWidth(rules, fitted.width, natural)
-    if (dragging) fitRulesFont(rules, fitted.room, ownPx, fontOffsetPx)
+    setPaneWidth(rules, sized.width, natural)
+    if (dragging) fitRulesFont(rules, sized.room, ownPx, fontOffsetPx)
     else rules.style.fontSize = `${fontPx}px`
     // The text may shrink to the held height, never grow into it.
     if (sideways) {
@@ -360,12 +470,27 @@
     })
   }
 
+  // <lib:write-style>
+  // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The page's style element `id`, added on the first call, holds `css`.
+  function writeStyle (id, css, doc = document) {
+    let style = doc.getElementById(id)
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = id
+      doc.head.appendChild(style)
+    }
+    style.textContent = css
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:write-style>
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer. A script
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
   // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste */ // eslint-disable-line no-redeclare
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -439,20 +564,22 @@
     swallowRelease(win)
   }
 
+  // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
+
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
-    framework.addSetting({
+  // The entry is added, and `open` runs, under `feature` (a guard feature), so a throw from either turns that feature off.
+  function addSettingsEntry (framework, feature, { name, content, open }) {
+    feature.run(() => framework.addSetting({
       tag: 'button',
       name,
       group: SETTINGS_GROUP,
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(() => {
-          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
-        }, 0)
+        setTimeout(() => feature.run(open), 0)
       }
-    })
+    }))
   }
 
   const COPY_PASTE_PICTURES = {
@@ -535,14 +662,6 @@
     ].join('\n')
   }
 
-  function addStyleOnce (id, css, doc = document) {
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = css
-    doc.head.appendChild(style)
-  }
-
   // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
   function buttonRowCss (bodyId) {
     const row = `.dialog:has(#${bodyId}) .dialog-options`
@@ -575,8 +694,8 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
-    if (css) addStyleOnce(styleId, css, doc)
+    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
@@ -673,19 +792,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
-  // <lib:plain>
-  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-  const rem = (value) => Math.round(value * 100) / 100
-
-  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
-  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
-
-  // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
-  const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
-  /* eslint-enable no-unused-vars */
-  // </lib:plain>
   // <lib:pointer-session>
   // Generated from lib/pointer-session.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -709,63 +815,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:pointer-session>
-  // <lib:store>
-  // Generated from lib/store.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  /* global isPlainObject */
-  // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
-  // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
-  const STORE_VERSION = 0
-  const UNREADABLE_SUFFIX = '_unreadable'
-
-  const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
-
-  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
-  function keptSlot (store, key, raw) {
-    const same = JSON.stringify(raw)
-    for (let n = 1; ; n++) {
-      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
-      const held = store.getData(slot)
-      if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
-    }
-  }
-
-  function readSaved (raw, read) {
-    if (isEnvelope(raw) && raw.v > STORE_VERSION) throw new Error(`it was saved by a later version (version ${raw.v})`)
-    const value = read(isEnvelope(raw) ? raw.data : raw)
-    if (value === undefined) throw new Error('its reader refused it')
-    return value
-  }
-
-  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
-  // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
-  function load (store, { key, read }) {
-    const raw = store.getData(key)
-    if (raw === null) return { value: undefined }
-    try {
-      return { value: readSaved(raw, read) }
-    } catch (error) {
-      const unreadable = error.message || String(error) || 'its reader threw'
-      const { slot, copied } = keptSlot(store, key, raw)
-      if (copied) {
-        if (store.keep) store.keep(slot, raw)
-        else store.setData(slot, raw)
-        console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
-      }
-      return { value: undefined, unreadable }
-    }
-  }
-
-  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
-
-  // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
-  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
-
-  function save (store, key, data) {
-    store.setData(key, { v: STORE_VERSION, data })
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:store>
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -1111,7 +1160,6 @@
         const rules = rulesPane()
         const controls = controlsColumn()
         if (rules && controls) takeOffFit(rules, controls)
-        fitted = false
         showControls(false)
       }
     },
@@ -1123,9 +1171,7 @@
     settings: {
       label: 'max size settings',
       needs: {
-        'Framework.addSetting': 'function',
-        'Framework.showDialog': 'function',
-        'Framework.closeDialog': 'function',
+        ...SETTINGS_DIALOG_NEEDS,
         'Framework.getData': 'function',
         'Framework.setData': 'function',
         'Framework.removeData': 'function'
@@ -1210,7 +1256,6 @@
     .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; hyphens: auto; }
   `
 
-  let fitted = false // whether the fit's output may be on the pane
   let limits = noLimits()
 
   let textWatch = null
@@ -1379,7 +1424,6 @@
       const game = document.querySelector('.game')
       if (!game || !isLandscape(game.getBoundingClientRect())) {
         takeOffFit(rules, controls)
-        fitted = false
         showControls(false)
         return
       }
@@ -1406,7 +1450,6 @@
       if (applied) now.applied = { fontOffsetPx: appliedOffset, box: applied }
       keepReadingPlace(rules, place)
       rulesRefit.run(() => watchText(rules))
-      fitted = fitted || Boolean(applied)
       showControls(Boolean(applied))
       if (applied) placeControls(rules)
     })
@@ -1418,7 +1461,7 @@
   // The limits are written only from the dialog, so a write that fails reaches its status line with the max size settings still on.
   const savedLimits = guard.storeFor(maxSizeSettings)
   // Both Max Size keys and the limits mirroring them, as a function that puts them back after a Save or Paste that failed half-way.
-  const snapshotLimits = () => snapshotStore(savedLimits, [MAX_WIDTH_KEY, MAX_HEIGHT_KEY], () => {
+  const snapshotLimits = () => snapshotStore(savedLimits, tableKeys(LIMIT_ROWS), () => {
     const was = limits
     return () => { limits = was }
   })
@@ -1437,10 +1480,7 @@
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
-      changed: () => {
-        const typed = typedLimits()
-        return typed.maxWidth !== limits.maxWidth || typed.maxHeight !== limits.maxHeight
-      },
+      changed: () => changedRows(LIMIT_ROWS, typedLimits(), limits).length > 0,
       snapshot: snapshotLimits,
       feature: maxSizeSettings,
       // Restore defaults clears this puzzle's sizing at once; the limits are drafts and stay as they are.
@@ -1454,7 +1494,7 @@
         copied: () => maxSizeSettings.runInDialog(() => copiedSettings(Framework)),
         readers: READERS,
         apply: (values) => {
-          limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
+          limits = withPasted(LIMIT_ROWS, limits, pastedByName(LIMIT_ROWS, values), values)
           saveLimits(savedLimits, limits)
           if (MAX_WIDTH_KEY in values) document.getElementById(MAX_WIDTH_INPUT_ID).value = limits.maxWidth ?? ''
           if (MAX_HEIGHT_KEY in values) document.getElementById(MAX_HEIGHT_INPUT_ID).value = limits.maxHeight ?? ''
@@ -1484,9 +1524,9 @@
     guard.probe({ roots: { Framework }, store: Framework })
     maxSizeSettings.run(() => {
       limits = readLimits(Framework)
-      addSettingsEntry(dialogs, { name: 'rulesresizer', content: 'Auto Rules Resizer', open: () => maxSizeSettings.run(openDialog) })
     })
-    addStyleOnce(`${ID}-style`, STYLE)
+    addSettingsEntry(dialogs, maxSizeSettings, { name: 'rulesresizer', content: 'Auto Rules Resizer', open: openDialog })
+    writeStyle(`${ID}-style`, STYLE)
     addFontBar()
     for (const corner of CORNERS) addCorner(corner)
     // SudokuPad calls resize on every layout: a new puzzle, a resize, a turn of the device. It scales the controls column to fit the

@@ -5,12 +5,11 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
-import { STATUS, closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
+import { closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR as EDITOR, openExtrasEditor, STATUS } from '../settings.mjs'
 
 const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
 const STYLE = '#pen-tool-extras-style'
-const EDITOR = '#pen-tool-extras-editor'
 
 const browser = useBrowser()
 

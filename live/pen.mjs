@@ -1,6 +1,7 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { cellCentre, mouseDrag } from './board.mjs'
+import { setInputValue } from './input.mjs'
 import { clickUntil, SETTLE_MS, settle } from './settle.mjs'
 
 // Pen Tool Extras' page button, and the values of the number pad's buttons 1 to 9 on each of its pages.
@@ -8,6 +9,8 @@ export const PAGE_BUTTON = '.pen-tool-extras-page'
 export const PAGE_ONE = '123456789'
 export const PAGE_TWO = 'abcdefghi'
 export const PAGE_THREE = 'jlnprtvxz'
+// The pen tool's three pages of pens, by page number: the characters on each page's buttons.
+export const PAGES = { 1: PAGE_ONE, 2: PAGE_TWO, 3: PAGE_THREE }
 // How long one press on the page button gets to turn the page before it is pressed again.
 const PAGE_TURN_MS = 500
 
@@ -61,9 +64,6 @@ export async function setSlider (page, selector, value) {
   await setInputValue(page.locator(selector), value)
 }
 
-// Sets the input `locator` finds to `value`, with the same `input` event a user's change fires.
-export const setInputValue = (locator, value) => locator.evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
-
 // Stores `raw` (a string, possibly corrupt) as the saved value of the script's data key `key`, for a reload to read.
 // Throws, naming the key, when nothing is saved there yet: a renamed storage key would otherwise take the planted value
 // to a dead key, the script would read nothing and fall back to its defaults, and the test would pass unproven.
@@ -76,21 +76,19 @@ export const plantSaved = (page, key, raw) => page.evaluate(([k, value]) => {
 // Like `plantSaved`, for a setting that may not be saved yet (a default untouched since the page opened): it plants either way.
 export const plantUnchecked = (page, key, raw) => page.evaluate(([k, value]) => { window.localStorage.setItem(Framework.makeDataKey(k), value) }, [key, raw])
 
-export async function keydownDefaults (page, key) {
-  await page.evaluate(() => {
-    window.__keydowns = []
-    window.addEventListener('keydown', (e) => window.__keydowns.push(e.defaultPrevented), { once: true })
-  })
-  await page.keyboard.press(key)
-  return page.evaluate(() => window.__keydowns)
-}
-
 export async function goToPenPage (page, values) {
   for (let i = 0; i < 3 && (await padValues(page)) !== values; i++) {
     await page.locator(PAGE_BUTTON).click()
     await settle(() => padValues(page), values, PAGE_TURN_MS)
   }
   assert.equal(await settle(() => padValues(page), values), values)
+}
+
+// Opens the pen tool, turns to pen page `pageNumber` and presses its button `key`.
+export async function selectPenOnPage (page, pageNumber, key) {
+  await openPenTool(page)
+  await goToPenPage(page, PAGES[pageNumber])
+  await page.locator(`.tool-pen button[data-key="${key}"]`).click()
 }
 
 // A real click this many px inside a button's left edge: the part nearest the grid, where a press that leaks to the board marks it (#521).

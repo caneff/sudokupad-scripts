@@ -10,7 +10,8 @@ import { useBrowser } from '../session.mjs'
 import { rulesWidth } from '../attacks.mjs'
 import { penDrawnCount } from '../pen.mjs'
 import { scriptedList } from './actions.mjs'
-import { ownedSettings, SETTINGS_SCRIPTS } from '../settings.mjs'
+import { ownedSettings } from '../settings.mjs'
+import { settingsScript } from '../scripts.mjs'
 import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
@@ -41,6 +42,10 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     const steps = puzzle.cells.flatMap(([r, c], i) => (r < 0 || c < 0 || r >= puzzle.rows || c >= puzzle.cols ? [['enter digit', [i, '1']]] : []))
     assert.ok(steps.length > 30, `${steps.length} margin targets`)
     await fuzzScripted({ browser: browser(), puzzle, steps })
+  })
+
+  it('a pick from the profile menu with Text Anywhere\'s tool current opens no note over its button (#829)', async () => {
+    await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['note background', false], ['profile switch', 1], ['boxed note', [0, 1]]] })
   })
 
   it('a page that does not show the puzzle set\'s free cells is refused, not fuzzed on the wrong cells', async () => {
@@ -273,7 +278,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
   describe('the rules box of Auto Rules Resizer (#818)', () => {
     const puzzle = puzzleByName('recorded 9x9')
-    const script = SETTINGS_SCRIPTS.find((s) => s.file === 'auto-rules-resizer.user.js')
+    const script = settingsScript('auto-rules-resizer.user.js')
     // What the script saved, by key without the prefix: the limits are plain, a puzzle's sizing is the one key that starts with `sizing_`.
     const saved = async (p) => Object.fromEntries(Object.entries(await ownedSettings(p, script)).map(([k, v]) => [k.replace(/^(?:svencodes_)?AutoRulesResizer_/, '').replace(/^sizing_.*/, 'sizing'), JSON.parse(v).data]))
     const sizing = async (p) => (await saved(p)).sizing

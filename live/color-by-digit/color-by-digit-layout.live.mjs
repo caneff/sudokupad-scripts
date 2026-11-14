@@ -4,8 +4,7 @@
 /* global document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ARROW, EDITOR, group, MENU, openSession, paintedKeys, savedProfiles, SEED, SEEDED_OFF, MODE_STORAGE_KEY } from './color-by-digit-fixtures.mjs'
-import { openScriptDialog } from '../settings.mjs'
+import { ARROW, EDITOR, group, MENU, openSession, paintedKeys, savedProfiles, SEED, SEEDED_OFF, MODE_STORAGE_KEY, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -20,7 +19,7 @@ describe(`the dialog at ${DESKTOP.width} px`, { concurrency: false }, () => {
   const rect = (selector) => p.locator(selector).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right } })
   before(async () => {
     ;({ context, p } = await openSession(browser(), script))
-    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    await openEditorOn(p)
   })
   after(async () => { await context?.close() })
 
@@ -98,7 +97,7 @@ describe(`the paint editor with Each digit's nine groups at ${DESKTOP.width} px`
   before(async () => {
     const saved = { ...SEEDED_OFF, ...savedProfiles({ profiles: [{ name: 'Each digit', groups: EACH_DIGIT }], active: 0 }), [MODE_STORAGE_KEY]: 'off' }
     ;({ context, p } = await openSession(browser(), script, { saved }))
-    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    await openEditorOn(p)
   })
   after(async () => { await context?.close() })
 
@@ -169,7 +168,7 @@ describe('the dialog at 1280x720', { concurrency: false }, () => {
   it('is styled from SudokuPad\'s own elements: no class is stamped on them, it is 640 px wide, and its button row is flex with a purple Save', async () => {
     const { context, p } = await openSession(browser(), script, { contextOptions: { viewport: { width: 1280, height: 720 } } })
     try {
-      await openScriptDialog(p, 'Color by Digit', EDITOR)
+      await openEditorOn(p)
       await p.mouse.move(0, 0)
       assert.deepEqual(await p.evaluate(() => [[...document.querySelector('.dialog').classList], [...document.querySelector('.dialog-options').classList]]), [['dialog'], ['dialog-options']])
       assert.equal(await p.locator('.dialog').evaluate((el) => Math.round(el.getBoundingClientRect().width)), DESKTOP_DIALOG_PX)

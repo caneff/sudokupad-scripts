@@ -154,9 +154,8 @@ const watchWarnings = (warned) => (page, errors) => {
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   for (const kase of CASES) {
     describe(kase.name, { concurrency: false }, () => {
-      let context, p, errors, warned
+      let context, p, errors, warned, read
 
-      const read = (fn, arg) => p.evaluate(fn, arg)
       // A click 2 px inside the top edge of cell (2, 2): an edge click, which SudokuPad stores as its X.
       const clickEdge = async (button = 'left') => {
         const [x, y] = await gridPoint(p, [2, 2.5])
@@ -176,6 +175,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           // A broken panel may lack the page button, so the tool is opened here.
           penTool: false
         }))
+        ;({ read } = extras.tools(p))
         await read((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS)
         await openPenTool(p)
       })
@@ -302,8 +302,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 // SudokuPad's own `actSend` throws once, after it has sent a click's actions (a render that fails, say). That throw is SudokuPad's: no
 // step is skipped, and the click is not sent a second time, which would step the mark on again.
 describe('SudokuPad throws after sending a click', { concurrency: false }, () => {
-  let context, p, errors, warned
-  const read = (fn, arg) => p.evaluate(fn, arg)
+  let context, p, errors, warned, read
   const clickEdge = async () => {
     const [x, y] = await gridPoint(p, [2, 2.5])
     await p.mouse.click(x, y + 2)
@@ -320,6 +319,7 @@ describe('SudokuPad throws after sending a click', { concurrency: false }, () =>
   before(async () => {
     warned = []
     ;({ context, p, errors } = await extras.open(browser(), { scripts: [{ code: withBreak({ breaks }) }], seed: watchWarnings(warned) }))
+    ;({ read } = extras.tools(p))
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS)
   })
   after(async () => { await context.close() })

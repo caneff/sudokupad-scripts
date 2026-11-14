@@ -1,4 +1,4 @@
-// The named configurations of the fuzz's generator (#725, #726, #727, #728, #730), which `--config` names. Each is the options `runFuzz` passes to `actionList`; a path replays only
+// The named configurations of the fuzz's generator (#725, #726, #727, #730), which `--config` names. Each is the options `runFuzz` passes to `actionList`; a path replays only
 // under the configuration it was found with, so a replay command names it. Not a check itself.
 import { ACTION_SETTLE_MS } from './engine.mjs'
 
@@ -10,7 +10,6 @@ export const CONFIGS = {
   'varied-wait': { waits: WAITS },
   'busy-start': { busyStart: true },
   'varied-wait+busy-start': { waits: WAITS, busyStart: true },
-  swarm: { swarm: true },
   'long-40': { maxCommands: 40, nonEmpty: true },
   'long-50': { maxCommands: 50, nonEmpty: true },
   'busy-start+long-40': { busyStart: true, maxCommands: 40, nonEmpty: true }

@@ -8,14 +8,14 @@ import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, typeText } from '../board.mjs'
 
-const { SELECTED, TEXTS, TEXT_BOX } = textAnywhere
+const { TEXTS, TEXT_BOX } = textAnywhere
 const ON_BOARD = [2.5, 4.5]
 const LAYER = '#text-anywhere-layer'
 
 const browser = useBrowser()
 
 describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, selectedCount
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   // The notes' layer is blurred as much as SudokuPad blurs the board's own layers.
@@ -34,6 +34,7 @@ describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: fals
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser()))
+    ;({ selectedCount } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await textAnywhere.reloadOnTextAnywhere(p)
     await typeText(p, ON_BOARD, 'r3c4 = 7')
@@ -65,16 +66,16 @@ describe('Text Anywhere\'s notes while SudokuPad is paused', { concurrency: fals
     assert.notEqual(await pointerTakers(), 0, 'the notes take a press again')
     assert.deepEqual(await places(), before, 'the notes are where they were')
     await p.mouse.click(...(await textAnywhere.middleAt(p, await gridPoint(p, ON_BOARD))))
-    assert.equal(await p.locator(SELECTED).count(), 1, 'a click on the pinned note selects it')
+    assert.equal(await selectedCount(), 1, 'a click on the pinned note selects it')
     await finishNote(p)
   })
 
   it('a selected note stays selected under the pause dialog', async () => {
     await p.mouse.click(...(await textAnywhere.middleAt(p, await gridPoint(p, ON_BOARD))))
-    assert.equal(await p.locator(SELECTED).count(), 1, 'the note is selected')
+    assert.equal(await selectedCount(), 1, 'the note is selected')
     await pauseFromPage()
     assert.equal(await layerBlurred(), true, 'blurred')
-    assert.equal(await p.locator(SELECTED).count(), 1, 'still selected under the dialog')
+    assert.equal(await selectedCount(), 1, 'still selected under the dialog')
     await closePauseDialog(p, 'Resume')
     assert.equal(await settle(layerBlurred, false), false, 'sharp after Resume')
     await finishNote(p)

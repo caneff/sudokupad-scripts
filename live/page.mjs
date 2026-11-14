@@ -92,7 +92,7 @@ export async function startPuzzle (p, { beforeStart } = {}) {
 
 // The scale of a computed `transform` (a `matrix(s, 0, 0, s, 0, 0)` or `none`): pen-tool-extras grows edge and corner marks
 // by a CSS scale, so a mark's width on screen is its stroke width times this.
-const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
+export const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
 
 // The scale of the element matching `selector` now.
 const scaleNow = async (page, selector) => scaleOf(await page.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transform, selector))
@@ -127,8 +127,6 @@ export async function assertPressState (page, selector, expected) {
   assert.equal(await scaleWhilePressed(page, selector, expected), expected, `${selector} held`)
   assert.equal(await settle(() => scaleNow(page, selector), 1), 1, `${selector} let go`)
 }
-
-export const drawnWidth = ({ strokeWidth, transform }) => Math.round(parseFloat(strokeWidth) * scaleOf(transform) * 1e4) / 1e4
 
 // Empties the puzzle's replay and undo stack. Every earlier check in a file grows the replay, and `loadReplay` plays one back
 // at about 13 ms an action, so a check that loads a replay restarts first and holds only its own actions.
