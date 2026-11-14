@@ -3,7 +3,7 @@
 // during a drag, and no motion when the system asks for less.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ARROW, BUTTON, EDITOR, MENU, openSession, savedProfiles, SEED } from './color-by-digit-fixtures.mjs'
+import { ARROW, BUTTON, EDITOR, MENU, openSession, savedProfiles, SEED, openMenuOn } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -39,11 +39,6 @@ const watchMenu = (p) => p.evaluate((menuSelector) => {
   }).observe(document.body, { subtree: true, childList: true, attributes: true })
 }, MENU)
 const menuSeen = (p) => p.evaluate(() => window.menuSeen)
-
-const openMenuByArrow = async (p) => {
-  await p.click(ARROW)
-  await p.locator(MENU).waitFor({ state: 'visible' })
-}
 
 describe('chips, swatches and digit keys at 60%, an empty profile\'s blank cells, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -91,7 +86,7 @@ describe('the profile menu\'s fade after a pick, injected after Start Puzzle', {
   after(async () => { await context.close() })
 
   it('opens at once, with no transition', async () => {
-    await openMenuByArrow(p)
+    await openMenuOn(p)
     const [first] = await menuSeen(p)
     assert.deepEqual([first.closing, first.duration], [false, '0s'])
   })
@@ -99,10 +94,10 @@ describe('the profile menu\'s fade after a pick, injected after Start Puzzle', {
   it('Escape, a click elsewhere and a resize close it at once, without the fade', async () => {
     await p.keyboard.press('Escape')
     await p.locator(MENU).waitFor({ state: 'detached' })
-    await openMenuByArrow(p)
+    await openMenuOn(p)
     await p.mouse.click(5, 5)
     await p.locator(MENU).waitFor({ state: 'detached' })
-    await openMenuByArrow(p)
+    await openMenuOn(p)
     await p.setViewportSize({ width: 1100, height: 700 })
     await p.locator(MENU).waitFor({ state: 'detached' })
     const seen = await menuSeen(p)
@@ -112,7 +107,7 @@ describe('the profile menu\'s fade after a pick, injected after Start Puzzle', {
 
   it('a pick blinks the row, then fades the menu over 100 ms with Material\'s accelerate easing, and removes it', async () => {
     await p.evaluate(() => { window.menuSeen = [] })
-    await openMenuByArrow(p)
+    await openMenuOn(p)
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).click()
     // The blink and the fade take 160 ms; the bound is loose for a loaded box and still far below a menu that lingers.
     await p.locator(MENU).waitFor({ state: 'detached', timeout: GONE_WITHIN_MS })
@@ -124,7 +119,7 @@ describe('the profile menu\'s fade after a pick, injected after Start Puzzle', {
   })
 
   it('while it fades, a click on the arrow box opens the list again', async () => {
-    await openMenuByArrow(p)
+    await openMenuOn(p)
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Odd/Even' }).click()
     // A fading menu already counts as closed: the next click opens a fresh one, which is the only one left.
     await p.click(ARROW)
@@ -187,7 +182,7 @@ describe('reduced motion, injected after Start Puzzle', { concurrency: false }, 
   after(async () => { await context.close() })
 
   it('a pick closes the menu at once: no fade, no blink, no transition', async () => {
-    await openMenuByArrow(p)
+    await openMenuOn(p)
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).click()
     await p.locator(MENU).waitFor({ state: 'detached' })
     const seen = await menuSeen(p)

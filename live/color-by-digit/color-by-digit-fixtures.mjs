@@ -46,6 +46,13 @@ export const EDITOR = COLOR_BY_DIGIT_DIALOG.editor
 export const ARROW = `${BUTTON} [data-role="menu"]`
 export const MENU = '#color-by-digit-menu'
 
+// Opens Color by Digit's settings dialog and the button's pulldown menu.
+export const openEditorOn = (p) => COLOR_BY_DIGIT_DIALOG.open(p)
+export async function openMenuOn (p) {
+  await p.click(ARROW)
+  await p.locator(MENU).waitFor({ state: 'visible' })
+}
+
 // '' for a digit in no group.
 export const paintedKeys = (p) => p.$$eval(`${EDITOR} button[data-act=digit]`, (es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.dataset.key])))
 
