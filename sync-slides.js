@@ -9,13 +9,11 @@ const { RAW, tagOf } = require('./tag-pictures.js')
 
 const SITE_DIR = path.join(__dirname, 'site')
 const SHOWS = JSON.parse(fs.readFileSync(path.join(SITE_DIR, 'slideshows.json'), 'utf8'))
-// A block: an opening marker on its own line, then up to its own closing marker.
 const BLOCK = /^([ \t]*)<!-- slideshow:([\w-]+) -->\n[\s\S]*?\n[ \t]*<!-- \/slideshow:\2 -->/gm
 const OPENING = /<!-- slideshow:([\w-]+) -->/g
 
 const escape = text => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-// One slideshow's markup, its outer div indented by `indent` spaces; each picture's address ends in the tag of its file.
 const renderShow = ({ dir, width, height, slides }, indent, hashOf = tagOf) => {
   const at = n => ' '.repeat(indent + n)
   const current = i => i === 0 ? ' current' : ''
@@ -39,8 +37,6 @@ const renderShow = ({ dir, width, height, slides }, indent, hashOf = tagOf) => {
   ].join('\n')
 }
 
-// Every marked block rewritten from `shows`. Any marker that is not part of a block this can rewrite (unknown id, no closing marker, not on its own line)
-// or a page with Windows line endings is a problem, and then the text comes back as it was.
 const syncText = (text, shows = SHOWS, hashOf = tagOf) => {
   const problems = []
   if (text.includes('\r')) return { text, problems: ['has Windows line endings, which the slideshow blocks do not match'] }
@@ -55,7 +51,6 @@ const syncText = (text, shows = SHOWS, hashOf = tagOf) => {
   return { text: problems.length ? text : out, problems }
 }
 
-// Rewrites each page of `dir`; returns the problems, each beginning with the page's name.
 const syncDir = (dir, shows = SHOWS, hashOf = tagOf) => fs.readdirSync(dir).filter(f => f.endsWith('.html')).flatMap(name => {
   const page = path.join(dir, name)
   const html = fs.readFileSync(page, 'utf8')

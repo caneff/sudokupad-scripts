@@ -1,5 +1,3 @@
-// Live check that Pen Tool Extras' Save is all-or-nothing, on sudokupad.app in headless Chromium: a Save whose second step throws
-// (the settings step, after the pen colors were stored) leaves the stored pen colors and thickness, and the style the page draws with, as they were.
 /* global Framework, Node */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

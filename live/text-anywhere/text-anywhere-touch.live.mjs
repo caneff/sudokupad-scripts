@@ -1,6 +1,4 @@
-// Live check of text-anywhere.user.js's touches on sudokupad.app (#541): the outline and handles hide while arrow keys nudge, an open note is kept 20 px inside the
-// window while typing without its stored point moving, Shift during a drag locks the move to one axis, a press on another note while one is open finishes the open
-// one and selects the other in the same press, and a note's hit area is its box plus 4 px (hover, select, drag, right-click erase). Real mouse and keyboard input throughout.
+// #541.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'

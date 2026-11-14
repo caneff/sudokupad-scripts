@@ -36,7 +36,6 @@ async function enableTools (p) {
   await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })
 }
 
-// The recorded puzzle's givens (the classic 9x9) and its solution.
 export const CLASSIC_SOLUTION = '534678912672195348198342567859761423426853791713924856961537284287419635345286179'
 export const CLASSIC_GRID = '530070000600195000098000060800060003400803001700020006060000280000419005000080079'
 export const CLASSIC_GIVENS = [...CLASSIC_GRID].flatMap((d, i) => d === '0' ? [] : [[Math.floor(i / 9), i % 9, Number(d)]])

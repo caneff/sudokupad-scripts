@@ -5,7 +5,6 @@ import { seedList, sweep } from './plants-sweep.mjs'
 const plantA = { id: 'a', expect: /rule-a/ }
 const plantB = { id: 'b', expect: /rule-b/ }
 
-// A fuzz that answers from a table keyed by plant, config and seed, and records its calls.
 function fakeFuzz (table) {
   const calls = []
   const fuzz = async (options) => {

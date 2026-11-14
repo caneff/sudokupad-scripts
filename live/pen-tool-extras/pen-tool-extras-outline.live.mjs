@@ -1,6 +1,3 @@
-// Live check of pen-tool-extras.user.js's White outline box on sudokupad.app in headless Chromium: on by default at width 2, off from the dialog's
-// Save (an explicit false is stored), painted white round a pen line (read off a screenshot's pixels, over a black backing so white shows), faded by the opacity
-// slider, kept off the drag highlight, kept over a reload, and on for settings saved before the box existed.
 // A touch screen stays untested.
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'

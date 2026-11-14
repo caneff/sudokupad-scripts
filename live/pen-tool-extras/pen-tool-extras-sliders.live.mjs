@@ -1,4 +1,3 @@
-// Live check of Pen Tool Extras' Thickness and Opacity sliders in the pen panel, on sudokupad.app in headless Chromium at 1280x720:
 // SudokuPad cancels every mouse move on the page, which stops the browser dragging a thumb unless the script keeps the move from it.
 import { after, before, describe, it } from 'node:test'
 import * as extras from './pen-tool-extras-fixtures.mjs'

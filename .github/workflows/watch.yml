@@ -1,9 +1,5 @@
 name: Watch SudokuPad
 
-# Nightly: checks SudokuPad's version with one request; a new version, or a week since the last full run, runs the full
-# live suite and a red one files a `bug` issue; a run that cannot reach the checks files a "did not run" issue
-# (live/watch.mjs). Then `npm run test:tampermonkey` installs every script into a real Tampermonkey.
-# `workflow_dispatch` is the manual run.
 on:
   schedule:
     - cron: '17 6 * * *'
@@ -64,7 +60,6 @@ jobs:
       - id: tampermonkey
         run: npm run test:tampermonkey
         if: ${{ !cancelled() && steps.watch.outcome != 'skipped' }}
-      # A red Tampermonkey test files one issue, and only when none is open, so a red that lasts several nights files once.
       - name: File the Tampermonkey issue
         if: ${{ failure() && steps.tampermonkey.outcome == 'failure' }}
         uses: ./.github/actions/file-issue-once

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.23
+// @version      1.32.26
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.23'
+  const VERSION = '1.32.26'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -110,7 +110,6 @@
   // <lib:slider-keys>
   // Generated from lib/slider-keys.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The keys that step a panel slider: + (also =, and the keypad's) up and - down.
   const SLIDER_STEP_KEYS = { '+': 1, '=': 1, '-': -1 }
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
   // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
@@ -121,7 +120,6 @@
   // <lib:wrap-index>
   // Generated from lib/wrap-index.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The index `delta` steps from `index` in a list of `count`, going round past either end.
   const wrapIndex = (index, delta, count) => (((index + delta) % count) + count) % count
   /* eslint-enable no-unused-vars */
   // </lib:wrap-index>
@@ -129,7 +127,6 @@
   // <lib:write-style>
   // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The page's style element `id`, added on the first call, holds `css`.
   function writeStyle (id, css, doc = document) {
     let style = doc.getElementById(id)
     if (!style) {
@@ -168,10 +165,8 @@
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global Framework */
-  // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
-  // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
-  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring, and the site's --accent.
+  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
@@ -488,7 +483,6 @@
       }
     }
 
-    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
     const dialogsFor = (feature) => ({
       addSetting: (setting) => Framework.addSetting(setting),
       showDialog: (options) => Framework.showDialog(options),
@@ -502,8 +496,7 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
-  // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
@@ -545,8 +538,6 @@
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
-  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
-  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
   function writeOrRestore (snapshot, write) {
     const restore = snapshot()
     try {
@@ -603,7 +594,7 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // Every script's maker, as its @author header says; the dialog names it after the version.
+  // As each script's @author header says.
   const AUTHOR = 'ChinStrap'
 
   // The title rules travel with the row, so they are in the page exactly while the dialog is.
@@ -702,9 +693,6 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
-  // `off` is `guard.off`; a missing one throws, since it would read as nothing being off.
-  // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
@@ -897,7 +885,6 @@
     return LINE_PATHS[value].map(([r, c]) => [row + r, col + c])
   }
 
-  // SudokuPad's pen tool's own action queue, which arrow lines, marks and line erase send through.
   const PEN_ACTIONS = {
     'ToolPen.tool.actStart': 'function',
     'ToolPen.tool.actAdd': 'function',
@@ -966,7 +953,6 @@
   // SudokuPad calls `clickCell` on the release, with no event, so the button is read from the pointer events before it.
   let lastButton = 0
 
-  // The one test of whether a press of `button` is the right click erase's, so the marks' click and SudokuPad's own leave it alone.
   const isEraseButton = (button) => button === RIGHT_BUTTON && inForce.eraseClicks
 
   function trackButton () {
@@ -1163,7 +1149,6 @@
     })
   }
 
-  // Rejects once COLOR_TOOL_TIMEOUT_MS passes with no ready color tool, naming it, so the caller can skip its step and keep SudokuPad's own colors.
   function waitForColorTool () {
     return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
   }
@@ -1335,7 +1320,6 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
-  // `light` or `dark` (LIGHT_TEXT and DARK_TEXT unless given), whichever contrasts more with the background color (any parseColor text).
   function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
@@ -1685,8 +1669,7 @@
     const mask = swatchMask(svg)
     return `.tool-pen button[data-key="${n}"]${page === 1 ? '' : `[${PAGE_ATTRIBUTE}="${page}"]`}:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${mask}; mask: ${mask}; }`
   }
-  // The look of the pages after the first, which SudokuPad's own CSS knows nothing about.
-  // A dash of 0 is a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so it scales with the slider.
+  // A dash of 0 is a zero-length dash with the round cap `.cell-pen` already has.
   // `:root:root` outranks SudokuPad's own rules whichever stylesheet loads last.
   function buildPagesCss (thickness, dash) {
     const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_KEYS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
@@ -1853,7 +1836,6 @@
   // The round caps take half a line width of the `stroke-dasharray` gap at each end, so the gap that shows is one line width less: this keeps it at least one, on a straight
   // and a diagonal piece alike.
   const MIN_DASH_GAP_PER_THICKNESS = 2
-  // Snapped per line so a segment holds whole dots.
   const DOT_SPACING_PER_THICKNESS = 2
 
   // With the spacing exactly `length / dots` the last dot falls on the segment's end, where the browser draws no zero-length dash, so a line's far end would have no dot;
@@ -1879,7 +1861,6 @@
     const { on, gap, offset } = dashPattern(thickness, dash, length)
     return `stroke-dasharray: ${on} ${gap};${dash === 0 ? '' : ` stroke-dashoffset: ${offset};`}`
   }
-  // `currentColor`, so one picture works both as a CSS mask and inline. The round cap is what makes a zero-length dash a dot.
   const SWATCH_LINE = { width: 3, from: 2, to: 22, middle: 12 }
   // The dash layout was worked out at width 2. The width 3 round caps add 0.5 to each end of a dash, so each dash is 1 shorter and each gap 1 longer to show the same gaps, and
   // the offset moves by half of that to keep each dash centred. A dot (a dash of 0) cannot be shorter.
@@ -1892,6 +1873,7 @@
     return { on: shown, gap: gap + 1, offset: shown / 2 }
   }
   const swatchArrows = () => arrowHeads([SWATCH_LINE.from, SWATCH_LINE.middle], [SWATCH_LINE.to, SWATCH_LINE.middle], arrowHeadScaleOf(THICKNESS.fallback) * SWATCH_ARROW_SCALE, 2)
+  // `currentColor`, so one picture works both as a CSS mask and inline.
   const SWATCH_PAINT = "fill='none' stroke='currentColor' stroke-linecap='round'"
   function swatchPicture (page, dash, angle) {
     const { on, gap, offset } = swatchDashes(dash)
@@ -1964,7 +1946,6 @@
   const arrowHeadScaleOf = (thickness) => 0.8 * THICKNESS.fallback * (thickness / THICKNESS.fallback) ** 0.8
   const arrowGapOf = (thickness, spacing) => spacing * 8 * (thickness / THICKNESS.fallback) ** 0.2
 
-  // Each head is in the middle of its equal share of the way from `from` to `to`, pointing at `to`.
   function arrowHeads (from, to, headScale, count) {
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
@@ -2228,7 +2209,6 @@
     return null
   }
 
-  // A grid corner's marks, in the shape of clickedMarks.
   function cornerMarks (kind, cell) {
     const values = CORNER_VALUES[kind]
     return { cell, values, plan: (present, settings) => planCycleClick(CORNER_CYCLE, (type) => values[CORNER_CYCLE.types.indexOf(type)], present, settings) }
@@ -2579,7 +2559,6 @@
   const HINT_ERASE_OPACITY = 0.5
   const HINT_ARROWS_CLASS = 'pen-tool-extras-hint-arrows'
 
-  // `:root:root` outranks SudokuPad's own rules whichever stylesheet loads last.
   function buildFeedbackCss (dash) {
     const colorsOf = (pages) => pages.flatMap((page) => page.chars.map((char, i) => [char, PEN_COLOR_KEYS[i]]))
     const dashed = PEN_PAGES.filter((page) => page.dashed).flatMap((page) => page.chars)
@@ -2690,8 +2669,7 @@
   // <lib:panel>
   // Generated from lib/panel.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads rem from plain, and SUDOKUPAD_PURPLE from sudokupad. A script that copies in settings-dialog as well has a second `global` naming
-  // SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  // A script that copies in settings-dialog as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global rem, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
   // A tool's purple panel: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of three controls at the full 4rem, and the sliders across the rest. A tray sits behind the last two rows; it is placed in
@@ -2988,7 +2966,6 @@
   const NOTE = 'pen-tool-extras-note'
   const SECTION_TITLE = 'pen-tool-extras-section-title'
   const DIVIDER = '<div class="pen-tool-extras-divider"></div>'
-  // The ruled mockup's colors for the grid's lines and for the marks table's.
   const GRID_LINE_COLOR = '#ddd'
   const MARKS_LINE_COLOR = '#eee'
   const INDENTED_COLOR = '#444'
@@ -2996,7 +2973,6 @@
   const COLUMN_GAP_PX = 24
   const SLIDER_PX = 96
   const MARK_CELL_PX = 28
-  // The marks table's columns, each headed by its MARK_PICTURES picture; a row's boxes are listed per column, null for no box.
   const MARK_COLUMNS = ['x', 'circle', 'directions', 'dot']
   const MARK_ROWS = [
     ['Edge', [['x', 'Edge X Mark'], ['circle', 'Edge Circle'], ['directions', 'Edge Directions'], null]],
@@ -3068,7 +3044,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       options: presetChoices(state.preset, state.presets, PRESET_LABELS),
       swatches: PEN_COLOR_KEYS.map((n) => ({ key: String(n), value: state.colors[n], label: `Pen color ${n}` }))
     })
-    // A box with no word label carries its name as its accessible name and hover title.
     const markBox = (key, name) =>
       `<label title="${name}" class="pen-tool-extras-mark">` +
       `<input type="checkbox" ${boxAttributes(`marks.${key}`)} aria-label="${name}" title="${name}"${state.marks[key] ? ' checked' : ''}></label>`

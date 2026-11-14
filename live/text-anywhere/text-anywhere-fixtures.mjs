@@ -1,5 +1,4 @@
-// Text Anywhere's live fixtures: the script, its storage keys and selectors, the puzzle key rule, and the helpers that open
-// SudokuPad with it, reload it and pick Text Anywhere. Not a check itself, so `live/**/*.live.mjs` skips it.
+// Not a check itself, so `live/**/*.live.mjs` skips it.
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
 import { createRequire } from 'node:module'
@@ -30,7 +29,6 @@ export const SEEN_TEXTS = '#text-anywhere-layer .text-anywhere-text'
 export const STRIKE_PIECE = '.text-anywhere-strike-piece'
 const STRIKES = `${TEXTS} .text-anywhere-strike`
 export const STRIKE_PIECES = `${STRIKES} ${STRIKE_PIECE}`
-// A check box drawn in a finished note.
 export const CHECK_BOXES = `${TEXTS} .text-anywhere-check`
 export const SLIDERS = '.text-anywhere-sliders'
 export const TRAY = '.text-anywhere-tray'
@@ -65,7 +63,6 @@ export const CRISP_PX = Math.hypot(CRISP_HALF_PX, CRISP_HALF_PX)
 export const HANDLES = '#text-anywhere-layer .text-anywhere-resize'
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
-// The settings dialog's Box color buttons, and the color input shown under Own.
 export const BOX_PICKS = `${SETTINGS_EDITOR} button[data-role="box-pick"]`
 export const BOX_CUSTOM_INPUT = `${SETTINGS_EDITOR} input[data-role="box-custom"]`
 export const PICKER_BOX = '.text-anywhere-picker'
@@ -195,13 +192,11 @@ export async function open (browser, options) {
   return opened
 }
 
-// Reloads the page with Text Anywhere injected after Start Puzzle again.
 export async function reload (p) {
   await reloadWith(p, [SCRIPT_FILE])
   await ready(p)
 }
 
-// Reloads, then picks Text Anywhere, where most cases start.
 export async function reloadOnTextAnywhere (p) {
   await reload(p)
   await pickTextAnywhere(p)

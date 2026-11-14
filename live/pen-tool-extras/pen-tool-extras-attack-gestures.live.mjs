@@ -1,8 +1,4 @@
-// Attacks on Pen Tool Extras' gestures (#596, from #590): a pen drag, a right-click erase, a slider drag and a hold on a color button,
-// each interrupted by something a user does, on sudokupad.app in headless Chromium. Every case is real input and checks the crash signals
-// (an uncaught error, a console error, a skip line), that nothing is left half done on the page (no drag highlight, no picker), that the
-// gesture's own outcome is whole where a drag was cut short (the line is drawn once or not at all, never half), that an ordinary gesture works afterward, and that
-// undoing everything brings the pen back to the start. The one thing not real input is attack 7's blur and focus, which Playwright cannot take from a page.
+// #596, from #590. The one thing not real input is attack 7's blur and focus, which Playwright cannot take from a page.
 /* global Framework */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

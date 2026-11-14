@@ -1,6 +1,4 @@
-// Live check of the bottom row's cap (#376) on sudokupad.app in headless Chromium: with two stand-in buttons from another
-// script added both before and after Color by Digit's, the row wraps five a row, every control stays inside the viewport,
-// and the button still works. Desktop sizes only. How it looks is judged by sight in the PR.
+// #376. Desktop sizes only. How it looks is judged by sight in the PR.
 /* global document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -15,7 +13,6 @@ const VIEWPORTS = [{ width: 1280, height: 720 }, { width: 1600, height: 900 }]
 // A pixel of slack for sub-pixel rounding at the viewport's edge.
 const EDGE_SLACK_PX = 1
 
-// Two stand-in buttons, as another script's would be, added where `where` says relative to Color by Digit's own.
 const STAND_INS = ['standin1', 'standin2']
 const addStandIns = `
   for (const name of ${JSON.stringify(STAND_INS)}) Framework.addAuxButton({ name, title: name, content: '<div class="icon"><svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg></div>', onClick () {} });

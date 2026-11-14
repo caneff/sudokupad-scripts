@@ -1,5 +1,5 @@
 // The numbers of the planted-bug harness (#727): per plant, how many of its seeded runs caught it and how long the median run took, for one fuzz configuration or
-// more side by side. Pure, so `plants-stats.test.mjs` tests it. Not a check itself.
+// more side by side. Not a check itself.
 //
 // A run is `{ plant, caught, seconds, other?, replayed? }`: `seconds` is the hunt's time (to the catch, or the whole budget when it caught nothing), `other` a failure that is
 // not the plant's (counted as a miss), `replayed` whether the catch's own path failed again (absent when nobody checked).
@@ -13,7 +13,6 @@ export function medianSeconds (runs) {
   return Number.isFinite(median) ? median : null
 }
 
-// One row per plant, in the order the plants first appear in `runs`.
 export function plantStats (runs) {
   const byPlant = new Map()
   for (const r of runs) byPlant.set(r.plant, [...(byPlant.get(r.plant) ?? []), r])
@@ -38,7 +37,6 @@ export function layout (header, rows) {
   return [line(header), line(widths.map((w) => '-'.repeat(w))), ...rows.map(line)]
 }
 
-// The notes under a table: failures of the plants' own paths to replay, and failures that were not the plant's.
 function notes (runs) {
   const stats = plantStats(runs)
   const checked = stats.reduce((n, s) => n + s.replayChecked, 0)

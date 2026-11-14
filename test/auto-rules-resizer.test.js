@@ -491,8 +491,6 @@ test('dragRulesBox: a pane already under the floor grows by the drag, not to the
   assert.deepEqual(dragRulesBox(NO_BOX, 'dl', 5, -10, short, MIN_PANE), NO_BOX)
 })
 
-// The pane fitted from 1000 to 8 px from the right edge, its column from 300 to 900, the board ending at 900, in a
-// 1600 x 1000 window.
 const LAYOUT = { pane: { left: 1000, right: 1592 }, column: { top: 300, bottom: 900 }, boardRight: 900, viewport: { width: 1600, height: 1000 } }
 
 test('clampDrag: a drag inside the window and clear of the board is applied as it is', () => {

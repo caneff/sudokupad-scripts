@@ -12,7 +12,6 @@ export const SCRIPT_FILE = 'pen-tool-extras.user.js'
 export const script = scriptSource(SCRIPT_FILE)
 export const STYLE = 'style#pen-tool-extras-style'
 
-// What the script exports for tests, such as its constants.
 export const scriptExports = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
 export const { HOLD_TO_EDIT_MS } = scriptExports
 // The pickers appear only when the hold timer fires.
@@ -39,7 +38,6 @@ export async function open (browser, { scripts = [SCRIPT_FILE], penTool, setting
   return opened
 }
 
-// Reloads the page with `scripts` (Pen Tool Extras alone by default, as `open` has it) and gets it ready again, as `open` does.
 export async function reload (p, { scripts = [SCRIPT_FILE], penTool, settings } = {}) {
   await reloadWith(p, scripts)
   await ready(p, { penTool, settings })

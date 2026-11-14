@@ -63,7 +63,6 @@ for (const script of SETTINGS_SCRIPTS) {
   })
 }
 
-// The next write of `key` through SudokuPad's Framework.setData throws `message`; the one after it, a restore's, goes through.
 const failNextWriteOf = (p, key, message) => p.evaluate(([name, text]) => {
   const setData = Framework.setData
   let armed = true
@@ -78,7 +77,6 @@ const failNextWriteOf = (p, key, message) => p.evaluate(([name, text]) => {
 
 const stored = (p, keys) => p.evaluate((names) => names.map((name) => Framework.getData(name)), keys)
 
-// What each control matching `selectors` shows: a box's tick, a toggle button's pressed state, any other control's value.
 const shown = (p, selectors) => p.evaluate((sels) => sels.map((sel) => {
   const el = document.querySelector(sel)
   if (!el) return null

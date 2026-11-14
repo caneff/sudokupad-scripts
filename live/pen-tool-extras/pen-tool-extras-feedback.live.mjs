@@ -1,6 +1,4 @@
-// Live check of pen-tool-extras.user.js's feedback before a gesture lands, on sudokupad.app in headless Chromium: the right-click erase's lack of a preview and its Escape (#546 rows 1 and 7),
-// and the drag highlight in the pen's style (row 5). Every press, move and key is real input; each check reads the page's computed
-// style and what is stored (`cell.pen`).
+// #546: rows 1 and 7 are the right-click erase's lack of a preview and its Escape, row 5 the drag highlight in the pen's style.
 /* global Framework, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -223,7 +221,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await holdDrag([[2.5, 2.5], [2.5, 4.5]])
       await settle(async () => (await hint()) !== null && (await hint()).headsD !== null, true)
       await back()
-      // The first arrowhead's middle, in screen pixels.
       const [x, y] = await read((heads) => {
         const el = document.querySelector(heads)
         const nums = el.getAttribute('d').match(/M([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)Z/).slice(1).map(Number)
@@ -240,7 +237,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.up()
       await unback()
       await undoAll(p)
-      await p.mouse.click(5, 5) // as above
+      await p.mouse.click(5, 5)
     })
 
     it('page 3: an arrow pen\'s erasing drag has the red solid hint and no arrowheads', async () => {

@@ -1,4 +1,3 @@
-// Live check of the place of Text Anywhere's button among the tool buttons, on sudokupad.app in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { buttonIds, DIGIT_BUTTON, TOOL_BUTTON, SCRIPT_FILE, SLIDERS, pickTextAnywhere, TOOL_KEYS, tool, texts } from './text-anywhere-fixtures.mjs'

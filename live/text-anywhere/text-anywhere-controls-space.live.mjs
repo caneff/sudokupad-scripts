@@ -1,5 +1,4 @@
-// Live check that a press on empty space inside SudokuPad's controls box starts a note (#632), with Auto Rules Resizer widening a long rules pane,
-// and that a press on a real control (a tool button, the rules text, the timer) still does not. Real mouse input.
+// #632.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

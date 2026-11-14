@@ -1,6 +1,3 @@
-// `npm run test:tampermonkey`: installs every script into a real Tampermonkey, main's copy and then the checkout's
-// over it as an update, and checks each one runs on SudokuPad. Then it follows Text Anywhere's move from its old
-// address in a Tampermonkey of its own. live/README.md § The Tampermonkey test is the full rule.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -77,7 +74,6 @@ describe('Tampermonkey', { concurrency: false }, () => {
     assert.deepEqual((await installedScripts(tm)).sort(byName), expected)
   })
 
-  // Each on its own puzzle page, with all of them installed, as a player has them: it starts and its action works.
   for (const script of SCRIPTS) {
     it(`${script.file} runs on the puzzle page`, async () => {
       const { p, errors } = await newPage(tm.context)

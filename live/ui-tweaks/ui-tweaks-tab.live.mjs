@@ -1,5 +1,3 @@
-// Live check of the Tab option of ui-tweaks.user.js on sudokupad.app, in headless Chromium.
-// The letter tool is switched on through its setting after the script is in, as a player does.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { keydownDefaults } from '../input.mjs'

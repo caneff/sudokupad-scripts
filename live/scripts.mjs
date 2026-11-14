@@ -9,7 +9,6 @@ import { settle } from './settle.mjs'
 export const BLACK = 'rgb(0, 0, 0)'
 export const DIGITS = '1234567890'
 export const LETTER_MODE_KEY = 'ToolLetter_letterMode'
-// What the number pad's keys read: digits, or letters in letter mode.
 export const numberPadText = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
 // Text Anywhere's tool button and settings dialog, named here once: a shared module imports no script's fixtures, which re-export them.
 export const TEXT_ANYWHERE_BUTTON = '#control-textanywhere'

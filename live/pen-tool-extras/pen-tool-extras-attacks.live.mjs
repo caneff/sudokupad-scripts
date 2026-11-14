@@ -1,6 +1,3 @@
-// Live attacks on pen-tool-extras.user.js: odd orders a solver produces, on sudokupad.app in headless Chromium. Each test names its attack, and asserts the
-// crash signals (no page error, no console error, no skip line) beside what a user expects to see. Clicks, drags and key presses are real input; the
-// harness restarts the puzzle, sets slider values and reads state from the page.
 /* global Framework, ToolPen */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -35,7 +32,6 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
   const SAVED_KEYS = ['PenColor_thickness', 'PenColor_opacity', 'PenColor_dash', 'PenColor_arrowspacing', 'PenColor_outlinewidth', 'PenColor_outline', 'PenColor_linestyles', 'PenColor_sliders', 'PenColor_middleerase', 'PenColor_colors', 'PenColor_pen', 'EdgeMarks_marks', 'ToolPen_linemode']
   const lineMode = () => read(() => ToolPen.tool.lineMode)
 
-  // Every attack gets its own page with the script installed, default settings and the pen tool open, and ends with the crash signals clean.
   beforeEach(async () => {
     ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors }))
     ;({ read, editor } = extras.tools(p))

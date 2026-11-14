@@ -1,8 +1,3 @@
-// Live check of text-anywhere.user.js's note box on sudokupad.app: a long line wraps at 16 em, a note of more than 8 lines stops growing
-// there and the wheel scrolls it without reaching SudokuPad, typing keeps the caret in view, a short note and the board keep the wheel,
-// a note that scrolls always shows its scroll bar (the open box only under the pointer), and markdown, line breaks and the halo still draw in a scrolled box. Ctrl+wheel and a dialog over a note keep
-// the wheel, a digit tool keeps the wheel's scroll while a click reaches the cell under the note, a click just under a wrapped note misses it,
-// and a note off the board wraps, scrolls and shows the move cursor. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'

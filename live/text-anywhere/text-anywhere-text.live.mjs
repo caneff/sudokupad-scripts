@@ -1,6 +1,3 @@
-// Live check of text-anywhere.user.js's typed text on sudokupad.app: a click opens a text box whose keys never reach
-// SudokuPad, Enter starts a new line, a click elsewhere and Escape end it, a click on a keypad color does not, a double-click on text edits it, and the Size slider. Real
-// mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
@@ -34,7 +31,6 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
   const cellState = () => read(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
   const saved = () => textAnywhere.saved(p)
   const doubleClickAt = async (at) => textAnywhere.reopen(p, await gridPoint(p, at))
-  // A color with no alpha is solid.
   const textStyle = async (content) => {
     const { color, size } = (await textAnywhere.noteLooks(p)).find((note) => note.text === content)
     return { color, size }

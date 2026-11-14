@@ -1,7 +1,4 @@
-// Live check that a click on the left of Pen Tool Extras' line mode, page and settings buttons never reaches SudokuPad's board,
-// on sudokupad.app in headless Chromium. The buttons sit just right of the grid, and SudokuPad's own edge hit test still finds an
-// edge of the last column for a press up to one cell beyond it, so a click that leaks draws an X there (#521). A touch screen stays untested.
-// Every click is a real mouse click.
+// SudokuPad's own edge hit test still finds an edge of the last column for a press up to one cell beyond the grid, so a click that leaks draws an X there (#521). A touch screen stays untested.
 /* global ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

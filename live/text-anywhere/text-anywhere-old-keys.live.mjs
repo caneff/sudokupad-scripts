@@ -1,5 +1,3 @@
-// Live check of text-anywhere.user.js on a board saved before 0.45.0, under the DrawTool_ keys: its notes and settings show after the update
-// and a reload, the notice bar's dismissal is copied from the old script id's, the old keys stay, and settings text copied from that version pastes.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

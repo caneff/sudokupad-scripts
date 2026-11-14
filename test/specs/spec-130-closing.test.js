@@ -73,6 +73,5 @@ test('Pen Tool Extras holds spec 130 together', () => {
     for (const file of ownFiles) assert.equal(old.test(read(file)), false, `${pieces.join('')} in ${file}`)
   }
 
-  // The version is one number, in both places it is kept.
   assert.equal(headerVersion(source), extras.VERSION)
 })

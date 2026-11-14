@@ -1,5 +1,3 @@
-// Live check of text-anywhere.user.js's saved notes on sudokupad.app: kept over a reload, per puzzle, and wiped by Restart, which Undo straight after takes back; the strokes and shapes an earlier version
-// saved are never drawn and stay in storage as they were.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
@@ -325,8 +323,8 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await read((k) => Framework.removeData(k), INDEX_KEY)
   })
 
-  // The open note autosaves (OPEN_NOTE_SAVE_MS after a key, #631). Under load the failed save's dialog can come before the note ends, and the Escape that ends it would
-  // dismiss the dialog (#647). So the dialog is waited for and closed first, and the index is mended in `finally`: a failure here must not leave the later tests an unreadable one.
+  // The open note autosaves OPEN_NOTE_SAVE_MS after a key (#631). Under load the failed save's dialog can come before the note ends, and the Escape that ends it would
+  // dismiss the dialog (#647), so the dialog is waited for and closed first, and the index is mended in `finally`: a failure here must not leave the later tests an unreadable one.
   it('an index that cannot be read leaves every puzzle\'s saved notes as they are, and the solver is told these notes were not saved', async () => {
     await reload()
     await read((k) => Framework.setData(k, 'not an index {'), INDEX_KEY)

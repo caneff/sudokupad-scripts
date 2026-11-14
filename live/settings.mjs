@@ -3,7 +3,6 @@
 
 import { createRequire } from 'node:module'
 
-// The label of the group every script's settings entry is in.
 const GROUP_LABEL = 'Experimental'
 
 export const { headerVersion } = createRequire(import.meta.url)('../test/header-version.js')
@@ -31,14 +30,11 @@ export async function openScriptDialog (p, entryText, editorSel) {
   await animationsDone(editor)
 }
 
-// Waits for the animations on the dialog around `locator`'s element and on its overlay to end.
 export const animationsDone = (locator) => locator.evaluate((el) => Promise.all([el.closest('.dialog'), el.closest('.dialog-overlay')]
   .flatMap((e) => e.getAnimations()).map((a) => a.finished)))
 
-// The open dialog's button whose whole label is `text`.
 export const dialogButton = (p, text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
 
-// Presses the dialog button named `text` (Save or Cancel) and waits for the editor matching `editorSel` to go.
 export async function closeDialogWith (p, text, editorSel) {
   await dialogButton(p, text).click()
   await p.locator(editorSel).waitFor({ state: 'detached' })
@@ -51,11 +47,9 @@ export const closeExtrasEditorWith = (p, text) => closeDialogWith(p, text, EXTRA
 export const STATUS = '.dialog [data-role="settings-status"]'
 // Every script's two buttons are icons, so each pair is found by its act, not its words.
 export const actButton = (p, act) => p.locator(`.dialog button[data-act="${act}"]`)
-// Every key `script` (one of scripts.mjs's SETTINGS_SCRIPTS) owns, as it is in localStorage, by key in order: what a check that nothing was saved compares.
 export const ownedSettings = (p, script) => p.evaluate((pattern) => Object.fromEntries(Object.keys(window.localStorage)
   .filter((k) => new RegExp(pattern).test(k.replace(/^svencodes_/, ''))).sort().map((k) => [k, window.localStorage.getItem(k)])), script.owns.source)
 
-// Puts `text` on the clipboard, clears the last status, presses Paste settings and returns the status it shows.
 export async function paste (p, text) {
   await p.evaluate(([selector, t]) => { document.querySelector(selector).textContent = ''; return navigator.clipboard.writeText(t) }, [STATUS, text])
   await actButton(p, 'paste-settings').click()

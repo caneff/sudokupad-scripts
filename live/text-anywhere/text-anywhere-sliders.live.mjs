@@ -1,6 +1,3 @@
-// Live check of text-anywhere.user.js's Size and Opacity sliders on sudokupad.app in headless Chromium at 1280x720: the two sliders under the controls in the shared
-// style (no Size or Outline button), a drag that follows the pointer, a move with nothing selected (the next note, saved), with notes selected (those, and the next note too), with a note
-// open (that note, and the next note too), and a saved size off the old menu's six that is kept. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

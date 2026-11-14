@@ -50,7 +50,7 @@ seam. These come from `twitch-rules-scroller` and
 ## Style
 
 9. **Reuse the existing helper; never write a second copy.** Two copies drift when
-   a fix lands in one. This holds across scripts too: a helper two scripts need goes in `lib/` and `node sync-lib.js` copies it in. Never edit a copy inside a `// <lib:name>` block.
+   a fix lands in one. This holds across scripts too: a helper two scripts need goes in `lib/` and `node sync-lib.js` copies it in. The Shared code bullet in `AGENTS.md` has the rule for the marked blocks.
 10. **Name a magic number or key once.** A bare value copied to a second place
     diverges when the first changes.
 11. **No parameter, flag or function that nothing calls.** An unused option is a
