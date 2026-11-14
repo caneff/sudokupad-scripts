@@ -817,20 +817,20 @@
 
   // `effect` runs once `inForce` holds the new value; the style is written after the effects, so an effect need not.
   function slider (key, range, effect, dialog) {
-    return { key, fallback: range.fallback, normalize: (data) => onSliderStep(range, data) ? data : range.fallback, accepts: (data) => onSliderStep(range, data), effect, range, dialog }
+    return { key, fallback: range.fallback, read: (data) => onSliderStep(range, data) ? data : range.fallback, paste: (data) => onSliderStep(range, data) ? data : undefined, effect, range, dialog }
   }
 
   function flag (key, effect = doNothing, dialog) {
-    return { key, fallback: true, normalize: (data) => data !== false, accepts: (data) => typeof data === 'boolean', effect, dialog }
+    return { key, fallback: true, read: (data) => data !== false, paste: (data) => typeof data === 'boolean' ? data : undefined, effect, dialog }
   }
 
-  function flags (key, names, effect, dialog, normalize = (data) => decodeFlags(names, data)) {
+  function flags (key, names, effect, dialog, read = (data) => decodeFlags(names, data)) {
     const accepts = (data) => isPlainObject(data) && Object.keys(data).length > 0 && Object.entries(data).every(([name, value]) => names.includes(name) && typeof value === 'boolean')
-    return { key, fallback: decodeFlags(names), normalize, accepts, effect, dialog }
+    return { key, fallback: decodeFlags(names), read, paste: (data) => accepts(data) ? read(data) : undefined, effect, dialog }
   }
 
   // The line mode is saved its own way. A row `under` a box is hidden while that box is unticked.
-  const SETTINGS = {
+  const SETTING_TABLE = {
     thickness: slider('PenColor_thickness', THICKNESS, adoptThickness, { label: 'Thickness', section: 'Line settings', box: 'show' }),
     opacity: slider('PenColor_opacity', OPACITY, adoptOpacity, { label: OPACITY_LABEL, section: 'Line settings', box: 'show' }),
     dash: slider('PenColor_dash', DASH, syncPenPanel, { label: 'Dash length', under: 'lineStyles.dashed' }),
@@ -845,7 +845,10 @@
     // The marks table is built by hand in the dialog, so this row has no section.
     marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot'], doNothing, {}, normalizeMarkSettings)
   }
-  const SETTING_NAMES = Object.keys(SETTINGS)
+  const SETTING_NAMES = Object.keys(SETTING_TABLE)
+  // The table's rows are in the lib's shape, each named by its place here, so `SETTINGS` is the one table.
+  const SETTINGS = Object.fromEntries(SETTING_NAMES.map((name) => [name, { name, ...SETTING_TABLE[name] }]))
+  const SETTING_ROWS = Object.values(SETTINGS)
 
   // A dialog box and a row `under` one name a setting by its path: `<setting>` for a flag, `<setting>.<flag>` for one of a set of flags.
   function draftWithBox (draft, path, checked) {
@@ -856,19 +859,14 @@
     return { ...draft, [name]: flagName === undefined ? checked : { ...draft[name], [flagName]: checked } }
   }
 
-  const SETTING_ROWS = SETTING_NAMES.map((name) => {
-    const { key, fallback, normalize, accepts } = SETTINGS[name]
-    return { name, key, fallback, read: normalize, paste: (data) => (accepts(data) ? normalize(data) : undefined) }
-  })
   const settingDefaults = () => tableDefaults(SETTING_ROWS)
   const readSettings = (store) => readTable(SETTING_ROWS, store)
   const changedSettings = (draft, current) => changedRows(SETTING_ROWS, draft, current).map((row) => row.name)
-  const saveSetting = saveRow
 
   // A write that throws leaves `current` as it was, so a retry finds the same settings changed and their effects still run.
   function saveChangedSettings (store, draft, current) {
     const changed = changedSettings(draft, current)
-    changed.forEach((name) => saveSetting(store, SETTINGS[name], draft[name]))
+    changed.forEach((name) => saveRow(store, SETTINGS[name], draft[name]))
     changed.forEach((name) => { current[name] = draft[name] })
     return changed
   }
@@ -3221,7 +3219,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
+    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return

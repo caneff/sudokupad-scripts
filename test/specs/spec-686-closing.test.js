@@ -11,7 +11,7 @@ const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { fakeStore } = require('../fake-store.js')
 const {
-  LOOKS, READERS, lookKeys, lookReaders, readLooks, changedDialogLooks, copiedSettings, pastedSettings, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BOX_KEY,
+  LOOKS, READERS, tableKeys, pasteReaders, readLooks, changedDialogLooks, copiedSettings, pastedSettings, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BOX_KEY,
   FRAME_KEY, FONT_KEY, lookTarget, indexAfterKeep, noteChanged, textItem, FEATURES
 } = require('../../text-anywhere.user.js')
 
@@ -24,10 +24,10 @@ const body = (name) => {
 }
 
 test('#693: the looks table holds every saved look once, and Copy, Paste, the start load, the snapshot and Save all read it', () => {
-  assert.deepEqual(lookKeys(LOOKS), [WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY])
-  assert.deepEqual(Object.keys(READERS), [COLORS_KEY, ...lookKeys(LOOKS)], 'Paste reads the colors and every look')
-  assert.deepEqual(Object.keys(JSON.parse(copiedSettings(fakeStore()))), lookKeys(LOOKS), 'Copy carries every look')
-  assert.match(SOURCE, /snapshotStore\(savedData, \[COLORS_KEY, \.\.\.lookKeys\(LOOKS\)\]/, 'the failed-save snapshot takes its keys from the table')
+  assert.deepEqual(tableKeys(LOOKS), [WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BOX_KEY, FRAME_KEY, FONT_KEY])
+  assert.deepEqual(Object.keys(READERS), [COLORS_KEY, ...tableKeys(LOOKS)], 'Paste reads the colors and every look')
+  assert.deepEqual(Object.keys(JSON.parse(copiedSettings(fakeStore()))), tableKeys(LOOKS), 'Copy carries every look')
+  assert.match(SOURCE, /snapshotStore\(savedData, \[COLORS_KEY, \.\.\.tableKeys\(LOOKS\)\]/, 'the failed-save snapshot takes its keys from the table')
   assert.match(SOURCE, /changedDialogLooks\(LOOKS, draftLooks, look\)/, 'Save writes the table\'s changed dialog rows')
   assert.match(SOURCE, /Object\.assign\(look, readLooks\(savedData\)\)/, 'the start load reads the table')
 
@@ -35,9 +35,9 @@ test('#693: the looks table holds every saved look once, and Copy, Paste, the st
   const withSpin = [...LOOKS, spin]
   const store = fakeStore({ TextAnywhere_spin: 'left' })
   assert.equal(JSON.parse(copiedSettings(store, withSpin)).TextAnywhere_spin, 'left', 'Copy')
-  assert.deepEqual(pastedSettings(JSON.stringify({ TextAnywhere_spin: 'left' }), lookReaders(withSpin)).values, { TextAnywhere_spin: 'left' }, 'Paste')
+  assert.deepEqual(pastedSettings(JSON.stringify({ TextAnywhere_spin: 'left' }), pasteReaders(withSpin)).values, { TextAnywhere_spin: 'left' }, 'Paste')
   assert.equal(readLooks(store, withSpin).spin, 'left', 'the start load')
-  assert.ok(lookKeys(withSpin).includes('TextAnywhere_spin'), 'the snapshot\'s keys')
+  assert.ok(tableKeys(withSpin).includes('TextAnywhere_spin'), 'the snapshot\'s keys')
   const now = readLooks(fakeStore(), withSpin)
   assert.deepEqual(changedDialogLooks(withSpin, { ...now, spin: 'left' }, now).map((row) => row.name), ['spin'], 'Save\'s changed rows')
 })

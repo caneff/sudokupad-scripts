@@ -1216,17 +1216,14 @@
     lookRowOf('noteFont', FONT_KEY, readFont, { dialog: true })
   ]
   const lookRow = (name) => LOOKS.find((row) => row.name === name)
-  const lookKeys = tableKeys
-  const lookReaders = pasteReaders
   const readLooks = (store, looks = LOOKS) => readTable(looks, store)
   const dialogLooks = (looks) => looks.filter((row) => row.dialog)
   const changedDialogLooks = (looks, draft, now) => changedRows(dialogLooks(looks), draft, now)
   const dialogDefaults = () => tableDefaults(dialogLooks(LOOKS))
-  const draftWithPasted = withPasted
 
   // Copy and Paste carry the colors, size, opacity, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? storedNoteColors(readNoteColors(data), readNotePreset(data)) : undefined
-  const READERS = { [COLORS_KEY]: readPastedColors, ...lookReaders(LOOKS) }
+  const READERS = { [COLORS_KEY]: readPastedColors, ...pasteReaders(LOOKS) }
 
   // The looks in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store, looks = LOOKS) {
@@ -1333,7 +1330,7 @@
   // since the copy is not brought back from its old notes, and a copy the browser refused is tried again at the next start. An old index that
   // cannot be read lists no puzzles: their notes stay under the old keys only.
   function copyOldKeys (store) {
-    for (const key of [COLOR_KEY, BACKGROUND_KEY, COLORS_KEY, NOTICE_KEY, ...lookKeys(LOOKS)]) copyOldKey(store, key)
+    for (const key of [COLOR_KEY, BACKGROUND_KEY, COLORS_KEY, NOTICE_KEY, ...tableKeys(LOOKS)]) copyOldKey(store, key)
     if (store.getData(INDEX_KEY) !== null) return
     let puzzles = []
     try {
@@ -2117,7 +2114,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, draftWithPasted, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2573,7 +2570,7 @@
   }
 
   // The colors and every look as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
-  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...lookKeys(LOOKS)], () => {
+  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...tableKeys(LOOKS)], () => {
     const wasColors = colors
     const wasPreset = colorsPreset
     const wasMissing = colorsMissing
@@ -2687,7 +2684,7 @@
         apply: (values) => {
           applyPasted(values)
           // The draft takes only what was pasted: an edit to anything else is still there for Save.
-          draftLooks = draftWithPasted(LOOKS, draftLooks, look, values)
+          draftLooks = withPasted(LOOKS, draftLooks, look, values)
           if (BOX_KEY in values) draftCustom = savedHex(look.boxColor) ?? draftCustom
           if (COLORS_KEY in values) {
             draft = colors
