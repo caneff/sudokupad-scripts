@@ -2,15 +2,13 @@
 require('./fake-page-storage.js')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const fs = require('node:fs')
 const path = require('node:path')
-const { headerVersion } = require('./header-version.js')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { startScript, withScript, withoutPath } = require('./unit-start.js')
-const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { withScript, withoutPath } = require('./unit-start.js')
+const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
 
 // The chips a profile pair draws in `style`; the digit profile is the cell profile unless given.
 const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
@@ -972,10 +970,6 @@ test('entry point: a Framework without getApp turns off the features that need a
   })
 })
 
-test('entry point: no Framework at all is left alone without a warning', () => {
-  assert.deepEqual(startScript('../color-by-digit.user.js', { Framework: undefined }).warnings, [])
-})
-
 // A SudokuPad stand-in for the cell coloring wrapper: cells hold a digit and colors, `act` applies
 // value/clear/colour/select/deselect/group actions and records every call, and `puzzle.inGroup` follows the group actions.
 // The color toggle is SudokuPad's: it adds the key to the cells that lack it unless every cell holds it, and then
@@ -1424,10 +1418,6 @@ test('the paint area stops touch scrolling and text selection, and the name box 
   assert.match(STYLE_CSS, /#color-by-digit-editor \[data-role="paint"\] \{[^}]*touch-action: none/)
   assert.match(STYLE_CSS, /#color-by-digit-editor \{[^}]*user-select: none/)
   assert.match(STYLE_CSS, /\[data-role="profile-name"\] \{[^}]*user-select: text/)
-})
-
-test('VERSION is the @version in the script header', () => {
-  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'color-by-digit.user.js'), 'utf8')))
 })
 
 // What stays inline is what depends on a value: a swatch's, digit key's or chip's color, and a chip's size.

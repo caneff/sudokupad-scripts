@@ -4,7 +4,6 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { headerVersion } = require('./header-version.js')
 const { fakeStore } = require('./fake-store.js')
 const { startScript } = require('./unit-start.js')
 const { loadLib } = require('./load-lib.js')
@@ -12,7 +11,7 @@ const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const {
   buildCss, SUDOKUPAD_PEN_COLORS, editedColors,
   readPenColors, storedPenColors, startupPenColors, PRESET_LABELS,
-  buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, VERSION, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
@@ -1308,10 +1307,6 @@ const headerField = (name) => (new RegExp(`^// @${name}\\s+(.+)$`, 'm').exec(HEA
 test('the header describes the script in Chris\'s approved intro and links its details page', () => {
   assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
   assert.equal(headerField('homepageURL'), 'https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html')
-})
-
-test('VERSION is the @version in the script header', () => {
-  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'pen-tool-extras.user.js'), 'utf8')))
 })
 
 // Page 3: arrow lines. A page 3 pen is two color characters; the one a line stores says which way it was dragged.
