@@ -11,7 +11,7 @@ import { useBrowser } from '../session.mjs'
 import { boxOpen, clickAt, finishNote, gridPoint, mouseDrag, restart, typeText, undoDepth } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
 
-const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SELECTED, SIZE_SLIDER, TEXT_BOX, TEXTS } = textAnywhere
+const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SIZE_SLIDER, TEXT_BOX, TEXTS } = textAnywhere
 const { HIT_MARGIN_PX } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const HOME = { width: 1200, height: 900 }
 const SPOT = [2.5, 2.5]
@@ -27,13 +27,11 @@ const SAVE_QUIET_MS = 1500
 const browser = useBrowser()
 
 describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, boxText, noteBox, selectedCount
 
   const saved = () => textAnywhere.saved(p)
   const savedTexts = async () => ((await saved()) ?? []).map((item) => item.text)
   const shown = () => textAnywhere.texts(p)
-  const boxText = () => textAnywhere.boxText(p)
-  const noteBox = (text) => textAnywhere.noteBox(p, text)
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const undoButton = () => p.click('#control-undo')
   const setClipboard = (items) => p.evaluate((data) => navigator.clipboard.write([new window.ClipboardItem(Object.fromEntries(Object.entries(data).map(([type, value]) => [type, new Blob([value], { type })])))]), items)
@@ -41,6 +39,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { contextOptions: { viewport: HOME, permissions: ['clipboard-read', 'clipboard-write'] }, seed: captureConsoleErrors }))
+    ;({ boxText, noteBox, selectedCount } = textAnywhere.tools(p))
   })
   after(async () => { await context.close() })
   beforeEach(async () => {
@@ -339,7 +338,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     await p.keyboard.press('5')
     await textAnywhere.pickTextAnywhere(p)
     await mouseDrag(p, [[0.6, 0.6], [3, 3], [4.4, 4.4]])
-    assert.equal(await p.locator(SELECTED).count(), 3, 'three notes are selected')
+    assert.equal(await selectedCount(), 3, 'three notes are selected')
     const before = await saved()
     await p.click(key(RED))
     await slideTo(p, SIZE_SLIDER, 14)
@@ -364,7 +363,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     await typeText(p, [1.5, 1.5], 'A')
     await typeText(p, [3.5, 1.5], 'B')
     await mouseDrag(p, [[0.6, 0.6], [2, 2], [4.4, 3.4]])
-    assert.equal(await p.locator(SELECTED).count(), 2, 'two notes are selected')
+    assert.equal(await selectedCount(), 2, 'two notes are selected')
     await p.evaluate((prefix) => {
       window.drawSaves = 0
       const setData = Framework.setData

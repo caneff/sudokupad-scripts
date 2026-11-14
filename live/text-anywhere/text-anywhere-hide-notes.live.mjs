@@ -16,7 +16,7 @@ const B = [3.5, 5.5]
 const browser = useBrowser()
 
 describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, selectedCount
 
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const eye = () => p.locator(HIDE_BUTTON)
@@ -26,10 +26,10 @@ describe('Text Anywhere\'s Hide all notes button', { concurrency: false }, () =>
     const { x, y, width, height } = note.getBoundingClientRect()
     return document.elementsFromPoint(x + width / 2, y + height / 2).filter((e) => e.matches(selector))
   }).length, TEXTS)
-  const selectedCount = () => textAnywhere.selectedCount(p)
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { contextOptions: { viewport: { width: 1280, height: 720 } } }))
+    ;({ selectedCount } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await reload()
     await typeText(p, A, 'one')

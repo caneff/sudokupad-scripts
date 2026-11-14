@@ -27,13 +27,10 @@ const C_AT = [4.5, 6.5]
 const browser = useBrowser()
 
 describe('Text Anywhere\'s touches', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, savedNote, noteBox, selectedCount
 
-  const noteBox = (text) => textAnywhere.noteBox(p, text)
-  const savedNote = (text) => textAnywhere.savedNote(p, text)
   const visible = (selector) => p.evaluate((s) => [...document.querySelectorAll(s)].map((e) => window.getComputedStyle(e).visibility), selector)
   const middle = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
-  const selectedCount = () => textAnywhere.selectedCount(p)
   const onlySelected = async (text) => (await p.locator(`${TEXTS}.text-anywhere-selected`).allTextContents()).join() === text
   const boardPoint = (point) => p.evaluate(([x, y]) => {
     const m = Framework.app.svgRenderer.getElem().getScreenCTM().inverse()
@@ -43,6 +40,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { contextOptions: { viewport: WINDOW } }))
+    ;({ savedNote, noteBox, selectedCount } = textAnywhere.tools(p))
   })
   after(async () => { await context.close() })
 

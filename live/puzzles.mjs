@@ -68,13 +68,13 @@ export async function openPuzzleId (p, id) {
   await startWithTools(p)
 }
 
-// Loads a puzzle in the tab again through the page's own loader, in place and with no reload, as the puzzle with `id` (none: under its own).
+// Loads a puzzle in the tab again through the page's own loader, in place and with no reload, as the puzzle with `id` (none: under its own), and waits for the page's puzzleId to be that id.
 // `source` is the page's first path, which a load in place changes, so a second call on one page passes it; the default is the current one.
 // SudokuPad loads Tag Manager again on a second puzzle in a tab (it has saved progress by then) and the harness aborts it, which leaves an
 // uncaught `Event` rejection no script caused, so Tag Manager is answered with an empty script first, as `installAll` does.
 export async function loadInPlace (p, id, { source = new URL(p.url()).pathname.slice(1) } = {}) {
   await p.route(/googletagmanager/, (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }))
-  await p.evaluate(async ([key, as]) => {
+  const loaded = await p.evaluate(async ([key, as]) => {
     const { parsePuzzleData, fetchPuzzle } = PuzzleLoader
     const data = await parsePuzzleData(await fetchPuzzle(key))
     if (as !== undefined) {
@@ -82,8 +82,9 @@ export async function loadInPlace (p, id, { source = new URL(p.url()).pathname.s
       Framework.app.puzzle.puzzleId = as
     }
     await Framework.app.loadCTCPuzzle(data)
+    return data.id
   }, [source, id])
-  if (id !== undefined) await p.waitForFunction((as) => Framework.app.puzzle.puzzleId === as, id)
+  await p.waitForFunction((as) => Framework.app.puzzle.puzzleId === as, loaded)
 }
 
 export const boardOf = async (p) => ({

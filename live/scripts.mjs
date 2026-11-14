@@ -1,6 +1,6 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { openScriptDialog, openSettings } from './settings.mjs'
+import { EXTRAS_EDITOR, openScriptDialog, openSettings } from './settings.mjs'
 import { placeNote } from './board.mjs'
 import { openPenTool, PAGE_BUTTON, penEntries } from './pen.mjs'
 import { keydownDefaults } from './input.mjs'
@@ -11,16 +11,29 @@ export const DIGITS = '1234567890'
 export const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 // What the number pad's keys read: digits, or letters in letter mode.
 export const numberPadText = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
-const TEXT_ANYWHERE_BUTTON = '#control-textanywhere'
+// Text Anywhere's tool button and settings dialog, named here once: a shared module imports no script's fixtures, which re-export them.
+export const TEXT_ANYWHERE_BUTTON = '#control-textanywhere'
+export const TEXT_ANYWHERE_EDITOR = '#text-anywhere-dialog'
+// Color by Digit's button and its aria-label, `Color by digit: ` and then the mode's word, and the mode read back off the label.
+const COLOR_BY_DIGIT_BUTTON = '#control-colorbydigit'
+const LABEL_PREFIX = 'Color by digit: '
+export const modeLabel = (mode) => `${LABEL_PREFIX}${mode}`
+export const labelOn = async (p) => {
+  const label = await p.locator(COLOR_BY_DIGIT_BUTTON).getAttribute('aria-label')
+  return label?.startsWith(LABEL_PREFIX) ? label.slice(LABEL_PREFIX.length) : label
+}
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
 
 const settingsEntry = async (p, text) => {
-  const group = await openSettings(p)
-  await group.locator('button, [role=button]').filter({ hasText: text }).first().waitFor({ state: 'visible' })
+  const menu = await openSettings(p)
+  await menu.locator('button, [role=button]').filter({ hasText: text }).first().waitFor({ state: 'visible' })
 }
 
-const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
+export const group = (key, digits) => ({ key, digits })
+export const ODD_EVEN = [group('1', ['1', '3', '5', '7', '9']), group('2', ['0', '2', '4', '6', '8'])]
 
+// The `dialog` record of a script with a settings dialog: `asDefault`, where there is one, is the value that Copy writes for a setting at its default and that the script saves as no key.
+// `saved` is a value the script saves under `key`, inside a `{ v, data }` envelope where `enveloped` is set; `badKey` and `bad` are a value the script's reader refuses.
 // Per script: its file, what shows it has started (`ready`), its control (`control`) and one representative action (`act`).
 // `ready` runs after Start Puzzle and the injection, `act` and then `control` after `ready`.
 export const SCRIPTS = [
@@ -28,16 +41,15 @@ export const SCRIPTS = [
     name: 'Color by Digit',
     file: 'color-by-digit.user.js',
     dialog: { owns: /^ColorByDigit_/, editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, enveloped: true, badKey: 'ColorByDigit_mode', bad: 'sideways' },
-    ready: (p) => p.locator('#control-colorbydigit').waitFor({ state: 'attached' }),
-    control: (p) => p.locator('#control-colorbydigit').waitFor({ state: 'visible' }),
+    ready: (p) => p.locator(COLOR_BY_DIGIT_BUTTON).waitFor({ state: 'attached' }),
+    control: (p) => p.locator(COLOR_BY_DIGIT_BUTTON).waitFor({ state: 'visible' }),
     // A fresh install starts in Cell, which colors the board's givens, and a press steps it to Digit, which takes them off.
     act: async (p) => {
       const colored = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).some((c) => (c.colours || []).length > 0))
-      const label = () => p.locator('#control-colorbydigit').getAttribute('aria-label')
       assert.equal(await settle(colored, true), true, 'Cell colored a cell')
-      assert.equal(await label(), 'Color by digit: Cell')
-      await p.click('#control-colorbydigit')
-      assert.equal(await settle(label, 'Color by digit: Digit'), 'Color by digit: Digit')
+      assert.equal(await labelOn(p), 'Cell')
+      await p.click(COLOR_BY_DIGIT_BUTTON)
+      assert.equal(await settle(() => labelOn(p), 'Digit'), 'Digit')
       assert.equal(await settle(colored, false), false, 'Digit took the colors off')
     }
   },
@@ -104,7 +116,7 @@ export const SCRIPTS = [
   {
     name: 'Pen Tool Extras',
     file: 'pen-tool-extras.user.js',
-    dialog: { owns: /^(PenColor_|EdgeMarks_)/, editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 },
+    dialog: { owns: /^(PenColor_|EdgeMarks_)/, editor: EXTRAS_EDITOR, key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 },
     ready: async (p) => {
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
       await p.evaluate(() => Framework.setSetting('toolpen', true))
@@ -130,7 +142,7 @@ export const SCRIPTS = [
   {
     name: 'Text Anywhere',
     file: 'text-anywhere.user.js',
-    dialog: { owns: /^TextAnywhere_/, editor: '#text-anywhere-dialog', key: 'TextAnywhere_width', saved: 3.5, badKey: 'TextAnywhere_width', bad: 500 },
+    dialog: { owns: /^TextAnywhere_/, editor: TEXT_ANYWHERE_EDITOR, key: 'TextAnywhere_width', saved: 3.5, badKey: 'TextAnywhere_width', bad: 500 },
     ready: (p) => p.locator(TEXT_ANYWHERE_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(TEXT_ANYWHERE_BUTTON).waitFor({ state: 'visible' }),
     act: (p) => placeNote(p, [2.5, 2.5], '15')

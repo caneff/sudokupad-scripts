@@ -25,10 +25,9 @@ const NEAR_CELLS = 0.1
 const browser = useBrowser()
 
 describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, savedNote
 
   const saved = () => textAnywhere.saved(p)
-  const savedNote = (text) => textAnywhere.savedNote(p, text)
   const texts = () => textAnywhere.texts(p)
   const selectedTexts = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent).sort(), SELECTED)
   const cellState = () => p.evaluate(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
@@ -65,6 +64,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { contextOptions: { viewport: { width: 1200, height: 900 } } }))
+    ;({ savedNote } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await textAnywhere.reloadOnTextAnywhere(p)
     await typeText(p, A_AT, 'A')

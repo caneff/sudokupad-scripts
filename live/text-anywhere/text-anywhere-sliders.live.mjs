@@ -19,16 +19,16 @@ const OFF = [7.5, 3.5]
 const browser = useBrowser()
 
 describe('Text Anywhere\'s Size and Opacity sliders', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, savedNote
 
   const saved = () => textAnywhere.saved(p)
-  const savedNote = (text) => textAnywhere.savedNote(p, text)
   const stored = (name) => p.evaluate((k) => Framework.getData(k) ?? null, name)
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const focusedSlider = () => p.evaluate((s) => document.activeElement?.matches(`${s} input`) === true, SLIDERS)
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), { contextOptions: { viewport: { width: 1280, height: 720 } } }))
+    ;({ savedNote } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await p.evaluate((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, OPACITY_KEY])
     await reload()

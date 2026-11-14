@@ -15,10 +15,9 @@ const BY = [1, 2]
 const browser = useBrowser()
 
 describe('Text Anywhere\'s polish', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, boxText
 
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
-  const boxText = () => textAnywhere.boxText(p)
   // The caret's offset in the open box's text, or null when it is not a collapsed caret in the box.
   const caret = () => p.evaluate(() => {
     const { anchorNode, anchorOffset, isCollapsed } = window.getSelection()
@@ -33,6 +32,7 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser()))
+    ;({ boxText } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await reload()
   })

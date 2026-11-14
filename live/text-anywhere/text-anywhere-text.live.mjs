@@ -23,14 +23,13 @@ const MARKDOWN_AT = [5.5, 6.5]
 const browser = useBrowser()
 
 describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, boxText
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const tool = () => textAnywhere.tool(p)
   const pickTextAnywhere = () => textAnywhere.pickTextAnywhere(p)
   const reload = () => textAnywhere.reload(p)
   const texts = () => textAnywhere.texts(p)
-  const boxText = () => textAnywhere.boxText(p)
   // Every cell's digit, mark and colour, so a key that reached SudokuPad shows as a change.
   const cellState = () => read(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
   const saved = () => textAnywhere.saved(p)
@@ -47,6 +46,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser()))
+    ;({ boxText } = textAnywhere.tools(p))
     await textAnywhere.forgetNotes(p)
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY])
     await reload()
