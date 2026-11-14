@@ -28,8 +28,9 @@ the test's own such as a script with a break planted (`scriptSource(file)` reads
 same context and `reloadWith` reloads one. A script's own fixtures wrap them with what shows the script is up, as Text Anywhere's
 and Pen Tool Extras' (`live/pen-tool-extras/pen-tool-extras-fixtures.mjs`, which also turns the pen tool on and opens it) `open` and `reload` do. `live/board.mjs` holds what every suite does to the board: where a cell is, a click and a drag there,
 Undo back to the start, Restart, and a Text Anywhere note typed (`typeText`) or placed with the tool picked first (`placeNote`).
-The settings dialogs' selectors, buttons and keys are `live/settings.mjs`'s (`STATUS`, `actButton`, `SETTINGS_SCRIPTS`), and each
-script's editor is its fixtures'.
+The settings dialogs' buttons are `live/settings.mjs`'s (`STATUS`, `actButton`). Each script with a dialog has one record in `live/scripts.mjs`
+(`SETTINGS_SCRIPTS`: entry, editor, owned-key pattern, typed-out keys, `open`), which the settings-shell, copy-paste and storage suites loop over;
+`live/scripts.test.mjs` fails when a script that copies in `lib:settings-dialog` has none.
 
 ## Injection time
 
