@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.13
+// @version      0.46.14
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.13'
+  const VERSION = '0.46.14'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -2088,10 +2088,10 @@
 
   const boardSvg = () => Framework.app.svgRenderer.getElem()
 
-  // What SudokuPad draws above the notes' layer: an open dialog and the menu drawer.
-  const ABOVE_NOTES = '.dialog-overlay, #appmenu'
+  // What is drawn above the notes' layer: an open dialog, the menu drawer and any script's popup menu (a role="menu" element on the page).
+  const ABOVE_NOTES = '.dialog-overlay, #appmenu, [role="menu"]'
 
-  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the top bar, the menu drawer and an open dialog.
+  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the top bar, the menu drawer, an open dialog and any script's popup menu.
   const CONTROLS = `.topbar, ${ABOVE_NOTES}, button, a, input, select, textarea`
   // The control panel's box is larger than what is drawn in it: a div with no text, fill or picture of its own is only layout.
   const CONTROLS_BOX = '#controls'
@@ -3243,7 +3243,7 @@
   const noteOf = (event) => event.target instanceof window.Element ? event.target.closest(`#${LAYER_ID} .${TEXT_CLASS}`) : null
 
   // The note the wheel is over. Under another tool the notes take no pointer, so the topmost drawn note whose box holds the point answers, unless a
-  // dialog or the menu drawer, which sit above the notes, is the wheel's target.
+  // dialog, the menu drawer or a script's popup menu, which sit above the notes, is the wheel's target.
   function wheelNote (event) {
     if (notesLayer().classList.contains(ACTIVE_CLASS)) return noteOf(event)
     if (!(event.target instanceof window.Element) || event.target.closest(ABOVE_NOTES)) return null
