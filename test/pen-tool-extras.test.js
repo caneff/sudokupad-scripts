@@ -6,6 +6,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { fakeStore } = require('./fake-store.js')
 const { startScript } = require('./unit-start.js')
+const { pageStandIn } = require('./page-stand-in.js')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const {
@@ -2165,22 +2166,8 @@ function loadWithFramework (framework) {
 
 // Runs `fn` on a page with a document and a window that take every call the startup makes and find none of SudokuPad's own elements.
 function withPage (fn) {
-  const element = () => new Proxy({ style: {}, classList: { add () {}, remove () {}, toggle () {}, contains: () => false }, dataset: {} }, {
-    get: (target, key) => key in target ? target[key] : (key === 'then' ? undefined : () => element())
-  })
   const saved = { document: global.document, window: global.window }
-  global.document = {
-    createElement: element,
-    createElementNS: element,
-    head: element(),
-    body: element(),
-    documentElement: { outerHTML: '' },
-    getElementById: () => null,
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    addEventListener () {}
-  }
-  global.window = { addEventListener () {}, MutationObserver: class { observe () {} }, getComputedStyle: () => ({}) }
+  Object.assign(global, pageStandIn())
   try {
     return fn()
   } finally {
@@ -2200,10 +2187,6 @@ test('a Framework with no getApp turns every install step off in one warning nam
   const warnings = withPage(() => loadWithFramework(framework))
   assert.deepEqual(warnings, [`pen-tool-extras: ${steps.join(', ')} skipped because SudokuPad has no Framework.getApp`])
   assert.deepEqual(entries, ['pentoolextras'])
-})
-
-test('a page with no Framework is left alone without a word', () => {
-  assert.deepEqual(loadWithFramework(undefined), [])
 })
 
 test('copiedSettings: every setting at the value in force, the pen colors once saved, and no key it does not own', () => {

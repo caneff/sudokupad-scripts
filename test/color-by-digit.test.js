@@ -537,6 +537,7 @@ test('the pulldowns sit above the profile list and the paint editor, one per row
   const row = '#color-by-digit-editor .cbd-pulldown'
   assert.equal(propertyOf(list, 'display'), 'grid')
   assert.match(propertyOf(list, 'gap'), /^\d+px$/)
+  assert.equal(propertyOf(list, 'margin'), '0 0 10px')
   assert.equal(propertyOf(row, 'display'), 'grid')
   assert.match(propertyOf(row, 'grid-template-columns'), /^\d+px minmax\(0, 1fr\)$/)
   assert.equal(propertyOf(row, 'align-items'), 'center')
@@ -547,6 +548,7 @@ test('the dialog has the profile list and the paint editor as two columns of one
   assert.match(html, /<div class="cbd-columns cbd-divider"><div class="cbd-column"><div id="mark-profiles"><\/div><\/div><div class="cbd-column">.*Digits</s)
   const columns = '#color-by-digit-editor .cbd-columns'
   assert.equal(propertyOf(columns, 'display'), 'grid')
+  assert.match(propertyOf(columns, 'gap'), /^\d+px$/)
   assert.match(propertyOf(columns, 'grid-template-columns'), /^repeat\(auto-fit, minmax\(\d+px, 1fr\)\)$/)
 })
 
