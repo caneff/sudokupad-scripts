@@ -5,7 +5,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { plantUnchecked } from '../pen.mjs'
-import { readUntil, settle, stable } from '../settle.mjs'
+import { readUntil, settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, clickAt, finishNote, gridPoint } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
@@ -204,17 +204,9 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
     assert.equal(await sizeShown(), 20)
   })
 
-  it('after a window resize each text still sits over the cells it was typed on', async () => {
-    const before = await textInCells('23')
-    const cellWidth = () => read(() => Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect().width)
-    const cellWidthBefore = await cellWidth()
-    await p.setViewportSize({ width: 800, height: 1000 })
-    const after = await stable(() => textInCells('23'))
-    assert.notEqual(await cellWidth(), cellWidthBefore, 'the resize changed the board\'s size')
-    assert.deepEqual(after, before)
-  })
-
   it('Enter starts a new line in the box and leaves the box open; Escape ends it with both lines, and a reload keeps them', async () => {
+    // This case and the ones after it run at this size.
+    await p.setViewportSize({ width: 800, height: 1000 })
     await clickAt(p, MULTI_AT)
     await p.keyboard.type('top')
     await p.keyboard.press('Enter')

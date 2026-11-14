@@ -3,10 +3,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { settle } from '../settle.mjs'
+import { clickUntil, settle } from '../settle.mjs'
 import { addPage, useBrowser } from '../session.mjs'
 import { loadInPlace } from '../puzzles.mjs'
-import { finishNote, gridPoint, mouseDrag, restart, typeText } from '../board.mjs'
+import { finishNote, gridPoint, mouseDrag, restart, selectCell, typeText } from '../board.mjs'
 
 const { DIALOG, DIGIT_BUTTON, NOTES_PREFIX, INDEX_KEY, NOT_NOTES, RESTARTED_PREFIX, TEXTS } = textAnywhere
 
@@ -16,6 +16,7 @@ const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 6
 // r1c3 of the recorded puzzle has no given.
 const EMPTY_CELL = [0, 2]
 const B_ID = 'puzzle-b-490'
+const UNDO_DEADLINE_MS = 5000
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
 const browser = useBrowser()
@@ -41,8 +42,14 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   const savedTexts = async () => ((await saved()) ?? []).map((item) => item.text)
   const enterDigit = async (digit) => {
     await p.click(DIGIT_BUTTON)
-    await p.mouse.click(...await gridPoint(p, EMPTY_CELL.map((v) => v + 0.5)))
+    await selectCell(p, ...EMPTY_CELL)
     await p.keyboard.press(digit)
+  }
+  // A click right after a reload can be dead, so an Undo is witnessed by taking a digit away: the digit is entered, then Undo clicks until it is gone.
+  const undoTakesDigit = async () => {
+    await enterDigit('7')
+    assert.equal(await settle(digit, '7'), '7')
+    assert.equal(await clickUntil(undo, digit, null, UNDO_DEADLINE_MS), null, 'the Undo took the digit away')
   }
   const digit = () => read(([row, col]) => Framework.app.grid.getCell(row, col).propGet('normal') ?? null, EMPTY_CELL)
 
@@ -173,8 +180,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.notEqual(await kept(), null)
     await reload()
     assert.equal(await kept(), null)
-    await undo()
-    await textAnywhere.frames(p)
+    await undoTakesDigit()
     assert.deepEqual(await texts(), [])
     assert.equal(await saved(), null)
   })
@@ -203,8 +209,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await kept(), null, 'the new note drops them')
     await reload()
     assert.deepEqual(await settle(texts, ['9']), ['9'])
-    await undo()
-    await textAnywhere.frames(p)
+    await undoTakesDigit()
     assert.deepEqual(await texts(), ['9'])
     assert.deepEqual(await savedTexts(), ['9'])
   })
@@ -408,6 +413,8 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await pickTextAnywhere()
     await typeText(p, [2.5, 2.5], '15')
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+    const storedNotes = async () => textAnywhere.notesOf(await read((k) => Framework.getData(k), NOTES_PREFIX + a))
+    const [{ at: atBefore }] = await storedNotes()
     await p.keyboard.down('ArrowRight')
     // The puzzle's id is watched: the moment it becomes B's, the key goes up, before the puzzle triggers 'loaded'.
     await read((bId) => {
@@ -430,7 +437,10 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await read(() => window.keyupInGap), true, 'the key went up between B\'s id and its load')
     assert.deepEqual(await settle(texts, []), [], 'puzzle B shows no notes')
     assert.equal(await read((k) => Framework.getData(k), NOTES_PREFIX + B_ID), null, 'nothing is saved under B')
-    assert.deepEqual(textAnywhere.notesOf(await read((k) => Framework.getData(k), NOTES_PREFIX + a)).map((item) => item.text), ['15'], 'A keeps its note')
+    // A's note moving in storage is the witness that the save landed in the gap, and landed under A.
+    const [{ text, at: atAfter }] = await storedNotes()
+    assert.equal(text, '15', 'A keeps its note')
+    assert.ok(atAfter[0] > atBefore[0], `the gap save moved A's note right: x ${atBefore[0]} to ${atAfter[0]}`)
   })
 
   it('the page raised no error', () => {
