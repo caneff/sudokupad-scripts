@@ -50,12 +50,17 @@ function without (a, b) {
 const digitsChanged = (now, before) => now.cells.flatMap((cell, i) => (cell.digit === before.cells[i]?.digit ? [] : [i]))
 
 // What a rule that compares two snapshots reads, leaving out `rulesPane`, which is a measure of the layout and is checked by its own rule.
-// The strokes are compared as a set: the order they sit in on the page is not something a player sees.
+// The strokes and the notes are compared as sets: the order they sit in on the page is not something a player sees.
+// When `openNote` is set, `notesDrawn` and `notesSaved` are left out too (#902): an Undo or Redo closes a note open for typing, which moves it from `notesSeen`
+// alone into both, and Text Anywhere's notes ride no undo stack (AGENTS.md). With no note open, a finished note's text, place, color and size are compared as well.
 const sorted = (list) => [...list].sort()
-const comparable = (page) => {
-  const { rulesPane, ...rest } = page // eslint-disable-line no-unused-vars
-  return { ...rest, penState: sorted(page.penState), penDrawn: sorted(page.penDrawn) }
+const comparable = (page, openNote) => {
+  const { rulesPane, notesDrawn, notesSaved, ...rest } = page // eslint-disable-line no-unused-vars
+  const notes = openNote ? {} : { notesDrawn: sorted(notesDrawn), notesSaved: notesSaved && notesSaved.map((note) => JSON.stringify(note)).sort() }
+  return { ...rest, ...notes, notesSeen: sorted(page.notesSeen), penState: sorted(page.penState), penDrawn: sorted(page.penDrawn) }
 }
+// Whether a note is open for typing: the player sees text that is not yet a finished note.
+const hasOpenNote = (page) => without(page.notesSeen, page.notesDrawn).length > 0
 
 const colorsCells = (mode) => mode === 'Cell' || mode === 'Both'
 
@@ -114,7 +119,7 @@ export const RULES = [
   },
   {
     name: 'notes-saved-match-drawn',
-    // Text Anywhere: no open note at a snapshot (every action finishes the note it opened), so the saved notes are exactly the ones on the board.
+    // Text Anywhere: no open note at a snapshot (every action finishes the note it opened; `undo-redo-restores` is the one place a note is open, and reads around it), so the saved notes are exactly the ones on the board.
     // A plain note is drawn as it was typed. A note with markup is drawn with the markup left out, so a saved one that finds no drawn twin as typed is matched to one with the same letters and digits (`wordsOf`).
     check: ({ now }) => {
       const saved = (now.page.notesSaved ?? []).filter((item) => item.kind === 'text').map((item) => item.text)
@@ -154,7 +159,7 @@ export const RULES = [
   },
   {
     name: 'undo-redo-restores',
-    // All scripts: a redo straight after an undo puts the page back exactly as it was before the undo. Read only when the undo took some steps off the stack and the
+    // All scripts: a redo straight after an undo puts the page back as it was before the undo, as `comparable` reads it. Read only when the undo took some steps off the stack and the
     // redo put the same number back: an undo on an empty stack does nothing and leaves the redo stack for the next redo, and an undo that also drops SudokuPad's selection
     // entry gets back only the rest.
     check: ({ now, before, action, earlier }) => {
@@ -164,7 +169,8 @@ export const RULES = [
       // A reload that brought the strokes back in color 1 (above) makes the undo start from that page; the redo gives the saved colors back.
       const reset = earlier.earlier?.action === 'reload' && resetToColorOne(earlier.before.page)
       const [was, is] = reset ? [withoutPenColors(earlier.before.page), withoutPenColors(now.page)] : [earlier.before.page, now.page]
-      return viewDifferences(comparable(was), comparable(is))
+      const open = hasOpenNote(earlier.before.page)
+      return viewDifferences(comparable(was, open), comparable(is, open))
     }
   },
   {

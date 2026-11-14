@@ -209,6 +209,22 @@ describe('the rules', () => {
       assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'redo' }), [])
       assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'click cell', earlier: { action: 'undo', page: board } }), [])
     })
+    it('holds when a note open for typing is finished by the undo or redo: notes ride no undo stack (#902)', () => {
+      const typing = { notesSeen: ['z'], notesDrawn: [], notesSaved: null }
+      const finished = { notesSeen: ['z'], notesDrawn: ['z'], notesSaved: [{ kind: 'text', text: 'z' }] }
+      assert.deepEqual(undoThenRedo({ ...board, ...finished }, { ...board, ...typing }), [])
+    })
+    it('fails when a finished note comes back moved or recolored while its text is the same, with no note open before the undo', () => {
+      const note = (at) => ({ notesSeen: ['z'], notesDrawn: ['z'], notesSaved: [{ kind: 'text', text: 'z', at }] })
+      assert.deepEqual(undoThenRedo({ ...board, ...note([2, 2]) }, { ...board, ...note([1, 1]) }), ['notesSaved was ["{\\"kind\\":\\"text\\",\\"text\\":\\"z\\",\\"at\\":[1,1]}"] and is now ["{\\"kind\\":\\"text\\",\\"text\\":\\"z\\",\\"at\\":[2,2]}"]'])
+    })
+    it('holds when the notes come back drawn in another order', () => {
+      const two = (a, b) => ({ notesSeen: [a, b], notesDrawn: [a, b], notesSaved: [{ kind: 'text', text: a }, { kind: 'text', text: b }] })
+      assert.deepEqual(undoThenRedo({ ...board, ...two('b', 'a') }, { ...board, ...two('a', 'b') }), [])
+    })
+    it('fails when what the player sees of the notes differs after the redo', () => {
+      assert.deepEqual(undoThenRedo({ ...board, notesSeen: ['z'] }), ['notesSeen was [] and is now ["z"]'])
+    })
     it('holds when the strokes come back drawn in another order', () => {
       const two = { penState: ['pen-1 pencolor-1', 'pen-2 pencolor-1'], penDrawn: ['pen-1 pencolor-1', 'pen-2 pencolor-1'] }
       assert.deepEqual(undoThenRedo({ ...board, ...two, penDrawn: [...two.penDrawn].reverse() }, { ...board, ...two }), [])
