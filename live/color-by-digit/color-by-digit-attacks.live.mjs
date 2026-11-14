@@ -8,7 +8,7 @@ import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
 import { closeDialogWith } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, savedState, typeProfileName, wrongCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
-import { selectCell } from '../board.mjs'
+import { selectCell, undoDepth } from '../board.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -151,7 +151,10 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     await deleteProfileRow(p, 1)
     await closeEditor('Save')
     assert.deepEqual((await getState()).profiles.map((x) => x.name), ['Low/5/High'])
+    const depth = await undoDepth(p)
+    assert.equal(depth > 0, true, 'the pick left a step to undo')
     await undo()
+    assert.equal(await settle(async () => (await undoDepth(p)) < depth, true), true, 'the Undo landed: the undo stack shrank')
     // The profile the undo would name is gone, so the saved profile is left as it is.
     const after = await getState()
     assert.deepEqual(after.profiles.map((x) => [x.name, x.groups]), [['Low/5/High', lowFiveHigh]])
