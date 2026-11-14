@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { closeDialogWith, openScriptDialog } from './settings.mjs'
+import { closeDialogWith, hideGetDataUntilWarn, openScriptDialog } from './settings.mjs'
 import { SETTINGS_SCRIPTS } from './scripts.mjs'
 import { openWith, useBrowser } from './session.mjs'
 
@@ -60,16 +60,7 @@ describe('a script\'s dialog names the parts that are off because SudokuPad chan
   before(async () => {
     // Dark Page's saved color needs Framework.getData and its settings entry does not, so the entry still opens.
     ({ context, p, errors } = await openWith(browser(), ['dark-page.user.js'], {
-      // SudokuPad needs getData itself, so it is hidden only until the script has logged its skip.
-      afterStart: (page) => page.evaluate(() => {
-        const getData = Framework.getData
-        const warn = console.warn
-        Framework.getData = undefined
-        console.warn = function (...args) {
-          warn.apply(this, args)
-          if (String(args[0]).startsWith('dark-page: saved color skipped')) { Framework.getData = getData; console.warn = warn }
-        }
-      }),
+      afterStart: hideGetDataUntilWarn(/^dark-page: saved color skipped/),
       expectedSkips: [/^dark-page: saved color skipped because SudokuPad has no Framework\.getData/]
     }))
   })
@@ -84,5 +75,22 @@ describe('a script\'s dialog names the parts that are off because SudokuPad chan
 
   it('the page raised no error beyond the declared skip', () => {
     assert.deepEqual(errors, [])
+  })
+})
+
+describe('hiding Framework.getData from a script leaves SudokuPad\'s own settings save working', { concurrency: false }, () => {
+  let context, p, errors
+  before(async () => {
+    // No script is injected, so nothing logs the warning and getData stays hidden for the whole test.
+    ({ context, p, errors } = await openWith(browser(), [], { afterStart: hideGetDataUntilWarn(/^never logged$/) }))
+  })
+  after(async () => { await context?.close() })
+
+  it('a throttled save (SudokuPad queues one on a setting change) finds getData and raises no error', async () => {
+    await p.evaluate(() => Framework.throttledSaveSettings())
+    // The throttle waits at least saveSettingsMinDelay before it saves.
+    await p.waitForTimeout(await p.evaluate(() => Framework.saveSettingsMinDelay + 300))
+    assert.deepEqual(errors, [])
+    assert.equal(await p.evaluate(() => typeof Framework.getData), 'undefined', 'a script still sees no getData')
   })
 })

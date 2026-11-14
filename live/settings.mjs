@@ -57,3 +57,22 @@ export async function paste (p, text) {
   await status.waitFor()
   return status.textContent()
 }
+
+// An `afterStart` for `openWith` that hides `Framework.getData` from a script until a `console.warn` matching `warning` is logged.
+// SudokuPad's own throttled `saveSettings` reads it too, on a timer a setting change queued, so that call (found by its stack frame)
+// still gets the real one: hiding it from the whole page raised `F.getData is not a function` whenever the timer fired meanwhile.
+export const hideGetDataUntilWarn = (warning) => (p) => p.evaluate((source) => {
+  const getData = Framework.getData
+  const warn = console.warn
+  Object.defineProperty(Framework, 'getData', {
+    configurable: true,
+    get: () => (new Error().stack.includes('saveSettings') ? getData : undefined)
+  })
+  console.warn = function (...args) {
+    warn.apply(this, args)
+    if (new RegExp(source).test(String(args[0]))) {
+      Object.defineProperty(Framework, 'getData', { configurable: true, writable: true, value: getData })
+      console.warn = warn
+    }
+  }
+}, warning.source)
