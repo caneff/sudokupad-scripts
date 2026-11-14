@@ -3,7 +3,8 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo } from './color-by-digit-fixtures.mjs'
-import { settle } from '../settle.mjs'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { POLL_MS, settle } from '../settle.mjs'
 import * as textAnywhere from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { finishNote, gridPoint, selectCell, undoDepth } from '../board.mjs'
 import { flushSave } from '../attacks.mjs'
@@ -82,11 +83,18 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
     })
     // The label stays Off whether or not the clicks land, so the Undo and the Redo are witnessed on SudokuPad's undo stack.
     const depth = await undoDepth(p)
+    const seen = new Set()
+    // Every distinct label read while the page settles: a mode the Undo moved and the Redo moved back still shows here.
+    const watch = async () => {
+      for (let i = 0; i < 10; i++) { seen.add(await label()); await sleep(POLL_MS) }
+    }
     await undo()
     assert.equal(await settle(() => undoDepth(p), depth - 1), depth - 1, 'the Undo landed')
+    await watch()
     await redo()
     assert.equal(await settle(() => undoDepth(p), depth), depth, 'the Redo landed')
-    assert.equal(await settle(label, 'Off'), 'Off')
+    await watch()
+    assert.deepEqual([...seen], ['Off'])
   })
 })
 

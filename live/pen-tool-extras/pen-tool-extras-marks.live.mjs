@@ -10,7 +10,7 @@ import { restartPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, dialogButton, openExtrasEditor, openSettings } from '../settings.mjs'
 import { cellCentre, undoDepth } from '../board.mjs'
 import { openPenTool, penDrawnCount, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
-import { settle, stable } from '../settle.mjs'
+import { settle, stable, STABLE_MS } from '../settle.mjs'
 import { addPage, openWith, useBrowser } from '../session.mjs'
 
 const DATA_KEY = 'EdgeMarks_marks'
@@ -1208,7 +1208,9 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
       assert.deepEqual(await settle(pen, ['3']), ['3'])
       await p.mouse.click(x, y)
       assert.deepEqual(await settle(pen, []), [])
-      // Counted after the clicks: a click wrap that warns again on each pen click raises the count past one.
+      // With `_actList` gone the click wrap is never installed, so this guards the skip's own warn-once latch: anything that re-ran the skip on a pen click would warn again.
+      // A console warning arrives after the click that caused it, so the page gets STABLE_MS to send a late one before the count is read.
+      await sleep(STABLE_MS)
       assert.equal(warnings.length, 1, JSON.stringify(warnings))
       assert.deepEqual(errors, [])
     } finally {
