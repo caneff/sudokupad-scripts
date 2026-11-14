@@ -6,15 +6,12 @@
 <title>ChinStrap's SudokuPad scripts</title>
 <link rel="stylesheet" href="style.css">
 <style>
-  /* The title sticker (style.css) holds the title and the intro as its subtitle, tilted like the stream's banner. Its left edge
-     lines up with the warning's, and it stands over the warning; the 14px under it is the mockup's, where with the tilt only the
-     two white rings meet. */
+  /* The 14px under the banner is the mockup's, where with the tilt only the two white rings meet. */
   .banner { position: relative; z-index: 2; display: inline-block; max-width: 46rem; margin: .5rem 0 14px calc(var(--title-ring-width) - var(--warn-ring-width)); padding: .7rem 1.4rem .8rem; transform: rotate(-1deg); }
   .banner h1 { margin: 0 0 .25rem; }
   .banner .lede { margin: 0; font-size: 1.05rem; }
   .warning { position: relative; z-index: 1; margin: 0 0 calc(var(--ring-gap) + var(--warn-ring-width) + var(--card-ring-width)); padding-top: .9rem; }
   .rows { display: flex; flex-direction: column; gap: calc(var(--ring-gap) + 2 * var(--card-ring-width)); }
-  /* Each script is a sticker card, in the six stream colors in turn. */
   .row { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.2rem 1.4rem; background: #fff; border: 12px solid var(--card); border-radius: 30px; box-shadow: var(--card-ring); }
   .row:nth-of-type(6n+1) { --card: var(--blue); }
   .row:nth-of-type(6n+2) { --card: var(--pink); }

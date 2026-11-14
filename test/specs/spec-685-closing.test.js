@@ -102,7 +102,6 @@ test('a Paste whose second write throws puts every key and its mirror back, keep
   assert.equal(sudokupad.status.textContent, 'Could not paste: planted write failure on A_height')
   assert.equal(feature.off, false)
   assert.deepEqual(guard.off, [])
-  // A missing key reads as null through the store.
   assert.equal(store.getData('A_height'), null)
 })
 
