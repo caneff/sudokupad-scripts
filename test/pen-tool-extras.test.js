@@ -27,7 +27,6 @@ const {
 const readPaste = (text) => pastedSettings(text, READERS)
 
 const nextType = (current, settings) => stepType(current, settings, EDGE_CYCLE)
-// A corner's and a cell middle's step through their marks, as the click takes it.
 const planCornerClick = (kind, present, settings) => cornerMarks(kind, {}).plan(present, settings)
 const planCellClick = (present, settings) => clickedMarks([{ type: 'select', arg: [{}] }, { type: 'pen', arg: '5' }]).plan(present, settings)
 
@@ -1338,7 +1337,6 @@ test('the header describes the script in Chris\'s approved intro and links its d
   assert.equal(headerField('homepageURL'), 'https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html')
 })
 
-// Page 3: arrow lines. A page 3 pen is two color characters; the one a line stores says which way it was dragged.
 test('a page 3 pen\'s two characters are the 18 from j to z and 0, two to a pen, the first for the way a line is stored', () => {
   const page = PEN_PAGES[2]
   assert.deepEqual([...page.chars, ...page.reverse].sort(), 'jklmnopqrstuvwxyz0'.split('').sort())
@@ -1505,7 +1503,6 @@ test('splitLineActs leaves actions that are not line values alone, and refuses a
   assert.throws(() => splitLineActs([{ type: 'select', arg: [cellAt(7, 7)] }, { type: 'pen', arg: '1' }], [pt(2.5, 2.5), pt(2.5, 3.5)], 'j'), RangeError)
 })
 
-// Arrow line geometry (`arrowLine` in the code). A page 3 line is a line as wide as a page 1 line and a run of arrows along it.
 const arrowLineAt = (value, forward, row, col, thickness, spacing = ARROW_SPACING.fallback) => arrowLine(value, forward, row, col, thickness, spacing)
 const numbersOf = (d) => d.match(/-?\d+(?:\.\d+)?/g).map(Number)
 const pointsOf = (d) => { const n = numbersOf(d); const out = []; for (let i = 0; i < n.length; i += 2) out.push([n[i], n[i + 1]]); return out }
@@ -2020,7 +2017,6 @@ test('saveRow removes the key of a value at its default and sets any other', () 
   ])
 })
 
-// The helpers a click and a redraw share, tested without SudokuPad.
 test('edgeMidpoint puts each edge value on the right side of the cell', () => {
   assert.deepEqual(edgeMidpoint('3', 2, 4), [2.5, 5])
   assert.deepEqual(edgeMidpoint('4', 2, 4), [3, 4.5])
@@ -2080,7 +2076,6 @@ test('lineSegmentsOf lists the line values of every cell with their color, and l
   assert.deepEqual(lineSegmentsOf(cells), [{ value: line, row: 1, col: 2, color: 'x' }])
 })
 
-// The requirement table: which SudokuPad internal each feature (an install step, the saved settings, the settings dialog) cannot work without.
 const FRAMEWORK_FNS = ['getApp', 'getData', 'setData', 'removeData', 'addSetting', 'showDialog', 'closeDialog']
 const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint']
 const completeSudokuPad = () => {
@@ -2109,7 +2104,6 @@ test('a complete SudokuPad lacks nothing', () => {
   assert.deepEqual(lackingInternals(FEATURES, completeSudokuPad()), new Map())
 })
 
-// Each internal removed alone, and the steps it holds back.
 const LACKING_ALONE = [
   ...['actStart', 'actAdd', 'actSend', 'clickCell', '_actList'].map((name) => [`ToolPen.tool.${name}`, (s) => { delete s.ToolPen.tool[name] }, ['arrowLines', 'marks', 'lineErase']]),
   ['ToolPen.tool.getInputRc', (s) => { delete s.ToolPen.tool.getInputRc }, ['marks', 'lineErase']],
