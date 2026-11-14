@@ -188,6 +188,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     }
   })
 
+  // Rebuilding every circle on each change cost 2k - 1 nodes for k circles (docs/research/color-by-digit/color-by-digit-redraw-cost.md).
   it('a new conflicting mark adds its own circle; the circles already drawn stay the same nodes and have no attribute rewritten', async () => {
     const tagDrawn = () => read(([circles]) => {
       const drawn = [...document.querySelectorAll(circles + ' circle')]

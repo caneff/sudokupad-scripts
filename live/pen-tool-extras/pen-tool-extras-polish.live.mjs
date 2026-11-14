@@ -1,3 +1,4 @@
+// #547.
 // The floor is checked on a grid scaled to half size (a 35 px cell at 1200 x 900), which is what a big grid does to its cells.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

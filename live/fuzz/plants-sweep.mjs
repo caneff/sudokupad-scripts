@@ -1,4 +1,4 @@
-// The planted-bug sweep (#727): every plant on every seed under every configuration, each hunt for a fixed budget, each catch replayed from its own path.
+// The planted-bug sweep (#727): every plant on every seed under every configuration, each hunt for a fixed budget, each catch replayed from its own path. Not a check itself.
 
 export const seedList = ({ base, count }) => Array.from({ length: count }, (_, i) => base + i)
 

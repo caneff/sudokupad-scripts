@@ -138,6 +138,7 @@ export function writeRecording (tmp, file) {
   writeAtomic(file, JSON.stringify(har))
 }
 
+// Whether the recording at `file` can be replayed whole. One that cannot be read counts as not.
 const isComplete = (file) => {
   try { return hasFabric(JSON.parse(readFileSync(file, 'utf8'))) } catch { return false }
 }

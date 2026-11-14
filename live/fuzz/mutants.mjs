@@ -1,6 +1,6 @@
 // Mutants of the scripts (#723): each is one standard mutation operator applied to one place of a script's text, in memory, as a planted bug that no author chose. The families are
 // the ones real faults couple to (Just et al., FSE 2014): relational (`<` to `<=`, `===` to `!==`, ...), conditional (a tested condition negated, `&&` and `||` swapped) and statement
-// deletion (a call, assignment or update statement dropped). Found on the script's AST with acorn; the files on disk never change.
+// deletion (a call, assignment or update statement dropped). Found on the script's AST with acorn; the files on disk never change. Not a check itself.
 import { parse } from 'acorn'
 import { SCRIPT_FILES, scriptSource } from '../session.mjs'
 

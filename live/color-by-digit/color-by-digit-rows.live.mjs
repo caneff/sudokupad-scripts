@@ -1,4 +1,4 @@
-// Desktop sizes only. How it looks is judged by sight in the PR.
+// #376. Desktop sizes only. How it looks is judged by sight in the PR.
 /* global document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

@@ -1,3 +1,4 @@
+// #596, from #590.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EDITOR, openSession, paintedKeys, PROFILES_KEY, SEED, savedState, openEditorOn } from './color-by-digit-fixtures.mjs'

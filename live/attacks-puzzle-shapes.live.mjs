@@ -1,3 +1,4 @@
+// Live attacks 67 and 68.
 // Text Anywhere's snap onto the ring of cells around the board (#603) is not checked here.
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

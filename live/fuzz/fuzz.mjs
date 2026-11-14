@@ -1,6 +1,6 @@
 // The fuzz on real SudokuPad: opens a page of `live/page.mjs` (on the puzzle a list names) with all six scripts installed the way a userscript manager does (at
 // DOMContentLoaded of every load, so a reload keeps them), gives the engine (`engine.mjs`) a page of its own for every action list, and reads the crash
-// signals (`signals.mjs`) from it. Each list names its puzzle (`puzzle-set.mjs`, #679).
+// signals (`signals.mjs`) from it. Each list names its puzzle (`puzzle-set.mjs`, #679). Not a check itself.
 import { setTimeout as sleep } from 'node:timers/promises'
 import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { NOTICE_BAR } from '../attacks.mjs'
@@ -370,6 +370,7 @@ function envFor (p, puzzle, { beforeReload }) {
 export async function openTarget (browser, puzzle, { planted, plant, coverage }) {
   const patch = plant && plantPatch(plant)
   const { context, p, errors } = await openPage(browser, {
+    // Copy settings and Paste settings of the dialogs use the clipboard.
     contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] },
     seed: async (page, collected) => {
       captureConsoleErrors(page, collected)

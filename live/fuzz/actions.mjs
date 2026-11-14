@@ -1,7 +1,7 @@
 // The fuzz's action vocabulary (#590 Q6 c, #593): what a user does with the six scripts on SudokuPad, weighted so ordinary use is the bulk, then
 // interruptions in the middle of a gesture, then page-level events. Each action is one step that leaves the mouse up and no key held, so a shrunk
 // list reads as plain steps and replays from the numbers alone. A list names its puzzle (`puzzle-set.mjs`, #679): the puzzle is the first thing a list
-// generates, so its path replays on the same puzzle, and an action reads the digit keys and the targets from the puzzle it runs on.
+// generates, so its path replays on the same puzzle, and an action reads the digit keys and the targets from the puzzle it runs on. Not a check itself.
 //
 // An action runs on an `env`, never on Playwright directly, so the unit tests drive the same code with a fake one (`fake-target.mjs`). The env is:
 //   env.page.mouse {move, down, up, click, dblclick, wheel}   env.page.keyboard {press, type, down, up}      Playwright's, used as they are

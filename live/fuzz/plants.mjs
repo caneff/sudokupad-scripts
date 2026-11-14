@@ -1,6 +1,6 @@
 // The bugs the fuzz is measured against (#678): each is a find-and-replace on the text of one `*.user.js`, applied when the fuzz injects the script, so the files on
 // disk never hold a bug. `kind` is how the bug should show: a broken rule (`rules.mjs`) or a crash signal (`signals.mjs`); `expect` matches the failure message that
-// counts as catching it (a crash plant names its own error text), so a failure the real scripts already have is not scored as a catch.
+// counts as catching it (a crash plant names its own error text), so a failure the real scripts already have is not scored as a catch. Not a check itself.
 
 import { mutantById, mutantPlant } from './mutants.mjs'
 

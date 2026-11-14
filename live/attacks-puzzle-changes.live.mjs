@@ -1,3 +1,4 @@
+// Live attacks 62, 63, 64 and 66. Attack 65, the replay tool, is `live/replay-playback.live.mjs`.
 // Under SudokuPad's solved dialog the overlay swallows the mouse and a press on it dismisses the dialog, so attack 64's draw, notes and dialogs come after the dismissal and under the dialog only keys and a pen drag are tried.
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

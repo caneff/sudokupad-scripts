@@ -1,6 +1,6 @@
 // The puzzles a fuzz list can run on (#679), each built in code with `puzzleData` and opened by its id, so none costs a request to sudokupad.app, plus the
 // recorded 9x9 of `live/puzzle-url.txt`. The set is data with no browser: the generator (`actions.mjs`) reads each puzzle's targets and digit keys from it,
-// so a list names its puzzle and a replay path finds it again.
+// so a list names its puzzle and a replay path finds it again. Not a check itself.
 //
 // A puzzle is: `name` (what a report prints), `rows` and `cols`, `data` (the SCL for `puzzleData`; null for the recorded one), `rules` ('long', 'short' or 'none':
 // the rules text its page shows), `keys` (the digit keys SudokuPad takes on it), `free` (the cells a digit can go in, `[row, col]`, 0-based) and `cells`

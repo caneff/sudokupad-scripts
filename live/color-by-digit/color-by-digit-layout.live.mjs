@@ -1,3 +1,4 @@
+// #304, #333; the profile menu's rows, synced and not, are #354.
 // How it looks is judged by sight in the PR.
 /* global document */
 import { after, before, describe, it } from 'node:test'

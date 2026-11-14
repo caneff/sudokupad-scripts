@@ -1,5 +1,5 @@
 // The named configurations of the fuzz's generator (#725, #726, #727, #730), which `--config` names. A path replays only
-// under the configuration it was found with, so a replay command names it.
+// under the configuration it was found with, so a replay command names it. Not a check itself.
 import { ACTION_SETTLE_MS } from './engine.mjs'
 
 // The waits after an action a varied-wait list draws from, the fixed wait first (so a shrink that does not need the timing ends there).

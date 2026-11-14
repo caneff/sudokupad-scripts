@@ -1,5 +1,5 @@
 // The numbers of the planted-bug harness (#727): per plant, how many of its seeded runs caught it and how long the median run took, for one fuzz configuration or
-// more side by side.
+// more side by side. Not a check itself.
 //
 // A run is `{ plant, caught, seconds, other?, replayed? }`: `seconds` is the hunt's time (to the catch, or the whole budget when it caught nothing), `other` a failure that is
 // not the plant's (counted as a miss), `replayed` whether the catch's own path failed again (absent when nobody checked).

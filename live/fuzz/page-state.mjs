@@ -1,4 +1,5 @@
 /* global Framework */
+// Not a check itself, so `live/**/*.live.mjs` skips it.
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { PROFILES_KEY } from '../color-by-digit/color-by-digit-fixtures.mjs'

@@ -1,3 +1,4 @@
+// #254; the edit mode pickers are #275.
 // A real touch screen stays untested. Pages 2 and 3 of the color buttons and the tray on Dark Page are judged by sight in the PR.
 /* global Framework, getComputedStyle, Image, document */
 import { after, before, describe, it } from 'node:test'
@@ -197,7 +198,7 @@ describe('the pen panel layout', { concurrency: false }, () => {
     }
   })
 
-  // A hold on a picker ends edit mode.
+  // The pickers must leave the grid alone and follow their buttons (#275). A hold on a picker ends edit mode.
   it('in edit mode every color button keeps its box, and each picker sits over its own button, also with Keypad Flipped on', async () => {
     const boxes = () => Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9].map(key))
     const pickers = (n) => p.locator(`.pen-tool-extras-picker input[data-key="${n}"]`)

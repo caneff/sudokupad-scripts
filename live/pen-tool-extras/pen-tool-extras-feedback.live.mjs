@@ -1,3 +1,4 @@
+// #546: rows 1 and 7 are the right-click erase's lack of a preview and its Escape, row 5 the drag highlight in the pen's style.
 /* global Framework, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

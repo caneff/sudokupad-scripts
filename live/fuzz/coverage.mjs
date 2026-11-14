@@ -1,6 +1,6 @@
 // V8 coverage of the scripts over a fuzz run (#729): which functions of each script no action of the run made run. An entry is what
 // Playwright's `page.coverage.stopJSCoverage()` returns, `[{ url, source, functions: [{ functionName, ranges: [{ startOffset, endOffset, count }] }] }]`, a function's own range
-// first and the blocks inside it after.
+// first and the blocks inside it after. Not a check itself.
 
 // An inline script has no URL, which V8 leaves out of coverage; a `sourceURL` tag names it. The tag goes at the end, so every offset still points into the file's own text.
 export const tagSource = (file, code) => `${code}\n//# sourceURL=${file}\n`

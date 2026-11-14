@@ -1,3 +1,4 @@
+// #596, from #590. The one thing not real input is attack 7's blur and focus, which Playwright cannot take from a page.
 /* global Framework */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

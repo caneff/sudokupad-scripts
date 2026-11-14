@@ -1,4 +1,4 @@
-// SudokuPad's own edge hit test still finds an edge of the last column for a press up to one cell beyond the grid, so a click that leaks draws an X there. A touch screen stays untested.
+// SudokuPad's own edge hit test still finds an edge of the last column for a press up to one cell beyond the grid, so a click that leaks draws an X there (#521). A touch screen stays untested.
 /* global ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

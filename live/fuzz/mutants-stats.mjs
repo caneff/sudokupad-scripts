@@ -1,5 +1,5 @@
 // The numbers of the mutant run (#723): per script and operator family, how many sampled mutants the fuzz caught, missed, could not reach or crashed at load, and how long a
-// catch took.
+// catch took. Not a check itself.
 //
 // A run is `{ caught, seconds, reached? }` as in `plants-stats.mjs`, `reached` whether the mutated code ran in a hunt that caught nothing. An outcome is
 // `{ mutant: { file, family }, verdict, runs }`, the verdict being one of `VERDICTS`.

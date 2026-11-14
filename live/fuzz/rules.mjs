@@ -1,5 +1,5 @@
 // What "working" means for each script in a fuzz run, a rule or more per script, and some for every script at once (#590 Q10, #594, #677), as pure functions over page snapshots.
-// The engine (`engine.mjs`) checks every rule after every action; `page-state.mjs` reads a snapshot's `page`.
+// The engine (`engine.mjs`) checks every rule after every action; `page-state.mjs` reads a snapshot's `page`. Not a check itself.
 //
 // A rule is `{ name, check({ now, before, action, earlier }) }`: `now` is the snapshot after the action, `before` the one before it and `action` the action's
 // kind (`actions.mjs`); `earlier` is the step before that, `{ action, before, strokeSinceReload, earlier }` with its own `earlier` (the step before it, without one of its own), or null for the first. It returns one readable line per violation; none means the rule holds. A snapshot's `page` is:

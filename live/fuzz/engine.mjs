@@ -1,7 +1,7 @@
 // The fuzz engine: fast-check generates action lists (`actions.mjs`), each list runs on a page of its own, the crash signals and the rules (`rules.mjs`) are
 // read after every action and once more 200 ms after the last, and a failing list is shrunk and reported with the numbers that replay it. It knows no browser: the
 // page comes from `openTarget(puzzle)` (`fuzz.mjs` opens real SudokuPad, `fake-target.mjs` a fake one for the unit tests); the puzzle is part of each
-// generated list (`actions.mjs`, #679).
+// generated list (`actions.mjs`, #679). Not a check itself.
 import fc from 'fast-check'
 import { actionList } from './actions.mjs'
 import { ruleViolations } from './rules.mjs'
@@ -129,6 +129,7 @@ export async function runFuzz ({ openTarget, puzzles, kinds, seed, runs, minutes
     if (shrunk.failed && shrunk.counterexample !== null) found = shrunk
   }
   const list = found.counterexample[0]
+  // fast-check prints the list as `a,b,c /*replayPath="..."*/`, so no step holds a comma.
   const shown = String(list)
   const listWait = list.waitMs ?? settleMs
   const failure = listWait < ACTION_SETTLE_MS && found.errorInstance?.step != null
