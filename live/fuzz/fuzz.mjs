@@ -89,6 +89,31 @@ async function clickIn (p, selector) {
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 }
 
+// What a player does when a Text Anywhere note (or its handle) covers a button they need: drags the note off, onto the board's middle. Each button's middle is looked at;
+// a covered one gets its note dragged, up to a few times, and one still covered then is a failure. Stops with nothing covered, so a note on no button is never touched.
+const CLEAR_TRIES = 4
+const LAYER = '#text-anywhere-layer'
+// How far a resize handle reaches past its note's box (the script's HANDLE_PX).
+const HANDLE_REACH_PX = 11
+const COVERED_BUTTON_NOTE = ([layer, notes, reach]) => {
+  for (const button of document.querySelectorAll('[id^="control-"]')) {
+    const box = button.getBoundingClientRect()
+    if (box.width === 0 || box.height === 0) continue
+    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2]
+    const top = document.elementFromPoint(x, y)
+    if (!top || top === button || button.contains(top) || !top.closest(layer)) continue
+    // A handle sits on its note's corner, so the note is the one whose box reaches the point; a point on the note's own middle presses it, as a drag must.
+    const note = [...document.querySelectorAll(notes)].find((n) => {
+      const b = n.getBoundingClientRect()
+      return x >= b.left - reach && x <= b.right + reach && y >= b.top - reach && y <= b.bottom + reach
+    })
+    if (!note) return { button: button.id, point: null }
+    const b = note.getBoundingClientRect()
+    return { button: button.id, point: [b.x + b.width / 2, b.y + b.height / 2] }
+  }
+  return null
+}
+
 // Color by Digit's profiles dialog (#814): opens it the way a user finds it, makes each edit of `actions.mjs`'s `profileEdit` on the dialog as it stands (a row, a
 // swatch or an option is counted from 0 and wrapped to how many there are, an edit the dialog's state does not allow, such as a delete of the only profile, is
 // not made), and presses Save or Cancel.
@@ -173,6 +198,21 @@ function envFor (p, puzzle, { beforeReload }) {
       const point = await gridPoint(p, [row + 0.5, col + 0.5])
       const onLink = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('a')), point)
       return !onLink ? point : (await cellCentre(p, Math.min(Math.max(row, 0), puzzle.rows - 1), Math.min(Math.max(col, 0), puzzle.cols - 1))).slice(0, 2)
+    },
+    async clearControls () {
+      for (let i = 0; i < CLEAR_TRIES; i++) {
+        const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS, HANDLE_REACH_PX])
+        if (!covered) return
+        if (!covered.point) throw new Error(`${covered.button} is covered by a Text Anywhere element that belongs to no note`)
+        const [row, col] = [Math.floor(puzzle.rows / 2), Math.floor(puzzle.cols / 2)]
+        const to = (await cellCentre(p, row, col)).slice(0, 2)
+        await p.mouse.move(...covered.point)
+        await p.mouse.down()
+        await p.mouse.move(...to, { steps: 6 })
+        await p.mouse.up()
+      }
+      const left = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS, HANDLE_REACH_PX])
+      if (left) throw new Error(`${left.button} is still covered by a note after ${CLEAR_TRIES} drags off it`)
     },
     async usePen (color) {
       await openPen()

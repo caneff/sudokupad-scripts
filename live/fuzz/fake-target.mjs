@@ -71,6 +71,8 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       cellPoint: rec('cellPoint', [100, 100]),
       noteCentre: async () => { log.push(['noteCentre']); return notes ? [200, 200] : null },
       usePen: rec('usePen'),
+      // The real one moves a covering note off a button; the fake page has no notes on any.
+      clearControls: async () => {},
       useNotes: rec('useNotes'),
       noteHandle: rec('noteHandle', [300, 320]),
       checkBoxPoint: rec('checkBoxPoint', [250, 260]),

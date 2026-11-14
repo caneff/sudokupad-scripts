@@ -48,6 +48,12 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['note background', false], ['profile switch', 1], ['boxed note', [0, 1]]] })
   })
 
+  it('a click on a button that a moved, resized note covers moves the note off it first, as a player does (#880)', async () => {
+    // Seed 270472555's shrink: the corner drag and the move put the note's handle over Dark Page's settings button.
+    const steps = [['note resize', [[1, 2], 2, 0, 50]], ['move note', null], ['dark page', ['#002010', false]]]
+    await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps })
+  })
+
   it('a page that does not show the puzzle set\'s free cells is refused, not fuzzed on the wrong cells', async () => {
     const wrong = { ...puzzleByName('4x4'), free: [[0, 1]] }
     await assert.rejects(openTarget(browser(), wrong, {}), /opened with \d+ free cells that are not the 1 of puzzle-set\.mjs/)

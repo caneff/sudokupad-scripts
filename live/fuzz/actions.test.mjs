@@ -30,6 +30,17 @@ const runOn = async (action, options) => {
 }
 
 describe('the action vocabulary', () => {
+  it('every action clears the buttons a note covers before it acts, so a covered click is never the fuzz\'s failure (#880)', async () => {
+    for (const kind of ['click cell', 'dark page', 'move note']) {
+      const target = await fakeTargets().openTarget()
+      const seenBefore = []
+      const env = { ...target.env, clearControls: async () => { seenBefore.push(target.log.length) } }
+      const [step] = scriptedList(puzzleByName('4x4'), [[kind, kind === 'click cell' ? 0 : kind === 'dark page' ? ['#000000', false] : null]])
+      await step.run({ selected: true }, { env })
+      assert.deepEqual(seenBefore, [0], `${kind} cleared once, before any call of its own`)
+    }
+  })
+
   it('a seed always gives the same actions, and another seed gives others', () => {
     assert.deepEqual(stepsOf(sample(7)), stepsOf(sample(7)))
     assert.notDeepEqual(stepsOf(sample(7)), stepsOf(sample(8)))
