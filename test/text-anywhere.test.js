@@ -8,7 +8,7 @@ const { headerField, headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY } = require('../text-anywhere.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -1576,6 +1576,47 @@ test('indexAfterKeep: deleting a note before the open one moves the open index d
   assert.equal(indexAfterKeep(1, keep), -1, 'a deleted note has no index')
   assert.equal(indexAfterKeep(-1, keep), -1, 'a note not saved yet stays unsaved')
   assert.equal(indexAfterKeep(5, keep), -1, 'an index past the notes has none')
+})
+
+const NONE = { editingIndex: null, resizing: null, move: null }
+
+test('followKept: the open note and its resize follow their notes to the places the others\' removal left them', () => {
+  const keep = [true, false, true, true]
+  assert.deepEqual(followKept({ ...NONE, editingIndex: 2, resizing: { index: 2, cancelled: false } }, keep), { editingIndex: 1, resizing: { index: 1, cancelled: false }, move: null, dragCancelled: false })
+})
+
+test('followKept: an open note that went is unsaved (-1), and so is its resize, which is not cancelled', () => {
+  const next = followKept({ ...NONE, editingIndex: 1, resizing: { index: 1, cancelled: false } }, [true, false, true])
+  assert.deepEqual(next.editingIndex, -1)
+  assert.deepEqual(next.resizing, { index: -1, cancelled: false })
+})
+
+test('followKept: a new open note (-1) stays unsaved', () => {
+  assert.equal(followKept({ ...NONE, editingIndex: -1 }, [true, false]).editingIndex, -1)
+})
+
+test('followKept: a selected note\'s resize whose note went is cancelled; one whose note stayed is not', () => {
+  const keep = [true, false, true]
+  assert.deepEqual(followKept({ ...NONE, resizing: { index: 1, cancelled: false } }, keep).resizing, { index: -1, cancelled: true })
+  assert.deepEqual(followKept({ ...NONE, resizing: { index: 2, cancelled: false } }, keep).resizing, { index: 1, cancelled: false })
+})
+
+test('followKept: a move leaves the notes that went and follows the rest', () => {
+  const next = followKept({ ...NONE, move: [{ index: 0, at: 'a' }, { index: 1, at: 'b' }, { index: 2, at: 'c' }] }, [true, false, true])
+  assert.deepEqual(next.move, [{ index: 0, at: 'a' }, { index: 1, at: 'c' }])
+  assert.equal(next.dragCancelled, false)
+})
+
+test('followKept: a move left with no note is cancelled', () => {
+  const next = followKept({ ...NONE, move: [{ index: 1 }] }, [true, false])
+  assert.equal(next.dragCancelled, true)
+})
+
+test('followKept: no open note, resize or move stays none, and the state given is not changed', () => {
+  assert.deepEqual(followKept(NONE, [true, false]), { ...NONE, dragCancelled: false })
+  const resizing = { index: 1, cancelled: false }
+  followKept({ ...NONE, resizing }, [true, false])
+  assert.deepEqual(resizing, { index: 1, cancelled: false })
 })
 
 test('notesAfterClose: empty text removes the note, -1 appends, otherwise the text replaces; the index left follows', () => {

@@ -700,6 +700,20 @@
   // Where the note at index `index` sits after the notes `keep` marks false went, or -1 when it went (or was never saved, as a new note's -1).
   const indexAfterKeep = (index, keep) => index < 0 || !keep[index] ? -1 : keep.slice(0, index).filter(Boolean).length
 
+  // The open note's index, a resize and a move after the notes `marks` marks false went. An open note that went is unsaved (-1, so closing it adds it back with what was typed),
+  // and so is its resize. A selected note's resize whose note went is cancelled, so its release saves nothing; a move leaves the notes that went, and a move left with none is
+  // `dragCancelled`. `editingIndex`, `resizing` and `move` are null when there is none.
+  function followKept ({ editingIndex, resizing, move }, marks) {
+    const index = resizing && indexAfterKeep(resizing.index, marks)
+    const moved = move && move.map((entry) => ({ ...entry, index: indexAfterKeep(entry.index, marks) })).filter((entry) => entry.index !== -1)
+    return {
+      editingIndex: editingIndex === null ? null : indexAfterKeep(editingIndex, marks),
+      resizing: resizing && { ...resizing, index, cancelled: resizing.cancelled || (editingIndex === null && index === -1) },
+      move: moved,
+      dragCancelled: moved !== null && moved.length === 0
+    }
+  }
+
   // Which notes a change of color, size, opacity or Background reaches besides the next note's setting: the open note, else the selected ones, else none.
   const lookTarget = (editing, selected) => editing ? 'open' : selected.length ? 'selected' : 'next'
 
@@ -2122,7 +2136,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2546,8 +2560,7 @@
 
   // The open note's own look changes.
   function changeOpen (change) {
-    editing.item = change(editing.item)
-    showEditing(boardMap())
+    writeNote(editing.index, change(editing.item))
     showPanelValues()
   }
 
@@ -3166,6 +3179,19 @@
     return { left: left + pad('Left'), top: top + pad('Top'), right: right - pad('Right'), bottom: bottom - pad('Bottom') }
   }
 
+  // The note being typed in, else the note at `index`: one rule for where the open note lives.
+  const readNote = (index) => editing ? editing.item : puzzleNotes[index]
+
+  function writeNote (index, item) {
+    if (editing) {
+      editing.item = item
+      showEditing(boardMap())
+    } else {
+      puzzleNotes[index] = item
+      renderNotes()
+    }
+  }
+
   const resizedIndex = () => editing ? editing.index : selected.length === 1 ? selected[0] : null
 
   // A press on a handle, with any button, keeps the note's focus and never reaches SudokuPad; only the left button resizes.
@@ -3174,7 +3200,7 @@
     event.stopPropagation()
     const index = resizedIndex()
     if (event.button !== PRIMARY_BUTTON || index === null) return
-    const item = editing ? editing.item : puzzleNotes[index]
+    const item = readNote(index)
     const element = editing ? editing.element : item[NOTE_ELEMENT]
     const unit = editing || item.fixed ? 1 : boardMap().scale
     const box = contentBox(element, unit)
@@ -3220,13 +3246,7 @@
     // The anchor is where the note's box lies without the view shift of an open note, so the pointer is taken out of that shift too.
     const shift = editing?.shift ?? [0, 0]
     const resized = resizedItem(item, anchor, [to[0] + offset[0] - shift[0], to[1] + offset[1] - shift[1]], map, corner, autoSize)
-    if (editing) {
-      editing.item = resized
-      showEditing(map)
-    } else {
-      puzzleNotes[index] = resized
-      renderNotes()
-    }
+    writeNote(index, resized)
   }
 
   function endResize (event) {
@@ -3246,12 +3266,10 @@
   function resetSize () {
     const index = resizedIndex()
     if (index === null) return
-    if (editing) {
-      editing.item = autoSized(editing.item)
-      showEditing(boardMap())
-    } else if (puzzleNotes[index].box) {
-      puzzleNotes[index] = autoSized(puzzleNotes[index])
-      renderNotes()
+    const note = readNote(index)
+    if (!editing && !note.box) return
+    writeNote(index, autoSized(note))
+    if (!editing) {
       snapToPixels([index])
       saveNotes()
     }
@@ -3414,24 +3432,17 @@
     const removed = kept.length !== puzzleNotes.length
     puzzleNotes = kept
     selected = stillSelected
-    if (removed) followKept(marks)
+    if (removed) keepMarked(marks)
     return removed
   }
 
-  // The open note, a resize and a move in progress follow their notes to the places the others' removal left them. An open note that went is unsaved (-1, so closing
-  // it adds it back with what was typed), and so is its resize. A selected note's resize whose note went is cancelled, so its release saves nothing; a move leaves the
-  // notes that went, and a move left with none is cancelled.
-  function followKept (marks) {
-    if (editing) editing.index = indexAfterKeep(editing.index, marks)
-    if (resizing) {
-      const index = indexAfterKeep(resizing.index, marks)
-      if (!editing && index === -1) resizing.cancelled = true
-      resizing.index = index
-    }
+  function keepMarked (marks) {
+    const next = followKept({ editingIndex: editing ? editing.index : null, resizing, move: drag?.move ?? null }, marks)
+    if (editing) editing.index = next.editingIndex
+    resizing = next.resizing
     if (!drag?.move) return
-    const move = drag.move.map((entry) => ({ ...entry, index: indexAfterKeep(entry.index, marks) })).filter(({ index }) => index !== -1)
-    if (move.length === 0) cancelDrag()
-    else drag.move = move
+    if (next.dragCancelled) cancelDrag()
+    else drag.move = next.move
   }
 
   function deleteSelected () {
@@ -3747,13 +3758,7 @@
   function cancelResize () {
     const { index, item } = resizing
     resizing.cancelled = true
-    if (editing) {
-      editing.item = item
-      showEditing(boardMap())
-    } else {
-      puzzleNotes[index] = item
-      renderNotes()
-    }
+    writeNote(index, item)
   }
 
   // A press that never moved opens no text box. A lost pointer (a blur, a tool switch, a move with the button up) cancels an erase, so nothing goes that the release never confirmed.
