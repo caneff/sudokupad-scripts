@@ -82,14 +82,19 @@ describe('hiding Framework.getData from a script leaves SudokuPad\'s own setting
   let context, p, errors
   before(async () => {
     // No script is injected, so nothing logs the warning and getData stays hidden for the whole test.
-    ({ context, p, errors } = await openWith(browser(), [], { afterStart: hideGetDataUntilWarn(/^never logged$/) }))
+    ({ context, p, errors } = await openWith(browser(), [], { afterStart: hideGetDataUntilWarn() }))
   })
   after(async () => { await context?.close() })
 
-  it('a throttled save (SudokuPad queues one on a setting change) finds getData and raises no error', async () => {
-    await p.evaluate(() => Framework.throttledSaveSettings())
-    // The throttle waits at least saveSettingsMinDelay before it saves.
-    await p.waitForTimeout(await p.evaluate(() => Framework.saveSettingsMinDelay + 300))
+  it('a throttled save (SudokuPad queues one on a setting change) runs, and raises no error', async () => {
+    await p.evaluate(() => {
+      // saveSettings ends in setData, which it reaches only after it has read getData.
+      window.__saved = false
+      const setData = Framework.setData
+      Framework.setData = function (...args) { window.__saved = true; return setData.apply(this, args) }
+      Framework.throttledSaveSettings()
+    })
+    await p.waitForFunction(() => window.__saved, null, { timeout: 5000 })
     assert.deepEqual(errors, [])
     assert.equal(await p.evaluate(() => typeof Framework.getData), 'undefined', 'a script still sees no getData')
   })
