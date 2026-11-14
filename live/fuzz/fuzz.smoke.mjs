@@ -21,8 +21,8 @@ import { SELECTED, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 const run = promisify(execFile)
 const PASSING_SEEDS = [2, 3]
 const PLANTED_SEED = 3
-// The seed the planted Tab bug is caught on.
-const TAB_PLANT_SEED = 4
+// A seed the planted Tab bug is caught on: a new action kind changes what each seed makes, so pick another from `npm run test:fuzz -- --seed <n> --runs 150 --plant tab-turns-pad-to-letters` if this one stops reaching Tab.
+const TAB_PLANT_SEED = 1
 const ROOT = new URL('../../', import.meta.url)
 const INTERRUPTED_BY_ESCAPE = /^(?:pen drag|right-click erase held|note drag).* then Escape then release$/
 
@@ -248,21 +248,26 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
   describe('the settings dialogs of UI Tweaks and Dark Page (#817)', () => {
     const puzzle = puzzleByName('4x4')
+    // Each option's saved value; an option at its default is saved as no key, which reads null.
     const tweaks = (p) => p.evaluate(() => ['tab', 'hideSelect', 'wrapButtons'].map((id) => Framework.getData(`UiTweaks_${id}`)))
     const colorOf = (p) => p.evaluate(() => Framework.getData('DarkPage_color'))
 
     it('Save keeps the two options and a Tab option clicked off and on again, and Cancel keeps none', async () => {
-      assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, true, false, true]]], tweaks), [true, true, true])
+      assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, true, false, true]]], tweaks), [null, true, true], 'the Tab option, back on, is at its default and saves no key')
       assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, true, false, false]]], tweaks), [null, null, null])
     })
 
-    it('Restore defaults then Save puts the options back to the defaults', async () => {
-      assert.deepEqual(await afterSteps(puzzle, [['ui tweaks dialog', [true, true, false, false, true]], ['ui tweaks dialog', [true, true, false, true, true]]], tweaks), [true, false, false])
+    it('Restore defaults then Save puts the options back to the defaults, saved as no key', async () => {
+      const first = ['ui tweaks dialog', [true, true, false, false, true]]
+      assert.deepEqual(await afterSteps(puzzle, [first], tweaks), [null, true, true], 'the first Save leaves two options off their defaults')
+      assert.deepEqual(await afterSteps(puzzle, [first, ['ui tweaks dialog', [true, true, false, true, true]]], tweaks), [null, null, null])
     })
 
     it('a pasted UI Tweaks text is applied on the spot, and a refused one changes nothing', async () => {
       const after = (text) => afterSteps(puzzle, [['ui tweaks settings text', [text, false]]], tweaks)
-      assert.deepEqual(await after('{"UiTweaks_wrapButtons":true,"UiTweaks_hideSelect":false}'), [true, false, true], 'a paste saves every option, the unpasted Tab at its current value')
+      const seeded = ['ui tweaks settings text', ['{"UiTweaks_tab":false,"UiTweaks_hideSelect":true}', false]]
+      assert.deepEqual(await afterSteps(puzzle, [seeded], tweaks), [false, true, null], 'the first paste leaves Tab and Select off their defaults')
+      assert.deepEqual(await afterSteps(puzzle, [seeded, ['ui tweaks settings text', ['{"UiTweaks_wrapButtons":true,"UiTweaks_hideSelect":false}', false]]], tweaks), [false, null, true], 'a second paste changes only its keys: the pasted false goes back to its default (no key), the unpasted Tab stays')
       assert.deepEqual(await after('{"UiTweaks_hideSelect":"yes"}'), [null, null, null])
       assert.deepEqual(await after(null), [null, null, null], 'Copy settings saves nothing')
     })
