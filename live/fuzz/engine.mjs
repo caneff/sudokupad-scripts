@@ -103,7 +103,7 @@ async function blameLate (open, steps, { landMs, settleMs }, failure) {
 // Runs a list written by hand (`scriptedList` of `actions.mjs`) on a page of its own for `puzzle`, with the checks of every fuzz run; throws what a failing run throws.
 export const runScript = ({ openTarget, puzzle, actions }) => runList(() => openTarget(puzzle), actions, ERRORS_LAND_MS, ACTION_SETTLE_MS)
 
-// Fuzzes with `seed` over `puzzles` (each list picks one) and the action `kinds` (`actions.mjs`: the engine's own tests pass a small fixed set, `fuzz.mjs` the real one): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
+// Fuzzes with `seed` over `puzzles` (each list picks one) and the action `kinds` (`actions.mjs`, required): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
 // most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus`, `busyStart`, `waits`, `maxCommands` and `nonEmpty` shape the lists (`actionList`), so a replay
 // needs the ones it was found with. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
 // each puzzle ran, by name) or the failure: `error`, `puzzle` (its name), `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`,

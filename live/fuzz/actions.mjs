@@ -163,10 +163,12 @@ function buildKinds () {
     await env.page.mouse.down()
     await env.page.mouse.move(...to, { steps: 6 })
   }
-  const penDrag = (kind, facts, words, interrupt, extra = fc.constant(null)) => ({
+  const penDrag = (kind, scripts, words, interrupt, extra = fc.constant(null)) => ({
     kind,
     group: 'interruption',
-    ...facts,
+    scripts,
+    start: false,
+    stroke: true,
     weight: 1,
     arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), color, extra),
     label: ([a, b, c, x], at) => `pen drag ${at(a)} -> ${at(b)} color ${c} then ${words(x)} then release`,
@@ -185,10 +187,12 @@ function buildKinds () {
     await env.page.mouse.down({ button: 'right' })
     await env.page.mouse.move(...to, { steps: 4 })
   }
-  const eraseHold = (kind, facts, words, interrupt, extra = fc.constant(null)) => ({
+  const eraseHold = (kind, scripts, words, interrupt, extra = fc.constant(null)) => ({
     kind,
     group: 'interruption',
-    ...facts,
+    scripts,
+    start: false,
+    stroke: false,
     weight: 1,
     arg: (puzzle) => fc.tuple(cell(puzzle), cell(puzzle), extra),
     label: ([a, b, x], at) => `right-click erase held ${at(a)} -> ${at(b)} then ${words(x)} then release`,
@@ -222,10 +226,12 @@ function buildKinds () {
     return centre
   }
   const ifNone = (t, a, at) => `(note ${jsonWords(NOTE_TEXTS[t])} at ${at(a)} if none)`
-  const noteDrag = (kind, facts, words, interrupt) => ({
+  const noteDrag = (kind, scripts, words, interrupt) => ({
     kind,
     group: 'interruption',
-    ...facts,
+    scripts,
+    start: false,
+    stroke: false,
     weight: 1,
     arg: note,
     label: ([t, a], at) => `note drag ${ifNone(t, a, at)} then ${words} then release`,
@@ -668,15 +674,15 @@ function buildKinds () {
     { kind: 'color mode', group: 'ordinary', scripts: [COLOR_BY_DIGIT], start: true, stroke: false, weight: 2, arg: () => fc.constant(null), label: () => 'press the Color by Digit button', run: (env) => env.clickColorMode() },
 
     // Interruptions in the middle of a gesture: a key, Escape, a tool switch, undo, a window resize, a second button, the pointer leaving the window.
-    penDrag('pen drag, Escape', { scripts: [PEN_TOOL_EXTRAS], start: false, stroke: true }, () => 'Escape', press('Escape')),
-    penDrag('pen drag, tool key', { scripts: [PEN_TOOL_EXTRAS], start: false, stroke: true }, (k) => `press ${k}`, (env, arg) => env.page.keyboard.press(arg[3]), toolKey),
-    penDrag('pen drag, undo', { scripts: [PEN_TOOL_EXTRAS], start: false, stroke: true }, () => 'Ctrl+Z', press('Control+z')),
-    penDrag('pen drag, resize', { scripts: [PEN_TOOL_EXTRAS, AUTO_RULES_RESIZER], start: false, stroke: true }, ({ width, height }) => `resize the window to ${width}x${height}`, (env, arg) => env.resize(arg[3]), fc.constantFrom(...WINDOW_SIZES)),
-    penDrag('pen drag, second button', { scripts: [PEN_TOOL_EXTRAS], start: false, stroke: true }, () => 'right button down and up', async (env) => {
+    penDrag('pen drag, Escape', [PEN_TOOL_EXTRAS], () => 'Escape', press('Escape')),
+    penDrag('pen drag, tool key', [PEN_TOOL_EXTRAS], (k) => `press ${k}`, (env, arg) => env.page.keyboard.press(arg[3]), toolKey),
+    penDrag('pen drag, undo', [PEN_TOOL_EXTRAS], () => 'Ctrl+Z', press('Control+z')),
+    penDrag('pen drag, resize', [PEN_TOOL_EXTRAS, AUTO_RULES_RESIZER], ({ width, height }) => `resize the window to ${width}x${height}`, (env, arg) => env.resize(arg[3]), fc.constantFrom(...WINDOW_SIZES)),
+    penDrag('pen drag, second button', [PEN_TOOL_EXTRAS], () => 'right button down and up', async (env) => {
       await env.page.mouse.down({ button: 'right' })
       await env.page.mouse.up({ button: 'right' })
     }),
-    penDrag('pen drag, blur', { scripts: [PEN_TOOL_EXTRAS], start: false, stroke: true }, () => 'window blur and focus', (env) => env.blurFocus()),
+    penDrag('pen drag, blur', [PEN_TOOL_EXTRAS], () => 'window blur and focus', (env) => env.blurFocus()),
     {
       kind: 'pen drag, leave window',
       group: 'interruption',
@@ -693,16 +699,16 @@ function buildKinds () {
         await env.page.mouse.click(...await env.cellPoint(arg[3]))
       }
     },
-    eraseHold('erase held, Escape', { scripts: [PEN_TOOL_EXTRAS], start: false, stroke: false }, () => 'Escape', press('Escape')),
-    eraseHold('erase held, tool key', { scripts: [PEN_TOOL_EXTRAS], start: false, stroke: false }, (k) => `press ${k}`, (env, arg) => env.page.keyboard.press(arg[2]), toolKey),
-    eraseHold('erase held, left button', { scripts: [PEN_TOOL_EXTRAS], start: false, stroke: false }, () => 'left button down and up', async (env) => {
+    eraseHold('erase held, Escape', [PEN_TOOL_EXTRAS], () => 'Escape', press('Escape')),
+    eraseHold('erase held, tool key', [PEN_TOOL_EXTRAS], (k) => `press ${k}`, (env, arg) => env.page.keyboard.press(arg[2]), toolKey),
+    eraseHold('erase held, left button', [PEN_TOOL_EXTRAS], () => 'left button down and up', async (env) => {
       await env.page.mouse.down({ button: 'left' })
       await env.page.mouse.up({ button: 'left' })
     }),
-    noteDrag('note drag, Escape', { scripts: [TEXT_ANYWHERE], start: false, stroke: false }, 'Escape', press('Escape')),
-    noteDrag('note drag, Delete', { scripts: [TEXT_ANYWHERE], start: false, stroke: false }, 'Delete', press('Delete')),
-    noteDrag('note drag, undo', { scripts: [TEXT_ANYWHERE], start: false, stroke: false }, 'Ctrl+Z', press('Control+z')),
-    noteDrag('note drag, resize', { scripts: [TEXT_ANYWHERE, AUTO_RULES_RESIZER], start: false, stroke: false }, `resize the window to ${WINDOW_SIZES[0].width}x${WINDOW_SIZES[0].height}`, (env) => env.resize(WINDOW_SIZES[0])),
+    noteDrag('note drag, Escape', [TEXT_ANYWHERE], 'Escape', press('Escape')),
+    noteDrag('note drag, Delete', [TEXT_ANYWHERE], 'Delete', press('Delete')),
+    noteDrag('note drag, undo', [TEXT_ANYWHERE], 'Ctrl+Z', press('Control+z')),
+    noteDrag('note drag, resize', [TEXT_ANYWHERE, AUTO_RULES_RESIZER], `resize the window to ${WINDOW_SIZES[0].width}x${WINDOW_SIZES[0].height}`, (env) => env.resize(WINDOW_SIZES[0])),
 
     // Page-level events.
     { kind: 'blur and focus', group: 'page', scripts: [], start: false, stroke: false, weight: 1, arg: () => fc.constant(null), label: () => 'window blur and focus', run: (env) => env.blurFocus() },
@@ -852,11 +858,11 @@ function actionArbitrary (puzzle, weights, kinds) {
   return fc.oneof(...kinds.map((k) => ({ weight: weights[k.kind], arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
 }
 
-// A busy start (#726) is built from the kinds that declare `start`: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
-// Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
 // The most steps a busy start has; its length is drawn up to it, so some starts are short and some are empty.
 export const MAX_START_STEPS = 30
 
+// A busy start (#726) is built from the kinds that declare `start`: what puts something on the board or into the saved data, and nothing that takes it away (undo, a reload) or holds a gesture open.
+// Digits, marks (a tool key, then a digit), colors, pen lines on every pen page, notes with their box settings, and the settings the scripts save.
 // The arbitrary of a busy start's steps over `puzzle`: commands like a list's, weighted alike (`--focus` included), run first, each printed with `(start) ` before it.
 const startArbitrary = (puzzle, weights, kinds) => fc.array(actionArbitrary(puzzle, weights, kinds.filter((k) => k.start)), { maxLength: MAX_START_STEPS, size: 'max' })
 
@@ -870,7 +876,7 @@ export const DEFAULT_MAX_COMMANDS = 20
 // `waits` (#725) is the milliseconds the engine may wait after each action: each list draws its own, beside its actions, so a path replays it and a shrink moves it
 // to the first of the set; with none, `waitMs` is undefined and the engine's own wait stands.
 // `nonEmpty` (#730) refuses a list with no action, which fast-check otherwise draws 1 time in `maxCommands + 1`.
-export const actionList = (puzzles, { kinds = KINDS, maxCommands = DEFAULT_MAX_COMMANDS, replayPath, focus = [], waits = [], busyStart = false, nonEmpty = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
+export const actionList = (puzzles, { kinds, maxCommands = DEFAULT_MAX_COMMANDS, replayPath, focus = [], waits = [], busyStart = false, nonEmpty = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
   const weights = kindWeights(kinds, focus)
   const commands = fc.commands([actionArbitrary(puzzle, weights, kinds)], { maxCommands, size: 'max', replayPath })
   const drawn = nonEmpty ? commands.filter((c) => [...c].length > 0) : commands

@@ -3,18 +3,17 @@ import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { actionList, MAX_START_STEPS } from './actions.mjs'
 import { CONFIGS, WAITS } from './configs.mjs'
-import { ACTION_SETTLE_MS, runFuzz, strokeSinceReload } from './engine.mjs'
-import { fakeTargets } from './fake-target.mjs'
+import { ACTION_SETTLE_MS, runFuzz, runScript, strokeSinceReload } from './engine.mjs'
+import { fakeTargets, quietPage } from './fake-target.mjs'
 import { FUZZ_PUZZLES } from './puzzle-set.mjs'
 
 // The engine's own vocabulary: the few actions its tests need, with the facts `actions.mjs` asks of a kind, so a new real kind moves no seed here. The shapes are the real kinds'
 // (`click cell`, `pen drag, Escape`): each runs on the fake page's `env`, and `start` marks the kinds a busy start may draw.
 const PEN = 'pen-tool-extras.user.js'
 const cell = (puzzle) => fc.nat(puzzle.cells.length - 1)
-const press = (kind, group, weight, key, start = false) => ({ kind, group, scripts: [], start, stroke: false, weight, arg: () => fc.constant(null), label: () => `press ${key}`, run: (env) => env.page.keyboard.press(key) })
 const KINDS = [
   { kind: 'click cell', group: 'ordinary', scripts: [], start: true, stroke: false, weight: 6, arg: cell, label: (i, at) => `click ${at(i)}`, run: async (env, i) => env.page.mouse.click(...await env.cellPoint(i)) },
-  press('tab', 'ordinary', 2, 'Tab'),
+  { kind: 'tab', group: 'ordinary', scripts: [], start: false, stroke: false, weight: 2, arg: () => fc.constant(null), label: () => 'press Tab', run: (env) => env.page.keyboard.press('Tab') },
   { kind: 'undo', group: 'ordinary', scripts: [], start: false, stroke: false, weight: 3, arg: () => fc.constant(null), label: () => 'undo', run: (env) => env.undo() },
   { kind: 'redo', group: 'ordinary', scripts: [], start: false, stroke: false, weight: 2, arg: () => fc.constant(null), label: () => 'redo', run: (env) => env.redo() },
   { kind: 'blur and focus', group: 'page', scripts: [], start: false, stroke: false, weight: 2, arg: () => fc.constant(null), label: () => 'window blur and focus', run: (env) => env.blurFocus() },
@@ -68,6 +67,32 @@ describe('strokeSinceReload (#743)', () => {
   it('counts an action that declares a stroke, and none that does not', () => {
     assert.equal(strokeSinceReload({ kind: 'drawing', stroke: true }, null), true)
     assert.equal(strokeSinceReload({ kind: 'settings', stroke: false }, null), false)
+  })
+})
+
+describe('the stroke fact reaches the rules (#681)', () => {
+  // A page whose strokes come back in color 1 after a reload; the rule forgives that only when the engine says a stroke was drawn since the last reload.
+  const strokePage = () => {
+    let strokes = []
+    const openTarget = async (puzzle) => {
+      const target = await fakeTargets().openTarget(puzzle)
+      target.snapshot = async () => ({ errors: [], notices: [], page: quietPage({ penState: strokes, penDrawn: strokes }) })
+      target.env.draw = async () => { strokes = ['pen-1 pencolor-3'] }
+      target.env.reload = async () => { strokes = ['pen-1 pencolor-1'] }
+      return target
+    }
+    return openTarget
+  }
+  const step = (cmd, run) => ({ cmd, check: () => true, run: (model, { env }) => run(env), toString: () => cmd.kind })
+  const draw = step({ kind: 'draw', stroke: true }, (env) => env.draw())
+  const key = step({ kind: 'key', stroke: false }, () => {})
+  const reload = step({ kind: 'reload', stroke: false }, (env) => env.reload())
+
+  it('a reload after a stroke, with a key between, may bring the strokes back in color 1', async () => {
+    await runScript({ openTarget: strokePage(), puzzle: PUZZLES[0], actions: [draw, key, reload] })
+  })
+  it('a reload with no stroke before it may not', async () => {
+    await assert.rejects(runScript({ openTarget: strokePage(), puzzle: PUZZLES[0], actions: [key, reload] }), /reload-changes-nothing/)
   })
 })
 
@@ -125,7 +150,7 @@ describe('the fuzz engine on a fake page', () => {
   })
 
   it('a focused failure replays, with the same focus, as the same list (#724)', async () => {
-    const focus = ['pen-tool-extras.user.js']
+    const focus = [PEN]
     const found = await runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, kinds: KINDS, seed: SEED, runs: 200, focus, ...FIXED_WAIT })
     assert.equal(found.failed, true)
     const replay = (withFocus) => runFuzz({ openTarget: fakeTargets({ plantEscapeError: true }).openTarget, puzzles: PUZZLES, kinds: KINDS, seed: found.seed, path: found.path, replayPath: found.replayPath, focus: withFocus, ...FIXED_WAIT })

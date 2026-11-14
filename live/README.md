@@ -128,7 +128,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 
 - **`--focus <script>`** (#724) raises the weight of the actions that exercise that script, by `FOCUS_FACTOR` (4), so a run spends its time where a change is. It takes a script's name
   without `.user.js` (`pen-tool-extras`); another name stops the run before the browser starts and repeats for several. Every other action keeps its weight, so every action still comes up. Which script an action exercises is
-  `KIND_SCRIPTS` of `live/fuzz/actions.mjs`; a new action kind needs an entry, which `actions.test.mjs` checks. The weights change the lists a seed gives, so a failure's printed replay
+  the `scripts` its kind declares in `KINDS` of `live/fuzz/actions.mjs`; a new kind declares it, which `actions.test.mjs` checks. The weights change the lists a seed gives, so a failure's printed replay
   command carries the same `--focus`, and a `--path` replays only with it.
 
 - **Each action list names its puzzle** (#679), drawn first from the set in `puzzle-set.mjs`, so one run covers them all and a printed `--path` replays on the
@@ -156,7 +156,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
   and an error that lands late, so that a 0 ms list reads it only at a later step, is still blamed on the step that caused it: after the shrink, the list's beginnings are run
   again with their last step given 40 ms, and the shortest that still fails names the step (one page more for each step it looks back).
   `--config busy-start` (#726) gives some lists a start of up to 30 steps (digits, marks, colors, pen lines, notes, saved settings), printed `(start) ...` ahead of the actions and dropped by a
-  shrink that does not need it. Its steps are actions of the list (`START_KINDS` of `actions.mjs`): what they put in SudokuPad's state (digits, marks, colors, pen lines) rides the
+  shrink that does not need it. Its steps are actions of the list (the kinds whose `KINDS` entry in `actions.mjs` declares `start`): what they put in SudokuPad's state (digits, marks, colors, pen lines) rides the
   undo stack, and the rest (notes, settings, Dark Page) is what `undo-to-start` leaves out, so the rules hold unchanged and `undo-to-start` still compares with an empty board, not with the start. `--config` names one of `live/fuzz/configs.mjs`; a path replays
   only under the configuration it was found with, and the replay command names it.
 - **The rules** (`rules.mjs`, #594) say what "working" means for each script, as pure functions over a snapshot of the page (`page-state.mjs` reads it) checked after

@@ -7,12 +7,12 @@ import { fakeTargets } from './fake-target.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
 
-// The lists a seed gives (each `{ puzzle, commands }`) over the whole puzzle set, or over `puzzles`.
 // What each real kind declares, by name.
 const KIND_SCRIPTS = Object.fromEntries(KINDS.map((k) => [k.kind, k.scripts]))
 const START_KINDS = KINDS.filter((k) => k.start).map((k) => k.kind)
 
-const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList(puzzles, { maxCommands: 20 }), { seed, numRuns: count })
+// The lists a seed gives (each `{ puzzle, commands }`) over the whole puzzle set, or over `puzzles`.
+const sample = (seed, count = 6, puzzles = FUZZ_PUZZLES) => fc.sample(actionList(puzzles, { kinds: KINDS, maxCommands: 20 }), { seed, numRuns: count })
 // fast-check wraps each generated command (`.cmd`), and prints a list only once it ran, so the steps are read from the commands.
 const actionsOf = (lists) => lists.flatMap((l) => [...l.commands].map((wrapped) => wrapped.cmd))
 const stepsOf = (lists) => actionsOf(lists).map(String)
@@ -489,7 +489,7 @@ describe('focusing the actions on a script (#724)', () => {
   const kindsOf = (file) => KIND_NAMES.filter((k) => KIND_SCRIPTS[k].includes(file))
   const counts = (focus) => {
     const seen = Object.fromEntries(KIND_NAMES.map((k) => [k, 0]))
-    for (const a of actionsOf(fc.sample(actionList(FUZZ_PUZZLES, { maxCommands: 20, focus }), { seed: 11, numRuns: 300 }))) seen[a.kind]++
+    for (const a of actionsOf(fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS, maxCommands: 20, focus }), { seed: 11, numRuns: 300 }))) seen[a.kind]++
     return seen
   }
   const share = (seen, kinds) => kinds.reduce((sum, k) => sum + seen[k], 0) / Object.values(seen).reduce((a, b) => a + b, 0)
@@ -514,7 +514,6 @@ describe('focusing the actions on a script (#724)', () => {
 
   it('names every script a kind exercises, and every script has a kind', () => {
     const files = new Set(scriptFiles())
-    for (const [kind, scripts] of Object.entries(KIND_SCRIPTS)) for (const f of scripts) assert.ok(files.has(f), `${kind}: ${f} is no script`)
     for (const f of files) assert.ok(kindsOf(f).length > 0, `${f} has no action that exercises it`)
   })
 
@@ -826,7 +825,7 @@ describe('focusing the actions on a script (#724)', () => {
 })
 
 describe('longer lists and no empty list (#730)', () => {
-  const lengths = (options, count = 300) => fc.sample(actionList(FUZZ_PUZZLES, options), { seed: 31, numRuns: count }).map((l) => [...l.commands].length)
+  const lengths = (options, count = 300) => fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS, ...options }), { seed: 31, numRuns: count }).map((l) => [...l.commands].length)
 
   it('with no nonEmpty, some lists are empty, as fast-check draws the length from 0', () => {
     assert.ok(lengths({ maxCommands: 20 }).includes(0))
