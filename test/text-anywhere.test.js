@@ -1578,21 +1578,21 @@ test('indexAfterKeep: deleting a note before the open one moves the open index d
   assert.equal(indexAfterKeep(5, keep), -1, 'an index past the notes has none')
 })
 
-const NONE = { editingIndex: null, resizing: null, move: null }
+const NONE = { textBoxIndex: null, resizing: null, move: null }
 
 test('followKept: the open note and its resize follow their notes to the places the others\' removal left them', () => {
   const keep = [true, false, true, true]
-  assert.deepEqual(followKept({ ...NONE, editingIndex: 2, resizing: { index: 2, cancelled: false } }, keep), { editingIndex: 1, resizing: { index: 1, cancelled: false }, move: null, dragCancelled: false })
+  assert.deepEqual(followKept({ ...NONE, textBoxIndex: 2, resizing: { index: 2, cancelled: false } }, keep), { textBoxIndex: 1, resizing: { index: 1, cancelled: false }, move: null, dragCancelled: false })
 })
 
 test('followKept: an open note that went is unsaved (-1), and so is its resize, which is not cancelled', () => {
-  const next = followKept({ ...NONE, editingIndex: 1, resizing: { index: 1, cancelled: false } }, [true, false, true])
-  assert.deepEqual(next.editingIndex, -1)
+  const next = followKept({ ...NONE, textBoxIndex: 1, resizing: { index: 1, cancelled: false } }, [true, false, true])
+  assert.deepEqual(next.textBoxIndex, -1)
   assert.deepEqual(next.resizing, { index: -1, cancelled: false })
 })
 
 test('followKept: a new open note (-1) stays unsaved', () => {
-  assert.equal(followKept({ ...NONE, editingIndex: -1 }, [true, false]).editingIndex, -1)
+  assert.equal(followKept({ ...NONE, textBoxIndex: -1 }, [true, false]).textBoxIndex, -1)
 })
 
 test('followKept: a selected note\'s resize whose note went is cancelled; one whose note stayed is not', () => {
