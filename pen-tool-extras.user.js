@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.25
+// @version      1.32.26
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.25'
+  const VERSION = '1.32.26'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -656,6 +656,7 @@
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
       `.${prefix}off-note:empty { display: none; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
@@ -744,7 +745,7 @@
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global setDialogStatus, errorText, writeOrRestore */
-  // `upgrade` rewrites the parsed object first, for text copied by an older version.
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -1675,6 +1676,7 @@
     COLOR_CHARS.forEach(({ page: index, number }, c) => {
       if (index === 0) return
       rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${number}); }`)
+      // A line is stroked and an arrow is filled, in the same color: the arrows' path has no stroke of its own.
       if (PEN_PAGES[index].arrowLines) rules.push(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${number}); stroke: none; }`)
     })
     PEN_PAGES.forEach((page, index) => {
@@ -1686,6 +1688,8 @@
     return rules.join('\n')
   }
 
+  // The slant is atan(28 / 40), the rise over the run of the line the button first showed. Under the line is a dot for each enabled page with the current one
+  // filled, as SudokuPad's color tool's page button has.
   const PAGE_BUTTON_ANGLE = 35
   // The viewBox of the icon that shows each page's style (the page the button turns to), drawn 34 px on its longest side and centred on its ink: see LINE_MODE_ICON_VIEWBOX.
   const PAGE_ICON_VIEWBOX = ['0.09 -2.31 24.352 24.352', '0 -2.5 24.6 24.6', '0.12 -2.18 24.352 24.352']
@@ -1972,6 +1976,7 @@
     }
   }
 
+  // An arrow line's class holds a page 3 color character, as in `cell-pen pen-1 pencolor-j`.
   function arrowLineOf (opts) {
     const match = /(?:^|\s)pencolor-(\S+)$/.exec(opts.className || '')
     return match && LINE_VALUES.includes(opts.value) ? arrowLineWayOf(match[1]) : null
@@ -2611,6 +2616,7 @@
     return layerIn(HINT_LAYER_ID, true)
   }
 
+  // SudokuPad draws the drag highlight inside the pen layer; it moves to the layer beside it, so the pen layer's opacity and outline do not touch it.
   function installHintLayer (tool) {
     steps.dragHint.wrap(tool, 'drawLineHint', function (stock, ...args) {
       stock(...args)
@@ -2663,8 +2669,7 @@
   // <lib:panel>
   // Generated from lib/panel.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // A script that copies in settings-dialog as well has a second `global` naming
-  // SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  // A script that copies in settings-dialog as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global rem, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
   // A tool's purple panel: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of three controls at the full 4rem, and the sliders across the rest. A tray sits behind the last two rows; it is placed in

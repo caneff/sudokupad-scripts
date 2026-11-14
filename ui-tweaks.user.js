@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.22
+// @version      0.1.23
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Toggle Selection button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.22'
+  const VERSION = '0.1.23'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -322,6 +322,7 @@
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
       `.${prefix}off-note:empty { display: none; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
@@ -410,7 +411,7 @@
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global setDialogStatus, errorText, writeOrRestore */
-  // `upgrade` rewrites the parsed object first, for text copied by an older version.
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -816,6 +817,7 @@
   if (typeof Framework === 'undefined') return
 
   let options = DEFAULT_OPTIONS
+  // The letter tool and its key list as they were before the Tab option swapped the list; null while the option is off.
   let swapped = null
 
   function applyTab (on) {
@@ -904,6 +906,7 @@
     })
   }
 
+  // The letter tool's own list holds whenever the tool is on, so a swapped list is not undone by the setting.
   function listenForHeldTab () {
     document.addEventListener('keydown', (event) => {
       tab.run(() => {

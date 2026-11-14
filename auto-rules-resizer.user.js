@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.14
+// @version      0.7.15
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,12 +18,12 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.14'
+  const VERSION = '0.7.15'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
-  const EDGE_PX = 8
-  const MIN_FONT_RATIO = 0.7
-  const MAX_FONT_RATIO = 1.5
+  const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
+  const MIN_FONT_RATIO = 0.7 // the smallest font, as a share of SudokuPad's own
+  const MAX_FONT_RATIO = 1.5 // the largest font, as a share of SudokuPad's own
   const READABLE_CHARS = 90
   const REM_PX = 16
   const RULES_MIN = { width: 15 * REM_PX, height: 7 * REM_PX } // the pane's floor under a drag, css px
@@ -641,6 +641,7 @@
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
       `.${prefix}off-note:empty { display: none; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
@@ -729,7 +730,7 @@
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global setDialogStatus, errorText, writeOrRestore */
-  // `upgrade` rewrites the parsed object first, for text copied by an older version.
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -1376,6 +1377,7 @@
     rules.scrollTop += (line - (contentTop(rules) - place.above)) / paneScale(rules)
   }
 
+  // Visual px per css px of the pane: SudokuPad scales the whole controls column.
   const paneScale = (rules) => (rules.offsetWidth > 0 ? rules.getBoundingClientRect().width / rules.offsetWidth : 1)
 
   // The pane's width in css px that sets the rules' average character READABLE_CHARS wide at `fontPx`. The average is the

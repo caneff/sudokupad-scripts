@@ -34,6 +34,7 @@ const blockLines = (name, module, indent) => {
 
 const ANY_CONST_VERSION = /^\s*const VERSION =/m
 
+// null when either version is not a plain X.Y.Z it can raise.
 function bumpPatch (source) {
   if (!SCRIPT_VERSION.test(source) || (ANY_CONST_VERSION.test(source) && !CONST_VERSION.test(source))) return null
   return [SCRIPT_VERSION, CONST_VERSION].reduce(
@@ -44,7 +45,7 @@ function bumpPatch (source) {
 const GLOBAL_COMMENT = /\/\*\s*globals?\s([^*]*)\*\//g
 const ESCAPE = /[.*+?^${}()|[\]\\]/g
 
-// Includes ESLint's `name:writable` form.
+// Names a module reads from other modules, per its `/* global */` comments (ESLint's `name:writable` form included).
 const globalNames = (module) => [...module.matchAll(GLOBAL_COMMENT)]
   .flatMap((comment) => comment[1].split(','))
   .map((name) => name.split(':')[0].trim())

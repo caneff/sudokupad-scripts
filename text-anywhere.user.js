@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.25
+// @version      0.46.26
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.25'
+  const VERSION = '0.46.26'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -25,6 +25,7 @@
   const MAX_WIDTH = 16
   const WIDTH_STEP = 0.5
   const DEFAULT_WIDTH = 6
+  // Percent.
   const MIN_OPACITY = 20
   const MAX_OPACITY = 100
   const OPACITY_STEP = 5
@@ -168,6 +169,7 @@
     [PEN_PRESET]: 'Pen colors',
     ...PALETTE_PRESET_LABELS
   }
+  // The next note's size is saved as a width; a text size is 2 x the width + 8.
   const WIDTH_KEY = KEY_PREFIX + 'width'
   const OUTLINE_KEY = KEY_PREFIX + 'outline'
   const OPACITY_KEY = KEY_PREFIX + 'opacity'
@@ -225,6 +227,7 @@
   const HANDLE_CLASS = 'text-anywhere-resize'
   const SELECTION_CLASS = 'text-anywhere-selection'
   const NUDGING_CLASS = 'text-anywhere-nudging'
+  // On a note within the hit margin of the pointer but not under it.
   const HOVERED_CLASS = 'text-anywhere-hovered'
   const GUIDE_CLASS = 'text-anywhere-snap-guide'
   const GUIDE_PX = 1
@@ -437,6 +440,7 @@
 
   const isBullet = (runs) => Boolean(runs[0]?.bullet)
   const BULLET_INDENT_EM = 1.2
+  // A number wider than "1." (two characters) pushes its text right by this much for each character more.
   const NUMBER_DIGIT_EM = 0.5
   const HEADER_SCALES = [1.5, 1.25, 1.1]
   const SUBTEXT_SCALE = 0.8
@@ -678,6 +682,7 @@
     return { notes: notes.map((note, i) => i === index ? { ...item, text } : note), index }
   }
 
+  // Where the note at index `index` sits after the notes `keep` marks false went, or -1 when it went (or was never saved, as a new note's -1).
   const indexAfterKeep = (index, keep) => index < 0 || !keep[index] ? -1 : keep.slice(0, index).filter(Boolean).length
 
   // The open note's index, a resize and a move after the notes `marks` marks false went. An open note that went is unsaved (-1, so closing it adds it back with what was typed),
@@ -1532,6 +1537,7 @@
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
       `.${prefix}off-note:empty { display: none; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
@@ -1620,7 +1626,7 @@
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global setDialogStatus, errorText, writeOrRestore */
-  // `upgrade` rewrites the parsed object first, for text copied by an older version.
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -2315,8 +2321,7 @@
   // <lib:panel>
   // Generated from lib/panel.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // A script that copies in settings-dialog as well has a second `global` naming
-  // SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  // A script that copies in settings-dialog as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global rem, SUDOKUPAD_PURPLE */ // eslint-disable-line no-redeclare
   // A tool's purple panel: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of three controls at the full 4rem, and the sliders across the rest. A tray sits behind the last two rows; it is placed in

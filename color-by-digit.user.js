@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.54
+// @version      0.25.55
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.54'
+  const VERSION = '0.25.55'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1813,6 +1813,7 @@
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       `.${prefix}off-note { margin: 6px 0; font-size: .85rem; color: ${TITLE_MUTED}; }`,
       `.${prefix}off-note:empty { display: none; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
@@ -2001,6 +2002,7 @@
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
   const DIALOG = `.dialog:has(${EDITOR})`
+  // Only for someone who has not asked the system for less motion; a fading menu takes no clicks.
   const MENU_FADE_MS = 100
   const ROW_SLIDE_MS = 80
   const MOTION_CSS = [
@@ -2069,7 +2071,7 @@
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global setDialogStatus, errorText, writeOrRestore */
-  // `upgrade` rewrites the parsed object first, for text copied by an older version.
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
     try {
@@ -2371,6 +2373,7 @@
   const DIGIT_STYLE_ID = 'color-by-digit-digits'
   const SVG_NS = 'http://www.w3.org/2000/svg'
 
+  // An entered digit's text element has no digit attribute; marks have `data-val`.
   function stampEnteredDigits () {
     document.querySelectorAll('#cell-values .cell-value').forEach((el) => {
       const digit = digitOfText(el.textContent)
@@ -2987,6 +2990,7 @@
         edit({ type: 'key-paint', digit: el.dataset.digit })
       }
       draw()
+      // The redraw replaced the button; a keyboard user keeps the focus on its successor.
       if (event.detail === 0 && act === 'digit') focusDigitKey(el.dataset.digit)
     })
   }

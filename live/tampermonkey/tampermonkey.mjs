@@ -127,6 +127,7 @@ const isAsk = (id) => (p) => p.url().startsWith(`chrome-extension://${id}/ask.ht
 export async function installScript ({ context, id }, url) {
   let ask
   for (let i = 0; i < ASK_TRIES && !ask; i++) {
+    // Only the wait running out means no page showed (`page: null`); any other failure is thrown, after the opener is closed.
     const shown = context.waitForEvent('page', { predicate: isAsk(id), timeout: ASK_MS })
       .then((page) => ({ page }), (error) => { if (error instanceof errors.TimeoutError) return { page: null }; return { error } })
     const opener = await context.newPage()
