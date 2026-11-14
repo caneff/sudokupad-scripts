@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { boardState, cellState, emptyCell, pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts } from './attacks.mjs'
-import { cellCentre, finishNote, gridPoint, mouseDrag, typeText, undoDepth } from './board.mjs'
+import { cellCentre, clickCell, finishNote, gridPoint, mouseDrag, typeText, undoDepth } from './board.mjs'
 import { penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
@@ -197,18 +197,17 @@ describe('attacks on input', { concurrency: false }, () => {
       await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...key })
     }
     const press = (key) => key.startsWith('Numpad') ? numpad(key.slice(-1)) : p.keyboard.press(key)
-    const clickCell = async ([row, col]) => p.mouse.click(...await gridPoint(p, [row + 0.5, col + 0.5]))
     // The board after `keys` pressed in a clean cell. A click in a probe cell afterward shows the color the pen picked, which no key leaves in the cell itself.
     const trial = async (tool, keys) => {
       const [cell, probe] = [cells.shift(), cells.shift()]
       await pickTool(p, tool)
       // A tool's picked color is kept between cells, so each trial starts from color 1, picked in a cell of its own.
-      await clickCell(scratch)
+      await clickCell(p, ...scratch)
       await p.keyboard.press('Digit1')
-      await clickCell(cell)
+      await clickCell(p, ...cell)
       for (const key of keys) await press(key)
       const state = [await cellState(p, cell), await p.evaluate((key) => Framework.getData(key), textAnywhere.COLOR_KEY)]
-      await clickCell(probe)
+      await clickCell(p, ...probe)
       return JSON.stringify([...state, await cellState(p, probe)])
     }
     const toolAfter = async (tool, key) => {

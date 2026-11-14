@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { buttonIds, DIGIT_BUTTON, pickTextAnywhere, TOOL_KEYS, texts as noteTexts, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { seedOddEvenCells } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { openWith, SCRIPT_FILES, useBrowser } from './session.mjs'
-import { cellCentre, mouseDrag, placeNote } from './board.mjs'
+import { cellCentre, clickCell, mouseDrag, placeNote } from './board.mjs'
 import { goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
@@ -37,10 +37,6 @@ for (const [order, files] of INSTALL_ORDERS) {
     let context, p, errors, solved
     const read = (fn, arg) => p.evaluate(fn, arg)
 
-    const clickCell = async (row, col) => {
-      const [x, y] = await cellCentre(p, row, col)
-      await p.mouse.click(x, y)
-    }
     const useTool = async (id) => {
       await p.click(id)
       await settle(() => tool(p), id.replace('#control-', ''))
@@ -67,17 +63,17 @@ for (const [order, files] of INSTALL_ORDERS) {
     // digits, which Color by Digit colors in Cell mode
       await useTool('#control-normal')
       for (const [r, c, d] of [[0, 2, '4'], [0, 3, '6'], [1, 1, '7']]) {
-        await clickCell(r, c)
+        await clickCell(p, r, c)
         await p.keyboard.press(d)
       }
       await useTool('#control-corner')
-      await clickCell(2, 0)
+      await clickCell(p, 2, 0)
       await p.keyboard.press('1'); await p.keyboard.press('2')
       await useTool('#control-centre')
-      await clickCell(2, 3)
+      await clickCell(p, 2, 3)
       await p.keyboard.press('3'); await p.keyboard.press('5')
       await useTool('#control-colour')
-      await clickCell(4, 4)
+      await clickCell(p, 4, 4)
       await p.keyboard.press('3')
       // pen: a solid line, a dashed one (page 2), an arrow line (page 3) and an edge mark
       await openPenTool(p)
