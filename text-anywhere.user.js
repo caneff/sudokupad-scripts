@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.13
+// @version      0.46.21
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.13'
+  const VERSION = '0.46.21'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -29,6 +29,8 @@
   const MIN_OPACITY = 20
   const MAX_OPACITY = 100
   const OPACITY_STEP = 5
+  const WIDTH_RANGE = { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }
+  const OPACITY_RANGE = { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }
   const DEFAULT_OPACITY = 100
   // An item saves its color as a number, 1 to 9, the number of one of the nine colors, so a recolor recolors it.
   const NOTE_COLOR_COUNT = 9
@@ -158,7 +160,6 @@
   const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
   /* eslint-enable no-unused-vars */
   // </lib:palette>
-  const HEX_COLOR = /^#([0-9a-f]{6})$/
   // The page's own color, as SudokuPad's buttons use it behind their icons.
   const PAGE_COLOR = 'var(--body-bg, #fff)'
   const PEN_PRESET = 'pen'
@@ -612,9 +613,8 @@
     return Number.isInteger(n) && n >= 1 && n <= NOTE_COLOR_COUNT ? n : undefined
   }
   const readColor = (saved) => noteColorNumber(saved) ?? DEFAULT_COLOR
-  const onSlider = (value, min, max, step) => isNumber(value) && value >= min && value <= max && Number.isInteger((value - min) / step)
-  const isWidth = (value) => onSlider(value, MIN_WIDTH, MAX_WIDTH, WIDTH_STEP)
-  const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
+  const isWidth = (value) => onSliderStep(WIDTH_RANGE, value)
+  const isOpacity = (value) => onSliderStep(OPACITY_RANGE, value)
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
   const readFlag = (saved) => saved === true
   const readBackground = readFlag
@@ -670,7 +670,7 @@
   const TEXT_SIZE_PER_WIDTH = 2
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
-  const sizeStep = (width, direction) => steppedSlider({ min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width, direction)
+  const sizeStep = (width, direction) => steppedSlider(WIDTH_RANGE, width, direction)
   // A note steps from its own size, not from the width the panel shows for the first selected note.
   const steppedNote = (item, direction) => ({ ...item, size: textSizeFor(sizeStep(widthFor(item.size), direction)) })
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
@@ -716,6 +716,8 @@
   // The keys that step a panel slider: + (also =, and the keypad's) up and - down.
   const SLIDER_STEP_KEYS = { '+': 1, '=': 1, '-': -1 }
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
+  // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
+  const onSliderStep = ({ min, max, step }, value) => typeof value === 'number' && value >= min && value <= max && Number.isInteger((value - min) / step)
   /* eslint-enable no-unused-vars */
   // </lib:slider-keys>
 
@@ -786,11 +788,59 @@
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
+  // A value already saved as it is writes nothing: a write is a storage round trip.
   function save (store, key, data) {
-    store.setData(key, { v: STORE_VERSION, data })
+    const envelope = { v: STORE_VERSION, data }
+    if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
+    store.setData(key, envelope)
   }
   /* eslint-enable no-unused-vars */
   // </lib:store>
+  // <lib:settings-table>
+  // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  /* global isPlainObject */ // eslint-disable-line no-redeclare
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
+  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  function sameValue (a, b) {
+    return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
+  }
+
+  const tableKeys = (rows) => rows.map((row) => row.key)
+
+  const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
+
+  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+
+  const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
+
+  // Every row as `store` holds it, by name.
+  const readTable = (rows, store) => readByField(rows, store, 'name')
+
+  // The same values by stored key, defaults included, so a paste can put a setting back to its default.
+  const copiedTable = (rows, store) => readByField(rows, store, 'key')
+
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+
+  // The rows whose draft differs from the value in force.
+  const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
+
+  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
+  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
+
+  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+
+  // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
+  function saveRow (store, row, value) {
+    if (sameValue(value, row.fallback)) store.removeData(row.key)
+    else if (row.envelope) row.envelope.save(store, row.key, value)
+    else store.setData(row.key, value)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-table>
 
   // <lib:color-math>
   // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
@@ -806,6 +856,11 @@
   const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
+
+  const SAVED_HEX = /^#[0-9a-f]{6}$/i
+
+  // A color read back from storage: `#` and six hex digits in any case, lowercased; anything else is undefined, and the caller picks its own fallback.
+  const savedHex = (value) => typeof value === 'string' && SAVED_HEX.test(value) ? value.toLowerCase() : undefined
 
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 
@@ -1113,8 +1168,6 @@
     return rgb ? toHex(rgb) : undefined
   }
 
-  const savedHex = (value) => typeof value === 'string' && HEX_COLOR.test(value.toLowerCase()) ? value.toLowerCase() : undefined
-
   // null when nothing is saved, which means the first-use copy of the pen colors is still owed. A saved value that is not
   // nine colors still counts as saved, so the copy never writes over it: each color it lacks shows SudokuPad's own.
   function readNoteColors (saved) {
@@ -1150,35 +1203,31 @@
     return { colors: { ...colors }, missing }
   }
 
-  // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `validator` a pasted value must pass or be skipped.
+  // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `paste` (the reader a pasted value goes through, `read` when absent; it gives undefined for a value to skip).
   // `dialog` marks the looks the settings dialog sets and the notes are drawn again in; the others are the panel's sliders.
   // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
+  const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })
   const LOOKS = [
-    { name: 'width', key: WIDTH_KEY, read: readWidth, validator: isWidth },
-    { name: 'opacity', key: OPACITY_KEY, read: readOpacity, validator: isOpacity },
-    { name: 'outline', key: OUTLINE_KEY, read: readOutline, dialog: true },
-    { name: 'boxColor', key: BOX_KEY, read: readBoxColor, dialog: true },
-    { name: 'frame', key: FRAME_KEY, read: readFrame, dialog: true },
-    { name: 'noteFont', key: FONT_KEY, read: readFont, dialog: true }
+    lookRowOf('width', WIDTH_KEY, readWidth, { paste: (data) => (isWidth(data) ? data : undefined) }),
+    lookRowOf('opacity', OPACITY_KEY, readOpacity, { paste: (data) => (isOpacity(data) ? data : undefined) }),
+    lookRowOf('outline', OUTLINE_KEY, readOutline, { dialog: true }),
+    lookRowOf('boxColor', BOX_KEY, readBoxColor, { dialog: true }),
+    lookRowOf('frame', FRAME_KEY, readFrame, { dialog: true }),
+    lookRowOf('noteFont', FONT_KEY, readFont, { dialog: true })
   ]
-  const lookKeys = (looks) => looks.map((row) => row.key)
-  const lookReaders = (looks) => Object.fromEntries(looks.map(({ key, read, validator }) => [key, validator ? (data) => validator(data) ? data : undefined : read]))
-  // Every look as `store` holds it, keyed by each row's `by` field: its name for the looks in force, its stored key for Copy.
-  const readLooks = (store, looks = LOOKS, by = 'name') => Object.fromEntries(looks.map((row) => [row[by], row.read(store.getData(row.key))]))
   const lookRow = (name) => LOOKS.find((row) => row.name === name)
-  // The dialog's rows whose draft differs from the value in force.
-  const changedDialogLooks = (looks, draft, now) => looks.filter((row) => row.dialog && draft[row.name] !== now[row.name])
-  const dialogDefaults = () => Object.fromEntries(LOOKS.filter((row) => row.dialog).map((row) => [row.name, row.read(undefined)]))
-  // A paste puts the pasted looks (read from `now`, once saved) into the draft and leaves every other look as the draft has it.
-  const draftWithPasted = (looks, draft, now, values) => ({ ...draft, ...Object.fromEntries(looks.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+  const readLooks = (store, looks = LOOKS) => readTable(looks, store)
+  const dialogLooks = (looks) => looks.filter((row) => row.dialog)
+  const changedDialogLooks = (looks, draft, now) => changedRows(dialogLooks(looks), draft, now)
+  const dialogDefaults = () => tableDefaults(dialogLooks(LOOKS))
 
   // Copy and Paste carry the colors, size, opacity, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? storedNoteColors(readNoteColors(data), readNotePreset(data)) : undefined
-  const READERS = { [COLORS_KEY]: readPastedColors, ...lookReaders(LOOKS) }
+  const READERS = { [COLORS_KEY]: readPastedColors, ...pasteReaders(LOOKS) }
 
   // The looks in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store, looks = LOOKS) {
-    const copied = readLooks(store, looks, 'key')
+    const copied = copiedTable(looks, store)
     const savedColors = readNoteColors(store.getData(COLORS_KEY))
     if (savedColors) copied[COLORS_KEY] = storedNoteColors(savedColors, readNotePreset(store.getData(COLORS_KEY)))
     return JSON.stringify(copied)
@@ -1281,7 +1330,7 @@
   // since the copy is not brought back from its old notes, and a copy the browser refused is tried again at the next start. An old index that
   // cannot be read lists no puzzles: their notes stay under the old keys only.
   function copyOldKeys (store) {
-    for (const key of [COLOR_KEY, BACKGROUND_KEY, COLORS_KEY, NOTICE_KEY, ...lookKeys(LOOKS)]) copyOldKey(store, key)
+    for (const key of [COLOR_KEY, BACKGROUND_KEY, COLORS_KEY, NOTICE_KEY, ...tableKeys(LOOKS)]) copyOldKey(store, key)
     if (store.getData(INDEX_KEY) !== null) return
     let puzzles = []
     try {
@@ -1317,9 +1366,9 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer. A script
+  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
   // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste */ // eslint-disable-line no-redeclare
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -1393,20 +1442,22 @@
     swallowRelease(win)
   }
 
+  // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
+
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
-    framework.addSetting({
+  // The entry is added, and `open` runs, under `feature` (a guard feature), so a throw from either turns that feature off.
+  function addSettingsEntry (framework, feature, { name, content, open }) {
+    feature.run(() => framework.addSetting({
       tag: 'button',
       name,
       group: SETTINGS_GROUP,
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(() => {
-          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
-        }, 0)
+        setTimeout(() => feature.run(open), 0)
       }
-    })
+    }))
   }
 
   const COPY_PASTE_PICTURES = {
@@ -1489,14 +1540,6 @@
     ].join('\n')
   }
 
-  function addStyleOnce (id, css, doc = document) {
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = css
-    doc.head.appendChild(style)
-  }
-
   // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
   function buttonRowCss (bodyId) {
     const row = `.dialog:has(#${bodyId}) .dialog-options`
@@ -1529,8 +1572,8 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
-    if (css) addStyleOnce(styleId, css, doc)
+    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
@@ -1989,7 +2032,7 @@
     },
     settings: {
       label: 'settings',
-      needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' },
+      needs: SETTINGS_DIALOG_NEEDS,
       onSkip () {
         document.querySelector(`.${SETTINGS_CLASS}`)?.remove()
         Framework.closeDialog()
@@ -2071,7 +2114,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, draftWithPasted, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, lookReaders, lookKeys, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2088,10 +2131,10 @@
 
   const boardSvg = () => Framework.app.svgRenderer.getElem()
 
-  // What SudokuPad draws above the notes' layer: an open dialog and the menu drawer.
-  const ABOVE_NOTES = '.dialog-overlay, #appmenu'
+  // What is drawn above the notes' layer: an open dialog, the menu drawer and any script's popup menu (a role="menu" element on the page).
+  const ABOVE_NOTES = '.dialog-overlay, #appmenu, [role="menu"]'
 
-  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the top bar, the menu drawer and an open dialog.
+  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the top bar, the menu drawer, an open dialog and any script's popup menu.
   const CONTROLS = `.topbar, ${ABOVE_NOTES}, button, a, input, select, textarea`
   // The control panel's box is larger than what is drawn in it: a div with no text, fill or picture of its own is only layout.
   const CONTROLS_BOX = '#controls'
@@ -2318,6 +2361,13 @@
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${SUDOKUPAD_PURPLE};`
 
+  // A slider row of `panelCss`'s `sliderRow` class: the range input, or an empty placeholder when hidden. Neither input takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
+  function sliderRowMarkup (sliderRow, shown, { id, label, range, value }) {
+    return shown
+      ? `<div class="${sliderRow}" title="${label}"><input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
+      : `<div class="${sliderRow}" data-empty></div>`
+  }
+
   // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders` and `sliderRow` are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
   function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
@@ -2520,7 +2570,7 @@
   }
 
   // The colors and every look as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
-  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...lookKeys(LOOKS)], () => {
+  const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...tableKeys(LOOKS)], () => {
     const wasColors = colors
     const wasPreset = colorsPreset
     const wasMissing = colorsMissing
@@ -2634,7 +2684,7 @@
         apply: (values) => {
           applyPasted(values)
           // The draft takes only what was pasted: an edit to anything else is still there for Save.
-          draftLooks = draftWithPasted(LOOKS, draftLooks, look, values)
+          draftLooks = withPasted(LOOKS, draftLooks, look, values)
           if (BOX_KEY in values) draftCustom = savedHex(look.boxColor) ?? draftCustom
           if (COLORS_KEY in values) {
             draft = colors
@@ -2737,17 +2787,6 @@
     return notes ? panelLooks(notes) : { color, width: look.width, opacity: look.opacity }
   }
 
-  function sliderRow (id, label, range, value) {
-    const row = document.createElement('div')
-    row.className = SLIDER_ROW_CLASS
-    row.title = label
-    const input = document.createElement('input')
-    Object.assign(input, { type: 'range', id, min: range.min, max: range.max, step: range.step, value, tabIndex: -1 })
-    input.setAttribute('aria-label', label)
-    row.append(input)
-    return row
-  }
-
   // The look each slider sets, read by its row in LOOKS, and how it changes a note.
   const SLIDER_LOOKS = {
     [SIZE_SLIDER]: { name: 'width', change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
@@ -2793,7 +2832,8 @@
     hideAll.addEventListener('click', under(textTool, () => setNotesHidden(!notesHidden)))
     const sliderRows = document.createElement('div')
     sliderRows.className = SLIDER_ROWS_CLASS
-    sliderRows.append(sliderRow(SIZE_SLIDER, SIZE_LABEL, { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, look.width), sliderRow(OPACITY_SLIDER, OPACITY_LABEL, { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }, look.opacity))
+    sliderRows.innerHTML = sliderRowMarkup(SLIDER_ROW_CLASS, true, { id: SIZE_SLIDER, label: SIZE_LABEL, range: WIDTH_RANGE, value: look.width }) +
+      sliderRowMarkup(SLIDER_ROW_CLASS, true, { id: OPACITY_SLIDER, label: OPACITY_LABEL, range: OPACITY_RANGE, value: look.opacity })
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
     sliders.append(sliderRows, hideAll)
@@ -3243,7 +3283,7 @@
   const noteOf = (event) => event.target instanceof window.Element ? event.target.closest(`#${LAYER_ID} .${TEXT_CLASS}`) : null
 
   // The note the wheel is over. Under another tool the notes take no pointer, so the topmost drawn note whose box holds the point answers, unless a
-  // dialog or the menu drawer, which sit above the notes, is the wheel's target.
+  // dialog, the menu drawer or a script's popup menu, which sit above the notes, is the wheel's target.
   function wheelNote (event) {
     if (notesLayer().classList.contains(ACTIVE_CLASS)) return noteOf(event)
     if (!(event.target instanceof window.Element) || event.target.closest(ABOVE_NOTES)) return null
@@ -4257,7 +4297,7 @@
     showColors()
     // The features are independent: one that fails to install costs the others nothing.
     textTool.run(() => {
-      addStyleOnce(PANEL_STYLE_ID, PANEL_CSS)
+      writeStyle(PANEL_STYLE_ID, PANEL_CSS)
       textTool.wrap(app, 'getToolNames', function (stock) { return toolNamesFor(stock(), this.currentEvent) })
       Framework.addTool({
         button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
@@ -4293,7 +4333,7 @@
       onWindow(textTool, 'pagehide', saveOpenNote)
       document.addEventListener('visibilitychange', under(textTool, () => { if (document.visibilityState === 'hidden') saveOpenNote() }))
     })
-    settingsUi.run(() => addSettingsEntry(dialogs, { name: 'textanywhere', content: 'Text Anywhere', open: under(settingsUi, openDialog) }))
+    addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: 'Text Anywhere', open: openDialog })
     boardNotes.run(() => {
       app.puzzle.on('loaded', under(boardNotes, showSavedNotes))
       app.on('restarted', under(boardNotes, restartNotes))

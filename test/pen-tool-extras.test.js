@@ -13,7 +13,7 @@ const {
   buildCss, SUDOKUPAD_PEN_COLORS, editedColors,
   readPenColors, storedPenColors, startupPenColors, PRESET_LABELS,
   buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, VERSION, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
+  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
   clickedMarks, marksAtPoint, holdsMark, DOT_FILL_CSS,
@@ -138,28 +138,20 @@ test('the thickness runs 1 to 16 in half steps from SudokuPad\'s own pen width o
 
 test('the thickness setting keeps a saved whole or half number from 1 to 16 unchanged', () => {
   for (const ok of [1, 1.5, 2.5, 5, 8, 12.5, 15.5, 16]) {
-    assert.equal(SETTINGS.thickness.normalize(ok), ok)
-    assert.equal(SETTINGS.thickness.accepts(ok), true, String(ok))
+    assert.equal(SETTINGS.thickness.read(ok), ok)
+    assert.equal(SETTINGS.thickness.paste(ok), ok, String(ok))
   }
 })
 
 test('a half-step thickness is saved as it is, not rounded', () => {
   const calls = []
-  saveSetting({ setData: (key, value) => calls.push([key, value]), removeData: () => {} }, SETTINGS.thickness, 1.5)
+  saveRow({ setData: (key, value) => calls.push([key, value]), removeData: () => {} }, SETTINGS.thickness, 1.5)
   assert.deepEqual(calls, [['PenColor_thickness', 1.5]])
-})
-
-test('inRange takes any multiple of the step from the minimum, and a whole-number range stays whole', () => {
-  assert.equal(inRange(2.5, THICKNESS), true)
-  assert.equal(inRange(2.25, THICKNESS), false)
-  assert.equal(inRange(2.5, DASH), false)
-  assert.equal(inRange(2.5, OPACITY), false)
-  assert.equal(inRange(22, OPACITY), false)
 })
 
 test('the thickness setting falls back to 5 for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 0.5, 16.5, 17, -3, 2.25, 1.75, 2.4, NaN, Infinity, '7', [7], { a: 7 }, true]) {
-    assert.equal(SETTINGS.thickness.normalize(bad), 5, String(bad))
+    assert.equal(SETTINGS.thickness.read(bad), 5, String(bad))
   }
 })
 
@@ -244,12 +236,12 @@ test('the opacity runs 20 to 100 percent in steps of 5 from SudokuPad\'s own pen
 })
 
 test('the opacity setting keeps a saved whole number from 20 to 100 on the slider\'s steps', () => {
-  for (const ok of [20, 55, 80, 100]) assert.equal(SETTINGS.opacity.normalize(ok), ok)
+  for (const ok of [20, 55, 80, 100]) assert.equal(SETTINGS.opacity.read(ok), ok)
 })
 
 test('the opacity setting falls back to 80 for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 19, 105, -80, 82, 80.5, NaN, Infinity, '70', [70], { a: 70 }, true]) {
-    assert.equal(SETTINGS.opacity.normalize(bad), 80, String(bad))
+    assert.equal(SETTINGS.opacity.read(bad), 80, String(bad))
   }
 })
 
@@ -847,8 +839,8 @@ test('the dash length runs from 0 (dots) to 8 line widths in whole steps, and st
 })
 
 test('the dash setting keeps a saved whole number from 0 to 8, a saved 0 included, and anything else is 3', () => {
-  for (const ok of [0, 1, 4, 8]) assert.equal(SETTINGS.dash.normalize(ok), ok)
-  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(SETTINGS.dash.normalize(bad), 3, String(bad))
+  for (const ok of [0, 1, 4, 8]) assert.equal(SETTINGS.dash.read(ok), ok)
+  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(SETTINGS.dash.read(bad), 3, String(bad))
 })
 
 const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).filter((r) => r.body.startsWith('stroke-dasharray'))
@@ -898,13 +890,13 @@ test('a dash too long for a cell to hold a gap is shortened to leave one, and pa
 })
 
 test('both sliders show unless saved as hidden, and saved data without the setting shows both', () => {
-  assert.deepEqual(SETTINGS.show.normalize(undefined), { thickness: true, opacity: true })
-  assert.deepEqual(SETTINGS.show.normalize(null), { thickness: true, opacity: true })
-  assert.deepEqual(SETTINGS.show.normalize({}), { thickness: true, opacity: true })
-  assert.deepEqual(SETTINGS.show.normalize({ thickness: false }), { thickness: false, opacity: true })
-  assert.deepEqual(SETTINGS.show.normalize({ opacity: false, thickness: false }), { thickness: false, opacity: false })
-  assert.deepEqual(SETTINGS.show.normalize({ thickness: 0, opacity: 'no' }), { thickness: true, opacity: true })
-  assert.deepEqual(SETTINGS.show.normalize([false, false]), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.read(undefined), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.read(null), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.read({}), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.read({ thickness: false }), { thickness: false, opacity: true })
+  assert.deepEqual(SETTINGS.show.read({ opacity: false, thickness: false }), { thickness: false, opacity: false })
+  assert.deepEqual(SETTINGS.show.read({ thickness: 0, opacity: 'no' }), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.read([false, false]), { thickness: true, opacity: true })
 })
 
 test('a hidden slider has no input, and the other keeps its place beside an empty row of the same height', () => {
@@ -1607,8 +1599,8 @@ test('an arrow line has at least one arrow on any segment at any thickness and a
 })
 
 test('the outline setting is off only for a saved false: nothing saved and anything untrusted is on', () => {
-  assert.equal(SETTINGS.outline.normalize(false), false)
-  for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(SETTINGS.outline.normalize(ok), true, JSON.stringify(ok))
+  assert.equal(SETTINGS.outline.read(false), false)
+  for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(SETTINGS.outline.read(ok), true, JSON.stringify(ok))
 })
 
 test('buildOutlineCss is empty when the outline is off and filters the pen layer and not the highlight, when on', () => {
@@ -1654,8 +1646,8 @@ test('the outline filter grows the layer\'s combined shape by the default width 
 
 test('the outline width setting keeps a saved whole number from 1 to 8 and reads anything else, nothing saved included, as 2', () => {
   assert.deepEqual(OUTLINE_WIDTH, { min: 1, max: 8, step: 1, fallback: 2 })
-  for (const ok of [1, 3, 8]) assert.equal(SETTINGS.outlineWidth.normalize(ok), ok)
-  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(SETTINGS.outlineWidth.normalize(bad), 2, JSON.stringify(bad))
+  for (const ok of [1, 3, 8]) assert.equal(SETTINGS.outlineWidth.read(ok), ok)
+  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(SETTINGS.outlineWidth.read(bad), 2, JSON.stringify(bad))
 })
 
 test('the outline filter grows and blurs more for a wider outline', () => {
@@ -1667,21 +1659,21 @@ test('the outline filter grows and blurs more for a wider outline', () => {
 
 test('arrow spacing runs 3 to 12 in whole steps and starts at 5, and the arrow spacing setting keeps a saved whole number in range', () => {
   assert.deepEqual(ARROW_SPACING, { min: 3, max: 12, step: 1, fallback: 5 })
-  for (const ok of [3, 5, 12]) assert.equal(SETTINGS.arrowSpacing.normalize(ok), ok)
-  for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(SETTINGS.arrowSpacing.normalize(bad), 5, JSON.stringify(bad))
+  for (const ok of [3, 5, 12]) assert.equal(SETTINGS.arrowSpacing.read(ok), ok)
+  for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(SETTINGS.arrowSpacing.read(bad), 5, JSON.stringify(bad))
 })
 
 test('right click erase is on unless saved as the boolean false', () => {
-  assert.equal(SETTINGS.eraseClicks.normalize(false), false)
-  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(SETTINGS.eraseClicks.normalize(ok), true, JSON.stringify(ok))
+  assert.equal(SETTINGS.eraseClicks.read(false), false)
+  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(SETTINGS.eraseClicks.read(ok), true, JSON.stringify(ok))
 })
 
 test('both line styles are enabled unless saved as the boolean false, each on its own; saved junk enables both', () => {
-  assert.deepEqual(SETTINGS.lineStyles.normalize(undefined), { dashed: true, arrows: true })
-  assert.deepEqual(SETTINGS.lineStyles.normalize({ dashed: false }), { dashed: false, arrows: true })
-  assert.deepEqual(SETTINGS.lineStyles.normalize({ arrows: false }), { dashed: true, arrows: false })
-  assert.deepEqual(SETTINGS.lineStyles.normalize({ dashed: false, arrows: false }), { dashed: false, arrows: false })
-  for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(SETTINGS.lineStyles.normalize(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
+  assert.deepEqual(SETTINGS.lineStyles.read(undefined), { dashed: true, arrows: true })
+  assert.deepEqual(SETTINGS.lineStyles.read({ dashed: false }), { dashed: false, arrows: true })
+  assert.deepEqual(SETTINGS.lineStyles.read({ arrows: false }), { dashed: true, arrows: false })
+  assert.deepEqual(SETTINGS.lineStyles.read({ dashed: false, arrows: false }), { dashed: false, arrows: false })
+  for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(SETTINGS.lineStyles.read(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
 })
 
 test('a wider arrow spacing gives fewer arrows on the same segment', () => {
@@ -1854,12 +1846,6 @@ test('every settings table row with a section is drawn in the dialog, so a secti
   }
 })
 
-test('inRange takes a whole number from min to max on the steps counted from min, and nothing else', () => {
-  const range = { min: 20, max: 100, step: 5, fallback: 80 }
-  for (const ok of [20, 25, 80, 100]) assert.equal(inRange(ok, range), true, String(ok))
-  for (const bad of [15, 105, 22, 20.5, '20', null, undefined, NaN, true, [20]]) assert.equal(inRange(bad, range), false, String(bad))
-})
-
 test('isPlainObject takes an object and no array, null or scalar', () => {
   assert.equal(isPlainObject({}), true)
   assert.equal(isPlainObject({ a: 1 }), true)
@@ -1909,12 +1895,12 @@ test('saving one mark unticked writes the key, and saving every box ticked remov
 
 test('a slider row built from a range normalizes and saves by that range alone', () => {
   const row = slider('New_key', { min: 2, max: 10, step: 2, fallback: 4 }, () => {})
-  assert.equal(row.normalize(6), 6)
-  for (const bad of [0, 12, 5, '6', null, {}]) assert.equal(row.normalize(bad), 4, JSON.stringify(bad))
+  assert.equal(row.read(6), 6)
+  for (const bad of [0, 12, 5, '6', null, {}]) assert.equal(row.read(bad), 4, JSON.stringify(bad))
   const calls = []
   const store = { setData: (key, value) => calls.push(['set', key, value]), removeData: (key) => calls.push(['remove', key]) }
-  saveSetting(store, row, 6)
-  saveSetting(store, row, 4)
+  saveRow(store, row, 6)
+  saveRow(store, row, 4)
   assert.deepEqual(calls, [['set', 'New_key', 6], ['remove', 'New_key']])
 })
 
@@ -1958,9 +1944,9 @@ test('an effect two rows share runs once', () => {
 test('flags decode each name on its own: only a saved false is off, a non-object is all on, an unknown name is dropped', () => {
   const row = flags('Flags_key', ['a', 'b'])
   assert.deepEqual(row.fallback, { a: true, b: true })
-  assert.deepEqual(row.normalize({ a: false }), { a: false, b: true })
-  assert.deepEqual(row.normalize({ a: 0, b: false, c: false }), { a: true, b: false })
-  for (const bad of [null, undefined, 'x', 1, [false, false]]) assert.deepEqual(row.normalize(bad), { a: true, b: true }, JSON.stringify(bad))
+  assert.deepEqual(row.read({ a: false }), { a: false, b: true })
+  assert.deepEqual(row.read({ a: 0, b: false, c: false }), { a: true, b: false })
+  for (const bad of [null, undefined, 'x', 1, [false, false]]) assert.deepEqual(row.read(bad), { a: true, b: true }, JSON.stringify(bad))
 })
 
 test('readSettings normalizes what is saved under each key and falls back for the rest', () => {
@@ -1986,18 +1972,18 @@ test('changedSettings names only the settings whose value differs, reading flags
   assert.deepEqual(changedSettings({ ...now, show: { thickness: false, opacity: true }, outline: false }, now), ['outline', 'show'])
 })
 
-test('saveSetting removes the key of a value at its default and sets any other', () => {
+test('saveRow removes the key of a value at its default and sets any other', () => {
   const calls = []
   const store = {
     setData: (key, value) => calls.push(['set', key, value]),
     removeData: (key) => calls.push(['remove', key])
   }
-  saveSetting(store, SETTINGS.thickness, 5)
-  saveSetting(store, SETTINGS.thickness, 9)
-  saveSetting(store, SETTINGS.outline, true)
-  saveSetting(store, SETTINGS.outline, false)
-  saveSetting(store, SETTINGS.lineStyles, { dashed: true, arrows: true })
-  saveSetting(store, SETTINGS.lineStyles, { dashed: false, arrows: true })
+  saveRow(store, SETTINGS.thickness, 5)
+  saveRow(store, SETTINGS.thickness, 9)
+  saveRow(store, SETTINGS.outline, true)
+  saveRow(store, SETTINGS.outline, false)
+  saveRow(store, SETTINGS.lineStyles, { dashed: true, arrows: true })
+  saveRow(store, SETTINGS.lineStyles, { dashed: false, arrows: true })
   assert.deepEqual(calls, [
     ['remove', 'PenColor_thickness'],
     ['set', 'PenColor_thickness', 9],

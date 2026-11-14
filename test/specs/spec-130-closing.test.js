@@ -21,7 +21,7 @@ const ownFiles = swept.filter((file) => /pen-tool-extras/.test(file))
 // SudokuPad (`npm run test:live` covers the `Framework` calls, rendering and undo there), and to saved settings from an older version.
 // `npm run test:tampermonkey` installs each script into a real Tampermonkey.
 test('Pen Tool Extras holds spec 130 together', () => {
-  const { SETTINGS, settingDefaults, readSettings, saveSetting, changedSettings } = extras
+  const { SETTINGS, settingDefaults, readSettings, saveRow, changedSettings } = extras
   const store = fakeStore()
   const saved = store.data
 
@@ -34,13 +34,13 @@ test('Pen Tool Extras holds spec 130 together', () => {
   // One save rule: for every row, a changed value saves its key and the default removes it.
   for (const [name, row] of Object.entries(SETTINGS)) {
     const changed = typeof row.fallback === 'number'
-      ? [row.fallback + 1, row.fallback - 5].find((value) => row.normalize(value) === value)
+      ? [row.fallback + 1, row.fallback - 5].find((value) => row.read(value) === value)
       : typeof row.fallback === 'boolean'
         ? !row.fallback
         : Object.fromEntries(Object.keys(row.fallback).map((flag) => [flag, !row.fallback[flag]]))
-    saveSetting(store, row, changed)
+    saveRow(store, row, changed)
     assert.deepEqual(readSettings(store)[name], changed, `${name} reads back as saved`)
-    saveSetting(store, row, row.fallback)
+    saveRow(store, row, row.fallback)
     assert.equal(row.key in saved, false, `${name} at its default has no key`)
   }
 
