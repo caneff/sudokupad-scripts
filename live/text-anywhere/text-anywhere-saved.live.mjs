@@ -3,7 +3,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { clickUntil, settle } from '../settle.mjs'
+import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 import { addPage, useBrowser } from '../session.mjs'
 import { loadInPlace } from '../puzzles.mjs'
 import { finishNote, gridPoint, mouseDrag, restart, selectCell, typeText } from '../board.mjs'
@@ -16,7 +16,6 @@ const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 6
 // r1c3 of the recorded puzzle has no given.
 const EMPTY_CELL = [0, 2]
 const B_ID = 'puzzle-b-490'
-const UNDO_DEADLINE_MS = 5000
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
 const browser = useBrowser()
@@ -45,11 +44,23 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await selectCell(p, ...EMPTY_CELL)
     await p.keyboard.press(digit)
   }
-  // A click right after a reload can be dead, so an Undo is witnessed by taking a digit away: the digit is entered, then Undo clicks until it is gone.
-  const undoTakesDigit = async () => {
-    await enterDigit('7')
-    assert.equal(await settle(digit, '7'), '7')
-    assert.equal(await clickUntil(undo, digit, null, UNDO_DEADLINE_MS), null, 'the Undo took the digit away')
+  // text-anywhere restores kept notes only on an Undo taken while SudokuPad's undo stack is empty, which is the Undo of the Restart itself. A click right after a reload can be dead,
+  // and a digit entered before the Restart does not survive the reload to witness the Undo, so the puzzle's own `act` event is: Undo clicks until it has reported an undo, and only then is "nothing came back" read.
+  const restartThenReload = async () => {
+    await restart(p)
+    assert.deepEqual(await settle(texts, []), [])
+    assert.notEqual(await kept(), null, 'Restart keeps the notes')
+    await reload()
+    assert.equal(await kept(), null, 'the reload drops them')
+  }
+  const undoTakesRestart = async () => {
+    await read(() => {
+      window.undoActs = 0
+      Framework.app.puzzle.on('act', (_, action) => { if (action?.type === 'undo') window.undoActs++ })
+    })
+    const taken = () => read(() => window.undoActs > 0)
+    assert.equal(await clickUntil(undo, taken, true, SETTLE_MS), true, 'the puzzle reported the Undo')
+    await textAnywhere.frames(p)
   }
   const digit = () => read(([row, col]) => Framework.app.grid.getCell(row, col).propGet('normal') ?? null, EMPTY_CELL)
 
@@ -175,12 +186,8 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   })
 
   it('a reload after Restart drops the kept notes: Undo then brings nothing back', async () => {
-    await restart(p)
-    assert.deepEqual(await settle(texts, []), [])
-    assert.notEqual(await kept(), null)
-    await reload()
-    assert.equal(await kept(), null)
-    await undoTakesDigit()
+    await restartThenReload()
+    await undoTakesRestart()
     assert.deepEqual(await texts(), [])
     assert.equal(await saved(), null)
   })
@@ -209,7 +216,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await kept(), null, 'the new note drops them')
     await reload()
     assert.deepEqual(await settle(texts, ['9']), ['9'])
-    await undoTakesDigit()
+    await undoTakesRestart()
     assert.deepEqual(await texts(), ['9'])
     assert.deepEqual(await savedTexts(), ['9'])
   })

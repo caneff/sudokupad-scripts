@@ -87,7 +87,9 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
 
   it('a Darker page preset sets nine colors that are not SudokuPad\'s, and Save writes them', async () => {
     await p.click(SETTINGS_BUTTON)
+    await p.locator(`${EDITOR} input[type=color]`).first().waitFor()
     const before = await dialogColors(p)
+    assert.equal(Object.keys(before).length, 9, 'the dialog shows its nine colors before the preset is picked')
     await p.locator(PRESET).selectOption('page-1')
     const colors = await dialogColors(p)
     assert.equal(Object.keys(colors).length, 9)

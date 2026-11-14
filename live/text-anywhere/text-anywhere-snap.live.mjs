@@ -3,6 +3,7 @@
 // and no guide shows. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
@@ -21,7 +22,7 @@ const RIGHT_LINE = 9
 const NEAR_PX = 0.6
 const OUTLINE_ON_GUIDE_PX = 0.25
 // The wait past SPEED_WINDOW_MS before the script draws a still pointer's move again (SETTLE_SLACK_MS in text-anywhere.user.js).
-const SETTLE_SLACK_MS = 20
+const SETTLE_SLACK_MS = Number(/const SETTLE_SLACK_MS = (\d+)/.exec(readFileSync(new URL('../../text-anywhere.user.js', import.meta.url), 'utf8'))[1])
 // A "nothing happened" wait: a pointer that rests this long would have been pulled by now, were the note near enough a target.
 const NOTHING_HAPPENS_MS = 300
 // What an earlier version saved, planted as it wrote it, and a note.
