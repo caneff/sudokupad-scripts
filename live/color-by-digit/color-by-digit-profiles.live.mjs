@@ -736,7 +736,10 @@ describe('opening the editor and saving with no edit, injected after Start Puzzl
   it('every preload comes back unchanged, in its order, with the active profile kept', async () => {
     await openEditorOn(p)
     await closeDialogWith(p, 'Save', EDITOR)
-    assert.deepEqual(await settle(async () => savedState(await p.evaluate((key) => Framework.getData(key), PROFILES_KEY)), PRELOAD_PROFILES), PRELOAD_PROFILES)
+    // The raw saved value, not the state read through the envelope: a no-edit Save writes nothing, so the value stays exactly as seeded
+    // (bare, with no `{ v, data }` envelope). A Save that rewrote the profiles would wrap them and fail this.
+    const raw = () => p.evaluate((key) => Framework.getData(key), PROFILES_KEY)
+    assert.deepEqual(await settle(raw, PRELOAD_PROFILES), PRELOAD_PROFILES)
   })
 
   it('no uncaught page errors', () => {

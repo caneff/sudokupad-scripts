@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import * as textAnywhere from '../text-anywhere/text-anywhere-fixtures.mjs'
-import { finishNote, gridPoint, selectCell } from '../board.mjs'
+import { finishNote, gridPoint, selectCell, undoDepth } from '../board.mjs'
 import { flushSave } from '../attacks.mjs'
 import { reloadWith, scriptSource, useBrowser } from '../session.mjs'
 
@@ -80,8 +80,12 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
       a.select(a.grid.getCell(4, 4))
       for (let i = 0; i < 12; i++) a.act({ type: 'value', arg: String(1 + (i % 9)) })
     })
+    // The label stays Off whether or not the clicks land, so the Undo and the Redo are witnessed on SudokuPad's undo stack.
+    const depth = await undoDepth(p)
     await undo()
+    assert.equal(await settle(() => undoDepth(p), depth - 1), depth - 1, 'the Undo landed')
     await redo()
+    assert.equal(await settle(() => undoDepth(p), depth), depth, 'the Redo landed')
     assert.equal(await settle(label, 'Off'), 'Off')
   })
 })
