@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.48
+// @version      0.25.49
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.48'
+  const VERSION = '0.25.49'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -906,6 +906,11 @@
   const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
+
+  const SAVED_HEX = /^#[0-9a-f]{6}$/i
+
+  // A color read back from storage: `#` and six hex digits in any case, lowercased; anything else is undefined, and the caller picks its own fallback.
+  const savedHex = (value) => typeof value === 'string' && SAVED_HEX.test(value) ? value.toLowerCase() : undefined
 
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 

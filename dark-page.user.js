@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.22
+// @version      0.7.23
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,14 +18,13 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.22'
+  const VERSION = '0.7.23'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
   const PAGE = `body:has(#${BOARD_ID})`
   const DATA_KEY = 'DarkPage_color'
   const DEFAULT_COLOR = '#000000'
-  const HEX_COLOR = /^#[0-9a-f]{6}$/i
   // SudokuPad's own buttons are light `#eee`, which glare on a dark page. An on button (`.selected`,
   // or `.selectedperm` on Select) keeps SudokuPad's fill and gets BUTTON_ACCENT as its border.
   const BUTTON_BG = '#2a2a2a'
@@ -40,7 +39,7 @@
   const PAGE_LIGHT_TEXT = '#ffffff'
   const PAGE_DARK_TEXT = '#000000'
   function pageColorOf (data) {
-    return typeof data === 'string' && HEX_COLOR.test(data) ? data.toLowerCase() : null
+    return savedHex(data) ?? null
   }
 
   // <lib:plain>
@@ -129,6 +128,11 @@
   const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
+
+  const SAVED_HEX = /^#[0-9a-f]{6}$/i
+
+  // A color read back from storage: `#` and six hex digits in any case, lowercased; anything else is undefined, and the caller picks its own fallback.
+  const savedHex = (value) => typeof value === 'string' && SAVED_HEX.test(value) ? value.toLowerCase() : undefined
 
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 

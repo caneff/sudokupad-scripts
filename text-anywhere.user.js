@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.18
+// @version      0.46.19
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.18'
+  const VERSION = '0.46.19'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -160,7 +160,6 @@
   const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
   /* eslint-enable no-unused-vars */
   // </lib:palette>
-  const HEX_COLOR = /^#([0-9a-f]{6})$/
   // The page's own color, as SudokuPad's buttons use it behind their icons.
   const PAGE_COLOR = 'var(--body-bg, #fff)'
   const PEN_PRESET = 'pen'
@@ -852,6 +851,11 @@
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
 
+  const SAVED_HEX = /^#[0-9a-f]{6}$/i
+
+  // A color read back from storage: `#` and six hex digits in any case, lowercased; anything else is undefined, and the caller picks its own fallback.
+  const savedHex = (value) => typeof value === 'string' && SAVED_HEX.test(value) ? value.toLowerCase() : undefined
+
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 
   function colorFunction (value) {
@@ -1157,8 +1161,6 @@
     const rgb = parseColor(text)
     return rgb ? toHex(rgb) : undefined
   }
-
-  const savedHex = (value) => typeof value === 'string' && HEX_COLOR.test(value.toLowerCase()) ? value.toLowerCase() : undefined
 
   // null when nothing is saved, which means the first-use copy of the pen colors is still owed. A saved value that is not
   // nine colors still counts as saved, so the copy never writes over it: each color it lacks shows SudokuPad's own.
