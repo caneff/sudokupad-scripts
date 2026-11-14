@@ -4,9 +4,8 @@
 // as before.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { EDITOR, openSession, paintedKeys, PROFILES_KEY, SEED, savedState } from './color-by-digit-fixtures.mjs'
+import { EDITOR, openSession, paintedKeys, PROFILES_KEY, SEED, savedState, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith } from '../settings.mjs'
-import { COLOR_BY_DIGIT_DIALOG } from '../scripts.mjs'
 import { captureConsoleErrors } from '../page.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -25,7 +24,6 @@ describe('Color by Digit\'s editor paint drag, interrupted', { concurrency: fals
   // Hovering first waits for the dialog to stop moving, so the box read is where the key is.
   const centre = async (digit) => { await digitKey(digit).hover(); const b = await digitKey(digit).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
   const savedProfiles = async () => savedState(await p.evaluate((key) => Framework.getData(key), PROFILES_KEY))
-  const openEditor = () => COLOR_BY_DIGIT_DIALOG.open(p)
 
   before(async () => {
     ;({ context, p, errors } = await openSession(browser(), script, { seed: captureConsoleErrors }))
@@ -33,7 +31,7 @@ describe('Color by Digit\'s editor paint drag, interrupted', { concurrency: fals
   after(async () => { await context.close() })
 
   it('16: a paint drag across digits, Escape mid-drag, then the mouse-up closes the editor with nothing saved, and a drag in the editor opened again still paints', async () => {
-    await openEditor()
+    await openEditorOn(p)
     const started = await paintedKeys(p)
     const points = await Promise.all([...FIRST_ROW, '6'].map(centre))
     await p.mouse.move(points[0].x, points[0].y)
@@ -48,7 +46,7 @@ describe('Color by Digit\'s editor paint drag, interrupted', { concurrency: fals
     assert.deepEqual((await savedProfiles()).profiles, SEED.profiles, 'the saved profiles are as they were')
     assert.deepEqual(errors, [], 'the page shows no error')
 
-    await openEditor()
+    await openEditorOn(p)
     assert.deepEqual(await paintedKeys(p), started, 'the editor, opened again, shows the saved profile')
     const [four, five, six] = await Promise.all(SECOND_ROW.map(centre))
     await p.mouse.move(four.x, four.y)
