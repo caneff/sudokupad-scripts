@@ -209,6 +209,14 @@ describe('the rules', () => {
       assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'redo' }), [])
       assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'click cell', earlier: { action: 'undo', page: board } }), [])
     })
+    it('holds when a note open for typing is finished by the undo or redo: notes ride no undo stack (#902)', () => {
+      const typing = { notesSeen: ['z'], notesDrawn: [], notesSaved: null }
+      const finished = { notesSeen: ['z'], notesDrawn: ['z'], notesSaved: [{ kind: 'text', text: 'z' }] }
+      assert.deepEqual(undoThenRedo({ ...board, ...finished }, { ...board, ...typing }), [])
+    })
+    it('fails when what the player sees of the notes differs after the redo', () => {
+      assert.deepEqual(undoThenRedo({ ...board, notesSeen: ['z'] }), ['notesSeen was [] and is now ["z"]'])
+    })
     it('holds when the strokes come back drawn in another order', () => {
       const two = { penState: ['pen-1 pencolor-1', 'pen-2 pencolor-1'], penDrawn: ['pen-1 pencolor-1', 'pen-2 pencolor-1'] }
       assert.deepEqual(undoThenRedo({ ...board, ...two, penDrawn: [...two.penDrawn].reverse() }, { ...board, ...two }), [])

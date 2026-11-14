@@ -52,9 +52,11 @@ const digitsChanged = (now, before) => now.cells.flatMap((cell, i) => (cell.digi
 // What a rule that compares two snapshots reads, leaving out `rulesPane`, which is a measure of the layout and is checked by its own rule.
 // The strokes are compared as a set: the order they sit in on the page is not something a player sees.
 const sorted = (list) => [...list].sort()
+// Text Anywhere's notes ride no undo stack (AGENTS.md), and an Undo or Redo closes a note open for typing, which moves it from `notesSeen` only to `notesDrawn` and
+// `notesSaved` as well (#902): only what the player sees of the notes, `notesSeen`, is compared.
 const comparable = (page) => {
-  const { rulesPane, ...rest } = page // eslint-disable-line no-unused-vars
-  return { ...rest, penState: sorted(page.penState), penDrawn: sorted(page.penDrawn) }
+  const { rulesPane, notesDrawn, notesSaved, ...rest } = page // eslint-disable-line no-unused-vars
+  return { ...rest, notesSeen: sorted(page.notesSeen), penState: sorted(page.penState), penDrawn: sorted(page.penDrawn) }
 }
 
 const colorsCells = (mode) => mode === 'Cell' || mode === 'Both'
