@@ -702,20 +702,20 @@
 
   // The open note's index, a resize and a move after the notes `marks` marks false went. An open note that went is unsaved (-1, so closing it adds it back with what was typed),
   // and so is its resize. A selected note's resize whose note went is cancelled, so its release saves nothing; a move leaves the notes that went, and a move left with none is
-  // `dragCancelled`. `editingIndex`, `resizing` and `move` are null when there is none.
-  function followKept ({ editingIndex, resizing, move }, marks) {
+  // `dragCancelled`. `textBoxIndex`, `resizing` and `move` are null when there is none.
+  function followKept ({ textBoxIndex, resizing, move }, marks) {
     const index = resizing && indexAfterKeep(resizing.index, marks)
     const moved = move && move.map((entry) => ({ ...entry, index: indexAfterKeep(entry.index, marks) })).filter((entry) => entry.index !== -1)
     return {
-      editingIndex: editingIndex === null ? null : indexAfterKeep(editingIndex, marks),
-      resizing: resizing && { ...resizing, index, cancelled: resizing.cancelled || (editingIndex === null && index === -1) },
+      textBoxIndex: textBoxIndex === null ? null : indexAfterKeep(textBoxIndex, marks),
+      resizing: resizing && { ...resizing, index, cancelled: resizing.cancelled || (textBoxIndex === null && index === -1) },
       move: moved,
       dragCancelled: moved !== null && moved.length === 0
     }
   }
 
   // Which notes a change of color, size, opacity or Background reaches besides the next note's setting: the open note, else the selected ones, else none.
-  const lookTarget = (editing, selected) => editing ? 'open' : selected.length ? 'selected' : 'next'
+  const lookTarget = (textBox, selected) => textBox ? 'open' : selected.length ? 'selected' : 'next'
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
   // <lib:plain>
@@ -2567,7 +2567,7 @@
 
   // The open note's own look changes.
   function changeOpen (change) {
-    writeNote(editing.index, change(editing.item))
+    writeNote(textBox.index, change(textBox.item))
     showPanelValues()
   }
 
@@ -2579,7 +2579,7 @@
   // An explicit change reaches the notes `lookTarget` names and is also the next note's setting (`setNext`); selecting or opening a note sets nothing.
   function applyLook (change, setNext) {
     setNext()
-    const target = lookTarget(editing, selected)
+    const target = lookTarget(textBox, selected)
     if (target === 'open') changeOpen(change)
     else if (target === 'selected') changeSelected(change)
     else showPanelValues()
@@ -2587,8 +2587,8 @@
 
   // The notes `lookTarget` names as a list, or null for the next note.
   function targetNotes () {
-    const target = lookTarget(editing, selected)
-    return target === 'open' ? [editing.item] : target === 'selected' ? selectedNotes() : null
+    const target = lookTarget(textBox, selected)
+    return target === 'open' ? [textBox.item] : target === 'selected' ? selectedNotes() : null
   }
 
   const pickColor = (next) => applyLook((item) => ({ ...item, color: next }), () => setColor(next))
@@ -2885,7 +2885,7 @@
   // The right button's `buttons` bit holds it.
   let erasing = null
   // The note open for typing: the index of the text it reopened, or -1 for a new one, the item and its element, which the solver types in.
-  let editing = null
+  let textBox = null
   // The four resize handles of the open note, or of the one note selected, each with the corner of CORNERS it sits on; none when no note shows them.
   let handles = []
   // A drag of a resize handle: the note's index in `puzzleNotes`, its item at the press, the corner dragged, the opposite corner on
@@ -3036,7 +3036,7 @@
     placeBoardGroup(map)
     const claimed = new Set()
     const notes = puzzleNotes.flatMap((item, index) => {
-      if (item.kind !== TEXT_KIND || (editing && editing.index === index)) return []
+      if (item.kind !== TEXT_KIND || (textBox && textBox.index === index)) return []
       if (!item[NOTE_ELEMENT] || claimed.has(item[NOTE_ELEMENT])) item[NOTE_ELEMENT] = Object.assign(document.createElement('div'), { className: TEXT_CLASS })
       const element = item[NOTE_ELEMENT]
       claimed.add(element)
@@ -3049,7 +3049,7 @@
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
     if (!drag?.move && !resizing) showFixedReachable(notes, map)
     if (drag?.move) showMove(drag, map)
-    if (editing) showEditing(map)
+    if (textBox) showTextBox(map)
     else showHandles(drag?.move ? null : selectedBox(map))
     if (!drag?.move) showSelection(map)
     if (hoverPoint) showHover()
@@ -3080,9 +3080,9 @@
   }
 
   // Restyles the open note and puts the handles on its corners. The note is shown moved in from the window's edge when its box would cross it: the view of it,
-  // `editing.shift`, is a translation of its element, and its item's point is never changed.
-  function showEditing (map) {
-    const { element, item } = editing
+  // `textBox.shift`, is a translation of its element, and its item's point is never changed.
+  function showTextBox (map) {
+    const { element, item } = textBox
     element.style.translate = ''
     styleNote(element, item, map)
     element.classList.toggle(EMPTY_CLASS, typedText(element) === '')
@@ -3090,9 +3090,9 @@
     const { left, top, right, bottom } = element.getBoundingClientRect()
     const shift = viewShift({ left, top, right, bottom }, { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight })
     element.style.translate = `${shift[0]}px ${shift[1]}px`
-    editing.shift = shift
-    editing.box = { left: left + shift[0], top: top + shift[1], right: right + shift[0], bottom: bottom + shift[1] }
-    showHandles(editing.box)
+    textBox.shift = shift
+    textBox.box = { left: left + shift[0], top: top + shift[1], right: right + shift[0], bottom: bottom + shift[1] }
+    showHandles(textBox.box)
     showSelection(map)
     showEdgeCursor(hoverPoint)
   }
@@ -3106,7 +3106,7 @@
   }
 
   function showSelection (map, offset = [0, 0]) {
-    const outlines = editing ? [{ box: editing.box, color: itemColor(editing.item.color) }] : selected.map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
+    const outlines = textBox ? [{ box: textBox.box, color: itemColor(textBox.item.color) }] : selected.map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
     const layer = notesLayer()
     const shown = [...layer.querySelectorAll(`.${SELECTION_CLASS}`)]
     for (const element of shown.slice(outlines.length)) element.remove()
@@ -3165,19 +3165,19 @@
   }
 
   // The note being typed in, else the note at `index`: one rule for where the open note lives.
-  const readNote = (index) => editing ? editing.item : puzzleNotes[index]
+  const readNote = (index) => textBox ? textBox.item : puzzleNotes[index]
 
   function writeNote (index, item) {
-    if (editing) {
-      editing.item = item
-      showEditing(boardMap())
+    if (textBox) {
+      textBox.item = item
+      showTextBox(boardMap())
     } else {
       puzzleNotes[index] = item
       renderNotes()
     }
   }
 
-  const resizedIndex = () => editing ? editing.index : selected.length === 1 ? selected[0] : null
+  const resizedIndex = () => textBox ? textBox.index : selected.length === 1 ? selected[0] : null
 
   // A press on a handle, with any button, keeps the note's focus and never reaches SudokuPad; only the left button resizes.
   function startResize (event, corner) {
@@ -3186,11 +3186,11 @@
     const index = resizedIndex()
     if (event.button !== PRIMARY_BUTTON || index === null) return
     const item = readNote(index)
-    const element = editing ? editing.element : item[NOTE_ELEMENT]
-    const unit = editing || item.fixed ? 1 : boardMap().scale
+    const element = textBox ? textBox.element : item[NOTE_ELEMENT]
+    const unit = textBox || item.fixed ? 1 : boardMap().scale
     const box = contentBox(element, unit)
     const [x, y] = eventPoint(event)
-    const shift = editing?.shift ?? [0, 0]
+    const shift = textBox?.shift ?? [0, 0]
     const grabbed = cornerPoint(box, corner)
     const anchor = cornerPoint(box, corner, true).map((v, i) => v - shift[i])
     const autoSize = unresizedSize(element, unit)
@@ -3229,7 +3229,7 @@
     const { index, item, corner, anchor, offset, autoSize, to } = resizing
     const map = boardMap()
     // The anchor is where the note's box lies without the view shift of an open note, so the pointer is taken out of that shift too.
-    const shift = editing?.shift ?? [0, 0]
+    const shift = textBox?.shift ?? [0, 0]
     const resized = resizedItem(item, anchor, [to[0] + offset[0] - shift[0], to[1] + offset[1] - shift[1]], map, corner, autoSize)
     writeNote(index, resized)
   }
@@ -3241,7 +3241,7 @@
     const { index, item, cancelled } = resizing
     resizing = null
     holdCursor(null)
-    if (cancelled || editing || String(puzzleNotes[index]?.box) === String(item.box)) return
+    if (cancelled || textBox || String(puzzleNotes[index]?.box) === String(item.box)) return
     keepDrawnPoints([index], boardMap())
     renderNotes()
     snapToPixels([index])
@@ -3252,9 +3252,9 @@
     const index = resizedIndex()
     if (index === null) return
     const note = readNote(index)
-    if (!editing && !note.box) return
+    if (!textBox && !note.box) return
     writeNote(index, autoSized(note))
-    if (!editing) {
+    if (!textBox) {
       snapToPixels([index])
       saveNotes()
     }
@@ -3282,7 +3282,7 @@
   // Hiding closes the open note and ends the selection, so nothing is left to act on unseen. A hidden note can be neither hit nor snapped to: no gesture can reach one.
   function setNotesHidden (hide) {
     if (hide === notesHidden) return
-    if (hide && editing) finishText()
+    if (hide && textBox) finishText()
     notesHidden = hide
     notesLayer().classList.toggle(HIDDEN_CLASS, hide)
     if (hide) select([])
@@ -3422,8 +3422,8 @@
   }
 
   function keepMarked (marks) {
-    const next = followKept({ editingIndex: editing ? editing.index : null, resizing, move: drag?.move ?? null }, marks)
-    if (editing) editing.index = next.editingIndex
+    const next = followKept({ textBoxIndex: textBox ? textBox.index : null, resizing, move: drag?.move ?? null }, marks)
+    if (textBox) textBox.index = next.textBoxIndex
     resizing = next.resizing
     if (!drag?.move) return
     if (next.dragCancelled) cancelDrag()
@@ -3494,23 +3494,23 @@
     // As SudokuPad's own buttons do: a press in the note is the note's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) element.addEventListener(type, (event) => event.stopPropagation())
     element.addEventListener('blur', under(textTool, (event) => {
-      if (!editing || editing.element !== element) return
-      if (isPanelControl(event.relatedTarget)) editing.caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null
+      if (!textBox || textBox.element !== element) return
+      if (isPanelControl(event.relatedTarget)) textBox.caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null
       else finishText()
     }))
     // Typing grows the box, which carries the handles and may start the text scrolling.
     element.addEventListener('input', under(textTool, (event) => {
-      if (!editing || editing.element !== element) return
+      if (!textBox || textBox.element !== element) return
       // Only a typed character completes a symbol: deleting, pasting and Undo leave the text as it is.
       if (event.inputType === 'insertText') {
         replaceTypedSymbol()
         splitTypingUndo()
       }
-      showEditing(boardMap())
+      showTextBox(boardMap())
       clearTimeout(openNoteSaveTimer)
       openNoteSaveTimer = setTimeout(under(textTool, saveOpenNote), OPEN_NOTE_SAVE_MS)
     }))
-    editing = { index, item, element }
+    textBox = { index, item, element }
     notesLayer().append(element)
     redraw()
     element.focus()
@@ -3523,13 +3523,13 @@
   function replaceTypedSymbol () {
     const selection = window.getSelection()
     const { anchorNode, anchorOffset } = selection
-    if (!selection.isCollapsed || anchorNode?.nodeType !== window.Node.TEXT_NODE || !editing.element.contains(anchorNode)) return
+    if (!selection.isCollapsed || anchorNode?.nodeType !== window.Node.TEXT_NODE || !textBox.element.contains(anchorNode)) return
     // A line break is a text node of its own, so the whole note is read, for whether the caret is in code, and the pair is then found in the caret's node.
     const toCaret = document.createRange()
-    toCaret.setStart(editing.element, 0)
+    toCaret.setStart(textBox.element, 0)
     toCaret.setEnd(anchorNode, anchorOffset)
     const nodeStart = toCaret.toString().length - anchorOffset
-    const found = symbolJustTyped(editing.element.textContent, nodeStart + anchorOffset)
+    const found = symbolJustTyped(textBox.element.textContent, nodeStart + anchorOffset)
     if (!found || found.start < nodeStart) return
     const range = document.createRange()
     range.setStart(anchorNode, found.start - nodeStart)
@@ -3552,9 +3552,9 @@
 
   // The focus went to a panel button (`caret` was saved then, null with no caret); the note takes it back, once.
   function returnFocusToNote () {
-    if (!editing || !('caret' in editing)) return
-    const { element, caret } = editing
-    delete editing.caret
+    if (!textBox || !('caret' in textBox)) return
+    const { element, caret } = textBox
+    delete textBox.caret
     element.focus()
     if (!caret) return
     const selection = window.getSelection()
@@ -3581,18 +3581,18 @@
   // An empty note is saved as no note, which is what closing it does; one never saved leaves the saved notes as they are.
   function saveOpenNote () {
     clearTimeout(openNoteSaveTimer)
-    if (!editing) return
-    const text = closingText(editing)
-    if (text === '' && !editing.saved) return
-    const { index, item } = editing
-    editing.saved = true
+    if (!textBox) return
+    const text = closingText(textBox)
+    if (text === '' && !textBox.saved) return
+    const { index, item } = textBox
+    textBox.saved = true
     writeNotes(notesAfterClose(puzzleNotes, index, item, text).notes)
   }
 
-  function closeEditing () {
+  function closeTextBox () {
     clearTimeout(openNoteSaveTimer)
-    const open = editing
-    editing = null
+    const open = textBox
+    textBox = null
     resizing = null
     holdCursor(null)
     open.element.remove()
@@ -3602,7 +3602,7 @@
 
   // Closes the open note. The index of the note it leaves, or -1 when there is none (it was empty).
   function finishText () {
-    const open = closeEditing()
+    const open = closeTextBox()
     const { index, item, saved } = open
     const text = closingText(open)
     const resized = index !== -1 && String(item.box) !== String(puzzleNotes[index].box)
@@ -3630,7 +3630,7 @@
       event.stopImmediatePropagation()
       return
     }
-    if (!editing || event.target !== editing.element) return
+    if (!textBox || event.target !== textBox.element) return
     event.stopImmediatePropagation()
     if (event.type !== 'keydown' || event.isComposing) return
     if (event.key === 'Tab') event.preventDefault()
@@ -3665,7 +3665,7 @@
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
-    if (!editing || editing.element.contains(event.target) || isHandle(event.target) || isPanelControl(event.target)) return
+    if (!textBox || textBox.element.contains(event.target) || isHandle(event.target) || isPanelControl(event.target)) return
     // A left press on another note goes on to select it, and to drag it. So does one on the open note's edge, on the note as it closes: its closed box is not the open one's
     // (trailing blank lines go, and the open one may be shifted clear of the window's edge), so it is not looked for again by position.
     const left = event.button === PRIMARY_BUTTON
@@ -3682,7 +3682,7 @@
   let edgeNote = null
 
   // The band round the open note, outside its box and within HIT_MARGIN_PX of it: a press there moves the note, as one inside selects its text.
-  const onOpenEdge = (point) => Boolean(editing) && inBox(point, grownBox(editing.box, HIT_MARGIN_PX)) && !inBox(point, editing.box)
+  const onOpenEdge = (point) => Boolean(textBox) && inBox(point, grownBox(textBox.box, HIT_MARGIN_PX)) && !inBox(point, textBox.box)
 
   // The move cursor over the open note's edge, which lies outside its element and so cannot carry a cursor of its own.
   let edgeCursor = false
@@ -3695,7 +3695,7 @@
   // A press on a panel button keeps the focus in the open note, so its caret stays. A slider takes the focus, and the note gets it back when the
   // pointer is released, even when the slider did not move.
   function keepNoteFocus (event) {
-    if (editing && isPanelControl(event.target) && !event.target.closest(`.${SLIDERS_CLASS} input`)) event.preventDefault()
+    if (textBox && isPanelControl(event.target) && !event.target.closest(`.${SLIDERS_CLASS} input`)) event.preventDefault()
   }
 
   function tickCheck (note, box) {
@@ -4011,7 +4011,7 @@
     resizing = null
     holdCursor(null)
     selected = []
-    if (editing) closeEditing()
+    if (textBox) closeTextBox()
   }
 
   // Saved notes the script cannot read are the browser's data and not SudokuPad's, so they are left as they are and never turn the saved data off.
@@ -4210,7 +4210,7 @@
       showHover()
       showChrome()
       endGesture()
-      if (editing) finishText()
+      if (textBox) finishText()
       selected = []
       renderNotes()
       hidePanel()
@@ -4247,13 +4247,13 @@
         cancelResize()
         return true
       }
-      if (event.key === 'Enter' && !hasChord(event) && !event.shiftKey && selected.length === 1 && !editing && !drag) {
+      if (event.key === 'Enter' && !hasChord(event) && !event.shiftKey && selected.length === 1 && !textBox && !drag) {
         event.preventDefault()
         openText(selected[0])
         return true
       }
       const sizeDirection = hasChord(event) ? undefined : SLIDER_STEP_KEYS[event.key]
-      if (sizeDirection && !editing) {
+      if (sizeDirection && !textBox) {
         // A gesture holds its notes as they were at the press, and its release would put the old size back.
         if (!drag && !resizing) stepSize(sizeDirection)
         return true

@@ -55,8 +55,8 @@ test('#695: a deletion moves every index after it down, and the note-changed rul
   const keep = [true, false, true]
   assert.equal(indexAfterKeep(2, keep), 1, 'the open note follows the deletion before it')
   assert.equal(indexAfterKeep(1, keep), -1, 'the note deleted has none')
-  const followed = followKept({ editingIndex: 2, resizing: { index: 2 }, move: [{ index: 2 }] }, keep)
-  assert.equal(followed.editingIndex, 1, 'the open note follows')
+  const followed = followKept({ textBoxIndex: 2, resizing: { index: 2 }, move: [{ index: 2 }] }, keep)
+  assert.equal(followed.textBoxIndex, 1, 'the open note follows')
   assert.equal(followed.resizing.index, 1, 'its resize follows')
   assert.deepEqual(followed.move, [{ index: 1 }], 'a move follows')
   assert.match(body('keepItems'), /keepMarked\(marks\)/, 'keepItems remaps them')
