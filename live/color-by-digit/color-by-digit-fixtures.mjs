@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { reloadWith, openWith } from '../session.mjs'
 import { CLASSIC_GRID } from '../puzzles.mjs'
+import { COLOR_BY_DIGIT_DIALOG } from '../scripts.mjs'
 import { POLL_MS, settle } from '../settle.mjs'
 
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by puzzle-url.txt; the
@@ -41,7 +42,7 @@ export const AUTO_STORAGE_KEY = storedAt(AUTO_KEY)
 export const SEEDED_OFF = { ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'off' }
 
 export const BUTTON = '#control-colorbydigit'
-export const EDITOR = '#color-by-digit-editor'
+export const EDITOR = COLOR_BY_DIGIT_DIALOG.editor
 export const ARROW = `${BUTTON} [data-role="menu"]`
 export const MENU = '#color-by-digit-menu'
 

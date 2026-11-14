@@ -51,19 +51,7 @@ export const closeExtrasEditorWith = (p, text) => closeDialogWith(p, text, EXTRA
 export const STATUS = '.dialog [data-role="settings-status"]'
 // Every script's two buttons are icons, so each pair is found by its act, not its words.
 export const actButton = (p, act) => p.locator(`.dialog button[data-act="${act}"]`)
-const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
-
-// `asDefault`, where there is one, is the value that Copy writes for a setting at its default and that the script saves as no key.
-// `saved` is a value the script saves under `key`, inside a `{ v, data }` envelope where `enveloped` is set; `badKey` and `bad` are a value the script's reader refuses.
-export const SETTINGS_SCRIPTS = [
-  { file: 'dark-page.user.js', owns: /^DarkPage_/, entry: 'Dark Page', editor: '#dark-page-input', key: 'DarkPage_color', saved: '#336699', asDefault: '#000000', badKey: 'DarkPage_color', bad: 'blue' },
-  { file: 'auto-rules-resizer.user.js', owns: /^AutoRulesResizer_/, entry: 'Auto Rules Resizer', editor: '#auto-rules-resizer-max-width', key: 'AutoRulesResizer_maxWidth', saved: 640, enveloped: true, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
-  { file: 'color-by-digit.user.js', owns: /^ColorByDigit_/, entry: 'Color by Digit', editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, enveloped: true, badKey: 'ColorByDigit_mode', bad: 'sideways' },
-  { file: 'text-anywhere.user.js', owns: /^TextAnywhere_/, entry: 'Text Anywhere', editor: '#text-anywhere-dialog', key: 'TextAnywhere_width', saved: 3.5, badKey: 'TextAnywhere_width', bad: 500 },
-  { file: 'pen-tool-extras.user.js', owns: /^(PenColor_|EdgeMarks_)/, entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 }
-]
-
-// Every key `script` (one of SETTINGS_SCRIPTS) owns, as it is in localStorage, by key in order: what a check that nothing was saved compares.
+// Every key `script` (one of scripts.mjs's SETTINGS_SCRIPTS) owns, as it is in localStorage, by key in order: what a check that nothing was saved compares.
 export const ownedSettings = (p, script) => p.evaluate((pattern) => Object.fromEntries(Object.keys(window.localStorage)
   .filter((k) => new RegExp(pattern).test(k.replace(/^svencodes_/, ''))).sort().map((k) => [k, window.localStorage.getItem(k)])), script.owns.source)
 

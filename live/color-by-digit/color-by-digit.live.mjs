@@ -4,7 +4,8 @@ import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, reloadSession, savedState, SEED, watch, wrongColorCountOn } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
-import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
+import { closeDialogWith, headerVersion, openSettings } from '../settings.mjs'
+import { COLOR_BY_DIGIT_DIALOG } from '../scripts.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -58,7 +59,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const redo = () => p.click('#control-redo')
   const paint = (r, c, key) => paintOn(p, r, c, key)
   const setMultiColor = (v) => read((v) => Framework.setSetting('multicolour', v), v)
-  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
+  const openEditor = () => COLOR_BY_DIGIT_DIALOG.open(p)
 
   before(async () => {
     ;({ context, p, errors } = await openSession(browser(), script))

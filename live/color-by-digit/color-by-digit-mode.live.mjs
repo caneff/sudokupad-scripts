@@ -6,7 +6,8 @@ import { createRequire } from 'node:module'
 import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, ODD_EVEN, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, watch, wordOn, cellsStateOn, wrongColorCountOn, reloadSession } from './color-by-digit-fixtures.mjs'
 import { MODES } from '../page.mjs'
 import { restart, selectCell } from '../board.mjs'
-import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { closeDialogWith } from '../settings.mjs'
+import { COLOR_BY_DIGIT_DIALOG } from '../scripts.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -63,7 +64,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   const paint = (r, c, key) => paintOn(p, r, c, key)
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
-  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
+  const openEditor = () => COLOR_BY_DIGIT_DIALOG.open(p)
 
   before(async () => {
     ({ context, p, errors } = await openSession(browser(), script))

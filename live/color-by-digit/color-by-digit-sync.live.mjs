@@ -5,7 +5,8 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, savedState, shadeReaders, watch, reloadSession } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
-import { closeDialogWith, openScriptDialog } from '../settings.mjs'
+import { closeDialogWith } from '../settings.mjs'
+import { COLOR_BY_DIGIT_DIALOG } from '../scripts.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -61,7 +62,7 @@ const tools = (p) => {
     await p.click(`${MENU} [data-act=pick][data-target="${target}"][data-index="${index}"]`)
     await p.locator(MENU).waitFor({ state: 'detached' })
   }
-  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
+  const openEditor = () => COLOR_BY_DIGIT_DIALOG.open(p)
   const save = () => closeDialogWith(p, 'Save', EDITOR)
   // A pick redraws the editor, so the pulldown is read again after it.
   const chooseDigit = async (value) => {

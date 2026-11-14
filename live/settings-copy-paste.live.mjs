@@ -1,6 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { actButton, closeDialogWith, dialogButton, openScriptDialog, ownedSettings, paste, SETTINGS_SCRIPTS, STATUS } from './settings.mjs'
+import { actButton, closeDialogWith, dialogButton, openScriptDialog, ownedSettings, paste, STATUS } from './settings.mjs'
+import { SETTINGS_SCRIPTS, settingsScript } from './scripts.mjs'
 import { openWith, useBrowser } from './session.mjs'
 
 const browser = useBrowser()
@@ -10,7 +11,7 @@ for (const script of SETTINGS_SCRIPTS) {
     let context, p, errors
     before(async () => {
       ({ context, p, errors } = await openWith(browser(), [script.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
-      await openScriptDialog(p, script.entry, script.editor)
+      await script.open(p)
     })
     after(async () => { await context?.close() })
 
@@ -89,43 +90,33 @@ const shown = (p, selectors) => p.evaluate((sels) => sels.map((sel) => {
 // every key back, and the script's in-memory copy of them too: the controls in `shows` are drawn from that copy when the dialog opens
 // again. A failed write leaves the feature on, so the page has no skip line.
 const FAILED_PASTES = [
-  { file: 'dark-page.user.js', entry: 'Dark Page', editor: '#dark-page-input', pasted: { DarkPage_color: '#336699' }, failing: 'DarkPage_color', shows: ['#dark-page-input'] },
+  { file: 'dark-page.user.js', pasted: { DarkPage_color: '#336699' }, failing: 'DarkPage_color', shows: ['#dark-page-input'] },
   {
     file: 'auto-rules-resizer.user.js',
-    entry: 'Auto Rules Resizer',
-    editor: '#auto-rules-resizer-max-width',
     pasted: { AutoRulesResizer_maxWidth: 640, AutoRulesResizer_maxHeight: 480 },
     failing: 'AutoRulesResizer_maxHeight',
     shows: ['#auto-rules-resizer-max-width', '#auto-rules-resizer-max-height']
   },
   {
     file: 'ui-tweaks.user.js',
-    entry: 'UI Tweaks',
-    editor: '#ui-tweaks-dialog',
     pasted: { UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true },
     failing: 'UiTweaks_wrapButtons',
     shows: ['input[data-option="hideSelect"]', 'input[data-option="wrapButtons"]']
   },
   {
     file: 'color-by-digit.user.js',
-    entry: 'Color by Digit',
-    editor: '#color-by-digit-editor',
-    pasted: { ColorByDigit_profiles: SETTINGS_SCRIPTS.find((s) => s.file === 'color-by-digit.user.js').saved, ColorByDigit_mode: 'digit' },
+    pasted: { ColorByDigit_profiles: settingsScript('color-by-digit.user.js').saved, ColorByDigit_mode: 'digit' },
     failing: 'ColorByDigit_mode',
     shows: ['select[data-role="mode-draft"]']
   },
   {
     file: 'text-anywhere.user.js',
-    entry: 'Text Anywhere',
-    editor: '#text-anywhere-dialog',
     pasted: { TextAnywhere_width: 3.5, TextAnywhere_opacity: 50, TextAnywhere_frame: true, TextAnywhere_font: 'fixed' },
     failing: 'TextAnywhere_font',
     shows: ['button[data-role="frame-pick"][data-value="on"]', 'select[data-role="font-choice"]']
   },
   {
     file: 'pen-tool-extras.user.js',
-    entry: 'Pen Tool Extras',
-    editor: '#pen-tool-extras-editor',
     pasted: { PenColor_thickness: 9, PenColor_colors: { 3: '#123456' } },
     failing: 'PenColor_colors',
     shows: ['#pen-tool-extras-setting-thickness']
@@ -139,15 +130,16 @@ for (const failedPaste of FAILED_PASTES) {
 
     it('says the paste failed, and the keys, the open dialog and the dialog opened again all show what they did before', async () => {
       ({ context, p, errors } = await openWith(browser(), [failedPaste.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
-      await openScriptDialog(p, failedPaste.entry, failedPaste.editor)
+      const { open, editor } = settingsScript(failedPaste.file)
+      await open(p)
       const keys = Object.keys(failedPaste.pasted)
       const before = { stored: await stored(p, keys), shown: await shown(p, failedPaste.shows) }
       await failNextWriteOf(p, failedPaste.failing, 'planted write failure')
       assert.equal(await paste(p, JSON.stringify(failedPaste.pasted)), 'Could not paste: planted write failure')
       assert.deepEqual(await stored(p, keys), before.stored)
       assert.deepEqual(await shown(p, failedPaste.shows), before.shown, 'the open dialog took the paste that failed')
-      await closeDialogWith(p, 'Cancel', failedPaste.editor)
-      await openScriptDialog(p, failedPaste.entry, failedPaste.editor)
+      await closeDialogWith(p, 'Cancel', editor)
+      await open(p)
       assert.deepEqual(await shown(p, failedPaste.shows), before.shown, 'the script\'s in-memory settings kept the paste that failed')
       assert.deepEqual(errors, [])
     })
@@ -155,7 +147,8 @@ for (const failedPaste of FAILED_PASTES) {
 }
 
 describe('color-by-digit.user.js: a Paste replaces only the pasted settings in the dialog\'s draft', { concurrency: false }, () => {
-  const { editor, entry, saved } = SETTINGS_SCRIPTS.find((s) => s.file === 'color-by-digit.user.js')
+  const dialog = settingsScript('color-by-digit.user.js')
+  const { editor, saved } = dialog
   const MODE = `${editor} select[data-role="mode-draft"]`
   const CELL_PROFILE = `${editor} select[data-role="cell-profile"]`
   let context, p, errors
@@ -165,7 +158,7 @@ describe('color-by-digit.user.js: a Paste replaces only the pasted settings in t
   after(async () => { await context?.close() })
 
   it('a pasted mode leaves the draft\'s unsaved choice of profile as it is', async () => {
-    await openScriptDialog(p, entry, editor)
+    await dialog.open(p)
     const active = await p.locator(CELL_PROFILE).inputValue()
     const chosen = await p.locator(`${CELL_PROFILE} option`).evaluateAll((options, current) => options.find((o) => o.value !== current).value, active)
     await p.selectOption(CELL_PROFILE, chosen)
@@ -176,7 +169,7 @@ describe('color-by-digit.user.js: a Paste replaces only the pasted settings in t
   })
 
   it('pasted profiles leave the draft\'s unsaved mode as it is', async () => {
-    await openScriptDialog(p, entry, editor)
+    await dialog.open(p)
     await p.selectOption(MODE, 'off')
     assert.equal(await paste(p, JSON.stringify({ ColorByDigit_profiles: saved })), 'Pasted 1 setting.')
     assert.equal(await p.locator(MODE).inputValue(), 'off', 'the unsaved mode edit is still in the draft')
