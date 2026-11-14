@@ -32,7 +32,7 @@ as one read-only Opus subagent with the prompt below, then puts the findings to 
 > dark-page.user.js, ui-tweaks.user.js, auto-rules-resizer.user.js) to confirm each finding in code. Every finding must
 > be confirmed in code with file:line, not only from the glossary. Do not run live tests or the fuzz.
 >
-> Report, as your final message only (no file): a numbered list, best first, at most 12 items. Each item: one line saying
+> Report, as your final message only (no file): a numbered list of every confirmed inconsistency, best first, with no cap. Each item: one line saying
 > the inconsistency in plain words as a solver would meet it; the two behaviors with file:line for each; and a one-line
 > suggested fix with your recommendation of which side should win. Then one line naming anything you looked at and
 > found consistent, so the scope is clear.
