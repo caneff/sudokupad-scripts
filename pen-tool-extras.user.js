@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.22
+// @version      1.32.23
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.22'
+  const VERSION = '1.32.23'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -916,8 +916,8 @@
     // The press on the settings dialog's overlay is held back on its own, so a throw installing it costs the dialog nothing; the overlay is SudokuPad's dialog's.
     overlay: { label: 'dialog overlay', needs: { 'Framework.showDialog': 'function' } },
     colors: { label: 'colors', needs: { ...APP, 'Framework.app.tools.colour': 'object' } },
-    // The install save waits for the color tool to hold a palette; one that is not ready in time turns only this off, and the pen keeps SudokuPad's own colors.
-    colorSave: { label: 'color save', needs: { 'Framework.setData': 'function' } },
+    // The install save runs once the app is ready and waits for the color tool to hold a palette; one that is not ready in time turns only this off, and the pen keeps SudokuPad's own colors.
+    colorSave: { label: 'color save', needs: { ...APP, 'Framework.setData': 'function' } },
     // With pen pages off the pad cannot turn back from page 2 or 3, so it and the pen go back to page 1.
     pages: {
       label: 'pen pages',
@@ -2285,7 +2285,7 @@
   }
 
   function withOwnProperty (owner, name, value, fn) {
-    const hadOwn = Object.prototype.hasOwnProperty.call(owner, name)
+    const hadOwn = Object.hasOwn(owner, name)
     const ownValue = owner[name]
     owner[name] = value
     try {
@@ -2801,11 +2801,12 @@
   const TRAY = 'pen-tool-extras-tray'
   // The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
   const CONTROL_BUTTONS = [LINE_MODE_BUTTON, PAGE_BUTTON, SETTINGS_BUTTON]
-  const controlButtons = CONTROL_BUTTONS.map((name) => `.tool-pen .controls-input button.${name}`).join(', ')
+  const PEN_PANEL = '.tool-pen .controls-input'
+  const controlButtons = CONTROL_BUTTONS.map((name) => `${PEN_PANEL} button.${name}`).join(', ')
   const PANEL_CSS = [
     `${LINE_MODE_PULLDOWN} { display: none; }`,
-    ...panelCss({ panel: '.tool-pen .controls-input', colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
-    ...CONTROL_BUTTONS.map((name, i) => `.tool-pen .controls-input button.${name} { order: ${i + 1}; }`),
+    ...panelCss({ panel: PEN_PANEL, colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
+    ...CONTROL_BUTTONS.map((name, i) => `${PEN_PANEL} button.${name} { order: ${i + 1}; }`),
     `.${LINE_MODE_BUTTON} svg, .${PAGE_BUTTON} svg, .${SETTINGS_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
     `.${LINE_MODE_BUTTON} path, .${SETTINGS_BUTTON} path, .${SETTINGS_BUTTON} circle { fill: none !important; }`
@@ -2887,7 +2888,6 @@
     saveSettings({ ...inForce, [name]: Number(input.value) })
   }
 
-  const PEN_PANEL = '.tool-pen .controls-input'
   // The panel may be up for a moment without a line mode pulldown, since SudokuPad builds it in steps.
   const PANEL_CHECK_MS = 1000
   const PANEL_MISSES = 2
@@ -3248,9 +3248,10 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     addSettingsEntry(dialogs, steps.settings, { name: 'pentoolextras', content: 'Pen Tool Extras', open: openDialog })
     const colorsAtStart = startupPenColors(savedData.getData(COLORS_KEY), hasColorTool)
     if (colorsAtStart.load) return adoptColors(colorsAtStart.load)
-    if (colorsAtStart.save) return saveColors(colorsAtStart.save)
-    // The install save, once: page 1 darkened. Off at startup (no Framework.setData) there is nothing to save with, so the wait is not started.
+    // The install save, once. Off at startup (no Framework.getApp or Framework.setData) there is nothing to wait for or save with.
     if (steps.colorSave.off) return
+    if (colorsAtStart.save) return saveColors(colorsAtStart.save)
+    // Page 1 darkened, once the color tool holds a palette.
     let tool
     try {
       tool = await waitForColorTool()

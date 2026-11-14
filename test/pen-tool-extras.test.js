@@ -2101,7 +2101,7 @@ const LACKING_ALONE = [
   ['Framework.app.svgRenderer.renderPart', (s) => { delete s.Framework.app.svgRenderer.renderPart }, ['arrowLines']],
   ['Framework.app.xyToRCExact', (s) => { delete s.Framework.app.xyToRCExact }, ['marks', 'lineErase']],
   ['Framework.app.tools.colour', (s) => { delete s.Framework.app.tools.colour }, ['colors']],
-  ['Framework.getApp', (s) => { delete s.Framework.getApp }, ['colors', 'pages', 'arrowLines', 'dragHint', 'marks', 'penPanel', 'lineErase']],
+  ['Framework.getApp', (s) => { delete s.Framework.getApp }, ['colors', 'colorSave', 'pages', 'arrowLines', 'dragHint', 'marks', 'penPanel', 'lineErase']],
   ...['getData', 'removeData'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['saved']]),
   // The install save writes the colors with setData.
   ['Framework.setData', (s) => { delete s.Framework.setData }, ['saved', 'colorSave']],
@@ -2171,10 +2171,13 @@ test('a Framework with no getApp turns every install step off in one warning nam
   delete framework.getApp
   const entries = []
   framework.addSetting = (setting) => entries.push(setting.name)
-  const steps = ['colors', 'pen pages', 'arrow lines', 'drag highlight', 'marks', 'pen panel', 'line erase']
+  const saved = []
+  framework.setData = (key) => saved.push(key)
+  const steps = ['colors', 'color save', 'pen pages', 'arrow lines', 'drag highlight', 'marks', 'pen panel', 'line erase']
   const warnings = withPage(() => loadWithFramework(framework))
   assert.deepEqual(warnings, [`pen-tool-extras: ${steps.join(', ')} skipped because SudokuPad has no Framework.getApp`])
   assert.deepEqual(entries, ['pentoolextras'])
+  assert.deepEqual(saved, [])
 })
 
 test('a page with no Framework is left alone without a word', () => {
