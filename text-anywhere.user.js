@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.19
+// @version      0.46.20
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.19'
+  const VERSION = '0.46.20'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -788,8 +788,11 @@
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
+  // A value already saved as it is writes nothing: a write is a storage round trip, and a drag or a note edit repeats the same value.
   function save (store, key, data) {
-    store.setData(key, { v: STORE_VERSION, data })
+    const envelope = { v: STORE_VERSION, data }
+    if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
+    store.setData(key, envelope)
   }
   /* eslint-enable no-unused-vars */
   // </lib:store>

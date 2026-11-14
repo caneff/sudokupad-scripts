@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.10
+// @version      0.7.11
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.10'
+  const VERSION = '0.7.11'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -123,8 +123,11 @@
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
+  // A value already saved as it is writes nothing: a write is a storage round trip, and a drag or a note edit repeats the same value.
   function save (store, key, data) {
-    store.setData(key, { v: STORE_VERSION, data })
+    const envelope = { v: STORE_VERSION, data }
+    if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
+    store.setData(key, envelope)
   }
   /* eslint-enable no-unused-vars */
   // </lib:store>
@@ -325,10 +328,9 @@
     const key = SIZING_KEY_PREFIX + puzzle
     const { w, h, x, y } = sizing.box
     const data = isDefaultSizing(sizing) ? null : { nudgePx: sizing.fontOffsetPx, box: { w, h, x, y } }
-    const held = store.getData(key)
-    if (data === null ? held === null : JSON.stringify(held) === JSON.stringify({ v: STORE_VERSION, data })) return
-    if (data === null) store.removeData(key)
-    else save(store, key, data)
+    if (data === null) {
+      if (store.getData(key) !== null) store.removeData(key)
+    } else save(store, key, data)
   }
 
   // SudokuPad's own rule in App.resize.
@@ -411,11 +413,11 @@
     const sideways = Boolean(applied.w && !applied.h)
     let startRoom = autoRoom
     if (dragging) startRoom = rules.offsetHeight
-    const fitted = draggedPane({ width, room: startRoom, box: applied, scale })
-    if (dragging) rules.style.maxHeight = `${fitted.room}px`
+    const sized = draggedPane({ width, room: startRoom, box: applied, scale })
+    if (dragging) rules.style.maxHeight = `${sized.room}px`
     if (applied.x || applied.y || lift) controls.style.translate = `${applied.x}px ${applied.y - lift}px`
-    setPaneWidth(rules, fitted.width, natural)
-    if (dragging) fitRulesFont(rules, fitted.room, ownPx, fontOffsetPx)
+    setPaneWidth(rules, sized.width, natural)
+    if (dragging) fitRulesFont(rules, sized.room, ownPx, fontOffsetPx)
     else rules.style.fontSize = `${fontPx}px`
     // The text may shrink to the held height, never grow into it.
     if (sideways) {
@@ -1155,7 +1157,6 @@
         const rules = rulesPane()
         const controls = controlsColumn()
         if (rules && controls) takeOffFit(rules, controls)
-        fitted = false
         showControls(false)
       }
     },
@@ -1252,7 +1253,6 @@
     .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; hyphens: auto; }
   `
 
-  let fitted = false // whether the fit's output may be on the pane
   let limits = noLimits()
 
   let textWatch = null
@@ -1421,7 +1421,6 @@
       const game = document.querySelector('.game')
       if (!game || !isLandscape(game.getBoundingClientRect())) {
         takeOffFit(rules, controls)
-        fitted = false
         showControls(false)
         return
       }
@@ -1448,7 +1447,6 @@
       if (applied) now.applied = { fontOffsetPx: appliedOffset, box: applied }
       keepReadingPlace(rules, place)
       rulesRefit.run(() => watchText(rules))
-      fitted = fitted || Boolean(applied)
       showControls(Boolean(applied))
       if (applied) placeControls(rules)
     })
