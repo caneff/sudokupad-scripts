@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.19
+// @version      1.32.20
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.19'
+  const VERSION = '1.32.20'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -110,6 +110,8 @@
   // The keys that step a panel slider: + (also =, and the keypad's) up and - down.
   const SLIDER_STEP_KEYS = { '+': 1, '=': 1, '-': -1 }
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
+  // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
+  const onSliderStep = ({ min, max, step }, value) => typeof value === 'number' && value >= min && value <= max && Number.isInteger((value - min) / step)
   /* eslint-enable no-unused-vars */
   // </lib:slider-keys>
 
@@ -802,11 +804,6 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
 
-  // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
-  function inRange (value, range) {
-    return typeof value === 'number' && value >= range.min && value <= range.max && Number.isInteger((value - range.min) / range.step)
-  }
-
   // Data saved before a name existed reads as true.
   function decodeFlags (names, data) {
     const saved = isPlainObject(data) ? data : {}
@@ -817,7 +814,7 @@
 
   // `effect` runs once `inForce` holds the new value; the style is written after the effects, so an effect need not.
   function slider (key, range, effect, dialog) {
-    return { key, fallback: range.fallback, normalize: (data) => inRange(data, range) ? data : range.fallback, accepts: (data) => inRange(data, range), effect, range, dialog }
+    return { key, fallback: range.fallback, normalize: (data) => onSliderStep(range, data) ? data : range.fallback, accepts: (data) => onSliderStep(range, data), effect, range, dialog }
   }
 
   function flag (key, effect = doNothing, dialog) {
@@ -2725,6 +2722,13 @@
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${SUDOKUPAD_PURPLE};`
 
+  // A slider row of `panelCss`'s `sliderRow` class: the range input, or an empty placeholder when hidden. Neither input takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
+  function sliderRowMarkup (sliderRow, shown, { id, label, range, value }) {
+    return shown
+      ? `<div class="${sliderRow}" title="${label}"><input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
+      : `<div class="${sliderRow}" data-empty></div>`
+  }
+
   // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders` and `sliderRow` are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
   function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
@@ -2825,16 +2829,12 @@
       `<g stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${LINE_MODE_ICON_SHOWS[mode].map((name) => LINE_MODE_ICON_LINES[name]).join('')}</g></svg></button>`
   }
 
-  // A hidden slider keeps an empty row so the other keeps its place. Neither slider takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
+  // A hidden slider keeps an empty row so the other keeps its place.
   function renderPanelSliders (thickness, opacity, show) {
     if (!show.thickness && !show.opacity) return ''
-    const row = (shown, id, label, range, value) => shown
-      ? `<div class="${SLIDER_ROW}" title="${label}">` +
-        `<input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
-      : `<div class="${SLIDER_ROW}" data-empty></div>`
     return `<div class="${SLIDERS}">` +
-      row(show.thickness, THICKNESS_SLIDER, 'Thickness', THICKNESS, thickness) +
-      row(show.opacity, OPACITY_SLIDER, OPACITY_LABEL, OPACITY, opacity) +
+      sliderRowMarkup(SLIDER_ROW, show.thickness, { id: THICKNESS_SLIDER, label: 'Thickness', range: THICKNESS, value: thickness }) +
+      sliderRowMarkup(SLIDER_ROW, show.opacity, { id: OPACITY_SLIDER, label: OPACITY_LABEL, range: OPACITY, value: opacity }) +
       '</div>'
   }
 
@@ -3214,7 +3214,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
+    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return

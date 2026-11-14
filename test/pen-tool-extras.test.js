@@ -13,7 +13,7 @@ const {
   buildCss, SUDOKUPAD_PEN_COLORS, editedColors,
   readPenColors, storedPenColors, startupPenColors, PRESET_LABELS,
   buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, VERSION, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
+  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
   clickedMarks, marksAtPoint, holdsMark, DOT_FILL_CSS,
@@ -147,14 +147,6 @@ test('a half-step thickness is saved as it is, not rounded', () => {
   const calls = []
   saveSetting({ setData: (key, value) => calls.push([key, value]), removeData: () => {} }, SETTINGS.thickness, 1.5)
   assert.deepEqual(calls, [['PenColor_thickness', 1.5]])
-})
-
-test('inRange takes any multiple of the step from the minimum, and a whole-number range stays whole', () => {
-  assert.equal(inRange(2.5, THICKNESS), true)
-  assert.equal(inRange(2.25, THICKNESS), false)
-  assert.equal(inRange(2.5, DASH), false)
-  assert.equal(inRange(2.5, OPACITY), false)
-  assert.equal(inRange(22, OPACITY), false)
 })
 
 test('the thickness setting falls back to 5 for nothing saved and for anything untrusted', () => {
@@ -1852,12 +1844,6 @@ test('every settings table row with a section is drawn in the dialog, so a secti
     if (!row.dialog.section) continue
     assert.ok(html.includes(row.range ? `data-row="${name}"` : `data-box="${name}`), name)
   }
-})
-
-test('inRange takes a whole number from min to max on the steps counted from min, and nothing else', () => {
-  const range = { min: 20, max: 100, step: 5, fallback: 80 }
-  for (const ok of [20, 25, 80, 100]) assert.equal(inRange(ok, range), true, String(ok))
-  for (const bad of [15, 105, 22, 20.5, '20', null, undefined, NaN, true, [20]]) assert.equal(inRange(bad, range), false, String(bad))
 })
 
 test('isPlainObject takes an object and no array, null or scalar', () => {
