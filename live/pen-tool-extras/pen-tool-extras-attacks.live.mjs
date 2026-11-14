@@ -28,10 +28,8 @@ const CELL = [4, 4]
 const browser = useBrowser()
 
 describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, read, editor
 
-  const read = (fn, arg) => p.evaluate(fn, arg)
-  const editor = () => p.locator(EXTRAS_EDITOR)
   const penStrokes = () => read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((g) => ({ cls: g.getAttribute('class'), dash: window.getComputedStyle(g).strokeDasharray, arrows: g.querySelectorAll('[data-arrow-line-part]').length })))
   const stored = (keys) => read((list) => list.map((k) => Framework.getData(k)), keys)
   const SAVED_KEYS = ['PenColor_thickness', 'PenColor_opacity', 'PenColor_dash', 'PenColor_arrowspacing', 'PenColor_outlinewidth', 'PenColor_outline', 'PenColor_linestyles', 'PenColor_sliders', 'PenColor_middleerase', 'PenColor_colors', 'PenColor_pen', 'EdgeMarks_marks', 'ToolPen_linemode']
@@ -40,6 +38,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
   // Every attack gets its own page with the script installed, default settings and the pen tool open, and ends with the crash signals clean.
   beforeEach(async () => {
     ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors }))
+    ;({ read, editor } = extras.tools(p))
   })
   afterEach(async () => {
     try {

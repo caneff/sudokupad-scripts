@@ -8,7 +8,7 @@ import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { gridPoint, mouseDrag, undoAll } from '../board.mjs'
+import { gridPoint, mouseDrag, undoAll, undoDepth } from '../board.mjs'
 import { openPenTool, penEntries } from '../pen.mjs'
 import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { FLOOR_MS, settle, stable, STABLE_MS } from '../settle.mjs'
@@ -37,14 +37,12 @@ const SMALLER_WINDOW = { width: 1100, height: 800 }
 const browser = useBrowser()
 
 describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, read
   // The pen entries a clean drag along LINE leaves, read once.
   let whole
 
-  const read = (fn, arg) => p.evaluate(fn, arg)
   const tool = () => read(() => Framework.app.tool)
   const hints = () => p.locator(HINTS).count()
-  const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
   const toTool = async () => {
     await openPenTool(p)
     await p.locator('.tool-pen button[data-key="1"]').click()
@@ -80,6 +78,7 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
 
   before(async () => {
     ;({ context, p, errors } = await extras.open(browser(), { seed: captureConsoleErrors, penTool: false }))
+    ;({ read } = extras.tools(p))
     await toTool()
     await mouseDrag(p, LINE)
     whole = await settle(() => penEntries(p), undefined, FLOOR_MS * 2, STABLE_MS)
