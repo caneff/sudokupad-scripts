@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.13
+// @version      0.46.14
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.13'
+  const VERSION = '0.46.14'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -2088,8 +2088,8 @@
 
   const boardSvg = () => Framework.app.svgRenderer.getElem()
 
-  // What SudokuPad draws above the notes' layer: an open dialog and the menu drawer.
-  const ABOVE_NOTES = '.dialog-overlay, #appmenu'
+  // What is drawn above the notes' layer: an open dialog, the menu drawer and any script's popup menu (Color by Digit's pad menu is a role="menu" div on the page).
+  const ABOVE_NOTES = '.dialog-overlay, #appmenu, [role="menu"]'
 
   // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the top bar, the menu drawer and an open dialog.
   const CONTROLS = `.topbar, ${ABOVE_NOTES}, button, a, input, select, textarea`

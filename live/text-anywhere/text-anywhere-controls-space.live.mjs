@@ -6,6 +6,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { openWithAllScripts, rulesWidth, setLongRules } from '../attacks.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen } from '../board.mjs'
+import { ARROW, MENU } from '../color-by-digit/color-by-digit-fixtures.mjs'
 
 const { SLIDERS, TEXT_BOX, pickTextAnywhere } = textAnywhere
 const WINDOW = { width: 1920, height: 1080 }
@@ -100,6 +101,16 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     assert.notEqual(at, null, 'the icon\'s div has a spot of its own')
     await p.mouse.click(...at)
     assert.equal(await boxOpen(p), false, 'the copy-rules icon opened a note')
+  })
+
+  it('a press on a row of Color by Digit\'s pad menu opens no note and leaves Text Anywhere\'s button on top (#829)', async () => {
+    await p.locator(ARROW).click()
+    await p.locator(MENU).waitFor({ state: 'visible' })
+    await p.locator(`${MENU} [data-act=pick][data-target=cells]`).nth(1).click()
+    await p.locator(MENU).waitFor({ state: 'detached' })
+    assert.equal(await boxOpen(p), false, 'the menu row opened a note')
+    const [x, y] = await centerOf('#control-textanywhere')
+    assert.equal(await p.evaluate(([px, py]) => document.elementFromPoint(px, py).closest('#control-textanywhere') !== null, [x, y]), true, 'the tool button is on top')
   })
 
   it('a press on a tool button, the rules text or the timer (which pauses with its own dialog) does not open a note', async () => {
