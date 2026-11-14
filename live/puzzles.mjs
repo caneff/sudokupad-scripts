@@ -1,12 +1,8 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 /* global Framework, loadFPuzzle */
-import assert from 'node:assert/strict'
 import { LOAD_MS } from './cache.mjs'
-import { GIVENS, MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { texts, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { startPuzzle, START } from './page.mjs'
-import { cellCentre } from './board.mjs'
-import { clickUntil, SETTLE_MS } from './settle.mjs'
+import { pickTool, texts } from './board.mjs'
 import { installAtIdle, SCRIPT_FILES, scriptSource } from './session.mjs'
 import { animationsDone } from './settings.mjs'
 
@@ -26,12 +22,6 @@ export async function installAll (p, patch = (file, code) => code) {
   await installAtIdle(p, SCRIPT_FILES.map((file) => ({ code: patch(file, scriptSource(file)) })))
 }
 
-// Saves Color by Digit's Odd/Even profile in Cell mode before the page loads, so odd digits take one color and even digits another.
-export const seedOddEvenCells = (p) => {
-  const entries = Object.entries({ ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'cell' }).map(([k, v]) => [k, JSON.stringify(v)])
-  return p.addInitScript((list) => list.forEach(([k, v]) => window.localStorage.setItem(k, v)), entries)
-}
-
 export async function startWithTools (p) {
   await startPuzzle(p)
   await enableTools(p)
@@ -48,7 +38,8 @@ async function enableTools (p) {
 
 // The recorded puzzle's givens (the classic 9x9) and its solution.
 export const CLASSIC_SOLUTION = '534678912672195348198342567859761423426853791713924856961537284287419635345286179'
-export const CLASSIC_GIVENS = [...GIVENS].flatMap((d, i) => d === '0' ? [] : [[Math.floor(i / 9), i % 9, Number(d)]])
+export const CLASSIC_GRID = '530070000600195000098000060800060003400803001700020006060000280000419005000080079'
+export const CLASSIC_GIVENS = [...CLASSIC_GRID].flatMap((d, i) => d === '0' ? [] : [[Math.floor(i / 9), i % 9, Number(d)]])
 
 // A puzzle's data; `givens` are `[row, col, value]` and `extra` (overlays, foglight) is merged in.
 // An inline `scl` puzzle has no id of its own and SudokuPad then saves its progress under `progress_undefined`, shared by every such
@@ -111,16 +102,8 @@ export async function closePauseDialog (p, button) {
   await p.locator('.dialog').waitFor({ state: 'detached' })
 }
 
-export async function clickCell (p, row, col) {
-  const [x, y] = await cellCentre(p, row, col)
-  await p.mouse.click(x, y)
-}
-
 // Picks the tool whose button is `button` and returns once SudokuPad has it; a click in the first moments after a script is injected is dead.
-export async function useTool (p, button) {
-  const name = button.replace('#control-', '')
-  assert.equal(await clickUntil(() => p.click(button), () => tool(p), name, SETTLE_MS), name)
-}
+export const useTool = (p, button) => pickTool(p, button.replace('#control-', ''))
 
 export async function resumeAfterHistory (p) {
   const state = await p.waitForFunction(([source, flags]) => {

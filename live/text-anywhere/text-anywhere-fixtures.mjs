@@ -4,7 +4,7 @@
 
 import { createRequire } from 'node:module'
 import { openWith, reloadWith, scriptSource } from '../session.mjs'
-import { clickUntil, SETTLE_MS } from '../settle.mjs'
+import { currentTool, pickTool, SELECTED, TEXT_BOX, TEXTS, texts } from '../board.mjs'
 
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
@@ -23,7 +23,6 @@ export const NOT_NOTES = `#text-anywhere-layer > :not(.text-anywhere-text, .text
 export const IN_LAYER = `#text-anywhere-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
 // The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
 export const TEXT_BGS = '#text-anywhere-layer .text-anywhere-text-bg:not(.text-anywhere-textbox)'
-export const TEXTS = '#text-anywhere-layer .text-anywhere-text:not(.text-anywhere-textbox)'
 // Every note the player sees: the finished ones and the one open for typing (a text box is a note too).
 export const SEEN_TEXTS = '#text-anywhere-layer .text-anywhere-text'
 // A struck run in a finished note, and the words and gaps it is drawn in, each with a line of its own.
@@ -32,7 +31,6 @@ const STRIKES = `${TEXTS} .text-anywhere-strike`
 export const STRIKE_PIECES = `${STRIKES} ${STRIKE_PIECE}`
 // A check box drawn in a finished note.
 export const CHECK_BOXES = `${TEXTS} .text-anywhere-check`
-export const TEXT_BOX = '#text-anywhere-layer .text-anywhere-textbox'
 export const SLIDERS = '.text-anywhere-sliders'
 export const TRAY = '.text-anywhere-tray'
 export const SIZE_SLIDER = '#text-anywhere-size'
@@ -85,11 +83,10 @@ export async function holdForPickers (p, selector, button, state) {
 
 export const middleOf = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
 
-export const tool = (p) => p.evaluate(() => Framework.app.tool)
 export const valueOf = (p, slider) => p.evaluate((selector) => Number(document.querySelector(selector).value), slider)
 
-// SudokuPad binds a new button's click a moment after it appears, so the click repeats until the tool is current.
-export const pickTextAnywhere = (p) => clickUntil(() => p.click(TOOL_BUTTON), () => tool(p), 'textanywhere', SETTLE_MS)
+export const pickTextAnywhere = (p) => pickTool(p, 'textanywhere')
+export { currentTool as tool, SELECTED, TEXT_BOX, TEXTS, texts }
 
 // The puzzle's key, as the script keys its notes: its id, or the page URL when it has none, as the recorded puzzle does.
 export const puzzleKey = (p) => p.evaluate(() => String(Framework.app.puzzle.puzzleId || window.location.href))
@@ -165,8 +162,6 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
 // Two frames: the pointer's work waits for the next one.
 export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
 // A finished note stays selected until a second Escape or a click elsewhere.
-export const SELECTED = '#text-anywhere-layer .text-anywhere-selected'
-export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
 export const forgetNotes = (p) => p.evaluate(([prefixes, index]) => {
   Object.keys(window.localStorage).filter((k) => prefixes.some((prefix) => k.includes(prefix))).forEach((k) => window.localStorage.removeItem(k))

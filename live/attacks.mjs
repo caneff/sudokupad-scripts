@@ -1,6 +1,6 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { pickTextAnywhere } from './text-anywhere/text-anywhere-fixtures.mjs'
+import { pickTool } from './board.mjs'
 import { captureConsoleErrors } from './page.mjs'
 import { SCRIPTS } from './scripts.mjs'
 import { addScripts, openWith, reloadWith } from './session.mjs'
@@ -14,7 +14,7 @@ const FILES = SCRIPTS.map((script) => script.file)
 // a player starts. Picking Text Anywhere's tool first waits out the moment its button's click is dead.
 async function allReady (p) {
   for (const script of SCRIPTS) await script.ready(p)
-  await pickTextAnywhere(p)
+  await pickTool(p, 'textanywhere')
   await p.click('#control-normal')
 }
 
@@ -79,8 +79,3 @@ export const rowCol = (i) => [Math.floor(i / 9), i % 9]
 
 // Undo after Restart loads the progress SudokuPad saves a moment after an action; a player pauses that long, so the save is forced.
 export const flushSave = (p) => p.evaluate(() => Framework.app.puzzle.saveProgress(true))
-
-export const colorCell = (p, [row, col], color) => p.evaluate(([r, c, arg]) => {
-  const a = Framework.app
-  a.deselect(); a.select(a.grid.getCell(r, c)); a.act({ type: 'colour', arg }); a.deselect()
-}, [row, col, String(color)])

@@ -7,7 +7,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from '../settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
 import { cellCentre, undoAll } from '../board.mjs'
 import { drag, goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, padValues, penEntries, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
@@ -304,7 +304,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('the Opacity slider fades the arrow lines with the pen layer: the group and its parts show at the slider\'s value', async () => {
-    const shown = async (selector) => [...new Set(await effectiveOpacities(p, selector))]
+    const shown = async (selector) => [...new Set(await extras.effectiveOpacities(p, selector))]
     await setSlider(p, '#pen-tool-extras-opacity', 50)
     assert.deepEqual(await settle(() => shown('#cell-pen > g.cell-pen'), [0.5]), [0.5])
     assert.deepEqual(await shown('#cell-pen > g.cell-pen > path'), [0.5])

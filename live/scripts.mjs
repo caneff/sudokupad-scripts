@@ -1,17 +1,17 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { openScriptDialog, openSettings } from './settings.mjs'
 import { placeNote } from './board.mjs'
-import { keydownDefaults, openPenTool, PAGE_BUTTON, penEntries } from './pen.mjs'
+import { openPenTool, PAGE_BUTTON, penEntries } from './pen.mjs'
+import { keydownDefaults } from './input.mjs'
 import { settle } from './settle.mjs'
-import { TOOL_BUTTON } from './text-anywhere/text-anywhere-fixtures.mjs'
 
 export const BLACK = 'rgb(0, 0, 0)'
 export const DIGITS = '1234567890'
 export const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 // What the number pad's keys read: digits, or letters in letter mode.
 export const numberPadText = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
+const TEXT_ANYWHERE_BUTTON = '#control-textanywhere'
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
 
 const settingsEntry = async (p, text) => {
@@ -30,11 +30,11 @@ export const SCRIPTS = [
     // A fresh install starts in Cell, which colors the board's givens, and a press steps it to Digit, which takes them off.
     act: async (p) => {
       const colored = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).some((c) => (c.colours || []).length > 0))
-      const label = () => labelOn(p)
+      const label = () => p.locator('#control-colorbydigit').getAttribute('aria-label')
       assert.equal(await settle(colored, true), true, 'Cell colored a cell')
-      assert.equal(await label(), 'Cell')
+      assert.equal(await label(), 'Color by digit: Cell')
       await p.click('#control-colorbydigit')
-      assert.equal(await settle(label, 'Digit'), 'Digit')
+      assert.equal(await settle(label, 'Color by digit: Digit'), 'Color by digit: Digit')
       assert.equal(await settle(colored, false), false, 'Digit took the colors off')
     }
   },
@@ -123,8 +123,8 @@ export const SCRIPTS = [
   {
     name: 'Text Anywhere',
     file: 'text-anywhere.user.js',
-    ready: (p) => p.locator(TOOL_BUTTON).waitFor({ state: 'attached' }),
-    control: (p) => p.locator(TOOL_BUTTON).waitFor({ state: 'visible' }),
+    ready: (p) => p.locator(TEXT_ANYWHERE_BUTTON).waitFor({ state: 'attached' }),
+    control: (p) => p.locator(TEXT_ANYWHERE_BUTTON).waitFor({ state: 'visible' }),
     act: (p) => placeNote(p, [2.5, 2.5], '15')
   }
 ]

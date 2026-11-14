@@ -4,7 +4,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { buttonIds, DIGIT_BUTTON, pickTextAnywhere, TOOL_KEYS, texts as noteTexts, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
-import { seedOddEvenCells } from './puzzles.mjs'
+import { seedOddEvenCells } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { openWith, SCRIPT_FILES, useBrowser } from './session.mjs'
 import { cellCentre, mouseDrag, placeNote } from './board.mjs'
 import { goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'

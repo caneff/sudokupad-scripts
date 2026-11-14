@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { restartPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, dialogButton, effectiveOpacities, openExtrasEditor, openSettings } from '../settings.mjs'
+import { closeExtrasEditorWith, dialogButton, openExtrasEditor, openSettings } from '../settings.mjs'
 import { cellCentre } from '../board.mjs'
 import { openPenTool, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
@@ -832,7 +832,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const setOpacity = (value) => setSlider(p, '#pen-tool-extras-opacity', value)
     const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
     const opacities = async () => {
-      const shown = await effectiveOpacities(p, '#cell-pen .cell-pen')
+      const shown = await extras.effectiveOpacities(p, '#cell-pen .cell-pen')
       const values = await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
       return [...new Set(values.map((v, i) => `${v}:${shown[i]}`))].sort()
     }
