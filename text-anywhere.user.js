@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.21
+// @version      0.46.22
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.21'
+  const VERSION = '0.46.22'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -688,6 +688,14 @@
   // opacity, background or box.
   const noteChanged = (item, text, before) => text !== (before?.text ?? '') ||
     (before !== null && (item.color !== before.color || item.size !== before.size || itemOpacity(item) !== itemOpacity(before) || Boolean(item.bg) !== Boolean(before.bg) || String(item.box) !== String(before.box)))
+
+  // The notes, and the index of the closed note among them, once the note at `index` (-1 for a new one) closes as `item` with `text`: empty text removes it, a new note
+  // is appended, any other replaces the saved one. The index is -1 when no note is left.
+  const notesAfterClose = (notes, index, item, text) => {
+    if (text === '') return { notes: notes.filter((_, i) => i !== index), index: -1 }
+    if (index === -1) return { notes: [...notes, { ...item, text }], index: notes.length }
+    return { notes: notes.map((note, i) => i === index ? { ...item, text } : note), index }
+  }
 
   // Where the note at index `index` sits after the notes `keep` marks false went, or -1 when it went (or was never saved, as a new note's -1).
   const indexAfterKeep = (index, keep) => index < 0 || !keep[index] ? -1 : keep.slice(0, index).filter(Boolean).length
@@ -2114,7 +2122,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -3582,8 +3590,7 @@
     if (text === '' && !editing.saved) return
     const { index, item } = editing
     editing.saved = true
-    if (text === '') writeNotes(puzzleNotes.filter((_, i) => i !== index))
-    else writeNotes(index === -1 ? [...puzzleNotes, { ...item, text }] : puzzleNotes.map((note, i) => i === index ? { ...item, text } : note))
+    writeNotes(notesAfterClose(puzzleNotes, index, item, text).notes)
   }
 
   function closeEditing () {
@@ -3605,13 +3612,7 @@
     const resized = index !== -1 && String(item.box) !== String(puzzleNotes[index].box)
     let left = index
     const changed = noteChanged(item, text, index === -1 ? null : puzzleNotes[index])
-    if (changed) {
-      if (text === '') {
-        puzzleNotes.splice(index, 1)
-        left = -1
-      } else if (index === -1) left = puzzleNotes.push({ ...item, text }) - 1
-      else puzzleNotes[index] = { ...item, text }
-    }
+    if (changed) ({ notes: puzzleNotes, index: left } = notesAfterClose(puzzleNotes, index, item, text))
     renderNotes()
     if (changed && resized && text !== '') snapToPixels([index])
     // A save made while typing is written over, even when the note ended as it began; that is no edit, so it leaves what Undo can bring back after a Restart.
