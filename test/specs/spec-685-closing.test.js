@@ -10,10 +10,6 @@ const ROOT = join(__dirname, '..', '..')
 
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const SCRIPTS = scriptFiles()
-// A script's own code: its text with every block sync-lib.js pastes in taken out.
-const ownCode = (file) => withoutLibBlocks(read(file))
-// The lib modules a script carries.
-const carried = (file) => libBlockNames(read(file))
 
 // The files a stray copy could hide in: the repo's root, `lib/`, `test/` and `live/`, so never `docs/research/` or `site/`.
 const filesIn = (dir) => readdirSync(join(ROOT, dir), { withFileTypes: true }).filter((entry) => entry.isFile() && /\.m?js$/.test(entry.name)).map((entry) => join(dir, entry.name))
@@ -141,7 +137,7 @@ test('a settings dialog opened with no snapshot throws at once', () => {
 test('every script\'s settings go through the shared guard, its dialog takes a snapshot, and no script keeps its own copy of a shared piece', () => {
   assert.equal(SCRIPTS.length, 6, SCRIPTS.join(', '))
   for (const file of SCRIPTS) {
-    const own = ownCode(file)
+    const own = withoutLibBlocks(read(file))
     assert.ok(/guard\.storeFor\(/.test(own), `${file} saves through the guard's store`)
     assert.ok(/guard\.dialogsFor\(/.test(own), `${file} opens its dialogs through the guard`)
     // The dialog's options, up to its Copy and Paste.
@@ -182,7 +178,7 @@ test('every lib test loads its module through the one loader, and every script\'
   }
   for (const file of SCRIPTS) {
     const { changed, problems } = syncText(read(file), readLib, libNamesOnDisk())
-    assert.deepEqual({ changed, problems }, { changed: [], problems: [] }, `${file} (${carried(file).join(', ')})`)
+    assert.deepEqual({ changed, problems }, { changed: [], problems: [] }, `${file} (${libBlockNames(read(file)).join(', ')})`)
   }
 })
 

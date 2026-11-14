@@ -332,18 +332,17 @@ for (const { heading, page: file, id } of SHOWS) {
   const animated = slides.filter(s => s.animation)
   if (animated.length) {
     test(`${heading}'s animated slides each have a tracked WebP and a tracked still PNG, both tagged on ${file} and ${HOME}`, () => {
+      const pages = [HOME, file].map((page) => [page, fs.readFileSync(path.join(SITE_DIR, page), 'utf8')])
       for (const { picture, animation } of animated) {
         assert.match(animation, /\.webp$/, `${animation} is not a WebP`)
         const tracked = execFileSync('git', ['ls-files', '--', dir + animation, dir + picture], { cwd: ROOT, encoding: 'utf8' }).split('\n')
         assert.deepEqual(tracked.filter(Boolean).sort(), [dir + animation, dir + picture].sort(), `${animation} and ${picture} must both be tracked`)
-        for (const page of [HOME, file]) {
-          const raw = fs.readFileSync(path.join(SITE_DIR, page), 'utf8')
+        for (const [page, raw] of pages) {
           assert.ok(raw.includes(`srcset="${RAW}${dir}${animation}?v=${tagOf(dir + animation)}"`), `${page} has no tagged <source> for ${animation}`)
           assert.ok(raw.includes(`src="${RAW}${dir}${picture}?v=${tagOf(dir + picture)}"`), `${page} has no tagged still ${picture}`)
         }
       }
-      for (const page of [HOME, file]) {
-        const raw = fs.readFileSync(path.join(SITE_DIR, page), 'utf8')
+      for (const [page, raw] of pages) {
         assert.equal(raw.split(`srcset="${RAW}${dir}`).length - 1, animated.length, `${page} has one WebP <source> per animated slide`)
       }
     })
