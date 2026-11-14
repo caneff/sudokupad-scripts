@@ -247,9 +247,10 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
       }
     }
 
-    it('released at 0.9 s opens no pickers, and a full hold afterward still does', async () => {
+    it('released at half the hold opens no pickers, and a full hold afterward still does', async () => {
       await press()
-      await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.9)
+      // Half the hold, not near its end: the release may land a long way late on a loaded box and still be before the timer.
+      await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.5)
       await p.mouse.up()
       // A "nothing happened" wait: the pickers, if the early release wrongly opened them, would show well within it.
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.4)

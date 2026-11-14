@@ -1208,6 +1208,8 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
       assert.deepEqual(await settle(pen, ['3']), ['3'])
       await p.mouse.click(x, y)
       assert.deepEqual(await settle(pen, []), [])
+      // Counted after the clicks: a click wrap that warns again on each pen click raises the count past one.
+      assert.equal(warnings.length, 1, JSON.stringify(warnings))
       assert.deepEqual(errors, [])
     } finally {
       await context.close()
