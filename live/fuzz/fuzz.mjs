@@ -89,27 +89,25 @@ async function clickIn (p, selector) {
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 }
 
-// What a player does when a Text Anywhere note (or its handle) covers a button they need: drags the note off, onto the board's middle. Each button's middle is looked at;
-// a covered one gets its note dragged, up to a few times, and one still covered then is a failure. Stops with nothing covered, so a note on no button is never touched.
+// What a player does when a Text Anywhere note (or its handle) covers a button: drags the note off, onto the board's middle.
 const CLEAR_TRIES = 4
 const LAYER = '#text-anywhere-layer'
-// How far a resize handle reaches past its note's box (the script's HANDLE_PX).
-const HANDLE_REACH_PX = 11
-const COVERED_BUTTON_NOTE = ([layer, notes, reach]) => {
-  for (const button of document.querySelectorAll('[id^="control-"]')) {
+const COVERED_BUTTON_NOTE = ([layer, notes]) => {
+  for (const button of document.querySelectorAll('button, [id^="control-"]')) {
     const box = button.getBoundingClientRect()
     if (box.width === 0 || box.height === 0) continue
     const [x, y] = [box.x + box.width / 2, box.y + box.height / 2]
     const top = document.elementFromPoint(x, y)
     if (!top || top === button || button.contains(top) || !top.closest(layer)) continue
-    // A handle sits on its note's corner, so the note is the one whose box reaches the point; a point on the note's own middle presses it, as a drag must.
+    // A handle sits on its note's corner, so the note is the one whose box, grown by the handle's own size, holds the point.
+    const reach = top.getBoundingClientRect().width
     const note = [...document.querySelectorAll(notes)].find((n) => {
       const b = n.getBoundingClientRect()
       return x >= b.left - reach && x <= b.right + reach && y >= b.top - reach && y <= b.bottom + reach
     })
-    if (!note) return { button: button.id, point: null }
+    if (!note) return { button: button.id || button.className, point: null }
     const b = note.getBoundingClientRect()
-    return { button: button.id, point: [b.x + b.width / 2, b.y + b.height / 2] }
+    return { button: button.id || button.className, point: [b.x + b.width / 2, b.y + b.height / 2] }
   }
   return null
 }
@@ -179,8 +177,23 @@ function envFor (p, puzzle, { beforeReload }) {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
   }
   const pickPenColor = (color) => clickIn(p, `.tool-pen button[data-key="${color}"]`)
+  const clearControls = async () => {
+    for (let i = 0; i <= CLEAR_TRIES; i++) {
+      const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS])
+      if (!covered) return
+      if (!covered.point) throw new Error(`${covered.button} is covered by a Text Anywhere element that belongs to no note`)
+      if (i === CLEAR_TRIES) throw new Error(`${covered.button} is still covered by a note after ${CLEAR_TRIES} drags off it`)
+      const to = (await cellCentre(p, Math.floor(puzzle.rows / 2), Math.floor(puzzle.cols / 2))).slice(0, 2)
+      await p.mouse.move(...covered.point)
+      await p.mouse.down()
+      await p.mouse.move(...to, { steps: 6 })
+      await p.mouse.up()
+    }
+  }
   const pickNotes = async () => {
     if (await pickTextAnywhere(p) !== 'textanywhere') throw new Error('Text Anywhere\'s tool could not be picked')
+    // A note blocks clicks only while its tool is current, so a button it covers shows only now.
+    await clearControls()
   }
   const sliderFor = async (name) => {
     const { selector, tool } = SLIDER_SELECTORS[name]
@@ -199,21 +212,7 @@ function envFor (p, puzzle, { beforeReload }) {
       const onLink = await p.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('a')), point)
       return !onLink ? point : (await cellCentre(p, Math.min(Math.max(row, 0), puzzle.rows - 1), Math.min(Math.max(col, 0), puzzle.cols - 1))).slice(0, 2)
     },
-    async clearControls () {
-      for (let i = 0; i < CLEAR_TRIES; i++) {
-        const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS, HANDLE_REACH_PX])
-        if (!covered) return
-        if (!covered.point) throw new Error(`${covered.button} is covered by a Text Anywhere element that belongs to no note`)
-        const [row, col] = [Math.floor(puzzle.rows / 2), Math.floor(puzzle.cols / 2)]
-        const to = (await cellCentre(p, row, col)).slice(0, 2)
-        await p.mouse.move(...covered.point)
-        await p.mouse.down()
-        await p.mouse.move(...to, { steps: 6 })
-        await p.mouse.up()
-      }
-      const left = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS, HANDLE_REACH_PX])
-      if (left) throw new Error(`${left.button} is still covered by a note after ${CLEAR_TRIES} drags off it`)
-    },
+    clearControls,
     async usePen (color) {
       await openPen()
       await pickPenColor(color)
