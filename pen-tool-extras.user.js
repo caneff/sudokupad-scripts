@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.20
+// @version      1.32.21
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.20'
+  const VERSION = '1.32.21'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1167,7 +1167,6 @@
     return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
   }
   const PEN_COLOR_KEYS = PEN_COLOR_NUMBERS.map(String)
-  const HEX_COLOR = /^#[0-9a-f]{6}$/i
   // A pen color preset's id is saved beside the colors under `preset`; a set with none, or one not in SAVED_PRESETS, is Custom. UNSAVED is SudokuPad's own colors before the install save, never saved.
   const SAVED_PRESETS = [...PAGE_PRESETS, SUDOKUPAD_PRESET]
   const CUSTOM = 'custom'
@@ -1177,7 +1176,7 @@
     [CUSTOM]: 'Custom',
     [UNSAVED]: 'SudokuPad (unsaved)'
   }
-  const isHexColor = (value) => typeof value === 'string' && HEX_COLOR.test(value)
+  const isHexColor = (value) => savedHex(value) !== undefined
 
   // null means the install save is still owed.
   function readPenColors (data) {
@@ -1237,6 +1236,11 @@
   const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
   const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
+
+  const SAVED_HEX = /^#[0-9a-f]{6}$/i
+
+  // A color read back from storage: `#` and six hex digits in any case, lowercased; anything else is undefined, and the caller picks its own fallback.
+  const savedHex = (value) => typeof value === 'string' && SAVED_HEX.test(value) ? value.toLowerCase() : undefined
 
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
 
