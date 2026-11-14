@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.49
+// @version      0.25.50
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.49'
+  const VERSION = '0.25.50'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -320,8 +320,11 @@
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
+  // A value already saved as it is writes nothing: a write is a storage round trip, and a drag or a note edit repeats the same value.
   function save (store, key, data) {
-    store.setData(key, { v: STORE_VERSION, data })
+    const envelope = { v: STORE_VERSION, data }
+    if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
+    store.setData(key, envelope)
   }
   /* eslint-enable no-unused-vars */
   // </lib:store>
