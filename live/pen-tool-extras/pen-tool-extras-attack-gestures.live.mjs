@@ -87,7 +87,7 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
   after(async () => { await context.close() })
   beforeEach(async () => {
     await restartPuzzle(p)
-    assert.equal(await settle(undoDepth, 0), 0)
+    assert.equal(await settle(() => undoDepth(p), 0), 0)
     await toTool()
   })
 
