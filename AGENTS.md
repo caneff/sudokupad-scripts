@@ -62,7 +62,7 @@ The six default roles, each label string equal to its role: `needs-triage`, `nee
 
 ### Domain docs
 
-Single-context: a root `GLOSSARY.md` and `docs/adr/` (ADR 0001 exists). See `docs/agents/domain.md`.
+Single-context: a root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Coding standards
 
