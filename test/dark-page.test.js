@@ -4,9 +4,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { headerVersion } = require('./header-version.js')
 const { startScript } = require('./unit-start.js')
-const { buildCss, PAGE, BOARD_ID, VERSION, DEFAULT_COLOR, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { buildCss, PAGE, BOARD_ID, DEFAULT_COLOR, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
 const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -146,10 +145,6 @@ test('no rule reaches inside the board, or sets color on body or a container of 
       if (/(^|[;\s])color\s*:/.test(declarations)) assert.notEqual(rest, '', selector)
     }
   }
-})
-
-test('VERSION is the @version in the script header', () => {
-  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8')))
 })
 
 function startOnBoard (framework) {

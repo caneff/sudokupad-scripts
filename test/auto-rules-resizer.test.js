@@ -4,11 +4,10 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { headerVersion } = require('./header-version.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { startScript } = require('./unit-start.js')
 const {
-  VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
+  MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, offsetFontPx, fitRulesPane, clearFit,
   copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, loadSizing, saveSizing, noSizing, SIZING_KEY_PREFIX, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
 } = require('../auto-rules-resizer.user.js')
@@ -296,10 +295,6 @@ test('limitFromBox: blank is no limit, a usable number is the limit, anything el
   assert.equal(limitFromBox('700', 600), 700)
   for (const slip of ['0', '-5', '0.2', 'abc']) assert.equal(limitFromBox(slip, 600), 600, slip)
   assert.equal(limitFromBox('abc', null), null)
-})
-
-test('VERSION is the @version in the script header', () => {
-  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')))
 })
 
 test('fitRulesPane: rules that scroll even when widened and shrunk end at 70% of SudokuPad\'s font', () => {
