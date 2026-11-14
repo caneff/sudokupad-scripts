@@ -674,7 +674,12 @@ describe('focusing the actions on a script (#724)', () => {
     })
 
     // What each script takes is its own reader's say, so a "valid" text is one its `pastedSettings` takes a setting from, and a refused one is no text it takes any from.
-    const taken = (script, text) => { try { return Object.keys(script.pastedSettings(text, script.READERS).values).length } catch { return 0 } }
+    const taken = (script, text) => {
+      try { return Object.keys(script.pastedSettings(text, script.READERS).values).length } catch (error) {
+        if (!/^the clipboard text is not/.test(error.message)) throw error
+        return 0
+      }
+    }
     const SCRIPTS = [['UI Tweaks', UI_TWEAKS, UI_TWEAKS_TEXTS], ['Dark Page', DARK_PAGE, DARK_PAGE_TEXTS]]
 
     it('the texts hold Copy, texts each script takes a setting from, and texts it takes none from', () => {
@@ -688,6 +693,13 @@ describe('focusing the actions on a script (#724)', () => {
       assert.equal(taken(UI_TWEAKS, '{"UiTweaks_hideSelect":"yes"}'), 0)
       assert.equal(taken(DARK_PAGE, '{"DarkPage_color":"blue"}'), 0)
       assert.ok(DARK_PAGE_TEXTS.includes('{"DarkPage_color":"blue"}'), 'a color the reader refuses')
+    })
+
+    it('a reader that throws anything but the clipboard refusal fails the check with that error', () => {
+      const broken = { READERS: {}, pastedSettings: () => { throw new TypeError('reader crashed') } }
+      assert.throws(() => taken(broken, '{}'), TypeError)
+      const refusing = { READERS: {}, pastedSettings: () => { throw new Error('the clipboard text is not a settings object') } }
+      assert.equal(taken(refusing, '[]'), 0)
     })
 
     it('every color Dark Page can be pasted is one of the dark colors', () => {
