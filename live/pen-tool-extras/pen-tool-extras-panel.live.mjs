@@ -7,10 +7,11 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { dialogButton, openExtrasEditor } from '../settings.mjs'
-import { draw, drag, openPenTool, penEntries, penValuesNoColor, setSlider } from '../pen.mjs'
+import { drag, draw, openPenTool, penDrawnCount, penEntries, penValuesNoColor, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { slideTo } from '../slider.mjs'
 import { useBrowser } from '../session.mjs'
+import { undoDepth } from '../board.mjs'
 
 const THICKNESS_KEY = 'PenColor_thickness'
 const SLIDERS_KEY = 'PenColor_sliders'
@@ -22,14 +23,10 @@ const OPACITY = '#pen-tool-extras-opacity'
 const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, read, editor
 
-  const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = (key) => read((k) => Framework.getData(k), key)
-  const editor = () => p.locator('#pen-tool-extras-editor')
   const sliderValue = (selector) => p.locator(selector).inputValue()
-  const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
-  const strokeCount = () => read(() => document.querySelectorAll('#cell-pen .cell-pen').length)
   const activeElementTag = () => read(() => document.activeElement.tagName)
   const lineWidth = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pencolor-1')).strokeWidth))
   const effectiveOpacity = async (selector) => (await extras.effectiveOpacities(p, selector))[0]
@@ -52,6 +49,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await extras.open(browser()))
+    ;({ read, editor } = extras.tools(p))
     await read(([a, b]) => { Framework.removeData(a); Framework.removeData(b) }, [THICKNESS_KEY, OPACITY_KEY])
     await draw(p, 8)
   })
@@ -276,14 +274,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('a slider drag adds nothing to the undo stack or the replay, draws no pen stroke and leaves every pen mark as it was', async () => {
-    const before = { depth: await undoDepth(), strokes: await strokeCount(), pen: await penValuesNoColor(p), replay: await read(() => Framework.app.getReplay()) }
+    const before = { depth: await undoDepth(p), strokes: await penDrawnCount(p), pen: await penValuesNoColor(p), replay: await read(() => Framework.app.getReplay()) }
     // Both drags end over the grid, so a stroke drawn by the slider's pointer events would show.
     await dragSlider(THICKNESS, GRID_X)
     await dragSlider(OPACITY, GRID_X)
     await dragToMax(THICKNESS)
     await dragToMax(OPACITY)
-    assert.equal(await undoDepth(), before.depth)
-    assert.equal(await strokeCount(), before.strokes)
+    assert.equal(await undoDepth(p), before.depth)
+    assert.equal(await penDrawnCount(p), before.strokes)
     assert.deepEqual(await penValuesNoColor(p), before.pen)
     assert.equal(await read(() => Framework.app.getReplay()), before.replay)
   })

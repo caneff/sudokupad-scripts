@@ -9,6 +9,8 @@ export const PAGE_BUTTON = '.pen-tool-extras-page'
 export const PAGE_ONE = '123456789'
 export const PAGE_TWO = 'abcdefghi'
 export const PAGE_THREE = 'jlnprtvxz'
+// The pen tool's three pages of pens, by page number: the characters on each page's buttons.
+export const PAGES = { 1: PAGE_ONE, 2: PAGE_TWO, 3: PAGE_THREE }
 // How long one press on the page button gets to turn the page before it is pressed again.
 const PAGE_TURN_MS = 500
 
@@ -80,6 +82,13 @@ export async function goToPenPage (page, values) {
     await settle(() => padValues(page), values, PAGE_TURN_MS)
   }
   assert.equal(await settle(() => padValues(page), values), values)
+}
+
+// Opens the pen tool, turns to pen page `pageNumber` and presses its button `key`.
+export async function selectPenOnPage (page, pageNumber, key) {
+  await openPenTool(page)
+  await goToPenPage(page, PAGES[pageNumber])
+  await page.locator(`.tool-pen button[data-key="${key}"]`).click()
 }
 
 // A real click this many px inside a button's left edge: the part nearest the grid, where a press that leaks to the board marks it (#521).

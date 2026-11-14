@@ -8,8 +8,8 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { restartPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, dialogButton, openExtrasEditor, openSettings } from '../settings.mjs'
-import { cellCentre } from '../board.mjs'
-import { openPenTool, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
+import { cellCentre, undoDepth } from '../board.mjs'
+import { openPenTool, penDrawnCount, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { addPage, openWith, useBrowser } from '../session.mjs'
 
@@ -54,13 +54,8 @@ const CORNERS = {
 const browser = useBrowser()
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
-  let context, p, errors
-  const read = (fn, arg) => p.evaluate(fn, arg)
+  let context, p, errors, read, editor
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
-  const editor = () => p.locator('#pen-tool-extras-editor')
-
-  const penCount = () => read(() => document.querySelectorAll('#cell-pen .cell-pen').length)
-  const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
 
   // A point 2 px inside the cell, next to the given side: a real click there is an edge click.
   const edgePoint = (row, col, side) => read(([r, c, s]) => {
@@ -122,6 +117,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await extras.open(browser()))
+    ;({ read, editor } = extras.tools(p))
     await watchMenus()
   })
   after(async () => { await context.close() })
@@ -147,11 +143,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       for (const [i, value] of edge.cycle.slice(0, -1).entries()) {
         for (let k = 0; k <= i; k++) await clickEdge(edge.row, edge.col, edge.side)
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), [value]), [value], `${name} before the right click`)
-        const depth = await undoDepth()
+        const depth = await undoDepth(p)
         await clickEdge(edge.row, edge.col, edge.side, 'right')
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), []), [], `${name} ${value} after a right click`)
-        assert.ok(await undoDepth() > depth, 'an undo step')
-        assert.equal(await penCount(), 0, 'the drawn mark is gone')
+        assert.ok(await undoDepth(p) > depth, 'an undo step')
+        assert.equal(await penDrawnCount(p), 0, 'the drawn mark is gone')
         await p.click('#control-undo')
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), [value]), [value], `${name} after an undo`)
         await clearMarks()
@@ -166,11 +162,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clickEdge(3, 3, 'right')
     assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['3']), ['3'])
     await clearMarks()
-    const depth = await undoDepth()
+    const depth = await undoDepth(p)
     await clickEdge(3, 3, 'right', 'right')
     await sleep(150) // "nothing happened in 150 ms" check
     assert.deepEqual(await penValuesAt(p, 3, 3), [])
-    assert.equal(await undoDepth(), depth, 'no undo step')
+    assert.equal(await undoDepth(p), depth, 'no undo step')
   })
 
   it('a right click over the grid in the pen tool keeps the browser menu closed, wherever it lands; off the grid and with another tool the menu is left alone', async () => {
@@ -204,11 +200,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     for (const [i, value] of ['5', '6', 'z'].entries()) {
       for (let k = 0; k <= i; k++) await clickCellCentre(...CELL_MARK)
       assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), [value]), [value], `${value} before the right click`)
-      const depth = await undoDepth()
+      const depth = await undoDepth(p)
       await p.mouse.click(cx, cy, { button: 'right' })
       assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), []), [], `${value} after a right click`)
-      assert.ok(await undoDepth() > depth, 'an undo step')
-      assert.equal(await penCount(), 0, 'the drawn mark is gone')
+      assert.ok(await undoDepth(p) > depth, 'an undo step')
+      assert.equal(await penDrawnCount(p), 0, 'the drawn mark is gone')
       await p.click('#control-undo')
       assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), [value]), [value], `${value} after an undo`)
       await clearMarks()
@@ -222,7 +218,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clickCellCentre(4, 2)
     await clickEdge(2, 2, 'right')
     assert.deepEqual(await settle(() => penValuesAt(p, 4, 2), ['z']), ['z'])
-    const depth = await undoDepth()
+    const depth = await undoDepth(p)
     const [x1, y1] = await cellCentre(p, 4, 1)
     const [x2, y2] = await cellCentre(p, 4, 2)
     await p.mouse.move(x1, y1)
@@ -232,7 +228,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(() => penValuesAt(p, 4, 1), []), [])
     assert.deepEqual(await settle(() => penValuesAt(p, 4, 2), []), [])
     assert.deepEqual(await penValuesAt(p, 2, 2), ['3'], 'the edge X off the drag stays')
-    assert.ok(await undoDepth() > depth, 'an undo step')
+    assert.ok(await undoDepth(p) > depth, 'an undo step')
     await p.click('#control-undo')
     assert.deepEqual(await settle(() => penValuesAt(p, 4, 1), ['5']), ['5'])
     assert.deepEqual(await settle(() => penValuesAt(p, 4, 2), ['z']), ['z'], 'one undo brings both back')
@@ -271,10 +267,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       for (const [i, value] of cycle.slice(0, -1).entries()) {
         for (let k = 0; k <= i; k++) await clickCorner(...corner)
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} before the right click`)
-        const depth = await undoDepth()
+        const depth = await undoDepth(p)
         await clickCorner(...corner, 'right')
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), []), [], `${name} ${value} after a right click`)
-        assert.ok(await undoDepth() > depth, 'an undo step')
+        assert.ok(await undoDepth(p) > depth, 'an undo step')
         await p.click('#control-undo')
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after an undo`)
         await clearMarks()
@@ -454,15 +450,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await put(6, 6, ['z'])
       await put(1, 1, ['x'])
       assert.deepEqual(await settle(stacking, STACKED), STACKED)
-      const drawn = await penCount()
+      const drawn = await penDrawnCount(p)
       // The acts above are not grouped like a click's, so an undo may first undo a selection: undo until a stroke goes, then redo as often.
       let undone = 0
-      while ((await penCount()) >= drawn && undone < 6) {
+      while ((await penDrawnCount(p)) >= drawn && undone < 6) {
         await p.click('#control-undo')
         undone++
-        await settle(async () => (await penCount()) < drawn, true, 500)
+        await settle(async () => (await penDrawnCount(p)) < drawn, true, 500)
       }
-      assert.equal((await penCount()) < drawn, true, 'an undo removes a stroke')
+      assert.equal((await penDrawnCount(p)) < drawn, true, 'an undo removes a stroke')
       assert.equal((await stacking()).ok, true, 'after an undo')
       for (let i = 0; i < undone; i++) await p.click('#control-redo')
       assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after a redo')
@@ -477,7 +473,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await clearMarks()
       await setThickness(5)
     }
-    assert.equal(await settle(penCount, 0), 0, 'erasing removes the marks from the marks layer too')
+    assert.equal(await settle(() => penDrawnCount(p), 0), 0, 'erasing removes the marks from the marks layer too')
   })
 
   it('one undo reverses one click and redo restores it', async () => {
@@ -627,7 +623,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const want = value === null ? [] : [value]
       assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), want), want)
     }
-    const depth = await undoDepth()
+    const depth = await undoDepth(p)
     await clickCellCentre(...CELL_MARK)
     await clickCellCentre(...CELL_MARK)
     await clickCellCentre(...CELL_MARK)
@@ -636,20 +632,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['6']), ['6'], 'one undo goes back one step')
     await p.click('#control-redo')
     assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['z']), ['z'], 'redo')
-    assert.ok(await undoDepth() > depth)
+    assert.ok(await undoDepth(p) > depth)
     await clearMarks()
-    const before = await penCount()
+    const before = await penDrawnCount(p)
     const [x, y] = await cellCentre(p, 6, 1)
     await p.mouse.move(x, y)
     await p.mouse.down()
     await p.mouse.move(x + 70, y + 5, { steps: 8 })
     await p.mouse.up()
-    assert.equal(await settle(async () => (await penCount()) > before, true), true)
+    assert.equal(await settle(async () => (await penDrawnCount(p)) > before, true), true)
     const values = await read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => v[0])))
     // A drag leaves a line, and a cell circle where it ends; never a mark on an edge.
     assert.deepEqual(values.filter((v) => '34bchijklmnopqrstuvwxy'.includes(v)), [], 'a drag draws no edge mark')
     await p.click('#control-undo')
-    assert.equal(await settle(penCount, before), before)
+    assert.equal(await settle(() => penDrawnCount(p), before), before)
   })
 
   it('getReplay() encodes the moves', async () => {
@@ -751,18 +747,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openExtrasEditor(p)
     for (const mark of MARK_BOXES) await box(mark).uncheck()
     await closeExtrasEditorWith(p, 'Save')
-    const undoable = await read(() => Framework.app.puzzle.undoStack.length)
+    const undoable = await undoDepth(p)
     await clickEdge(3, 3, 'right')
     await clickEdge(3, 3, 'bottom')
     // "nothing happened in 500 ms" check
     await sleep(500)
     assert.deepEqual(await penValuesAt(p, 3, 3), ['3'])
-    assert.equal(await read(() => Framework.app.puzzle.undoStack.length), undoable)
+    assert.equal(await undoDepth(p), undoable)
     await clickCellCentre(...CELL_MARK)
     // "nothing happened in 500 ms" check
     await sleep(500)
     assert.deepEqual(await penValuesAt(p, ...CELL_MARK), [])
-    assert.equal(await read(() => Framework.app.puzzle.undoStack.length), undoable)
+    assert.equal(await undoDepth(p), undoable)
     await openExtrasEditor(p)
     for (const mark of MARK_BOXES) await box(mark).check()
     await closeExtrasEditorWith(p, 'Save')
