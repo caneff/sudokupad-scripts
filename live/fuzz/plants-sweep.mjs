@@ -1,7 +1,5 @@
-// The planted-bug sweep (#727): every plant on every seed under every configuration, each hunt for a fixed budget, each catch replayed from its own path.
-// `fuzz` is `fuzz.mjs`'s, passed in so the unit test needs no browser. Not a check itself.
+// The planted-bug sweep (#727): every plant on every seed under every configuration, each hunt for a fixed budget, each catch replayed from its own path. Not a check itself.
 
-// K consecutive seeds from `base`.
 export const seedList = ({ base, count }) => Array.from({ length: count }, (_, i) => base + i)
 
 const round1 = (ms) => Math.round(ms / 100) / 10

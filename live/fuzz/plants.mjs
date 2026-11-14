@@ -123,7 +123,7 @@ export function plantById (id) {
   return plant
 }
 
-// The script's text with the bug in it. A mutant (`apply`) makes its own edit. A find text that matches anywhere but once is an error: a script that changed under the plant must not run unplanted.
+// A find that matches other than once is an error: a script that changed under the plant must not run unplanted.
 export function applyPlant (plant, code) {
   if (plant.apply) return plant.apply(code)
   const matches = code.split(plant.find).length - 1
@@ -131,5 +131,4 @@ export function applyPlant (plant, code) {
   return code.replace(plant.find, () => plant.replace)
 }
 
-// What `installAll` takes: every script as it is, the plant's script with the bug.
 export const plantPatch = (plant) => (file, code) => (file === plant.file ? applyPlant(plant, code) : code)

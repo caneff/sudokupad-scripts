@@ -10,7 +10,6 @@ const { fakeStore, quietly } = require('./fake-store.js')
 const { withScript, withoutPath } = require('./unit-start.js')
 const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, asideOf, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
 
-// The chips a profile pair draws in `style`; the digit profile is the cell profile unless given.
 const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
@@ -373,7 +372,6 @@ test('setProfileGroups replaces only the chosen profile\'s groups', () => {
   assert.equal(next.active, 1)
 })
 
-// The digit profile: following the cell profile ("synced"), on a profile of its own, and the digit colors on or off.
 const synced = { profiles: [{ name: 'A', groups: LOW }, { name: 'B', groups: ODD }, { name: 'C', groups: ENTROPIC }], active: 1 }
 const apart = setDigitActive(setSync(synced, false), 2)
 
@@ -2038,7 +2036,6 @@ test('reduceDraft paste: a pasted mode is held to the draft\'s own profiles, not
   assert.equal(reduceDraft(opened(), { type: 'paste', mode: 'digit' }).mode, 'digit')
 })
 
-// The dialog's focus, hover and press states, hit areas, grab cursor and keyboard.
 const RING = SUDOKUPAD_PURPLE
 test('the dialog\'s buttons, digit keys, swatches and profile rows show a 2 px ring on keyboard focus only', () => {
   for (const part of ['button', '[data-role="swatch"]', '.cbd-profile']) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.20
+// @version      0.1.23
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Toggle Selection button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.20'
+  const VERSION = '0.1.23'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -110,7 +110,6 @@
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // SudokuPad's bottom row of tool buttons.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button. !important because an inline max-width on the row beats a stylesheet cap.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem !important; }`
@@ -149,7 +148,6 @@
   // <lib:write-style>
   // Generated from lib/write-style.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // The page's style element `id`, added on the first call, holds `css`.
   function writeStyle (id, css, doc = document) {
     let style = doc.getElementById(id)
     if (!style) {
@@ -164,8 +162,7 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads ERROR_LOG_KEY, readErrorLog, formatErrorLog and SUDOKUPAD_PURPLE from sudokupad, and wireCopyPaste from settings-transfer and writeStyle from write-style. A script
-  // that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
+  // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
   /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
@@ -207,8 +204,6 @@
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
-  // `snapshot()` runs first and returns the function that puts back everything `write` can change, so a write that fails half-way leaves
-  // the stored values and their mirrors as they were. The write's throw is rethrown; a restore that itself throws is named beside it.
   function writeOrRestore (snapshot, write) {
     const restore = snapshot()
     try {
@@ -265,7 +260,7 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // Every script's maker, as its @author header says; the dialog names it after the version.
+  // As each script's @author header says.
   const AUTHOR = 'ChinStrap'
 
   // The title rules travel with the row, so they are in the page exactly while the dialog is.
@@ -364,9 +359,6 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  // Save and Paste each write under `snapshot` (`writeOrRestore`'s), in a dialog action of the guard feature `feature` (`runInDialog`).
-  // `off` is `guard.off`; a missing one throws, since it would read as nothing being off.
-  // `copyPaste` holds the rest of `wireCopyPaste`'s options: `copied`, `readers`, `upgrade` and `apply`.
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
@@ -472,10 +464,8 @@
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   /* global Framework */
-  // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
-  // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
-  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring, and the site's --accent.
+  // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
@@ -792,7 +782,6 @@
       }
     }
 
-    // What a settings entry and dialog are handed in place of Framework: the close a dialog button runs goes under `feature`.
     const dialogsFor = (feature) => ({
       addSetting: (setting) => Framework.addSetting(setting),
       showDialog: (options) => Framework.showDialog(options),
@@ -864,7 +853,6 @@
   const dialogs = guard.dialogsFor(settingsEntry)
   // The options are written only from the dialog, so a write that fails reaches its status line with the settings entry still on.
   const savedSettings = guard.storeFor(settingsEntry)
-  // Every option's key and the options in force, as a function that puts them back after a Save or Paste that failed half-way.
   const snapshotOptions = () => snapshotStore(savedSettings, tableKeys(OPTION_ROWS), () => {
     const was = options
     return () => applyOptions(was)
@@ -906,7 +894,6 @@
       extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
     })
     if (!body) return
-    // The draft takes the defaults, and Save or Cancel decides.
     const restoreDefaults = () => OPTIONS.forEach((option) => {
       draft[option.id] = DEFAULT_OPTIONS[option.id]
       box(option.id).checked = draft[option.id]

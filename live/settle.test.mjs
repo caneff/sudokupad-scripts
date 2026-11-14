@@ -5,7 +5,6 @@ import assert from 'node:assert/strict'
 import { CLICK_TAKES_MS, FLOOR_MS, STABLE_MS, clickUntil, readUntil, settle, stable } from './settle.mjs'
 
 const timed = async (fn) => { const t = Date.now(); const value = await fn(); return { value, ms: Date.now() - t } }
-// A read whose value is `steps[i].value` from `steps[i].at` milliseconds after the first call.
 const scripted = (steps) => {
   const t0 = Date.now()
   return async () => steps.filter((s) => Date.now() - t0 >= s.at).at(-1).value

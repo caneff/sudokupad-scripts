@@ -1,11 +1,4 @@
-// Live check that pen-tool-extras.user.js loses one install step, not the whole pen tool, when SudokuPad changes under it, on
-// sudokupad.app in headless Chromium.
-//
-// A case either takes away an internal a step needs before the script's startup check reads it (a snippet run on `Framework.getApp()`,
-// ahead of the script's own), makes a call the script makes fail while SudokuPad's own use of it goes on, changes how SudokuPad sends a click, or plants a throw in the
-// script's own code inside a wrapper. Each then checks the console warning that names the step, the dialog's line, that SudokuPad's own
-// action still works on the event that failed and after it, and that the other steps still work. A removed internal also goes from
-// SudokuPad's own code, so a case that removes one draws only with what it does not serve.
+// A removed internal also goes from SudokuPad's own code, so a case that removes one draws only with what it does not serve.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -143,7 +136,6 @@ async function dialogLineOf (p) {
 // The snippet runs on `Framework.getApp()` before the script's own, so the script's startup check sees the internal already broken.
 const withBreak = (kase) => `;Framework.getApp().then(() => { ${kase.breaks || ''} });\n${kase.source || script}`
 
-// A `seed` for `open`: the script's console warnings go into `warned`, and the page's console errors into `errors`.
 const watchWarnings = (warned) => (page, errors) => {
   page.on('console', (m) => {
     if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())

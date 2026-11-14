@@ -1655,7 +1655,6 @@ test('the store over load, edit, Restart and Undo: what Restart keeps reads back
   assert.deepEqual(loaded, [line, sum])
   const edited = [loaded[0], { ...loaded[1], text: '16' }]
   saveNotesTo(store, 'p1', edited)
-  // Restart: the notes are kept, then the saved notes are cleared.
   keepRestartedTo(store, 'p1', edited)
   saveNotesTo(store, 'p1', [])
   assert.equal(store.getData(NOTES_PREFIX + 'p1'), null, 'Restart cleared the saved notes')

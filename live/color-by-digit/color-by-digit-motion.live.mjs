@@ -1,6 +1,3 @@
-// Live check of Color by Digit's touches on sudokupad.app, in headless Chromium: chips, swatches and digit keys at 60%,
-// the profile menu's fade and blink after a pick, the blank cells of an empty profile, the profile rows sliding aside
-// during a drag, and no motion when the system asks for less.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { ARROW, BUTTON, EDITOR, MENU, openSession, savedProfiles, SEED, openMenuOn, openEditorOn } from './color-by-digit-fixtures.mjs'

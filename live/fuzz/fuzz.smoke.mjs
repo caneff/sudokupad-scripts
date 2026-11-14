@@ -29,8 +29,6 @@ const INTERRUPTED_BY_ESCAPE = /^(?:pen drag|right-click erase held|note drag).* 
 const browser = useBrowser()
 
 describe('the fuzz on SudokuPad', { concurrency: false }, () => {
-  // Every puzzle opens once, on the page the fuzz uses, with the puzzle set's free cells matching the page's, and takes a click, a digit and an undo with no rule
-  // broken and no crash signal.
   for (const puzzle of FUZZ_PUZZLES) {
     it(`the ${puzzle.name} puzzle opens and takes a click, a digit key and an undo`, async () => {
       await fuzzScripted({ browser: browser(), puzzle, steps: [['click cell', 0], ['type digit', puzzle.keys[0]], ['undo', null]] })
@@ -95,7 +93,6 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle, steps: [['place note', [0, at(0, 2)]], ['click cell', at(0, 3)], ['type digit', '1'], ['reload', null]] })
   })
 
-  // Runs `steps` (`[kind, arg]`) on a fresh page of `puzzle` and returns the snapshot after the last, with no plant in.
   async function snapshotAfter (puzzle, steps) {
     const target = await openTarget(browser(), puzzle, {})
     try {
@@ -107,7 +104,6 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     }
   }
 
-  // Runs `steps` on a fresh page of `puzzle` and gives `read` the page.
   async function afterSteps (puzzle, steps, read) {
     const target = await openTarget(browser(), puzzle, {})
     try {

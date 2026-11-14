@@ -1,6 +1,6 @@
 // The fuzz on real SudokuPad: opens a page of `live/page.mjs` (on the puzzle a list names) with all six scripts installed the way a userscript manager does (at
 // DOMContentLoaded of every load, so a reload keeps them), gives the engine (`engine.mjs`) a page of its own for every action list, and reads the crash
-// signals (`signals.mjs`) from it. Each list names its puzzle (`puzzle-set.mjs`, #679). Not a check itself; `fuzz.smoke.mjs` is the test, `run.mjs` the command line.
+// signals (`signals.mjs`) from it. Each list names its puzzle (`puzzle-set.mjs`, #679). Not a check itself.
 import { setTimeout as sleep } from 'node:timers/promises'
 import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { NOTICE_BAR } from '../attacks.mjs'
@@ -52,13 +52,11 @@ for (const name of SLIDERS) if (!SLIDER_SELECTORS[name]) throw new Error(`action
 // A press on a track this far in from its end is on the track, not on the edge pixel that belongs to the next element.
 const TRACK_MARGIN_PX = 6
 
-// How long a script's element is waited for before it counts as lost.
 const BOX_TIMEOUT_MS = 2000
 
 const UI_TWEAKS = settingsScript('ui-tweaks.user.js')
 const UI_TWEAKS_DIALOG = UI_TWEAKS.editor
 const DARK_PAGE_INPUT = '#dark-page-input'
-// The two scripts whose Copy settings and Paste settings the fuzz presses: the entry's name, and the editor that shows while its dialog is open.
 const SETTINGS_DIALOGS = { 'ui tweaks': UI_TWEAKS, 'dark page': settingsScript('dark-page.user.js') }
 const isSettingsObject = (text) => {
   try {
@@ -112,15 +110,14 @@ const COVERED_BUTTON_NOTE = ([layer, notes]) => {
   return null
 }
 
-// Color by Digit's profiles dialog (#814): opens it the way a user finds it, makes each edit of `actions.mjs`'s `profileEdit` on the dialog as it stands (a row, a
-// swatch or an option is counted from 0 and wrapped to how many there are, an edit the dialog's state does not allow, such as a delete of the only profile, is
-// not made), and presses Save or Cancel.
-// Opens the menu on the Color by Digit button's arrow.
 async function openPadMenu (p) {
   await clickIn(p, ARROW)
   await p.locator(PROFILE_MENU).waitFor({ state: 'visible' })
 }
 
+// Color by Digit's profiles dialog (#814): opens it the way a user finds it, makes each edit of `actions.mjs`'s `profileEdit` on the dialog as it stands (a row, a
+// swatch or an option is counted from 0 and wrapped to how many there are, an edit the dialog's state does not allow, such as a delete of the only profile, is
+// not made), and presses Save or Cancel.
 async function editProfiles (p, edits, save, fromMenu) {
   if (fromMenu) {
     await openPadMenu(p)
@@ -171,7 +168,6 @@ async function pickProfileFromMenu (p, i) {
   await p.locator(PROFILE_MENU).waitFor({ state: 'detached' })
 }
 
-// The env `actions.mjs` runs on, over a real page showing `puzzle`.
 function envFor (p, puzzle, { beforeReload }) {
   const openPen = async () => {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')

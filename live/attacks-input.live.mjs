@@ -1,6 +1,4 @@
-// Live attacks 69 to 72 (#628, from #590): the wheel, middle click, fast multiple clicks, Ctrl+A, Ctrl+C, Ctrl+V, number-pad digits and Caps Lock, thrown at
-// Text Anywhere, Pen Tool Extras and Color by Digit installed together, on sudokupad.app in headless Chromium. Each test names its attack and
-// asserts the crash signals (no uncaught error, console error or skip line) beside what a user expects. Clicks, drags and keys are real input.
+// Live attacks 69 to 72 (#628, from #590).
 /* global Framework */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

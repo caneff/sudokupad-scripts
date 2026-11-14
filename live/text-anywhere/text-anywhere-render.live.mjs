@@ -1,8 +1,3 @@
-// Live check of how little text-anywhere.user.js redraws on sudokupad.app, with 30 notes on the board: a drag of two selected notes keeps each
-// frame's pointer moves under a frame's work and never recreates a note, during the drag or at its release; with another tool current a mouse move
-// measures no note and shows no hover; a redraw that changes only the selection measures no note; a board resize writes one group's style and touches
-// no note; a class change that leaves the board where it was redraws nothing; and a move, a selection rectangle, a resize and an erase each wait for
-// the next frame and then show the last pointer move.
 // The pointer moves are dispatched from the page, so each one's work can be timed; the presses are real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

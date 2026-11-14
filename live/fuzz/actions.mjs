@@ -48,7 +48,6 @@ const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.j
 const { BOX_PRESETS, CORNERS, NUDGE_REPEAT_MS } = require('../../text-anywhere.user.js')
 const { scriptFiles } = require('../../sync-lib.js')
 
-// A script's file name from its short name, which is what `--focus` takes and a replay command prints.
 export const scriptFile = (name) => `${name}.user.js`
 export const scriptName = (file) => file.replace(/\.user\.js$/, '')
 const AUTO_RULES_RESIZER = scriptFile('auto-rules-resizer')
@@ -83,9 +82,7 @@ const CORNER_NAMES = { ur: 'top-right', dl: 'bottom-left' }
 export const RULES_LIMIT_TEXTS = ['', '200', '400', '700', '2000', '0', '-5']
 const limitWords = (text) => (text === '' ? 'none' : text)
 
-// The four sliders of the pen panel and the notes panel, by the name a step prints.
 export const SLIDERS = ['pen thickness', 'pen opacity', 'note size', 'note opacity']
-// Text Anywhere's Box color buttons, in the dialog's order; `custom` is Own.
 const BOX_CHOICES = [...Object.keys(BOX_PRESETS), 'custom']
 const boxLabel = (choice) => BOX_PRESETS[choice] ?? 'Own'
 const SLIDER_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End']
@@ -180,7 +177,6 @@ function buildKinds () {
     }
   })
 
-  // A right-button erase held down from cell `a` to cell `b`.
   async function eraseHoldStart (env, [a, b]) {
     const [from, to] = [await env.cellPoint(a), await env.cellPoint(b)]
     await env.usePen(1)
@@ -211,7 +207,6 @@ function buildKinds () {
     await env.page.mouse.down()
     await env.page.mouse.move(centre[0] + NOTE_DRAG[0], centre[1] + NOTE_DRAG[1], { steps: 6 })
   }
-  // The middle of the first note drawn; with none, one with `text` is placed at cell `a` first.
   async function firstNote (env, text, a) {
     return await env.noteCentre() ?? (await env.placeNote(text, a), await env.noteCentre())
   }
@@ -245,7 +240,6 @@ function buildKinds () {
   const press = (key) => (env) => env.page.keyboard.press(key)
 
   return [
-    // Ordinary use of SudokuPad and of every script.
     {
       kind: 'click cell',
       group: 'ordinary',
@@ -674,7 +668,6 @@ function buildKinds () {
     },
     { kind: 'color mode', group: 'ordinary', scripts: [COLOR_BY_DIGIT], start: true, stroke: false, weight: 2, arg: () => fc.constant(null), label: () => 'press the Color by Digit button', run: (env) => env.clickColorMode() },
 
-    // Interruptions in the middle of a gesture: a key, Escape, a tool switch, undo, a window resize, a second button, the pointer leaving the window.
     penDrag('pen drag, Escape', [PEN_TOOL_EXTRAS], () => 'Escape', press('Escape')),
     penDrag('pen drag, tool key', [PEN_TOOL_EXTRAS], (k) => `press ${k}`, (env, arg) => env.page.keyboard.press(arg[3]), toolKey),
     penDrag('pen drag, undo', [PEN_TOOL_EXTRAS], () => 'Ctrl+Z', press('Control+z')),
@@ -711,7 +704,6 @@ function buildKinds () {
     noteDrag('note drag, undo', [TEXT_ANYWHERE], 'Ctrl+Z', press('Control+z')),
     noteDrag('note drag, resize', [TEXT_ANYWHERE, AUTO_RULES_RESIZER], `resize the window to ${WINDOW_SIZES[0].width}x${WINDOW_SIZES[0].height}`, (env) => env.resize(WINDOW_SIZES[0])),
 
-    // Page-level events.
     { kind: 'blur and focus', group: 'page', scripts: [], start: false, stroke: false, weight: 1, arg: () => fc.constant(null), label: () => 'window blur and focus', run: (env) => env.blurFocus() },
     { kind: 'reload', group: 'page', scripts: [], start: false, stroke: false, weight: 1, arg: () => fc.constant(null), label: () => 'reload the page', run: (env, _, model) => { model.selected = false; return env.reload() } },
     {
@@ -829,7 +821,6 @@ export const KIND_GROUPS = Object.fromEntries(KINDS.map((k) => [k.kind, k.group]
 // The name of target `i` of `puzzle` in a step: `r3c4`, with row 0 and a column 0 for the cells just outside the grid on its top and left.
 const nameTarget = (puzzle) => (i) => `r${puzzle.cells[i][0] + 1}c${puzzle.cells[i][1] + 1}`
 
-// One action of kind `k` with its numbers `arg`: a command fast-check can run, shrink and print.
 const commandOf = (k, puzzle, arg) => ({
   kind: k.kind,
   group: k.group,
@@ -845,7 +836,6 @@ const commandOf = (k, puzzle, arg) => ({
 // How much a focused script's kinds weigh over their own weight: a kind is raised, never silenced, so the others still come up.
 export const FOCUS_FACTOR = 4
 
-// The script files `flag` (`--focus`, `--file`) names (short names); a name that is no script is refused, naming the ones that are.
 export function focusFiles (names = [], flag = '--focus') {
   const files = scriptFiles()
   return names.map((name) => {
@@ -854,10 +844,8 @@ export function focusFiles (names = [], flag = '--focus') {
   })
 }
 
-// The weight of every one of `kinds`, by name, when the actions are focused on the script files `focus`.
 export const kindWeights = (kinds, focus = []) => Object.fromEntries(kinds.map((k) => [k.kind, k.weight * (k.scripts.some((f) => focus.includes(f)) ? FOCUS_FACTOR : 1)]))
 
-// The arbitrary of one action of `kinds` over `puzzle` (`puzzle-set.mjs`), weighted by `weights` (`kindWeights`).
 function actionArbitrary (puzzle, weights, kinds) {
   return fc.oneof(...kinds.map((k) => ({ weight: weights[k.kind], arbitrary: k.arg(puzzle).map((arg) => commandOf(k, puzzle, arg)) })))
 }
@@ -870,7 +858,6 @@ export const MAX_START_STEPS = 30
 // The arbitrary of a busy start's steps over `puzzle`: commands like a list's, weighted alike (`--focus` included), run first, each printed with `(start) ` before it.
 const startArbitrary = (puzzle, weights, kinds) => fc.array(actionArbitrary(puzzle, weights, kinds.filter((k) => k.start)), { maxLength: MAX_START_STEPS, size: 'max' })
 
-// The most actions a list has unless a configuration says more.
 export const DEFAULT_MAX_COMMANDS = 20
 
 // The generator of whole lists, each `{ puzzle, start, commands, waitMs }`: a puzzle of `puzzles`, then (with `busyStart`, #726) a start of up to `MAX_START_STEPS` steps that builds a

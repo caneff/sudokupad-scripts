@@ -26,7 +26,6 @@ function enter (file, globals) {
   return { path, warnings, leave }
 }
 
-// Requires the script once and returns what it warned.
 function startScript (file, globals) {
   const { path, warnings, leave } = enter(file, globals)
   try {

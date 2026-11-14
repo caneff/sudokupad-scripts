@@ -1,8 +1,6 @@
 name: Fuzz pull request
 
-# A short fuzz of a pull request that changes a script, so a bug it adds shows before the merge and not the morning after (the nightly is fuzz.yml). 5 minutes of
-# `npm run test:fuzz` on real SudokuPad across the puzzle set, with the actions of the changed scripts raised (`--focus`). A failure fails the check and prints the seed, the
-# shrunk steps and the replay command in the job summary; it files no issue, since the pull request is where it is seen. It runs neither the Tampermonkey test nor the live suite.
+# Files no issue: the pull request is where a failure is seen.
 on:
   pull_request:
     paths:

@@ -1,6 +1,5 @@
-// Live check of Pen Tool Extras' small touches (#547) on sudokupad.app in headless Chromium: a press state on the panel buttons, the grid's hand cursor kept under the pen tool, an erased line that
-// leaves no copy, a fade-in on edit mode's pickers, the press state and the pickers off under reduced motion, and a pixel floor on the corner and the right-click line hit.
-// Every press, click and drag is real mouse input. The floor is checked on a grid scaled to half size (a 35 px cell at 1200 x 900), which is what a big grid does to its cells.
+// #547.
+// The floor is checked on a grid scaled to half size (a 35 px cell at 1200 x 900), which is what a big grid does to its cells.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'

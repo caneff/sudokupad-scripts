@@ -2,8 +2,7 @@
 
 Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
 script is one `*.user.js` file with no build step for users. Shared code lives in `lib/<name>.js` and `node sync-lib.js` copies it into each
-script between `// <lib:name>` and `// </lib:name>` markers, so an installed script is still one file. Never edit inside a marked block;
-`lib/*.test.js` tests each module.
+script between `// <lib:name>` and `// </lib:name>` markers, so an installed script is still one file.
 
 - **Pages**: `site/` is the static homepage and its Pen Tool Extras details page. GitHub Pages serves it from `main`
   (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
@@ -28,7 +27,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 - **Slideshows**: `site/slideshows.json` is the one source of every slideshow's pictures, `alt` text and captions. After editing it, or retaking a slide picture,
   run `node sync-slides.js`: it rewrites each `<!-- slideshow:id -->` block on the homepage and the details page, picture tags included.
   Never edit inside a block; `test/site.test.js` fails until you run it.
-- **Shared code**: after editing `lib/<name>.js`, run `node sync-lib.js`, as `node tag-pictures.js` is run after a picture: it rewrites each
+- **Shared code**: never edit inside a marked block; `lib/*.test.js` tests each module. After editing `lib/<name>.js`, run `node sync-lib.js`, as `node tag-pictures.js` is run after a picture: it rewrites each
   marked block in the `*.user.js` and raises the version of every script it changed. `test/sync-lib.test.js` fails until you do.
 - **No feature relies on a right-button drag** (Chris, 2026-11-07): SudokuPad's Test Large Puzzle UI setting pans the board on it and no
   script sees the moves (`docs/research/large-puzzle-ui-right-drag.md`). A right click is fine; a right-drag may only be an extra on top of
@@ -63,7 +62,7 @@ The six default roles, each label string equal to its role: `needs-triage`, `nee
 
 ### Domain docs
 
-Single-context: a root `GLOSSARY.md`, plus `docs/adr/` once one is needed. See `docs/agents/domain.md`.
+Single-context: a root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Coding standards
 

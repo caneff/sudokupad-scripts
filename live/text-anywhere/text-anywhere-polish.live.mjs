@@ -1,5 +1,3 @@
-// Live check of text-anywhere.user.js's polish on sudokupad.app: symbols typed as ASCII become their signs with the caret where the solver was typing, a click
-// on a checklist box ticks it and saves the note without opening it, and a note being moved is drawn at 60% of its own opacity. Real mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

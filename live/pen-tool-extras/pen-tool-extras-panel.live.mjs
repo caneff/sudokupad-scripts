@@ -1,7 +1,4 @@
-// Live check of pen-tool-extras.user.js's thickness and opacity sliders in the pen tool's panel, of the
-// line mode button that steps SudokuPad's hidden line mode pulldown, and of the opacity of the pen layer, on
-// sudokupad.app in headless Chromium. A touch screen stays untested.
-// Every slider move is a real mouse drag.
+// A touch screen stays untested.
 /* global Framework, ToolPen, Image, TouchEvent, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -66,7 +63,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await lineWidth(), 5)
     assert.equal(await lineOpacity(), 0.8)
     assert.equal(row.y >= controls.y + controls.height, true, JSON.stringify({ row, controls }))
-    // The pad is no taller with the sliders than without.
     const height = () => p.locator('.controls-buttons').evaluate((el) => el.getBoundingClientRect().height)
     const withSliders = await height()
     await p.locator('.pen-tool-extras-sliders').evaluate((el) => { el.style.display = 'none' })
@@ -368,7 +364,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await editor().waitFor({ state: 'detached' })
     assert.equal(await p.locator(THICKNESS).count(), 1, 'Cancel leaves the panel as it was')
     assert.equal(await saved(SLIDERS_KEY), null)
-    // Hide the thickness slider: the opacity slider keeps its place and the thickness one still applies to the marks.
     await openExtrasEditor(p)
     await show('thickness').uncheck()
     await dialogButton(p, 'Save').click()
@@ -379,7 +374,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await p.locator('.pen-tool-extras-page').boundingBox(), pageButton)
     assert.equal(await lineWidth(), 16, 'a hidden slider\'s value still applies')
     assert.deepEqual(await read((k) => Framework.getData(k), SLIDERS_KEY), { thickness: false, opacity: true })
-    // Hide the opacity slider too: no block, no gap, and the page button stays put.
     await openExtrasEditor(p)
     await show('opacity').uncheck()
     await dialogButton(p, 'Save').click()
@@ -390,7 +384,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await lineOpacity(), 0.4, 'a hidden slider\'s value still applies')
     const height = () => p.locator('.controls-buttons').evaluate((el) => el.getBoundingClientRect().height)
     assert.equal(await height() > 0, true)
-    // Only the opacity slider hidden: the thickness one is back where it was.
     await openExtrasEditor(p)
     await show('thickness').check()
     await dialogButton(p, 'Save').click()
@@ -398,7 +391,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator(THICKNESS).waitFor({ state: 'visible' })
     assert.deepEqual(await rowOf(THICKNESS), bothAt.thickness)
     assert.deepEqual(await p.locator('.pen-tool-extras-sliders').boundingBox(), bothAt.sliders)
-    // The hidden state survives a reload, then Restore defaults ticks both boxes and Save puts both sliders back.
     await reload()
     assert.equal(await p.locator(OPACITY).count(), 0)
     assert.equal(await p.locator(THICKNESS).count(), 1)

@@ -1,4 +1,3 @@
-// Live check of pen-tool-extras.user.js's pen colors and thickness on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -42,7 +41,6 @@ const HOLD_QUIET_MS = HOLD_TO_EDIT_MS + 500
 
 const removePalette = (page) => page.evaluate(() => { window.__palette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = undefined })
 const putBackRemovedPalette = (page) => page.evaluate(() => { Framework.app.tools.colour.palette = window.__palette })
-// Opens the page with no script and the color tool's palette gone, for the script to be added to.
 const openWithNoPalette = (options) => openWith(browser(), [], { ...options, afterStart: removePalette })
 
 const probeStrokeWidth = (page, value, parent) => page.evaluate(([value, parent]) => {

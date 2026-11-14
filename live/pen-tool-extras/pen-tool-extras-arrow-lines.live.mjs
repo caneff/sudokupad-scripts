@@ -1,7 +1,4 @@
-// Live check of pen-tool-extras.user.js's third page of pens (arrow lines) on sudokupad.app in headless Chromium.
-// A touch screen stays untested.
-// Every drag, press and click is real input. A line's direction is stored in its color character (a page 3 pen is two
-// characters), so the checks read both what is stored (`cell.pen`) and what is drawn (the way each arrow points).
+// A touch screen stays untested. A line's direction is stored in its color character (a page 3 pen is two characters), so the checks read both what is stored (`cell.pen`) and what is drawn.
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

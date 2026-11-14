@@ -1,6 +1,3 @@
-// Live attacks on color-by-digit.user.js: odd orders a solver produces, on sudokupad.app in headless Chromium. Each test names its attack, and asserts the
-// crash signals (no page error, no console error, no skip line) beside what a user expects to see. Clicks, drags and key presses are real input; the
-// harness selects a cell, restarts the puzzle and reads state from the page.
 /* global Framework */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -51,7 +48,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
   }
   const valuesInRow = () => read((row) => [0, 1, 2, 3, 4, 5, 6, 7, 8].map((c) => String(Framework.app.grid.getCell(row, c).value || '')), ROW)
 
-  // Every attack gets its own page with the profiles Odd/Even and Low/5/High saved, in Cell mode, and ends with the crash signals clean.
   beforeEach(async () => {
     ;({ context, p, errors } = await openSession(browser(), script, { seed: captureConsoleErrors }))
     await pressTo(p, 'Cell')
@@ -128,7 +124,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     await p.locator(MENU).waitFor({ state: 'detached' })
     const lowFiveHigh = (await getState()).profiles.find((x) => x.name === 'Low/5/High').groups
     assert.equal(await settle(() => wrongCount(lowFiveHigh), 0), 0, 'the pick recolors the board')
-    // One undo takes the whole switch back: the digits stay, the board shows the old profile's colors and the old profile is active again.
     await undo()
     assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'the undo brings the old profile\'s colors back')
     assert.deepEqual((await valuesInRow()).slice(0, 2), ['3', '4'], 'and takes no digit')

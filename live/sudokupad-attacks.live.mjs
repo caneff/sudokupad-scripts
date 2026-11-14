@@ -1,6 +1,4 @@
-// Live attacks on SudokuPad itself with all the scripts loaded (#590, attacks 49-56): each test tries to break the scripts
-// with something a player does to SudokuPad, and checks the crash signals (a skip line, a page error, a console error, a
-// notice bar) plus what the player expects to see.
+// Live attacks on SudokuPad itself with all the scripts loaded (#590, attacks 49-56).
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { assertNoCrash, attack, cellsState, emptyCells, flushSave, loadScripts, noteCount, NOTES, NOTICE_BAR, openWithAllScripts, reloadWithScripts, rowCol, rulesScroll, rulesWidth, setLongRules, typeDigits } from './attacks.mjs'
@@ -16,7 +14,6 @@ import { addPage, useBrowser } from './session.mjs'
 
 const browser = useBrowser()
 
-// Something of every kind the scripts and SudokuPad keep: a digit, a pen line, a colored cell and a note.
 async function fillBoard (p, start) {
   await typeDigits(p, rowCol(emptyCells(start)[0]), '5')
   await draw(p, 6)
@@ -72,8 +69,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     assert.equal(await labelOn(p), 'Cell', 'Color by Digit kept its mode')
   }))
 
-  // #590's rule: after undoing back to the start, the puzzle state equals the starting state. Color by Digit's Cell colors are
-  // part of the history, so the givens are left uncolored while the button still reads Cell.
+  // #590: after undoing back to the start the puzzle state equals the start; Color by Digit's Cell colors are part of the history, so the givens are uncolored while the button reads Cell.
   it('50 Undo back to the start gives the starting state', { todo: '#606' }, () => attack(browser(), async (p) => {
     const start = await cellsState(p)
     await fillBoard(p, start)
@@ -95,7 +91,6 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
         assert.equal(await settle(tool, name), name, `hotkey ${key}, round ${round}`)
       }
     }
-    // The scripts still work after the churn: a pen line, then a note.
     await draw(p, 7)
     assert.equal((await penEntries(p)).length > 0, true, 'a pen line was drawn')
     await placeNote(p, [2.5, 2.5], '7')
@@ -114,7 +109,6 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     assert.deepEqual(await values(), before.map((v) => !v), 'the flipped settings survived the reload')
     assert.equal(await p.locator('#control-pen').count(), 0, 'with the pen tool off, its button is gone')
     assert.equal(await p.evaluate(() => document.body.classList.contains('setting-flipkeypad')), true, 'Keypad Flipped shows')
-    // Flipped back, as they were: the tools show and work.
     await flip()
     await p.locator('#control-pen').waitFor({ state: 'visible' })
     await draw(p, 7)
@@ -178,7 +172,6 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       const { p: tabB, errors: errorsB } = await addPage(context, [], { seed: captureConsoleErrors })
       await loadScripts(tabB)
       await tabA.bringToFront()
-      // Color by Digit's mode and Pen Tool Extras' Thickness, saved by tab A.
       await tabA.click(CBD_BUTTON)
       assert.equal(await settle(() => labelOn(tabA), 'Digit'), 'Digit', 'tab A is in Digit mode')
       await openPenTool(tabA)
@@ -223,7 +216,6 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       })
     })
     try {
-      // Each feature that saves says so once, and each of the six scripts puts up its own bar.
       const scripts = [...new Set(SAVED.map(([script]) => script))].sort()
       assert.deepEqual(await settle(() => p.locator(NOTICE_BAR).evaluateAll((bars) => bars.map((b) => b.dataset.script).sort()), scripts), scripts)
       assert.deepEqual(said.sort(), SAVED.map(([script, feature]) => `${script}: ${feature}`).sort(), 'one declared skip line per feature')

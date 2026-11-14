@@ -1,6 +1,3 @@
-// Live check of text-anywhere.user.js's looks on sudokupad.app: a note under the pointer that is neither selected nor open gets a faint purple outline, and only
-// while Text Anywhere is the current tool; the cursor is `move` on a closed note and `text` in the open one; the resize handles are 11 px squares with a white
-// border and a purple ring; a selected note's outline and the selection rectangle are solid. Real mouse input, computed styles read off the page.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

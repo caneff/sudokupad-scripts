@@ -1,8 +1,5 @@
-// Live attacks 62, 63, 64 and 66 on all six scripts together: the puzzle or the page changes under them, on sudokupad.app in headless Chromium. Each test names its
-// attack and asserts the crash signals (no page error, no skip line) beside what a user expects to see. Clicks, drags and keys are real input; the scripts
-// load at DOMContentLoaded of every page load, as Tampermonkey runs them. Attack 65, the replay tool, is `live/replay-playback.live.mjs`.
-// Under SudokuPad's solved dialog its overlay swallows the mouse and a press on it dismisses the dialog, so the draw, the notes and the script
-// dialogs of attack 64 come after the dismissal, and under the dialog the attack is the keyboard and the pen tool's drag.
+// Live attacks 62, 63, 64 and 66. Attack 65, the replay tool, is `live/replay-playback.live.mjs`.
+// Under SudokuPad's solved dialog the overlay swallows the mouse and a press on it dismisses the dialog, so attack 64's draw, notes and dialogs come after the dismissal and under the dialog only keys and a pen drag are tried.
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { openPage } from './page.mjs'
@@ -39,7 +36,6 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     }
   })
 
-  // Marks of every kind in puzzle A: a digit, a corner mark, a color, a pen line and a Text Anywhere note. Returns the board once each shows.
   const markA = async () => {
     await useTool(p, '#control-normal')
     await clickCell(p, 0, 2)

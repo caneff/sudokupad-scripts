@@ -393,7 +393,6 @@ test(`${HOME} names no Digit Color script and links no digit-color file`, () => 
   assert.doesNotMatch(page, /Digit Color|digit-color/)
 })
 
-// Checks shared by the Text Anywhere and Color by Digit details pages: the header's @description, the intro, no picture in the feature grid, and a screenshot script per picture.
 const SCRIPT_INTRO = /<\/p>\s*<p(?: class="lede")?>(Adds (?:a button )?to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
 const shared = ({ page, script, name, summary, intro, homePicture }) => {
   test(`${script}.user.js's @description is the homepage summary`, () => {
@@ -426,7 +425,6 @@ const shared = ({ page, script, name, summary, intro, homePicture }) => {
   })
 }
 
-// Color by Digit's entry and details page.
 const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.'
 const CBD_LEAD_INS = ['Four modes', 'Updates as you solve', 'Colored digits', 'Profiles', 'Quick switching', 'A separate digit profile']
 
@@ -530,7 +528,6 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
   ])
 })
 
-// Text Anywhere's entry and details page.
 const DRAW_SUMMARY = 'Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
 const DRAW_LEAD_INS = ['Typed notes anywhere', 'Formatting', 'Long notes', 'Readable over digits', 'Colors, size and opacity', 'Select and move', 'Key to switch on', 'Hide all notes', 'Erase', 'Kept per puzzle', 'Settings']
 
@@ -596,8 +593,6 @@ test(`${DRAW} shows one note, every style, as a two-slide slideshow: the note op
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {
   assert.deepEqual(section(DRAW, 'Good to know'), ['The notes are kept in this browser only, so another browser or device does not show them.', 'Undo right after Restart restores the notes. If the notes cannot be saved, a message says so.'])
 })
-
-// A script in docs/research/ takes a picture when its header names the picture's file.
 
 test('the README has a Text Anywhere row with a Details link, and the Settings sentence is kept', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')

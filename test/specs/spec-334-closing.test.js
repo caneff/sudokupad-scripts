@@ -31,7 +31,6 @@ const MODULE_NAMES = ['parseColor', 'darkenColor', 'toHex', 'isTransparent', 'GA
 // dialogs' title rows and Copy/Paste icons, the sliders' drag and the panels' look are `npm run test:live`'s, and a real
 // Tampermonkey install is `npm run test:tampermonkey`'s.
 test('spec 334: shared lib/ modules copied into each script, kept in sync by node sync-lib.js', () => {
-  // Every module exists, with its own test.
   for (const name of Object.keys(CARRIES)) {
     assert.ok(existsSync(join(ROOT, 'lib', `${name}.js`)), `lib/${name}.js`)
     assert.ok(existsSync(join(ROOT, 'lib', `${name}.test.js`)), `lib/${name}.test.js`)
@@ -49,7 +48,6 @@ test('spec 334: shared lib/ modules copied into each script, kept in sync by nod
     const synced = syncText(source, readLib, libNamesOnDisk())
     assert.deepEqual(synced.problems, [], `${file}: ${RUN}`)
     assert.deepEqual(synced.changed, [], `${file}: blocks out of date; run ${RUN}`)
-    // No module name is defined again outside the blocks.
     const own = withoutLibBlocks(source)
     for (const name of MODULE_NAMES) {
       assert.doesNotMatch(own, new RegExp(`^\\s*(?:function\\s+${name}\\b|(?:const|let|var)\\s+${name}\\b)`, 'm'), `${file} defines ${name} outside lib/`)

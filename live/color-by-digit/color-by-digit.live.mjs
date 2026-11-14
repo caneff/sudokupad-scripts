@@ -1,4 +1,3 @@
-// Live check of color-by-digit.user.js on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, reloadSession, savedState, SEED, watch, wrongColorCountOn, openEditorOn } from './color-by-digit-fixtures.mjs'
@@ -82,7 +81,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }, BUTTON)
   // SudokuPad re-fits its controls after a throttled delay; `stable` fails if the row is still moving after SETTLE_MS.
   const settledLayout = () => stable(layout)
-  // FIT_SLACK_PX absorbs sub-pixel rounding between the row's bottom edge and the footer's top.
   const fits = (l) => [l.button, l.row].every((r) => r.left >= 0 && r.top >= 0 && r.right <= l.view.width && r.bottom <= l.view.height) &&
     l.footer.top >= l.button.bottom - FIT_SLACK_PX && l.footer.top >= l.row.bottom - FIT_SLACK_PX
 
@@ -398,7 +396,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await settle(getGroups, []), [])
       assert.equal((await getData()).active, 1)
       await pressTo(p, 'Both')
-      // "Nothing happened": no cell gets a color.
       assert.deepEqual(await watch(coloredCount), [0])
     })
   })

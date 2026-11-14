@@ -1,7 +1,4 @@
-// Live check of pen-tool-extras.user.js's settings dialog layout on sudokupad.app in headless Chromium, at 1200x1000: the two by two grid whose vertical
-// line meets the title line and the footer line, the Line settings / Line styles divider starting at the vertical line, the pen colors filling their
-// column, the five sliders one column and 96px long, the marks table's headings over their boxes, the title row's icon buttons and status, the dialog
-// centred in the window, one column on a narrow screen, and the button row (Save, Cancel, Restore defaults). A touch screen stays untested. Every click is real input.
+// A touch screen stays untested.
 import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'

@@ -1,6 +1,4 @@
-// Live attacks on Text Anywhere's editing (#597, attacks 19-33 of #590): each test tries to break the script in one hostile way and asserts the crash signals
-// (a page error or a skip line, collected by `openWith` and checked after every test) plus what a user expects to see. Attack 34 waits on #584.
-// Real mouse and keyboard input throughout, at a desktop size.
+// #597, attacks 19-33 of #590. Attack 34 waits on #584.
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -250,7 +248,6 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.equal((await shown()).length, 2)
     await reload()
     assert.equal((await shown()).length, 2, 'both over a reload')
-    // The notes can still be selected and erased.
     await p.mouse.click(...await textAnywhere.middleAt(p, await gridPoint(p, OTHER)), { button: 'right' })
     assert.deepEqual(await settle(shown, [line]), [line], 'the other note is the one left')
   })

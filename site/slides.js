@@ -1,7 +1,5 @@
 /* eslint-env browser */
 'use strict'
-// The slideshow every page shares: it adds a pager to each .slideshow and steps the .slide pictures and .slide-caption
-// texts, which share the .current class. Without this script the first slide and its caption show.
 const ARROW_ICON = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`
 
 for (const show of document.querySelectorAll('.slideshow')) {

@@ -12,7 +12,6 @@ const ROOT = new URL('../', import.meta.url)
 // The scripts at the repo root, by file name; a handover (sync-lib.js) is none.
 export const SCRIPT_FILES = scriptFiles()
 
-// The text of the script `file` (one of SCRIPT_FILES), as a user installs it.
 export function scriptSource (file) {
   assert.ok(SCRIPT_FILES.includes(file), `no script ${file}`)
   return readFileSync(new URL(file, ROOT), 'utf8')
@@ -78,7 +77,6 @@ export async function addPage (context, scripts, { mode = 'after-start', seed, e
   return { p, errors }
 }
 
-// `addPage` in a context of its own (1200x900 unless `contextOptions` say otherwise). Returns `{ context, p, errors }`.
 export async function openWith (browser, scripts, { contextOptions = {}, ...options } = {}) {
   checkMode(options.mode ?? 'after-start')
   const context = await browser.newContext({ viewport: VIEWPORT, ...contextOptions })

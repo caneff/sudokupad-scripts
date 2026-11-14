@@ -1,5 +1,3 @@
-// The pure parts of live/watch.mjs and its decision flow, with the version read, the suite and `gh` injected.
-// Network-free, so it runs in `npm test`.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
