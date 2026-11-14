@@ -1,6 +1,3 @@
-// Live check of pen-tool-extras.user.js's edge and corner marks and its opacity slider on sudokupad.app, in headless Chromium.
-// Playback of a replay with every script installed is live/replay-playback.live.mjs's.
-// Every click is a real mouse click on the page at an edge's pixel position.
 /* global Replay, Framework, ToolPen, MouseEvent, Node, createImageBitmap, OffscreenCanvas */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -1137,7 +1134,6 @@ describe('without the script', { concurrency: false }, () => {
       })
       await withScript.close()
 
-      // Second page: no script. Load the replay.
       const { p: bare, errors } = await addPage(context, [])
       await bare.evaluate((r) => Framework.app.loadReplay(r), replay)
       await bare.waitForFunction(() => Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3).pen.length === 18, null, { timeout: 15000 })

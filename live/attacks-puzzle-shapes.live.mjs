@@ -1,7 +1,4 @@
-// Live attacks 67 and 68 on all six scripts together: puzzles that are not a plain 9x9, on sudokupad.app in headless Chromium. Each test names its attack and
-// asserts the crash signals (no page error, no skip line) beside what a user expects to see. Clicks, drags and keys are real input; the scripts load at
-// DOMContentLoaded of every page load, as Tampermonkey runs them. The puzzles are built here as data and opened by their id (`live/puzzles.mjs`).
-// Text Anywhere's snap onto the ring of cells around the board is #603 and is not checked here.
+// Text Anywhere's snap onto the ring of cells around the board (#603) is not checked here.
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { openPage } from './page.mjs'
@@ -88,8 +85,6 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     assert.equal(Math.abs(guide.x + guide.width / 2 - line) < NEAR_PX, true, `the guide at ${guide.x} is on the column line ${line}`)
   }
 
-  // Color by Digit's Odd/Even profile in Cell mode colors the givens: the cells of one group share a color and the groups differ.
-  // Then a digit entered at `enter` takes the color of its digit's group.
   const colorsByDigit = async ({ odd, even, enter, digit }) => {
     const colorOf = ([row, col]) => p.evaluate(([r, c]) => Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c).colours.join(), [row, col])
     const groups = []

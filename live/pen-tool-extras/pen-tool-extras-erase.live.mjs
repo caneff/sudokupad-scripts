@@ -1,8 +1,4 @@
-// Live check of pen-tool-extras.user.js's whole-line erase (a right click in the pen tool; the middle button is left to SudokuPad and the browser, and erases nothing) on sudokupad.app in headless Chromium.
-// A real mouse's middle button on Windows is still owed: headless Chromium draws no autoscroll, so the checks read
-// `defaultPrevented` on the press events instead of watching a scroll.
-// Every drag and click is real input, and each check reads what is stored (`cell.pen`) and the undo stack; the middle button checks
-// read `defaultPrevented` on the press events instead.
+// A real mouse's middle button on Windows is still owed: headless Chromium draws no autoscroll, so the checks read `defaultPrevented` on the press events instead.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'

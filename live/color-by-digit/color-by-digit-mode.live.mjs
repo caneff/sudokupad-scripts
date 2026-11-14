@@ -1,5 +1,3 @@
-// Live check of Color by Digit's mode (Cell, Digit, Both and Off) and its cell coloring on sudokupad.app, in headless Chromium.
-// The digit shades of Digit and Both are color-by-digit-digits.live.mjs's.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -377,7 +375,6 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('in Cell, Save with changed groups recolors every cell in one undo step', async () => {
-    // Low/5/High is saved; switch to Odd/Even.
     const before = await allColors()
     await openEditorOn(p)
     await chooseProfile(0)

@@ -1,4 +1,3 @@
-// live/fuzz/nightly.mjs through the real `fileIssue` of live/watch.mjs, with the fuzz run and `gh` faked. Network-free, so it runs in `npm test`.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'

@@ -1,7 +1,7 @@
 // The fuzz engine: fast-check generates action lists (`actions.mjs`), each list runs on a page of its own, the crash signals and the rules (`rules.mjs`) are
 // read after every action and once more 200 ms after the last, and a failing list is shrunk and reported with the numbers that replay it. It knows no browser: the
 // page comes from `openTarget(puzzle)` (`fuzz.mjs` opens real SudokuPad, `fake-target.mjs` a fake one for the unit tests); the puzzle is part of each
-// generated list (`actions.mjs`, #679). Not a check itself.
+// generated list (`actions.mjs`, #679).
 import fc from 'fast-check'
 import { actionList } from './actions.mjs'
 import { ruleViolations } from './rules.mjs'
@@ -14,12 +14,10 @@ const ERRORS_LAND_MS = 200
 // caused it. fast-check never removes the last action of a list in a shrink, so an error read only after the list would keep one stray step. A list that waits
 // less (#725) reads the page again after this long before it blames an action: the first read came before the page settled.
 export const ACTION_SETTLE_MS = 40
-// No number of runs: the time limit or `runs` ends the hunt.
 const UNBOUNDED = 1000000
 const DEFAULT_MINUTES = 2
 // A busy start's step in the shape fast-check's own list entries have (`cmd` is the action), so the checks read the two alike.
 const asStep = (cmd) => ({ cmd, check: (model) => cmd.check(model), run: (model, real) => cmd.run(model, real), toString: () => String(cmd) })
-// A failure is shrunk for at most this long; a list shrunk that far is reported as it stands.
 const DEFAULT_SHRINK_MINUTES = 10
 
 const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
@@ -100,7 +98,6 @@ async function blameLate (open, steps, { landMs, settleMs }, failure) {
   return blamed
 }
 
-// Runs a list written by hand (`scriptedList` of `actions.mjs`) on a page of its own for `puzzle`, with the checks of every fuzz run; throws what a failing run throws.
 export const runScript = ({ openTarget, puzzle, actions }) => runList(() => openTarget(puzzle), actions, ERRORS_LAND_MS, ACTION_SETTLE_MS)
 
 // Fuzzes with `seed` over `puzzles` (each list picks one) and the action `kinds` (`actions.mjs`, required): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
@@ -132,7 +129,6 @@ export async function runFuzz ({ openTarget, puzzles, kinds, seed, runs, minutes
     if (shrunk.failed && shrunk.counterexample !== null) found = shrunk
   }
   const list = found.counterexample[0]
-  // fast-check prints the list as `a,b,c /*replayPath="..."*/`, so no step holds a comma.
   const shown = String(list)
   const listWait = list.waitMs ?? settleMs
   const failure = listWait < ACTION_SETTLE_MS && found.errorInstance?.step != null

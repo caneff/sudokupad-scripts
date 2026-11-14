@@ -1,5 +1,3 @@
-// Live check of Pen Tool Extras' + and - keys, which step the Thickness slider, on sudokupad.app in headless Chromium at 1280x720:
-// each key (with the keypad's), a held key, the limits, Alt held, a focused field, an open dialog, a hidden slider and the pen tool being off.
 // docs/research/sudokupad-pen-tool.md § + and - holds what SudokuPad's own pen tool does with them.
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'

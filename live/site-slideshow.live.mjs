@@ -1,7 +1,4 @@
-// Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Text Anywhere, and Text Anywhere's
-// second one, of one note before and after), opened from disk: Next and Previous step
-// the slideshow's picture, caption and counter, and both ends wrap. Each details page's slides also fill their frame to its inset and are never shown wider than their own width, at 1280x720 and 1600x900. The page's raw.githubusercontent.com
-// pictures are served from this checkout, since a branch is not on main yet.
+// The page's raw.githubusercontent.com pictures are served from this checkout, since a branch is not on main yet.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'

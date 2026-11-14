@@ -1,5 +1,3 @@
-// Color by Digit's live fixtures: the board, the saved profiles every session starts with, the storage keys, the
-// script's selectors, and the helpers that open a session on that board. Not a check itself, so `live/**/*.live.mjs` skips it.
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
 import assert from 'node:assert/strict'
@@ -19,7 +17,6 @@ export { group, labelOn, modeLabel, ODD_EVEN }
 
 export const LOW_FIVE_HIGH = [group('1', ['0', '1', '2', '3', '4']), group('5', ['5']), group('9', ['6', '7', '8', '9'])]
 
-// The fresh install and the migration are checked in color-by-digit-profiles.live.mjs.
 export const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
 
 // The keys the script saves under, and the ones Framework.setData stores them at (the site's own prefix in front).
@@ -136,7 +133,6 @@ export async function buttonPoint (p) {
   return { x: box.x + box.width * 0.3, y: box.y + box.height * 0.6 }
 }
 
-// A short press on the button, which steps the mode to `want`.
 export async function pressTo (p, want) {
   const { x, y } = await buttonPoint(p)
   await p.mouse.click(x, y)
@@ -203,7 +199,6 @@ export const keyOf = (groups, digit) => (groups.find((g) => g.digits.includes(St
 
 export const cellsStateOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({ r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])], corner: [...(c.pencilmarks || [])] })))
 
-// How many cells hold colors other than `expected(cell)`, a cell being a `cellsStateOn` entry.
 export async function wrongColorCountOn (p, expected) {
   return (await cellsStateOn(p)).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(expected(x))).length
 }

@@ -1,8 +1,4 @@
-// Live check of dark-page.user.js on sudokupad.app, in headless Chromium.
-//
-// The reference for every board check is the same page with the script switched off (its
-// stylesheet's media set to `not all`): a separate page that never had the script rasterizes the
-// board with a different history, which shifts some antialiased line pixels by up to 8 levels.
+// The reference for every board check is the same page with the script switched off (its stylesheet's media set to `not all`): a separate page rasterizes the board with a different history, shifting antialiased pixels by up to 8 levels.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'

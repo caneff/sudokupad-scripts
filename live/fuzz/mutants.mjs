@@ -1,6 +1,6 @@
 // Mutants of the scripts (#723): each is one standard mutation operator applied to one place of a script's text, in memory, as a planted bug that no author chose. The families are
 // the ones real faults couple to (Just et al., FSE 2014): relational (`<` to `<=`, `===` to `!==`, ...), conditional (a tested condition negated, `&&` and `||` swapped) and statement
-// deletion (a call, assignment or update statement dropped). Found on the script's AST with acorn; the files on disk never change. Not a check itself.
+// deletion (a call, assignment or update statement dropped). Found on the script's AST with acorn; the files on disk never change.
 import { parse } from 'acorn'
 import { SCRIPT_FILES, scriptSource } from '../session.mjs'
 
@@ -46,13 +46,13 @@ export function mutantsOf (file, code) {
   return edits.map((e) => ({ ...e, id: `mutant:${file}:${e.start}-${e.end}:${e.family}`, file, original: code.slice(e.start, e.end), description: `line ${e.line}: ${e.family}, \`${snippet(code.slice(e.start, e.end))}\` becomes \`${snippet(e.text)}\`` }))
 }
 
-// The script's text with the mutant in it. A text that is no longer the one the mutant was made from is an error: a script that changed under it must not run unmutated.
+// A script that changed under the mutant must not run unmutated.
 export function applyMutant (mutant, code) {
   if (code.slice(mutant.start, mutant.end) !== mutant.original) throw new Error(`mutant ${mutant.id}: ${mutant.file} no longer holds ${JSON.stringify(mutant.original)} at ${mutant.start}`)
   return code.slice(0, mutant.start) + mutant.text + code.slice(mutant.end)
 }
 
-// A mutant as the planted-bug harness takes it (`plants.mjs`): any failure counts as a catch, since no message belongs to a mutant.
+// Any failure counts as a catch, since no message belongs to a mutant.
 export const mutantPlant = (mutant) => ({ id: mutant.id, file: mutant.file, kind: 'mutant', bug: mutant.description, expect: /[\s\S]*/, apply: (code) => applyMutant(mutant, code), mutant })
 
 // The mutant a printed id names, found again in the script as it is now, so a replay command with `--plant <id>` works.
@@ -64,7 +64,7 @@ export function mutantById (id) {
   return found
 }
 
-// A generator of numbers in [0, 1) that gives the same ones for the same seed (mulberry32).
+// mulberry32
 export function seededRandom (seed) {
   let a = seed >>> 0
   return () => {

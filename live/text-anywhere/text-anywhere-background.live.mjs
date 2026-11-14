@@ -1,6 +1,3 @@
-// Live check of text-anywhere.user.js's Background button on sudokupad.app: a note made with Background on has a box behind its text and bg:true in storage,
-// turning Background off leaves that note's box and the next note has none, pressing Background changes no note but the one open in the text box,
-// and both the notes' boxes and the button's state survive a reload. Real mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
@@ -157,7 +154,6 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
   })
 
   it('turning Background on for an open note moves its handles with the padded box', async () => {
-    // The handles' span and the open note's own box, measured now.
     const shape = () => p.evaluate(([handles, box]) => {
       const handleBoxes = [...document.querySelectorAll(handles)].map((h) => h.getBoundingClientRect())
       const note = document.querySelector(box).getBoundingClientRect()

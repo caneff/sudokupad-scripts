@@ -1,6 +1,3 @@
-// Live check of text-anywhere.user.js's Outline choice in the settings dialog on sudokupad.app in headless Chromium at 1280x720: None, Thin and Thick (the default) for every
-// note at once on Save, Cancel leaving it, a reload keeping it, a note's own saved outline ignored, Copy then Paste carrying it, and the halo drawn as a round ring with no
-// spike past its radius. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

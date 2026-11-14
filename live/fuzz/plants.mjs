@@ -1,6 +1,6 @@
 // The bugs the fuzz is measured against (#678): each is a find-and-replace on the text of one `*.user.js`, applied when the fuzz injects the script, so the files on
 // disk never hold a bug. `kind` is how the bug should show: a broken rule (`rules.mjs`) or a crash signal (`signals.mjs`); `expect` matches the failure message that
-// counts as catching it (a crash plant names its own error text), so a failure the real scripts already have is not scored as a catch. Not a check itself.
+// counts as catching it (a crash plant names its own error text), so a failure the real scripts already have is not scored as a catch.
 
 import { mutantById, mutantPlant } from './mutants.mjs'
 
@@ -123,7 +123,7 @@ export function plantById (id) {
   return plant
 }
 
-// The script's text with the bug in it. A mutant (`apply`) makes its own edit. A find text that matches anywhere but once is an error: a script that changed under the plant must not run unplanted.
+// A find that matches other than once is an error: a script that changed under the plant must not run unplanted.
 export function applyPlant (plant, code) {
   if (plant.apply) return plant.apply(code)
   const matches = code.split(plant.find).length - 1
@@ -131,5 +131,4 @@ export function applyPlant (plant, code) {
   return code.replace(plant.find, () => plant.replace)
 }
 
-// What `installAll` takes: every script as it is, the plant's script with the bug.
 export const plantPatch = (plant) => (file, code) => (file === plant.file ? applyPlant(plant, code) : code)

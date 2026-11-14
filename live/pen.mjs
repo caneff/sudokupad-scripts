@@ -4,7 +4,6 @@ import { cellCentre, mouseDrag } from './board.mjs'
 import { setInputValue } from './input.mjs'
 import { clickUntil, SETTLE_MS, settle } from './settle.mjs'
 
-// Pen Tool Extras' page button, and the values of the number pad's buttons 1 to 9 on each of its pages.
 export const PAGE_BUTTON = '.pen-tool-extras-page'
 export const PAGE_ONE = '123456789'
 export const PAGE_TWO = 'abcdefghi'
@@ -31,7 +30,6 @@ export const padValues = (page) => page.evaluate(() => [...document.querySelecto
 
 export const penEntries = (page) => page.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => `${c.row},${c.col}:${v}`)).sort())
 
-// The pen entries of every cell without their colors (each entry's first character), sorted.
 export const penValuesNoColor = (page) => page.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => v[0])).sort())
 
 export const penValuesAt = (page, row, col) => page.evaluate(([r, c]) => Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c).pen.map((v) => v[0]).sort(), [row, col])

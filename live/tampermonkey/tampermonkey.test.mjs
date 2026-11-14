@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { errors } from 'playwright'
 import { crxZip, installScript } from './tampermonkey.mjs'
 
-// A CRX3 file: `Cr24`, a version, a header length, that many header bytes, then the zip.
 const crx = ({ magic = 'Cr24', version = 3, header = Buffer.from('signed-header'), zip = Buffer.from('PK\x03\x04zip-bytes') } = {}) => {
   const fixed = Buffer.alloc(12)
   fixed.write(magic, 0, 'latin1')

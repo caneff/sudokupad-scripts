@@ -32,7 +32,6 @@ export async function openWithAllScripts (browser, { seed, ...options } = {}) {
   return opened
 }
 
-// Several lines at SudokuPad's own width.
 export const setLongRules = (p) => p.evaluate(() => {
   const rules = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits. '
   Framework.app.showMetaInfoUI({ title: 'Rules', author: 'Tester', rules: rules.repeat(4) })

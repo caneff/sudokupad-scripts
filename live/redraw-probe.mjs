@@ -1,7 +1,5 @@
-// Measures what a userscript's handlers cost per event on a live page: the time each spends in a handler it registered
-// and the DOM nodes added or removed under it. Not a check itself, so `live/**/*.live.mjs` skips it.
-// A handler is the callback of a MutationObserver, a `requestAnimationFrame` or an event listener that was registered
-// from code carrying PROBE_TAG, so the script under test is injected with `tagged(code)`.
+// Not a check itself, so `live/**/*.live.mjs` skips it.
+// A handler is a MutationObserver, requestAnimationFrame or event listener callback registered from code carrying PROBE_TAG, so inject the script with `tagged(code)`.
 
 export const PROBE_TAG = 'redraw-probe-script.js'
 

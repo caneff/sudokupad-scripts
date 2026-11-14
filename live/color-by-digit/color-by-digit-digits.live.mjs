@@ -1,4 +1,3 @@
-// Live check of Color by Digit's digit colors (the Digit and Both modes) on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -189,7 +188,6 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     }
   })
 
-  // Rebuilding every circle on each change cost 2k - 1 nodes for k circles (docs/research/color-by-digit/color-by-digit-redraw-cost.md).
   it('a new conflicting mark adds its own circle; the circles already drawn stay the same nodes and have no attribute rewritten', async () => {
     const tagDrawn = () => read(([circles]) => {
       const drawn = [...document.querySelectorAll(circles + ' circle')]
@@ -437,7 +435,6 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
       await enter(0, 3, '4')
       assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[4]]), [SHADE[4]])
       assert.equal(await p.locator(STYLE).count(), 1)
-      // The rebuilt board gets one circle group, and a conflicting mark on it gets its circle.
       await markMode('#control-corner', async () => { await enter(0, 7, '5') })
       // The corner 5 at (0,5) survived the rebuild, so two conflicting corner 5s each have a circle.
       assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))

@@ -1,5 +1,4 @@
-// The command that replays one failure: the seed, the printed path, and every option that changes the lists or the page the path was found with
-// (`--focus` changes the weights and `--config` the shape of a list, so a path replays only under them).
+// `--focus` changes the weights and `--config` the shape of a list, so a path replays only under them.
 import { scriptName } from './actions.mjs'
 import { DEFAULT_CONFIG } from './configs.mjs'
 

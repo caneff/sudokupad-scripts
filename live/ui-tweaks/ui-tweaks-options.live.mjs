@@ -1,5 +1,3 @@
-// Live check of the options dialog of ui-tweaks.user.js on sudokupad.app, in headless Chromium: each option on and off, its
-// effect on the bottom row, and that the choices survive a reload. The Tab option's own behavior is in ui-tweaks-tab.live.mjs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { numberPadText } from '../scripts.mjs'
@@ -23,7 +21,6 @@ const browser = useBrowser()
 
 const box = (p, id) => p.locator(`${DIALOG} input[data-option="${id}"]`)
 const openDialog = (p) => openScriptDialog(p, 'UI Tweaks', DIALOG)
-// Sets each named option in the open dialog and presses Save.
 async function chooseAndSave (p, choices) {
   await openDialog(p)
   for (const [id, on] of Object.entries(choices)) await box(p, id).setChecked(on)
@@ -41,7 +38,6 @@ const addExtraButtons = (p) => p.evaluate((names) => {
   Framework.app.refreshControls()
 }, EXTRA_BUTTONS)
 
-// Once the scripts are in: the stand-in buttons added and the letter tool on.
 async function ready (p) {
   await addExtraButtons(p)
   await p.evaluate(() => Framework.setSetting('toolletter', true))
@@ -49,7 +45,6 @@ async function ready (p) {
   await p.locator('#control-seven').waitFor({ state: 'visible' })
 }
 
-// A page with `scripts` in, `ready`.
 async function open (scripts = [SCRIPT_FILE]) {
   const opened = await openWith(browser(), scripts)
   await ready(opened.p)

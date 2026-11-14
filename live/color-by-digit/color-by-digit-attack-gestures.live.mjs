@@ -1,7 +1,3 @@
-// Attacks on Color by Digit's gestures (#596, from #590): the editor's paint drag across the digit keys, interrupted by Escape, on sudokupad.app
-// in headless Chromium. Real input throughout. It checks the crash signals (an uncaught error, a console error, a skip line), that Escape ends the
-// dialog with nothing saved, and that the editor, opened again, shows the saved profiles and paints
-// as before.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EDITOR, openSession, paintedKeys, PROFILES_KEY, SEED, savedState, openEditorOn } from './color-by-digit-fixtures.mjs'

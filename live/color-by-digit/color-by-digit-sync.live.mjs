@@ -1,5 +1,3 @@
-// Live check of Color by Digit's digit profile on sudokupad.app, in headless Chromium: the dialog's Digit pulldown on a named
-// profile, so cells and digits take different profiles, on Same as cell, and on None, which turns digit coloring off.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'

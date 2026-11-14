@@ -1,5 +1,3 @@
-// Live check of the ways out of Text Anywhere's color edit mode (lib/color-picker.js, shared with Pen Tool Extras), on sudokupad.app: Escape, a press outside
-// the panel (which does nothing else), left Alt held, and the window losing focus; a press on another color button stays in it.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'

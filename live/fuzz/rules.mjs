@@ -1,6 +1,5 @@
-// What "working" means for each script in a fuzz run, a rule or more per script, and some for every script at once (#590 Q10, #594, #677), as pure functions over page snapshots so they are unit-tested
-// with hand-built ones (`rules.test.mjs`). The engine (`engine.mjs`) checks every rule after every action; `page-state.mjs` reads a snapshot's `page`.
-// Not a check itself.
+// What "working" means for each script in a fuzz run, a rule or more per script, and some for every script at once (#590 Q10, #594, #677), as pure functions over page snapshots.
+// The engine (`engine.mjs`) checks every rule after every action; `page-state.mjs` reads a snapshot's `page`.
 //
 // A rule is `{ name, check({ now, before, action, earlier }) }`: `now` is the snapshot after the action, `before` the one before it and `action` the action's
 // kind (`actions.mjs`); `earlier` is the step before that, `{ action, before, strokeSinceReload, earlier }` with its own `earlier` (the step before it, without one of its own), or null for the first. It returns one readable line per violation; none means the rule holds. A snapshot's `page` is:
@@ -58,10 +57,8 @@ const comparable = (page) => {
   return { ...rest, penState: sorted(page.penState), penDrawn: sorted(page.penDrawn) }
 }
 
-// Whether Color by Digit colors the cells in this mode.
 const colorsCells = (mode) => mode === 'Cell' || mode === 'Both'
 
-// One line per field of `was` that differs in `now`, naming the field and both values; a field only `now` has is not compared.
 const viewDifferences = (was, now) => Object.keys(was).filter((field) => JSON.stringify(was[field]) !== JSON.stringify(now[field]))
   .map((field) => `${field} was ${JSON.stringify(was[field])} and is now ${JSON.stringify(now[field])}`)
 
@@ -201,7 +198,6 @@ export const RULES = [
     name: 'rules-fit-pane',
     check: ({ now }) => {
       const pane = now.page.rulesPane
-      // A puzzle with no rules text shows no pane, and there is nothing to fit.
       if (pane === null || rulesPaneFits(pane)) return []
       return [`the rules need ${pane.scrollHeight}px in a pane of ${pane.clientHeight}px at ${pane.fontPx}px, above the smallest font ${(pane.ownFontPx * MIN_FONT_RATIO).toFixed(2)}px`]
     }

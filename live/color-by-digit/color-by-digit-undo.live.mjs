@@ -1,5 +1,3 @@
-// Live check of Color by Digit's mode against SudokuPad's Undo and Redo on sudokupad.app, in headless Chromium:
-// the button and the board must agree after either.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo } from './color-by-digit-fixtures.mjs'
