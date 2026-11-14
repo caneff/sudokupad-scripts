@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
-import { finishNote, gridPoint } from '../board.mjs'
+import { finishNote, gridPoint, restart } from '../board.mjs'
 
 const { TEXTS } = textAnywhere
 // In cells from the grid's top left: the note nudged, and a note of bullets.
@@ -179,6 +179,23 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     } finally {
       await p.keyboard.up('ArrowRight')
     }
+  })
+
+  it('Restart while the key is held drops the unsaved nudge, so Undo brings the notes back', async () => {
+    await selectNote('N')
+    const x0 = (await noteBox('N')).x
+    await p.keyboard.down('ArrowRight')
+    try {
+      assert.equal(await settle(async () => (await noteBox('N')).x - x0 > HELD_FAR_PX, true), true, 'the held key moved the note')
+      await restart(p)
+    } finally {
+      await p.keyboard.up('ArrowRight')
+    }
+    assert.deepEqual(await settle(() => textAnywhere.texts(p), []), [], 'Restart cleared the notes')
+    await p.click('#control-undo')
+    const back = await settle(async () => (await textAnywhere.texts(p)).includes('N'), true)
+    assert.equal(back, true, 'Undo brought the notes back')
+    assert.equal((await saved()).some((item) => item.text === 'N'), true, 'the notes brought back are saved')
   })
 
   it('with nothing selected the arrow keys move the cell cursor', async () => {
