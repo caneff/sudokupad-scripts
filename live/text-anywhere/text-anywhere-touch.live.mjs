@@ -265,9 +265,18 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
 
     it('reaches HIT_MARGIN_PX on the other sides too', async () => {
       const box = await noteBox('BB')
-      const [x, y] = [box.x + box.width / 2, box.y + box.height + HIT_MARGIN_PX - 1]
-      await p.mouse.click(x, y)
-      assert.equal(await onlySelected('BB'), true, 'below the box')
+      const near = HIT_MARGIN_PX - 1
+      const sides = {
+        right: [box.x + box.width + near, box.y + box.height / 2],
+        top: [box.x + box.width / 2, box.y - near],
+        bottom: [box.x + box.width / 2, box.y + box.height + near]
+      }
+      for (const [side, point] of Object.entries(sides)) {
+        await p.mouse.click(...point)
+        assert.equal(await onlySelected('BB'), true, `${side} of the box`)
+        await p.keyboard.press('Escape')
+        assert.equal(await selectedCount(), 0, `nothing selected again before the next side, after ${side}`)
+      }
     })
   })
 

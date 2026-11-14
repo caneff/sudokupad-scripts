@@ -3,6 +3,7 @@
 // and no guide shows. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
@@ -20,6 +21,10 @@ const COLUMN_LINE = 5
 const RIGHT_LINE = 9
 const NEAR_PX = 0.6
 const OUTLINE_ON_GUIDE_PX = 0.25
+// The wait past SPEED_WINDOW_MS before the script draws a still pointer's move again (SETTLE_SLACK_MS in text-anywhere.user.js).
+const SETTLE_SLACK_MS = Number(/const SETTLE_SLACK_MS = (\d+)/.exec(readFileSync(new URL('../../text-anywhere.user.js', import.meta.url), 'utf8'))[1])
+// A "nothing happened" wait: a pointer that rests this long would have been pulled by now, were the note near enough a target.
+const NOTHING_HAPPENS_MS = 300
 // What an earlier version saved, planted as it wrote it, and a note.
 const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [[100, 100], [300, 200], [500, 100]] }
 const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 60, box: [64, 320, 256, 448] }
@@ -36,8 +41,9 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
   }
   const outlineLeft = async () => (await p.locator(SELECTION).boundingBox()).x - OUTLINE_MIDDLE_PX
   // Presses the note '15' and drags it by `dx` px along the row, then `wiggle` px further, reading its outline and the x guide before the release. The moves
-  // arrive at once, which is a fast drag: a drag that `snaps` is read once the pointer has stood still long enough for the pull to show.
-  const dragBy = async (dx, wiggle = 0, snaps = false) => {
+  // arrive at once, which is a fast drag: a drag that `snaps` is read once the pointer has stood still long enough for the pull to show, and one that `rests`
+  // once the pointer has stood still for NOTHING_HAPPENS_MS, so a pull that is not to come has had its time.
+  const dragBy = async (dx, wiggle = 0, snaps = false, rests = false) => {
     const note = await noteBox('15')
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
     await p.mouse.move(px, py)
@@ -45,6 +51,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     await p.mouse.move(px + dx, py, { steps: 6 })
     if (wiggle) await p.mouse.move(px + dx + wiggle, py)
     if (snaps) await p.locator(GUIDE_X).waitFor()
+    if (rests) await p.waitForTimeout(NOTHING_HAPPENS_MS)
     const during = { left: await outlineLeft(), guides: await p.locator(GUIDE_X).count() }
     const guideBox = during.guides ? await p.locator(GUIDE_X).boundingBox() : null
     await p.mouse.up()
@@ -57,7 +64,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     const after = await outlineLeft()
     assert.equal(Math.abs(after - guide) < OUTLINE_ON_GUIDE_PX, true, `the outline's line ${after} is off the guide ${guide} it was snapped to, after the release`)
   }
-  const dragToGap = async (gap, snaps = false) => dragBy(await lineX(COLUMN_LINE) + gap - ((await noteBox('15')).x - OUTLINE_MIDDLE_PX), 0, snaps)
+  const dragToGap = async (gap, snaps = false, rests = false) => dragBy(await lineX(COLUMN_LINE) + gap - ((await noteBox('15')).x - OUTLINE_MIDDLE_PX), 0, snaps, rests)
 
   before(async () => {
     ;({ context, p, errors } = await textAnywhere.open(browser()))
@@ -124,19 +131,28 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     const note = await noteBox('15')
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
     const gap = line + 2 - (note.x - OUTLINE_MIDDLE_PX)
+    await p.evaluate(() => {
+      window.__release = {}
+      window.addEventListener('pointermove', (e) => { window.__release.lastMove = e.timeStamp }, true)
+      window.addEventListener('pointerup', (e) => { window.__release.up = e.timeStamp }, { capture: true, once: true })
+    })
     await p.mouse.move(px, py)
     await p.mouse.down()
     await p.mouse.move(px - 150, py, { steps: 4 })
     await p.mouse.move(px + gap, py, { steps: 4 })
     // Past the 100 ms the speed is measured over, short of the 120 ms after which the move is drawn again: the drawn move is the unpulled one, and the release is not to pull it.
-    await p.evaluate((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)), SPEED_WINDOW_MS + 4)
-    const shown = await outlineLeft()
+    // The wait runs from the last move's own time and the outline is read in the same step, so the release has only the one round trip left to land in.
+    const shown = await p.evaluate(([ms, selection, middle]) => new Promise((resolve) => {
+      window.setTimeout(() => resolve(document.querySelector(selection).getBoundingClientRect().x - middle), window.__release.lastMove + ms - window.performance.now())
+    }), [SPEED_WINDOW_MS + 1, SELECTION, OUTLINE_MIDDLE_PX])
     await p.mouse.up()
-    // The case needs the drawn move to be the unpulled one. A box too loaded to land inside the 100-120 ms window has not built the case, so it skips instead of passing.
-    if (!(Math.abs(shown - (line + 2)) < NEAR_PX)) {
-      t.skip(`the outline was at ${shown}, not drawn unpulled at ${line + 2}: the window was missed`)
+    // The page times the release itself: a box too loaded to land it before the 120 ms timer has not built the case, so it skips instead of failing or passing.
+    const { lastMove, up } = await p.evaluate(() => window.__release)
+    if (up - lastMove >= SPEED_WINDOW_MS + SETTLE_SLACK_MS) {
+      t.skip(`the release came ${Math.round(up - lastMove)} ms after the last move, past the ${SPEED_WINDOW_MS + SETTLE_SLACK_MS} ms that redraws it`)
       return
     }
+    assert.equal(Math.abs(shown - (line + 2)) < NEAR_PX, true, `the outline was at ${shown}, not drawn unpulled at ${line + 2}`)
     assert.equal(Math.abs(await outlineLeft() - shown) < NEAR_PX, true, `dropped at ${await outlineLeft()}, as drawn at ${shown}`)
   })
 
@@ -180,16 +196,18 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
 
   it('a note dragged 6 px off the line stays where the pointer put it and shows no x guide', async () => {
     const line = await lineX(COLUMN_LINE)
-    const { left, guides } = await dragToGap(6)
-    assert.equal(guides, 0, 'no guide')
+    const { left, guides } = await dragToGap(6, false, true)
+    assert.equal(guides, 0, 'no guide, though the pointer rested')
     assert.equal(Math.abs(left - (line + 6)) < NEAR_PX, true, `the outline's line ${left} is 6 px past ${line}`)
   })
 
-  it('a note dragged 5 px from where it began, clear of every target, moves exactly 5 px: the notes being dragged are no targets', async () => {
+  // A press moves nothing until it passes the 4 px click slop, so the drag goes 8 px out and 5 back: the note ends 3 px from where it began, inside SNAP_PX, so its
+  // own box from before the drag would pull it back if it were a target. The grid's lines and the other note are cells away.
+  it('a note dragged out and back to 3 px from where it began, clear of every target, rests there: the notes being dragged are no targets', async () => {
     const before = (await noteBox('15')).x
-    const { guides } = await dragBy(5)
+    const { guides } = await dragBy(8, -5, false, true)
     assert.equal(guides, 0, 'no guide')
-    assert.equal(Math.abs((await noteBox('15')).x - (before + 5)) < NEAR_PX, true, 'the note moved with the pointer')
+    assert.equal(Math.abs((await noteBox('15')).x - (before + 3)) < NEAR_PX, true, 'the note moved with the pointer')
   })
 
   it('releasing a snapped note never jumps: the pointer moving 0.5 px further within the pull leaves it on the line, drawn and saved', async () => {

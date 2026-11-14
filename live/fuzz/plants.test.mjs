@@ -61,7 +61,7 @@ describe('the plants against the shipped scripts', () => {
 
   it('no plant\'s expect matches a crash or a rule of some other script', () => {
     const unrelated = 'crash signal after "click": page error or console error: TypeError: cell.somethingElse is not a function; rule broken after "undo": undo-to-start: x'
-    for (const plant of PLANTS.filter((p) => p.kind === 'crash')) assert.equal(plant.expect.test(unrelated), false, plant.id)
+    for (const plant of PLANTS) assert.equal(plant.expect.test(unrelated), false, plant.id)
   })
 
   it('no shipped script holds a replacement', () => {

@@ -7,6 +7,7 @@ const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
 
 const SCRIPT = 'pen-tool-extras.user.js'
+const { headerVersion } = require('../header-version.js')
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const source = read(SCRIPT)
 const extras = require(join(ROOT, SCRIPT))
@@ -73,5 +74,5 @@ test('Pen Tool Extras holds spec 130 together', () => {
   }
 
   // The version is one number, in both places it is kept.
-  assert.equal(source.match(/@version\s+(\S+)/)[1], extras.VERSION)
+  assert.equal(headerVersion(source), extras.VERSION)
 })

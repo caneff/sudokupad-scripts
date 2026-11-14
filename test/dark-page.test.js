@@ -4,9 +4,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { headerVersion } = require('./header-version.js')
 const { startScript } = require('./unit-start.js')
-const { buildCss, PAGE, BOARD_ID, VERSION, DEFAULT_COLOR, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { buildCss, PAGE, BOARD_ID, DEFAULT_COLOR, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
 const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -148,10 +147,6 @@ test('no rule reaches inside the board, or sets color on body or a container of 
   }
 })
 
-test('VERSION is the @version in the script header', () => {
-  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8')))
-})
-
 function startOnBoard (framework) {
   const appended = []
   const inBody = []
@@ -210,7 +205,7 @@ test('pastedSettings: a valid color is kept lower-case, a bad one is skipped and
 
 const completeFramework = () => ({ Framework: { getApp () {}, getData () {}, addSetting () {}, showDialog () {}, closeDialog () {}, setData () {}, removeData () {} } })
 
-test('Dark Page declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+test('a SudokuPad with every Framework call Dark Page makes lacks none of them', () => {
   assert.deepEqual(lackingInternals(FEATURES, completeFramework()), new Map())
 })
 

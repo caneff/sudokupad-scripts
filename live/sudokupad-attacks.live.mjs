@@ -52,6 +52,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     await flushSave(p)
     await restart(p)
     await p.click('#control-undo')
+    assert.equal(await settle(() => noteCount(p), 1), 1, 'the Undo landed: it brought the note back')
     assert.equal(await settle(() => labelOn(p), 'Cell'), 'Cell', 'Color by Digit was switched by the Undo')
   }))
 

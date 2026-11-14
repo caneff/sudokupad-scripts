@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
+const { scriptFiles } = require('../sync-lib.js')
 
 const ROOT = path.join(__dirname, '..')
 const SCRIPT = path.join(ROOT, '.github', 'actions', 'file-issue-once', 'file-issue-once.sh')
@@ -72,7 +73,7 @@ describe('fuzz-pr.yml (#724)', () => {
     assert.match(yml, /^on:\n {2}pull_request:\n {4}paths:\n/m)
     assert.doesNotMatch(yml, /^ {2}(push|schedule|workflow_dispatch):/m)
     const paths = yml.split('paths:\n')[1].split(/\n(?! {6}- )/)[0].split('\n').map((l) => l.replace(/^ {6}- /, ''))
-    const scripts = fs.readdirSync(ROOT).filter((f) => f.endsWith('.user.js') && f !== 'draw-tool.user.js')
+    const scripts = scriptFiles()
     assert.deepEqual(paths.sort(), [...scripts, 'lib/**', 'live/fuzz/**'].sort())
   })
 

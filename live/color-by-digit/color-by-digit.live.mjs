@@ -226,6 +226,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the 0 key, on its own row under 7, paints and clears like any digit key', async () => {
     await reopen()
+    const zero = await digitKey('0').boundingBox()
+    const seven = await digitKey('7').boundingBox()
+    assert.equal(zero.y > seven.y + seven.height / 2, true, 'the 0 key is on a row below 7')
+    assert.equal(Math.abs(zero.x - seven.x) < seven.width, true, 'and sits under it')
     await swatch('5').click()
     await digitKey('0').click()
     assert.equal(await keyOf('0'), '5')

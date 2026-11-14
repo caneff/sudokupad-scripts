@@ -6,11 +6,11 @@ const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
 
+const { headerVersion: versionOf } = require('../header-version.js')
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const extras = require('../../pen-tool-extras.user.js')
 const byDigit = require('../../color-by-digit.user.js')
 
-const versionOf = (text) => /^\/\/ @version\s+(\S+)$/m.exec(text)[1]
 const inlineStyles = (html) => html.match(/\sstyle="[^"]*"/g) || []
 
 // Typed out from c126948, the commit spec 204 was written against, as the independent source.
