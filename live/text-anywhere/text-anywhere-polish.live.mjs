@@ -18,7 +18,7 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
   let context, p, errors
 
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
-  const boxText = () => p.locator(TEXT_BOX).textContent()
+  const boxText = () => textAnywhere.boxText(p)
   // The caret's offset in the open box's text, or null when it is not a collapsed caret in the box.
   const caret = () => p.evaluate(() => {
     const { anchorNode, anchorOffset, isCollapsed } = window.getSelection()

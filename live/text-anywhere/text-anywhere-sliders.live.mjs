@@ -22,7 +22,7 @@ describe('Text Anywhere\'s Size and Opacity sliders', { concurrency: false }, ()
   let context, p, errors
 
   const saved = () => textAnywhere.saved(p)
-  const savedNote = async (text) => (await saved()).find((item) => item.text === text)
+  const savedNote = (text) => textAnywhere.savedNote(p, text)
   const stored = (name) => p.evaluate((k) => Framework.getData(k) ?? null, name)
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const focusedSlider = () => p.evaluate((s) => document.activeElement?.matches(`${s} input`) === true, SLIDERS)

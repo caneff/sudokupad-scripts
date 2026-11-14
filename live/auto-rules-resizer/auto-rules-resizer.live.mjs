@@ -5,6 +5,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { addScripts, openWith, scriptSource, useBrowser } from '../session.mjs'
 import { undoDepth } from '../board.mjs'
+import { loadInPlace } from '../puzzles.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
@@ -996,16 +997,9 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
   }
   // The puzzle at `source` (the page's first path, which a load in place changes) loaded in place as a puzzle with `id`, the way SudokuPad's
   // own loadRemoteCTCPuzzle does it (the id first, then the puzzle), and FILLING_RULES shown on it: another puzzle in the same tab, with no
-  // reload. SudokuPad loads Tag Manager again on a second puzzle in a tab; it is answered with an empty script, as `live/puzzles.mjs` does.
+  // reload.
   const openInPlace = async (p, source, id) => {
-    await p.route(/googletagmanager/, (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }))
-    await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
-    await p.evaluate(async ([key, as]) => {
-      const { parsePuzzleData, fetchPuzzle } = window.pageLoader
-      const data = await parsePuzzleData(await fetchPuzzle(key))
-      Framework.app.puzzle.puzzleId = as
-      await Framework.app.loadCTCPuzzle(data)
-    }, [source, id])
+    await loadInPlace(p, id, { source })
     await p.evaluate((rules) => {
       Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
       Framework.app.resize()

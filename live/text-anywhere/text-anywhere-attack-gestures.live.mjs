@@ -14,7 +14,7 @@ import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, mouseDrag, typeText } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
 
-const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SELECTED, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
+const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const COLOR_BUTTON = `${KEYPAD} button[data-key="4"]`
 const RECTANGLE = '#text-anywhere-layer .text-anywhere-selection-rectangle'
@@ -42,7 +42,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     return saved
   }
   const noteItems = async () => (await items()).filter((i) => i.kind === 'text')
-  const selectedCount = () => p.locator(SELECTED).count()
+  const selectedCount = () => textAnywhere.selectedCount(p)
   const handleCount = () => p.locator(HANDLES).count()
   const noteBox = () => read((selector) => {
     const note = document.querySelector(selector).getBoundingClientRect()

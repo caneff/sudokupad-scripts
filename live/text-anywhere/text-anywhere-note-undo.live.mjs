@@ -6,7 +6,6 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, undoDepth } from '../board.mjs'
 
-const { TEXT_BOX } = textAnywhere
 const SPOT = [3.5, 3.5]
 
 const browser = useBrowser()
@@ -14,7 +13,7 @@ const browser = useBrowser()
 describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, () => {
   let context, p, errors
 
-  const boxText = () => p.locator(TEXT_BOX).textContent()
+  const boxText = () => textAnywhere.boxText(p)
   const openNote = async () => p.mouse.click(...await gridPoint(p, SPOT))
 
   before(async () => {

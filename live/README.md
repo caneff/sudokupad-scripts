@@ -109,7 +109,7 @@ an id with the page's own compression (`puzzleIdFor`) and opens it by that id in
 served from the recording whatever the path, so no new recording is needed. Give every built puzzle its own `id`: an inline `scl` puzzle has none
 and SudokuPad then saves its progress under `progress_undefined`, shared by every such puzzle. `installAll` runs all six scripts at
 `DOMContentLoaded` of every load, as a userscript manager does, and answers the requests the recording lacks for the solved dialog (two icons) and for Tag
-Manager with empty files. A history move (Back, Forward) or a second puzzle leaves the pen and replay tools off again, which `startWithTools` and
+Manager with empty files. `loadInPlace(p, id)` loads a second puzzle in the same tab through the page's own loader, with no reload, and answers Tag Manager's second load, which leaves a page error otherwise. A history move (Back, Forward) or a second puzzle leaves the pen and replay tools off again, which `startWithTools` and
 `resumeAfterHistory` turn on.
 
 ## The fuzz run

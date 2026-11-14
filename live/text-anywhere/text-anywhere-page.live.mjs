@@ -28,7 +28,7 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
   const texts = () => textAnywhere.texts(p)
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const near = (got, want) => got.length === want.length && got.every((v, i) => Math.abs(v - want[i]) <= NEAR_PX)
-  const savedNote = async (text) => (await saved()).find((item) => item.text === text)
+  const savedNote = (text) => textAnywhere.savedNote(p, text)
   const noteMiddle = (text) => read(([selector, want]) => {
     const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
     return [box.x + box.width / 2, box.y + box.height / 2]
