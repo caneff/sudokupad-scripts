@@ -22,6 +22,13 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 export const statePath = (env, home) => join(dirname(harPath(env, home)), 'last-version')
 
+// Playwright looks for its browsers in `${XDG_CACHE_HOME:-~/.cache}/ms-playwright` on Linux, so moving the harness cache
+// with XDG_CACHE_HOME (live/cache.mjs) would move that lookup too. The suite's env pins it where Playwright's default
+// is, unless the caller already set PLAYWRIGHT_BROWSERS_PATH.
+export const suiteEnv = (env, home, platform = process.platform) => platform === 'linux' && env.XDG_CACHE_HOME && !env.PLAYWRIGHT_BROWSERS_PATH
+  ? { ...env, PLAYWRIGHT_BROWSERS_PATH: join(home, '.cache', 'ms-playwright') }
+  : env
+
 export const FULL_RUN_MS = 7 * 24 * 60 * 60 * 1000
 export const fullRunPath = (env, home) => join(dirname(harPath(env, home)), 'last-full-run')
 
@@ -161,7 +168,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     lastVersion: () => readState(file),
     lastFullRun: () => readLastFullRun(fullFile),
     now: () => Date.now(),
-    runSuite: () => run('npm', ['run', 'test:live'], { env: { ...process.env, LIVE_REFRESH: '1', NODE_OPTIONS: '--test-reporter=tap' } }),
+    runSuite: () => run('npm', ['run', 'test:live'], { env: { ...suiteEnv(process.env, homedir()), LIVE_REFRESH: '1', NODE_OPTIONS: '--test-reporter=tap' } }),
     fileIssue,
     remember: (v) => writeState(file, v),
     rememberFullRun: (ms) => writeState(fullFile, String(ms))
