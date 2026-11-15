@@ -276,7 +276,7 @@ not the nightly the morning after. It runs on a `pull_request` whose paths are o
 up as a bug and not when someone installs it. Its header comment is the full rule: a new version runs the suite
 with `LIVE_REFRESH=1`, red files one `bug` and `needs-info` issue, and a version already checked is a no-op until a week has passed. The last version
 checked lives in `last-version`, beside the recording.
-A run with `XDG_CACHE_HOME` set moves the recording and Playwright's browser lookup alike, so `suiteEnv` pins `PLAYWRIGHT_BROWSERS_PATH` to `~/.cache/ms-playwright` for the suite (on Linux, unless it is already set).
+A run with `XDG_CACHE_HOME` set moves the recording and Playwright's browser lookup alike, so `suiteEnv` pins `PLAYWRIGHT_BROWSERS_PATH` to `~/.cache/ms-playwright` for the suite (on Linux, unless it or npm's `playwright_browsers_path` is already set, which is how to point the watch at browsers installed under a moved `XDG_CACHE_HOME`).
 
 Two more rules close gaps in that:
 

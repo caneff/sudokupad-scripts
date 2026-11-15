@@ -44,7 +44,10 @@ export const START = /Start Puzzle|Continue|Resume/i
 
 export const puzzleUrl = () => readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 
-export const harPath = (env, home) => join(env.XDG_CACHE_HOME || join(home, '.cache'), 'sudokupad-scripts', 'live', 'sudokupad.har')
+// The cache folder Playwright and this harness both default to: `$XDG_CACHE_HOME`, else `~/.cache`.
+export const cacheHome = (env, home) => env.XDG_CACHE_HOME || join(home, '.cache')
+
+export const harPath = (env, home) => join(cacheHome(env, home), 'sudokupad-scripts', 'live', 'sudokupad.har')
 
 // `incomplete` is a recording that lacks a file a check needs (see `hasFabric`): it records at once, once per run,
 // whatever its age or version, since a restamp or a replay would keep the gap.
