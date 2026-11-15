@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.15
+// @version      0.7.16
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.15'
+  const VERSION = '0.7.16'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -288,13 +288,15 @@
   // The drag as far as the layout allows now, which can be less than when it was made (a smaller window, a
   // board that moved): the controls column stays inside the window and the pane clear of the board. `pane` is
   // the undragged pane's visual left and right at its fitted width, `column` the undragged controls column's
-  // visual top and bottom.
+  // visual top, bottom and right.
   function clampDrag (box, { pane, column, boardRight, viewport }) {
     // A move right or down comes only with a shrink of the same size, which keeps the column where it was.
-    const x = Math.max(box.x, boardRight - pane.left)
+    // The column is wider than a shrunk pane, so the move stops where its right edge is EDGE_PX from the window's, and the shrink stops with it (#899).
+    const xRaw = Math.max(box.x, boardRight - pane.left)
+    const x = Math.min(xRaw, Math.max(0, viewport.width - EDGE_PX - column.right))
     const y = Math.max(box.y, -column.top)
     return {
-      w: Math.min(box.w, Math.max(0, viewport.width - EDGE_PX - pane.right) - x),
+      w: Math.min(box.w + (xRaw - x), Math.max(0, viewport.width - EDGE_PX - pane.right) - x),
       h: Math.min(box.h, Math.max(0, viewport.height - column.bottom - y)),
       x,
       y

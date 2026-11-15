@@ -176,6 +176,25 @@ describe('a sideways corner drag keeps the pane\'s height and never raises its f
   }
 })
 
+// #899: rules long enough to widen the pane to the window's edge, then the dl corner shrunk as far as it goes: the controls column, wider than the pane, moved
+// right by the shrink and ran past the window's edge, with Color by Digit's pad-menu arrow half off the page.
+describe('a corner drag that shrinks the pane to its floor (#899)', { concurrency: false }, () => {
+  it('leaves the controls column inside the window, 8 px from its edge at the most', async () => {
+    const window = { width: 1200, height: 900 }
+    const { context, p, errors } = await rulesPage(window, undefined, VERY_LONG_RULES)
+    try {
+      await inject(p)
+      await settle(async () => (await fontPx(p)) > 0, true)
+      await dragCorner(p, 'dl', 400, 0)
+      const right = () => p.evaluate(() => document.getElementById('controls').getBoundingClientRect().right)
+      assert.equal(await stable(right) <= window.width - EDGE_PX, true, `the controls column ends at ${await right()} px of a ${window.width} px window`)
+      assert.deepEqual(errors, [])
+    } finally {
+      await context.close()
+    }
+  })
+})
+
 describe('a landscape window, rules that fill the pane at SudokuPad\'s width', { concurrency: false }, () => {
   let context, p, errors, own
 

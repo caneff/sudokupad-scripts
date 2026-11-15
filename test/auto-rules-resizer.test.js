@@ -113,7 +113,7 @@ function fakePane (chars, scale = 1, spareRoom = 0, pageSpare = 0) {
   const moved = () => parseFloat(controls.style.translate.split(' ')[1]) || 0
   const controls = {
     style: { translate: '' },
-    getBoundingClientRect: () => ({ top: 240 + moved(), bottom: VIEWPORT.height - pageSpare + (height() - ownHeight) * scale + moved() })
+    getBoundingClientRect: () => ({ top: 240 + moved(), right: 1000 + 480 * scale, bottom: VIEWPORT.height - pageSpare + (height() - ownHeight) * scale + moved() })
   }
   const fit = (opts = {}) => fitRulesPane({
     rules, container, controls, getStyle, viewport: VIEWPORT, pageTop: 240, useSpare: true, boardRight: 900, fontOffsetPx: 0, box: noRulesDrag(), ...opts
@@ -491,7 +491,7 @@ test('dragRulesBox: a pane already under the floor grows by the drag, not to the
   assert.deepEqual(dragRulesBox(NO_BOX, 'dl', 5, -10, short, MIN_PANE), NO_BOX)
 })
 
-const LAYOUT = { pane: { left: 1000, right: 1592 }, column: { top: 300, bottom: 900 }, boardRight: 900, viewport: { width: 1600, height: 1000 } }
+const LAYOUT = { pane: { left: 1000, right: 1592 }, column: { top: 300, bottom: 900, right: 1500 }, boardRight: 900, viewport: { width: 1600, height: 1000 } }
 
 test('clampDrag: a drag inside the window and clear of the board is applied as it is', () => {
   for (const box of [NO_BOX, { w: 50, h: 40, x: -50, y: 0 }, { w: 0, h: 100, x: 0, y: -100 }]) assert.deepEqual(clampDrag(box, LAYOUT), box)
@@ -507,6 +507,14 @@ test('clampDrag: the pane stops at the board, and the controls column at the win
 
 test('clampDrag: a shrink, which moves the controls right or down by as much, is applied as it is', () => {
   for (const box of [{ w: -60, h: 0, x: 60, y: 0 }, { w: 0, h: -40, x: 0, y: 40 }]) assert.deepEqual(clampDrag(box, LAYOUT), box)
+})
+
+test('clampDrag: a shrink stops where the controls column, wider than the pane, would run past 8 px from the window\'s edge (#899)', () => {
+  const wide = { ...LAYOUT, column: { top: 300, bottom: 900, right: 1592 + 24 } }
+  assert.deepEqual(clampDrag({ w: -60, h: 0, x: 60, y: 0 }, wide), { w: 0, h: 0, x: 0, y: 0 }, 'a column already past the edge does not move right')
+  const narrow = { ...LAYOUT, column: { top: 300, bottom: 900, right: 1592 - 32 } }
+  assert.deepEqual(clampDrag({ w: -60, h: 0, x: 60, y: 0 }, narrow), { w: -32, h: 0, x: 32, y: 0 }, 'a column 32 px from the limit moves 32 px and the pane shrinks by as much')
+  assert.deepEqual(clampDrag({ w: -20, h: 0, x: 20, y: 0 }, narrow), { w: -20, h: 0, x: 20, y: 0 }, 'a shrink inside the limit is applied as it is')
 })
 
 test('dragRulesBox: a corner the pane does not have is refused', () => {
