@@ -15,12 +15,21 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { harPath, liveVersion } from './cache.mjs'
+import { cacheHome, harPath, liveVersion } from './cache.mjs'
 
 const REPO = 'caneff/sudokupad-scripts'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 export const statePath = (env, home) => join(dirname(harPath(env, home)), 'last-version')
+
+// Playwright looks for its browsers in `<cache home>/ms-playwright` on Linux, so moving the harness cache with
+// XDG_CACHE_HOME (live/cache.mjs) would move that lookup too. The pin is the folder it would use with XDG_CACHE_HOME unset.
+export const suiteEnv = (env, home, platform = process.platform) => platform === 'linux' && env.XDG_CACHE_HOME && !env.PLAYWRIGHT_BROWSERS_PATH && !env.npm_config_playwright_browsers_path
+  ? { ...env, PLAYWRIGHT_BROWSERS_PATH: join(cacheHome({}, home), 'ms-playwright') }
+  : env
+
+// What `npm run test:live` runs with under the watch.
+export const suiteRunEnv = (env, home, platform) => ({ ...suiteEnv(env, home, platform), LIVE_REFRESH: '1', NODE_OPTIONS: '--test-reporter=tap' })
 
 export const FULL_RUN_MS = 7 * 24 * 60 * 60 * 1000
 export const fullRunPath = (env, home) => join(dirname(harPath(env, home)), 'last-full-run')
@@ -161,7 +170,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     lastVersion: () => readState(file),
     lastFullRun: () => readLastFullRun(fullFile),
     now: () => Date.now(),
-    runSuite: () => run('npm', ['run', 'test:live'], { env: { ...process.env, LIVE_REFRESH: '1', NODE_OPTIONS: '--test-reporter=tap' } }),
+    runSuite: () => run('npm', ['run', 'test:live'], { env: suiteRunEnv(process.env, homedir()) }),
     fileIssue,
     remember: (v) => writeState(file, v),
     rememberFullRun: (ms) => writeState(fullFile, String(ms))

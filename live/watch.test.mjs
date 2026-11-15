@@ -3,12 +3,40 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { didNotRunIssue, failedChecks, FULL_RUN_MS, fileIssue, fullRunDue, fullRunPath, issueFor, readLastFullRun, readState, statePath, watch, writeState } from './watch.mjs'
+import { didNotRunIssue, failedChecks, FULL_RUN_MS, fileIssue, fullRunDue, fullRunPath, issueFor, readLastFullRun, readState, statePath, suiteEnv, suiteRunEnv, watch, writeState } from './watch.mjs'
 
 describe('statePath', () => {
   it('sits beside the recording', () => {
     assert.equal(statePath({ XDG_CACHE_HOME: '/x/cache' }, '/home/u'), '/x/cache/sudokupad-scripts/live/last-version')
     assert.equal(statePath({}, '/home/u'), '/home/u/.cache/sudokupad-scripts/live/last-version')
+  })
+})
+
+describe('suiteEnv', () => {
+  it('pins Playwright to its default browser folder when XDG_CACHE_HOME moves the harness cache', () => {
+    assert.equal(suiteEnv({ XDG_CACHE_HOME: '/x/cache' }, '/home/u', 'linux').PLAYWRIGHT_BROWSERS_PATH, '/home/u/.cache/ms-playwright')
+  })
+
+  it('keeps a PLAYWRIGHT_BROWSERS_PATH already set, and leaves the rest of the env alone', () => {
+    const env = { XDG_CACHE_HOME: '/x/cache', PLAYWRIGHT_BROWSERS_PATH: '/mine', OTHER: '1' }
+    assert.deepEqual(suiteEnv(env, '/home/u', 'linux'), env)
+  })
+
+  it('keeps a browser path npm passes from an .npmrc', () => {
+    const env = { XDG_CACHE_HOME: '/x/cache', npm_config_playwright_browsers_path: '/rc' }
+    assert.deepEqual(suiteEnv(env, '/home/u', 'linux'), env)
+  })
+
+  it('is what the suite runs with, beside its refresh and reporter settings', () => {
+    assert.deepEqual(suiteRunEnv({ XDG_CACHE_HOME: '/x/cache' }, '/home/u', 'linux'), {
+      XDG_CACHE_HOME: '/x/cache', PLAYWRIGHT_BROWSERS_PATH: '/home/u/.cache/ms-playwright', LIVE_REFRESH: '1', NODE_OPTIONS: '--test-reporter=tap'
+    })
+  })
+
+  it('adds nothing when XDG_CACHE_HOME is unset or empty, or off Linux', () => {
+    assert.equal('PLAYWRIGHT_BROWSERS_PATH' in suiteEnv({}, '/home/u', 'linux'), false)
+    assert.equal('PLAYWRIGHT_BROWSERS_PATH' in suiteEnv({ XDG_CACHE_HOME: '' }, '/home/u', 'linux'), false)
+    assert.equal('PLAYWRIGHT_BROWSERS_PATH' in suiteEnv({ XDG_CACHE_HOME: '/x/cache' }, '/home/u', 'darwin'), false)
   })
 })
 
