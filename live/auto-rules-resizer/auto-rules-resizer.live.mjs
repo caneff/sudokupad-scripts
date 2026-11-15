@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { addScripts, openWith, scriptSource, useBrowser } from '../session.mjs'
 import { undoDepth } from '../board.mjs'
 import { loadInPlace } from '../puzzles.mjs'
+import { RULES_TEXT } from '../fuzz/puzzle-set.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
@@ -23,8 +24,6 @@ const LONG_RULES = Array(8).fill(RULES).join(' ')
 // About 5,600 characters: no width the window allows stops the scroll.
 const VERY_LONG_RULES = Array(40).fill(RULES).join(' ')
 // Twelve times: needs more than 500 css px of width at SudokuPad's own size.
-// Twenty times, as the fuzz's long-rules pages: the fit takes the pane to the window's edge at 1200 px.
-const TWENTY_RULES = Array(20).fill(RULES).join(' ')
 const WIDE_RULES = Array(12).fill(RULES).join(' ')
 // Five times: at SudokuPad's own width the fit takes the pane's spare height with a font between SudokuPad's and the 150% cap.
 const FILLING_RULES = Array(5).fill(RULES).join(' ')
@@ -178,23 +177,29 @@ describe('a sideways corner drag keeps the pane\'s height and never raises its f
   }
 })
 
-// #899 (the fuzz's seed 1335312343): rules long enough that the fit widens the pane to the window's edge, then the dl corner shrunk by 241 px. With Color by Digit's
+// The fuzz's seed 1335312343: the fuzz's long rules, which the fit widens to the window's edge at 1200 px, then the dl corner shrunk by 241 px. With Color by Digit's
 // button the controls column is wider than the shrunk pane, and the shrink moved it right, past the window's edge, with the button's pad-menu arrow half off the page.
-describe('a corner drag that shrinks the pane (#899)', { concurrency: false }, () => {
-  it('leaves the controls column inside the window, 8 px from its edge at the most, with Color by Digit\'s button in it', async () => {
-    const window = { width: 1200, height: 900 }
-    const { context, p, errors } = await rulesPage(window, undefined, TWENTY_RULES)
-    try {
-      await inject(p, [SCRIPT_FILE, 'color-by-digit.user.js'])
-      await settle(async () => (await fontPx(p)) > 0, true)
-      await dragCorner(p, 'dl', 241, 0)
-      const right = () => p.evaluate(() => document.getElementById('controls').getBoundingClientRect().right)
-      assert.equal(await stable(right) <= window.width - EDGE_PX, true, `the controls column ends at ${await right()} px of a ${window.width} px window`)
-      assert.deepEqual(errors, [])
-    } finally {
-      await context.close()
-    }
-  })
+describe('a dl corner drag that shrinks a pane at the window\'s edge', { concurrency: false }, () => {
+  const window = { width: 1200, height: 900 }
+  const columnRight = (p) => p.evaluate(() => document.getElementById('controls').getBoundingClientRect().right)
+  for (const [name, scripts] of [['with Color by Digit\'s button in the column', [SCRIPT_FILE, 'color-by-digit.user.js']], ['with nothing wider than the pane in the column', [SCRIPT_FILE]]]) {
+    it(`narrows the pane and keeps the column 8 px inside the window at the most, ${name}`, async () => {
+      const { context, p, errors } = await rulesPage(window, undefined, RULES_TEXT)
+      try {
+        await inject(p, scripts)
+        await settle(async () => (await fontPx(p)) > 0, true)
+        const start = await stable(() => pane(p))
+        await dragCorner(p, 'dl', 241, 0)
+        const now = await stable(() => pane(p))
+        const right = await stable(() => columnRight(p))
+        assert.equal(now.width < start.width, true, `the drag narrowed the pane ${start.width} -> ${now.width}`)
+        assert.equal(right <= window.width - EDGE_PX, true, `the controls column ends at ${right} px of a ${window.width} px window`)
+        assert.deepEqual(errors, [])
+      } finally {
+        await context.close()
+      }
+    })
+  }
 })
 
 describe('a landscape window, rules that fill the pane at SudokuPad\'s width', { concurrency: false }, () => {

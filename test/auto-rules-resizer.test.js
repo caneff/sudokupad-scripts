@@ -91,7 +91,7 @@ test('offsetFontPx: one px per press from the automatic size, inside 70% to 150%
 // height follows its text at the current font and width, capped at 224 css px; the container wraps the pane;
 // SudokuPad's own font is 17.6 px. `scale` is visual px per css px, as SudokuPad scales the controls column.
 const VIEWPORT = { width: 2048, height: 1064 }
-function fakePane (chars, scale = 1, spareRoom = 0, pageSpare = 0) {
+function fakePane (chars, scale = 1, spareRoom = 0, pageSpare = 0, buttonsPx = 0) {
   const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '' }
   const font = () => parseFloat(style.fontSize) || 17.6
   const width = () => parseFloat(style.width) || 480
@@ -111,9 +111,10 @@ function fakePane (chars, scale = 1, spareRoom = 0, pageSpare = 0) {
   // pane at its own height; a taller pane pushes the column's bottom down, and the column's `translate` moves it.
   const ownHeight = height()
   const moved = () => parseFloat(controls.style.translate.split(' ')[1]) || 0
+  const movedX = () => parseFloat(controls.style.translate) || 0
   const controls = {
     style: { translate: '' },
-    getBoundingClientRect: () => ({ top: 240 + moved(), right: 1000 + 480 * scale, bottom: VIEWPORT.height - pageSpare + (height() - ownHeight) * scale + moved() })
+    getBoundingClientRect: () => ({ top: 240 + moved(), right: 1000 + movedX() + Math.max(width() * scale, buttonsPx), bottom: VIEWPORT.height - pageSpare + (height() - ownHeight) * scale + moved() })
   }
   const fit = (opts = {}) => fitRulesPane({
     rules, container, controls, getStyle, viewport: VIEWPORT, pageTop: 240, useSpare: true, boardRight: 900, fontOffsetPx: 0, box: noRulesDrag(), ...opts
@@ -491,7 +492,7 @@ test('dragRulesBox: a pane already under the floor grows by the drag, not to the
   assert.deepEqual(dragRulesBox(NO_BOX, 'dl', 5, -10, short, MIN_PANE), NO_BOX)
 })
 
-const LAYOUT = { pane: { left: 1000, right: 1592 }, column: { top: 300, bottom: 900, right: 1500 }, boardRight: 900, viewport: { width: 1600, height: 1000 } }
+const LAYOUT = { pane: { left: 1000, right: 1592 }, column: { top: 300, bottom: 900 }, boardRight: 900, viewport: { width: 1600, height: 1000 } }
 
 test('clampDrag: a drag inside the window and clear of the board is applied as it is', () => {
   for (const box of [NO_BOX, { w: 50, h: 40, x: -50, y: 0 }, { w: 0, h: 100, x: 0, y: -100 }]) assert.deepEqual(clampDrag(box, LAYOUT), box)
@@ -509,12 +510,11 @@ test('clampDrag: a shrink, which moves the controls right or down by as much, is
   for (const box of [{ w: -60, h: 0, x: 60, y: 0 }, { w: 0, h: -40, x: 0, y: 40 }]) assert.deepEqual(clampDrag(box, LAYOUT), box)
 })
 
-test('clampDrag: a shrink stops where the controls column, wider than the pane, would run past 8 px from the window\'s edge (#899)', () => {
-  const wide = { ...LAYOUT, column: { top: 300, bottom: 900, right: 1592 + 24 } }
-  assert.deepEqual(clampDrag({ w: -60, h: 0, x: 60, y: 0 }, wide), { w: 0, h: 0, x: 0, y: 0 }, 'a column already past the edge does not move right')
-  const narrow = { ...LAYOUT, column: { top: 300, bottom: 900, right: 1592 - 32 } }
-  assert.deepEqual(clampDrag({ w: -60, h: 0, x: 60, y: 0 }, narrow), { w: -32, h: 0, x: 32, y: 0 }, 'a column 32 px from the limit moves 32 px and the pane shrinks by as much')
-  assert.deepEqual(clampDrag({ w: -20, h: 0, x: 20, y: 0 }, narrow), { w: -20, h: 0, x: 20, y: 0 }, 'a shrink inside the limit is applied as it is')
+test('fitRulesPane: a shrink gives back what would run the controls column, wider than the pane, past 8 px from the window\'s edge (#899)', () => {
+  const shrink = { w: -100, h: 0, x: 100, y: 0 }
+  const { fit } = fakePane(140, 1, 0, 0, 1000)
+  assert.deepEqual(fit({ box: shrink }), { w: -40, h: 0, x: 40, y: 0 }, 'a 1000 px column at 1100 px ends 60 px past 2040')
+  assert.deepEqual(fakePane(140).fit({ box: shrink }), shrink, 'a column no wider than the pane keeps the whole shrink')
 })
 
 test('dragRulesBox: a corner the pane does not have is refused', () => {
