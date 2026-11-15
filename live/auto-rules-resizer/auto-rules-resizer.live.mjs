@@ -178,14 +178,14 @@ describe('a sideways corner drag keeps the pane\'s height and never raises its f
   }
 })
 
-// #899 (the fuzz's seed 1335312343): rules long enough that the fit widens the pane to the window's edge, then the dl corner shrunk by 241 px: the controls column, wider than the pane, moved
-// right by the shrink and ran past the window's edge, with Color by Digit's pad-menu arrow half off the page.
-describe('a corner drag that shrinks the pane to its floor (#899)', { concurrency: false }, () => {
-  it('leaves the controls column inside the window, 8 px from its edge at the most', async () => {
+// #899 (the fuzz's seed 1335312343): rules long enough that the fit widens the pane to the window's edge, then the dl corner shrunk by 241 px. With Color by Digit's
+// button the controls column is wider than the shrunk pane, and the shrink moved it right, past the window's edge, with the button's pad-menu arrow half off the page.
+describe('a corner drag that shrinks the pane (#899)', { concurrency: false }, () => {
+  it('leaves the controls column inside the window, 8 px from its edge at the most, with Color by Digit\'s button in it', async () => {
     const window = { width: 1200, height: 900 }
     const { context, p, errors } = await rulesPage(window, undefined, TWENTY_RULES)
     try {
-      await inject(p)
+      await inject(p, [SCRIPT_FILE, 'color-by-digit.user.js'])
       await settle(async () => (await fontPx(p)) > 0, true)
       await dragCorner(p, 'dl', 241, 0)
       const right = () => p.evaluate(() => document.getElementById('controls').getBoundingClientRect().right)
