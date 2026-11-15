@@ -23,6 +23,8 @@ const LONG_RULES = Array(8).fill(RULES).join(' ')
 // About 5,600 characters: no width the window allows stops the scroll.
 const VERY_LONG_RULES = Array(40).fill(RULES).join(' ')
 // Twelve times: needs more than 500 css px of width at SudokuPad's own size.
+// Twenty times, as the fuzz's long-rules pages: the fit takes the pane to the window's edge at 1200 px.
+const TWENTY_RULES = Array(20).fill(RULES).join(' ')
 const WIDE_RULES = Array(12).fill(RULES).join(' ')
 // Five times: at SudokuPad's own width the fit takes the pane's spare height with a font between SudokuPad's and the 150% cap.
 const FILLING_RULES = Array(5).fill(RULES).join(' ')
@@ -176,16 +178,16 @@ describe('a sideways corner drag keeps the pane\'s height and never raises its f
   }
 })
 
-// #899: rules long enough to widen the pane to the window's edge, then the dl corner shrunk as far as it goes: the controls column, wider than the pane, moved
+// #899 (the fuzz's seed 1335312343): rules long enough that the fit widens the pane to the window's edge, then the dl corner shrunk by 241 px: the controls column, wider than the pane, moved
 // right by the shrink and ran past the window's edge, with Color by Digit's pad-menu arrow half off the page.
 describe('a corner drag that shrinks the pane to its floor (#899)', { concurrency: false }, () => {
   it('leaves the controls column inside the window, 8 px from its edge at the most', async () => {
     const window = { width: 1200, height: 900 }
-    const { context, p, errors } = await rulesPage(window, undefined, VERY_LONG_RULES)
+    const { context, p, errors } = await rulesPage(window, undefined, TWENTY_RULES)
     try {
       await inject(p)
       await settle(async () => (await fontPx(p)) > 0, true)
-      await dragCorner(p, 'dl', 400, 0)
+      await dragCorner(p, 'dl', 241, 0)
       const right = () => p.evaluate(() => document.getElementById('controls').getBoundingClientRect().right)
       assert.equal(await stable(right) <= window.width - EDGE_PX, true, `the controls column ends at ${await right()} px of a ${window.width} px window`)
       assert.deepEqual(errors, [])
