@@ -88,6 +88,10 @@ describe('the rules', () => {
       assert.deepEqual(check('notes-saved-match-drawn', { notesSaved: saved, notesDrawn: ['Title\nsmall print\nslow and snake_case and x = 1'] }), [])
       assert.equal(check('notes-saved-match-drawn', { notesSaved: saved, notesDrawn: ['Title\nsmall print\nfast and snake_case and x = 1'] }).length, 2)
     })
+    it('holds for a header, a subtext line and an italic with no backtick among them (#930)', () => {
+      assert.deepEqual(check('notes-saved-match-drawn', { notesSaved: items('# Title\n-# small print'), notesDrawn: ['Title\nsmall print'] }), [])
+      assert.deepEqual(check('notes-saved-match-drawn', { notesSaved: items('_slow_ now'), notesDrawn: ['slow now'] }), [])
+    })
     it('holds for a check box with no dash, and one that ends its line, as the script draws them (#815)', () => {
       assert.deepEqual(check('notes-saved-match-drawn', { notesSaved: items('[x] milk', '- [x]'), notesDrawn: ['milk', ''] }), [])
     })

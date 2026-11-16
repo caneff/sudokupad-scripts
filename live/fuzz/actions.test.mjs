@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, NOTE_SETTLE_MS, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
@@ -21,7 +21,7 @@ const { THICKNESS, DASH, ARROW_SPACING } = createRequire(import.meta.url)('../..
 const UI_TWEAKS = createRequire(import.meta.url)('../../ui-tweaks.user.js')
 const DARK_PAGE = createRequire(import.meta.url)('../../dark-page.user.js')
 const AUTO_RULES_RESIZER = createRequire(import.meta.url)('../../auto-rules-resizer.user.js')
-const { BOX_LINES, NUDGE_REPEAT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
+const { BOX_LINES, NUDGE_REPEAT_MS, SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
 const runOn = async (action, options) => {
   const target = await fakeTargets(options).openTarget()
@@ -1233,18 +1233,19 @@ describe("Text Anywhere's color hold and note gestures (#930)", () => {
       const { log } = await runOn(a)
       const ns = names(log)
       const [, ms] = calls(log, 'holdFor')[0]
-      assert.ok(ms > 100 + 20, 'longer than the pointer window and its slack')
+      assert.equal(ms, NOTE_SETTLE_MS)
+      assert.ok(ms > SPEED_WINDOW_MS + 20, 'longer than the pointer window and the 20 ms of slack the settle timer adds')
       assert.ok(ns.lastIndexOf('mouse.move') < ns.indexOf('holdFor') && ns.indexOf('holdFor') < ns.indexOf('mouse.up'), 'move, wait, release')
     }
   })
 
-  it('a press that loses the pointer presses a note, switches tool by key, and only then lets go', async () => {
+  it('a press that loses the pointer presses a note, blurs the window, and only then lets go, with no move and no key', async () => {
     for (const a of kindOf('note press lost')) {
       const { log } = await runOn(a)
       const ns = names(log)
       assert.equal(calls(log, 'mouse.move').length, 1, 'the pointer never drags')
-      assert.ok(ns.indexOf('mouse.down') < ns.indexOf('blurFocus') && ns.indexOf('blurFocus') < ns.indexOf('keyboard.press') && ns.indexOf('keyboard.press') < ns.indexOf('mouse.up'), String(a))
-      assert.match(calls(log, 'keyboard.press')[0][1], /^[cvxz]$/)
+      assert.equal(calls(log, 'keyboard.press').length, 0)
+      assert.ok(ns.indexOf('mouse.down') > -1 && ns.indexOf('mouse.down') < ns.indexOf('blurFocus') && ns.indexOf('blurFocus') < ns.indexOf('mouse.up'), String(a))
     }
   })
 
@@ -1256,7 +1257,8 @@ describe("Text Anywhere's color hold and note gestures (#930)", () => {
       corners.add(calls(log, 'noteHandle')[0][1])
       assert.deepEqual(calls(log, 'keyboard.press').map(([, k]) => k), ['Escape'])
       assert.ok(ns.indexOf('mouse.down') < ns.indexOf('keyboard.press') && ns.indexOf('keyboard.press') < ns.indexOf('mouse.up'), String(a))
-      assert.ok(ns.indexOf('mouse.move', ns.indexOf('mouse.down')) < ns.indexOf('keyboard.press'), 'the handle has moved before Escape')
+      const moved = ns.indexOf('mouse.move', ns.indexOf('mouse.down'))
+      assert.ok(moved > -1 && moved < ns.indexOf('keyboard.press'), 'the handle has moved before Escape')
     }
     assert.deepEqual([...corners].sort(), [0, 1, 2, 3])
   })

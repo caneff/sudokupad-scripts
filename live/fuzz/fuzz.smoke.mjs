@@ -16,7 +16,7 @@ import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
-import { SELECTED, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { PICKER_BOX, SELECTED, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 
 const run = promisify(execFile)
 const PASSING_SEEDS = [2, 3]
@@ -266,19 +266,18 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
     describe('the color hold and note gestures of #930', () => {
       const FIRST = [0, NOTE_AT]
-      const NOTE_PICKERS = '.text-anywhere-picker'
       const savedAt = async (steps) => savedFirst((await snapshotAfter(puzzle, [NOTE, ...steps])).page).at
       const moved = async (steps) => { const [x, y] = await savedAt(steps); const [x0, y0] = await savedAt([]); return [x - x0, y - y0] }
 
       it('a hold on a text color opens the pickers, a recolor there is saved for that color, and every end leaves no picker', async () => {
-        const colorAfter = (edit) => afterSteps(puzzle, [['note color edit', edit]], async (p) => ({ colors: await p.evaluate(() => Framework.getData('TextAnywhere_colors')), pickers: await p.locator(NOTE_PICKERS).count() }))
+        const colorAfter = (edit) => afterSteps(puzzle, [['note color edit', edit]], async (p) => ({ colors: await p.evaluate(() => Framework.getData('TextAnywhere_colors')), pickers: await p.locator(PICKER_BOX).count() }))
         const recolored = await colorAfter([3, 1, 0x123456, at(1, 1), 'z'])
         assert.equal(JSON.stringify(recolored.colors).includes('#123456'), true, JSON.stringify(recolored.colors))
         assert.equal(recolored.pickers, 0)
         for (const end of [0, 2, 3]) assert.equal((await colorAfter([3, end, 0x123456, at(1, 1), 'z'])).pickers, 0, `end ${end}`)
       })
 
-      it('a drag with Shift held keeps the note on one axis, and one held still moves it as far as one that is not', async () => {
+      it('a drag with Shift held keeps the note on one axis, and one held still ends where a plain one does', async () => {
         const [dx, dy] = await moved([['note shift drag', FIRST]])
         assert.ok(Math.abs(dx) > 10 && Math.abs(dy) < 1, `moved by ${dx} x ${dy}`)
         const plain = await moved([['move note', null]])
@@ -286,9 +285,9 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
         assert.ok(still.every((v, i) => Math.abs(v - plain[i]) < 0.1), `held still ${still}, plain ${plain}`)
       })
 
-      it('Escape during a resize puts the note back, and a press the tool leaves moves nothing', async () => {
+      it('Escape during a resize puts the note back, and a press that loses the pointer to a blur moves nothing and raises no page error', async () => {
         assert.equal(savedFirst((await snapshotAfter(puzzle, [NOTE, ['note resize escape', [FIRST, 3, 40, 30]]])).page).box, undefined)
-        assert.deepEqual(await moved([['note press lost', [FIRST, 'z']]]), [0, 0])
+        assert.deepEqual(await moved([['note press lost', FIRST]]), [0, 0])
       })
 
       it('a rich note with a header, an italic and inline code is drawn and raises no page error', async () => {
