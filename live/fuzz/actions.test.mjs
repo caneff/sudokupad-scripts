@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
+import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, SETTINGS_KINDS, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, ARROW_KEYS, PROFILE_NAMES, ROW_KEYS, SWATCH_KEYS, NOTE_SETTLE_MS, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, REPLAY_PATH, SETTINGS_KINDS, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, ARROW_KEYS, PROFILE_NAMES, ROW_KEYS, SWATCH_KEYS, NOTE_SETTLE_MS, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
@@ -1348,37 +1349,54 @@ describe('Color by Digit: a held button and a conflicting mark (#931)', () => {
 
 describe('a reload drawn after the settings actions (#936)', () => {
   const lists = (options, count = 300) => fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS, maxCommands: 20, ...options }), { seed: 936, numRuns: count })
-  // For each settings action of the commands, whether a reload is the very next action.
-  const followed = (lists) => lists.flatMap((l) => {
+  // Every action but the last of each list, with whether a reload is the very next action.
+  const pairs = (drawn) => drawn.flatMap((l) => {
     const kinds = [...l.commands].map((w) => w.cmd.kind)
-    return kinds.flatMap((kind, i) => (SETTINGS_KINDS.includes(kind) && i < kinds.length - 1 ? [kinds[i + 1] === 'reload'] : []))
+    return kinds.slice(0, -1).map((kind, i) => [kind, kinds[i + 1] === 'reload'])
   })
   const rate = (flags) => flags.filter(Boolean).length / flags.length
+  const afterSettings = (drawn) => rate(pairs(drawn).filter(([kind]) => SETTINGS_KINDS.includes(kind)).map(([, reload]) => reload))
+  const afterOthers = (drawn) => rate(pairs(drawn).filter(([kind]) => kind !== 'reload' && !SETTINGS_KINDS.includes(kind)).map(([, reload]) => reload))
+  const digest = (drawn) => createHash('sha1').update(drawn.map((l) => JSON.stringify([l.puzzle.name, l.waitMs, l.start.map(String), [...l.commands].map((w) => String(w.cmd))])).join('\n')).digest('hex')
 
-  it('the settings kinds are real kinds that save a setting', () => {
+  it('the settings kinds are real kinds, and the ones the five missed mutants save through', () => {
     for (const kind of ['color mode', 'pen line mode', 'note box color', 'note background']) assert.ok(SETTINGS_KINDS.includes(kind), kind)
     for (const kind of SETTINGS_KINDS) assert.ok(KIND_NAMES.includes(kind), kind)
     assert.ok(!SETTINGS_KINDS.includes('reload'))
   })
 
-  it('without the option, a reload follows a settings action only as often as it is drawn at all', () => {
-    assert.ok(rate(followed(lists({}))) < 0.15)
+  it('without the option a reload is drawn after a settings action no more than after any other', () => {
+    const drawn = lists({})
+    assert.ok(afterSettings(drawn) < 0.15)
+    assert.ok(afterOthers(drawn) < 0.15)
   })
 
-  it('with the option, a reload follows about half the settings actions', () => {
-    const r = rate(followed(lists({ reloadAfterSettings: true })))
+  it('with the option, a reload follows about half the settings actions and no other action more than before', () => {
+    const drawn = lists({ reloadAfterSettings: true })
+    const r = afterSettings(drawn)
     assert.ok(r > 0.35 && r < 0.65, `rate ${r}`)
+    assert.ok(afterOthers(drawn) < 0.15, `rate ${afterOthers(drawn)}`)
   })
 
-  it('the lists are the same under the same seed, and a printed list names the reloads', () => {
+  it('without the option the lists are the ones origin/main drew (the digests were taken there)', () => {
+    assert.equal(digest(fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS }), { seed: 936, numRuns: 30 })), '4cf41d46238aee4d86583085f731ebb9f91d28e2')
+    assert.equal(digest(fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS, busyStart: true }), { seed: 936, numRuns: 30 })), '6b7a39319437519019365b060ef5c10ecb87e719')
+    assert.equal(digest(fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS, reloadAfterSettings: false }), { seed: 936, numRuns: 30 })), '4cf41d46238aee4d86583085f731ebb9f91d28e2')
+  })
+
+  it('a seed gives the same lists, and a list prints the steps that ran, the reloads among them, then the replay path', async () => {
     const [a, b] = [lists({ reloadAfterSettings: true, nonEmpty: true }, 40), lists({ reloadAfterSettings: true, nonEmpty: true }, 40)]
-    assert.deepEqual(a.map(String), b.map(String))
-    assert.ok(a.some((l) => /reload the page/.test(String(l))))
-    assert.ok(a.every((l) => /\/\*replayPath="[^"]*"\*\/$/.test(String(l))), 'the replay path ends the printed list')
-  })
-
-  it('the lists without the option are those they were before it', () => {
-    assert.deepEqual(lists({}, 20).map(String), lists({ reloadAfterSettings: false }, 20).map(String))
+    assert.deepEqual(a.map((l) => [...l.commands].map((w) => String(w.cmd))), b.map((l) => [...l.commands].map((w) => String(w.cmd))))
+    const list = a.find((l) => [...l.commands].some((w) => w.cmd.kind === 'reload' && SETTINGS_KINDS.includes([...l.commands][[...l.commands].indexOf(w) - 1]?.cmd.kind)))
+    assert.ok(list, 'a list with a reload after a settings action')
+    assert.equal(String(list).replace(REPLAY_PATH, '').trim(), '', 'nothing ran, so nothing is printed')
+    const steps = [...list.commands]
+    const target = await fakeTargets().openTarget()
+    // The first two steps run; the rest never do, as when a failure ends a list.
+    await fc.asyncModelRun(() => ({ model: { selected: false }, real: { env: target.env } }), steps.slice(0, 2))
+    const shown = String(list)
+    assert.equal(shown.replace(REPLAY_PATH, '').trim(), steps.slice(0, 2).map(String).join(','))
+    assert.match(shown, REPLAY_PATH)
   })
 
   it('a busy start that saved a setting may be followed by a reload before the first action', () => {

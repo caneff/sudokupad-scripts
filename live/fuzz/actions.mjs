@@ -1306,22 +1306,27 @@ export const DEFAULT_MAX_COMMANDS = 20
 // color presets and restyle, and the two that can remove the last note (they write the notes index). `reloadAfterSettings` draws a reload after them.
 export const SETTINGS_KINDS = ['color mode', 'pen line mode', 'note box color', 'note background', 'note color preset', 'note restyle', 'clear notes', 'note erase']
 
-// A reload follows a settings action with this chance (one coin in `RELOAD_COINS` of the drawn coins), so the reload rate after a save is about half, not the 5.8% of a list's own draw.
-const REPLAY_COMMENT = /\s*\/\*replayPath="[^"]*"\*\/$/
+// The replay path fast-check prints after a list of commands (`/*replayPath="..."*/`), which the engine reads back out of a failure's printed list.
+export const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
 
-// `commands` (the fast-check list) with a reload after each settings action whose coin is true, and `lead` (a coin for the start's last settings step) a reload before the first action. The coins are drawn
-// beside the list, so a shrink drops them with it and a seed gives the same list. The printed form keeps the replay path of `commands`.
+// `commands` (the fast-check list) with a reload after each settings action whose coin is true, and with `lead` true a reload before the first action. The coins are drawn beside the list, so a
+// shrink drops them with it and a seed gives the same list. Like fast-check's own list, the printed form names only the steps that ran, then the replay path of `commands`.
 function withReloads (commands, coins, lead, puzzle, kinds) {
   const reload = kinds.find((k) => k.kind === 'reload')
-  const wrapped = (cmd) => ({ cmd, check: (model) => cmd.check(model), run: (model, real) => cmd.run(model, real), toString: () => String(cmd) })
+  const added = () => {
+    const cmd = commandOf(reload, puzzle, null)
+    const step = { cmd, hasRan: false, check: (model) => cmd.check(model), run: (model, real) => { step.hasRan = true; return cmd.run(model, real) }, toString: () => String(cmd) }
+    return step
+  }
   const steps = []
-  const add = () => steps.push(wrapped(commandOf(reload, puzzle, null)))
-  if (lead) add()
+  if (lead) steps.push(added())
   ;[...commands].forEach((step, i) => {
     steps.push(step)
-    if (coins[i] && SETTINGS_KINDS.includes(step.cmd.kind)) add()
+    if (coins[i] && SETTINGS_KINDS.includes(step.cmd.kind)) steps.push(added())
   })
-  return { [Symbol.iterator]: () => steps[Symbol.iterator](), toString: () => `${steps.map(String).join(',')}${String(commands).match(REPLAY_COMMENT)?.[0] ?? ''}` }
+  // The replay path is read when the list is printed: fast-check builds it from the commands that ran.
+  const replay = () => String(commands).match(new RegExp(`\\s*${REPLAY_PATH.source}$`))?.[0] ?? ''
+  return Object.assign(steps, { toString: () => `${steps.filter((step) => step.hasRan).map(String).join(',')}${replay()}` })
 }
 
 // The generator of whole lists, each `{ puzzle, start, commands, waitMs }`: a puzzle of `puzzles`, then (with `busyStart`, #726) a start of up to `MAX_START_STEPS` steps that builds a
@@ -1331,6 +1336,8 @@ function withReloads (commands, coins, lead, puzzle, kinds) {
 // `waits` (#725) is the milliseconds the engine may wait after each action: each list draws its own, beside its actions, so a path replays it and a shrink moves it
 // to the first of the set; with none, `waitMs` is undefined and the engine's own wait stands.
 // `nonEmpty` (#730) refuses a list with no action, which fast-check otherwise draws 1 time in `maxCommands + 1`.
+// `reloadAfterSettings` (#936) puts a reload after about half the settings actions (`SETTINGS_KINDS`), and before the first action when the start saved a setting; the printed list names the reloads that ran,
+// and a replay needs the same option, as with the others, since the coins are part of what the path replays.
 export const actionList = (puzzles, { kinds, maxCommands = DEFAULT_MAX_COMMANDS, replayPath, focus = [], waits = [], busyStart = false, nonEmpty = false, reloadAfterSettings = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
   const weights = kindWeights(kinds, focus)
   const commands = fc.commands([actionArbitrary(puzzle, weights, kinds)], { maxCommands, size: 'max', replayPath })
