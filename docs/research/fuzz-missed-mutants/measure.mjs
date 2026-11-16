@@ -1,7 +1,7 @@
 // The measurement of #927: why do missed save deletions and boundary flips go uncaught? Research scratch, not a check: run from the repo root, not in `npm test`, not linted.
-//   node docs/research/fuzz-missed-mutants/measure.mjs select [--per-group 10] [--sample-seed 927] [--coverage-runs 40] [--config busy-start]   writes sample.json
+//   node docs/research/fuzz-missed-mutants/measure.mjs select [--per-group 10] [--sample-seed 927] [--coverage-runs 40] [--config <name>]   writes sample.json
 //   node docs/research/fuzz-missed-mutants/measure.mjs direct   writes sample-direct.json: the reached deletions of a bare `x.setData(...)` statement that sample.json did not draw (the first filter also took statements that only hold a setData)
-//   node docs/research/fuzz-missed-mutants/measure.mjs run [--sample sample-direct.json] --budget <seconds> --out <file.jsonl> [--shard i/n] [--seeds 3] [--seed 1000] [--config busy-start] [--only <id> ...]
+//   node docs/research/fuzz-missed-mutants/measure.mjs run [--sample sample-direct.json] --budget <seconds> --out <file.jsonl> [--shard i/n] [--seeds 3] [--seed 1000] [--config <name>] [--only <id> ...]   (the committed runs passed no --config, so they used the default, `current`)
 // `select` fuzzes the shipped scripts for coverage as `mutants-run.mjs` does, then draws, from the mutants in code that hunt ran, every `setData` statement deletion and every `<` `<=` `>` `>=` flip,
 // `--per-group` of each, seeded. `run` fuzzes each sampled mutant on each seed for the budget and writes one JSON line per hunt: the verdict, and how many action lists ran the mutated code and how many of
 // those had a page load (a reload) after the page that ran it, read from V8 coverage per page load (`createCoverage` of `live/fuzz/coverage.mjs` fed one page at a time).
