@@ -22,6 +22,7 @@
 //   env.placeNote(text, i)                   a note with `text` at cell `i`, finished with Escape
 //   env.noteCentre() -> [x, y] | null        the middle of the first note drawn
 //   env.profileEditor(edits, save, fromMenu) opens Color by Digit's settings dialog (from the pad menu's Edit profiles when `fromMenu`, else from the settings), makes each edit (`[op, ...numbers]`, `PROFILE_EDITS`) and presses Save or Cancel
+//   env.holdColorMode(drift)                 holds the left button on the Color by Digit button: until its menu opens, then lets go and presses Escape; or, with `drift`, moves off the button past the hold's slop, waits out the hold, lets go and checks no menu opened
 //   env.pickProfile(i)                       picks profile `i` (counted from 0, wrapped to the profiles there are) from the pad button's menu
 //   env.restartPuzzle()                      restarts the puzzle, as SudokuPad's own Restart does
 //   env.noteHandle(corner) -> [x, y] | null  the middle of the resize handle at `corner` (0 to 3) of the one note selected; null when the page shows no four handles
@@ -116,11 +117,17 @@ const THICKNESS_STEPS = { min: THICKNESS.min / THICKNESS.step, max: THICKNESS.ma
 
 // Color by Digit's profile editor (#814): the names a rename types, and the edits a dialog action makes before it saves or cancels. A row, a brush and a profile
 // are counted from 0 and wrapped by the env to what the dialog holds (six profiles at the most), so a list replays on a dialog of any size.
-export const PROFILE_NAMES = ['Mine', 'Tens', 'A B', 'x', 'Twenty four letters long!']
+// The last name holds the four characters `escapeHtml` replaces (#931).
+export const PROFILE_NAMES = ['Mine', 'Tens', 'A B', 'x', 'Twenty four letters long!', 'R&D <b> "q"']
 export const MAX_PROFILES = 6
 const PROFILE_BRUSHES = 10
-const DIGITS = '0123456789'
+export const DIGITS = '0123456789'
 export const MAX_PROFILE_EDITS = 4
+export const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
+// The keys the editor takes from the keyboard (#931): arrows and Enter on a swatch, arrows and a digit on a digit key, arrows, Enter and Space on a profile row.
+export const SWATCH_KEYS = [...ARROW_KEYS, 'Enter']
+export const DIGIT_KEYS = [...ARROW_KEYS, ...DIGITS]
+export const ROW_KEYS = [...ARROW_KEYS, 'Enter', 'Space']
 
 // Notes whose text draws as a list, a check box, a code block, and a note taller than its box (#815), which the wheel scrolls.
 // The last one (#930) holds a header, a subtext line, an _italic_, inline code and a snake_case word, whose underscores are no italic.
@@ -135,7 +142,6 @@ const MAX_SIZE_PRESSES = 3
 const RESIZE_CORNERS = Object.keys(CORNERS).length
 const RESIZE_REACH_PX = 80
 const WHEEL_DELTAS = [-400, -120, 120, 400, 1200]
-const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
 const MAX_NUDGE_TAPS = 4
 // A held arrow key repeats once it has been down NUDGE_REPEAT_MS; this much longer is a few repeats.
 const NUDGE_HOLD_EXTRA_MS = 200
@@ -172,9 +178,14 @@ function buildKinds () {
     fc.tuple(fc.constant('select'), row),
     fc.tuple(fc.constant('paint'), fc.nat(DIGITS.length - 1), fc.nat(PROFILE_BRUSHES - 1)),
     fc.tuple(fc.constant('cell profile'), row),
-    fc.tuple(fc.constant('digit profile'), fc.nat(MAX_PROFILES + 1))
+    fc.tuple(fc.constant('digit profile'), fc.nat(MAX_PROFILES + 1)),
+    fc.tuple(fc.constant('swatch key'), fc.nat(PROFILE_BRUSHES - 1), fc.nat(SWATCH_KEYS.length - 1)),
+    fc.tuple(fc.constant('digit key'), fc.nat(DIGITS.length - 1), fc.nat(DIGIT_KEYS.length - 1)),
+    fc.tuple(fc.constant('row key'), row, fc.nat(ROW_KEYS.length - 1)),
+    fc.tuple(fc.constant('paint drag'), fc.nat(DIGITS.length - 1), fc.nat(DIGITS.length - 1), fc.nat(PROFILE_BRUSHES - 1)),
+    fc.constant(['clear all'])
   )
-  const profileEditWords = ([op, a, b]) => ({
+  const profileEditWords = ([op, a, b, c]) => ({
     new: () => 'new profile',
     rename: () => `rename to ${PROFILE_NAMES[a]}`,
     delete: () => `delete profile ${a}`,
@@ -182,7 +193,12 @@ function buildKinds () {
     select: () => `select profile ${a}`,
     paint: () => `paint digit ${DIGITS[a]} with swatch ${b}`,
     'cell profile': () => `cell profile ${a}`,
-    'digit profile': () => `digit profile ${a}`
+    'digit profile': () => `digit profile ${a}`,
+    'swatch key': () => `press ${SWATCH_KEYS[b]} on swatch ${a}`,
+    'digit key': () => `press ${DIGIT_KEYS[b]} on digit ${DIGITS[a]}`,
+    'row key': () => `press ${ROW_KEYS[b]} on profile row ${a}`,
+    'paint drag': () => `drag from digit ${DIGITS[a]} to digit ${DIGITS[b]} with swatch ${c}`,
+    'clear all': () => 'Clear all'
   })[op]()
   const note = (puzzle) => fc.tuple(fc.nat(NOTE_TEXTS.length - 1), cell(puzzle))
 
@@ -946,6 +962,44 @@ function buildKinds () {
       arg: () => fc.nat(MAX_PROFILES - 1),
       label: (i) => `pick profile ${i} from the pad menu`,
       run: (env, i) => env.pickProfile(i)
+    },
+    {
+      kind: 'color button hold',
+      group: 'ordinary',
+      scripts: [COLOR_BY_DIGIT],
+      start: false,
+      stroke: false,
+      weight: 1,
+      // A press that stays opens the pad menu; one that drifts past the slop is no click, so it opens nothing and changes no mode.
+      arg: () => fc.boolean(),
+      label: (drift) => drift ? 'hold the Color by Digit button then drift off it and let go' : 'hold the Color by Digit button until its menu opens and press Escape',
+      run: (env, drift) => env.holdColorMode(drift)
+    },
+    {
+      kind: 'conflict mark',
+      group: 'ordinary',
+      scripts: [COLOR_BY_DIGIT],
+      start: true,
+      stroke: false,
+      weight: 2,
+      // A digit, then a corner or centre mark of the same digit in another cell of its row: the mark conflicts, and Color by Digit draws a circle round it while digits are colored.
+      // A cell alone in its row (the nearly solved puzzle's) takes the mark in another free cell, which conflicts only when they share a column or box.
+      arg: (puzzle) => fc.tuple(fc.nat(puzzle.free.length - 1), fc.nat(), digit(puzzle), fc.boolean()).map(([i, n, d, centre]) => {
+        const others = puzzle.free.flatMap((_, j) => (j === i ? [] : [j]))
+        const mates = others.filter((j) => puzzle.free[j][0] === puzzle.free[i][0])
+        const candidates = mates.length > 0 ? mates : others
+        return [i, candidates.length > 0 ? candidates[n % candidates.length] : i, d, centre]
+      }),
+      label: ([i, j, d, centre], at) => `enter ${d} in ${at(i)} then put a ${centre ? 'centre' : 'corner'} mark of it in ${at(j)}`,
+      run: async (env, [i, j, d, centre], model) => {
+        await env.page.keyboard.press(TOOL_KEYS[0])
+        await env.page.mouse.click(...await env.cellPoint(i))
+        await env.page.keyboard.press(d)
+        await env.page.mouse.click(...await env.cellPoint(j))
+        await env.page.keyboard.press(centre ? TOOL_KEYS[2] : TOOL_KEYS[1])
+        await env.page.keyboard.press(d)
+        model.selected = true
+      }
     },
     { kind: 'color mode', group: 'ordinary', scripts: [COLOR_BY_DIGIT], start: true, stroke: false, weight: 2, arg: () => fc.constant(null), label: () => 'press the Color by Digit button', run: (env) => env.clickColorMode() },
 
