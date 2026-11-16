@@ -18,6 +18,7 @@
 //   penColors     the nine pen colors, `--puzzle-pencolor-N` as computed
 //   noteLooks     { color, background } the Text Anywhere panel shows (the color key marked current, the Background button's `aria-pressed`) while its tool is current with no note selected or open; null otherwise
 //   noteColors    the nine note colors, `--text-anywhere-color-N` as computed
+//   uiTweaksOffNote  the text of the off-note in the UI Tweaks dialog the last 'ui tweaks dialog' action opened, read as it opened; null before any (the dialog is closed by the time a snapshot is read)
 //   noteBoxes     one { text, fill, expected } per finished note with a box: its computed fill, and the fill of the box color Text Anywhere has saved (`boxFill` of the stored value and the note's color), both as computed rgb text
 import { createRequire } from 'node:module'
 
@@ -221,6 +222,16 @@ export const RULES = [
     name: 'note-box-color',
     // Text Anywhere: every note with a box is filled with the box color the script has saved, however many times the color changed before the note was made.
     check: ({ now }) => now.page.noteBoxes.filter(({ fill, expected }) => fill !== expected).map(({ text, fill, expected }) => `the note ${JSON.stringify(text)} has a box filled ${fill}, not the saved box color ${expected}`)
+  },
+  {
+    name: 'ui-tweaks-off-note-empty',
+    // UI Tweaks: the dialog's off-note says which features are off, so it is empty on a page where none is. A page with a feature off shows a notice, which fails the run before any rule.
+    // Read only after a UI Tweaks dialog action: `uiTweaksOffNote` keeps its last reading, which no other action refreshes.
+    check: ({ now, action }) => {
+      const note = now.page.uiTweaksOffNote
+      if (action !== 'ui tweaks dialog' || note === null || now.notices.length > 0 || note === '') return []
+      return [`the dialog says ${JSON.stringify(note)} but no UI Tweaks feature is off`]
+    }
   },
   {
     name: 'tab-not-letters',

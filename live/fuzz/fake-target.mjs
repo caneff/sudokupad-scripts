@@ -13,6 +13,7 @@ export const quietPage = (overrides = {}) => ({
   rulesPane: { fontPx: 17.6, ownFontPx: 17.6, scrollHeight: 300, clientHeight: 300, fontOffsetPx: 0 },
   letterMode: false,
   noteBoxes: [],
+  uiTweaksOffNote: null,
   ...overrides
 })
 

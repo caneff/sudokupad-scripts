@@ -325,7 +325,7 @@ The 300 s hunts ran 5,340 action lists on the uncaught hunts, 310 of them (5.8%)
 | `text-anywhere:2574` | `setData(COLORS_KEY, ...)` | 0/3 | 0/3 | 151 / 9 | the rule was added in #935, measured in `fuzz-missed-mutants/reload-settings-935.md` |
 | `text-anywhere:2586` | `setData(row.key, value)` | 1/3 | 3/3 | n/a (caught) | more time |
 | `text-anywhere:2738` | `setData(BACKGROUND_KEY, on)` | 0/3 | 0/3 | 53 / 2 | reload too rare (#936); the reload view reads it since #935 |
-| `ui-tweaks:357` | `off.length > 0` to `>=` | 0/3 | 0/3 | 29 / 1 | needs a rule (#937) |
+| `ui-tweaks:357` | `off.length > 0` to `>=` | 0/3 | 0/3 | 29 / 1 | the rule `ui-tweaks-off-note-empty` was added in #937: 1/3 caught at 30 s (seed 471864207, 28.6 s, replays), so more time |
 | `pen-tool-extras:1295` | `x >= -GAMUT_EDGE` to `>` | 0/3 | 0/3 | 43 / 0 | not visible: needs a float exactly at the gamut edge |
 | `text-anywhere:1254` | `value > 0` to `>= 0` (stored size) | 0/3 | 0/3 | 14 / 1 | not visible: the script never saves a size of 0 |
 | `text-anywhere:3280` | `deltaY < 0` to `<= 0` | 0/3 | 0/3 | 8 / 0 | needs a wheel of exactly 0: not drawn |
