@@ -16,7 +16,7 @@ import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
-import { KINDS, MARK_BOXES, PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
+import { ERROR_LOG_SCRIPTS, KINDS, MARK_BOXES, PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
@@ -57,7 +57,11 @@ const BOX_TIMEOUT_MS = 2000
 const UI_TWEAKS = settingsScript('ui-tweaks.user.js')
 const UI_TWEAKS_DIALOG = UI_TWEAKS.editor
 const DARK_PAGE_INPUT = '#dark-page-input'
-const SETTINGS_DIALOGS = { 'ui tweaks': UI_TWEAKS, 'dark page': settingsScript('dark-page.user.js') }
+const SETTINGS_DIALOGS = Object.fromEntries(ERROR_LOG_SCRIPTS.map((name) => [name, settingsScript(`${name.replaceAll(' ', '-')}.user.js`)]))
+const PEN_SETTINGS_BUTTON = '.pen-tool-extras-settings'
+const NOTE_COLOR_PRESET = `${SETTINGS_EDITOR} select[data-role="color-choice"]`
+// What a press of Copy error log or Clear is answered with on a page where nothing is broken (a log with records is copied, an empty one says so); any other answer is a failure.
+const ERROR_LOG_ANSWERS = { copy: /^(Error log copied\.|The error log is empty\.)$/, clear: /^Error log cleared\.$/ }
 const isSettingsObject = (text) => {
   try {
     const data = JSON.parse(text)
@@ -387,6 +391,61 @@ function envFor (p, puzzle, { beforeReload }) {
         if (/^Could not paste/.test(status) && isSettingsObject(text)) throw new Error(`pasting ${text} into ${entry} failed: ${status}`)
       }
       await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    async restoreDefaults (script, save) {
+      const { editor, open } = SETTINGS_DIALOGS[script]
+      await open(p)
+      // Color by Digit asks first when the draft holds profiles of the player's own, and an unanswered confirm is dismissed, which would skip the restore: the player says OK.
+      const onConfirm = (dialog) => dialog.accept()
+      p.once('dialog', onConfirm)
+      try {
+        await dialogButton(p, 'Restore defaults').click()
+      } finally {
+        p.off('dialog', onConfirm)
+      }
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    // Clear empties the shared log the run reads its failure's records from, which is a report's context only: a failure is a crash signal or a broken rule, read from the page.
+    async errorLogButton (script, clear) {
+      const { editor, open } = SETTINGS_DIALOGS[script]
+      await open(p)
+      await actButton(p, clear ? 'clear-error-log' : 'copy-error-log').click()
+      const status = await p.locator(STATUS).filter({ hasText: /\S/ }).textContent()
+      if (!ERROR_LOG_ANSWERS[clear ? 'clear' : 'copy'].test(status)) throw new Error(`${script}'s ${clear ? 'Clear' : 'Copy error log'} answered "${status}"`)
+      await closeDialogWith(p, 'Cancel', editor)
+    },
+    async noteColorPreset (pick, save) {
+      const { editor, open } = SETTINGS_DIALOGS['text anywhere']
+      await open(p)
+      // A preset that is the colors in force is selected and disabled, and a disabled option cannot be picked.
+      const values = await p.locator(NOTE_COLOR_PRESET).evaluate((el) => [...el.options].filter((o) => !o.disabled).map((o) => o.value))
+      await p.locator(NOTE_COLOR_PRESET).selectOption(values[pick % values.length])
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    async noteDialogFromMenu (save) {
+      const { editor, open } = SETTINGS_DIALOGS['text anywhere']
+      await open(p)
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    async penDialogFromGear (save) {
+      await openPen()
+      await clickIn(p, PEN_SETTINGS_BUTTON)
+      await p.locator(EXTRAS_EDITOR).waitFor({ state: 'visible' })
+      await animationsDone(p.locator(EXTRAS_EDITOR))
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
+    },
+    async penShowBoxes ({ thickness, opacity }, save) {
+      await openExtrasEditor(p)
+      await p.locator(`${EXTRAS_EDITOR} input[data-box="show.thickness"]`).setChecked(thickness)
+      await p.locator(`${EXTRAS_EDITOR} input[data-box="show.opacity"]`).setChecked(opacity)
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
+    },
+    // A swatch is edited after a preset, which can leave colors missing from the page's palette and put a note on them.
+    async penSwatchEdit (pick, pen, hex, save) {
+      await this.penPresets(pick, false, true)
+      await openExtrasEditor(p)
+      await p.locator(`${EXTRAS_EDITOR} input[data-role="swatch"][data-key="${pen}"]`).fill(hex)
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
     async uiTweaks ({ hideSelect, wrapButtons, toggleTab, restore }, save) {
       await UI_TWEAKS.open(p)

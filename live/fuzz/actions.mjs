@@ -40,6 +40,14 @@
 //   env.rulesDialog({ maxWidth, maxHeight, restore }, save)   opens Auto Rules Resizer's dialog, types both limits (text, as a user types them), presses Restore defaults when `restore`, and presses Save or Cancel
 //   env.resize({ width, height })  env.blurFocus()  env.reload()
 //   env.darkPage(color, save, restore)       opens Dark Page's dialog, picks `color`, presses Restore defaults when `restore`, and presses Save or Cancel
+//   env.settingsText(script, text, save)    also takes 'color by digit', 'text anywhere', 'pen tool extras' and 'auto rules resizer' (#928)
+//   env.restoreDefaults(script, save)        opens the dialog of `script` ('color by digit' or 'text anywhere'), presses Restore defaults, and presses Save or Cancel
+//   env.errorLogButton(script, clear)        opens the dialog of `script` (`ERROR_LOG_SCRIPTS`) and presses Clear when `clear`, else Copy error log, and waits for its answer
+//   env.noteColorPreset(pick, save)          opens Text Anywhere's dialog, picks the Text color preset at position `pick` (wrapped to the pulldown's options), and presses Save or Cancel
+//   env.noteDialogFromMenu(save)             opens Text Anywhere's dialog from SudokuPad's settings menu, and presses Save or Cancel
+//   env.penDialogFromGear(save)              opens Pen Tool Extras' dialog from the pen panel's gear, and presses Save or Cancel
+//   env.penShowBoxes({ thickness, opacity }, save)   sets the boxes that show or hide the pen panel's two sliders in Pen Tool Extras' dialog, and presses Save or Cancel
+//   env.penSwatchEdit(pick, pen, hex, save)  opens Pen Tool Extras' dialog, picks color preset `pick`, sets the swatch of pen `pen` to `hex`, and presses Save or Cancel
 import { createRequire } from 'node:module'
 import fc from 'fast-check'
 
@@ -70,6 +78,18 @@ const textOrCopy = (texts) => fc.oneof({ weight: COPY_WEIGHT, arbitrary: fc.cons
 // a text each script refuses (a wrong type, a color that is no hex, a foreign key, not JSON, empty, not an object) is the other half.
 export const UI_TWEAKS_TEXTS = [null, '{"UiTweaks_hideSelect":true}', '{"UiTweaks_wrapButtons":true,"UiTweaks_hideSelect":false}', '{"UiTweaks_tab":true,"UiTweaks_hideSelect":true,"UiTweaks_wrapButtons":true}', '{"UiTweaks_hideSelect":"yes"}', '{"Other_key":1}', '[]', 'not json', '']
 export const DARK_PAGE_TEXTS = [null, '{"DarkPage_color":"#101030"}', '{"DarkPage_color":"#002010"}', '{"DarkPage_color":"#000000","Other_key":1}', '{"DarkPage_color":"blue"}', '{"Other_key":1}', '[]', 'not json', '']
+// The texts of the other four dialogs (#928), each a Copy press (null), settings its own reader takes (the shapes its Copy writes) and texts it takes none from;
+// `actions.test.mjs` checks each against the script's `pastedSettings`. Color by Digit's `ColorByDigit_auto` is the legacy on/off the mode replaced (`withModeFromAuto`),
+// a preload mark pasted at its default removes the key (the store's `removeData`), and a limit of null is no limit (`readLimit`).
+const PROFILES_TEXT = '{"ColorByDigit_profiles":{"profiles":[{"name":"Mine","groups":[{"key":"1","digits":["1","3","5","7","9"]},{"key":"2","digits":["0","2","4","6","8"]}]}],"active":0}}'
+const NOTE_COLORS_TEXT = `{"TextAnywhere_colors":{${Array.from({ length: 9 }, (_, i) => `"${i + 1}":"#${String(i + 1).repeat(2)}33aa"`).join(',')}}}`
+export const COLOR_BY_DIGIT_TEXTS = [null, '{"ColorByDigit_mode":"digit"}', '{"ColorByDigit_mode":"off","ColorByDigit_addedPreloads":true}', '{"ColorByDigit_addedPreloads":false,"ColorByDigit_addedEachDigit":false}', '{"ColorByDigit_auto":true}', PROFILES_TEXT, '{"ColorByDigit_mode":"sideways"}', '{"Other_key":1}', '[]', 'not json', '']
+export const TEXT_ANYWHERE_TEXTS = [null, '{"TextAnywhere_width":3.5,"TextAnywhere_opacity":50}', '{"TextAnywhere_outline":"thin","TextAnywhere_frame":true,"TextAnywhere_font":"fixed"}', '{"TextAnywhere_box":"yellow"}', NOTE_COLORS_TEXT, '{"TextAnywhere_width":500}', '{"TextAnywhere_colors":{"1":"red"}}', '{"Other_key":1}', '[]', 'not json', '']
+export const PEN_TOOL_EXTRAS_TEXTS = [null, '{"PenColor_thickness":9}', '{"PenColor_colors":{"3":"#123456"}}', '{"EdgeMarks_marks":{"x":true,"circle":true}}', '{"PenColor_opacity":7}', '{"PenColor_thickness":"thick"}', '{"Other_key":1}', '[]', 'not json', '']
+export const AUTO_RULES_RESIZER_TEXTS = [null, '{"AutoRulesResizer_maxWidth":640,"AutoRulesResizer_maxHeight":480}', '{"AutoRulesResizer_maxWidth":null}', '{"AutoRulesResizer_maxHeight":300}', '{"AutoRulesResizer_maxWidth":"tall"}', '{"AutoRulesResizer_maxHeight":0}', '{"Other_key":1}', '[]', 'not json', '']
+// The six dialogs that have an error log row, by the words `env.errorLogButton` takes, and how a step names them.
+export const ERROR_LOG_SCRIPTS = ['color by digit', 'dark page', 'ui tweaks', 'auto rules resizer', 'pen tool extras', 'text anywhere']
+const SCRIPT_NAMES = { 'color by digit': 'Color by Digit', 'dark page': 'Dark Page', 'ui tweaks': 'UI Tweaks', 'auto rules resizer': 'Auto Rules Resizer', 'pen tool extras': 'Pen Tool Extras', 'text anywhere': 'Text Anywhere' }
 const settingsTextLabel = (name, text, save) => `${name} dialog: ${text === null ? 'Copy settings' : `Paste settings ${jsonWords(text)}`} ${save ? 'Save' : 'Cancel'}`
 
 // The rules box's two drag corners (`CORNERS` of auto-rules-resizer.user.js, which does not export it; the fake-page test checks them against `dragRulesBox`), and how far a drag goes either way:
@@ -238,6 +258,18 @@ function buildKinds () {
     }
   })
   const press = (key) => (env) => env.page.keyboard.press(key)
+  // Copy settings or one text pasted into the dialog of `script` (#928), then Save or Cancel, as UI Tweaks' and Dark Page's kinds do.
+  const settingsTextKind = (script, file, texts) => ({
+    kind: `${script} settings text`,
+    group: 'ordinary',
+    scripts: [file],
+    start: true,
+    stroke: false,
+    weight: 1,
+    arg: () => fc.tuple(textOrCopy(texts), fc.boolean()),
+    label: ([text, save]) => settingsTextLabel(SCRIPT_NAMES[script], text, save),
+    run: (env, [text, save]) => env.settingsText(script, text, save)
+  })
 
   return [
     {
@@ -788,6 +820,98 @@ function buildKinds () {
       arg: () => fc.tuple(textOrCopy(DARK_PAGE_TEXTS), fc.boolean()),
       label: ([text, save]) => settingsTextLabel('Dark Page', text, save),
       run: (env, [text, save]) => env.settingsText('dark page', text, save)
+    },
+    settingsTextKind('color by digit', COLOR_BY_DIGIT, COLOR_BY_DIGIT_TEXTS),
+    settingsTextKind('text anywhere', TEXT_ANYWHERE, TEXT_ANYWHERE_TEXTS),
+    settingsTextKind('pen tool extras', PEN_TOOL_EXTRAS, PEN_TOOL_EXTRAS_TEXTS),
+    settingsTextKind('auto rules resizer', AUTO_RULES_RESIZER, AUTO_RULES_RESIZER_TEXTS),
+    {
+      kind: 'color by digit defaults',
+      group: 'ordinary',
+      scripts: [COLOR_BY_DIGIT],
+      start: true,
+      stroke: false,
+      weight: 1,
+      arg: () => fc.boolean(),
+      label: (save) => `Color by Digit dialog: Restore defaults ${save ? 'Save' : 'Cancel'}`,
+      run: (env, save) => env.restoreDefaults('color by digit', save)
+    },
+    {
+      kind: 'text anywhere defaults',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: true,
+      stroke: false,
+      weight: 1,
+      arg: () => fc.boolean(),
+      label: (save) => `Text Anywhere dialog: Restore defaults ${save ? 'Save' : 'Cancel'}`,
+      run: (env, save) => env.restoreDefaults('text anywhere', save)
+    },
+    {
+      kind: 'error log',
+      group: 'ordinary',
+      scripts: scriptFiles(),
+      start: true,
+      stroke: false,
+      weight: 2,
+      arg: () => fc.tuple(fc.nat(ERROR_LOG_SCRIPTS.length - 1), fc.boolean()),
+      label: ([i, clear]) => `${SCRIPT_NAMES[ERROR_LOG_SCRIPTS[i]]} dialog: ${clear ? 'Clear error log' : 'Copy error log'}`,
+      run: (env, [i, clear]) => env.errorLogButton(ERROR_LOG_SCRIPTS[i], clear)
+    },
+    {
+      kind: 'note color preset',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: true,
+      stroke: false,
+      weight: 1,
+      arg: () => fc.tuple(fc.nat(COLOR_PRESET_PICKS - 1), fc.boolean()),
+      label: ([pick, save]) => `Text Anywhere text color preset ${pick} ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [pick, save]) => env.noteColorPreset(pick, save)
+    },
+    {
+      kind: 'note dialog from menu',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: true,
+      stroke: false,
+      weight: 1,
+      arg: () => fc.boolean(),
+      label: (save) => `Text Anywhere dialog from the settings menu ${save ? 'Save' : 'Cancel'}`,
+      run: (env, save) => env.noteDialogFromMenu(save)
+    },
+    {
+      kind: 'pen dialog from gear',
+      group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: false,
+      weight: 1,
+      arg: () => fc.boolean(),
+      label: (save) => `Pen Tool Extras dialog from the pen panel gear ${save ? 'Save' : 'Cancel'}`,
+      run: (env, save) => env.penDialogFromGear(save)
+    },
+    {
+      kind: 'pen show boxes',
+      group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: false,
+      weight: 1,
+      arg: () => fc.tuple(fc.boolean(), fc.boolean(), fc.boolean()),
+      label: ([thickness, opacity, save]) => `Pen Tool Extras dialog: Thickness slider ${thickness ? 'shown' : 'hidden'} Opacity slider ${opacity ? 'shown' : 'hidden'} ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [thickness, opacity, save]) => env.penShowBoxes({ thickness, opacity }, save)
+    },
+    {
+      kind: 'pen swatch edit',
+      group: 'ordinary',
+      scripts: [PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: false,
+      weight: 1,
+      arg: () => fc.tuple(fc.nat(COLOR_PRESET_PICKS - 1), color, fc.integer({ min: 0, max: 0xffffff }), fc.boolean()),
+      label: ([pick, pen, rgb, save]) => `Pen Tool Extras colors: preset ${pick} then pen ${pen} swatch ${ownColor(rgb)} ${save ? 'Save' : 'Cancel'}`,
+      run: (env, [pick, pen, rgb, save]) => env.penSwatchEdit(pick, pen, ownColor(rgb), save)
     },
     {
       kind: 'ui tweaks dialog',

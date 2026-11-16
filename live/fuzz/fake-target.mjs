@@ -107,7 +107,14 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       rulesDialog: rec('rulesDialog'),
       darkPage: rec('darkPage'),
       settingsText: rec('settingsText'),
-      uiTweaks: rec('uiTweaks')
+      uiTweaks: rec('uiTweaks'),
+      restoreDefaults: rec('restoreDefaults'),
+      errorLogButton: rec('errorLogButton'),
+      noteColorPreset: rec('noteColorPreset'),
+      noteDialogFromMenu: rec('noteDialogFromMenu'),
+      penDialogFromGear: rec('penDialogFromGear'),
+      penShowBoxes: rec('penShowBoxes'),
+      penSwatchEdit: rec('penSwatchEdit')
     }
     const target = {
       env,
