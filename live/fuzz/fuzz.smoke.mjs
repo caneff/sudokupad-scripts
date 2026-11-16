@@ -61,6 +61,10 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle, steps })
   })
 
+  it('a wide rich note is dragged off the digit button on a 4x4 board (#944)', async () => {
+    await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['rich note', [4, 1]], ['pen page', null]] })
+  })
+
   it('a page that does not show the puzzle set\'s free cells is refused, not fuzzed on the wrong cells', async () => {
     const wrong = { ...puzzleByName('4x4'), free: [[0, 1]] }
     await assert.rejects(openTarget(browser(), wrong, {}), /opened with \d+ free cells that are not the 1 of puzzle-set\.mjs/)
