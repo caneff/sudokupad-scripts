@@ -33,8 +33,8 @@ const FONT_TOLERANCE_PX = 0.01
 
 // A note's letters and digits alone, after the check box markers a line carries, which are drawn as boxes. The marker is `CHECK_MARK`'s in text-anywhere.user.js: the dash is optional and the box may end the line.
 const wordsOf = (text) => text.replace(/^\s*(?:[-*+] )?\[[ xX]?\](?: |$)/gm, '').replace(/[^\p{L}\p{N}]/gu, '')
-// Whether Text Anywhere draws a note's text other than as typed: a list line, a check box, a code fence, bold or inline code.
-const hasMarkup = (text) => /^\s*(?:[-*+] |(?:[-*+] )?\[[ xX]?\](?: |$)|```)|\*\*|`/m.test(text)
+// Whether Text Anywhere draws a note's text other than as typed: a list line, a check box, a code fence, a header or subtext line, bold, an _italic_ or inline code.
+const hasMarkup = (text) => /^\s*(?:[-*+] |(?:[-*+] )?\[[ xX]?\](?: |$)|```|#{1,3} |-# )|\*\*|(?:^|\W)_\S|`/m.test(text)
 
 // The lines in `a` and not in `b`, counting repeats: [x, x] against [x] leaves one x.
 function without (a, b) {

@@ -80,6 +80,7 @@ async function hoverRules (p) {
 }
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
+export const NOTE_COLOR_PICKERS = '.text-anywhere-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
 // A click this far (in cells) inside the edge of a cell is an edge click, and a corner's own point is a corner click.
 const EDGE_INSET = 0.04
@@ -302,6 +303,19 @@ function envFor (p, puzzle, { beforeReload }) {
         await p.mouse.up()
       }
     },
+    async holdNoteColor (color) {
+      await pickNotes()
+      const box = await p.locator(`${KEYPAD} button[data-key="${color}"]`).boundingBox({ timeout: BOX_TIMEOUT_MS })
+      if (!box) throw new Error(`text color ${color}'s button is not on the page`)
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await p.mouse.down()
+      try {
+        await p.locator(NOTE_COLOR_PICKERS).first().waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
+      } finally {
+        await p.mouse.up()
+      }
+    },
+    setNotePicker: (color, hex) => p.locator(`${NOTE_COLOR_PICKERS} input[data-key="${color}"]`).fill(hex),
     setPenPicker: (color, hex) => p.locator(`${COLOR_PICKERS} input[data-key="${color}"]`).fill(hex),
     async penPresets (pick, restore, save) {
       await openExtrasEditor(p)

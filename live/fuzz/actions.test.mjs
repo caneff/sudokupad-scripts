@@ -1175,3 +1175,98 @@ describe('longer lists and no empty list (#730)', () => {
     assert.ok(long.filter((n) => n > 20).length > 100, 'most lists are past the old limit')
   })
 })
+
+describe("Text Anywhere's color hold and note gestures (#930)", () => {
+  const calls = (log, name) => log.filter(([n]) => n === name)
+  const names = (log) => log.map(([n]) => n)
+  const kindOf = (kind) => actionsOf(sample(41, 800)).filter((x) => x.kind === kind)
+  const NEW_KINDS = ['note color edit', 'note shift drag', 'note drag held still', 'note press lost', 'note resize escape']
+
+  it('each kind exercises Text Anywhere, is generated, is ordinary use, and is left out of a busy start', () => {
+    for (const kind of NEW_KINDS) {
+      assert.deepEqual(KIND_SCRIPTS[kind], ['text-anywhere.user.js'], kind)
+      assert.equal(KIND_GROUPS[kind], 'ordinary', kind)
+      assert.ok(kindOf(kind).length > 3, `${kind} is drawn`)
+      assert.ok(!START_KINDS.includes(kind), `${kind} is a gesture a busy start leaves out`)
+    }
+  })
+
+  it('a color edit holds a text color to open the pickers, then recolors one, presses Escape, clicks a cell or presses a tool key', async () => {
+    const ends = new Set()
+    for (const a of kindOf('note color edit')) {
+      const { log } = await runOn(a)
+      assert.equal(calls(log, 'holdNoteColor').length, 1)
+      const picked = calls(log, 'setNotePicker')
+      const step = String(a)
+      assert.match(step, /^hold text color \d to edit its color then /)
+      ends.add(step.replace(/^.* then /, '').replace(/ to #[0-9a-f]{6}/, '').replace(/^click r\d+c\d+$/, 'click a cell').replace(/^press [cvxz]$/, 'press a tool key'))
+      if (/recolor/.test(step)) {
+        assert.equal(picked.length, 1)
+        assert.match(picked[0][2], /^#[0-9a-f]{6}$/)
+        assert.equal(picked[0][1], calls(log, 'holdNoteColor')[0][1], 'the held color is the one recolored')
+      } else {
+        assert.equal(picked.length, 0)
+      }
+      const [, key] = calls(log, 'keyboard.press').at(-1) ?? []
+      if (/ press Escape$/.test(step)) assert.deepEqual([key, calls(log, 'mouse.click').length], ['Escape', 0], step)
+      if (/ click r\d+c\d+$/.test(step)) assert.deepEqual([calls(log, 'keyboard.press').length, calls(log, 'mouse.click').length], [0, 1], step)
+      if (/ press [cvxz]$/.test(step)) assert.deepEqual([key, calls(log, 'mouse.click').length], [step.slice(-1), 0], step)
+      assert.ok(names(log).indexOf('holdNoteColor') < Math.max(names(log).indexOf('setNotePicker'), names(log).indexOf('keyboard.press'), names(log).indexOf('mouse.click')), 'the hold comes first')
+    }
+    assert.deepEqual([...ends].sort(), ['click a cell', 'press a tool key', 'press Escape', 'recolor it and press Escape'].sort())
+  })
+
+  it('a shift drag presses the note, then holds Shift while it moves, and lets go of both', async () => {
+    for (const a of kindOf('note shift drag')) {
+      const { log } = await runOn(a)
+      const ns = names(log)
+      assert.equal(calls(log, 'mouse.down').length, 1)
+      assert.deepEqual([calls(log, 'keyboard.down')[0]?.slice(1), calls(log, 'keyboard.up')[0]?.slice(1)], [['Shift'], ['Shift']])
+      assert.ok(ns.indexOf('mouse.down') < ns.indexOf('keyboard.down'), 'Shift goes down after the press: with it at the press a note is only selected')
+      assert.ok(ns.indexOf('keyboard.down') < ns.indexOf('mouse.move', ns.indexOf('keyboard.down')), 'the move comes with Shift held')
+      assert.ok(ns.indexOf('mouse.up') < ns.indexOf('keyboard.up'), 'Shift is let go after the button')
+    }
+  })
+
+  it('a drag held still waits past the settle time with the button down, then releases', async () => {
+    for (const a of kindOf('note drag held still')) {
+      const { log } = await runOn(a)
+      const ns = names(log)
+      const [, ms] = calls(log, 'holdFor')[0]
+      assert.ok(ms > 100 + 20, 'longer than the pointer window and its slack')
+      assert.ok(ns.lastIndexOf('mouse.move') < ns.indexOf('holdFor') && ns.indexOf('holdFor') < ns.indexOf('mouse.up'), 'move, wait, release')
+    }
+  })
+
+  it('a press that loses the pointer presses a note, switches tool by key, and only then lets go', async () => {
+    for (const a of kindOf('note press lost')) {
+      const { log } = await runOn(a)
+      const ns = names(log)
+      assert.equal(calls(log, 'mouse.move').length, 1, 'the pointer never drags')
+      assert.ok(ns.indexOf('mouse.down') < ns.indexOf('blurFocus') && ns.indexOf('blurFocus') < ns.indexOf('keyboard.press') && ns.indexOf('keyboard.press') < ns.indexOf('mouse.up'), String(a))
+      assert.match(calls(log, 'keyboard.press')[0][1], /^[cvxz]$/)
+    }
+  })
+
+  it('a resize escape drags a handle, presses Escape with the button still down, then lets go', async () => {
+    const corners = new Set()
+    for (const a of kindOf('note resize escape')) {
+      const { log } = await runOn(a)
+      const ns = names(log)
+      corners.add(calls(log, 'noteHandle')[0][1])
+      assert.deepEqual(calls(log, 'keyboard.press').map(([, k]) => k), ['Escape'])
+      assert.ok(ns.indexOf('mouse.down') < ns.indexOf('keyboard.press') && ns.indexOf('keyboard.press') < ns.indexOf('mouse.up'), String(a))
+      assert.ok(ns.indexOf('mouse.move', ns.indexOf('mouse.down')) < ns.indexOf('keyboard.press'), 'the handle has moved before Escape')
+    }
+    assert.deepEqual([...corners].sort(), [0, 1, 2, 3])
+  })
+
+  it('the rich notes hold a header, a subtext line, an italic and inline code, and a snake_case word that is no italic', () => {
+    const markdown = RICH_NOTES.find((t) => /^# \w/m.test(t))
+    assert.ok(markdown, 'a header')
+    assert.match(markdown, /^-# \w/m, 'a subtext line')
+    assert.match(markdown, /(^|\s)_\w+_(\s|$)/m, 'an italic')
+    assert.match(markdown, /`[^`\n]+`/, 'inline code')
+    assert.match(markdown, /[a-z]_[a-z]/, 'an underscore inside a word')
+  })
+})
