@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { addScripts, openWith, scriptSource, useBrowser } from '../session.mjs'
 import { undoDepth } from '../board.mjs'
 import { loadInPlace } from '../puzzles.mjs'
+import { RULES_TEXT } from '../fuzz/puzzle-set.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
@@ -168,6 +169,31 @@ describe('a sideways corner drag keeps the pane\'s height and never raises its f
         await dragCorner(p, corner, 0, dy)
         const now = await stable(() => pane(p))
         assert.equal(now.cssHeight > start.cssHeight + 1, true, `height ${start.cssHeight} -> ${now.cssHeight} px`)
+        assert.deepEqual(errors, [])
+      } finally {
+        await context.close()
+      }
+    })
+  }
+})
+
+// The fuzz's seed 1335312343: the fuzz's long rules, which the fit widens to the window's edge at 1200 px, then the dl corner shrunk by 241 px. With Color by Digit's
+// button the controls column is wider than the shrunk pane, and the shrink moved it right, past the window's edge, with the button's pad-menu arrow half off the page.
+describe('a dl corner drag that shrinks a pane at the window\'s edge', { concurrency: false }, () => {
+  const window = { width: 1200, height: 900 }
+  const columnRight = (p) => p.evaluate(() => document.getElementById('controls').getBoundingClientRect().right)
+  for (const [name, scripts] of [['with Color by Digit\'s button in the column', [SCRIPT_FILE, 'color-by-digit.user.js']], ['with nothing wider than the pane in the column', [SCRIPT_FILE]]]) {
+    it(`narrows the pane and keeps the column 8 px inside the window at the most, ${name}`, async () => {
+      const { context, p, errors } = await rulesPage(window, undefined, RULES_TEXT)
+      try {
+        await inject(p, scripts)
+        await settle(async () => (await fontPx(p)) > 0, true)
+        const start = await stable(() => pane(p))
+        await dragCorner(p, 'dl', 241, 0)
+        const now = await stable(() => pane(p))
+        const right = await stable(() => columnRight(p))
+        assert.equal(now.width < start.width, true, `the drag narrowed the pane ${start.width} -> ${now.width}`)
+        assert.equal(right <= window.width - EDGE_PX, true, `the controls column ends at ${right} px of a ${window.width} px window`)
         assert.deepEqual(errors, [])
       } finally {
         await context.close()

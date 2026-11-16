@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.15
+// @version      0.7.16
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.15'
+  const VERSION = '0.7.16'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -290,7 +290,7 @@
   // the undragged pane's visual left and right at its fitted width, `column` the undragged controls column's
   // visual top and bottom.
   function clampDrag (box, { pane, column, boardRight, viewport }) {
-    // A move right or down comes only with a shrink of the same size, which keeps the column where it was.
+    // A move right or down comes only with a shrink of the same size, which keeps the column where it was; `fitRulesPane` gives back what passes the window's edge.
     const x = Math.max(box.x, boardRight - pane.left)
     const y = Math.max(box.y, -column.top)
     return {
@@ -399,12 +399,22 @@
     // A pane taller than SudokuPad's runs the column off the window's bottom: it is lifted by that much, and a drag adds to the lift.
     const lift = Math.max(0, Math.ceil(controls.getBoundingClientRect().bottom - viewport.height))
     if (lift) controls.style.translate = `0px ${-lift}px`
-    const applied = clampDrag(box, {
+    let applied = clampDrag(box, {
       pane: { left: home.left, right: home.left + width * scale },
       column: controls.getBoundingClientRect(),
       boardRight,
       viewport
     })
+    if (applied.x > 0) {
+      // A shrink moves the column right by as much, and a column wider than the shrunk pane (Color by Digit's button makes it so) then runs past the
+      // window's edge: the shrink gives back what passes EDGE_PX from it, or where SudokuPad had the column's edge, if that was further out.
+      setPaneWidth(rules, draggedPane({ width, room: autoRoom, box: applied, scale }).width, natural)
+      controls.style.translate = `${applied.x}px ${-lift}px`
+      const back = Math.min(applied.x, Math.max(0, Math.ceil(controls.getBoundingClientRect().right - Math.max(viewport.width - EDGE_PX, column.right))))
+      applied = { ...applied, w: applied.w + back, x: applied.x - back }
+      controls.style.translate = lift ? `0px ${-lift}px` : ''
+      setPaneWidth(rules, width, natural) // the trial narrowed the pane; the drag's height is read on the fitted one
+    }
     // A drag adds to the fitted pane's height: a drag that started from SudokuPad's own height would shrink a pane the fit had grown.
     const dragging = Boolean(applied.w || applied.h)
     const sideways = Boolean(applied.w && !applied.h)
