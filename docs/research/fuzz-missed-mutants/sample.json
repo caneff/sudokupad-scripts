@@ -1,0 +1,157 @@
+{
+  "counts": {
+    "save-deletion": {
+      "candidates": 52,
+      "reached": 25
+    },
+    "boundary-flip": {
+      "candidates": 242,
+      "reached": 154
+    }
+  },
+  "coverageRuns": 40,
+  "config": "current",
+  "sampleSeed": 927,
+  "sample": [
+    {
+      "group": "save-deletion",
+      "id": "mutant:color-by-digit.user.js:136743-136776:deletion",
+      "file": "color-by-digit.user.js",
+      "line": 2499,
+      "description": "line 2499: deletion, `savedData.setData(MODE_KEY, next)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:pen-tool-extras.user.js:92872-92922:deletion",
+      "file": "pen-tool-extras.user.js",
+      "line": 1789,
+      "description": "line 1789: deletion, `savedData.setData('ToolPen_color', penNumber(pen))` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:text-anywhere.user.js:75040-75096:deletion",
+      "file": "text-anywhere.user.js",
+      "line": 1316,
+      "description": "line 1316: deletion, `store.setData(INDEX_KEY, index.filter((k) => k ...` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:pen-tool-extras.user.js:92597-92988:deletion",
+      "file": "pen-tool-extras.user.js",
+      "line": 1782,
+      "description": "line 1782: deletion, `steps.pages.wrap(tool, 'setSelectedColor', func...` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:dark-page.user.js:40516-40783:deletion",
+      "file": "dark-page.user.js",
+      "line": 763,
+      "description": "line 763: deletion, `dismiss.addEventListener('click', () => { dismi...` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:auto-rules-resizer.user.js:52068-52335:deletion",
+      "file": "auto-rules-resizer.user.js",
+      "line": 992,
+      "description": "line 992: deletion, `dismiss.addEventListener('click', () => { dismi...` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:text-anywhere.user.js:103720-103987:deletion",
+      "file": "text-anywhere.user.js",
+      "line": 1855,
+      "description": "line 1855: deletion, `dismiss.addEventListener('click', () => { dismi...` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:pen-tool-extras.user.js:18609-18876:deletion",
+      "file": "pen-tool-extras.user.js",
+      "line": 341,
+      "description": "line 341: deletion, `dismiss.addEventListener('click', () => { dismi...` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:auto-rules-resizer.user.js:6571-6599:deletion",
+      "file": "auto-rules-resizer.user.js",
+      "line": 130,
+      "description": "line 130: deletion, `store.setData(key, envelope)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:pen-tool-extras.user.js:156922-156964:deletion",
+      "file": "pen-tool-extras.user.js",
+      "line": 2852,
+      "description": "line 2852: deletion, `savedData.setData(LINE_MODE_KEY, lineMode)` becomes `;`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:ui-tweaks.user.js:19681-19682:relational",
+      "file": "ui-tweaks.user.js",
+      "line": 357,
+      "description": "line 357: relational, `>` becomes `>=`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:pen-tool-extras.user.js:65215-65217:relational",
+      "file": "pen-tool-extras.user.js",
+      "line": 1295,
+      "description": "line 1295: relational, `>=` becomes `>`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:text-anywhere.user.js:71521-71522:relational",
+      "file": "text-anywhere.user.js",
+      "line": 1254,
+      "description": "line 1254: relational, `>` becomes `>=`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:text-anywhere.user.js:187131-187132:relational",
+      "file": "text-anywhere.user.js",
+      "line": 3280,
+      "description": "line 3280: relational, `<` becomes `<=`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:text-anywhere.user.js:228241-228242:relational",
+      "file": "text-anywhere.user.js",
+      "line": 4216,
+      "description": "line 4216: relational, `>` becomes `>=`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:color-by-digit.user.js:130548-130549:relational",
+      "file": "color-by-digit.user.js",
+      "line": 2351,
+      "description": "line 2351: relational, `>` becomes `>=`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:color-by-digit.user.js:9801-9802:relational",
+      "file": "color-by-digit.user.js",
+      "line": 190,
+      "description": "line 190: relational, `>` becomes `>=`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:text-anywhere.user.js:192722-192723:relational",
+      "file": "text-anywhere.user.js",
+      "line": 3420,
+      "description": "line 3420: relational, `<` becomes `<=`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:text-anywhere.user.js:72007-72008:relational",
+      "file": "text-anywhere.user.js",
+      "line": 1258,
+      "description": "line 1258: relational, `>` becomes `>=`"
+    },
+    {
+      "group": "boundary-flip",
+      "id": "mutant:color-by-digit.user.js:102843-102845:relational",
+      "file": "color-by-digit.user.js",
+      "line": 1917,
+      "description": "line 1917: relational, `<=` becomes `<`"
+    }
+  ]
+}
