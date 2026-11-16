@@ -14,6 +14,10 @@
 //   pageColor     the page's background as a computed `rgb(r, g, b)`
 //   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight, fontOffsetPx }; null on a puzzle with no rules text (#679)
 //   letterMode    whether the number pad shows letters
+//   penTool       { selected, lineMode } of Pen Tool Extras' pen while the pen tool is current; null otherwise (SudokuPad leaves the pen tool after a reload, so a reload compares it only if that changes)
+//   penColors     the nine pen colors, `--puzzle-pencolor-N` as computed
+//   noteLooks     { color, background } the Text Anywhere panel shows (the color key marked current, the Background button's `aria-pressed`) while its tool is current with no note selected or open; null otherwise
+//   noteColors    the nine note colors, `--text-anywhere-color-N` as computed
 //   noteBoxes     one { text, fill, expected } per finished note with a box: its computed fill, and the fill of the box color Text Anywhere has saved (`boxFill` of the stored value and the note's color), both as computed rgb text
 import { createRequire } from 'node:module'
 
@@ -55,7 +59,8 @@ const digitsChanged = (now, before) => now.cells.flatMap((cell, i) => (cell.digi
 // alone into both, and Text Anywhere's notes ride no undo stack (AGENTS.md). With no note open, a finished note's text, place, color and size are compared as well.
 const sorted = (list) => [...list].sort()
 const comparable = (page, openNote) => {
-  const { rulesPane, notesDrawn, notesSaved, ...rest } = page // eslint-disable-line no-unused-vars
+  // The pen and note settings are `reload-changes-nothing`'s: the panel's reading is null while a note is open and an object once an undo or redo has finished it.
+  const { rulesPane, notesDrawn, notesSaved, penTool, penColors, noteLooks, noteColors, ...rest } = page // eslint-disable-line no-unused-vars
   const notes = openNote ? {} : { notesDrawn: sorted(notesDrawn), notesSaved: notesSaved && notesSaved.map((note) => JSON.stringify(note)).sort() }
   return { ...rest, ...notes, notesSeen: sorted(page.notesSeen), penState: sorted(page.penState), penDrawn: sorted(page.penDrawn) }
 }
@@ -81,11 +86,12 @@ const withoutPenColors = (page) => ({
 
 // What a reload must leave as it was. Color by Digit colors the entered cells every time the page opens in Cell or Both mode, as one undo step, so a coloring
 // undone before the reload comes back by design: in those modes the cells' colors (and the serialized cells that hold them) are left out. Not read: the notes
-// (notes-survive-reload counts a note still open for typing), the undo stack depth and the letter pad, none of which a reload promises to keep.
+// (notes-survive-reload counts a note still open for typing), the undo stack depth and the letter pad, none of which a reload promises to keep. Read too: the settings the scripts save
+// (the selected pen, the pen line mode and the pen colors; the note color, background and colors), as the page shows them, since a deleted save shows only after a reload (#935).
 const reloadView = (page, ignorePenColors) => {
   const { mode, groups, cells } = page.colorByDigit
   const shown = ignorePenColors ? withoutPenColors(page) : page
-  const base = { penState: sorted(shown.penState), penDrawn: sorted(shown.penDrawn), pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit) }
+  const base = { penState: sorted(shown.penState), penDrawn: sorted(shown.penDrawn), pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit), penTool: page.penTool, penColors: page.penColors, noteLooks: page.noteLooks, noteColors: page.noteColors }
   return colorsCells(mode) ? base : { ...base, cells: shown.cells, colours: cells.map((cell) => cell.colours) }
 }
 
@@ -154,7 +160,10 @@ export const RULES = [
       if (action !== 'reload') return []
       // Only when a stroke was drawn since the last reload (the engine's `strokeSinceReload`): the bug needs the reload soon after one, and a key press can come between.
       const ignorePenColors = earlier?.strokeSinceReload === true && resetToColorOne(now.page)
-      return viewDifferences(reloadView(before.page, ignorePenColors), reloadView(now.page, ignorePenColors))
+      const [was, is] = [reloadView(before.page, ignorePenColors), reloadView(now.page, ignorePenColors)]
+      // A side with no panel to read is no comparison (`page-state.mjs` says when a panel is read).
+      for (const part of ['penTool', 'noteLooks']) if (was[part] === null || is[part] === null) { delete was[part]; delete is[part] }
+      return viewDifferences(was, is)
     }
   },
   {
