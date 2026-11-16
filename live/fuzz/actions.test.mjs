@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, ARROW_KEYS, PROFILE_NAMES, ROW_KEYS, SWATCH_KEYS, NOTE_SETTLE_MS, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, SETTINGS_KINDS, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, ARROW_KEYS, PROFILE_NAMES, ROW_KEYS, SWATCH_KEYS, NOTE_SETTLE_MS, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
@@ -1343,5 +1343,51 @@ describe('Color by Digit: a held button and a conflicting mark (#931)', () => {
       else assert.equal(to, from, 'same row')
     }
     assert.deepEqual([...tools].sort(), ['c', 'x'])
+  })
+})
+
+describe('a reload drawn after the settings actions (#936)', () => {
+  const lists = (options, count = 300) => fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS, maxCommands: 20, ...options }), { seed: 936, numRuns: count })
+  // For each settings action of the commands, whether a reload is the very next action.
+  const followed = (lists) => lists.flatMap((l) => {
+    const kinds = [...l.commands].map((w) => w.cmd.kind)
+    return kinds.flatMap((kind, i) => (SETTINGS_KINDS.includes(kind) && i < kinds.length - 1 ? [kinds[i + 1] === 'reload'] : []))
+  })
+  const rate = (flags) => flags.filter(Boolean).length / flags.length
+
+  it('the settings kinds are real kinds that save a setting', () => {
+    for (const kind of ['color mode', 'pen line mode', 'note box color', 'note background']) assert.ok(SETTINGS_KINDS.includes(kind), kind)
+    for (const kind of SETTINGS_KINDS) assert.ok(KIND_NAMES.includes(kind), kind)
+    assert.ok(!SETTINGS_KINDS.includes('reload'))
+  })
+
+  it('without the option, a reload follows a settings action only as often as it is drawn at all', () => {
+    assert.ok(rate(followed(lists({}))) < 0.15)
+  })
+
+  it('with the option, a reload follows about half the settings actions', () => {
+    const r = rate(followed(lists({ reloadAfterSettings: true })))
+    assert.ok(r > 0.35 && r < 0.65, `rate ${r}`)
+  })
+
+  it('the lists are the same under the same seed, and a printed list names the reloads', () => {
+    const [a, b] = [lists({ reloadAfterSettings: true, nonEmpty: true }, 40), lists({ reloadAfterSettings: true, nonEmpty: true }, 40)]
+    assert.deepEqual(a.map(String), b.map(String))
+    assert.ok(a.some((l) => /reload the page/.test(String(l))))
+    assert.ok(a.every((l) => /\/\*replayPath="[^"]*"\*\/$/.test(String(l))), 'the replay path ends the printed list')
+  })
+
+  it('the lists without the option are those they were before it', () => {
+    assert.deepEqual(lists({}, 20).map(String), lists({ reloadAfterSettings: false }, 20).map(String))
+  })
+
+  it('a busy start that saved a setting may be followed by a reload before the first action', () => {
+    const drawn = lists({ busyStart: true, reloadAfterSettings: true, nonEmpty: true }, 300)
+    const savedAtStart = drawn.filter((l) => l.start.some((s) => SETTINGS_KINDS.includes(s.kind)))
+    assert.ok(savedAtStart.length > 30)
+    const reloaded = savedAtStart.filter((l) => [...l.commands][0].cmd.kind === 'reload').length / savedAtStart.length
+    assert.ok(reloaded > 0.3 && reloaded < 0.7, `rate ${reloaded}`)
+    const others = drawn.filter((l) => !l.start.some((s) => SETTINGS_KINDS.includes(s.kind)))
+    assert.ok(others.filter((l) => [...l.commands][0].cmd.kind === 'reload').length / others.length < 0.15)
   })
 })

@@ -18,6 +18,11 @@ describe('the configurations (#725, #726, #727, #730)', () => {
     assert.deepEqual(CONFIGS['busy-start+long-40'], { busyStart: true, maxCommands: 40, nonEmpty: true })
   })
 
+  it('the reload-after-settings configurations name the option of the generator (#936)', () => {
+    assert.deepEqual(CONFIGS['reload-after-settings'], { reloadAfterSettings: true })
+    assert.deepEqual(CONFIGS['busy-start+reload-after-settings'], { busyStart: true, reloadAfterSettings: true })
+  })
+
   it('swarm is no configuration (#850)', () => {
     assert.throws(() => configOptions('swarm'), /no configuration "swarm"/)
     assert.ok(!Object.keys(CONFIGS).includes('swarm'))
