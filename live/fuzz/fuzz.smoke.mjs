@@ -9,7 +9,7 @@ import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
 import { rulesWidth } from '../attacks.mjs'
 import { penDrawnCount } from '../pen.mjs'
-import { ERROR_LOG_SCRIPTS, scriptedList } from './actions.mjs'
+import { ERROR_LOG_SCRIPTS, MORE_TEXT, scriptedList } from './actions.mjs'
 import { ownedSettings } from '../settings.mjs'
 import { settingsScript } from '../scripts.mjs'
 import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
@@ -200,8 +200,8 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       const savedLooks = async (steps) => savedFirst((await snapshotAfter(puzzle, [NOTE, ...steps])).page)
       const erased = async (how) => savedTexts((await snapshotAfter(puzzle, [NOTE, ['note erase', [FIRST, OTHER, THIRD, how]]])).page)
 
-      it('a right click, a right-drag over the note and the same with it open each erase it', async () => {
-        for (const how of ['click', 'drag', 'open']) assert.deepEqual(await erased(how), [], how)
+      it('a right click and a right-drag over the note each erase it', async () => {
+        for (const how of ['click', 'drag']) assert.deepEqual(await erased(how), [], how)
       })
 
       it('a color pressed with the note selected recolors it, and with it open as well', async () => {
@@ -230,9 +230,9 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       it('typing in a reopened note adds to its text, and deleting all of it removes the note', async () => {
         const typed = await savedTexts((await snapshotAfter(puzzle, [NOTE, ['note edit', [FIRST, 'type more']]])).page)
         assert.equal(typed.length, 1)
-        assert.match(typed[0], /ab/)
+        assert.ok(typed[0].includes(MORE_TEXT), typed[0])
         const clicked = await savedTexts((await snapshotAfter(puzzle, [NOTE, ['note edit', [FIRST, 'click and type']]])).page)
-        assert.match(clicked[0], /ab/)
+        assert.ok(clicked[0].includes(MORE_TEXT), clicked[0])
         assert.deepEqual(await savedTexts((await snapshotAfter(puzzle, [NOTE, ['note edit', [FIRST, 'delete all']]])).page), [])
       })
 
@@ -247,6 +247,12 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
         assert.ok(Array.isArray(resized.box))
         const reset = await savedLooks([['note handle reset', [FIRST, 3, false, 40, 30]]])
         assert.equal(reset.box, undefined, JSON.stringify(reset))
+      })
+
+      it('every corner handle of a selected or open note is still there after its drag, so the double-click can follow', async () => {
+        for (const open of [false, true]) {
+          for (const corner of [0, 1, 2, 3]) await snapshotAfter(puzzle, [NOTE, ['note handle reset', [FIRST, corner, open, -60, 50]]])
+        }
       })
     })
 

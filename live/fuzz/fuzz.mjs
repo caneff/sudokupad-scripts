@@ -11,7 +11,7 @@ import { actButton, animationsDone, closeDialogWith, closeExtrasEditorWith, dial
 import { COLOR_BY_DIGIT_DIALOG, SETTINGS_SCRIPTS, settingsScript } from '../scripts.mjs'
 import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, RULES_PANE } from '../auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
-import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, HIDE_BUTTON, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, HIDE_BUTTON, KEYPAD, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
@@ -347,7 +347,7 @@ function envFor (p, puzzle, { beforeReload }) {
     finishNote: () => finishNote(p),
     async pressNotePanel (what) {
       await keepNotes()
-      await clickIn(p, typeof what === 'number' ? `.controls-input button[data-key="${what}"]` : what === 'hide all' ? HIDE_BUTTON : BACKGROUND_BUTTON)
+      await clickIn(p, typeof what === 'number' ? `${KEYPAD} button[data-key="${what}"]` : what === 'hide all' ? HIDE_BUTTON : BACKGROUND_BUTTON)
     },
     async setNoteBackground (on) {
       await pickNotes()

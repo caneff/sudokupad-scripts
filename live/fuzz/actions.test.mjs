@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
@@ -22,8 +22,6 @@ const UI_TWEAKS = createRequire(import.meta.url)('../../ui-tweaks.user.js')
 const DARK_PAGE = createRequire(import.meta.url)('../../dark-page.user.js')
 const AUTO_RULES_RESIZER = createRequire(import.meta.url)('../../auto-rules-resizer.user.js')
 const { BOX_LINES, NUDGE_REPEAT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
-
-const SLIDERS_OF_NOTES = ['note size', 'note opacity']
 
 const runOn = async (action, options) => {
   const target = await fakeTargets(options).openTarget()
@@ -441,7 +439,7 @@ describe('the action vocabulary', () => {
     describe('the Text Anywhere note edits of #929', () => {
       const pressed = (log) => calls(log, 'pressNotePanel').map(([, what]) => what)
 
-      it('an erase presses the right button on the first note, or drags it across the note, and lets go; a click moves nowhere', async () => {
+      it('an erase right-clicks the first note, or drags the right button across it, and lets go; a click moves nowhere', async () => {
         const modes = new Set()
         for (const a of kindOf('note erase')) {
           const { log } = await runOn(a)
@@ -454,7 +452,7 @@ describe('the action vocabulary', () => {
             assert.deepEqual(clicks[0], ['mouse.click', 200, 200, { button: 'right' }])
             assert.equal(downs.length, 0)
           } else {
-            modes.add(names(log).includes('mouse.dblclick') ? 'open' : 'drag')
+            modes.add('drag')
             assert.deepEqual([downs.length, ups.length], [1, 1])
             assert.equal(downs[0][1].button, 'right')
             assert.equal(ups[0][1].button, 'right')
@@ -462,7 +460,7 @@ describe('the action vocabulary', () => {
             assert.ok(moves.some(([x, y]) => x === 200 && y === 200), 'the drag goes over the note')
           }
         }
-        assert.deepEqual([...modes].sort(), ['click', 'drag', 'open'])
+        assert.deepEqual([...modes].sort(), ['click', 'drag'])
       })
 
       it('an erase places a note first when there is none, and only then; with none placed it does nothing', async () => {
@@ -483,11 +481,12 @@ describe('the action vocabulary', () => {
           if (slides.length) {
             seen.add('slider')
             assert.equal(slides[0][3], true, 'the slider is reached with the notes tool kept')
-            assert.ok(SLIDERS_OF_NOTES.includes(slides[0][1]), 'a note slider')
+            assert.ok(NOTE_SLIDERS.includes(slides[0][1]), 'a note slider')
             assert.equal(calls(log, 'mouse.down').length, 1)
             assert.equal(calls(log, 'mouse.up').length, 1)
           }
-          assert.ok(ns.indexOf('mouse.dblclick') === -1 ? ns.indexOf('mouse.click') !== -1 : calls(log, 'finishNote').length === 1, 'selected by a click, or opened and finished')
+          if (ns.includes('mouse.dblclick')) assert.equal(calls(log, 'finishNote').length, 1, 'opened and finished')
+          else assert.ok(ns.includes('mouse.click'), 'selected by a click')
           const first = ns.findIndex((n) => n === 'pressNotePanel' || n === 'sliderPoint')
           assert.ok(first > ns.findIndex((n) => n === 'mouse.click' || n === 'mouse.dblclick'), 'after the note is chosen')
         }
@@ -509,9 +508,9 @@ describe('the action vocabulary', () => {
           assert.ok(presses.length >= 1)
           for (const k of presses) keys.add(k)
           tools.add(names(log).includes('usePen') ? 'pen' : 'notes')
-          assert.ok(presses.every((k) => ['+', '=', '-'].includes(k)), String(a))
+          assert.ok(presses.every((k) => SIZE_KEYS.includes(k)), String(a))
         }
-        assert.deepEqual([...keys].sort(), ['+', '-', '='])
+        assert.deepEqual([...keys].sort(), [...SIZE_KEYS].sort())
         assert.deepEqual([...tools].sort(), ['notes', 'pen'])
       })
 
@@ -522,7 +521,10 @@ describe('the action vocabulary', () => {
           assert.deepEqual(calls(log, 'mouse.dblclick')[0].slice(1), [200, 200])
           assert.equal(calls(log, 'finishNote').length, 1)
           const typed = calls(log, 'keyboard.type').length > 0
-          const deleted = calls(log, 'keyboard.press').some(([, k]) => k === 'Backspace')
+          const presses = calls(log, 'keyboard.press').map(([, k]) => k)
+          const deleted = presses.includes('Backspace')
+          if (deleted) assert.deepEqual(presses.slice(-2), ['Control+a', 'Backspace'], 'all the text is selected before it is deleted')
+          else assert.deepEqual(calls(log, 'keyboard.type').map(([, text]) => text), [MORE_TEXT])
           const clicked = calls(log, 'mouse.click').length > 0
           assert.ok(typed || deleted, String(a))
           seen.add(deleted ? 'delete all' : clicked ? 'click and type' : 'type more')
@@ -542,13 +544,21 @@ describe('the action vocabulary', () => {
           const { log } = await runOn(a)
           const ns = names(log)
           const dbl = calls(log, 'mouse.dblclick')
-          assert.equal(dbl.length >= 1, true)
+          assert.equal(dbl.length, ns.includes('finishNote') ? 2 : 1, 'the handle, after the note when it is opened')
           assert.deepEqual(dbl.at(-1).slice(1), [300, 320], 'the handle')
           assert.ok(ns.lastIndexOf('mouse.up') < ns.lastIndexOf('mouse.dblclick'), 'after the drag')
           assert.equal(calls(log, 'mouse.down').length, 1)
           seen.add(ns.includes('finishNote') ? 'open' : 'selected')
         }
         assert.deepEqual([...seen].sort(), ['open', 'selected'])
+      })
+
+      it('a handle reset whose handle is gone after the drag fails instead of skipping the double-click', async () => {
+        const [a] = kindOf('note handle reset')
+        const target = await fakeTargets().openTarget()
+        let handles = 0
+        target.env.noteHandle = async () => (++handles === 1 ? [300, 320] : null)
+        await assert.rejects(a.run({ selected: true }, { env: target.env }), /handle is gone/)
       })
 
       it('the note edits run only when a note can be placed: with none it presses nothing', async () => {
@@ -561,7 +571,7 @@ describe('the action vocabulary', () => {
         }
       })
 
-      it('a busy start can hold the restyles, the edits and the erase, none that hides or opens a dialog', () => {
+      it('a busy start can hold the restyles and the size keys, which set a look, and no erase, edit, hide or handle reset', () => {
         for (const kind of ['note restyle', 'size key']) assert.ok(START_KINDS.includes(kind), kind)
         for (const kind of ['note erase', 'note edit', 'hide all notes', 'note handle reset']) assert.ok(!START_KINDS.includes(kind), kind)
       })

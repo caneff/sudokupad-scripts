@@ -126,8 +126,8 @@ const CHECK_BOX_NOTE = RICH_NOTES[1]
 const TALL_NOTE = RICH_NOTES[RICH_NOTES.length - 1]
 export const NOTE_SLIDERS = SLIDERS.filter((name) => name.startsWith('note '))
 // What a note edit types into a reopened note, and the size keys (`SLIDER_STEP_KEYS` of text-anywhere.user.js and pen-tool-extras.user.js, which do not export it).
-const MORE_TEXT = 'ab'
-const SIZE_KEYS = ['+', '=', '-']
+export const MORE_TEXT = 'ab'
+export const SIZE_KEYS = ['+', '=', '-']
 const MAX_SIZE_PRESSES = 3
 const RESIZE_CORNERS = Object.keys(CORNERS).length
 const RESIZE_REACH_PX = 80
@@ -701,14 +701,14 @@ function buildKinds () {
       start: false,
       stroke: false,
       weight: 2,
-      // `click` is a right click on the note; `drag` presses the right button on cell `from`, goes over the note and on to cell `to` (the tool's erase, which a right-drag only extends: AGENTS.md);
-      // `open` is the same drag with the note open for typing, which a press on the open note would not start.
-      arg: (puzzle) => fc.tuple(note(puzzle), cell(puzzle), cell(puzzle), fc.constantFrom('click', 'drag', 'open')),
+      // `click` is a right click on the note; `drag` presses the right button on cell `from`, goes over the note and on to cell `to` (the tool's erase, which a right-drag only extends: AGENTS.md).
+      // A note open for typing is finished by any press outside it and a press inside it starts no erase, so there is no erase with a note open.
+      arg: (puzzle) => fc.tuple(note(puzzle), cell(puzzle), cell(puzzle), fc.constantFrom('click', 'drag')),
       label: ([[t, a], from, to, how], at) => how === 'click'
         ? `right-click the first note ${ifNone(t, a, at)}`
-        : `right-drag from ${at(from)} over the first note ${ifNone(t, a, at)}${how === 'open' ? ' open for typing' : ''} to ${at(to)}`,
+        : `right-drag from ${at(from)} over the first note ${ifNone(t, a, at)} to ${at(to)}`,
       run: async (env, [[t, a], from, to, how]) => {
-        const centre = how === 'open' ? await openFirstNote(env, NOTE_TEXTS[t], a) : await firstNote(env, NOTE_TEXTS[t], a)
+        const centre = await firstNote(env, NOTE_TEXTS[t], a)
         if (!centre) return
         await env.useNotes()
         if (how === 'click') {
@@ -720,7 +720,6 @@ function buildKinds () {
         await env.page.mouse.move(...centre, { steps: 4 })
         await env.page.mouse.move(...await env.cellPoint(to), { steps: 4 })
         await env.page.mouse.up({ button: 'right' })
-        if (how === 'open') await env.finishNote()
       }
     },
     {
@@ -822,8 +821,10 @@ function buildKinds () {
         await env.page.mouse.down()
         await env.page.mouse.move(handle[0] + dx, handle[1] + dy, { steps: 6 })
         await env.page.mouse.up()
+        // The note stays selected or open after its drag, so its handle is still there: a missing one is a failure, not a step to skip.
         const moved = await env.noteHandle(corner)
-        if (moved) await env.page.mouse.dblclick(...moved)
+        if (!moved) throw new Error(`corner ${corner}'s handle is gone after its drag`)
+        await env.page.mouse.dblclick(...moved)
         if (open) await env.finishNote()
       }
     },
