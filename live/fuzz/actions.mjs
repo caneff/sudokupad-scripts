@@ -42,6 +42,7 @@
 //   env.settingsText(script, text, save)     opens the dialog of `script` (one of `ERROR_LOG_SCRIPTS`' words), presses Copy settings when `text` is null and else puts `text` on the clipboard and presses Paste settings, then presses Save or Cancel
 //   env.dragRules(corner, dx, dy)            hovers the rules box, presses its `corner` ('ur' or 'dl') and moves it by (dx, dy), then lets go; does nothing on a page with no rules box
 //   env.rulesFont(step, times)               presses the rules box's f+ (step 1) or f- (step -1) `times` times; does nothing on a page with no rules box
+//   env.scrollRules(dy)                      hovers the rules box and turns the mouse wheel `dy` pixels over it; does nothing on a page with no rules box
 //   env.rulesDialog({ maxWidth, maxHeight, restore }, save)   opens Auto Rules Resizer's dialog, types both limits (text, as a user types them), presses Restore defaults when `restore`, and presses Save or Cancel
 //   env.resize({ width, height })  env.blurFocus()  env.reload()
 //   env.darkPage(color, save, restore)       opens Dark Page's dialog, picks `color`, presses Restore defaults when `restore`, and presses Save or Cancel
@@ -1090,6 +1091,18 @@ function buildKinds () {
       arg: () => fc.tuple(fc.constantFrom(1, -1), fc.integer({ min: 1, max: 3 })),
       label: ([step, times]) => `press ${step > 0 ? 'f+' : 'f-'} on the rules box ${times} time${times === 1 ? '' : 's'}`,
       run: (env, [step, times]) => env.rulesFont(step, times)
+    },
+    // The wheel over the rules box (#932) gives a later drag or f+ a scrolled box, so `readingPlace` has a place to keep across the fit; a rules text that does not scroll takes it as nothing.
+    {
+      kind: 'rules wheel',
+      group: 'page',
+      scripts: [AUTO_RULES_RESIZER],
+      start: true,
+      stroke: false,
+      weight: 1,
+      arg: () => fc.constantFrom(...WHEEL_DELTAS),
+      label: (dy) => `wheel ${dy} over the rules box`,
+      run: (env, dy) => env.scrollRules(dy)
     },
     {
       kind: 'rules dialog',

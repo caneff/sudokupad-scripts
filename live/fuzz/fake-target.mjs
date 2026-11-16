@@ -108,6 +108,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       reload: rec('reload'),
       dragRules: rec('dragRules'),
       rulesFont: rec('rulesFont'),
+      scrollRules: rec('scrollRules'),
       rulesDialog: rec('rulesDialog'),
       darkPage: rec('darkPage'),
       settingsText: rec('settingsText'),

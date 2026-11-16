@@ -915,7 +915,7 @@ describe('focusing the actions on a script (#724)', () => {
   describe('the rules box of Auto Rules Resizer (#818)', () => {
     const calls = (log, name) => log.filter(([n]) => n === name)
     const kindOf = (kind) => actionsOf(sample(41, 800)).filter((x) => x.kind === kind)
-    const NEW_KINDS = ['rules drag', 'rules font', 'rules dialog']
+    const NEW_KINDS = ['rules drag', 'rules font', 'rules dialog', 'rules wheel']
     const AUTO = 'auto-rules-resizer.user.js'
 
     it('each kind exercises Auto Rules Resizer, is generated, is page use and can sit in a busy start', () => {
@@ -961,6 +961,19 @@ describe('focusing the actions on a script (#724)', () => {
       const step = (arg) => String(scriptedList(puzzleByName('4x4'), [['rules font', arg]])[0])
       assert.equal(step([1, 2]), 'press f+ on the rules box 2 times')
       assert.equal(step([-1, 1]), 'press f- on the rules box 1 time')
+    })
+
+    it('a wheel action turns the rules box by a signed number of pixels, up and down, and says so (#932)', async () => {
+      const signs = new Set()
+      for (const a of kindOf('rules wheel')) {
+        const [, dy] = calls((await runOn(a)).log, 'scrollRules')[0]
+        assert.notEqual(dy, 0)
+        signs.add(Math.sign(dy))
+      }
+      assert.deepEqual([...signs].sort(), [-1, 1])
+      const step = (arg) => String(scriptedList(puzzleByName('4x4'), [['rules wheel', arg]])[0])
+      assert.equal(step(400), 'wheel 400 over the rules box')
+      assert.equal(step(-120), 'wheel -120 over the rules box')
     })
 
     // What the script makes of a typed limit is its own `limitFromBox`: the texts hold a blank, numbers, and text it takes no limit from.

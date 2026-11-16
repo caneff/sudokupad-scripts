@@ -439,6 +439,10 @@ function envFor (p, puzzle, { beforeReload }) {
         await p.locator(`${FONT_BAR} button`).filter({ hasText: step > 0 ? 'f+' : 'f-' }).click({ timeout: BOX_TIMEOUT_MS })
       }
     },
+    async scrollRules (dy) {
+      if (!await hoverRules(p)) return
+      await p.mouse.wheel(0, dy)
+    },
     // A limit typed is a limit saved only on Save; Restore defaults clears this puzzle's sizing at once, so a Cancel after it still keeps the clearing.
     async rulesDialog ({ maxWidth, maxHeight, restore }, save) {
       await settingsScript('auto-rules-resizer.user.js').open(p)
