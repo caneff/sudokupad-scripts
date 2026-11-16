@@ -431,6 +431,8 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       const shrink = ['rules drag', ['dl', 0, -500]]
       assert.ok(await afterSteps(puzzle, [shrink, ['rules wheel', 400]], top) > 0, 'scrolled down')
       assert.equal(await afterSteps(puzzle, [shrink, ['rules wheel', -400]], top), 0, 'up from the top stays')
+      // The refit of an f+ keeps the reading place (`readingPlace`, `contentTop`, `lineTop`), so the box is still scrolled after it.
+      assert.ok(await afterSteps(puzzle, [shrink, ['rules wheel', 400], ['rules font', [1, 1]]], top) > 0, 'scrolled still after f+')
       assert.deepEqual(await afterSteps(puzzleByName('4x4'), [['rules wheel', 400]], saved), {})
     })
 
