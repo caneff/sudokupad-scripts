@@ -180,7 +180,8 @@ const concurrent = (gh, hunts, outputs, { ok = false, print = () => {} } = {}) =
       clock = FUZZ_MINUTES * MINUTE_MS
       return { ok, output: outputs[k] ?? 'a run started after the night was over\n' }
     },
-    fileIssue: gh.file,
+    // Filing takes real time on GitHub: yield a macrotask, so a second hunt reaches its own failure while the first is still filing.
+    fileIssue: async (issue) => { await new Promise((resolve) => setImmediate(resolve)); return gh.file(issue) },
     newSeed: () => ++seed,
     now: () => clock,
     print
