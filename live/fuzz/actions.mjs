@@ -12,8 +12,8 @@
 //   env.turnPenPage()  env.undo()  env.redo()  env.clickColorMode()
 //   env.undoAll()                            presses Undo until the undo stack is empty
 //   env.extrasSettings({ arrowSpacing, dash, thickness }, save)   opens Pen Tool Extras' settings dialog, sets the values it is given and presses Save or Cancel
-//   env.sliderPoint(name, fraction) -> [x, y]   the page point `fraction` (0 to 1) along the track of slider `name` (`SLIDERS`), opening the tool that shows it
-//   env.focusSlider(name)  env.leaveSlider(name)   puts the keyboard focus on a slider, and takes it off
+//   env.sliderPoint(name, fraction) -> [x, y] | null   the page point `fraction` (0 to 1) along the track of slider `name` (`SLIDERS`), opening the tool that shows it; null for a pen slider the player hid in Pen Tool Extras' dialog
+//   env.focusSlider(name) -> boolean  env.leaveSlider(name)   puts the keyboard focus on a slider (false for a hidden one, which takes none), and takes it off
 //   env.noteBoxDialog(choice, color, save)   opens Text Anywhere's settings dialog, picks the Box color `choice` (`BOX_CHOICES`; `color` is the Own color) and presses Save or Cancel
 //   env.setNoteBackground(on)                presses Text Anywhere's Background button when it is not as `on` says
 //   env.useArrowPen(color)                   opens the pen tool, turns it to the arrow lines page (page 3) and picks its pen color 1 to 9
@@ -34,22 +34,22 @@
 //   env.setPenPicker(color, hex)             sets the open color picker of pen `color` to `hex`
 //   env.penPresets(pick, restore, save)      opens Pen Tool Extras' settings dialog, picks the color preset at position `pick` (wrapped to the pulldown's options) or, when `restore`, presses Restore defaults, and presses Save or Cancel
 //   env.uiTweaks({ hideSelect, wrapButtons, toggleTab, restore }, save)   opens UI Tweaks' dialog, sets the Hide the Toggle Selection button and Wrap buttons boxes, clicks the Tab box off and on again, presses Restore defaults when `restore`, and presses Save or Cancel
-//   env.settingsText(script, text, save)     opens the dialog of `script` ('ui tweaks' or 'dark page'), presses Copy settings when `text` is null and else puts `text` on the clipboard and presses Paste settings, then presses Save or Cancel
+//   env.settingsText(script, text, save)     opens the dialog of `script` (one of `ERROR_LOG_SCRIPTS`' words), presses Copy settings when `text` is null and else puts `text` on the clipboard and presses Paste settings, then presses Save or Cancel
 //   env.dragRules(corner, dx, dy)            hovers the rules box, presses its `corner` ('ur' or 'dl') and moves it by (dx, dy), then lets go; does nothing on a page with no rules box
 //   env.rulesFont(step, times)               presses the rules box's f+ (step 1) or f- (step -1) `times` times; does nothing on a page with no rules box
 //   env.rulesDialog({ maxWidth, maxHeight, restore }, save)   opens Auto Rules Resizer's dialog, types both limits (text, as a user types them), presses Restore defaults when `restore`, and presses Save or Cancel
 //   env.resize({ width, height })  env.blurFocus()  env.reload()
 //   env.darkPage(color, save, restore)       opens Dark Page's dialog, picks `color`, presses Restore defaults when `restore`, and presses Save or Cancel
-//   env.settingsText(script, text, save)    also takes 'color by digit', 'text anywhere', 'pen tool extras' and 'auto rules resizer' (#928)
 //   env.restoreDefaults(script, save)        opens the dialog of `script` ('color by digit' or 'text anywhere'), presses Restore defaults, and presses Save or Cancel
 //   env.errorLogButton(script, clear)        opens the dialog of `script` (`ERROR_LOG_SCRIPTS`) and presses Clear when `clear`, else Copy error log, and waits for its answer
 //   env.noteColorPreset(pick, save)          opens Text Anywhere's dialog, picks the Text color preset at position `pick` (wrapped to the pulldown's options), and presses Save or Cancel
 //   env.noteDialogFromMenu(save)             opens Text Anywhere's dialog from SudokuPad's settings menu, and presses Save or Cancel
-//   env.penDialogFromGear(save)              opens Pen Tool Extras' dialog from the pen panel's gear, and presses Save or Cancel
+//   env.penDialogFromSettingsButton(save)    opens Pen Tool Extras' dialog from the pen panel's settings button, and presses Save or Cancel
 //   env.penShowBoxes({ thickness, opacity }, save)   sets the boxes that show or hide the pen panel's two sliders in Pen Tool Extras' dialog, and presses Save or Cancel
-//   env.penSwatchEdit(pick, pen, hex, save)  opens Pen Tool Extras' dialog, picks color preset `pick`, sets the swatch of pen `pen` to `hex`, and presses Save or Cancel
+//   env.penSwatchEdit(pick, pen, hex, save)  opens Pen Tool Extras' dialog, picks color preset `pick` and sets the swatch of pen `pen` to `hex` in it, and presses Save or Cancel
 import { createRequire } from 'node:module'
 import fc from 'fast-check'
+import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 
 const require = createRequire(import.meta.url)
 const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.js')
@@ -87,9 +87,10 @@ export const COLOR_BY_DIGIT_TEXTS = [null, '{"ColorByDigit_mode":"digit"}', '{"C
 export const TEXT_ANYWHERE_TEXTS = [null, '{"TextAnywhere_width":3.5,"TextAnywhere_opacity":50}', '{"TextAnywhere_outline":"thin","TextAnywhere_frame":true,"TextAnywhere_font":"fixed"}', '{"TextAnywhere_box":"yellow"}', NOTE_COLORS_TEXT, '{"TextAnywhere_width":500}', '{"TextAnywhere_colors":{"1":"red"}}', '{"Other_key":1}', '[]', 'not json', '']
 export const PEN_TOOL_EXTRAS_TEXTS = [null, '{"PenColor_thickness":9}', '{"PenColor_colors":{"3":"#123456"}}', '{"EdgeMarks_marks":{"x":true,"circle":true}}', '{"PenColor_opacity":7}', '{"PenColor_thickness":"thick"}', '{"Other_key":1}', '[]', 'not json', '']
 export const AUTO_RULES_RESIZER_TEXTS = [null, '{"AutoRulesResizer_maxWidth":640,"AutoRulesResizer_maxHeight":480}', '{"AutoRulesResizer_maxWidth":null}', '{"AutoRulesResizer_maxHeight":300}', '{"AutoRulesResizer_maxWidth":"tall"}', '{"AutoRulesResizer_maxHeight":0}', '{"Other_key":1}', '[]', 'not json', '']
-// The six dialogs that have an error log row, by the words `env.errorLogButton` takes, and how a step names them.
-export const ERROR_LOG_SCRIPTS = ['color by digit', 'dark page', 'ui tweaks', 'auto rules resizer', 'pen tool extras', 'text anywhere']
-const SCRIPT_NAMES = { 'color by digit': 'Color by Digit', 'dark page': 'Dark Page', 'ui tweaks': 'UI Tweaks', 'auto rules resizer': 'Auto Rules Resizer', 'pen tool extras': 'Pen Tool Extras', 'text anywhere': 'Text Anywhere' }
+// The six scripts with a settings dialog, by the lower-case words of the dialog's entry in SudokuPad's settings menu (`SETTINGS_SCRIPTS` of `live/scripts.mjs`): what `env.settingsText`,
+// `env.restoreDefaults` and `env.errorLogButton` take. A step names the dialog by its entry.
+export const ERROR_LOG_SCRIPTS = SETTINGS_SCRIPTS.map(({ entry }) => entry.toLowerCase())
+const dialogEntry = (words) => SETTINGS_SCRIPTS.find(({ entry }) => entry.toLowerCase() === words).entry
 const settingsTextLabel = (name, text, save) => `${name} dialog: ${text === null ? 'Copy settings' : `Paste settings ${jsonWords(text)}`} ${save ? 'Save' : 'Cancel'}`
 
 // The rules box's two drag corners (`CORNERS` of auto-rules-resizer.user.js, which does not export it; the fake-page test checks them against `dragRulesBox`), and how far a drag goes either way:
@@ -267,7 +268,7 @@ function buildKinds () {
     stroke: false,
     weight: 1,
     arg: () => fc.tuple(textOrCopy(texts), fc.boolean()),
-    label: ([text, save]) => settingsTextLabel(SCRIPT_NAMES[script], text, save),
+    label: ([text, save]) => settingsTextLabel(dialogEntry(script), text, save),
     run: (env, [text, save]) => env.settingsText(script, text, save)
   })
 
@@ -459,6 +460,8 @@ function buildKinds () {
       label: ([s, from, to]) => `drag the ${SLIDERS[s]} slider from ${from * 10}% to ${to * 10}%`,
       run: async (env, [s, from, to]) => {
         const start = await env.sliderPoint(SLIDERS[s], from / 10)
+        // A pen slider hidden in Pen Tool Extras' dialog is not on the panel, and a player cannot drag it.
+        if (!start) return
         const end = await env.sliderPoint(SLIDERS[s], to / 10)
         await env.page.mouse.move(...start)
         await env.page.mouse.down()
@@ -476,7 +479,7 @@ function buildKinds () {
       arg: () => fc.tuple(fc.nat(SLIDERS.length - 1), fc.nat(SLIDER_KEYS.length - 1), fc.integer({ min: 1, max: 5 })),
       label: ([s, k, times]) => `press ${SLIDER_KEYS[k]} ${times} times on the ${SLIDERS[s]} slider`,
       run: async (env, [s, k, times]) => {
-        await env.focusSlider(SLIDERS[s])
+        if (!await env.focusSlider(SLIDERS[s])) return
         for (let i = 0; i < times; i++) await env.page.keyboard.press(SLIDER_KEYS[k])
         await env.leaveSlider(SLIDERS[s])
       }
@@ -855,7 +858,7 @@ function buildKinds () {
       stroke: false,
       weight: 2,
       arg: () => fc.tuple(fc.nat(ERROR_LOG_SCRIPTS.length - 1), fc.boolean()),
-      label: ([i, clear]) => `${SCRIPT_NAMES[ERROR_LOG_SCRIPTS[i]]} dialog: ${clear ? 'Clear error log' : 'Copy error log'}`,
+      label: ([i, clear]) => `${dialogEntry(ERROR_LOG_SCRIPTS[i])} dialog: ${clear ? 'Clear error log' : 'Copy error log'}`,
       run: (env, [i, clear]) => env.errorLogButton(ERROR_LOG_SCRIPTS[i], clear)
     },
     {
@@ -873,7 +876,8 @@ function buildKinds () {
       kind: 'note dialog from menu',
       group: 'ordinary',
       scripts: [TEXT_ANYWHERE],
-      start: true,
+      // Opens and closes with nothing changed, as 'pen settings' does: a start holds what puts something into the saved data.
+      start: false,
       stroke: false,
       weight: 1,
       arg: () => fc.boolean(),
@@ -881,15 +885,16 @@ function buildKinds () {
       run: (env, save) => env.noteDialogFromMenu(save)
     },
     {
-      kind: 'pen dialog from gear',
+      kind: 'pen dialog from settings button',
       group: 'ordinary',
       scripts: [PEN_TOOL_EXTRAS],
-      start: true,
+      // Like 'pen settings': nothing is changed in it.
+      start: false,
       stroke: false,
       weight: 1,
       arg: () => fc.boolean(),
-      label: (save) => `Pen Tool Extras dialog from the pen panel gear ${save ? 'Save' : 'Cancel'}`,
-      run: (env, save) => env.penDialogFromGear(save)
+      label: (save) => `Pen Tool Extras dialog from the pen panel settings button ${save ? 'Save' : 'Cancel'}`,
+      run: (env, save) => env.penDialogFromSettingsButton(save)
     },
     {
       kind: 'pen show boxes',

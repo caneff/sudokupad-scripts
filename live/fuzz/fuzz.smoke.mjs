@@ -389,20 +389,49 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
     it('a Text color preset is saved on Save and not on Cancel', async () => {
       const colors = data('TextAnywhere_colors')
-      assert.equal((await afterSteps(puzzle, [['note color preset', [0, true]]], colors))[0] !== null, true, 'Save saved a preset')
+      assert.notDeepEqual(await afterSteps(puzzle, [['note color preset', [0, true]]], colors), [null], 'Save saved a preset')
       assert.deepEqual(await afterSteps(puzzle, [['note color preset', [0, false]]], colors), [null])
     })
 
-    it('Pen Tool Extras\' Show boxes are saved on Save and a swatch edit after a preset is saved for its pen', async () => {
+    it('Pen Tool Extras\' Show boxes are saved each for its own slider on Save and not on Cancel, and a slider hidden there is skipped by the slider actions', async () => {
       const sliders = data('PenColor_sliders')
-      assert.notDeepEqual(await afterSteps(puzzle, [['pen show boxes', [false, true, true]]], sliders), [null], 'Save saved the boxes')
+      assert.deepEqual(await afterSteps(puzzle, [['pen show boxes', [false, true, true]]], sliders), [{ thickness: false, opacity: true }])
+      assert.deepEqual(await afterSteps(puzzle, [['pen show boxes', [true, false, true]]], sliders), [{ thickness: true, opacity: false }])
       assert.deepEqual(await afterSteps(puzzle, [['pen show boxes', [false, true, false]]], sliders), [null], 'Cancel saved none')
-      const [colors] = await afterSteps(puzzle, [['pen swatch edit', [2, 4, 0x123456, true]]], data('PenColor_colors'))
-      assert.equal(colors[4], '#123456')
+      // The list the correctness review found failing: a hidden slider is no lost control.
+      await fuzzScripted({ browser: browser(), puzzle, steps: [['pen show boxes', [false, false, true]], ['slider drag', [0, 5, 5]], ['slider drag', [1, 0, 10]], ['slider keys', [0, 1, 2]], ['slider keys', [1, 1, 2]]] })
     })
 
-    it('the dialog of Text Anywhere opens from the settings menu and the dialog of Pen Tool Extras from the pen panel gear, and each closes on Save or Cancel', async () => {
-      await afterSteps(puzzle, [['note dialog from menu', true], ['note dialog from menu', false], ['pen dialog from gear', true], ['pen dialog from gear', false]], async () => {})
+    it('a swatch edit after a preset is saved for its pen on Save, and Cancel drops the preset and the swatch together', async () => {
+      const colors = data('PenColor_colors')
+      const [saved] = await afterSteps(puzzle, [['pen swatch edit', [2, 4, 0x123456, true]]], colors)
+      assert.equal(saved[4], '#123456')
+      const [cancelled] = await afterSteps(puzzle, [['pen swatch edit', [2, 4, 0x123456, false]]], colors)
+      assert.notEqual(cancelled[4], '#123456', 'Cancel kept the swatch')
+      const [first] = await afterSteps(puzzle, [['pen colors dialog', [0, false, false]]], colors)
+      assert.deepEqual(cancelled, first, 'Cancel kept the preset: the colors are those of an install')
+    })
+
+    it('the dialog of Text Anywhere opens from the settings menu and the dialog of Pen Tool Extras from the pen panel settings button, and each closes on Save or Cancel', async () => {
+      const dialogsOpen = (p) => p.locator('.dialog').count()
+      for (const kind of ['note dialog from menu', 'pen dialog from settings button']) {
+        for (const save of [true, false]) assert.equal(await afterSteps(puzzle, [[kind, save]], dialogsOpen), 0, `${kind} ${save ? 'Save' : 'Cancel'} leaves no dialog`)
+      }
+    })
+
+    it('a Copy error log that cannot write the clipboard is a failure, not an answer', async () => {
+      const target = await openTarget(browser(), puzzle, {})
+      try {
+        const p = target.env.page
+        await p.evaluate(() => {
+          window.localStorage.setItem('sudokupad-scripts-error-log', JSON.stringify([{ script: 'dark-page', feature: 'saved color', name: 'TypeError', message: 'seeded', stack: 'TypeError: seeded', version: '1.0.0', sudokupad: '1.0', url: 'https://sudokupad.app/' }]))
+          navigator.clipboard.writeText = () => Promise.reject(new Error('planted clipboard refusal'))
+        })
+        const [copy] = scriptedList(puzzle, [['error log', [1, false]]])
+        await assert.rejects(copy.run({ selected: true }, { env: target.env }), /dark page's Copy error log answered "Could not copy the error log/)
+      } finally {
+        await target.close()
+      }
     })
   })
 

@@ -4,6 +4,7 @@ import fc from 'fast-check'
 import { createRequire } from 'node:module'
 import { actionList, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
+import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
 
@@ -685,7 +686,7 @@ describe('focusing the actions on a script (#724)', () => {
 
     // What each script takes is its own reader's say, so a "valid" text is one its `pastedSettings` takes a setting from, and a refused one is no text it takes any from.
     const taken = (script, text) => {
-      try { return Object.keys(script.pastedSettings(text, script.READERS).values).length } catch (error) {
+      try { return Object.keys(script.pastedSettings(text, script.READERS, script.withModeFromAuto ?? script.withNewKeys).values).length } catch (error) {
         if (!/^the clipboard text is not/.test(error.message)) throw error
         return 0
       }
@@ -840,6 +841,8 @@ describe('the settings dialogs\' Copy, Paste, Restore defaults and error log (#9
   const kindOf = (kind) => actionsOf(sample(43, 1500)).filter((x) => x.kind === kind)
   const stepOf = (kind, arg) => String(scriptedList(puzzleByName('4x4'), [[kind, arg]])[0])
   const requireScript = (file) => createRequire(import.meta.url)(`../../${file}`)
+  // The kinds that only open a dialog and close it, as 'pen settings' does, so a busy start leaves them out.
+  const OPEN_ONLY = ['note dialog from menu', 'pen dialog from settings button']
   const NEW_KINDS = {
     'color by digit settings text': 'color-by-digit.user.js',
     'text anywhere settings text': 'text-anywhere.user.js',
@@ -849,7 +852,7 @@ describe('the settings dialogs\' Copy, Paste, Restore defaults and error log (#9
     'text anywhere defaults': 'text-anywhere.user.js',
     'note color preset': 'text-anywhere.user.js',
     'note dialog from menu': 'text-anywhere.user.js',
-    'pen dialog from gear': 'pen-tool-extras.user.js',
+    'pen dialog from settings button': 'pen-tool-extras.user.js',
     'pen show boxes': 'pen-tool-extras.user.js',
     'pen swatch edit': 'pen-tool-extras.user.js'
   }
@@ -858,12 +861,12 @@ describe('the settings dialogs\' Copy, Paste, Restore defaults and error log (#9
     for (const [kind, file] of Object.entries(NEW_KINDS)) {
       assert.deepEqual(KIND_SCRIPTS[kind], [file], kind)
       assert.equal(KIND_GROUPS[kind], 'ordinary', kind)
-      assert.ok(START_KINDS.includes(kind), `${kind} in a busy start`)
+      assert.equal(START_KINDS.includes(kind), !OPEN_ONLY.includes(kind), `${kind} in a busy start`)
       assert.ok(kindOf(kind).length > 3, `${kind} is drawn`)
     }
   })
 
-  // A "valid" text is one the script's own `pastedSettings` takes a setting from; a refused one is a text it takes none from.
+  // A "valid" text is one the script's own `pastedSettings` takes a setting from, through the `upgrade` its Paste passes; a refused one is a text it takes none from.
   const taken = (script, text) => {
     try { return Object.keys(script.pastedSettings(text, script.READERS).values).length } catch (error) {
       if (!/^the clipboard text is not/.test(error.message)) throw error
@@ -935,13 +938,22 @@ describe('the settings dialogs\' Copy, Paste, Restore defaults and error log (#9
       seen.add(`${script}/${clear}`)
     }
     assert.deepEqual([...seen].sort(), ERROR_LOG_SCRIPTS.flatMap((s) => [`${s}/false`, `${s}/true`]).sort())
-    assert.deepEqual(ERROR_LOG_SCRIPTS.length, 6)
     assert.equal(stepOf('error log', [1, false]), 'Dark Page dialog: Copy error log')
     assert.equal(stepOf('error log', [0, true]), 'Color by Digit dialog: Clear error log')
   })
 
-  it('the error log kind names every script by the words its dialog entry uses', () => {
-    assert.deepEqual(ERROR_LOG_SCRIPTS, ['color by digit', 'dark page', 'ui tweaks', 'auto rules resizer', 'pen tool extras', 'text anywhere'])
+  it('every script word an action hands the env names a settings dialog of live/scripts.mjs, and the six dialogs are the six scripts', async () => {
+    const words = new Set()
+    for (const kind of ['error log', 'color by digit defaults', 'text anywhere defaults', ...TEXT_SCRIPTS.map(([, , , script]) => `${script} settings text`)]) {
+      for (const a of kindOf(kind)) {
+        const { log } = await runOn(a)
+        for (const [name, word] of log) if (['settingsText', 'restoreDefaults', 'errorLogButton'].includes(name)) words.add(word)
+      }
+    }
+    const dialogs = SETTINGS_SCRIPTS.map(({ entry }) => entry.toLowerCase())
+    assert.deepEqual([...words].filter((w) => !dialogs.includes(w)), [], 'a word that is no dialog\'s entry')
+    assert.deepEqual([...words].sort(), [...dialogs].sort(), 'every dialog is named by some action')
+    assert.deepEqual(SETTINGS_SCRIPTS.map(({ file }) => file).sort(), scriptFiles().sort())
   })
 
   it('a note color preset action picks a preset of the Text color pulldown, then Save or Cancel', async () => {
@@ -956,8 +968,8 @@ describe('the settings dialogs\' Copy, Paste, Restore defaults and error log (#9
     assert.equal(stepOf('note color preset', [2, true]), 'Text Anywhere text color preset 2 Save')
   })
 
-  it('the other ways in: Text Anywhere\'s dialog from the settings menu, Pen Tool Extras\' from the pen panel gear', async () => {
-    for (const [kind, call, words] of [['note dialog from menu', 'noteDialogFromMenu', 'Text Anywhere dialog from the settings menu'], ['pen dialog from gear', 'penDialogFromGear', 'Pen Tool Extras dialog from the pen panel gear']]) {
+  it('the other ways in: Text Anywhere\'s dialog from the settings menu, Pen Tool Extras\' from the pen panel settings button', async () => {
+    for (const [kind, call, words] of [['note dialog from menu', 'noteDialogFromMenu', 'Text Anywhere dialog from the settings menu'], ['pen dialog from settings button', 'penDialogFromSettingsButton', 'Pen Tool Extras dialog from the pen panel settings button']]) {
       const saves = new Set()
       for (const a of kindOf(kind)) saves.add(calls((await runOn(a)).log, call)[0][1])
       assert.deepEqual([...saves].sort(), [false, true], kind)
@@ -975,6 +987,16 @@ describe('the settings dialogs\' Copy, Paste, Restore defaults and error log (#9
     }
     for (const [name, set] of Object.entries(seen)) assert.deepEqual([...set].sort(), [false, true], name)
     assert.equal(stepOf('pen show boxes', [true, false, true]), 'Pen Tool Extras dialog: Thickness slider shown Opacity slider hidden Save')
+  })
+
+  it('a slider drag or key press on a pen slider the player hid does nothing, instead of failing for a lost control', async () => {
+    for (const kind of ['slider drag', 'slider keys']) {
+      const a = kindOf(kind)[0]
+      const target = await fakeTargets().openTarget()
+      const env = { ...target.env, sliderPoint: async () => null, focusSlider: async () => false }
+      await a.run({ selected: true }, { env })
+      assert.deepEqual(target.log.filter(([n]) => /^mouse\.|^keyboard\./.test(n)), [], kind)
+    }
   })
 
   it('a swatch edit action picks a color preset, recolors one pen swatch, then Save or Cancel', async () => {

@@ -94,7 +94,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       placeNote: async (...a) => { log.push(['placeNote', ...a]); notes++ },
       extrasSettings: rec('extrasSettings'),
       sliderPoint: async (name, fraction) => { log.push(['sliderPoint', name, fraction]); return [100 + fraction * 200, 300] },
-      focusSlider: rec('focusSlider'),
+      focusSlider: rec('focusSlider', true),
       leaveSlider: rec('leaveSlider'),
       noteBoxDialog: rec('noteBoxDialog'),
       setNoteBackground: rec('setNoteBackground'),
@@ -112,7 +112,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       errorLogButton: rec('errorLogButton'),
       noteColorPreset: rec('noteColorPreset'),
       noteDialogFromMenu: rec('noteDialogFromMenu'),
-      penDialogFromGear: rec('penDialogFromGear'),
+      penDialogFromSettingsButton: rec('penDialogFromSettingsButton'),
       penShowBoxes: rec('penShowBoxes'),
       penSwatchEdit: rec('penSwatchEdit')
     }
