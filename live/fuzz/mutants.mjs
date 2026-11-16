@@ -25,11 +25,11 @@ const isIife = (expression) => expression.type === 'CallExpression' && /^(?:Arro
 
 const snippet = (text) => { const one = text.replace(/\s+/g, ' '); return one.length > 50 ? `${one.slice(0, 47)}...` : one }
 
-// Every mutant of the script `file` whose text is `code`: `{ id, file, family, start, end, original, text, line, description }`, the edit being `code.slice(start, end)` (`original`) replaced
-// by `text`.
+// Every mutant of the script `file` whose text is `code`: `{ id, file, family, start, end, reachAt, original, text, line, description }`, the edit being `code.slice(start, end)` (`original`) replaced
+// by `text`. `reachAt` is the offset coverage is asked about: V8 counts a logical operator with its right-hand side, which runs only when the swap matters, so a swap is reached where its expression starts.
 export function mutantsOf (file, code) {
   const edits = []
-  const add = (family, start, end, text, line) => edits.push({ family, start, end, text, line })
+  const add = (family, start, end, text, line, reachAt = start) => edits.push({ family, start, end, text, line, reachAt })
   walk(parseScript(code), (node) => {
     const line = node.loc.start.line
     if (node.type === 'BinaryExpression' && RELATIONAL[node.operator]) {
@@ -38,7 +38,7 @@ export function mutantsOf (file, code) {
     }
     if (node.type === 'LogicalExpression' && LOGICAL[node.operator]) {
       const at = code.indexOf(node.operator, node.left.end)
-      add('conditional', at, at + node.operator.length, LOGICAL[node.operator], line)
+      add('conditional', at, at + node.operator.length, LOGICAL[node.operator], line, node.start)
     }
     if (TESTED.has(node.type)) add('conditional', node.test.start, node.test.end, `!(${code.slice(node.test.start, node.test.end)})`, line)
     if (node.type === 'ExpressionStatement' && !node.directive && DELETABLE.has(node.expression.type) && !isIife(node.expression)) add('deletion', node.start, node.end, ';', line)

@@ -29,6 +29,13 @@ test('a tested condition is negated and && and || swap', () => {
   assert.match(mutated('conditional', '&&'), /n < limit \|\| seen/)
 })
 
+test('a swap is judged reached at its whole expression, every other mutant at its edit', () => {
+  const swap = find('conditional', '&&')
+  assert.equal(swap.reachAt, code.indexOf('n < limit && seen'))
+  assert.equal(code.slice(swap.reachAt, swap.start).trim(), 'n < limit')
+  for (const m of mutantsOf('one.user.js', code).filter((x) => x.id !== swap.id)) assert.equal(m.reachAt, m.start, m.description)
+})
+
 test('a call, assignment or update statement is deleted, and a declaration or return is not', () => {
   assert.equal(mutated('deletion', 'bump(1)').includes('bump(1)'), false)
   assert.equal(mutated('deletion', 'seen += n').includes('seen += n'), false)

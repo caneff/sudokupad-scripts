@@ -51,7 +51,7 @@ try {
   for (const file of files) {
     const code = scriptSource(file)
     const candidates = mutantsOf(file, code)
-    const ran = candidates.filter((m) => baseline.ranAt(file, m.start))
+    const ran = candidates.filter((m) => baseline.ranAt(file, m.reachAt))
     const sample = sampleMutants(ran, perScript, sampleSeed)
     console.log(`${file}: ${candidates.length} mutants, ${ran.length} in code the coverage hunt ran, ${sample.length} sampled`)
     const loadable = []
@@ -69,7 +69,7 @@ try {
       fuzz: async (options) => {
         const coverage = createCoverage(SCRIPT_FILES)
         const result = await fuzz({ browser, ...options, coverage })
-        if (!result.failed) reached.set(runKey(options.plant.id, options.seed), coverage.ranAt(options.plant.file, options.plant.mutant.start))
+        if (!result.failed) reached.set(runKey(options.plant.id, options.seed), coverage.ranAt(options.plant.file, options.plant.mutant.reachAt))
         return result
       },
       plants: loadable.map(mutantPlant),

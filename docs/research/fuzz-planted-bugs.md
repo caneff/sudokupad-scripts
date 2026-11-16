@@ -259,7 +259,14 @@ Catches were fast when they came: 32 of the 41 catching hunts took under 10 s, a
 **A flaw in the unreachable count.** 10 of the 17 unreachable mutants are `&&` and `||` swaps (10 of the 16 such swaps sampled). The generator places such a mutant at the
 operator, and V8 counts the operator as part of the right-hand side: a probe in Node (`a || g(b)` called with `a` true) gave the range of `|| g(b)` a count of 0. So "reached" for a
 swap asks whether the right-hand side ran, and a swap changes exactly that. Those 10 are likely misses read as unreachable. The fix is to check the start of the whole
-expression for this family; it was not made or rerun here.
+expression for this family.
+
+*Fixed (#926).* Each mutant now carries `reachAt`, the start of the whole `LogicalExpression` for a swap and its own `start` for every other family, and both `ranAt` calls in
+`mutants-run.mjs` use it. A check run, `npm run fuzz:mutants -- --file color-by-digit --per-script 10` (2 seeds, 30 s, box load about 31 of 32 cores): 1,356 mutants, 761 in code the
+coverage hunt ran, 10 sampled, of which 2 were swaps (line 522 and line 1952). Both read as reached in the coverage hunt, so neither was dropped from the sample as before. Of
+the 4 seed runs they got, 1 (line 1952, seed 567671813) was reached and not caught; the other 3 reported "its code never ran" in that run's own 30 s hunt, a different test
+from the sampling one. The 10-mutant table: 1 caught, 5 missed, 3 unreachable, 1 load error. The full mutant run was not repeated, and a sample of 2 swaps says nothing about
+the rate.
 
 **What the sample shows, and what it does not.**
 
