@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createCoverage, neverRunReport, tagSource, trackClosing } from './coverage.mjs'
+import { createCoverage, neverRunReport, parseNeverRun, tagSource, trackClosing } from './coverage.mjs'
 
 const source = 'function a () {}\nfunction b () {\n  if (x) y()\n}\nconst c = () => 1\n'
 const fn = (functionName, startOffset, endOffset, count, ...blocks) => ({ functionName, ranges: [{ startOffset, endOffset, count }, ...blocks.map(([s, e, n]) => ({ startOffset: s, endOffset: e, count: n }))] })
@@ -85,4 +85,9 @@ test('trackClosing resolves allClosed only once every target it opened has finis
   await closing
   await settled
   assert.deepEqual(events, ['closed first', 'closed second', 'all closed'])
+})
+
+test('parseNeverRun reads back what neverRunReport prints, and skips every other line', () => {
+  const never = { 'one.user.js': { total: 4, never: [{ name: 'b', line: 2, column: 1 }] }, 'two.user.js': { total: 9, never: [] } }
+  assert.deepEqual(parseNeverRun(['fuzz passed: 3 action lists', ...neverRunReport(never), 'done'].join('\n')), never)
 })

@@ -6,7 +6,7 @@
 // At the end it prints one never-run list merged over the hunts.
 import { pathToFileURL } from 'node:url'
 import { BLOCKED_BY, fileIssue, run } from '../watch.mjs'
-import { neverRunReport } from './coverage.mjs'
+import { neverRunReport, parseNeverRun } from './coverage.mjs'
 
 export const FUZZ_MINUTES = 30
 export const MINUTE_MS = 60000
@@ -86,17 +86,8 @@ export const didNotRunIssue = (why) => ({
 // The never-run lists the hunts print after their verdicts (`neverRunReport` of coverage.mjs), as one list in the same format: a function is never-run only if no hunt ran it. A hunt that printed no list
 // (killed for hanging) says nothing. A function inside a never-run one is not listed by a hunt (V8 never compiles it), so a function a hunt left out is counted as run: the merged count is a floor, as each hunt's.
 export function mergeNeverRun (outputs) {
-  const hunts = outputs.map((output) => {
-    const scripts = {}
-    let file
-    for (const line of output.split('\n')) {
-      const head = /^(\S+\.user\.js): \d+ of (\d+) functions never ran$/.exec(line)
-      if (head) { file = head[1]; scripts[file] = { total: Number(head[2]), never: [] }; continue }
-      const fn = /^ {2}(.*) \(line (\d+), column (\d+)\)$/.exec(line)
-      if (fn && file) scripts[file].never.push({ name: fn[1], line: Number(fn[2]), column: Number(fn[3]) })
-    }
-    return scripts
-  }).filter((scripts) => Object.keys(scripts).length > 0)
+  const hunts = outputs.map(parseNeverRun)
+    .filter((scripts) => Object.keys(scripts).length > 0)
   const key = (f) => `${f.name}:${f.line}:${f.column}`
   const files = [...new Set(hunts.flatMap((scripts) => Object.keys(scripts)))]
   return neverRunReport(Object.fromEntries(files.map((file) => {
