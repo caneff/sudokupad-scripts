@@ -123,8 +123,8 @@ export const MAX_PROFILES = 6
 const PROFILE_BRUSHES = 10
 export const DIGITS = '0123456789'
 export const MAX_PROFILE_EDITS = 4
-const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
-// The keys the editor takes from the keyboard (#931): arrows and Enter on a swatch, arrows and a digit on a paint chip, arrows, Enter and Space on a profile row.
+export const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
+// The keys the editor takes from the keyboard (#931): arrows and Enter on a swatch, arrows and a digit on a digit key, arrows, Enter and Space on a profile row.
 export const SWATCH_KEYS = [...ARROW_KEYS, 'Enter']
 export const DIGIT_KEYS = [...ARROW_KEYS, ...DIGITS]
 export const ROW_KEYS = [...ARROW_KEYS, 'Enter', 'Space']
@@ -983,9 +983,12 @@ function buildKinds () {
       stroke: false,
       weight: 2,
       // A digit, then a corner or centre mark of the same digit in another cell of its row: the mark conflicts, and Color by Digit draws a circle round it while digits are colored.
+      // A cell alone in its row (the nearly solved puzzle's) takes the mark in another free cell, which conflicts only when they share a column or box.
       arg: (puzzle) => fc.tuple(fc.nat(puzzle.free.length - 1), fc.nat(), digit(puzzle), fc.boolean()).map(([i, n, d, centre]) => {
-        const row = puzzle.free.flatMap(([r], j) => (r === puzzle.free[i][0] && j !== i ? [j] : []))
-        return [i, row.length > 0 ? row[n % row.length] : i, d, centre]
+        const others = puzzle.free.flatMap((_, j) => (j === i ? [] : [j]))
+        const mates = others.filter((j) => puzzle.free[j][0] === puzzle.free[i][0])
+        const candidates = mates.length > 0 ? mates : others
+        return [i, candidates.length > 0 ? candidates[n % candidates.length] : i, d, centre]
       }),
       label: ([i, j, d, centre], at) => `enter ${d} in ${at(i)} then put a ${centre ? 'centre' : 'corner'} mark of it in ${at(j)}`,
       run: async (env, [i, j, d, centre], model) => {

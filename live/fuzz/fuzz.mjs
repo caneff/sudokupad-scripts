@@ -12,7 +12,7 @@ import { COLOR_BY_DIGIT_DIALOG, SETTINGS_SCRIPTS, settingsScript } from '../scri
 import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, RULES_PANE } from '../auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, HIDE_BUTTON, KEYPAD, middleOf, PICKER_BOX, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
-import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
+import { ARROW, BUTTON as COLOR_BUTTON, buttonPoint, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
@@ -53,9 +53,8 @@ for (const name of SLIDERS) if (!SLIDER_SELECTORS[name]) throw new Error(`action
 const TRACK_MARGIN_PX = 6
 
 const BOX_TIMEOUT_MS = 2000
-// Past the Color by Digit button's hold (500 ms) and its drift allowance, so a hold that drifted off had time to open a menu and did not.
+// Longer than the button's hold, so a hold that drifted off had time to open a menu and did not.
 const COLOR_HOLD_DRIFT_WAIT_MS = 800
-const COLOR_BUTTON = '#control-colorbydigit'
 const COLOR_HOLD_DRIFT_PX = 40
 
 const UI_TWEAKS = settingsScript('ui-tweaks.user.js')
@@ -184,7 +183,7 @@ async function editProfiles (p, edits, save, fromMenu) {
       await (await wrapped(p.locator(`${PROFILE_EDITOR} button[data-role=swatch]`), c)).click()
       const from = await p.locator(`${PROFILE_EDITOR} button[data-act=digit][data-digit="${DIGITS[a]}"]`).boundingBox({ timeout: BOX_TIMEOUT_MS })
       const to = await p.locator(`${PROFILE_EDITOR} button[data-act=digit][data-digit="${DIGITS[b]}"]`).boundingBox({ timeout: BOX_TIMEOUT_MS })
-      if (!from || !to) throw new Error('a digit chip is not on the page to drag across')
+      if (!from || !to) throw new Error('a digit key is not on the page to drag across')
       await p.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
       await p.mouse.down()
       await p.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 })
@@ -287,10 +286,7 @@ function envFor (p, puzzle, { beforeReload }) {
     undoAll: () => undoAll(p),
     clickColorMode: () => clickIn(p, COLOR_BUTTON),
     holdColorMode: async (drift) => {
-      const box = await p.locator(COLOR_BUTTON).boundingBox({ timeout: BOX_TIMEOUT_MS })
-      if (!box) throw new Error('the Color by Digit button is not on the page')
-      const x = box.x + box.width / 2
-      const y = box.y + box.height / 2
+      const { x, y } = await buttonPoint(p)
       await p.mouse.move(x, y)
       await p.mouse.down()
       try {

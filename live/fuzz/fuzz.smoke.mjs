@@ -543,7 +543,13 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
   describe("Color by Digit's profile editor keys, paint drag, Clear all, a held button and a conflict mark (#931)", () => {
     const puzzle = puzzleByName('4x4')
     const profiles = (p) => p.evaluate(() => Framework.getData('ColorByDigit_profiles'))
-    const active = async (p) => { const { data } = await profiles(p); return data.profiles[data.active] }
+    // A Save that changed nothing saves nothing, so a key that did nothing fails here, in its own words.
+    const saved = async (p) => {
+      const stored = await profiles(p)
+      assert.ok(stored, 'Save saved no profiles: the edits changed nothing')
+      return stored.data
+    }
+    const active = async (p) => { const { profiles: all, active: index } = await saved(p); return all[index] }
     const edit = (edits, save = true) => ['profile editor', [edits, save, false]]
     const digitsOf = (profile) => profile.groups.flatMap((g) => g.digits).sort().join('')
 
@@ -552,13 +558,13 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.equal(pressed.groups.find((g) => g.digits.includes('5')).key, '1', 'the digit 5 pressed on its chip joined the starting brush\'s group')
       const brushed = await afterSteps(puzzle, [edit([['swatch key', 3, 4], ['digit key', 5, 9]])], active)
       assert.notEqual(brushed.groups.find((g) => g.digits.includes('5')).key, '1', 'Enter on a swatch took its color as the brush')
-      const [first, second] = (await afterSteps(puzzle, [edit([['row key', 0, 3], ['clear all']])], profiles)).data.profiles
+      const [first, second] = (await afterSteps(puzzle, [edit([['row key', 0, 3], ['clear all']])], saved)).profiles
       assert.deepEqual([first.groups.length > 0, second.groups], [true, []], 'Down on the first row selected the second profile, which the Clear all after it emptied')
       assert.equal((await afterSteps(puzzle, [edit([['rename', 5]])], active)).name, PROFILE_NAMES[5])
       await fuzzScripted({ browser: browser(), puzzle, steps: [edit([['swatch key', 0, 1], ['swatch key', 4, 0], ['digit key', 0, 3], ['digit key', 9, 2], ['row key', 1, 5], ['row key', 0, 4]], false)] })
     })
 
-    it('a drag across the digits paints more than one, and Clear all empties the groups', async () => {
+    it('a drag across the digits changes more of them than one click, and Clear all empties the groups', async () => {
       const one = digitsOf(await afterSteps(puzzle, [edit([['paint', 0, 0]])], active))
       const dragged = digitsOf(await afterSteps(puzzle, [edit([['paint drag', 0, 9, 0]])], active))
       assert.ok(dragged.length < one.length, `a drag (${dragged}) changed more digits than one click (${one})`)
@@ -572,10 +578,15 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
     it('a corner mark and a centre mark that conflict with a digit in their row each get a circle while digits are colored', async () => {
       const digitMode = ['color by digit settings text', ['{"ColorByDigit_mode":"digit"}', true]]
-      // A circle is drawn a moment after the mark, so the count is awaited.
-      const circles = async (p) => { await p.waitForFunction(() => document.querySelectorAll('.conflict').length === 0 || document.querySelectorAll('#color-by-digit-circles circle').length > 0).catch(() => {}); return p.locator('#color-by-digit-circles circle').count() }
+      const CIRCLE = '#color-by-digit-circles circle'
+      // A circle is drawn a moment after the mark; a page with no conflict draws none, which is read at once.
+      const circles = (p) => p.locator(CIRCLE).count()
+      const circlesAfterMark = async (p) => {
+        await p.locator(CIRCLE).first().waitFor({ state: 'attached' })
+        return circles(p)
+      }
       assert.equal(await afterSteps(puzzle, [digitMode], circles), 0)
-      for (const centre of [false, true]) assert.equal(await afterSteps(puzzle, [digitMode, ['conflict mark', [0, 1, puzzle.keys[0], centre]]], circles), 1, centre ? 'centre' : 'corner')
+      for (const centre of [false, true]) assert.equal(await afterSteps(puzzle, [digitMode, ['conflict mark', [0, 1, puzzle.keys[0], centre]]], circlesAfterMark), 1, centre ? 'centre' : 'corner')
     })
   })
 

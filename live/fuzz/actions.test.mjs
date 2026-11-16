@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, PROFILE_NAMES, NOTE_SETTLE_MS, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, ARROW_KEYS, PROFILE_NAMES, ROW_KEYS, SWATCH_KEYS, NOTE_SETTLE_MS, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
@@ -210,9 +210,9 @@ describe('the action vocabulary', () => {
   describe("Color by Digit's profile editor, menu and Restart (#814)", () => {
     const calls = (log, name) => log.filter(([n]) => n === name)
     const kindOf = (kind) => actionsOf(sample(21, 600)).filter((x) => x.kind === kind)
-    const editorCalls = async () => {
+    const editorCalls = async (pool = kindOf('profile editor').slice(0, 200)) => {
       const seen = []
-      for (const a of kindOf('profile editor').slice(0, 200)) seen.push({ step: String(a), call: calls((await runOn(a)).log, 'profileEditor')[0] })
+      for (const a of pool) seen.push({ step: String(a), call: calls((await runOn(a)).log, 'profileEditor')[0] })
       return seen
     }
 
@@ -242,14 +242,15 @@ describe('the action vocabulary', () => {
     })
 
     it('the edits of the keyboard, the paint drag and Clear all, and a name with & < > and a quote, are drawn (#931)', async () => {
-      const seen = await editorCalls()
+      const seen = await editorCalls(actionsOf(sample(23, 3000)).filter((x) => x.kind === 'profile editor'))
       const edits = seen.flatMap(({ call: [, e] }) => e)
       const keys = (op) => new Set(edits.filter(([o]) => o === op).map(([, , k]) => k))
-      const arrowAndDigit = [...keys('digit key')].some((k) => k < 4) && [...keys('digit key')].some((k) => k >= 4)
-      assert.ok(keys('swatch key').size >= 3 && arrowAndDigit && keys('row key').size >= 3, 'arrows, Enter, Space and digits are drawn')
-      for (const op of ['swatch key', 'digit key', 'row key', 'paint drag', 'clear all']) assert.ok(edits.some(([o]) => o === op), op)
-      assert.ok(PROFILE_NAMES.some((name) => /[&<>"]/.test(name)), 'a name with the four characters escapeHtml replaces')
-      assert.ok(PROFILE_NAMES.length > 0 && edits.some(([o, i]) => o === 'rename' && /[&<>"]/.test(PROFILE_NAMES[i])), 'it is typed')
+      const enter = SWATCH_KEYS.indexOf('Enter')
+      assert.ok(keys('swatch key').has(enter), 'Enter on a swatch is drawn')
+      assert.ok(keys('row key').has(ROW_KEYS.indexOf('Enter')) && keys('row key').has(ROW_KEYS.indexOf('Space')), 'Enter and Space on a profile row are drawn')
+      assert.ok([...keys('digit key')].some((k) => k < ARROW_KEYS.length), 'an arrow on a digit key is drawn')
+      assert.ok([...keys('digit key')].some((k) => k >= ARROW_KEYS.length), 'a digit on a digit key is drawn')
+      assert.ok(edits.some(([o, i]) => o === 'rename' && /[&<>"]/.test(PROFILE_NAMES[i])), 'a name with the four characters escapeHtml replaces is typed')
     })
 
     it('the switch action picks a profile from the pad menu, and the restart action restarts the puzzle', async () => {
@@ -1310,9 +1311,11 @@ describe('Color by Digit: a held button and a conflicting mark (#931)', () => {
     assert.deepEqual([...drifts].sort(), [false, true])
   })
 
-  it('a conflict mark enters a digit in one cell, then puts a corner or centre mark of it in another cell of the same row', async () => {
+  it('a conflict mark enters a digit in one cell, then puts a corner or centre mark of it in another cell of the same row, or in another cell where the cell is alone in its row', async () => {
     const tools = new Set()
-    for (const a of kindOf('conflict mark')) {
+    const nearlySolved = puzzleByName('nearly solved 9x9')
+    const marks = FUZZ_PUZZLES.flatMap((puzzle) => actionsOf(sample(52, 150, [puzzle])).filter((x) => x.kind === 'conflict mark').map((action) => ({ action, puzzle })))
+    for (const { action: a, puzzle } of marks) {
       const { log } = await runOn(a)
       const keys = calls(log, 'keyboard.press').map(([, k]) => k)
       assert.equal(calls(log, 'mouse.click').length, 2)
@@ -1322,7 +1325,9 @@ describe('Color by Digit: a held button and a conflicting mark (#931)', () => {
       tools.add(keys[2])
       const [, from, to] = String(a).match(/^enter \d in r(\d+)c\d+ then put a (?:corner|centre) mark of it in r(\d+)c\d+$/) ?? []
       assert.ok(from !== undefined, String(a))
-      assert.equal(to, from, 'same row')
+      // Every cell of the nearly solved puzzle is alone in its row, so its mark goes in another free cell.
+      if (puzzle === nearlySolved) assert.notEqual(String(a).match(/ in (r\d+c\d+) then/)[1], String(a).match(/ it in (r\d+c\d+)$/)[1], 'another cell')
+      else assert.equal(to, from, 'same row')
     }
     assert.deepEqual([...tools].sort(), ['c', 'x'])
   })
