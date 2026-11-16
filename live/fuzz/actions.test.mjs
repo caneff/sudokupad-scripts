@@ -2,8 +2,9 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, DARK_COLORS, DARK_PAGE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
+import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
 import { scriptFiles } from '../../sync-lib.js'
 
@@ -56,7 +57,7 @@ describe('the action vocabulary', () => {
     const groups = actionsOf(sample(2, 150)).map((a) => a.group)
     const share = (g) => groups.filter((x) => x === g).length / groups.length
     assert.ok(share('ordinary') > 0.5, `ordinary share ${share('ordinary')}`)
-    assert.ok(share('interruption') > 0.1 && share('page') > 0.02, 'interruptions and page events are there too')
+    assert.ok(share('interruption') > 0.08 && share('page') > 0.02, 'interruptions and page events are there too')
   })
 
   it('every step reads as plain words with no comma, which the report joins steps by', () => {
@@ -685,7 +686,7 @@ describe('focusing the actions on a script (#724)', () => {
 
     // What each script takes is its own reader's say, so a "valid" text is one its `pastedSettings` takes a setting from, and a refused one is no text it takes any from.
     const taken = (script, text) => {
-      try { return Object.keys(script.pastedSettings(text, script.READERS).values).length } catch (error) {
+      try { return Object.keys(script.pastedSettings(text, script.READERS, script.withModeFromAuto ?? script.withNewKeys).values).length } catch (error) {
         if (!/^the clipboard text is not/.test(error.message)) throw error
         return 0
       }
@@ -832,6 +833,184 @@ describe('focusing the actions on a script (#724)', () => {
       assert.equal(step(['400', '', true, false]), 'Auto Rules Resizer dialog: max width 400 max height none Restore defaults Cancel')
       assert.equal(step(['', '0', false, true]), 'Auto Rules Resizer dialog: max width none max height 0 Save')
     })
+  })
+})
+
+describe('the settings dialogs\' Copy, Paste, Restore defaults and error log (#928)', () => {
+  const calls = (log, name) => log.filter(([n]) => n === name)
+  const kindOf = (kind) => actionsOf(sample(43, 1500)).filter((x) => x.kind === kind)
+  const stepOf = (kind, arg) => String(scriptedList(puzzleByName('4x4'), [[kind, arg]])[0])
+  const requireScript = (file) => createRequire(import.meta.url)(`../../${file}`)
+  // The kinds that only open a dialog and close it, as 'pen settings' does, so a busy start leaves them out.
+  const OPEN_ONLY = ['note dialog from menu', 'pen dialog from settings button']
+  const NEW_KINDS = {
+    'color by digit settings text': 'color-by-digit.user.js',
+    'text anywhere settings text': 'text-anywhere.user.js',
+    'pen tool extras settings text': 'pen-tool-extras.user.js',
+    'auto rules resizer settings text': 'auto-rules-resizer.user.js',
+    'color by digit defaults': 'color-by-digit.user.js',
+    'text anywhere defaults': 'text-anywhere.user.js',
+    'note color preset': 'text-anywhere.user.js',
+    'note dialog from menu': 'text-anywhere.user.js',
+    'pen dialog from settings button': 'pen-tool-extras.user.js',
+    'pen show boxes': 'pen-tool-extras.user.js',
+    'pen swatch edit': 'pen-tool-extras.user.js'
+  }
+
+  it('each new kind exercises its script, is generated, is ordinary use and can sit in a busy start', () => {
+    for (const [kind, file] of Object.entries(NEW_KINDS)) {
+      assert.deepEqual(KIND_SCRIPTS[kind], [file], kind)
+      assert.equal(KIND_GROUPS[kind], 'ordinary', kind)
+      assert.equal(START_KINDS.includes(kind), !OPEN_ONLY.includes(kind), `${kind} in a busy start`)
+      assert.ok(kindOf(kind).length > 3, `${kind} is drawn`)
+    }
+  })
+
+  // A "valid" text is one the script's own `pastedSettings` takes a setting from, through the `upgrade` its Paste passes; a refused one is a text it takes none from.
+  const taken = (script, text) => {
+    try { return Object.keys(script.pastedSettings(text, script.READERS).values).length } catch (error) {
+      if (!/^the clipboard text is not/.test(error.message)) throw error
+      return 0
+    }
+  }
+  const TEXT_SCRIPTS = [
+    ['Color by Digit', 'color-by-digit.user.js', COLOR_BY_DIGIT_TEXTS, 'color by digit'],
+    ['Text Anywhere', 'text-anywhere.user.js', TEXT_ANYWHERE_TEXTS, 'text anywhere'],
+    ['Pen Tool Extras', 'pen-tool-extras.user.js', PEN_TOOL_EXTRAS_TEXTS, 'pen tool extras'],
+    ['Auto Rules Resizer', 'auto-rules-resizer.user.js', AUTO_RULES_RESIZER_TEXTS, 'auto rules resizer']
+  ]
+
+  it('each script\'s texts hold Copy, texts it takes a setting from, and texts it takes none from', () => {
+    for (const [name, file, texts] of TEXT_SCRIPTS) {
+      const script = requireScript(file)
+      const pastes = texts.filter((t) => t !== null)
+      assert.ok(texts.includes(null), `${name}: Copy`)
+      assert.ok(pastes.filter((t) => taken(script, t) > 0).length >= 3, `${name}: texts it takes`)
+      for (const refused of ['', 'not json', '[]']) assert.ok(pastes.includes(refused), `${name}: ${JSON.stringify(refused)}`)
+      assert.ok(pastes.filter((t) => taken(script, t) === 0).length >= 4, `${name}: texts it refuses`)
+    }
+  })
+
+  it('the texts reach what the ticket names: a legacy auto mode, a pasted limit of none, a pasted palette and a foreign key', () => {
+    assert.ok(COLOR_BY_DIGIT_TEXTS.some((t) => t && /ColorByDigit_auto/.test(t)), 'withModeFromAuto')
+    assert.ok(COLOR_BY_DIGIT_TEXTS.some((t) => t && /addedPreloads":false/.test(t)), 'a preload mark at its default')
+    assert.ok(AUTO_RULES_RESIZER_TEXTS.some((t) => t && /maxWidth":null/.test(t)), 'readLimit on none')
+    assert.ok(TEXT_ANYWHERE_TEXTS.some((t) => t && /TextAnywhere_colors/.test(t)), 'readPastedColors')
+    assert.ok(PEN_TOOL_EXTRAS_TEXTS.some((t) => t && /PenColor_colors/.test(t)), 'the pen palette')
+    for (const [name, , texts] of TEXT_SCRIPTS) assert.ok(texts.some((t) => t && /Other_key/.test(t)), `${name}: a foreign key`)
+  })
+
+  it('a settings text action copies or pastes one text of its own script, then Save or Cancel', async () => {
+    const saves = new Set()
+    for (const [name, , texts, script] of TEXT_SCRIPTS) {
+      const pasted = new Set()
+      for (const a of kindOf(`${script} settings text`)) {
+        const [, who, text, save] = calls((await runOn(a)).log, 'settingsText')[0]
+        assert.equal(who, script)
+        pasted.add(text)
+        saves.add(save)
+      }
+      assert.deepEqual([...pasted].sort(), [...texts].sort(), name)
+    }
+    assert.deepEqual([...saves].sort(), [false, true])
+    assert.equal(stepOf('color by digit settings text', [null, true]), 'Color by Digit dialog: Copy settings Save')
+    assert.equal(stepOf('auto rules resizer settings text', ['{"AutoRulesResizer_maxWidth":null}', false]), 'Auto Rules Resizer dialog: Paste settings "{\\"AutoRulesResizer_maxWidth\\":null}" Cancel')
+  })
+
+  it('a defaults action presses Restore defaults in Color by Digit\'s or Text Anywhere\'s dialog, then Save or Cancel', async () => {
+    for (const [kind, script] of [['color by digit defaults', 'color by digit'], ['text anywhere defaults', 'text anywhere']]) {
+      const saves = new Set()
+      for (const a of kindOf(kind)) {
+        const [, who, save] = calls((await runOn(a)).log, 'restoreDefaults')[0]
+        assert.equal(who, script)
+        saves.add(save)
+      }
+      assert.deepEqual([...saves].sort(), [false, true], kind)
+    }
+    assert.equal(stepOf('color by digit defaults', true), 'Color by Digit dialog: Restore defaults Save')
+    assert.equal(stepOf('text anywhere defaults', false), 'Text Anywhere dialog: Restore defaults Cancel')
+  })
+
+  it('an error log action presses Copy error log or Clear in the dialog of each of the six scripts', async () => {
+    const seen = new Set()
+    for (const a of kindOf('error log')) {
+      const [, script, clear] = calls((await runOn(a)).log, 'errorLogButton')[0]
+      seen.add(`${script}/${clear}`)
+    }
+    assert.deepEqual([...seen].sort(), ERROR_LOG_SCRIPTS.flatMap((s) => [`${s}/false`, `${s}/true`]).sort())
+    assert.equal(stepOf('error log', [1, false]), 'Dark Page dialog: Copy error log')
+    assert.equal(stepOf('error log', [0, true]), 'Color by Digit dialog: Clear error log')
+  })
+
+  it('every script word an action hands the env names a settings dialog of live/scripts.mjs, and the six dialogs are the six scripts', async () => {
+    const words = new Set()
+    for (const kind of ['error log', 'color by digit defaults', 'text anywhere defaults', ...TEXT_SCRIPTS.map(([, , , script]) => `${script} settings text`)]) {
+      for (const a of kindOf(kind)) {
+        const { log } = await runOn(a)
+        for (const [name, word] of log) if (['settingsText', 'restoreDefaults', 'errorLogButton'].includes(name)) words.add(word)
+      }
+    }
+    const dialogs = SETTINGS_SCRIPTS.map(({ entry }) => entry.toLowerCase())
+    assert.deepEqual([...words].filter((w) => !dialogs.includes(w)), [], 'a word that is no dialog\'s entry')
+    assert.deepEqual([...words].sort(), [...dialogs].sort(), 'every dialog is named by some action')
+    assert.deepEqual(SETTINGS_SCRIPTS.map(({ file }) => file).sort(), scriptFiles().sort())
+  })
+
+  it('a note color preset action picks a preset of the Text color pulldown, then Save or Cancel', async () => {
+    const picks = new Set()
+    const saves = new Set()
+    for (const a of kindOf('note color preset')) {
+      const [, pick, save] = calls((await runOn(a)).log, 'noteColorPreset')[0]
+      picks.add(pick); saves.add(save)
+    }
+    assert.ok(picks.size >= 4, `${picks.size} presets`)
+    assert.deepEqual([...saves].sort(), [false, true])
+    assert.equal(stepOf('note color preset', [2, true]), 'Text Anywhere text color preset 2 Save')
+  })
+
+  it('the other ways in: Text Anywhere\'s dialog from the settings menu, Pen Tool Extras\' from the pen panel settings button', async () => {
+    for (const [kind, call, words] of [['note dialog from menu', 'noteDialogFromMenu', 'Text Anywhere dialog from the settings menu'], ['pen dialog from settings button', 'penDialogFromSettingsButton', 'Pen Tool Extras dialog from the pen panel settings button']]) {
+      const saves = new Set()
+      for (const a of kindOf(kind)) saves.add(calls((await runOn(a)).log, call)[0][1])
+      assert.deepEqual([...saves].sort(), [false, true], kind)
+      assert.equal(stepOf(kind, true), `${words} Save`)
+      assert.equal(stepOf(kind, false), `${words} Cancel`)
+    }
+  })
+
+  it('a Show boxes action sets the Thickness and Opacity boxes, then Save or Cancel', async () => {
+    const seen = { thickness: new Set(), opacity: new Set(), save: new Set() }
+    for (const a of kindOf('pen show boxes')) {
+      const [, boxes, save] = calls((await runOn(a)).log, 'penShowBoxes')[0]
+      assert.deepEqual(Object.keys(boxes).sort(), ['opacity', 'thickness'])
+      seen.thickness.add(boxes.thickness); seen.opacity.add(boxes.opacity); seen.save.add(save)
+    }
+    for (const [name, set] of Object.entries(seen)) assert.deepEqual([...set].sort(), [false, true], name)
+    assert.equal(stepOf('pen show boxes', [true, false, true]), 'Pen Tool Extras dialog: Thickness slider shown Opacity slider hidden Save')
+  })
+
+  it('a slider drag or key press on a pen slider the player hid does nothing, instead of failing for a lost control', async () => {
+    for (const kind of ['slider drag', 'slider keys']) {
+      const a = kindOf(kind)[0]
+      const target = await fakeTargets().openTarget()
+      const env = { ...target.env, sliderPoint: async () => null, focusSlider: async () => false }
+      await a.run({ selected: true }, { env })
+      assert.deepEqual(target.log.filter(([n]) => /^mouse\.|^keyboard\./.test(n)), [], kind)
+    }
+  })
+
+  it('a swatch edit action picks a color preset, recolors one pen swatch, then Save or Cancel', async () => {
+    const pens = new Set()
+    for (const a of kindOf('pen swatch edit')) {
+      const [, pick, pen, hex, save] = calls((await runOn(a)).log, 'penSwatchEdit')[0]
+      assert.match(hex, /^#[0-9a-f]{6}$/)
+      assert.ok(pen >= 1 && pen <= 9, `pen ${pen}`)
+      assert.equal(typeof save, 'boolean')
+      assert.equal(typeof pick, 'number')
+      pens.add(pen)
+    }
+    assert.equal(pens.size, 9)
+    assert.equal(stepOf('pen swatch edit', [3, 4, 0x123456, true]), 'Pen Tool Extras colors: preset 3 then pen 4 swatch #123456 Save')
   })
 })
 
