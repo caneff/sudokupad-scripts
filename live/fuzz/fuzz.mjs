@@ -20,6 +20,7 @@ import { DIGIT_KEYS, DIGITS, KINDS, MARK_BOXES, PROFILE_NAMES, ROW_KEYS, scripte
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
+import { noteDrop } from './note-drop.mjs'
 import { replayCommand } from './replay-command.mjs'
 import { FUZZ_PUZZLES, insideGrid, rulesTextFor } from './puzzle-set.mjs'
 import { newestErrorRecords } from './signals.mjs'
@@ -102,7 +103,7 @@ async function clickIn (p, selector) {
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 }
 
-// What a player does when a Text Anywhere note (or its handle) covers a button: drags the note off, onto the board's middle.
+// What a player does when a Text Anywhere note (or its handle) covers a button: drags the note off, onto the board's middle or, for a note that would still cover the button there, to the nearest place that clears it (`note-drop.mjs`).
 const CLEAR_TRIES = 4
 const LAYER = '#text-anywhere-layer'
 const COVERED_BUTTON_NOTE = ([layer, notes]) => {
@@ -113,7 +114,7 @@ const COVERED_BUTTON_NOTE = ([layer, notes]) => {
     const top = document.elementFromPoint(x, y)
     if (!top || top === button || button.contains(top) || !top.closest(layer)) continue
     // A handle sits on its note's corner, so the note is the one whose box, grown by the handle's own size, holds the point.
-    const reach = top.getBoundingClientRect().width
+    const reach = top.closest(notes) ? 0 : top.getBoundingClientRect().width
     // A note's own element is that note: the grown box below would match any note within its width of the button, a wide one's included.
     const note = top.closest(notes) ?? [...document.querySelectorAll(notes)].find((n) => {
       const b = n.getBoundingClientRect()
@@ -121,7 +122,7 @@ const COVERED_BUTTON_NOTE = ([layer, notes]) => {
     })
     if (!note) return { button: button.id || button.className, point: null }
     const b = note.getBoundingClientRect()
-    return { button: button.id || button.className, point: [b.x + b.width / 2, b.y + b.height / 2] }
+    return { button: button.id || button.className, point: [b.x + b.width / 2, b.y + b.height / 2], size: [b.width, b.height], reach, at: [x, y] }
   }
   return null
 }
@@ -218,7 +219,8 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       if (!covered) return
       if (!covered.point) throw new Error(`${covered.button} is covered by a Text Anywhere element that belongs to no note`)
       if (i === CLEAR_TRIES) throw new Error(`${covered.button} is still covered by a note after ${CLEAR_TRIES} drags off it`)
-      const to = (await cellCentre(p, Math.floor(puzzle.rows / 2), Math.floor(puzzle.cols / 2))).slice(0, 2)
+      const middle = (await cellCentre(p, Math.floor(puzzle.rows / 2), Math.floor(puzzle.cols / 2))).slice(0, 2)
+      const to = noteDrop(middle, covered, await p.evaluate(() => [window.innerWidth, window.innerHeight]))
       await p.mouse.move(...covered.point)
       await p.mouse.down()
       await p.mouse.move(...to, { steps: 6 })

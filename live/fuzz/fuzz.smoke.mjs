@@ -61,6 +61,11 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle, steps })
   })
 
+  it('a wide rich note is dragged clear of the buttons it covers on a 4x4 board, where the board\'s middle leaves it over the number pad (#944)', async () => {
+    // Seed 729's shrink of #932's rerun: the fifth rich note is 697 px wide, so on the board's middle it still covers a digit button, and a drag from there to there moves nothing.
+    await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['rich note', [4, 1]], ['pen page', null]] })
+  })
+
   it('a page that does not show the puzzle set\'s free cells is refused, not fuzzed on the wrong cells', async () => {
     const wrong = { ...puzzleByName('4x4'), free: [[0, 1]] }
     await assert.rejects(openTarget(browser(), wrong, {}), /opened with \d+ free cells that are not the 1 of puzzle-set\.mjs/)
