@@ -1384,6 +1384,11 @@ describe('a reload drawn after the settings actions (#936)', () => {
     assert.equal(digest(fc.sample(actionList(FUZZ_PUZZLES, { kinds: KINDS, reloadAfterSettings: false }), { seed: 936, numRuns: 30 })), '4cf41d46238aee4d86583085f731ebb9f91d28e2')
   })
 
+  it('without the option a failure shrinks along the path it did on origin/main, so a printed path still replays', () => {
+    const shrunk = fc.check(fc.property(actionList(FUZZ_PUZZLES, { kinds: KINDS, busyStart: true }), (l) => [...l.commands].length < 5 || l.start.length < 3), { seed: 936, numRuns: 100, endOnFailure: false })
+    assert.equal(shrunk.counterexamplePath, '0:0:1:0:0:1:1:1:1:1:3:4')
+  })
+
   it('a seed gives the same lists, and a list prints the steps that ran, the reloads among them, then the replay path', async () => {
     const [a, b] = [lists({ reloadAfterSettings: true, nonEmpty: true }, 40), lists({ reloadAfterSettings: true, nonEmpty: true }, 40)]
     assert.deepEqual(a.map((l) => [...l.commands].map((w) => String(w.cmd))), b.map((l) => [...l.commands].map((w) => String(w.cmd))))
