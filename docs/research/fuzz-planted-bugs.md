@@ -325,7 +325,7 @@ The 300 s hunts ran 5,340 action lists on the uncaught hunts, 310 of them (5.8%)
 | `text-anywhere:2574` | `setData(COLORS_KEY, ...)` | 0/3 | 0/3 | 151 / 9 | the rule was added in #935, measured in `fuzz-missed-mutants/reload-settings-935.md` |
 | `text-anywhere:2586` | `setData(row.key, value)` | 1/3 | 3/3 | n/a (caught) | more time |
 | `text-anywhere:2738` | `setData(BACKGROUND_KEY, on)` | 0/3 | 0/3 | 53 / 2 | reload too rare (#936); the reload view reads it since #935 |
-| `ui-tweaks:357` | `off.length > 0` to `>=` | 0/3 | 0/3 | 29 / 1 | needs a rule (#937) |
+| `ui-tweaks:357` | `off.length > 0` to `>=` | 0/3 | 0/3 | 29 / 1 | the rule `ui-tweaks-off-note-empty` was added in #937: 1/3 caught at 30 s (seed 471864207, 28.6 s, replays), so more time |
 | `pen-tool-extras:1295` | `x >= -GAMUT_EDGE` to `>` | 0/3 | 0/3 | 43 / 0 | not visible: needs a float exactly at the gamut edge |
 | `text-anywhere:1254` | `value > 0` to `>= 0` (stored size) | 0/3 | 0/3 | 14 / 1 | not visible: the script never saves a size of 0 |
 | `text-anywhere:3280` | `deltaY < 0` to `<= 0` | 0/3 | 0/3 | 8 / 0 | needs a wheel of exactly 0: not drawn |
@@ -347,7 +347,7 @@ coverage is not added, and the probe read 0 for the three caught lib mutants.
   reload. Ticket #936 (`--config reload-after-settings`, measured below in § A reload drawn after the settings actions: it caught 4 of these 5; `text-anywhere:1316` stays missed because no rule reads the index).
 - **Needs a rule: 4 deletions and 1 flip.** `pen-tool-extras:1789`, `1790`, `1557` and `text-anywhere:2574` ran in 151 to 197 lists with a reload after the code in 9 to 12, and were not caught in any of 3 hunts. `reloadView` then read
   strokes, page color, Color by Digit's mode, groups and digits only: not the selected pen, the pen color set or the text note's color set. Ticket #935 added them (`fuzz-missed-mutants/reload-settings-935.md` has what it caught); `ui-tweaks:357` (a flip that leaves an empty
-  "Off because SudokuPad changed:" in the dialog, visible, read by no rule) is ticket #937. `text-anywhere:1303` (the notes index; it ran in 133 lists, 8 with a reload after) is rule-blind or not visible, and is in neither count: the visibility was not read further.
+  "Off because SudokuPad changed:" in the dialog, visible, read by no rule) got its rule in ticket #937 (`ui-tweaks-off-note-empty`; the row above has the measurement). `text-anywhere:1303` (the notes index; it ran in 133 lists, 8 with a reload after) is rule-blind or not visible, and is in neither count: the visibility was not read further.
 - **Not reachable by the fuzz: 4 deletions.** The `dismiss` click listeners (dark-page, auto-rules-resizer, text-anywhere, pen-tool-extras) were "reached" because the listener is installed, but nothing in `live/fuzz/` clicks a
   dismiss button (`rg dismiss live/fuzz` finds none) and the notice they dismiss shows only on a page the script skipped. No ticket: that is not what the fuzz is for.
 - **Unclassified: the reach read is an artifact, 3 deletions** (`color-by-digit:327`, `color-by-digit:2263`, `pen-tool-extras:105`). They read 0 lists that ran them in about 198 lists each. The per-page read asks V8 coverage of the

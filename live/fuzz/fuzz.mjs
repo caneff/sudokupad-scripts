@@ -207,7 +207,7 @@ async function pickProfileFromMenu (p, i) {
   await p.locator(PROFILE_MENU).waitFor({ state: 'detached' })
 }
 
-function envFor (p, puzzle, { beforeReload }) {
+function envFor (p, puzzle, { beforeReload, reads }) {
   const openPen = async () => {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
   }
@@ -527,6 +527,7 @@ function envFor (p, puzzle, { beforeReload }) {
     },
     async uiTweaks ({ hideSelect, wrapButtons, toggleTab, restore }, save) {
       await UI_TWEAKS.open(p)
+      reads.uiTweaksOffNote = await p.locator(`.dialog:has(${UI_TWEAKS_DIALOG}) [data-role="off-note"]`).textContent()
       const box = (id) => p.locator(`${UI_TWEAKS_DIALOG} input[data-option="${id}"]`)
       await box('hideSelect').setChecked(hideSelect)
       await box('wrapButtons').setChecked(wrapButtons)
@@ -555,6 +556,8 @@ export async function openTarget (browser, puzzle, { planted, plant, coverage })
       await installAll(page, coverage ? (file, code) => tagSource(file, patch ? patch(file, code) : code) : patch)
     }
   })
+  // What an action read while its dialog was open, for the snapshot after it.
+  const reads = { uiTweaksOffNote: null }
   const readCoverage = async () => { if (coverage) coverage.add(await p.coverage.stopJSCoverage()) }
   const restartCoverage = async () => { if (coverage) await p.coverage.startJSCoverage({ resetOnNavigation: false }) }
   try {
@@ -567,8 +570,8 @@ export async function openTarget (browser, puzzle, { planted, plant, coverage })
     const onPage = await freeCells(p)
     if (JSON.stringify(sortedCells(onPage)) !== JSON.stringify(sortedCells(puzzle.free))) throw new Error(`the ${puzzle.name} puzzle opened with ${onPage.length} free cells that are not the ${puzzle.free.length} of puzzle-set.mjs`)
     return {
-      env: envFor(p, puzzle, { beforeReload: async () => { await readCoverage(); await restartCoverage() } }),
-      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR), page: await readPageState(p, { expectRules: rulesTextFor(puzzle) !== null }) }),
+      env: envFor(p, puzzle, { reads, beforeReload: async () => { await readCoverage(); await restartCoverage() } }),
+      snapshot: async () => ({ errors: [...errors], notices: await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent.trim()), NOTICE_BAR), page: { ...await readPageState(p, { expectRules: rulesTextFor(puzzle) !== null }), uiTweaksOffNote: reads.uiTweaksOffNote } }),
       wait: (ms) => sleep(ms),
       errorLog: async () => newestErrorRecords(await p.evaluate((key) => window.localStorage.getItem(key), ERROR_LOG_KEY)),
       close: async () => {

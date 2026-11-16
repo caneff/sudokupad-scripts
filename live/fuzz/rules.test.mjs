@@ -362,4 +362,20 @@ describe('the rules', () => {
       assert.deepEqual(check('tab-not-letters', { letterMode: true }, { action: 'undo' }), [])
     })
   })
+
+  describe('ui-tweaks-off-note-empty', () => {
+    const dialog = 'ui tweaks dialog'
+    it('holds when the dialog opened on a healthy page shows an empty off-note', () => {
+      assert.deepEqual(check('ui-tweaks-off-note-empty', { uiTweaksOffNote: '' }, { action: dialog }), [])
+    })
+    it('fails when the dialog opened on a healthy page shows text in the off-note', () => {
+      assert.deepEqual(check('ui-tweaks-off-note-empty', { uiTweaksOffNote: 'Off because SudokuPad changed: ' }, { action: dialog }), ['the dialog says "Off because SudokuPad changed: " but no UI Tweaks feature is off'])
+    })
+    it('fails when the dialog action left no reading of the off-note', () => {
+      assert.deepEqual(check('ui-tweaks-off-note-empty', { uiTweaksOffNote: null }, { action: dialog }), ["the UI Tweaks dialog's off-note was not read"])
+    })
+    it('reads only after a UI Tweaks dialog action, since the dialog is closed after any other', () => {
+      assert.deepEqual(check('ui-tweaks-off-note-empty', { uiTweaksOffNote: 'Off because SudokuPad changed: ' }, { action: 'undo' }), [])
+    })
+  })
 })
