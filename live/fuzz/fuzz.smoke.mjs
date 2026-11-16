@@ -9,7 +9,7 @@ import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
 import { rulesWidth } from '../attacks.mjs'
 import { penDrawnCount } from '../pen.mjs'
-import { scriptedList } from './actions.mjs'
+import { ERROR_LOG_SCRIPTS, scriptedList } from './actions.mjs'
 import { ownedSettings } from '../settings.mjs'
 import { settingsScript } from '../scripts.mjs'
 import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
@@ -22,7 +22,7 @@ const run = promisify(execFile)
 const PASSING_SEEDS = [2, 3]
 const PLANTED_SEED = 3
 // A seed the planted Tab bug is caught on: a new action kind changes what each seed makes, so pick another from `npm run test:fuzz -- --seed <n> --runs 150 --plant tab-turns-pad-to-letters` if this one stops reaching Tab.
-const TAB_PLANT_SEED = 1
+const TAB_PLANT_SEED = 3
 const ROOT = new URL('../../', import.meta.url)
 const INTERRUPTED_BY_ESCAPE = /^(?:pen drag|right-click erase held|note drag).* then Escape then release$/
 
@@ -337,6 +337,101 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, true]]], saved), { maxWidth: 400, maxHeight: 300 })
       assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, true]], ['rules dialog', ['', '0', false, true]]], saved), { maxHeight: 300 })
       assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, false]]], saved), {})
+    })
+  })
+
+  describe('the Copy, Paste, Restore defaults and error log of every settings dialog (#928)', () => {
+    const puzzle = puzzleByName('4x4')
+    const data = (...keys) => (p) => p.evaluate((names) => names.map((key) => Framework.getData(key)), keys)
+    const paste = (script, text, save = false) => [`${script} settings text`, [text, save]]
+
+    it('a pasted text is applied on the spot in each of the four dialogs, and Copy settings changes nothing', async () => {
+      const after = (script, text, ...keys) => afterSteps(puzzle, [paste(script, text)], data(...keys))
+      assert.deepEqual(await after('color by digit', '{"ColorByDigit_mode":"digit"}', 'ColorByDigit_mode'), ['digit'])
+      assert.deepEqual(await after('text anywhere', '{"TextAnywhere_width":3.5,"TextAnywhere_frame":true}', 'TextAnywhere_width', 'TextAnywhere_frame'), [3.5, true])
+      assert.deepEqual(await after('pen tool extras', '{"PenColor_thickness":9}', 'PenColor_thickness'), [9])
+      assert.deepEqual((await after('auto rules resizer', '{"AutoRulesResizer_maxWidth":640,"AutoRulesResizer_maxHeight":480}', 'AutoRulesResizer_maxWidth', 'AutoRulesResizer_maxHeight')).map((v) => v.data), [640, 480])
+      assert.deepEqual(await after('pen tool extras', '{"PenColor_thickness":"thick"}', 'PenColor_thickness'), [null], 'a refused text saves nothing')
+      assert.deepEqual(await after('text anywhere', null, 'TextAnywhere_width'), [null], 'Copy settings saves nothing')
+    })
+
+    it('Restore defaults then Save puts Color by Digit\'s profiles back to the preloaded ones, and Text Anywhere\'s frame back to off', async () => {
+      const profileCount = async (p) => (await data('ColorByDigit_profiles')(p))[0]?.data?.profiles?.length ?? null
+      // The preloaded profiles are the default, so a page that never saved them reads null and a Save of one more makes the count.
+      const added = await afterSteps(puzzle, [['profile editor', [[['new']], true, false]]], profileCount)
+      assert.ok(added > 1, `a new profile saved, with the preloaded ones (${added})`)
+      const restored = await afterSteps(puzzle, [['profile editor', [[['new']], true, false]], ['color by digit defaults', true]], profileCount)
+      assert.ok(restored === null || restored === added - 1, `Restore defaults then Save took the new profile away (${restored})`)
+      assert.equal(await afterSteps(puzzle, [['profile editor', [[['new']], true, false]], ['color by digit defaults', false]], profileCount), added, 'Cancel kept it')
+      const frame = [paste('text anywhere', '{"TextAnywhere_frame":true}')]
+      assert.deepEqual(await afterSteps(puzzle, [...frame, ['text anywhere defaults', true]], data('TextAnywhere_frame')), [false], 'the frame is off again')
+      assert.deepEqual(await afterSteps(puzzle, [...frame, ['text anywhere defaults', false]], data('TextAnywhere_frame')), [true], 'Cancel after Restore defaults keeps the pasted frame')
+    })
+
+    it('Copy error log and Clear answer in all six dialogs, and Clear empties a log that has a record', async () => {
+      const log = (p) => p.evaluate(() => window.localStorage.getItem('sudokupad-scripts-error-log'))
+      const seeded = (p) => p.evaluate(() => window.localStorage.setItem('sudokupad-scripts-error-log', JSON.stringify([{ script: 'dark-page', feature: 'saved color', name: 'TypeError', message: 'seeded', stack: 'TypeError: seeded', version: '1.0.0', sudokupad: '1.0', url: 'https://sudokupad.app/' }])))
+      for (let i = 0; i < ERROR_LOG_SCRIPTS.length; i++) {
+        await afterSteps(puzzle, [['error log', [i, false]], ['error log', [i, true]]], async () => {})
+      }
+      const target = await openTarget(browser(), puzzle, {})
+      try {
+        await seeded(target.env.page)
+        const [copy, clear] = scriptedList(puzzle, [['error log', [1, false]], ['error log', [1, true]]])
+        await copy.run({ selected: true }, { env: target.env })
+        assert.notEqual(await log(target.env.page), null, 'Copy leaves the log')
+        await clear.run({ selected: true }, { env: target.env })
+        assert.equal(await log(target.env.page), null, 'Clear emptied it')
+      } finally {
+        await target.close()
+      }
+    })
+
+    it('a Text color preset is saved on Save and not on Cancel', async () => {
+      const colors = data('TextAnywhere_colors')
+      assert.notDeepEqual(await afterSteps(puzzle, [['note color preset', [0, true]]], colors), [null], 'Save saved a preset')
+      assert.deepEqual(await afterSteps(puzzle, [['note color preset', [0, false]]], colors), [null])
+    })
+
+    it('Pen Tool Extras\' Show boxes are saved each for its own slider on Save and not on Cancel, and a slider hidden there is skipped by the slider actions', async () => {
+      const sliders = data('PenColor_sliders')
+      assert.deepEqual(await afterSteps(puzzle, [['pen show boxes', [false, true, true]]], sliders), [{ thickness: false, opacity: true }])
+      assert.deepEqual(await afterSteps(puzzle, [['pen show boxes', [true, false, true]]], sliders), [{ thickness: true, opacity: false }])
+      assert.deepEqual(await afterSteps(puzzle, [['pen show boxes', [false, true, false]]], sliders), [null], 'Cancel saved none')
+      // The list the correctness review found failing: a hidden slider is no lost control.
+      await fuzzScripted({ browser: browser(), puzzle, steps: [['pen show boxes', [false, false, true]], ['slider drag', [0, 5, 5]], ['slider drag', [1, 0, 10]], ['slider keys', [0, 1, 2]], ['slider keys', [1, 1, 2]]] })
+    })
+
+    it('a swatch edit after a preset is saved for its pen on Save, and Cancel drops the preset and the swatch together', async () => {
+      const colors = data('PenColor_colors')
+      const [saved] = await afterSteps(puzzle, [['pen swatch edit', [2, 4, 0x123456, true]]], colors)
+      assert.equal(saved[4], '#123456')
+      const [cancelled] = await afterSteps(puzzle, [['pen swatch edit', [2, 4, 0x123456, false]]], colors)
+      assert.notEqual(cancelled[4], '#123456', 'Cancel kept the swatch')
+      const [first] = await afterSteps(puzzle, [['pen colors dialog', [0, false, false]]], colors)
+      assert.deepEqual(cancelled, first, 'Cancel kept the preset: the colors are those of an install')
+    })
+
+    it('the dialog of Text Anywhere opens from the settings menu and the dialog of Pen Tool Extras from the pen panel settings button, and each closes on Save or Cancel', async () => {
+      const dialogsOpen = (p) => p.locator('.dialog').count()
+      for (const kind of ['note dialog from menu', 'pen dialog from settings button']) {
+        for (const save of [true, false]) assert.equal(await afterSteps(puzzle, [[kind, save]], dialogsOpen), 0, `${kind} ${save ? 'Save' : 'Cancel'} leaves no dialog`)
+      }
+    })
+
+    it('a Copy error log that cannot write the clipboard is a failure, not an answer', async () => {
+      const target = await openTarget(browser(), puzzle, {})
+      try {
+        const p = target.env.page
+        await p.evaluate(() => {
+          window.localStorage.setItem('sudokupad-scripts-error-log', JSON.stringify([{ script: 'dark-page', feature: 'saved color', name: 'TypeError', message: 'seeded', stack: 'TypeError: seeded', version: '1.0.0', sudokupad: '1.0', url: 'https://sudokupad.app/' }]))
+          navigator.clipboard.writeText = () => Promise.reject(new Error('planted clipboard refusal'))
+        })
+        const [copy] = scriptedList(puzzle, [['error log', [1, false]]])
+        await assert.rejects(copy.run({ selected: true }, { env: target.env }), /dark page's Copy error log answered "Could not copy the error log/)
+      } finally {
+        await target.close()
+      }
     })
   })
 
