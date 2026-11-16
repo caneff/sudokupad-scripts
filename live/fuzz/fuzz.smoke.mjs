@@ -422,6 +422,18 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       await fuzzScripted({ browser: browser(), puzzle: puzzleByName('16x16'), steps: [['rules font', [1, 1]]] })
     })
 
+    // The wheel scrolls on the compositor's schedule, so the read waits a moment before it looks. A box shrunk to its floor has text to scroll to.
+    it('a wheel over the rules box scrolls it, and a box with no rules text has nothing to scroll (#932)', async () => {
+      const top = async (p) => {
+        await p.waitForTimeout(500)
+        return p.locator('.puzzle-rules').evaluate((e) => e.scrollTop)
+      }
+      const shrink = ['rules drag', ['dl', 0, -500]]
+      assert.ok(await afterSteps(puzzle, [shrink, ['rules wheel', 400]], top) > 0, 'scrolled down')
+      assert.equal(await afterSteps(puzzle, [shrink, ['rules wheel', -400]], top), 0, 'up from the top stays')
+      assert.deepEqual(await afterSteps(puzzleByName('4x4'), [['rules wheel', 400]], saved), {})
+    })
+
     it('Restore defaults saves no sizing at all', async () => {
       assert.equal(await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['rules font', [-1, 1]], ['rules dialog', ['', '', true, false]]], sizing), undefined)
     })
