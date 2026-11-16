@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       hunts:
-        description: 'Hunts at once (blank: the nightly default, NIGHTLY_HUNTS of live/fuzz/nightly.mjs); how #925 measured 1, 3 and 4'
+        description: 'Hunts at once, a whole number of 1 or more; blank is the nightly default (NIGHTLY_HUNTS of live/fuzz/nightly.mjs)'
         required: false
         default: ''
 

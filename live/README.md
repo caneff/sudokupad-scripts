@@ -228,12 +228,15 @@ in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `
   `Fuzz: crash: <first signal>` (numbers folded to `N`) for a crash signal. The body has the seed, the puzzle, the shrunk steps, the replay command, the shared
   error log and the run's link, then a `## Blocked by` section reading `None`, as the watch's issues do. When an open issue already has that title, the run comments on it with the same details and files nothing. Closing the issue
   is what makes the next occurrence file a new one.
+- **Hunts at once** (#925). `NIGHTLY_HUNTS` hunts run together, each on its own seeds and with its own "hunt again" loop below; two that fail on one title file or comment once. `FUZZ_HUNTS` (the `hunts` input of a
+  `workflow_dispatch` of `fuzz.yml`) overrides the count and must be a whole number of 1 or more, or the run stops. Each hunt's own never-run list is in the log, and after them one list of the functions no hunt ran
+  (`mergeNeverRun`). `docs/research/fuzz-hit-rate.md` § Hunts at once has the measurement that chose the count.
 - **The hunt goes on after a failure** (#676). `run.mjs` stops at its first failure, so after a failure is filed or commented on, the night starts `run.mjs` again on a
   new seed with the minutes left of the 30, until they are used (less than one minute left is not worth a page start). A failure's title is filed or
-  commented on at most once a night, so a failure that keeps coming cannot bury a different one. A night with no failure is one 30-minute run and passes. The 50-minute timeout (`FUZZ_TIMEOUT_MS`)
+  commented on at most once a night, so a failure that keeps coming cannot bury a different one. A night with no failure is one 30-minute run per hunt, all at once, and passes. The 50-minute timeout (`FUZZ_TIMEOUT_MS`)
   bounds the whole night, shrinks included, not each run.
 - **A "did not run" issue.** A run that ends with neither verdict (no Chromium, a crash before the first list, the process not starting, a hang killed 50 minutes into the night, a pass that ran no action list) files
-  "Fuzz did not run: the nightly fuzz could not be checked", once while it is open, and ends the night. A workflow step before the fuzz that fails (`npm ci`, the Chromium
+  "Fuzz did not run: the nightly fuzz could not be checked", once while it is open (one, whatever the number of hunts), and ends the night: runs already going finish, and no hunt starts another. A workflow step before the fuzz that fails (`npm ci`, the Chromium
   install) files the same issue from the workflow.
 - **Shared code.** Filing is `fileIssue` of `live/watch.mjs` (its `comment` option makes a duplicate a comment). `live/fuzz/nightly.test.mjs` tests it in
   `npm test` with `gh` faked, the same seam as `live/watch.test.mjs`.
