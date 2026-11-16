@@ -232,6 +232,11 @@ describe('the rules', () => {
       assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'redo' }), [])
       assert.deepEqual(check('undo-redo-restores', undone, { before: board, action: 'click cell', earlier: { action: 'undo', page: board } }), [])
     })
+    it('leaves the pen and note settings of the reload rule alone: the note panel reads null while a note is open and an object after the redo finishes it', () => {
+      const looks = { penTool: null, penColors: ['#111'], noteLooks: null, noteColors: ['#333'] }
+      const finished = { ...looks, noteLooks: { color: '1', background: 'false' } }
+      assert.deepEqual(undoThenRedo({ ...board, ...finished }, { ...board, ...looks }), [])
+    })
     it('holds when a note open for typing is finished by the undo or redo: notes ride no undo stack (#902)', () => {
       const typing = { notesSeen: ['z'], notesDrawn: [], notesSaved: null }
       const finished = { notesSeen: ['z'], notesDrawn: ['z'], notesSaved: [{ kind: 'text', text: 'z' }] }

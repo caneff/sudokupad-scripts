@@ -173,7 +173,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
     Read only when the undo took steps off the stack and the redo put the same number back. Leaves out an undo on an empty stack, which does nothing and leaves
     the redo stack for the next redo; an undo that also drops SudokuPad's selection entry, which a redo does not bring back; the rules pane (layout); the order
     strokes sit in on the page; and a redo after anything but an undo (`undo back to the start` included).
-  - `reload-changes-nothing`: a reload keeps the pen strokes (state and drawn, as a set), the page color, Color by Digit's mode, groups and digits, and, in Digit
+  - `reload-changes-nothing`: a reload keeps the pen strokes (state and drawn, as a set), the page color, the pen colors and Text Anywhere's note colors (as the page computes them), Color by Digit's mode, groups and digits, the selected pen and line mode (while the pen tool is current, which a reload rarely leaves it) and Text Anywhere's note color and Background button (while its tool is current with no note selected or open; #935), and, in Digit
     and Off mode, the cells and their colors. Leaves out, in Cell and Both mode, every cell's colors and the serialized cells, which hold them with the pencil marks:
     Color by Digit colors the entered cells every time the page opens, so a coloring undone before the reload returns by design, and the colors and the marks
     sit in one serialized string that the rule does not parse. Also leaves out the notes' position and look (`notes-survive-reload` counts their text), the undo

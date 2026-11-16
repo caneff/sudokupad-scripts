@@ -63,6 +63,8 @@ export const CRISP_PX = Math.hypot(CRISP_HALF_PX, CRISP_HALF_PX)
 export const HANDLES = '#text-anywhere-layer .text-anywhere-resize'
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
+// The outline of each note selected.
+export const SELECTION = '#text-anywhere-layer .text-anywhere-selection'
 export const BOX_PICKS = `${SETTINGS_EDITOR} button[data-role="box-pick"]`
 export const BOX_CUSTOM_INPUT = `${SETTINGS_EDITOR} input[data-role="box-custom"]`
 export const PICKER_BOX = '.text-anywhere-picker'

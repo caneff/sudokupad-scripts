@@ -15,6 +15,8 @@ Measured with `measure.mjs run --sample sample-direct.json --only <id>`, 3 seeds
 A "harness catch" is `digit is still covered by a note after 4 drags off it` (seed 1001, 214 to 228 s, all three mutants): a crash signal of the engine, not of the new rule.
 
 - Text Anywhere's colors went from 0/3 to 3/3 at 300 s. Pen colors went to 1/3: 1 to 3 lists per hunt had a reload after the save, too few.
-- The pen save stays missed: the pen is read only while the pen tool is current, and a reload before the pen tool is opened (or with another tool current) shows nothing. The selected pen
-  cannot be read otherwise: `ToolPen.tool.selectedColor` is undefined until the tool first opens. Reaching it needs an action that reloads with the pen tool current, not a wider read.
+- The pen save stays missed, for two reasons. SudokuPad leaves the pen tool on a reload (probed: the tool is `normal` after it, while Text Anywhere's tool stays current), and `ToolPen.tool.selectedColor` is
+  undefined and the line mode is its default until the pen tool first opens, so `penTool` is null after a reload and is not compared. And the deletion shows only for a pen whose color number is also on an
+  earlier pad page, such as a letter pen: `setSelectedColor` also saves `ToolPen_color`, and `restoreSelectedPen` (pen-tool-extras.user.js) puts the saved pen back only over a stock selection of its color
+  number, so a digit pen on the first page comes back without the `PEN_KEY` save. Reaching it needs an action that selects a pen from a later page, reloads, and opens the pen tool before the next snapshot.
 - The 30 s budget catches none; the rule needs a reload after the save, which 30 s rarely runs.

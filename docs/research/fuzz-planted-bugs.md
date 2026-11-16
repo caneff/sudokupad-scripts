@@ -313,18 +313,18 @@ The 300 s hunts ran 5,340 action lists on the uncaught hunts, 310 of them (5.8%)
 | `text-anywhere:1855` | dismiss `click` listener holding a save | 0/3 | 0/3 | 197 / 11 | not reachable: the fuzz never clicks it |
 | `pen-tool-extras:341` | dismiss `click` listener holding a save | 0/3 | 0/3 | 196 / 11 | not reachable: the fuzz never clicks it |
 | `auto-rules-resizer:130` | lib `save`: `store.setData(key, envelope)` | 1/3 | 2/3 | n/a (caught) | more time |
-| `pen-tool-extras:2852` | `setData(LINE_MODE_KEY, lineMode)` | 0/3 | 0/3 | 33 / 0 | reload too rare, and the reload view would not read it (#935, #936) |
+| `pen-tool-extras:2852` | `setData(LINE_MODE_KEY, lineMode)` | 0/3 | 0/3 | 33 / 0 | reload too rare (#936); the reload view reads it since #935, but only while the pen tool is current |
 | `color-by-digit:327` | lib `save`: `store.setData(key, envelope)` | 0/3 | 0/3 | 0 / 0 | unclassified: reach read is an artifact (see below) |
 | `color-by-digit:2263` | `setData(key, true)` (one-time preload flag) | 0/3 | 0/3 | 0 / 0 | unclassified: reach read is an artifact (see below) |
 | `pen-tool-extras:105` | lib `saveRow`: `store.setData(row.key, value)` | 0/3 | 0/3 | 0 / 0 | unclassified: reach read is an artifact (see below) |
-| `pen-tool-extras:1557` | `setData(COLORS_KEY, ...)` | 0/3 | 0/3 | 197 / 12 | needs a rule (#935) |
-| `pen-tool-extras:1790` | `setData(PEN_KEY, pen)` | 0/3 | 0/3 | 164 / 10 | needs a rule (#935) |
+| `pen-tool-extras:1557` | `setData(COLORS_KEY, ...)` | 0/3 | 0/3 | 197 / 12 | the rule was added in #935, measured in `fuzz-missed-mutants/reload-settings-935.md` |
+| `pen-tool-extras:1790` | `setData(PEN_KEY, pen)` | 0/3 | 0/3 | 164 / 10 | the rule was added in #935, measured in `fuzz-missed-mutants/reload-settings-935.md` |
 | `text-anywhere:799` | lib `save`: `store.setData(key, envelope)` | 3/3 | 3/3 | n/a (caught) | caught at 30 s |
 | `text-anywhere:1303` | `setData(INDEX_KEY, touched.index)` | 0/3 | 0/3 | 133 / 8 | rule-blind or not visible: the index only lists puzzles with notes (not read further) |
-| `text-anywhere:2535` | `setData(COLOR_KEY, color)` | 0/3 | 0/3 | 17 / 1 | reload too rare, then needs a rule (#936, #935) |
-| `text-anywhere:2574` | `setData(COLORS_KEY, ...)` | 0/3 | 0/3 | 151 / 9 | needs a rule (#935) |
+| `text-anywhere:2535` | `setData(COLOR_KEY, color)` | 0/3 | 0/3 | 17 / 1 | reload too rare (#936); the reload view reads it since #935 |
+| `text-anywhere:2574` | `setData(COLORS_KEY, ...)` | 0/3 | 0/3 | 151 / 9 | the rule was added in #935, measured in `fuzz-missed-mutants/reload-settings-935.md` |
 | `text-anywhere:2586` | `setData(row.key, value)` | 1/3 | 3/3 | n/a (caught) | more time |
-| `text-anywhere:2738` | `setData(BACKGROUND_KEY, on)` | 0/3 | 0/3 | 53 / 2 | reload too rare, then needs a rule (#936, #935) |
+| `text-anywhere:2738` | `setData(BACKGROUND_KEY, on)` | 0/3 | 0/3 | 53 / 2 | reload too rare (#936); the reload view reads it since #935 |
 | `ui-tweaks:357` | `off.length > 0` to `>=` | 0/3 | 0/3 | 29 / 1 | needs a rule (#937) |
 | `pen-tool-extras:1295` | `x >= -GAMUT_EDGE` to `>` | 0/3 | 0/3 | 43 / 0 | not visible: needs a float exactly at the gamut edge |
 | `text-anywhere:1254` | `value > 0` to `>= 0` (stored size) | 0/3 | 0/3 | 14 / 1 | not visible: the script never saves a size of 0 |
@@ -345,8 +345,8 @@ coverage is not added, and the probe read 0 for the three caught lib mutants.
   not a save and crashes the pen pad just past 30 s, and `text-anywhere:799` was caught at 30 s. 10x the time moves the catch from 3 mutants to 4. No change is called for: it is the budget the nightly can spend, not a defect.
 - **Reload too rare: 5 deletions** (`color-by-digit:2499`, `text-anywhere:1316`, `pen-tool-extras:2852`, `text-anywhere:2535`, `text-anywhere:2738`). Their code ran in 17 to 53 lists each and a reload followed it in 0 to 2. Only 5.8% of lists have a
   reload. Ticket #936.
-- **Needs a rule: 4 deletions and 1 flip.** `pen-tool-extras:1789`, `1790`, `1557` and `text-anywhere:2574` ran in 151 to 197 lists with a reload after the code in 9 to 12, and were not caught in any of 3 hunts. `reloadView` reads
-  strokes, page color, Color by Digit's mode, groups and digits only: not the selected pen, the pen color set or the text note's color set. Ticket #935 for the saved settings; `ui-tweaks:357` (a flip that leaves an empty
+- **Needs a rule: 4 deletions and 1 flip.** `pen-tool-extras:1789`, `1790`, `1557` and `text-anywhere:2574` ran in 151 to 197 lists with a reload after the code in 9 to 12, and were not caught in any of 3 hunts. `reloadView` then read
+  strokes, page color, Color by Digit's mode, groups and digits only: not the selected pen, the pen color set or the text note's color set. Ticket #935 added them (`fuzz-missed-mutants/reload-settings-935.md` has what it caught); `ui-tweaks:357` (a flip that leaves an empty
   "Off because SudokuPad changed:" in the dialog, visible, read by no rule) is ticket #937. `text-anywhere:1303` (the notes index; it ran in 133 lists, 8 with a reload after) is rule-blind or not visible, and is in neither count: the visibility was not read further.
 - **Not reachable by the fuzz: 4 deletions.** The `dismiss` click listeners (dark-page, auto-rules-resizer, text-anywhere, pen-tool-extras) were "reached" because the listener is installed, but nothing in `live/fuzz/` clicks a
   dismiss button (`rg dismiss live/fuzz` finds none) and the notice they dismiss shows only on a page the script skipped. No ticket: that is not what the fuzz is for.
