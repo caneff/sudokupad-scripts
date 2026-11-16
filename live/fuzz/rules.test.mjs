@@ -138,6 +138,20 @@ describe('the rules', () => {
       assert.equal(check('reload-changes-nothing', { ...board, pageColor: 'rgb(0, 0, 0)' }, { before: board, action: 'reload' }).length, 1)
       assert.equal(check('reload-changes-nothing', { ...board, colorByDigit: colorByDigit('Off', [['5', ['5']], [''], ['']]) }, { before: board, action: 'reload' }).length, 1)
     })
+    const settings = { penTool: { selected: '5', lineMode: 'centeronly' }, penColors: ['#111', '#222'], noteLooks: { color: '4', background: 'true' }, noteColors: ['#333', '#444'] }
+    const set = { ...board, ...settings }
+    it('holds when a reload gives back the selected pen, the pen colors, the line mode and the note color, colors and background', () => {
+      assert.deepEqual(check('reload-changes-nothing', set, { before: set, action: 'reload' }), [])
+    })
+    it('fails when a reload changes the selected pen, the line mode, a pen color, the note color or background, or a note color', () => {
+      for (const changed of [{ penTool: { ...settings.penTool, selected: '1' } }, { penTool: { ...settings.penTool, lineMode: 'both' } }, { penColors: ['#111', '#999'] }, { noteLooks: { ...settings.noteLooks, color: '1' } }, { noteLooks: { ...settings.noteLooks, background: 'false' } }, { noteColors: ['', ''] }]) {
+        assert.equal(check('reload-changes-nothing', { ...set, ...changed }, { before: set, action: 'reload' }).length, 1, JSON.stringify(changed))
+      }
+    })
+    it('leaves the pen and the note panel alone when either side shows none (the tool is not current, or a note is selected or open, which a reload ends)', () => {
+      assert.deepEqual(check('reload-changes-nothing', { ...set, penTool: null, noteLooks: null }, { before: set, action: 'reload' }), [])
+      assert.deepEqual(check('reload-changes-nothing', set, { before: { ...set, penTool: null, noteLooks: null }, action: 'reload' }), [])
+    })
     it('holds when a reload draws the same strokes in another order', () => {
       const two = { penState: ['pen-1 pencolor-1', 'pen-e pencolor-1'], penDrawn: ['pen-1 pencolor-1', 'pen-e pencolor-1'] }
       assert.deepEqual(check('reload-changes-nothing', { ...two, penState: [...two.penState].reverse(), penDrawn: [...two.penDrawn].reverse() }, { before: two, action: 'reload' }), [])

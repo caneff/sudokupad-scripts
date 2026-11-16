@@ -14,6 +14,10 @@
 //   pageColor     the page's background as a computed `rgb(r, g, b)`
 //   rulesPane     the pane that shows the puzzle's rules: { fontPx, ownFontPx, scrollHeight, clientHeight, fontOffsetPx }; null on a puzzle with no rules text (#679)
 //   letterMode    whether the number pad shows letters
+//   penTool       { selected, lineMode } of Pen Tool Extras' pen while the pen tool is current; null otherwise
+//   penColors     the nine pen colors, `--puzzle-pencolor-N` as computed
+//   noteLooks     { color, background } the Text Anywhere panel shows (the color key marked current, the Background button's `aria-pressed`) while its tool is current with no note selected or open; null otherwise
+//   noteColors    the nine note colors, `--text-anywhere-color-N` as computed
 //   noteBoxes     one { text, fill, expected } per finished note with a box: its computed fill, and the fill of the box color Text Anywhere has saved (`boxFill` of the stored value and the note's color), both as computed rgb text
 import { createRequire } from 'node:module'
 
@@ -81,11 +85,12 @@ const withoutPenColors = (page) => ({
 
 // What a reload must leave as it was. Color by Digit colors the entered cells every time the page opens in Cell or Both mode, as one undo step, so a coloring
 // undone before the reload comes back by design: in those modes the cells' colors (and the serialized cells that hold them) are left out. Not read: the notes
-// (notes-survive-reload counts a note still open for typing), the undo stack depth and the letter pad, none of which a reload promises to keep.
+// (notes-survive-reload counts a note still open for typing), the undo stack depth and the letter pad, none of which a reload promises to keep. Read too: the settings the scripts save
+// (the selected pen, the pen line mode and the pen colors; the note color, background and colors), as the page shows them, since a deleted save shows only after a reload (#935).
 const reloadView = (page, ignorePenColors) => {
   const { mode, groups, cells } = page.colorByDigit
   const shown = ignorePenColors ? withoutPenColors(page) : page
-  const base = { penState: sorted(shown.penState), penDrawn: sorted(shown.penDrawn), pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit) }
+  const base = { penState: sorted(shown.penState), penDrawn: sorted(shown.penDrawn), pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit), penTool: page.penTool, penColors: page.penColors, noteLooks: page.noteLooks, noteColors: page.noteColors }
   return colorsCells(mode) ? base : { ...base, cells: shown.cells, colours: cells.map((cell) => cell.colours) }
 }
 
@@ -154,7 +159,10 @@ export const RULES = [
       if (action !== 'reload') return []
       // Only when a stroke was drawn since the last reload (the engine's `strokeSinceReload`): the bug needs the reload soon after one, and a key press can come between.
       const ignorePenColors = earlier?.strokeSinceReload === true && resetToColorOne(now.page)
-      return viewDifferences(reloadView(before.page, ignorePenColors), reloadView(now.page, ignorePenColors))
+      const [was, is] = [reloadView(before.page, ignorePenColors), reloadView(now.page, ignorePenColors)]
+      // The pen's and the note panel's settings show only while their tool is current (and the note's only with no note selected or open), and a side that shows none is no comparison.
+      for (const part of ['penTool', 'noteLooks']) if (was[part] === null || is[part] === null) { delete was[part]; delete is[part] }
+      return viewDifferences(was, is)
     }
   },
   {
