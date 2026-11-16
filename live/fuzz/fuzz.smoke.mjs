@@ -52,6 +52,14 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps })
   })
 
+  it('a wide note over a button is the one dragged off it, not a narrow note within its width (#930)', async () => {
+    // Seed 729's shrink after #930: the wide rich note covers a number pad button, and the small note 15 lay within the note's width of it.
+    const puzzle = puzzleByName('6x6')
+    const cell = (row, col) => puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+    const steps = [['size key', [[0, cell(1, 2)], false, 0, 1]], ['rich note', [4, cell(4, 4)]], ['pen line', [cell(1, 2), cell(1, 2), 1]]]
+    await fuzzScripted({ browser: browser(), puzzle, steps })
+  })
+
   it('a page that does not show the puzzle set\'s free cells is refused, not fuzzed on the wrong cells', async () => {
     const wrong = { ...puzzleByName('4x4'), free: [[0, 1]] }
     await assert.rejects(openTarget(browser(), wrong, {}), /opened with \d+ free cells that are not the 1 of puzzle-set\.mjs/)

@@ -112,7 +112,8 @@ const COVERED_BUTTON_NOTE = ([layer, notes]) => {
     if (!top || top === button || button.contains(top) || !top.closest(layer)) continue
     // A handle sits on its note's corner, so the note is the one whose box, grown by the handle's own size, holds the point.
     const reach = top.getBoundingClientRect().width
-    const note = [...document.querySelectorAll(notes)].find((n) => {
+    // A note's own element is that note: the grown box below would match any note within its width of the button, a wide one's included.
+    const note = top.closest(notes) ?? [...document.querySelectorAll(notes)].find((n) => {
       const b = n.getBoundingClientRect()
       return x >= b.left - reach && x <= b.right + reach && y >= b.top - reach && y <= b.bottom + reach
     })
