@@ -83,6 +83,8 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       markPoint: rec('markPoint', [120, 140]),
       holdPenColor: rec('holdPenColor'),
       setPenPicker: rec('setPenPicker'),
+      holdNoteColor: rec('holdNoteColor'),
+      setNotePicker: rec('setNotePicker'),
       penPresets: rec('penPresets'),
       undo: async () => { log.push(['undo']); undoDepth = Math.max(0, undoDepth - 1) },
       redo: async () => { log.push(['redo']); undoDepth++; if (lettersOnRedo) letterMode = true },

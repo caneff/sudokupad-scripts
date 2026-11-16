@@ -34,6 +34,8 @@
 //   env.markPoint(i, where) -> [x, y]        the page point at side `where` of target `i`: 0 to 3 an edge (top, right, bottom, left) a click reads as an edge click, 4 to 7 a corner (top left, top right, bottom left, bottom right)
 //   env.holdPenColor(color)                  holds the left button on the pen's color button `color` until the nine color pickers show, then lets go
 //   env.setPenPicker(color, hex)             sets the open color picker of pen `color` to `hex`
+//   env.holdNoteColor(color)                 picks Text Anywhere's tool, holds the left button on its text color button `color` until the nine color pickers show, then lets go
+//   env.setNotePicker(color, hex)            sets the open color picker of text color `color` to `hex`
 //   env.penPresets(pick, restore, save)      opens Pen Tool Extras' settings dialog, picks the color preset at position `pick` (wrapped to the pulldown's options) or, when `restore`, presses Restore defaults, and presses Save or Cancel
 //   env.uiTweaks({ hideSelect, wrapButtons, toggleTab, restore }, save)   opens UI Tweaks' dialog, sets the Hide the Toggle Selection button and Wrap buttons boxes, clicks the Tab box off and on again, presses Restore defaults when `restore`, and presses Save or Cancel
 //   env.settingsText(script, text, save)     opens the dialog of `script` (one of `ERROR_LOG_SCRIPTS`' words), presses Copy settings when `text` is null and else puts `text` on the clipboard and presses Paste settings, then presses Save or Cancel
@@ -55,7 +57,7 @@ import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 
 const require = createRequire(import.meta.url)
 const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.js')
-const { BOX_PRESETS, CORNERS, NUDGE_REPEAT_MS } = require('../../text-anywhere.user.js')
+const { BOX_LINES, BOX_PRESETS, CORNERS, NUDGE_REPEAT_MS, SPEED_WINDOW_MS } = require('../../text-anywhere.user.js')
 const { scriptFiles } = require('../../sync-lib.js')
 
 export const scriptFile = (name) => `${name}.user.js`
@@ -121,9 +123,10 @@ const DIGITS = '0123456789'
 export const MAX_PROFILE_EDITS = 4
 
 // Notes whose text draws as a list, a check box, a code block, and a note taller than its box (#815), which the wheel scrolls.
-export const RICH_NOTES = ['- one\n- **two**', '- [ ] buy\n- [x] sold', '```\nsum ->\n  x=1\n```', Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n')]
+// The last one (#930) holds a header, a subtext line, an _italic_, inline code and a snake_case word, whose underscores are no italic.
+export const RICH_NOTES = ['- one\n- **two**', '- [ ] buy\n- [x] sold', '```\nsum ->\n  x=1\n```', Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n'), '# Title\n-# small print\n_slow_ and snake_case and `x = 1`']
 const CHECK_BOX_NOTE = RICH_NOTES[1]
-const TALL_NOTE = RICH_NOTES[RICH_NOTES.length - 1]
+const TALL_NOTE = RICH_NOTES.find((text) => text.split('\n').length > BOX_LINES)
 export const NOTE_SLIDERS = SLIDERS.filter((name) => name.startsWith('note '))
 // What a note edit types into a reopened note, and the size keys (`SLIDER_STEP_KEYS` of text-anywhere.user.js and pen-tool-extras.user.js, which do not export it).
 export const MORE_TEXT = 'ab'
@@ -144,6 +147,9 @@ const MARK_SIDES = 8
 const MAX_LINE_MODE_PRESSES = 3
 const COLOR_PRESET_PICKS = 6
 const PEN_EDIT_ENDS = 5
+const NOTE_EDIT_ENDS = 4
+// Longer than the pointer's speed window and the slack on top of it (`SETTLE_SLACK_MS` of text-anywhere.user.js, 20, which it does not export): the settle timer has gone off.
+export const NOTE_SETTLE_MS = SPEED_WINDOW_MS + 20 + 80
 
 const NOTE_DRAG = [70, 40]
 const ownColor = (rgb) => `#${rgb.toString(16).padStart(6, '0')}`
@@ -229,10 +235,13 @@ function buildKinds () {
   })
 
   // A drag of the note whose middle is `centre`, with the left button still down.
-  async function dragNote (env, centre) {
+  async function pressNote (env, centre) {
     await env.useNotes()
     await env.page.mouse.move(...centre)
     await env.page.mouse.down()
+  }
+  async function dragNote (env, centre) {
+    await pressNote(env, centre)
     await env.page.mouse.move(centre[0] + NOTE_DRAG[0], centre[1] + NOTE_DRAG[1], { steps: 6 })
   }
   async function firstNote (env, text, a) {
@@ -801,6 +810,94 @@ function buildKinds () {
       run: async (env, twice) => {
         await env.pressNotePanel('hide all')
         if (twice) await env.pressNotePanel('hide all')
+      }
+    },
+    {
+      kind: 'note color edit',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
+      weight: 2,
+      // The hold of `pen color edit` on Text Anywhere's own text colors; its pickers end on Escape, a press outside the panel or a tool key.
+      arg: (puzzle) => fc.tuple(color, fc.nat(NOTE_EDIT_ENDS - 1), fc.integer({ min: 0, max: 0xffffff }), cell(puzzle), toolKey),
+      label: ([c, end, rgb, a, key], at) => `hold text color ${c} to edit its color then ${['press Escape', `recolor it to ${ownColor(rgb)} and press Escape`, `click ${at(a)}`, `press ${key}`][end]}`,
+      run: async (env, [c, end, rgb, a, key]) => {
+        await env.holdNoteColor(c)
+        if (end === 1) await env.setNotePicker(c, ownColor(rgb))
+        if (end === 2) await env.page.mouse.click(...await env.cellPoint(a))
+        else if (end === 3) await env.page.keyboard.press(key)
+        else await env.page.keyboard.press('Escape')
+      }
+    },
+    {
+      kind: 'note shift drag',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
+      weight: 1,
+      // Shift goes down after the press: held at the press, a note is only selected. With it down the drag keeps to one axis (`lockedAxis`).
+      arg: (puzzle) => note(puzzle),
+      label: ([t, a], at) => `drag the first note ${ifNone(t, a, at)} with Shift held`,
+      run: async (env, [t, a]) => {
+        const centre = await firstNote(env, NOTE_TEXTS[t], a)
+        await pressNote(env, centre)
+        await env.page.keyboard.down('Shift')
+        await env.page.mouse.move(centre[0] + NOTE_DRAG[0], centre[1] + NOTE_DRAG[1], { steps: 6 })
+        await env.page.mouse.up()
+        await env.page.keyboard.up('Shift')
+      }
+    },
+    {
+      kind: 'note drag held still',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
+      weight: 1,
+      // Held past the pointer's speed window, the note is drawn again where it stands (the settle timer).
+      arg: (puzzle) => note(puzzle),
+      label: ([t, a], at) => `drag the first note ${ifNone(t, a, at)} then hold it still ${NOTE_SETTLE_MS} ms and let go`,
+      run: async (env, arg) => {
+        await noteDragStart(env, arg)
+        await env.holdFor(NOTE_SETTLE_MS)
+        await env.page.mouse.up()
+      }
+    },
+    {
+      kind: 'note press lost',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
+      weight: 1,
+      // A press that never moves and then loses the pointer to a window blur (`endGesture`, on the window's blur): the press ends as a click on its own (`endDrag`'s default), and the later release does nothing.
+      arg: (puzzle) => note(puzzle),
+      label: ([t, a], at) => `press the first note ${ifNone(t, a, at)} then blur the window and let go`,
+      run: async (env, [t, a]) => {
+        await pressNote(env, await firstNote(env, NOTE_TEXTS[t], a))
+        await env.blurFocus()
+        await env.page.mouse.up()
+      }
+    },
+    {
+      kind: 'note resize escape',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
+      weight: 1,
+      arg: (puzzle) => fc.tuple(note(puzzle), fc.nat(RESIZE_CORNERS - 1), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX }), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX })),
+      label: ([[t, a], corner, dx, dy], at) => `drag corner ${corner} of the first note ${ifNone(t, a, at)} by ${dx} x ${dy} then press Escape and let go`,
+      run: async (env, [[t, a], corner, dx, dy]) => {
+        const handle = await selectFirstNote(env, NOTE_TEXTS[t], a) && await env.noteHandle(corner)
+        if (!handle) return
+        await env.page.mouse.move(...handle)
+        await env.page.mouse.down()
+        await env.page.mouse.move(handle[0] + dx, handle[1] + dy, { steps: 6 })
+        await env.page.keyboard.press('Escape')
+        await env.page.mouse.up()
       }
     },
     {

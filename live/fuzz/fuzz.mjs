@@ -11,7 +11,7 @@ import { actButton, animationsDone, closeDialogWith, closeExtrasEditorWith, dial
 import { COLOR_BY_DIGIT_DIALOG, SETTINGS_SCRIPTS, settingsScript } from '../scripts.mjs'
 import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, RULES_PANE } from '../auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
-import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, HIDE_BUTTON, KEYPAD, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, HIDE_BUTTON, KEYPAD, middleOf, PICKER_BOX, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
@@ -111,7 +111,8 @@ const COVERED_BUTTON_NOTE = ([layer, notes]) => {
     if (!top || top === button || button.contains(top) || !top.closest(layer)) continue
     // A handle sits on its note's corner, so the note is the one whose box, grown by the handle's own size, holds the point.
     const reach = top.getBoundingClientRect().width
-    const note = [...document.querySelectorAll(notes)].find((n) => {
+    // A note's own element is that note: the grown box below would match any note within its width of the button, a wide one's included.
+    const note = top.closest(notes) ?? [...document.querySelectorAll(notes)].find((n) => {
       const b = n.getBoundingClientRect()
       return x >= b.left - reach && x <= b.right + reach && y >= b.top - reach && y <= b.bottom + reach
     })
@@ -195,6 +196,18 @@ function envFor (p, puzzle, { beforeReload }) {
       await p.mouse.move(...covered.point)
       await p.mouse.down()
       await p.mouse.move(...to, { steps: 6 })
+      await p.mouse.up()
+    }
+  }
+  // Holds the left button on a color button until the nine color pickers show, then lets go; a hold that shows none is a failure: the player's hold opens them.
+  const holdColor = async (button, pickers, name) => {
+    const box = await p.locator(button).boundingBox({ timeout: BOX_TIMEOUT_MS })
+    if (!box) throw new Error(`${name}'s button is not on the page`)
+    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await p.mouse.down()
+    try {
+      await p.locator(pickers).first().waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
+    } finally {
       await p.mouse.up()
     }
   }
@@ -290,18 +303,12 @@ function envFor (p, puzzle, { beforeReload }) {
       const at = [[row + EDGE_INSET, col + 0.5], [row + 0.5, col + 1 - EDGE_INSET], [row + 1 - EDGE_INSET, col + 0.5], [row + 0.5, col + EDGE_INSET], [row, col], [row, col + 1], [row + 1, col], [row + 1, col + 1]]
       return gridPoint(p, at[side])
     },
-    // The button is let go whatever happens, and a hold that shows no pickers is a failure: the player's hold opens them.
-    async holdPenColor (color) {
-      const box = await p.locator(`.tool-pen button[data-key="${color}"]`).boundingBox({ timeout: BOX_TIMEOUT_MS })
-      if (!box) throw new Error(`pen color ${color}'s button is not on the page`)
-      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-      await p.mouse.down()
-      try {
-        await p.locator(COLOR_PICKERS).first().waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
-      } finally {
-        await p.mouse.up()
-      }
+    holdPenColor: (color) => holdColor(`.tool-pen button[data-key="${color}"]`, COLOR_PICKERS, `pen color ${color}`),
+    async holdNoteColor (color) {
+      await pickNotes()
+      await holdColor(`${KEYPAD} button[data-key="${color}"]`, PICKER_BOX, `text color ${color}`)
     },
+    setNotePicker: (color, hex) => p.locator(`${PICKER_BOX} input[data-key="${color}"]`).fill(hex),
     setPenPicker: (color, hex) => p.locator(`${COLOR_PICKERS} input[data-key="${color}"]`).fill(hex),
     async penPresets (pick, restore, save) {
       await openExtrasEditor(p)
