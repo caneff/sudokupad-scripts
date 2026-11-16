@@ -91,6 +91,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       undoAll: async () => { log.push(['undoAll']); undoDepth = 0 },
       clickColorMode: rec('clickColorMode'),
       profileEditor: rec('profileEditor'),
+      holdColorMode: rec('holdColorMode'),
       pickProfile: rec('pickProfile'),
       restartPuzzle: rec('restartPuzzle'),
       placeNote: async (...a) => { log.push(['placeNote', ...a]); notes++ },

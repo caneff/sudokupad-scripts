@@ -16,7 +16,7 @@ import { ARROW, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { runFuzz, runScript } from './engine.mjs'
-import { KINDS, MARK_BOXES, PROFILE_NAMES, scriptedList, SLIDERS } from './actions.mjs'
+import { DIGIT_KEYS, DIGITS, KINDS, MARK_BOXES, PROFILE_NAMES, ROW_KEYS, scriptedList, SLIDERS, SWATCH_KEYS } from './actions.mjs'
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
@@ -53,6 +53,10 @@ for (const name of SLIDERS) if (!SLIDER_SELECTORS[name]) throw new Error(`action
 const TRACK_MARGIN_PX = 6
 
 const BOX_TIMEOUT_MS = 2000
+// Past the Color by Digit button's hold (500 ms) and its drift allowance, so a hold that drifted off had time to open a menu and did not.
+const COLOR_HOLD_DRIFT_WAIT_MS = 800
+const COLOR_BUTTON = '#control-colorbydigit'
+const COLOR_HOLD_DRIFT_PX = 40
 
 const UI_TWEAKS = settingsScript('ui-tweaks.user.js')
 const UI_TWEAKS_DIALOG = UI_TWEAKS.editor
@@ -146,7 +150,7 @@ async function editProfiles (p, edits, save, fromMenu) {
     return locator.nth(n % count)
   }
   const rows = p.locator(PROFILE_ROWS)
-  for (const [op, a, b] of edits) {
+  for (const [op, a, b, c] of edits) {
     if (op === 'new') {
       const add = p.locator(`${PROFILE_EDITOR} [data-act=new-profile]`)
       if (await add.isEnabled()) await add.click()
@@ -165,6 +169,29 @@ async function editProfiles (p, edits, save, fromMenu) {
     } else if (op === 'paint') {
       await (await wrapped(p.locator(`${PROFILE_EDITOR} button[data-role=swatch]`), b)).click()
       await p.locator(`${PROFILE_EDITOR} button[data-act=digit][data-digit="${a}"]`).click()
+    } else if (op === 'swatch key') {
+      const swatch = await wrapped(p.locator(`${PROFILE_EDITOR} button[data-role=swatch]`), a)
+      await swatch.focus()
+      await swatch.press(SWATCH_KEYS[b])
+    } else if (op === 'digit key') {
+      await p.locator(`${PROFILE_EDITOR} button[data-act=digit][data-digit="${DIGITS[a]}"]`).focus()
+      await p.keyboard.press(DIGIT_KEYS[b])
+    } else if (op === 'row key') {
+      const button = await wrapped(p.locator(`${PROFILE_EDITOR} [data-act=select]`), a)
+      await button.focus()
+      await button.press(ROW_KEYS[b])
+    } else if (op === 'paint drag') {
+      await (await wrapped(p.locator(`${PROFILE_EDITOR} button[data-role=swatch]`), c)).click()
+      const from = await p.locator(`${PROFILE_EDITOR} button[data-act=digit][data-digit="${DIGITS[a]}"]`).boundingBox({ timeout: BOX_TIMEOUT_MS })
+      const to = await p.locator(`${PROFILE_EDITOR} button[data-act=digit][data-digit="${DIGITS[b]}"]`).boundingBox({ timeout: BOX_TIMEOUT_MS })
+      if (!from || !to) throw new Error('a digit chip is not on the page to drag across')
+      await p.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+      await p.mouse.down()
+      await p.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 })
+      await p.mouse.up()
+    } else if (op === 'clear all') {
+      const clear = p.locator(`${PROFILE_EDITOR} [data-act=clear]`)
+      if (await clear.isEnabled()) await clear.click()
     } else {
       const select = p.locator(`${PROFILE_EDITOR} select[data-role=${op === 'cell profile' ? 'cell-profile' : 'digit-profile'}]`)
       await select.selectOption({ index: a % await select.locator('option').count() })
@@ -258,7 +285,31 @@ function envFor (p, puzzle, { beforeReload }) {
     undo: () => clickIn(p, '#control-undo'),
     redo: () => clickIn(p, '#control-redo'),
     undoAll: () => undoAll(p),
-    clickColorMode: () => clickIn(p, '#control-colorbydigit'),
+    clickColorMode: () => clickIn(p, COLOR_BUTTON),
+    holdColorMode: async (drift) => {
+      const box = await p.locator(COLOR_BUTTON).boundingBox({ timeout: BOX_TIMEOUT_MS })
+      if (!box) throw new Error('the Color by Digit button is not on the page')
+      const x = box.x + box.width / 2
+      const y = box.y + box.height / 2
+      await p.mouse.move(x, y)
+      await p.mouse.down()
+      try {
+        if (drift) {
+          await p.mouse.move(x, y + COLOR_HOLD_DRIFT_PX, { steps: 4 })
+          // A "nothing happened in N ms" check: the hold timer would have fired by now.
+          await sleep(COLOR_HOLD_DRIFT_WAIT_MS)
+          if (await p.locator(PROFILE_MENU).count() > 0) throw new Error('a hold that drifted off the Color by Digit button opened its menu')
+        } else {
+          await p.locator(PROFILE_MENU).waitFor({ state: 'visible', timeout: HOLD_WAIT_MS })
+        }
+      } finally {
+        await p.mouse.up()
+      }
+      if (!drift) {
+        await p.keyboard.press('Escape')
+        await p.locator(PROFILE_MENU).waitFor({ state: 'detached' })
+      }
+    },
     profileEditor: (edits, save, fromMenu) => editProfiles(p, edits, save, fromMenu),
     pickProfile: (i) => pickProfileFromMenu(p, i),
     restartPuzzle: () => restartPuzzle(p),

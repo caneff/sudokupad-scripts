@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { createRequire } from 'node:module'
-import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, NOTE_SETTLE_MS, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
+import { actionList, MORE_TEXT, NOTE_SLIDERS, SIZE_KEYS, AUTO_RULES_RESIZER_TEXTS, COLOR_BY_DIGIT_TEXTS, DARK_COLORS, DARK_PAGE_TEXTS, ERROR_LOG_SCRIPTS, PEN_TOOL_EXTRAS_TEXTS, TEXT_ANYWHERE_TEXTS, DEFAULT_MAX_COMMANDS, focusFiles, FOCUS_FACTOR, KIND_GROUPS, KIND_NAMES, KINDS, kindWeights, MARK_BOXES, MAX_PROFILE_EDITS, MAX_PROFILES, PROFILE_NAMES, NOTE_SETTLE_MS, RICH_NOTES, RULES_CORNERS, RULES_DRAG_REACH_PX, RULES_LIMIT_TEXTS, scriptedList, UI_TWEAKS_TEXTS } from './actions.mjs'
 import { fakeTargets } from './fake-target.mjs'
 import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
@@ -229,7 +229,7 @@ describe('the action vocabulary', () => {
         for (const [op] of edits) ops.add(op)
         saves.add(save)
       }
-      assert.deepEqual([...ops].sort(), ['cell profile', 'delete', 'digit profile', 'move', 'new', 'paint', 'rename', 'select'])
+      assert.deepEqual([...ops].sort(), ['cell profile', 'clear all', 'delete', 'digit key', 'digit profile', 'move', 'new', 'paint', 'paint drag', 'rename', 'row key', 'select', 'swatch key'])
       assert.deepEqual([...saves].sort(), [false, true])
       assert.deepEqual([...menus].sort(), [false, true], 'opened from the settings and from the pad menu')
     })
@@ -238,7 +238,18 @@ describe('the action vocabulary', () => {
       const steps = (await editorCalls()).map(({ step }) => step)
       for (const step of steps) assert.match(step, /^Color by Digit profiles dialog(?: from the pad menu)?: .*(?:Save|Cancel)$/)
       const all = steps.join(' | ')
-      for (const word of ['new profile', 'rename to ', 'delete profile ', 'move profile ', 'select profile ', 'paint digit ', 'cell profile ', 'digit profile ']) assert.ok(all.includes(word), word)
+      for (const word of ['new profile', 'rename to ', 'delete profile ', 'move profile ', 'select profile ', 'paint digit ', 'cell profile ', 'digit profile ', 'press ', ' on profile row ', ' on swatch ', ' on digit ', 'drag from digit ', 'Clear all']) assert.ok(all.includes(word), word)
+    })
+
+    it('the edits of the keyboard, the paint drag and Clear all, and a name with & < > and a quote, are drawn (#931)', async () => {
+      const seen = await editorCalls()
+      const edits = seen.flatMap(({ call: [, e] }) => e)
+      const keys = (op) => new Set(edits.filter(([o]) => o === op).map(([, , k]) => k))
+      const arrowAndDigit = [...keys('digit key')].some((k) => k < 4) && [...keys('digit key')].some((k) => k >= 4)
+      assert.ok(keys('swatch key').size >= 3 && arrowAndDigit && keys('row key').size >= 3, 'arrows, Enter, Space and digits are drawn')
+      for (const op of ['swatch key', 'digit key', 'row key', 'paint drag', 'clear all']) assert.ok(edits.some(([o]) => o === op), op)
+      assert.ok(PROFILE_NAMES.some((name) => /[&<>"]/.test(name)), 'a name with the four characters escapeHtml replaces')
+      assert.ok(PROFILE_NAMES.length > 0 && edits.some(([o, i]) => o === 'rename' && /[&<>"]/.test(PROFILE_NAMES[i])), 'it is typed')
     })
 
     it('the switch action picks a profile from the pad menu, and the restart action restarts the puzzle', async () => {
@@ -1270,5 +1281,49 @@ describe("Text Anywhere's color hold and note gestures (#930)", () => {
     assert.match(markdown, /(^|\s)_\w+_(\s|$)/m, 'an italic')
     assert.match(markdown, /`[^`\n]+`/, 'inline code')
     assert.match(markdown, /[a-z]_[a-z]/, 'an underscore inside a word')
+  })
+})
+
+describe('Color by Digit: a held button and a conflicting mark (#931)', () => {
+  const calls = (log, name) => log.filter(([n]) => n === name)
+  const kindOf = (kind) => actionsOf(sample(51, 1500)).filter((x) => x.kind === kind)
+
+  it('the hold and the conflict mark exercise Color by Digit, are generated and are ordinary use; the hold is a gesture a busy start leaves out and the mark can sit in one', () => {
+    for (const kind of ['color button hold', 'conflict mark']) {
+      assert.deepEqual(KIND_SCRIPTS[kind], ['color-by-digit.user.js'], kind)
+      assert.equal(KIND_GROUPS[kind], 'ordinary', kind)
+      assert.ok(kindOf(kind).length > 3, `${kind} is drawn`)
+    }
+    assert.ok(!START_KINDS.includes('color button hold'))
+    assert.ok(START_KINDS.includes('conflict mark'))
+  })
+
+  it('a hold presses the button and lets go on it, or drifts off it first, and says which', async () => {
+    const drifts = new Set()
+    for (const a of kindOf('color button hold')) {
+      const { log } = await runOn(a)
+      const held = calls(log, 'holdColorMode')
+      assert.equal(held.length, 1)
+      drifts.add(held[0][1])
+      assert.equal(String(a), held[0][1] ? 'hold the Color by Digit button then drift off it and let go' : 'hold the Color by Digit button until its menu opens and press Escape')
+    }
+    assert.deepEqual([...drifts].sort(), [false, true])
+  })
+
+  it('a conflict mark enters a digit in one cell, then puts a corner or centre mark of it in another cell of the same row', async () => {
+    const tools = new Set()
+    for (const a of kindOf('conflict mark')) {
+      const { log } = await runOn(a)
+      const keys = calls(log, 'keyboard.press').map(([, k]) => k)
+      assert.equal(calls(log, 'mouse.click').length, 2)
+      assert.equal(keys.length, 4, 'digit tool, the digit, the mark tool, the digit')
+      assert.equal(keys[0], 'z')
+      assert.equal(keys[1], keys[3], 'the same digit')
+      tools.add(keys[2])
+      const [, from, to] = String(a).match(/^enter \d in r(\d+)c\d+ then put a (?:corner|centre) mark of it in r(\d+)c\d+$/) ?? []
+      assert.ok(from !== undefined, String(a))
+      assert.equal(to, from, 'same row')
+    }
+    assert.deepEqual([...tools].sort(), ['c', 'x'])
   })
 })
