@@ -81,27 +81,63 @@ export const didNotRunIssue = (why) => ({
   ].join('\n')
 })
 
-export async function nightly ({ runFuzz, fileIssue: file, newSeed, now = Date.now, runUrl }) {
+// The never-run lists the hunts print after their verdicts (`neverRunReport` of coverage.mjs), as one list: a function is never-run only if no hunt ran it. A hunt that printed no list
+// (killed for hanging) says nothing. A function inside a never-run one is not listed by a hunt (V8 never compiles it), so a function a hunt left out is counted as run: the merged count is a floor, as each hunt's.
+export function mergeNeverRun (outputs) {
+  const hunts = outputs.map((output) => {
+    const scripts = new Map()
+    let file
+    for (const line of output.split('\n')) {
+      const head = /^(\S+\.user\.js): \d+ of (\d+) functions never ran$/.exec(line)
+      if (head) { file = head[1]; scripts.set(file, { total: Number(head[2]), never: new Set() }); continue }
+      const fn = /^ {2}(.*\(line \d+, column \d+\))$/.exec(line)
+      if (fn && file) scripts.get(file).never.add(fn[1])
+    }
+    return scripts
+  }).filter((scripts) => scripts.size > 0)
+  const files = [...new Set(hunts.flatMap((scripts) => [...scripts.keys()]))]
+  return files.flatMap((file) => {
+    const seen = hunts.map((scripts) => scripts.get(file)).filter(Boolean)
+    const never = [...seen[0].never].filter((fn) => seen.every((s) => s.never.has(fn)))
+    return [`${file}: ${never.length} of ${Math.max(...seen.map((s) => s.total))} functions never ran`, ...never.map((fn) => `  ${fn}`)]
+  })
+}
+
+// `hunts` loops run at once, each with its own seeds and its own "hunt again after a failure" loop; they share the night's clock, the set of titles reported, and the did-not-run stop.
+export async function nightly ({ runFuzz, fileIssue: file, newSeed, now = Date.now, runUrl, hunts = 1, print = console.log }) {
   const start = now()
   const reported = new Set()
-  while (true) {
-    const minutes = FUZZ_MINUTES - (now() - start) / MINUTE_MS
-    if (reported.size > 0 && minutes < MIN_RUN_MINUTES) break
-    let result
-    try { result = await runFuzz(newSeed(), { minutes, timeoutMs: FUZZ_TIMEOUT_MS - (now() - start) }) } catch (e) {
-      await file(didNotRunIssue(`the fuzz could not be started: ${e.message}`))
-      return 'did-not-run'
+  const outputs = []
+  let didNotRun = false
+  const hunt = async () => {
+    while (!didNotRun) {
+      const minutes = FUZZ_MINUTES - (now() - start) / MINUTE_MS
+      if (reported.size > 0 && minutes < MIN_RUN_MINUTES) return
+      let result
+      try { result = await runFuzz(newSeed(), { minutes, timeoutMs: FUZZ_TIMEOUT_MS - (now() - start) }) } catch (e) {
+        didNotRun = true
+        await file(didNotRunIssue(`the fuzz could not be started: ${e.message}`))
+        return
+      }
+      outputs.push(result.output)
+      const parsed = parseFuzzOutput(result.output)
+      if (parsed?.passed && result.ok) return
+      if (!parsed?.failed) {
+        didNotRun = true
+        await file(didNotRunIssue(`it printed no verdict (exit ${result.ok ? 0 : 'non-zero'}); the tail of its output:\n\n\`\`\`\n${result.output.split('\n').slice(-15).join('\n')}\n\`\`\``))
+        return
+      }
+      const issue = fuzzIssue(parsed, { runUrl })
+      // Marked before the filing is awaited, so a second hunt failing on the same title while this one files does not file it again.
+      if (!reported.has(issue.title)) {
+        reported.add(issue.title)
+        await file(issue)
+      }
     }
-    const parsed = parseFuzzOutput(result.output)
-    if (parsed?.passed && result.ok) break
-    if (!parsed?.failed) {
-      await file(didNotRunIssue(`it printed no verdict (exit ${result.ok ? 0 : 'non-zero'}); the tail of its output:\n\n\`\`\`\n${result.output.split('\n').slice(-15).join('\n')}\n\`\`\``))
-      return 'did-not-run'
-    }
-    const issue = fuzzIssue(parsed, { runUrl })
-    if (!reported.has(issue.title)) await file(issue)
-    reported.add(issue.title)
   }
+  await Promise.all(Array.from({ length: hunts }, hunt))
+  mergeNeverRun(outputs).forEach((line) => print(line))
+  if (didNotRun) return 'did-not-run'
   return reported.size > 0 ? 'red' : 'green'
 }
 
@@ -109,6 +145,9 @@ export async function nightly ({ runFuzz, fileIssue: file, newSeed, now = Date.n
 // The configuration the nightly hunts with: busy-start caught the most planted bugs, and the fastest, of the four measured
 // (docs/research/fuzz-planted-bugs.md, third run). Named on the command line, not made the default, so a replay command printed before keeps replaying.
 export const NIGHTLY_CONFIG = 'busy-start'
+
+// How many hunts run at once (#925). `FUZZ_HUNTS` overrides it, which is how fuzz.yml's `hunts` input measures a count on the runner (docs/research/fuzz-hit-rate.md, § Hunts at once).
+export const NIGHTLY_HUNTS = 1
 
 // Each run is told its seed in the log, since a run killed for hanging prints none.
 export function fuzzProcess (seed, { minutes, timeoutMs }, runner = run) {
@@ -119,6 +158,7 @@ export function fuzzProcess (seed, { minutes, timeoutMs }, runner = run) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const runUrl = process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : undefined
   const outcome = await nightly({
+    hunts: Number(process.env.FUZZ_HUNTS) || NIGHTLY_HUNTS,
     runFuzz: fuzzProcess,
     fileIssue,
     newSeed: () => Math.floor(Math.random() * 2 ** 31),

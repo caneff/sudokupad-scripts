@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileIssue, run } from '../watch.mjs'
-import { FUZZ_MINUTES, FUZZ_TIMEOUT_MS, MINUTE_MS, NIGHTLY_CONFIG, didNotRunIssue, failureTitle, fuzzProcess, nightly, parseFuzzOutput } from './nightly.mjs'
+import { FUZZ_MINUTES, FUZZ_TIMEOUT_MS, MINUTE_MS, NIGHTLY_CONFIG, NIGHTLY_HUNTS, didNotRunIssue, failureTitle, fuzzProcess, mergeNeverRun, nightly, parseFuzzOutput } from './nightly.mjs'
 import { CONFIGS } from './configs.mjs'
 
 const failedOutput = (seed, error, steps = ['click cell 3', 'digit 5']) => [
@@ -166,6 +166,109 @@ describe('a night with several failures', () => {
   })
 })
 
+// Hunts that run at once: `outputs[k]` is what the k-th run started prints. Every run yields once before it returns, so the hunts are all in flight when the first one ends. The first run to end uses the night's 30 minutes.
+const concurrent = (gh, hunts, outputs, { ok = false, print = () => {} } = {}) => {
+  const runs = []
+  let clock = 0
+  let seed = 0
+  const outcome = nightly({
+    hunts,
+    runFuzz: async (s, limits) => {
+      const k = runs.length
+      runs.push({ seed: s, ...limits })
+      await new Promise((resolve) => setImmediate(resolve))
+      clock = FUZZ_MINUTES * MINUTE_MS
+      return { ok, output: outputs[k] ?? 'a run started after the night was over\n' }
+    },
+    fileIssue: gh.file,
+    newSeed: () => ++seed,
+    now: () => clock,
+    print
+  })
+  return Object.assign(outcome, { runs })
+}
+
+describe('hunts at once', () => {
+  it('starts every hunt at the same time, each on its own seed', async () => {
+    const n = concurrent(fakeGh(), 3, ['fuzz passed: 9 action lists over 2 puzzles in 5 s (seed 1)\n', 'fuzz passed: 9 action lists over 2 puzzles in 5 s (seed 2)\n', 'fuzz passed: 9 action lists over 2 puzzles in 5 s (seed 3)\n'], { ok: true })
+    assert.equal(await n, 'green')
+    assert.deepEqual(n.runs.map((r) => r.seed), [1, 2, 3])
+    assert.deepEqual(n.runs.map((r) => r.minutes), [FUZZ_MINUTES, FUZZ_MINUTES, FUZZ_MINUTES])
+    assert.deepEqual(n.runs.map((r) => r.timeoutMs), [FUZZ_TIMEOUT_MS, FUZZ_TIMEOUT_MS, FUZZ_TIMEOUT_MS])
+  })
+
+  it('files one issue when two hunts fail on the same title at once', async () => {
+    const gh = fakeGh()
+    const n = concurrent(gh, 2, [failedOutput(1, RULE), failedOutput(2, RULE.replace('r1c1-r1c2', 'r2c2-r2c3'))])
+    assert.equal(await n, 'red')
+    assert.deepEqual(verbs(gh), ['issue create'])
+  })
+
+  it('files one issue each when two hunts fail on two titles at once', async () => {
+    const gh = fakeGh()
+    assert.equal(await concurrent(gh, 2, [failedOutput(1, RULE), failedOutput(2, CRASH)]), 'red')
+    assert.deepEqual(gh.open.map((i) => i.title).sort(), ['Fuzz: crash: page error or console error: TypeError: x is null at N', 'Fuzz: rule broken: pen-lines-drawn'])
+  })
+
+  it('comments once, not twice, when two hunts fail at once on a title an open issue has', async () => {
+    const gh = fakeGh()
+    gh.open.push({ number: 9, title: 'Fuzz: rule broken: pen-lines-drawn' })
+    await concurrent(gh, 2, [failedOutput(1, RULE), failedOutput(2, RULE)])
+    assert.deepEqual(verbs(gh), ['issue comment'])
+  })
+
+  it('hunts again in the hunt that failed, on a new seed with the time left, while the others go on', async () => {
+    const pass = (seed) => `fuzz passed: 9 action lists over 2 puzzles in 5 s (seed ${seed})\n`
+    const gh = fakeGh()
+    const runs = []
+    let clock = 0
+    const outputs = { 1: failedOutput(1, RULE), 2: pass(2), 3: pass(3) }
+    const outcome = await nightly({
+      hunts: 2,
+      runFuzz: async (seed, limits) => { runs.push({ seed, ...limits }); await new Promise((resolve) => setImmediate(resolve)); clock += 10 * MINUTE_MS; return { ok: seed !== 1, output: outputs[seed] } },
+      fileIssue: gh.file,
+      newSeed: () => runs.length + 1,
+      now: () => clock,
+      print: () => {}
+    })
+    assert.equal(outcome, 'red')
+    assert.deepEqual(runs.map((r) => r.seed), [1, 2, 3])
+    assert.equal(runs[2].minutes, FUZZ_MINUTES - 10)
+  })
+
+  it('files the did-not-run issue once and starts no new run when one hunt has no verdict', async () => {
+    const gh = fakeGh()
+    const n = concurrent(gh, 2, ['browserType.launch: Executable does not exist\n', failedOutput(2, RULE), failedOutput(3, CRASH)])
+    assert.equal(await n, 'did-not-run')
+    assert.equal(n.runs.length, 2)
+    assert.ok(gh.open.some((i) => i.title === didNotRunIssue('x').title))
+  })
+
+  it('prints one never-run list, of the functions no hunt ran', async () => {
+    const list = (...names) => ['a.user.js: ' + names.length + ' of 9 functions never ran', ...names.map((n, i) => `  ${n} (line ${i + 1}, column 3)`)].join('\n') + '\n'
+    const printed = []
+    await concurrent(fakeGh(), 2, [
+      'fuzz passed: 5 action lists over 2 puzzles in 5 s (seed 1)\n' + list('f', 'g'),
+      'fuzz passed: 5 action lists over 2 puzzles in 5 s (seed 2)\n' + list('f')
+    ], { ok: true, print: (line) => printed.push(line) })
+    assert.deepEqual(printed.slice(-2), ['a.user.js: 1 of 9 functions never ran', '  f (line 1, column 3)'])
+  })
+})
+
+describe('mergeNeverRun', () => {
+  const run = (...lines) => lines.join('\n') + '\n'
+  it('keeps a function only when every run left it out, and counts the largest total', () => {
+    const a = run('fuzz passed: 1 action lists over 1 puzzles in 1 s (seed 1)', 'x.user.js: 2 of 8 functions never ran', '  f (line 1, column 1)', '  g (line 2, column 1)')
+    const b = run('fuzz passed: 1 action lists over 1 puzzles in 1 s (seed 2)', 'x.user.js: 2 of 10 functions never ran', '  g (line 2, column 1)', '  h (line 3, column 1)')
+    assert.deepEqual(mergeNeverRun([a, b]), ['x.user.js: 1 of 10 functions never ran', '  g (line 2, column 1)'])
+  })
+  it('ignores a run that printed no list, as a killed one does', () => {
+    const a = run('x.user.js: 1 of 4 functions never ran', '  f (line 1, column 1)')
+    assert.deepEqual(mergeNeverRun([a, 'boom\n']), ['x.user.js: 1 of 4 functions never ran', '  f (line 1, column 1)'])
+  })
+  it('is empty when no run printed a list', () => assert.deepEqual(mergeNeverRun(['boom\n']), []))
+})
+
 describe('a run with no failure', () => {
   it('files nothing when the fuzz passed', async () => {
     const gh = fakeGh()
@@ -258,6 +361,10 @@ describe('the real run', () => {
     assert.equal(r.ok, false)
     assert.equal(parseFuzzOutput(r.output), null)
   })
+})
+
+it('the nightly runs a whole number of hunts, at least one', () => {
+  assert.ok(Number.isInteger(NIGHTLY_HUNTS) && NIGHTLY_HUNTS >= 1)
 })
 
 it('the nightly hunts with a configuration the fuzz knows, so a renamed one fails here and not at 07:47', () => {
