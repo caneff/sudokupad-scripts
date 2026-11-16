@@ -1302,6 +1302,33 @@ const startArbitrary = (puzzle, weights, kinds) => fc.array(actionArbitrary(puzz
 
 export const DEFAULT_MAX_COMMANDS = 20
 
+// The kinds that save a setting or an index, whose deleted save shows only after a reload (#936): Color by Digit's mode, Pen Tool Extras' line mode, Text Anywhere's note color, background, the
+// color presets and restyle, and the two that can remove the last note (they write the notes index). `reloadAfterSettings` draws a reload after them.
+export const SETTINGS_KINDS = ['color mode', 'pen line mode', 'note box color', 'note background', 'note color preset', 'note restyle', 'clear notes', 'note erase']
+
+// The replay path fast-check prints after a list of commands (`/*replayPath="..."*/`), which the engine reads back out of a failure's printed list.
+export const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
+
+// `commands` (the fast-check list) with a reload after each settings action whose coin is true, and with `lead` true a reload before the first action. The coins are drawn beside the list, so a
+// shrink drops them with it and a seed gives the same list. Like fast-check's own list, the printed form names only the steps that ran, then the replay path of `commands`.
+function withReloads (commands, coins, lead, puzzle, kinds) {
+  const reload = kinds.find((k) => k.kind === 'reload')
+  const added = () => {
+    const cmd = commandOf(reload, puzzle, null)
+    const step = { cmd, hasRan: false, check: (model) => cmd.check(model), run: (model, real) => { step.hasRan = true; return cmd.run(model, real) }, toString: () => String(cmd) }
+    return step
+  }
+  const steps = []
+  if (lead) steps.push(added())
+  ;[...commands].forEach((step, i) => {
+    steps.push(step)
+    if (coins[i] && SETTINGS_KINDS.includes(step.cmd.kind)) steps.push(added())
+  })
+  // The replay path is read when the list is printed: fast-check builds it from the commands that ran.
+  const replay = () => String(commands).match(new RegExp(`\\s*${REPLAY_PATH.source}$`))?.[0] ?? ''
+  return Object.assign(steps, { toString: () => `${steps.filter((step) => step.hasRan).map(String).join(',')}${replay()}` })
+}
+
 // The generator of whole lists, each `{ puzzle, start, commands, waitMs }`: a puzzle of `puzzles`, then (with `busyStart`, #726) a start of up to `MAX_START_STEPS` steps that builds a
 // busy board, then at most `maxCommands` actions on it. `replayPath` replays a shrunk list (what `String()` of a failing list prints, which is the start's steps and then the
 // actions'); the puzzle is drawn first, so the same path gives the same puzzle. `focus` is script files (`focusFiles`) whose actions weigh more; a path replays only with the
@@ -1309,20 +1336,27 @@ export const DEFAULT_MAX_COMMANDS = 20
 // `waits` (#725) is the milliseconds the engine may wait after each action: each list draws its own, beside its actions, so a path replays it and a shrink moves it
 // to the first of the set; with none, `waitMs` is undefined and the engine's own wait stands.
 // `nonEmpty` (#730) refuses a list with no action, which fast-check otherwise draws 1 time in `maxCommands + 1`.
-export const actionList = (puzzles, { kinds, maxCommands = DEFAULT_MAX_COMMANDS, replayPath, focus = [], waits = [], busyStart = false, nonEmpty = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
+// `reloadAfterSettings` (#936) puts a reload after about half the settings actions (`SETTINGS_KINDS`), and before the first action when the start saved a setting; the printed list names the reloads that ran,
+// and a replay needs the same option, as with the others, since the coins are part of what the path replays.
+export const actionList = (puzzles, { kinds, maxCommands = DEFAULT_MAX_COMMANDS, replayPath, focus = [], waits = [], busyStart = false, nonEmpty = false, reloadAfterSettings = false } = {}) => fc.constantFrom(...puzzles).chain((puzzle) => {
   const weights = kindWeights(kinds, focus)
   const commands = fc.commands([actionArbitrary(puzzle, weights, kinds)], { maxCommands, size: 'max', replayPath })
   const drawn = nonEmpty ? commands.filter((c) => [...c].length > 0) : commands
   // A single wait is a constant, which draws nothing, so its lists are those of no set.
   const waitMs = waits.length > 1 ? fc.constantFrom(...waits) : fc.constant(waits[0])
   const start = busyStart ? startArbitrary(puzzle, weights, kinds) : fc.constant([])
-  return fc.tuple(waitMs, start, drawn).map(([wait, steps, commands]) => ({
-    puzzle,
-    start: steps,
-    commands,
-    waitMs: wait,
-    toString: () => [...steps.map((step) => `(start) ${step}`), String(commands)].join(',')
-  }))
+  // One coin for each action and one more for the start (#936); a list with no option draws none, so its lists are those of before the option.
+  const coins = reloadAfterSettings ? fc.array(fc.boolean(), { minLength: maxCommands + 1, maxLength: maxCommands + 1 }) : fc.constant([])
+  return fc.tuple(waitMs, start, drawn, coins).map(([wait, steps, drawnCommands, [lead, ...after]]) => {
+    const commands = reloadAfterSettings ? withReloads(drawnCommands, after, lead && steps.some((step) => SETTINGS_KINDS.includes(step.kind)), puzzle, kinds) : drawnCommands
+    return {
+      puzzle,
+      start: steps,
+      commands,
+      waitMs: wait,
+      toString: () => [...steps.map((step) => `(start) ${step}`), String(commands)].join(',')
+    }
+  })
 })
 
 // A list written out by hand, for a regression that is one known sequence: `steps` are `[kind, arg]` of the kinds above, in the shape fast-check wraps them in.

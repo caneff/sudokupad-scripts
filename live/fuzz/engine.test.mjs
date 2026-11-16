@@ -367,6 +367,23 @@ describe('the fuzz engine on a fake page', () => {
     })
   })
 
+  describe('a reload after the settings actions (#936)', () => {
+    // A vocabulary with a settings kind of the real name and a reload; the reloads the fake page logs are the run's.
+    const SETTINGS = { kind: 'color mode', group: 'ordinary', scripts: [], start: true, stroke: false, weight: 6, arg: () => fc.constant(null), label: () => 'press the Color by Digit button', run: (env) => env.clickColorMode() }
+    const RELOADS = [SETTINGS, KINDS.find((k) => k.kind === 'reload'), KINDS.find((k) => k.kind === 'tab')]
+    const reloadsOf = async (options) => {
+      const { openTarget, targets } = fakeTargets()
+      const result = await runFuzz({ openTarget, puzzles: PUZZLES, kinds: RELOADS, seed: SEED, runs: 60, ...FIXED_WAIT, ...options })
+      assert.equal(result.failed, false)
+      return targets.reduce((sum, t) => sum + t.log.filter(([name]) => name === 'reload').length, 0)
+    }
+
+    it('runFuzz hands the option to the generator: the run reloads more with it than without', async () => {
+      const [plain, drawn] = [await reloadsOf({}), await reloadsOf({ reloadAfterSettings: true })]
+      assert.ok(drawn > plain * 2, `${drawn} reloads with the option, ${plain} without`)
+    })
+  })
+
   describe('some lists start from a busy board (#726)', () => {
     const BUSY = { busyStart: true, ...FIXED_WAIT }
 

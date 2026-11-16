@@ -3,7 +3,7 @@
 // page comes from `openTarget(puzzle)` (`fuzz.mjs` opens real SudokuPad, `fake-target.mjs` a fake one for the unit tests); the puzzle is part of each
 // generated list (`actions.mjs`, #679). Not a check itself.
 import fc from 'fast-check'
-import { actionList } from './actions.mjs'
+import { actionList, REPLAY_PATH } from './actions.mjs'
 import { ruleViolations } from './rules.mjs'
 import { crashSignals } from './signals.mjs'
 
@@ -20,7 +20,6 @@ const DEFAULT_MINUTES = 2
 const asStep = (cmd) => ({ cmd, check: (model) => cmd.check(model), run: (model, real) => cmd.run(model, real), toString: () => String(cmd) })
 const DEFAULT_SHRINK_MINUTES = 10
 
-const REPLAY_PATH = /\/\*replayPath="([^"]*)"\*\//
 // The steps a printed list holds, in order: a busy start's steps (`(start) ...`) and then the actions'. fast-check prints them joined by commas, so no step holds one;
 // a list that failed in its start ran no action and prints an empty one last.
 const stepsOf = (shown) => shown.replace(REPLAY_PATH, '').trim().split(',').filter((step) => step.trim() !== '')
@@ -101,14 +100,14 @@ async function blameLate (open, steps, { landMs, settleMs }, failure) {
 export const runScript = ({ openTarget, puzzle, actions }) => runList(() => openTarget(puzzle), actions, ERRORS_LAND_MS, ACTION_SETTLE_MS)
 
 // Fuzzes with `seed` over `puzzles` (each list picks one) and the action `kinds` (`actions.mjs`, required): until `minutes` pass or `runs` lists have run, then, on a failure, shrinks it for at
-// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus`, `busyStart`, `waits`, `maxCommands` and `nonEmpty` shape the lists (`actionList`), so a replay
+// most `shrinkMinutes`. `path` and `replayPath` replay one failure, with no hunt and no shrink. `focus`, `busyStart`, `waits`, `maxCommands`, `nonEmpty` and `reloadAfterSettings` shape the lists (`actionList`), so a replay
 // needs the ones it was found with. Returns `{ failed: false, seed, runs, huntMs, puzzleRuns }` (the lists
 // each puzzle ran, by name) or the failure: `error`, `puzzle` (its name), `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`,
 // `replayPath`, `waitMs` (the list's own wait, under `waits`), `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
-export async function runFuzz ({ openTarget, puzzles, kinds, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits, busyStart, maxCommands, nonEmpty }) {
+export async function runFuzz ({ openTarget, puzzles, kinds, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits, busyStart, maxCommands, nonEmpty, reloadAfterSettings }) {
   // The puzzle of every list started, in order: the hunt's lists are the first `hunt.numRuns` (a list the time limit cut off, and the shrink's, come after).
   const started = []
-  const property = fc.asyncProperty(actionList(puzzles, { kinds, replayPath, focus, waits, busyStart, maxCommands, nonEmpty }), ({ puzzle, start, commands, waitMs }) => {
+  const property = fc.asyncProperty(actionList(puzzles, { kinds, replayPath, focus, waits, busyStart, maxCommands, nonEmpty, reloadAfterSettings }), ({ puzzle, start, commands, waitMs }) => {
     started.push(puzzle.name)
     return runList(() => openTarget(puzzle), [...start.map(asStep), ...commands], landMs, waitMs ?? settleMs)
   })

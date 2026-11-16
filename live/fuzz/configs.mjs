@@ -12,7 +12,10 @@ export const CONFIGS = {
   'varied-wait+busy-start': { waits: WAITS, busyStart: true },
   'long-40': { maxCommands: 40, nonEmpty: true },
   'long-50': { maxCommands: 50, nonEmpty: true },
-  'busy-start+long-40': { busyStart: true, maxCommands: 40, nonEmpty: true }
+  'busy-start+long-40': { busyStart: true, maxCommands: 40, nonEmpty: true },
+  // A reload drawn after a settings action about half the time (#936), alone and on a busy start.
+  'reload-after-settings': { reloadAfterSettings: true },
+  'busy-start+reload-after-settings': { busyStart: true, reloadAfterSettings: true }
 }
 
 export const DEFAULT_CONFIG = 'current'
