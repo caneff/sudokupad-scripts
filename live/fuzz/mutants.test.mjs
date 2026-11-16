@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { SCRIPT_FILES, scriptSource } from '../session.mjs'
-import { applyMutant, FAMILIES, mutantPlant, mutantsOf, sampleMutants, seededRandom } from './mutants.mjs'
+import { applyMutant, FAMILIES, mutantPlant, mutantReached, mutantsOf, sampleMutants, seededRandom } from './mutants.mjs'
 
 const code = `(function () {
   const limit = 3
@@ -34,6 +34,13 @@ test('a swap is judged reached at its whole expression, every other mutant at it
   assert.equal(swap.reachAt, code.indexOf('n < limit && seen'))
   assert.equal(code.slice(swap.reachAt, swap.start).trim(), 'n < limit')
   for (const m of mutantsOf('one.user.js', code).filter((x) => x.id !== swap.id)) assert.equal(m.reachAt, m.start, m.description)
+})
+
+test('a mutant is reached when coverage ran its reach offset, not its edit', () => {
+  const swap = find('conditional', '&&')
+  const ranOnlyAt = (offset) => ({ ranAt: (file, at) => file === 'one.user.js' && at === offset })
+  assert.equal(mutantReached(ranOnlyAt(swap.reachAt), swap), true)
+  assert.equal(mutantReached(ranOnlyAt(swap.start), swap), false)
 })
 
 test('a call, assignment or update statement is deleted, and a declaration or return is not', () => {

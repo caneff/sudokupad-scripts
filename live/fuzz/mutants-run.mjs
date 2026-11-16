@@ -10,7 +10,7 @@ import { numberOption } from './cli-number.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { createCoverage, neverRunReport } from './coverage.mjs'
 import { fuzz, openTarget } from './fuzz.mjs'
-import { FAMILIES, mutantPlant, mutantsOf, sampleMutants } from './mutants.mjs'
+import { FAMILIES, mutantPlant, mutantReached, mutantsOf, sampleMutants } from './mutants.mjs'
 import { mutantTables, mutantVerdict } from './mutants-stats.mjs'
 import { FUZZ_PUZZLES } from './puzzle-set.mjs'
 import { seedList, sweep } from './plants-sweep.mjs'
@@ -51,7 +51,7 @@ try {
   for (const file of files) {
     const code = scriptSource(file)
     const candidates = mutantsOf(file, code)
-    const ran = candidates.filter((m) => baseline.ranAt(file, m.reachAt))
+    const ran = candidates.filter((m) => mutantReached(baseline, m))
     const sample = sampleMutants(ran, perScript, sampleSeed)
     console.log(`${file}: ${candidates.length} mutants, ${ran.length} in code the coverage hunt ran, ${sample.length} sampled`)
     const loadable = []
@@ -69,7 +69,7 @@ try {
       fuzz: async (options) => {
         const coverage = createCoverage(SCRIPT_FILES)
         const result = await fuzz({ browser, ...options, coverage })
-        if (!result.failed) reached.set(runKey(options.plant.id, options.seed), coverage.ranAt(options.plant.file, options.plant.mutant.reachAt))
+        if (!result.failed) reached.set(runKey(options.plant.id, options.seed), mutantReached(coverage, options.plant.mutant))
         return result
       },
       plants: loadable.map(mutantPlant),

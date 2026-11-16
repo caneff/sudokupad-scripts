@@ -46,6 +46,9 @@ export function mutantsOf (file, code) {
   return edits.map((e) => ({ ...e, id: `mutant:${file}:${e.start}-${e.end}:${e.family}`, file, original: code.slice(e.start, e.end), description: `line ${e.line}: ${e.family}, \`${snippet(code.slice(e.start, e.end))}\` becomes \`${snippet(e.text)}\`` }))
 }
 
+// Whether `coverage` (`coverage.mjs`) saw the mutant's code run, asked at its `reachAt`.
+export const mutantReached = (coverage, mutant) => coverage.ranAt(mutant.file, mutant.reachAt)
+
 // A script that changed under the mutant must not run unmutated.
 export function applyMutant (mutant, code) {
   if (code.slice(mutant.start, mutant.end) !== mutant.original) throw new Error(`mutant ${mutant.id}: ${mutant.file} no longer holds ${JSON.stringify(mutant.original)} at ${mutant.start}`)
