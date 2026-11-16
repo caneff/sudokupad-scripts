@@ -5,10 +5,10 @@ import { RULES, ruleViolations } from './rules.mjs'
 
 const rule = (name) => RULES.find((r) => r.name === name)
 // `earlier` is the step before `before` as overrides of its page: `{ action, page, strokeSinceReload }`, with its own `earlier` the same way.
-const check = (name, now, { before = {}, action = 'click cell', earlier = null, notices = [] } = {}) => {
+const check = (name, now, { before = {}, action = 'click cell', earlier = null } = {}) => {
   const step = (e) => e && { action: e.action, strokeSinceReload: e.strokeSinceReload, before: { page: quietPage(e.page) }, earlier: step(e.earlier) }
   const earlierStep = step(earlier)
-  return rule(name).check({ now: { notices, page: quietPage(now) }, before: { page: quietPage(before) }, action, earlier: earlierStep })
+  return rule(name).check({ now: { page: quietPage(now) }, before: { page: quietPage(before) }, action, earlier: earlierStep })
 }
 
 const colorByDigit = (mode, cells, groups = [{ key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]) => ({ mode, groups, cells: cells.map(([digit, colours = [], given = false]) => ({ digit, given, colours })) })
@@ -371,8 +371,8 @@ describe('the rules', () => {
     it('fails when the dialog opened on a healthy page shows text in the off-note', () => {
       assert.deepEqual(check('ui-tweaks-off-note-empty', { uiTweaksOffNote: 'Off because SudokuPad changed: ' }, { action: dialog }), ['the dialog says "Off because SudokuPad changed: " but no UI Tweaks feature is off'])
     })
-    it('holds when a feature is off, whatever the note says', () => {
-      assert.deepEqual(check('ui-tweaks-off-note-empty', { uiTweaksOffNote: 'Off because SudokuPad changed: Tab' }, { action: dialog, notices: ['UI Tweaks: Tab is off — SudokuPad changed.'] }), [])
+    it('fails when the dialog action left no reading of the off-note', () => {
+      assert.deepEqual(check('ui-tweaks-off-note-empty', { uiTweaksOffNote: null }, { action: dialog }), ["the UI Tweaks dialog's off-note was not read"])
     })
     it('reads only after a UI Tweaks dialog action, since the dialog is closed after any other', () => {
       assert.deepEqual(check('ui-tweaks-off-note-empty', { uiTweaksOffNote: 'Off because SudokuPad changed: ' }, { action: 'undo' }), [])

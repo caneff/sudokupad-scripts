@@ -225,12 +225,13 @@ export const RULES = [
   },
   {
     name: 'ui-tweaks-off-note-empty',
-    // UI Tweaks: the dialog's off-note says which features are off, so it is empty on a page where none is. A page with a feature off shows a notice, which fails the run before any rule.
+    // UI Tweaks: the dialog's off-note says which features are off, so it is empty on a healthy page (a page with a feature off shows a notice, which fails the run before any rule).
     // Read only after a UI Tweaks dialog action: `uiTweaksOffNote` keeps its last reading, which no other action refreshes.
     check: ({ now, action }) => {
+      if (action !== 'ui tweaks dialog') return []
       const note = now.page.uiTweaksOffNote
-      if (action !== 'ui tweaks dialog' || note === null || now.notices.length > 0 || note === '') return []
-      return [`the dialog says ${JSON.stringify(note)} but no UI Tweaks feature is off`]
+      if (note === null) return ["the UI Tweaks dialog's off-note was not read"]
+      return note === '' ? [] : [`the dialog says ${JSON.stringify(note)} but no UI Tweaks feature is off`]
     }
   },
   {
