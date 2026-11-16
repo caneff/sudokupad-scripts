@@ -35,7 +35,7 @@ estimate from the evidence, not a measurement; the last column says how to measu
 | 1 | Swarm testing: each list draws a non-empty random subset of the kinds (or of the three groups plus kinds), then generates only from it | rare combinations of kinds; kinds that suppress others (undo all, reload wipe what a later step needs) | Groce et al. 2012: 42% more distinct crashes in a week of compiler testing; stack example from 1 in 370,000 to 1 in 16 tests. Hypothesis's `FeatureFlags` applies it to stateful rules | S | high for multi-step plants (`page-three-line-not-drawn` took 49 s, `dark-page-saves-light` 91 s); none for one-step plants | paired seeds, row 0; watch the two slow catches' time to catch |
 | 2 | V8 coverage of the six scripts over a fuzz run (sourceURL tag + `page.coverage`), a list of functions with count 0, per night or per plants run | action gaps (the one miss) | Playwright `Coverage`; CDP `Profiler.takePreciseCoverage` | S to M | indirect but sure: every unreached function is a bug class no rule can catch; it would have pointed at `adoptThickness` / `adoptArrowSpacing` before #678 | count of never-run functions before and after an action is added; a plant in a function the report says is reached should then be caught |
 | 3 | Longer lists: `maxCommands` 20 to 40 or 50, and no empty list (`fc.commands` draws the length uniformly from 0, so 1 list in 21 is empty today) | deeper states (busy board, long undo stacks, many notes) | Arcuri 2010 ("Longer is better"): longer sequences make hard stateful targets easy; source: command list length is uniform in [0, maxCommands] | S | medium; per-list page start (about 1.1 s) is spread over more steps, about +35% steps per second by my arithmetic below; shrinks get longer | steps per second from the run's own counts; row 0 on the slow plants |
-| 4 | Parallel hunts in the nightly: 3 or 4 independent `fc.check` loops on fresh seeds, one browser, each list its own context as now | throughput | GitHub's public-repo `ubuntu-latest` is 4 CPUs, 16 GB; fast-check's fuzzing page says to use several processes for long runs | M (nightly bookkeeping: two failures at once, one issue per title) | about 2 to 3 times the lists per night, if the runner is not CPU-bound (not measured) | lists per night in the Actions log; plants per seed caught at a fixed wall-clock budget |
+| 4 | Parallel hunts in the nightly: 3 or 4 independent `fc.check` loops on fresh seeds, one browser, each list its own context as now | throughput | GitHub's public-repo `ubuntu-latest` is 4 CPUs, 16 GB; fast-check's fuzzing page says to use several processes for long runs | M (nightly bookkeeping: two failures at once, one issue per title) | about 2 to 3 times the lists per night, if the runner is not CPU-bound (measured in § Hunts at once: 3.4 times at 4 hunts) | lists per night in the Actions log; plants per seed caught at a fixed wall-clock budget |
 | 5 | Timing as a generated argument: per action a settle of 0, 40 or 300 ms (and a key `delay`), and per list a CPU throttle of 1x or 4x (CDP `Emulation.setCPUThrottlingRate`) | races between a script's observers, timers and frames and the next input | Node.fz (EuroSys 2017): perturbing the event-loop schedule exposed known bugs much more often and found new ones; Romano et al. ICSE 2021: 45% of flaky UI tests come from async waits | S to M | uncertain: real for race bugs, but none of the 10 plants is a race; adds flaky failures and makes replay less exact | write one race plant (a redraw on a 50 ms timer that reads stale state); compare catch fraction; count failures that do not replay |
 | 6 | Busy starting states: puzzle variants that open with many digits, marks, pen strokes, colors and notes (from a replay or `puzzleData`), as Hypothesis's `@initialize` does | code that only runs on a full board; the "board too empty" miss reason | Arcuri 2010 (state reach needs long prefixes, a seeded state is a free prefix); Hypothesis stateful docs (initialize rules) | M | medium for rules over many strokes or cells; also cuts the steps a list spends building state | a plant that needs 10 or more strokes or notes; row 0 |
 | 7 | Mutants as the yardstick: sample 30 to 50 mutants of the operators real faults couple to (relational, conditional, statement deletion), only in code row 2 says is reached, run each through `plants-run.mjs` | measurement bias of hand plants (written by the rule author) | Just et al. FSE 2014: mutant detection correlates with real fault detection; 73% of real faults coupled to mutants | M (own generator over `espree`/`acorn`, already in `node_modules` through StandardJS, but a direct dependency needs a ruling) or L (Stryker) | none by itself; a fairer measure for rows 1 to 6 | it replaces the hand plants as the score |
@@ -182,7 +182,7 @@ snapshot; a failure is replayed by index and shrunk for at most 10 minutes.
 
 - **Runner** ("GitHub-hosted runners reference", GitHub Docs, https://docs.github.com/en/actions/reference/runners/github-hosted-runners): standard Linux x64 runners
   for public repositories have 4 CPUs, 16 GB RAM, 14 GB SSD; private repositories get 2 CPUs, 8 GB. This repository is public (`gh repo view`), so `fuzz.yml`'s
-  `ubuntu-latest` job has 4 CPUs. Today it runs one list at a time.
+  `ubuntu-latest` job has 4 CPUs. It ran one hunt at a time until #925; see § Hunts at once.
 - **Shape**: fast-check runs one property sequentially, and its fuzzing page advises several processes for long runs (section 1). Several `runFuzz` loops in one Node
   process, each with its own seed and sharing one `browser`, also work, since each list already gets its own context and Node mostly awaits Chromium. The pages are
   served from the recording (`live/page.mjs`), so parallel lists add no load on sudokupad.app. CPU contention changes timing (a mild row 5 for free, and a source of
@@ -192,6 +192,20 @@ snapshot; a failure is replayed by index and shrunk for at most 10 minutes.
   used so that PR fuzzing reports only crashes "newly introduced". The analogue here: a 10-minute fuzz on PRs that touch a `*.user.js`, and a failure that also fails
   on `main` reported as "not from this PR". It finds the same bugs sooner; it does not raise the nightly's hit rate.
 - Locally, `fuzz:plants` already takes about 45 minutes per configuration on one core (2 h 08 min for three, `fuzz-planted-bugs.md`'s third run); parallel plants on the shared machine fall under the machine-load rule and are not proposed here.
+
+## Hunts at once
+
+#925 measured 1, 3 and 4 hunts of `live/fuzz/nightly.mjs` on GitHub's `ubuntu-latest` runner (4 CPUs). Each count was a `workflow_dispatch` of `fuzz.yml` on branch `implement-925` at 539b8ca,
+with the `hunts` input set to the count (`FUZZ_HUNTS`), 30 minutes, `--config busy-start --coverage`, fresh seeds:
+
+| hunts | Actions run | action lists in 30 min, per hunt | total | timeouts |
+| --- | --- | --- | --- | --- |
+| 1 | 43864189522 | 202 | 202 | none |
+| 3 | 43868989304 | 169, 181, 169 | 519 | none |
+| 4 | 43873707456 | 175, 173, 166, 176 | 690 | none |
+
+Every run passed. Each hunt at 4 ran 166 to 176 lists, 82 to 87 percent of the lone hunt's 202, so the runner's 4 CPUs are not the limit: 4 hunts give 3.4 times the lists of 1 (3 hunts, 2.6 times), above the 2 to 3 times estimated in
+§ Ranked changes row 4. Chris ruled 4 (2026-11-16): `NIGHTLY_HUNTS` is 4. Not measured: 5 or more hunts, and whether more lists find more failures (the hit rate itself).
 
 ## Not checked
 
@@ -203,7 +217,7 @@ snapshot; a failure is replayed by index and shrunk for at most 10 minutes.
   sections were not read. Node.fz and Romano et al. were read from their abstracts and finding tables only.
 - Hughes's QuickCheck papers were not opened (section 6). ClusterFuzzLite's JavaScript support and its "affected fuzzers" logic were not checked; only its GitHub Actions
   page was read.
-- Whether 3 or 4 Chromium contexts at once fit the 4-CPU runner without timeouts, and how much `page.coverage` slows a list, were not measured.
+- How much `page.coverage` slows a list was not measured. (Whether 3 or 4 hunts at once fit the runner was, in § Hunts at once.)
 - fast-check's `chain` shrinking behavior for the swarm subset was inferred from the source's general shape, not traced line by line or tested.
 
 ## The first never-run list (#729)

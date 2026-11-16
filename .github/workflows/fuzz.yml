@@ -5,6 +5,11 @@ on:
   schedule:
     - cron: '47 7 * * *'
   workflow_dispatch:
+    inputs:
+      hunts:
+        description: 'Hunts at once, a whole number of 1 or more; blank is the nightly default (NIGHTLY_HUNTS of live/fuzz/nightly.mjs)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -31,6 +36,7 @@ jobs:
         run: npm run fuzz:nightly
         env:
           GH_TOKEN: ${{ github.token }}
+          FUZZ_HUNTS: ${{ inputs.hunts }}
       # A step before the fuzz (npm ci, the Chromium install) failed, so live/fuzz/nightly.mjs never ran and filed nothing. Same title as
       # nightly.mjs's own "did not run" issue, and filed only when none is open.
       - name: File the did-not-run issue

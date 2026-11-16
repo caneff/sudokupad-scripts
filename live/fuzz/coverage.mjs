@@ -60,6 +60,19 @@ export function neverRunReport (never) {
   ])
 }
 
+// The inverse of `neverRunReport`: the `{ [file]: { total, never } }` a printed report says, so the format lives in this one module. Lines that are not part of a report are skipped.
+export function parseNeverRun (output) {
+  const scripts = {}
+  let file
+  for (const line of output.split('\n')) {
+    const head = /^(\S+\.user\.js): \d+ of (\d+) functions never ran$/.exec(line)
+    if (head) { file = head[1]; scripts[file] = { total: Number(head[2]), never: [] }; continue }
+    const fn = /^ {2}(.*) \(line (\d+), column (\d+)\)$/.exec(line)
+    if (fn && file) scripts[file].never.push({ name: fn[1], line: Number(fn[2]), column: Number(fn[3]) })
+  }
+  return scripts
+}
+
 // `open` (a fuzz's `openTarget`) with every target it gives tracked until its `close` has finished. The fuzz's time limit returns while the list it was running still goes on, and that
 // page's coverage is read by its `close`: `allClosed` resolves once every page opened so far has been read.
 export function trackClosing (open) {
