@@ -164,7 +164,7 @@ export async function nightly ({ runFuzz, fileIssue: file, newSeed, now = Date.n
 export const NIGHTLY_CONFIG = 'busy-start'
 
 // How many hunts run at once (#925). `FUZZ_HUNTS` overrides it (`huntCount`), which is how fuzz.yml's `hunts` input measures a count on the runner (docs/research/fuzz-hit-rate.md, § Hunts at once).
-export const NIGHTLY_HUNTS = 1
+export const NIGHTLY_HUNTS = 4
 
 // Each run is told its seed in the log, since a run killed for hanging prints none.
 export function fuzzProcess (seed, { minutes, timeoutMs }, runner = run) {
