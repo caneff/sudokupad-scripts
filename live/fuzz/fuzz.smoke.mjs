@@ -22,7 +22,7 @@ const run = promisify(execFile)
 const PASSING_SEEDS = [2, 3]
 const PLANTED_SEED = 3
 // A seed the planted Tab bug is caught on: a new action kind changes what each seed makes, so pick another from `npm run test:fuzz -- --seed <n> --runs 150 --plant tab-turns-pad-to-letters` if this one stops reaching Tab.
-const TAB_PLANT_SEED = 2
+const TAB_PLANT_SEED = 1
 const ROOT = new URL('../../', import.meta.url)
 const INTERRUPTED_BY_ESCAPE = /^(?:pen drag|right-click erase held|note drag).* then Escape then release$/
 
