@@ -1,0 +1,86 @@
+{
+  "direct": {
+    "candidates": 32,
+    "reached": 16,
+    "alreadySampled": 5
+  },
+  "sample": [
+    {
+      "group": "save-deletion",
+      "id": "mutant:color-by-digit.user.js:16494-16522:deletion",
+      "file": "color-by-digit.user.js",
+      "line": 327,
+      "description": "line 327: deletion, `store.setData(key, envelope)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:color-by-digit.user.js:127000-127028:deletion",
+      "file": "color-by-digit.user.js",
+      "line": 2263,
+      "description": "line 2263: deletion, `savedData.setData(key, true)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:pen-tool-extras.user.js:6909-6938:deletion",
+      "file": "pen-tool-extras.user.js",
+      "line": 105,
+      "description": "line 105: deletion, `store.setData(row.key, value)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:pen-tool-extras.user.js:80826-80877:deletion",
+      "file": "pen-tool-extras.user.js",
+      "line": 1557,
+      "description": "line 1557: deletion, `savedData.setData(COLORS_KEY, storedPenColors(s...` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:pen-tool-extras.user.js:92929-92960:deletion",
+      "file": "pen-tool-extras.user.js",
+      "line": 1790,
+      "description": "line 1790: deletion, `savedData.setData(PEN_KEY, pen)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:text-anywhere.user.js:43861-43889:deletion",
+      "file": "text-anywhere.user.js",
+      "line": 799,
+      "description": "line 799: deletion, `store.setData(key, envelope)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:text-anywhere.user.js:74410-74449:deletion",
+      "file": "text-anywhere.user.js",
+      "line": 1303,
+      "description": "line 1303: deletion, `store.setData(INDEX_KEY, touched.index)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:text-anywhere.user.js:150213-150248:deletion",
+      "file": "text-anywhere.user.js",
+      "line": 2535,
+      "description": "line 2535: deletion, `savedData.setData(COLOR_KEY, color)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:text-anywhere.user.js:151621-151676:deletion",
+      "file": "text-anywhere.user.js",
+      "line": 2574,
+      "description": "line 2574: deletion, `savedData.setData(COLORS_KEY, storedColorSet(co...` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:text-anywhere.user.js:151961-151994:deletion",
+      "file": "text-anywhere.user.js",
+      "line": 2586,
+      "description": "line 2586: deletion, `savedData.setData(row.key, value)` becomes `;`"
+    },
+    {
+      "group": "save-deletion",
+      "id": "mutant:text-anywhere.user.js:159788-159825:deletion",
+      "file": "text-anywhere.user.js",
+      "line": 2738,
+      "description": "line 2738: deletion, `savedData.setData(BACKGROUND_KEY, on)` becomes `;`"
+    }
+  ]
+}

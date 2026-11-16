@@ -278,3 +278,85 @@ the rate.
   to be seen by a rule. A miss here may need a longer hunt, not a new rule; the run did not test that.
 - Some missed mutants may change nothing a user would see (a deleted `link.rel` or `style.id`); the run cannot tell such a mutant from a real miss.
 - The two runs shared one box, so the time to catch may be slower than on an idle one.
+
+### Why the missed mutants are missed (#927)
+
+Question: do the deleted saves and boundary flips of the #723 run need a longer hunt, a reload drawn more often, or a new rule? Measured on 2026-11-16 on commit 4d1aef6. The scratch is in `docs/research/fuzz-missed-mutants/`
+(`measure.mjs`, the two samples, the four `runs-*.jsonl` files of one line per hunt).
+
+**Method.** The mutants were drawn fresh from `mutantsOf` on the scripts as they are, among those the 40-list coverage hunt (seed 723) ran: 52 `setData` statement deletions of which 25 were reached, and
+242 `<` `<=` `>` `>=` flips of which 154 were reached. Sampled with seed 927: 10 flips, 10 deletions, and then 11 more deletions, because the first filter (any deletion whose text holds a `setData`) also took statements that only
+hold one (a `dismiss.addEventListener('click', ...)`, a `steps.pages.wrap(...)`), so the `direct` mode drew the 16 reached deletions of a bare `x.setData(...)` statement (11 not yet sampled). That is 21 save deletions and 10 flips.
+Each was fuzzed on seeds 1000, 1001, 1002 at 30 s and at 300 s per hunt, 63 + 30 hunts at each budget. Per hunt, V8 coverage read one page load at a time says how many action lists ran
+the mutated code, and how many of those had a page load after the one that ran it (a reload).
+
+**Deviation: the hunts ran under `--config current`, not `busy-start`.** The ticket asked for `busy-start`; `measure.mjs` was run without `--config`, so it used the default. Every number below is under `current`. The #723
+numbers were under `busy-start`. The jobs were not rerun.
+
+**Results.**
+
+| group | mutants | caught at 30 s (mutants / hunts) | caught at 300 s (mutants / hunts) |
+| --- | --- | --- | --- |
+| save deletion | 21 | 3 / 5 of 63 | 4 / 11 of 63 |
+| boundary flip | 10 | 0 / 0 of 30 | 0 / 0 of 30 |
+
+The 300 s hunts ran 5,340 action lists on the uncaught hunts, 310 of them (5.8%) with a reload.
+
+| mutant | what | 30 s hunts caught | 300 s hunts caught | lists (300 s) that ran it / then a reload | verdict |
+| --- | --- | --- | --- | --- | --- |
+| `color-by-digit:2499` | `setData(MODE_KEY, next)` | 0/3 | 0/3 | 44 / 0 | reload too rare |
+| `pen-tool-extras:1789` | `setData('ToolPen_color', ...)` | 0/3 | 0/3 | 177 / 10 | needs a rule (rule-blind; SudokuPad also saves this key, so maybe not visible) |
+| `text-anywhere:1316` | `setData(INDEX_KEY, index.filter(...))` | 0/3 | 0/3 | 27 / 0 | reload too rare (effect on a player unclear) |
+| `pen-tool-extras:1782` | `steps.pages.wrap(tool, 'setSelectedColor', ...)` (not a save: a wrap that holds saves) | 0/3 | 3/3 | n/a (caught) | caught: breaks the pen pad, a crash just past 30 s |
+| `dark-page:763` | dismiss `click` listener holding a save | 0/3 | 0/3 | 212 / 13 | not reachable: the fuzz never clicks it |
+| `auto-rules-resizer:992` | dismiss `click` listener holding a save | 0/3 | 0/3 | 197 / 11 | not reachable: the fuzz never clicks it |
+| `text-anywhere:1855` | dismiss `click` listener holding a save | 0/3 | 0/3 | 197 / 11 | not reachable: the fuzz never clicks it |
+| `pen-tool-extras:341` | dismiss `click` listener holding a save | 0/3 | 0/3 | 196 / 11 | not reachable: the fuzz never clicks it |
+| `auto-rules-resizer:130` | lib `save`: `store.setData(key, envelope)` | 1/3 | 2/3 | n/a (caught) | more time |
+| `pen-tool-extras:2852` | `setData(LINE_MODE_KEY, lineMode)` | 0/3 | 0/3 | 33 / 0 | reload too rare, and the reload view would not read it (#935, #936) |
+| `color-by-digit:327` | lib `save`: `store.setData(key, envelope)` | 0/3 | 0/3 | 0 / 0 | unclassified: reach read is an artifact (see below) |
+| `color-by-digit:2263` | `setData(key, true)` (one-time preload flag) | 0/3 | 0/3 | 0 / 0 | unclassified: reach read is an artifact (see below) |
+| `pen-tool-extras:105` | lib `saveRow`: `store.setData(row.key, value)` | 0/3 | 0/3 | 0 / 0 | unclassified: reach read is an artifact (see below) |
+| `pen-tool-extras:1557` | `setData(COLORS_KEY, ...)` | 0/3 | 0/3 | 197 / 12 | needs a rule (#935) |
+| `pen-tool-extras:1790` | `setData(PEN_KEY, pen)` | 0/3 | 0/3 | 164 / 10 | needs a rule (#935) |
+| `text-anywhere:799` | lib `save`: `store.setData(key, envelope)` | 3/3 | 3/3 | n/a (caught) | caught at 30 s |
+| `text-anywhere:1303` | `setData(INDEX_KEY, touched.index)` | 0/3 | 0/3 | 133 / 8 | rule-blind or not visible: the index only lists puzzles with notes (not read further) |
+| `text-anywhere:2535` | `setData(COLOR_KEY, color)` | 0/3 | 0/3 | 17 / 1 | reload too rare, then needs a rule (#936, #935) |
+| `text-anywhere:2574` | `setData(COLORS_KEY, ...)` | 0/3 | 0/3 | 151 / 9 | needs a rule (#935) |
+| `text-anywhere:2586` | `setData(row.key, value)` | 1/3 | 3/3 | n/a (caught) | more time |
+| `text-anywhere:2738` | `setData(BACKGROUND_KEY, on)` | 0/3 | 0/3 | 53 / 2 | reload too rare, then needs a rule (#936, #935) |
+| `ui-tweaks:357` | `off.length > 0` to `>=` | 0/3 | 0/3 | 29 / 1 | needs a rule (#937) |
+| `pen-tool-extras:1295` | `x >= -GAMUT_EDGE` to `>` | 0/3 | 0/3 | 43 / 0 | not visible: needs a float exactly at the gamut edge |
+| `text-anywhere:1254` | `value > 0` to `>= 0` (stored size) | 0/3 | 0/3 | 14 / 1 | not visible: the script never saves a size of 0 |
+| `text-anywhere:3280` | `deltaY < 0` to `<= 0` | 0/3 | 0/3 | 8 / 0 | needs a wheel of exactly 0: not drawn |
+| `text-anywhere:4216` | `selected.length > 0` to `>= 0` | 0/3 | 0/3 | 148 / 7 | not classified (handler on an empty selection not read) |
+| `color-by-digit:2351` | `done.length > 0 \|\| ...` to `>=` | 0/3 | 0/3 | 18 / 0 | not visible: a restart record nothing reads |
+| `color-by-digit:190` | `g.digits.length > 0` to `>=` | 0/3 | 0/3 | 25 / 1 | not visible: a group with no digits is not built |
+| `text-anywhere:3420` | `i < Math.min(index, shown.length)` to `<=` | 0/3 | 0/3 | 12 / 0 | not classified (loop bound not read) |
+| `text-anywhere:1258` | `item.text.length > 0` to `>= 0` | 0/3 | 0/3 | 14 / 1 | not visible: the script never saves an empty text |
+| `color-by-digit:1917` | `profiles.length <= 1` to `< 1` | 0/3 | 0/3 | 9 / 0 | needs exactly one profile: the fuzz rarely drives the profile editor (#931) |
+
+"Lists that ran it" counts lists with a page load whose coverage ran the mutated code; it is a read of the code having run, not of the saved value being used. For a caught mutant the count is not shown: a failed list's
+coverage is not added, and the probe read 0 for the three caught lib mutants.
+
+**Verdict per group.** Read from the table; the "not visible" and "needs a rule" calls come from reading the mutated line and `reloadView`, not from a test of each.
+
+- **More time: a small part.** 2 of the 21 deletions (`auto-rules-resizer:130`, `text-anywhere:2586`) went from 1 of 3 hunts at 30 s to 2 and 3 of 3 at 300 s; `pen-tool-extras:1782` is
+  not a save and crashes the pen pad just past 30 s, and `text-anywhere:799` was caught at 30 s. 10x the time moves the catch from 3 mutants to 4. No change is called for: it is the budget the nightly can spend, not a defect.
+- **Reload too rare: 5 deletions** (`color-by-digit:2499`, `text-anywhere:1316`, `pen-tool-extras:2852`, `text-anywhere:2535`, `text-anywhere:2738`). Their code ran in 17 to 53 lists each and a reload followed it in 0 to 2. Only 5.8% of lists have a
+  reload. Ticket #936.
+- **Needs a rule: 4 deletions and 1 flip.** `pen-tool-extras:1789`, `1790`, `1557` and `text-anywhere:2574` ran in 151 to 197 lists with a reload after the code in 9 to 12, and were not caught in any of 3 hunts. `reloadView` reads
+  strokes, page color, Color by Digit's mode, groups and digits only: not the selected pen, the pen color set or the text note's color set. Ticket #935 for the saved settings; `ui-tweaks:357` (a flip that leaves an empty
+  "Off because SudokuPad changed:" in the dialog, visible, read by no rule) is ticket #937. `text-anywhere:1303` (the notes index; it ran in 133 lists, 8 with a reload after) is rule-blind or not visible, and is in neither count: the visibility was not read further.
+- **Not reachable by the fuzz: 4 deletions.** The `dismiss` click listeners (dark-page, auto-rules-resizer, text-anywhere, pen-tool-extras) were "reached" because the listener is installed, but nothing in `live/fuzz/` clicks a
+  dismiss button (`rg dismiss live/fuzz` finds none) and the notice they dismiss shows only on a page the script skipped. No ticket: that is not what the fuzz is for.
+- **Unclassified: the reach read is an artifact, 3 deletions** (`color-by-digit:327`, `color-by-digit:2263`, `pen-tool-extras:105`). They read 0 lists that ran them in about 198 lists each. The per-page read asks V8 coverage of the
+  *mutated* script, where the deleted statement is a bare `;`, and V8 gives that `;` the count of the range beside it, so it reads "never ran" when the code ran after an early `return`, after a false `if (c) x()`, or as a taken `else`. The
+  review's probe (headless Chromium, `createCoverage`) read true on the original and false on the mutated page in each shape. These three, and the caught `auto-rules-resizer:130` and `text-anywhere:799` (all five the shared `save` or `saveRow` shapes), read 0
+  for that reason. `measure.mjs` also records `ran` as `=== true`, so a page whose script was not heard (`ranAt` null) counts as "did not run". So the run does not say whether their save was reached or followed by a reload, and they get no verdict. The fix is to read reach at the original script's offsets; not done, and no ticket, as it moves 3 of 21 mutants.
+- **Boundary flips: not visible or not drawn, not time or reload.** None of the 10 was caught at 300 s, and the reload is no cause for any: a flip at `=` changes the result only for an operand exactly at the edge. 5 are not
+  visible (`pen-tool-extras:1295` a float exactly at the gamut edge; `text-anywhere:1254` and `1258` a stored size 0 or empty text that the script never saves; `color-by-digit:2351` and `190` state nothing reads); `text-anywhere:3280` needs a
+  wheel of exactly 0; `color-by-digit:1917` needs exactly one profile (ticket #931's profile editor actions draw it). `text-anywhere:4216` and `3420` were not read far enough to classify. So a longer hunt does not catch these.
+
+**What it does not show.** The runs are `current`, not `busy-start`, and that matters for the "reload too rare" verdict: `busy-start` draws up to 30 start steps first, among them the settings the scripts save (`startArbitrary` in `live/fuzz/actions.mjs`), and the nightly runs it (`live/fuzz/nightly.mjs`), so the rate of a reload after a save there is unmeasured and ticket #936 rests on the `current` rate. A visibility call is missing for `text-anywhere:4216`, `3420`, `1303` and `1316`, and none was made for the 3 unclassified deletions; the ticket asked for it on each miss. Three seeds per mutant; 21 and 10 mutants out of 2,842 in reached code. The "visible to a player" calls rest on one line of code each. The reach read per
+page is not trusted for caught mutants or for the 3 unreached ones.
