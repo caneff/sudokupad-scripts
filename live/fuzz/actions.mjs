@@ -12,9 +12,11 @@
 //   env.turnPenPage()  env.undo()  env.redo()  env.clickColorMode()
 //   env.undoAll()                            presses Undo until the undo stack is empty
 //   env.extrasSettings({ arrowSpacing, dash, thickness }, save)   opens Pen Tool Extras' settings dialog, sets the values it is given and presses Save or Cancel
-//   env.sliderPoint(name, fraction) -> [x, y] | null   the page point `fraction` (0 to 1) along the track of slider `name` (`SLIDERS`), opening the tool that shows it; null for a pen slider the player hid in Pen Tool Extras' dialog
+//   env.sliderPoint(name, fraction, keepTool) -> [x, y] | null   the page point `fraction` (0 to 1) along the track of slider `name` (`SLIDERS`), opening the tool that shows it; null for a pen slider the player hid in Pen Tool Extras' dialog.
+//                                            A note slider picks Text Anywhere's tool again unless `keepTool` is true, which ends a selection, so a note chosen stays chosen only with it
 //   env.focusSlider(name) -> boolean  env.leaveSlider(name)   puts the keyboard focus on a slider (false for a hidden one, which takes none), and takes it off
 //   env.noteBoxDialog(choice, color, save)   opens Text Anywhere's settings dialog, picks the Box color `choice` (`BOX_CHOICES`; `color` is the Own color) and presses Save or Cancel
+//   env.pressNotePanel(what)                 presses a button of Text Anywhere's panel: a color 1 to 9, 'background' or 'hide all', picking the tool only when it is not current, so a selected or open note stays chosen
 //   env.setNoteBackground(on)                presses Text Anywhere's Background button when it is not as `on` says
 //   env.useArrowPen(color)                   opens the pen tool, turns it to the arrow lines page (page 3) and picks its pen color 1 to 9
 //   env.placeNote(text, i)                   a note with `text` at cell `i`, finished with Escape
@@ -122,6 +124,11 @@ export const MAX_PROFILE_EDITS = 4
 export const RICH_NOTES = ['- one\n- **two**', '- [ ] buy\n- [x] sold', '```\nsum ->\n  x=1\n```', Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n')]
 const CHECK_BOX_NOTE = RICH_NOTES[1]
 const TALL_NOTE = RICH_NOTES[RICH_NOTES.length - 1]
+export const NOTE_SLIDERS = SLIDERS.filter((name) => name.startsWith('note '))
+// What a note edit types into a reopened note, and the size keys (`SLIDER_STEP_KEYS` of text-anywhere.user.js and pen-tool-extras.user.js, which do not export it).
+export const MORE_TEXT = 'ab'
+export const SIZE_KEYS = ['+', '=', '-']
+const MAX_SIZE_PRESSES = 3
 const RESIZE_CORNERS = Object.keys(CORNERS).length
 const RESIZE_REACH_PX = 80
 const WHEEL_DELTAS = [-400, -120, 120, 400, 1200]
@@ -240,6 +247,14 @@ function buildKinds () {
     if (!centre) return null
     await env.useNotes()
     await env.page.mouse.click(...centre)
+    return centre
+  }
+  // Opens the first note for typing with a double-click, and gives its middle; null when there is no note.
+  async function openFirstNote (env, text, a) {
+    const centre = await firstNote(env, text, a)
+    if (!centre) return null
+    await env.useNotes()
+    await env.page.mouse.dblclick(...centre)
     return centre
   }
   const ifNone = (t, a, at) => `(note ${jsonWords(NOTE_TEXTS[t])} at ${at(a)} if none)`
@@ -677,6 +692,140 @@ function buildKinds () {
         await env.useNotes()
         await env.page.mouse.dblclick(...centre)
         await env.finishNote()
+      }
+    },
+    {
+      kind: 'note erase',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
+      weight: 2,
+      // `click` is a right click on the note; `drag` presses the right button on cell `from`, goes over the note and on to cell `to` (the tool's erase, which a right-drag only extends: AGENTS.md).
+      // A note open for typing is finished by any press outside it and a press inside it starts no erase, so there is no erase with a note open.
+      arg: (puzzle) => fc.tuple(note(puzzle), cell(puzzle), cell(puzzle), fc.constantFrom('click', 'drag')),
+      label: ([[t, a], from, to, how], at) => how === 'click'
+        ? `right-click the first note ${ifNone(t, a, at)}`
+        : `right-drag from ${at(from)} over the first note ${ifNone(t, a, at)} to ${at(to)}`,
+      run: async (env, [[t, a], from, to, how]) => {
+        const centre = await firstNote(env, NOTE_TEXTS[t], a)
+        if (!centre) return
+        await env.useNotes()
+        if (how === 'click') {
+          await env.page.mouse.click(...centre, { button: 'right' })
+          return
+        }
+        await env.page.mouse.move(...await env.cellPoint(from))
+        await env.page.mouse.down({ button: 'right' })
+        await env.page.mouse.move(...centre, { steps: 4 })
+        await env.page.mouse.move(...await env.cellPoint(to), { steps: 4 })
+        await env.page.mouse.up({ button: 'right' })
+      }
+    },
+    {
+      kind: 'note restyle',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: true,
+      stroke: false,
+      weight: 2,
+      arg: (puzzle) => fc.tuple(note(puzzle), fc.boolean(), fc.oneof(
+        fc.tuple(fc.constant('color'), color),
+        fc.constant(['background']),
+        fc.tuple(fc.constant('slider'), fc.nat(NOTE_SLIDERS.length - 1), fc.nat(10), fc.nat(10))
+      )),
+      label: ([[t, a], open, [what, x, from, to]], at) => `${what === 'color' ? `press note color ${x}` : what === 'background' ? 'press the Background button' : `drag the ${NOTE_SLIDERS[x]} slider from ${from * 10}% to ${to * 10}%`} with the first note ${ifNone(t, a, at)} ${open ? 'open' : 'selected'}`,
+      run: async (env, [[t, a], open, [what, x, from, to]]) => {
+        const chosen = open ? await openFirstNote(env, NOTE_TEXTS[t], a) : await selectFirstNote(env, NOTE_TEXTS[t], a)
+        if (!chosen) return
+        if (what === 'slider') {
+          const [start, end] = [await env.sliderPoint(NOTE_SLIDERS[x], from / 10, true), await env.sliderPoint(NOTE_SLIDERS[x], to / 10, true)]
+          await env.page.mouse.move(...start)
+          await env.page.mouse.down()
+          await env.page.mouse.move(...end, { steps: 8 })
+          await env.page.mouse.up()
+        } else {
+          await env.pressNotePanel(what === 'color' ? x : what)
+        }
+        if (open) await env.finishNote()
+      }
+    },
+    {
+      kind: 'size key',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE, PEN_TOOL_EXTRAS],
+      start: true,
+      stroke: false,
+      weight: 2,
+      // With Text Anywhere's tool the keys step the size of the notes selected; with the pen, its thickness.
+      arg: (puzzle) => fc.tuple(note(puzzle), fc.boolean(), fc.nat(SIZE_KEYS.length - 1), fc.integer({ min: 1, max: MAX_SIZE_PRESSES })),
+      label: ([[t, a], pen, k, times], at) => `press ${SIZE_KEYS[k]} ${times} time${times === 1 ? '' : 's'} with ${pen ? 'the pen' : `the first note selected ${ifNone(t, a, at)}`}`,
+      run: async (env, [[t, a], pen, k, times]) => {
+        if (pen) await env.usePen(1)
+        else if (!await selectFirstNote(env, NOTE_TEXTS[t], a)) return
+        for (let i = 0; i < times; i++) await env.page.keyboard.press(SIZE_KEYS[k])
+      }
+    },
+    {
+      kind: 'note edit',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
+      weight: 1,
+      arg: (puzzle) => fc.tuple(note(puzzle), fc.constantFrom('click and type', 'type more', 'delete all')),
+      label: ([[t, a], how], at) => `double-click the first note ${ifNone(t, a, at)} then ${how === 'click and type' ? `click in it and type ${MORE_TEXT}` : how === 'type more' ? `type ${MORE_TEXT}` : 'delete all its text'} and finish it`,
+      run: async (env, [[t, a], how]) => {
+        const centre = await openFirstNote(env, NOTE_TEXTS[t], a)
+        if (!centre) return
+        if (how === 'click and type') await env.page.mouse.click(...centre)
+        if (how === 'delete all') {
+          await env.page.keyboard.press('Control+a')
+          await env.page.keyboard.press('Backspace')
+        } else {
+          await env.page.keyboard.type(MORE_TEXT)
+        }
+        await env.finishNote()
+      }
+    },
+    {
+      kind: 'hide all notes',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
+      weight: 1,
+      // Pressed twice, the notes are shown again.
+      arg: () => fc.boolean(),
+      label: (twice) => `press Hide all${twice ? ' twice' : ''}`,
+      run: async (env, twice) => {
+        await env.pressNotePanel('hide all')
+        if (twice) await env.pressNotePanel('hide all')
+      }
+    },
+    {
+      kind: 'note handle reset',
+      group: 'ordinary',
+      scripts: [TEXT_ANYWHERE],
+      start: false,
+      stroke: false,
+      weight: 1,
+      // A note resized by its handle and then put back to its own size by a double-click on the handle; selected, a note with no box is not resized by it, so half the draws open the note.
+      arg: (puzzle) => fc.tuple(note(puzzle), fc.nat(RESIZE_CORNERS - 1), fc.boolean(), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX }), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX })),
+      label: ([[t, a], corner, open, dx, dy], at) => `drag corner ${corner} of the first note ${open ? 'open' : 'selected'} ${ifNone(t, a, at)} by ${dx} x ${dy} then double-click it`,
+      run: async (env, [[t, a], corner, open, dx, dy]) => {
+        const chosen = open ? await openFirstNote(env, NOTE_TEXTS[t], a) : await selectFirstNote(env, NOTE_TEXTS[t], a)
+        const handle = chosen && await env.noteHandle(corner)
+        if (!handle) return
+        await env.page.mouse.move(...handle)
+        await env.page.mouse.down()
+        await env.page.mouse.move(handle[0] + dx, handle[1] + dy, { steps: 6 })
+        await env.page.mouse.up()
+        // The note stays selected or open after its drag, so its handle is still there: a missing one is a failure, not a step to skip.
+        const moved = await env.noteHandle(corner)
+        if (!moved) throw new Error(`corner ${corner}'s handle is gone after its drag`)
+        await env.page.mouse.dblclick(...moved)
+        if (open) await env.finishNote()
       }
     },
     {
