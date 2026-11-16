@@ -23,6 +23,8 @@ const DARK_PAGE = createRequire(import.meta.url)('../../dark-page.user.js')
 const AUTO_RULES_RESIZER = createRequire(import.meta.url)('../../auto-rules-resizer.user.js')
 const { BOX_LINES, NUDGE_REPEAT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
+const SLIDERS_OF_NOTES = ['note size', 'note opacity']
+
 const runOn = async (action, options) => {
   const target = await fakeTargets(options).openTarget()
   await action.run({ selected: true }, { env: target.env })
@@ -434,6 +436,135 @@ describe('the action vocabulary', () => {
       assert.ok(names(log).includes('useNotes'))
       assert.deepEqual(calls(log, 'mouse.dblclick')[0].slice(1), [200, 200])
       assert.deepEqual(calls(log, 'finishNote').length, 1)
+    })
+
+    describe('the Text Anywhere note edits of #929', () => {
+      const pressed = (log) => calls(log, 'pressNotePanel').map(([, what]) => what)
+
+      it('an erase presses the right button on the first note, or drags it across the note, and lets go; a click moves nowhere', async () => {
+        const modes = new Set()
+        for (const a of kindOf('note erase')) {
+          const { log } = await runOn(a)
+          const downs = calls(log, 'mouse.down')
+          const ups = calls(log, 'mouse.up')
+          const clicks = calls(log, 'mouse.click')
+          assert.ok(!names(log).includes('placeNote'), 'a note is there')
+          if (clicks.length) {
+            modes.add('click')
+            assert.deepEqual(clicks[0], ['mouse.click', 200, 200, { button: 'right' }])
+            assert.equal(downs.length, 0)
+          } else {
+            modes.add(names(log).includes('mouse.dblclick') ? 'open' : 'drag')
+            assert.deepEqual([downs.length, ups.length], [1, 1])
+            assert.equal(downs[0][1].button, 'right')
+            assert.equal(ups[0][1].button, 'right')
+            const moves = calls(log, 'mouse.move').map(([, x, y]) => [x, y])
+            assert.ok(moves.some(([x, y]) => x === 200 && y === 200), 'the drag goes over the note')
+          }
+        }
+        assert.deepEqual([...modes].sort(), ['click', 'drag', 'open'])
+      })
+
+      it('an erase places a note first when there is none, and only then; with none placed it does nothing', async () => {
+        const [a] = kindOf('note erase')
+        assert.ok((await runOn(a, { withNote: false })).log.some(([n]) => n === 'placeNote'))
+        assert.ok(!(await runOn(a, { withNote: true })).log.some(([n]) => n === 'placeNote'))
+      })
+
+      it('a restyle selects or opens the first note, then presses a color, Background or a slider with the tool kept, so the note stays chosen', async () => {
+        const seen = new Set()
+        for (const a of kindOf('note restyle')) {
+          const { log } = await runOn(a)
+          const ns = names(log)
+          const press = pressed(log)
+          const slides = calls(log, 'sliderPoint')
+          assert.equal(press.length + (slides.length ? 1 : 0), 1, String(a))
+          if (press.length) seen.add(typeof press[0] === 'number' ? 'color' : press[0])
+          if (slides.length) {
+            seen.add('slider')
+            assert.equal(slides[0][3], true, 'the slider is reached with the notes tool kept')
+            assert.ok(SLIDERS_OF_NOTES.includes(slides[0][1]), 'a note slider')
+            assert.equal(calls(log, 'mouse.down').length, 1)
+            assert.equal(calls(log, 'mouse.up').length, 1)
+          }
+          assert.ok(ns.indexOf('mouse.dblclick') === -1 ? ns.indexOf('mouse.click') !== -1 : calls(log, 'finishNote').length === 1, 'selected by a click, or opened and finished')
+          const first = ns.findIndex((n) => n === 'pressNotePanel' || n === 'sliderPoint')
+          assert.ok(first > ns.findIndex((n) => n === 'mouse.click' || n === 'mouse.dblclick'), 'after the note is chosen')
+        }
+        assert.deepEqual([...seen].sort(), ['background', 'color', 'slider'])
+      })
+
+      it('the colors a restyle presses are the nine', async () => {
+        const colors = new Set()
+        for (const a of kindOf('note restyle')) for (const c of pressed((await runOn(a)).log)) if (typeof c === 'number') colors.add(c)
+        assert.deepEqual([...colors].sort(), [1, 2, 3, 4, 5, 6, 7, 8, 9])
+      })
+
+      it('a size key press is +, = or -, with Text Anywhere\'s tool (a note selected) or with the pen, and never a chord', async () => {
+        const keys = new Set()
+        const tools = new Set()
+        for (const a of kindOf('size key')) {
+          const { log } = await runOn(a)
+          const presses = calls(log, 'keyboard.press').map(([, k]) => k)
+          assert.ok(presses.length >= 1)
+          for (const k of presses) keys.add(k)
+          tools.add(names(log).includes('usePen') ? 'pen' : 'notes')
+          assert.ok(presses.every((k) => ['+', '=', '-'].includes(k)), String(a))
+        }
+        assert.deepEqual([...keys].sort(), ['+', '-', '='])
+        assert.deepEqual([...tools].sort(), ['notes', 'pen'])
+      })
+
+      it('a note edit double-clicks the first note, then clicks in it, types more, or deletes all its text, and finishes it', async () => {
+        const seen = new Set()
+        for (const a of kindOf('note edit')) {
+          const { log } = await runOn(a)
+          assert.deepEqual(calls(log, 'mouse.dblclick')[0].slice(1), [200, 200])
+          assert.equal(calls(log, 'finishNote').length, 1)
+          const typed = calls(log, 'keyboard.type').length > 0
+          const deleted = calls(log, 'keyboard.press').some(([, k]) => k === 'Backspace')
+          const clicked = calls(log, 'mouse.click').length > 0
+          assert.ok(typed || deleted, String(a))
+          seen.add(deleted ? 'delete all' : clicked ? 'click and type' : 'type more')
+        }
+        assert.deepEqual([...seen].sort(), ['click and type', 'delete all', 'type more'])
+      })
+
+      it('Hide all is pressed once or twice, so the notes are hidden and then shown again', async () => {
+        const counts = new Set()
+        for (const a of kindOf('hide all notes')) counts.add(pressed((await runOn(a)).log).filter((w) => w === 'hide all').length)
+        assert.deepEqual([...counts].sort(), [1, 2])
+      })
+
+      it('a handle reset double-clicks a handle of the first note, selected or open, after dragging it', async () => {
+        const seen = new Set()
+        for (const a of kindOf('note handle reset')) {
+          const { log } = await runOn(a)
+          const ns = names(log)
+          const dbl = calls(log, 'mouse.dblclick')
+          assert.equal(dbl.length >= 1, true)
+          assert.deepEqual(dbl.at(-1).slice(1), [300, 320], 'the handle')
+          assert.ok(ns.lastIndexOf('mouse.up') < ns.lastIndexOf('mouse.dblclick'), 'after the drag')
+          assert.equal(calls(log, 'mouse.down').length, 1)
+          seen.add(ns.includes('finishNote') ? 'open' : 'selected')
+        }
+        assert.deepEqual([...seen].sort(), ['open', 'selected'])
+      })
+
+      it('the note edits run only when a note can be placed: with none it presses nothing', async () => {
+        for (const kind of ['note erase', 'note restyle', 'note edit', 'note handle reset']) {
+          const [a] = kindOf(kind)
+          const target = await fakeTargets({ withNote: false }).openTarget()
+          target.env.placeNote = async () => {}
+          await a.run({ selected: true }, { env: target.env })
+          assert.deepEqual(calls(target.log, 'mouse.click').concat(calls(target.log, 'mouse.down'), calls(target.log, 'mouse.dblclick'), calls(target.log, 'keyboard.press'), calls(target.log, 'pressNotePanel')), [], kind)
+        }
+      })
+
+      it('a busy start can hold the restyles, the edits and the erase, none that hides or opens a dialog', () => {
+        for (const kind of ['note restyle', 'size key']) assert.ok(START_KINDS.includes(kind), kind)
+        for (const kind of ['note erase', 'note edit', 'hide all notes', 'note handle reset']) assert.ok(!START_KINDS.includes(kind), kind)
+      })
     })
   })
 

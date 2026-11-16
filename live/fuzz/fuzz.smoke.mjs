@@ -22,7 +22,7 @@ const run = promisify(execFile)
 const PASSING_SEEDS = [2, 3]
 const PLANTED_SEED = 3
 // A seed the planted Tab bug is caught on: a new action kind changes what each seed makes, so pick another from `npm run test:fuzz -- --seed <n> --runs 150 --plant tab-turns-pad-to-letters` if this one stops reaching Tab.
-const TAB_PLANT_SEED = 3
+const TAB_PLANT_SEED = 2
 const ROOT = new URL('../../', import.meta.url)
 const INTERRUPTED_BY_ESCAPE = /^(?:pen drag|right-click erase held|note drag).* then Escape then release$/
 
@@ -191,6 +191,63 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.deepEqual(savedTexts(page), ['15'])
       assert.deepEqual(page.notesSeen, ['15'], 'the note is drawn and nothing is open for typing')
       assert.deepEqual(errors, [])
+    })
+
+    describe('the note edits of #929', () => {
+      const FIRST = [0, NOTE_AT]
+      const OTHER = at(1, 1)
+      const THIRD = at(7, 7)
+      const savedLooks = async (steps) => savedFirst((await snapshotAfter(puzzle, [NOTE, ...steps])).page)
+      const erased = async (how) => savedTexts((await snapshotAfter(puzzle, [NOTE, ['note erase', [FIRST, OTHER, THIRD, how]]])).page)
+
+      it('a right click, a right-drag over the note and the same with it open each erase it', async () => {
+        for (const how of ['click', 'drag', 'open']) assert.deepEqual(await erased(how), [], how)
+      })
+
+      it('a color pressed with the note selected recolors it, and with it open as well', async () => {
+        const before = (await savedLooks([])).color
+        for (const open of [false, true]) {
+          const after = (await savedLooks([['note restyle', [FIRST, open, ['color', before === 4 ? 5 : 4]]]])).color
+          assert.notEqual(after, before, `open ${open}`)
+        }
+      })
+
+      it('Background gives the selected note a box, and a size slider resizes it', async () => {
+        assert.equal((await savedLooks([['note restyle', [FIRST, false, ['background']]]])).bg, true)
+        const start = (await savedLooks([])).size
+        assert.notEqual((await savedLooks([['note restyle', [FIRST, false, ['slider', 0, 5, 10]]]])).size, start)
+      })
+
+      it('+ makes the selected note bigger and - smaller, and with the pen they change the thickness', async () => {
+        const size = async (key) => (await savedLooks([['size key', [FIRST, false, key, 1]]])).size
+        const start = (await savedLooks([])).size
+        assert.ok(await size(0) > start, '+')
+        assert.ok(await size(2) < start, '-')
+        const thickness = (key) => afterSteps(puzzle, [['size key', [FIRST, true, key, 2]]], (p) => p.evaluate(() => Framework.getData('PenColor_thickness')))
+        assert.notEqual(await thickness(0), await thickness(2))
+      })
+
+      it('typing in a reopened note adds to its text, and deleting all of it removes the note', async () => {
+        const typed = await savedTexts((await snapshotAfter(puzzle, [NOTE, ['note edit', [FIRST, 'type more']]])).page)
+        assert.equal(typed.length, 1)
+        assert.match(typed[0], /ab/)
+        const clicked = await savedTexts((await snapshotAfter(puzzle, [NOTE, ['note edit', [FIRST, 'click and type']]])).page)
+        assert.match(clicked[0], /ab/)
+        assert.deepEqual(await savedTexts((await snapshotAfter(puzzle, [NOTE, ['note edit', [FIRST, 'delete all']]])).page), [])
+      })
+
+      it('Hide all hides the notes and a second press shows them', async () => {
+        const shown = (twice) => afterSteps(puzzle, [NOTE, ['hide all notes', twice]], (p) => p.locator(TEXTS).first().isVisible())
+        assert.equal(await shown(false), false)
+        assert.equal(await shown(true), true)
+      })
+
+      it('a double-click on a handle puts a resized note back to its own size', async () => {
+        const resized = savedFirst((await snapshotAfter(puzzle, [NOTE, ['note resize', [FIRST, 3, 40, 30]]])).page)
+        assert.ok(Array.isArray(resized.box))
+        const reset = await savedLooks([['note handle reset', [FIRST, 3, false, 40, 30]]])
+        assert.equal(reset.box, undefined, JSON.stringify(reset))
+      })
     })
 
     it('rich notes and a restart raise no page error', async () => {
