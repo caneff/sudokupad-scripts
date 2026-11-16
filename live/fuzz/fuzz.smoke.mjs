@@ -422,18 +422,24 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       await fuzzScripted({ browser: browser(), puzzle: puzzleByName('16x16'), steps: [['rules font', [1, 1]]] })
     })
 
-    // The wheel scrolls on the compositor's schedule, so the read waits a moment before it looks. A box shrunk to its floor has text to scroll to.
-    it('a wheel over the rules box scrolls it, and a box with no rules text has nothing to scroll (#932)', async () => {
-      const top = async (p) => {
+    // The wheel scrolls on the compositor's schedule: a read that expects a scroll waits for it, and a read that expects none looks after a moment. A box shrunk to its floor has text to scroll to.
+    it('a wheel over the rules box scrolls it, and over a page with no rules box or rules that fit it does nothing (#932)', async () => {
+      const scrollTop = (p) => p.locator('.puzzle-rules').evaluate((e) => e.scrollTop)
+      const scrolled = async (p) => {
+        await p.waitForFunction(() => document.querySelector('.puzzle-rules').scrollTop > 0)
+        return scrollTop(p)
+      }
+      const still = async (p) => {
         await p.waitForTimeout(500)
-        return p.locator('.puzzle-rules').evaluate((e) => e.scrollTop)
+        return scrollTop(p)
       }
       const shrink = ['rules drag', ['dl', 0, -500]]
-      assert.ok(await afterSteps(puzzle, [shrink, ['rules wheel', 400]], top) > 0, 'scrolled down')
-      assert.equal(await afterSteps(puzzle, [shrink, ['rules wheel', -400]], top), 0, 'up from the top stays')
-      // The refit of an f+ keeps the reading place (`readingPlace`, `contentTop`, `lineTop`), so the box is still scrolled after it.
-      assert.ok(await afterSteps(puzzle, [shrink, ['rules wheel', 400], ['rules font', [1, 1]]], top) > 0, 'scrolled still after f+')
-      assert.deepEqual(await afterSteps(puzzleByName('4x4'), [['rules wheel', 400]], saved), {})
+      assert.ok(await afterSteps(puzzle, [shrink, ['rules wheel', 400]], scrolled) > 0, 'scrolled down')
+      assert.equal(await afterSteps(puzzle, [shrink, ['rules wheel', -400]], still), 0, 'up from the top stays')
+      // The refit of an f+ keeps the reading place, so the box is still scrolled after it.
+      assert.ok(await afterSteps(puzzle, [shrink, ['rules wheel', 400], ['rules font', [1, 1]]], scrolled) > 0, 'scrolled still after f+')
+      assert.equal(await afterSteps(puzzleByName('cages 9x9'), [['rules wheel', 400]], still), 0, 'rules that fit do not scroll')
+      assert.equal(await afterSteps(puzzleByName('4x4'), [['rules wheel', 400]], (p) => p.locator('.puzzle-rules').isVisible()), false, 'no rules box to turn')
     })
 
     it('Restore defaults saves no sizing at all', async () => {
