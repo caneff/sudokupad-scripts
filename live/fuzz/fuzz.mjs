@@ -8,7 +8,7 @@ import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE } from '../pen.mjs'
 import { setInputValue } from '../input.mjs'
 import { actButton, animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, paste, STATUS } from '../settings.mjs'
-import { COLOR_BY_DIGIT_DIALOG, settingsScript } from '../scripts.mjs'
+import { COLOR_BY_DIGIT_DIALOG, SETTINGS_SCRIPTS, settingsScript } from '../scripts.mjs'
 import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, RULES_PANE } from '../auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
 import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, middleOf, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
@@ -41,10 +41,10 @@ async function showRules (p, puzzle) {
   }, rules)
 }
 
-// Each slider `actions.mjs` names: its selector, and whether the pen tool or Text Anywhere's tool shows it. Pen Tool Extras' ids are typed out, as the live tests type them.
+// Each slider `actions.mjs` names: its selector, whether the pen tool or Text Anywhere's tool shows it, and for a pen slider the key of the Show boxes that can hide it. Pen Tool Extras' ids are typed out, as the live tests type them.
 const SLIDER_SELECTORS = {
-  'pen thickness': { selector: '#pen-tool-extras-thickness', tool: 'pen' },
-  'pen opacity': { selector: '#pen-tool-extras-opacity', tool: 'pen' },
+  'pen thickness': { selector: '#pen-tool-extras-thickness', tool: 'pen', shown: 'thickness' },
+  'pen opacity': { selector: '#pen-tool-extras-opacity', tool: 'pen', shown: 'opacity' },
   'note size': { selector: NOTE_SIZE_SLIDER, tool: 'notes' },
   'note opacity': { selector: NOTE_OPACITY_SLIDER, tool: 'notes' }
 }
@@ -57,7 +57,12 @@ const BOX_TIMEOUT_MS = 2000
 const UI_TWEAKS = settingsScript('ui-tweaks.user.js')
 const UI_TWEAKS_DIALOG = UI_TWEAKS.editor
 const DARK_PAGE_INPUT = '#dark-page-input'
-const SETTINGS_DIALOGS = { 'ui tweaks': UI_TWEAKS, 'dark page': settingsScript('dark-page.user.js') }
+// The dialog of each script by the lower-case words of its entry, which is how `actions.mjs` names it.
+const SETTINGS_DIALOGS = Object.fromEntries(SETTINGS_SCRIPTS.map((script) => [script.entry.toLowerCase(), script]))
+const PEN_SETTINGS_BUTTON = '.pen-tool-extras-settings'
+const NOTE_COLOR_PRESET = `${SETTINGS_EDITOR} select[data-role="color-choice"]`
+// What a press of Copy error log or Clear is answered with on a page where nothing is broken (a log with records is copied, an empty one says so); any other answer is a failure.
+const ERROR_LOG_ANSWERS = { copy: /^(Error log copied\.|The error log is empty\.)$/, clear: /^Error log cleared\.$/ }
 const isSettingsObject = (text) => {
   try {
     const data = JSON.parse(text)
@@ -78,6 +83,13 @@ export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
 // A click this far (in cells) inside the edge of a cell is an edge click, and a corner's own point is a corner click.
 const EDGE_INSET = 0.04
+
+// The option at position `pick` (wrapped to the options there are) of a color preset pulldown. The option that is the colors in force (Custom after a hand edit) is selected and
+// disabled, and a disabled option cannot be picked.
+async function pickPreset (p, selector, pick) {
+  const values = await p.locator(selector).evaluate((el) => [...el.options].filter((o) => !o.disabled).map((o) => o.value))
+  await p.locator(selector).selectOption(values[pick % values.length])
+}
 
 // A real click on the middle of the element `selector` matches, which waits for nothing about its state: a button that cannot be pressed now (Undo
 // with nothing to undo) is pressed like a user presses it, and nothing happens. An element that is not there is a crash: a script lost its control.
@@ -191,6 +203,8 @@ function envFor (p, puzzle, { beforeReload }) {
     // A note blocks clicks only while its tool is current, so a button it covers shows only now.
     await clearControls()
   }
+  // Pen Tool Extras saves the Show boxes a player unticked as `false` under their key, and nothing while both are ticked.
+  const sliderHidden = (name) => p.evaluate(([key]) => Framework.getData('PenColor_sliders')?.[key] === false, [SLIDER_SELECTORS[name].shown])
   const sliderFor = async (name) => {
     const { selector, tool } = SLIDER_SELECTORS[name]
     if (tool === 'pen') await openPen()
@@ -250,6 +264,7 @@ function envFor (p, puzzle, { beforeReload }) {
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
     async sliderPoint (name, fraction) {
+      if (await sliderHidden(name)) return null
       const box = await (await sliderFor(name)).boundingBox({ timeout: BOX_TIMEOUT_MS })
       if (!box) throw new Error(`the ${name} slider is not on the page`)
       return [box.x + TRACK_MARGIN_PX + (box.width - 2 * TRACK_MARGIN_PX) * fraction, box.y + box.height / 2]
@@ -288,13 +303,15 @@ function envFor (p, puzzle, { beforeReload }) {
       if (restore) {
         await dialogButton(p, 'Restore defaults').click()
       } else {
-        // The Custom option is disabled (and selected) after a hand edit, and a disabled option cannot be picked.
-        const values = await p.locator(COLOR_CHOICE).evaluate((el) => [...el.options].filter((o) => !o.disabled).map((o) => o.value))
-        await p.locator(COLOR_CHOICE).selectOption(values[pick % values.length])
+        await pickPreset(p, COLOR_CHOICE, pick)
       }
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
-    async focusSlider (name) { await (await sliderFor(name)).focus() },
+    async focusSlider (name) {
+      if (await sliderHidden(name)) return false
+      await (await sliderFor(name)).focus()
+      return true
+    },
     async leaveSlider (name) { await p.locator(SLIDER_SELECTORS[name].selector).evaluate((el) => el.blur()) },
     async noteBoxDialog (choice, color, save) {
       await pickNotes()
@@ -387,6 +404,59 @@ function envFor (p, puzzle, { beforeReload }) {
         if (/^Could not paste/.test(status) && isSettingsObject(text)) throw new Error(`pasting ${text} into ${entry} failed: ${status}`)
       }
       await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    async restoreDefaults (script, save) {
+      const { editor, open } = SETTINGS_DIALOGS[script]
+      await open(p)
+      // Color by Digit asks first when the draft holds profiles of the player's own, and an unanswered confirm is dismissed, which would skip the restore: the player says OK.
+      const onConfirm = (dialog) => dialog.accept()
+      p.once('dialog', onConfirm)
+      try {
+        await dialogButton(p, 'Restore defaults').click()
+      } finally {
+        p.off('dialog', onConfirm)
+      }
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    // Clear empties the shared log the run reads its failure's records from, which is a report's context only: a failure is a crash signal or a broken rule, read from the page.
+    async errorLogButton (script, clear) {
+      const { editor, open } = SETTINGS_DIALOGS[script]
+      await open(p)
+      await actButton(p, clear ? 'clear-error-log' : 'copy-error-log').click()
+      const status = await p.locator(STATUS).filter({ hasText: /\S/ }).textContent()
+      if (!ERROR_LOG_ANSWERS[clear ? 'clear' : 'copy'].test(status)) throw new Error(`${script}'s ${clear ? 'Clear' : 'Copy error log'} answered "${status}"`)
+      await closeDialogWith(p, 'Cancel', editor)
+    },
+    async noteColorPreset (pick, save) {
+      const { editor, open } = SETTINGS_DIALOGS['text anywhere']
+      await open(p)
+      await pickPreset(p, NOTE_COLOR_PRESET, pick)
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    async noteDialogFromMenu (save) {
+      const { editor, open } = SETTINGS_DIALOGS['text anywhere']
+      await open(p)
+      await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
+    },
+    async penDialogFromSettingsButton (save) {
+      await openPen()
+      await clickIn(p, PEN_SETTINGS_BUTTON)
+      await p.locator(EXTRAS_EDITOR).waitFor({ state: 'visible' })
+      await animationsDone(p.locator(EXTRAS_EDITOR))
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
+    },
+    async penShowBoxes ({ thickness, opacity }, save) {
+      await openExtrasEditor(p)
+      await p.locator(`${EXTRAS_EDITOR} input[data-box="show.thickness"]`).setChecked(thickness)
+      await p.locator(`${EXTRAS_EDITOR} input[data-box="show.opacity"]`).setChecked(opacity)
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
+    },
+    // A swatch is edited after a preset in the same dialog, which can leave colors missing from the page's palette and put a note on them; Cancel drops both.
+    async penSwatchEdit (pick, pen, hex, save) {
+      await openExtrasEditor(p)
+      await pickPreset(p, COLOR_CHOICE, pick)
+      await p.locator(`${EXTRAS_EDITOR} input[data-role="swatch"][data-key="${pen}"]`).fill(hex)
+      await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
     async uiTweaks ({ hideSelect, wrapButtons, toggleTab, restore }, save) {
       await UI_TWEAKS.open(p)
