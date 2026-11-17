@@ -277,3 +277,35 @@ describe('a fresh install\'s Low/5/High contrast', { concurrency: false }, () =>
     assert.equal(ratio >= 3.5, true, `key ${key}: ${ratio}`)
   }))
 })
+
+describe('the button with Dark Page installed', { concurrency: false }, () => {
+  const darkPage = scriptSource('dark-page.user.js')
+  const channelsOf = (css) => (css.match(/[\d.]+/g) || []).map(Number)
+
+  for (const mode of ['cell', 'digit', 'both', 'off']) {
+    it(`${mode}: each chip digit reads at 3:1 or more against its chip as drawn over the dark button, and the mode word is 10 px or larger`, async () => {
+      const { context, p } = await openSession(browser(), script, { saved: { [MODE_STORAGE_KEY]: mode }, also: [darkPage] })
+      try {
+        const look = await p.locator(BUTTON).evaluate((button) => {
+          const read = (el) => { const s = getComputedStyle(el); return [s.fill, s.fillOpacity] }
+          return {
+            button: getComputedStyle(button).backgroundColor,
+            chips: [...button.querySelectorAll('[data-role="chip"]')].map((g) => ({ rects: [...g.querySelectorAll('rect')].map(read), ink: getComputedStyle(g.querySelector('text')).fill })),
+            wordSize: getComputedStyle(button.querySelector('[data-role="mode"]')).fontSize
+          }
+        })
+        assert.equal(parseFloat(look.wordSize) >= 10, true, look.wordSize)
+        assert.equal(look.chips.length > 0, true)
+        for (const chip of look.chips) {
+          const shown = chip.rects.reduce((under, [fill, opacity]) => {
+            const [r, g, b, a = 1] = channelsOf(fill)
+            const alpha = a * Number(opacity)
+            return [r, g, b].map((c, i) => alpha * c + (1 - alpha) * under[i])
+          }, channelsOf(look.button).slice(0, 3))
+          const ratio = contrastRatio(channelsOf(chip.ink).slice(0, 3), shown)
+          assert.equal(ratio >= 3, true, `${mode}: ink ${chip.ink} on ${shown}: ${ratio}`)
+        }
+      } finally { await context.close() }
+    })
+  }
+})

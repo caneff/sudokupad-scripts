@@ -46,10 +46,11 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     const color = await Promise.all(keys.map((key) => paletteColorOn(p, key)))
     const shade = await Promise.all(keys.map((key) => shadeOn(p, key)))
     const cells = {
-      cell: keys.map((_, i) => [color[i], DEFAULT_FILL]),
+      // A digit that falls short of 3:1 on its chip is darkened (rgb(25, 86, 187) is the blue on key 2's color, rgb(131, 131, 131) the shade on key 1's).
+      cell: keys.map((_, i) => [color[i], i === 1 ? 'rgb(25, 86, 187)' : DEFAULT_FILL]),
       digit: keys.map((_, i) => [WHITE, shade[i]]),
-      both: keys.map((_, i) => [color[i], shade[i]]),
-      off: keys.map(() => [WHITE, 'rgb(153, 153, 153)'])
+      both: keys.map((_, i) => [color[i], i === 0 ? 'rgb(131, 131, 131)' : shade[i]]),
+      off: keys.map(() => [WHITE, 'rgb(136, 136, 136)'])
     }[mode]
     return { cells, outline: mode === 'off' ? 'rgb(170, 170, 170)' : BLACK }
   }
@@ -70,7 +71,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
 
   it('the button names Off in its label and draws its chips white with grey digits and a grey outline, and has no AUTO box', async () => {
     assert.equal(await label(), 'Off')
-    assert.equal(await p.locator(BUTTON).getAttribute('title'), 'Color by digit: Off')
+    assert.equal(await p.locator(BUTTON).getAttribute('title'), 'Color by Digit: Off')
     await assertLook('off')
     assert.equal(await p.locator(`${BUTTON} [data-role="auto"]`).count(), 0)
     assert.equal(/AUTO/.test(await p.locator(BUTTON).textContent()), false)

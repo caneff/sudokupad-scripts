@@ -17,7 +17,7 @@ const PEN_TOOL = 'pen'
 const NOTE_TOOL = 'textanywhere'
 // A note selected (its outline) or open for typing (its box): Text Anywhere's panel then shows that note's look, not the next note's.
 const NOTE_BUSY = `${SELECTION}, ${TEXT_BOX}`
-const COLOR_BUTTON_TITLE = /^Color by digit: (\w+)$/
+const COLOR_BUTTON_TITLE = /^Color by Digit: (\w+)$/
 // Auto Rules Resizer refits 100 ms after the last resize, and the rules are read once they fit or this long has passed: a wait on a condition, so a slow box
 // reads the finished fit, and a pane that never fits is still read and reported.
 const RULES_FIT_MS = 2000
