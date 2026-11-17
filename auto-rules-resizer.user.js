@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.28
+// @version      0.7.29
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.28'
+  const VERSION = '0.7.29'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -88,10 +88,12 @@
   const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
 
   // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
+  const slotName = (key, n) => key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+
   function keptSlot (store, key, raw) {
     const same = JSON.stringify(raw)
     for (let n = 1; ; n++) {
-      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const slot = slotName(key, n)
       const held = store.getData(slot)
       if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
     }
@@ -119,11 +121,16 @@
         else store.setData(slot, raw)
         console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
       }
-      return { value: undefined, unreadable }
+      return { value: undefined, unreadable, slot }
     }
   }
 
-  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
+  // Slots fill in order, so the first empty one ends the list.
+  function unreadableSlots (store, key) {
+    const slots = []
+    while (store.getData(slotName(key, slots.length + 1)) !== null) slots.push(slotName(key, slots.length + 1))
+    return slots
+  }
 
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
