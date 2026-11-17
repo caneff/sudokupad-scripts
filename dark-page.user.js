@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.35
+// @version      0.7.36
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.35'
+  const VERSION = '0.7.36'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -925,7 +925,7 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
+    // A write or read that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
     // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
@@ -944,8 +944,18 @@
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
         }
       }
+      // In a dialog action a read that throws goes on to the caller, as a write does, so Copy says why it could not read.
+      const read = (key) => {
+        if (feature.off) return null
+        try {
+          return Framework.getData(key)
+        } catch (error) {
+          if (Object(error) === error) storeFailures.add(error)
+          throw error
+        }
+      }
       return {
-        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        getData: (key) => (dialogActions > 0 ? read(key) : feature.run(() => Framework.getData(key), () => null)),
         setData: (key, value) => write(() => Framework.setData(key, value)),
         removeData: (key) => write(() => Framework.removeData(key)),
         keep: (key, value) => feature.run(() => Framework.setData(key, value))
@@ -1043,7 +1053,7 @@
       feature: settingsEntry,
       save: () => saveColor(picked),
       copyPaste: {
-        copied: () => savedPageColor.runInDialog(() => copiedSettings(Framework)),
+        copied: () => savedPageColor.runInDialog(() => copiedSettings(guard.storeFor(savedPageColor))),
         readers: READERS,
         // The draft takes the paste only once it is saved, so a paste that failed leaves the dialog showing what it showed.
         apply: (values) => {

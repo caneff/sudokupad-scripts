@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.35
+// @version      1.32.36
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.35'
+  const VERSION = '1.32.36'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -461,7 +461,7 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
+    // A write or read that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
     // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
@@ -480,8 +480,18 @@
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
         }
       }
+      // In a dialog action a read that throws goes on to the caller, as a write does, so Copy says why it could not read.
+      const read = (key) => {
+        if (feature.off) return null
+        try {
+          return Framework.getData(key)
+        } catch (error) {
+          if (Object(error) === error) storeFailures.add(error)
+          throw error
+        }
+      }
       return {
-        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        getData: (key) => (dialogActions > 0 ? read(key) : feature.run(() => Framework.getData(key), () => null)),
         setData: (key, value) => write(() => Framework.setData(key, value)),
         removeData: (key) => write(() => Framework.removeData(key)),
         keep: (key, value) => feature.run(() => Framework.setData(key, value))
@@ -3173,7 +3183,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       },
       copyPaste: {
         // A copy with the saved settings off says so in the dialog's status line, rather than copy the defaults as if they were saved.
-        copied: () => steps.saved.runInDialog(() => copiedSettings(Framework)),
+        copied: () => steps.saved.runInDialog(() => copiedSettings(savedData)),
         readers: READERS,
         apply: (values) => {
           const pasted = SETTING_NAMES.filter((name) => SETTINGS[name].key in values)

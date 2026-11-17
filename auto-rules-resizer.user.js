@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.25
+// @version      0.7.26
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.25'
+  const VERSION = '0.7.26'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -1148,7 +1148,7 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
+    // A write or read that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
     // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
@@ -1167,8 +1167,18 @@
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
         }
       }
+      // In a dialog action a read that throws goes on to the caller, as a write does, so Copy says why it could not read.
+      const read = (key) => {
+        if (feature.off) return null
+        try {
+          return Framework.getData(key)
+        } catch (error) {
+          if (Object(error) === error) storeFailures.add(error)
+          throw error
+        }
+      }
       return {
-        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        getData: (key) => (dialogActions > 0 ? read(key) : feature.run(() => Framework.getData(key), () => null)),
         setData: (key, value) => write(() => Framework.setData(key, value)),
         removeData: (key) => write(() => Framework.removeData(key)),
         keep: (key, value) => feature.run(() => Framework.setData(key, value))
@@ -1541,7 +1551,7 @@
         fitPage()
       },
       copyPaste: {
-        copied: () => maxSizeSettings.runInDialog(() => copiedSettings(Framework)),
+        copied: () => maxSizeSettings.runInDialog(() => copiedSettings(savedLimits)),
         readers: READERS,
         apply: (values) => {
           limits = withPasted(LIMIT_ROWS, limits, values)
