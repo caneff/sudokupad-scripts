@@ -66,7 +66,7 @@ const SETTINGS_DIALOGS = Object.fromEntries(SETTINGS_SCRIPTS.map((script) => [sc
 const PEN_SETTINGS_BUTTON = '.pen-tool-extras-settings'
 const NOTE_COLOR_PRESET = `${SETTINGS_EDITOR} select[data-role="color-choice"]`
 // What a press of Copy error log or Clear is answered with on a page where nothing is broken (a log with records is copied, an empty one says so); any other answer is a failure.
-const ERROR_LOG_ANSWERS = { copy: /^(Error log copied\.|The error log is empty\.)$/, clear: /^Error log cleared\.$/ }
+const ERROR_LOG_ANSWERS = { copy: /^(Error log copied\.|The error log is empty\.)$/, clear: /^(Error log cleared\.|The error log was already empty\.)$/ }
 const isSettingsObject = (text) => {
   try {
     const data = JSON.parse(text)

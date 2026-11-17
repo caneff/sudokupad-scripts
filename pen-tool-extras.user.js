@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.27
+// @version      1.32.28
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.27'
+  const VERSION = '1.32.28'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -643,8 +643,9 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
+          const wasEmpty = readErrorLog(win.localStorage).length === 0
           win.localStorage.removeItem(ERROR_LOG_KEY)
-          say('Error log cleared.')
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
         }
         const log = readErrorLog(win.localStorage)
@@ -3019,7 +3020,7 @@
 
   // Scoped by the editor's id, so SudokuPad's other dialogs are left alone; `:has` reaches the dialog and its buttons from the editor, so they are styled from the first frame.
   const OPTIONS = `.dialog:has(${EDITOR}) .dialog-options`
-  const hiddenRowCss = (name) => `${EDITOR}:not(:has(input[data-box="${SETTINGS[name].dialog.under}"]:checked)) [data-row="${name}"] { display: none; }`
+  const hiddenRowCss = (name) => `${EDITOR}:not(:has(input[data-box="${SETTINGS[name].dialog.under}"]:checked)) [data-row="${name}"] { visibility: hidden; }`
   const DIALOG_CSS = [
     // Sized to its content and centred in the window; the paragraph around the editor loses SudokuPad's bottom margin so the vertical line meets the footer's line.
     `.dialog:has(${EDITOR}) { width: fit-content !important; max-width: 96vw !important; }`,

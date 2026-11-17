@@ -1541,8 +1541,9 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
+          const wasEmpty = readErrorLog(win.localStorage).length === 0
           win.localStorage.removeItem(ERROR_LOG_KEY)
-          say('Error log cleared.')
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
         }
         const log = readErrorLog(win.localStorage)
