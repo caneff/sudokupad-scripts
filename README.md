@@ -19,7 +19,7 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 | Text Anywhere | Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes. [Details](https://caneff.github.io/sudokupad-scripts/text-anywhere.html) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js) |
 | Dark Page | Makes the page black around the puzzle, or a color you pick. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |
 | Auto Rules Resizer | Fits the rules pane to the screen in landscape: the largest text that fits, widening the pane only when the rules need it. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js) |
-| UI Tweaks | Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches to letters, hide the Toggle Selection button, and wrap the bottom row after five buttons. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js) |
+| UI Tweaks | Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches to letters, hide the Select button, and wrap the bottom row after five buttons. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js) |
 
 ## Settings
 
@@ -58,10 +58,10 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
 Its dialog has three options, each applied at once on Save and kept in the browser. Restore defaults sets the boxes back to how they start, as a draft that Cancel drops:
 
 - **Tab never switches to letters** (on at first): SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a stray Tab left the number pad on letters after a refresh. During play, Tab does what it did before, minus the toggle, and a held Tab is stopped too. The letter button and `/` still toggle, and Tab still moves focus in dialogs. It works whenever you turn the letter tool on in settings.
-- **Hide the Toggle Selection button** (off at first): hides SudokuPad's Select button in the bottom row, and the other buttons close up.
+- **Hide the Select button** (off at first): hides SudokuPad's Select button in the bottom row, and the other buttons close up.
 - **Wrap buttons** (off at first): the bottom row of tool buttons wraps onto a second line after five. Color by Digit already caps that row at five on its own, so with it installed this option changes nothing.
 
-If a SudokuPad update changes what the Tab option, the saved options or the settings entry needs, that part logs a console warning and turns itself off, and a bar at the bottom of the page says so. Hide the Toggle Selection button and Wrap buttons are style rules only, with nothing of SudokuPad's to break.
+If a SudokuPad update changes what the Tab option, the saved options or the settings entry needs, that part logs a console warning and turns itself off, and a bar at the bottom of the page says so. Hide the Select button and Wrap buttons are style rules only, with nothing of SudokuPad's to break.
 
 ### Auto Rules Resizer
 
@@ -69,10 +69,10 @@ Ported from the rules-pane fit of twitch-rules-scroller's stream script, which g
 
 - In landscape, the rules pane takes all the height the page has to spare (the controls column is lifted so it stays on the page, and keeps SudokuPad's scale) and keeps SudokuPad's width. Only when the rules would still scroll at SudokuPad's own font size does it widen, as far as it takes to stop the scroll at that size and no further than the window's right edge, less 8 px. Only when they would still scroll at the widest does the font shrink, to 70% of SudokuPad's size at the least; below that the rules scroll. Rules that fit take the largest font at which they still do, up to 150% of SudokuPad's size. It refits on a window resize and on each SudokuPad layout.
 - In portrait it leaves SudokuPad as it is.
-- f+ and f-, above the pane's top-left corner, move the font a pixel at a time from the fitted size, between 70% and 150% of SudokuPad's own. f+ also widens the pane when the bigger font would scroll at the current width, only as far as it takes. The two buttons show only while the pointer is over the pane, a corner or the buttons.
-- Two corners show while the pointer is over the pane. The top right grows the pane right and up, moving the controls up; the bottom left grows it left and down. The pane never grows onto the board, the controls never go off the window, even after the window gets smaller, and a drag never shrinks the pane under 15 × 7 rem.
-- An "Auto Rules Resizer" entry in SudokuPad's settings opens a dialog with a max auto width and a max auto height, in CSS px. An empty box means no limit, and both start empty. The limits cap only the automatic fit, so a corner drag can still go past them, and the height limit caps the room the font is fitted to. They are saved in SudokuPad's own storage.
-- A puzzle's text size and pane size, if you change them with f+, f- or the drag corners, are kept per puzzle: you get them back when you return to it, and every other puzzle starts at the fitted default. Restore defaults in the Auto Rules Resizer dialog clears the current puzzle's.
+- f+ and f-, in the pane's top edge at its left corner, clear of the text even when the rules scroll, move the font a pixel at a time from the fitted size, between 70% and 150% of SudokuPad's own. f+ also widens the pane when the bigger font would scroll at the current width, only as far as it takes. The two buttons show only while the pointer is over the pane, a corner or the buttons.
+- Two drag corners show while the pointer is over the pane, in its edge clear of the text, each taking a press over 24 px each way. The top right grows the pane right and up, moving the controls up; the bottom left grows it left and down. The pane never grows onto the board, the controls never go off the window, even after the window gets smaller, and a drag never shrinks the pane under 15 × 7 rem.
+- An "Auto Rules Resizer" entry in SudokuPad's settings opens a dialog with a max auto width and a max auto height, in CSS px. An empty box means no limit, and both start empty. The least is 240 px wide and 112 px high: a smaller value is refused with a message, and one saved or pasted reads as the least. Restore defaults empties both boxes, for Save or Cancel to decide. The limits cap only the automatic fit, so a corner drag can still go past them, and the height limit caps the room the font is fitted to. They are saved in SudokuPad's own storage.
+- A puzzle's text size and pane size, if you change them with f+, f- or the drag corners, are kept per puzzle: you get them back when you return to it, and every other puzzle starts at the fitted default. Reset puzzle size in the Auto Rules Resizer dialog clears the current puzzle's at once.
 
 ## License
 

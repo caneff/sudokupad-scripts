@@ -63,7 +63,7 @@ test('buildCss: the defaults add no rule', () => {
   assert.equal(buildCss(DEFAULT_OPTIONS), '')
 })
 
-test('buildCss: Hide the Toggle Selection button hides only that button, in the bottom row', () => {
+test('buildCss: Hide the Select button hides only that button, in the bottom row', () => {
   assert.equal(buildCss({ ...DEFAULT_OPTIONS, hideSelect: true }), '.controls-aux [data-control="select"] { display: none !important; }')
 })
 

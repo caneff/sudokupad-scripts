@@ -209,8 +209,8 @@
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per
   browser under `ToolLetter_letterMode`. The button and `/` toggle it; UI Tweaks' Tab option makes Tab do nothing in play instead.
-- **UI Tweaks** — the script `ui-tweaks.user.js`. Three **options** in one settings dialog: Tab never switches to letters (on at first), Hide the Toggle Selection button and Wrap buttons (off at first).
-- **bottom row** — SudokuPad's `.controls-aux`, the row of buttons under the number pad: undo, redo, check, the Toggle Selection button (`data-control="select"`), and the buttons other scripts add (Color by Digit's). Wrap buttons caps it at five a row.
+- **UI Tweaks** — the script `ui-tweaks.user.js`. Three **options** in one settings dialog: Tab never switches to letters (on at first), Hide the Select button and Wrap buttons (off at first).
+- **bottom row** — SudokuPad's `.controls-aux`, the row of buttons under the number pad: undo, redo, check, the Select button (`data-control="select"`), and the buttons other scripts add (Color by Digit's). Wrap buttons caps it at five a row.
 - **Text Anywhere** — the script `text-anywhere.user.js`, and the tool it adds to SudokuPad's tool buttons, named **Text** on the button. `T` makes it current
   (not with the Letter tool on, a note open, a dialog open or focus in a field); it takes none of the Z X C V B N M tool keys. Called Draw Tool before 0.17.0, when it also drew lines and shapes, and Text Annotation until 0.27.0. Its keys are saved under `TextAnywhere_`, and its **notice bar** dismissal under `text-anywhere-notice`; before 0.45.0 they were `DrawTool_` (the notes `DrawTool_drawing_*`) and `draw-tool-notice`, and each start copies an old key to its new name where none is saved, the notes only while the new index is unsaved and the index only once every listed puzzle's notes are copied, so a copy refused for room is tried again at the next start, and keeps the old one for a rolled-back version. Its console lines and **error log** records name it `text-anywhere`. Its install address was `draw-tool.user.js` before 0.45.1. That file stays as its **handover**, frozen at 0.45.1, whose `@updateURL` and `@downloadURL` name `text-anywhere.user.js`, so a copy installed from the old address updates to it and then on to the new one.
 - **notes** — everything Text Anywhere has put on one puzzle: its texts, oldest first. Saved per puzzle (keyed by
@@ -269,6 +269,7 @@
   SudokuPad's own. A press the floor or the cap cancels is not kept, so an offset stopped at either can be a fraction of a px. Not Text Anywhere's **nudge**.
 - **sizing** — a puzzle's own size of the rules pane in Auto Rules Resizer: its **font offset** and its dragged box (how far the two drag corners grew or
   shrank the pane, and moved the controls column). It is saved under `AutoRulesResizer_sizing_<puzzle>` (the puzzle's id, else its page URL) as
-  `{ nudgePx, box }`, `nudgePx` being the font offset's stored name, and only f+, f-, a corner drag or Restore defaults changes it: a window too small
+  `{ nudgePx, box }`, `nudgePx` being the font offset's stored name, and only f+, f-, a corner drag or Reset puzzle size changes it: a window too small
   for all of it, or an automatic size already at the cap, applies less of it and leaves what is saved alone. A puzzle never resized has no key and starts
-  at the default, no offset and no drag. Restore defaults in the Auto Rules Resizer dialog clears the current puzzle's.
+  at the default, no offset and no drag. Reset puzzle size in the Auto Rules Resizer dialog clears the current puzzle's at once; the dialog's Restore defaults
+  only empties the two limit boxes, for Save or Cancel to decide.
