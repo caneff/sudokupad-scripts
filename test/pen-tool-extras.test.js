@@ -11,7 +11,7 @@ const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const {
   buildCss, SUDOKUPAD_PEN_COLORS, editedColors,
-  readPenColors, storedPenColors, startupPenColors, PRESET_LABELS,
+  readPenColors, presetColorSet, editedColorSet, storedPenColors, startupPenColors, PRESET_LABELS,
   buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
@@ -90,28 +90,40 @@ test('readPenColors does not read an array by index', () => {
 })
 
 test('readPenColors reads colors saved with no preset name, as older versions save them, as Custom and unchanged', () => {
-  assert.deepEqual(readPenColors(NINE_SAVED), { colors: NINE_SAVED, preset: 'custom', missing: [] })
+  assert.deepEqual(readPenColors(NINE_SAVED), { colors: NINE_SAVED, preset: 'custom', missing: [], fromPreset: 'custom' })
 })
 
 test('readPenColors keeps a saved preset name, and reads one it does not know as Custom', () => {
-  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'page-2' }), { colors: NINE_SAVED, preset: 'page-2', missing: [] })
-  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'sudokupad' }), { colors: NINE_SAVED, preset: 'sudokupad', missing: [] })
+  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'page-2' }), { colors: NINE_SAVED, preset: 'page-2', missing: [], fromPreset: 'page-2' })
+  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'sudokupad' }), { colors: NINE_SAVED, preset: 'sudokupad', missing: [], fromPreset: 'sudokupad' })
   for (const odd of ['page-4', 'custom', 'unsaved', 'Darker page 1', 7, null]) {
     assert.equal(readPenColors({ ...NINE_SAVED, preset: odd }).preset, 'custom', JSON.stringify(odd))
   }
 })
 
+test('presetColorSet carries the page the set came from, and an edit keeps it while dropping only the edited pen from the missing ones', () => {
+  const pages = [['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9'], ['b0']]
+  const set = presetColorSet('page-2', pages, () => 'rgb(255, 0, 0)')
+  assert.equal(set.fromPreset, 'page-2')
+  assert.deepEqual(set.missing, [1, 2, 3, 4, 5, 6, 7, 8, 9])
+  const edited = editedColorSet(set, '4', '#123456')
+  assert.equal(edited.preset, 'custom')
+  assert.equal(edited.fromPreset, 'page-2')
+  assert.equal(edited.colors[4], '#123456')
+  assert.deepEqual(edited.missing, [1, 2, 3, 5, 6, 7, 8, 9])
+})
+
 test('storedPenColors keeps the nine colors where older versions read them and adds the preset name beside them, but none for Custom', () => {
   assert.deepEqual(storedPenColors({ colors: NINE_SAVED, preset: 'page-1', missing: [4] }), { ...NINE_SAVED, preset: 'page-1' })
-  assert.deepEqual(storedPenColors({ colors: NINE_SAVED, preset: 'custom', missing: [] }), NINE_SAVED)
-  assert.deepEqual(readPenColors(storedPenColors({ colors: NINE_SAVED, preset: 'page-3', missing: [] })), { colors: NINE_SAVED, preset: 'page-3', missing: [] })
+  assert.deepEqual(storedPenColors({ colors: NINE_SAVED, preset: 'custom', missing: [], fromPreset: 'custom' }), NINE_SAVED)
+  assert.deepEqual(readPenColors(storedPenColors({ colors: NINE_SAVED, preset: 'page-3', missing: [], fromPreset: 'page-3' })), { colors: NINE_SAVED, preset: 'page-3', missing: [], fromPreset: 'page-3' })
 })
 
 test('startupPenColors loads a saved set, waits for the color tool when nothing is saved, and saves SudokuPad\'s colors when there is no color tool', () => {
-  assert.deepEqual(startupPenColors({ ...NINE_SAVED, preset: 'page-2' }, true), { load: { colors: NINE_SAVED, preset: 'page-2', missing: [] } })
-  assert.deepEqual(startupPenColors(NINE_SAVED, false), { load: { colors: NINE_SAVED, preset: 'custom', missing: [] } })
+  assert.deepEqual(startupPenColors({ ...NINE_SAVED, preset: 'page-2' }, true), { load: { colors: NINE_SAVED, preset: 'page-2', missing: [], fromPreset: 'page-2' } })
+  assert.deepEqual(startupPenColors(NINE_SAVED, false), { load: { colors: NINE_SAVED, preset: 'custom', missing: [], fromPreset: 'custom' } })
   assert.deepEqual(startupPenColors(null, true), { wait: true })
-  assert.deepEqual(startupPenColors(null, false), { save: { colors: TABLE, preset: 'sudokupad', missing: [] } })
+  assert.deepEqual(startupPenColors(null, false), { save: { colors: TABLE, preset: 'sudokupad', missing: [], fromPreset: 'sudokupad' } })
 })
 
 test('PRESET_LABELS names the palette presets and the two states a set can be in beside them', () => {
@@ -983,9 +995,9 @@ test('Custom is in the pulldown only while the set is custom, selected and not p
 })
 
 test('the missing-color note names the page the colors came from and the pens that keep SudokuPad\'s own', () => {
-  const text = renderEditor(editorState({ missing: [4, 5], preset: 'custom', pickedPreset: 'page-2' }))
+  const text = renderEditor(editorState({ missing: [4, 5], preset: 'custom', fromPreset: 'page-2' }))
   assert.match(text, /Cell color page 2 has no usable color at the matching button, so pen colors 4, 5 keep SudokuPad's own\./)
-  assert.match(renderEditor(editorState({ missing: [7], pickedPreset: 'page-1' })), /Cell color page 1 has no usable color at the matching button, so pen color 7 keeps SudokuPad's own\./)
+  assert.match(renderEditor(editorState({ missing: [7], fromPreset: 'page-1' })), /Cell color page 1 has no usable color at the matching button, so pen color 7 keeps SudokuPad's own\./)
   assert.doesNotMatch(renderEditor(editorState()), /no usable color/)
 })
 
@@ -1220,7 +1232,7 @@ test('the dialog is sized to its content, the paragraph around the editor loses 
 
 test('a missing-color note in the first column wraps within it and never sets its width', () => {
   assert.match(DIALOG_CSS, /\.pen-tool-extras-cell \.pen-tool-extras-note \{[^}]*width: 0;[^}]*min-width: 100%;/)
-  assert.match(renderEditor(editorState({ missing: [4], pickedPreset: 'page-1' })), /<div class="pen-tool-extras-cell"><div class="pen-tool-extras-section-title">Pen colors<\/div>[\s\S]*no usable color[\s\S]*<\/div><div class="pen-tool-extras-cell">/, 'the note is in the Pen colors cell')
+  assert.match(renderEditor(editorState({ missing: [4], fromPreset: 'page-1' })), /<div class="pen-tool-extras-cell"><div class="pen-tool-extras-section-title">Pen colors<\/div>[\s\S]*no usable color[\s\S]*<\/div><div class="pen-tool-extras-cell">/, 'the note is in the Pen colors cell')
 })
 
 test('the grid\'s lines are the mockup\'s #ddd: each cell has a top line and each right-hand cell a left line, and the divider a top line', () => {
