@@ -9,7 +9,7 @@ import { loadInPlace } from '../puzzles.mjs'
 import { RULES_TEXT } from '../fuzz/puzzle-set.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
-import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
+import { closeDialogWith, dialogButton, headerVersion, openScriptDialog, openSettings, STATUS } from '../settings.mjs'
 import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, STYLE } from './auto-rules-resizer-fixtures.mjs'
 
 const SCRIPT_FILE = 'auto-rules-resizer.user.js'
@@ -452,7 +452,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     let context, p, errors
 
     before(async () => {
-      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved(null, 50)))
+      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved(null, 112), LONG_RULES))
       await inject(p)
     })
     after(async () => { await context.close() })
@@ -461,7 +461,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
       assert.equal(await settle(() => p.locator(FONT_BAR).count(), 1), 1)
       const now = await stable(() => pane(p))
       assert.equal(now.font, MIN_FONT_PX)
-      assert.equal(now.cssHeight <= 50, true, `pane ${now.cssHeight} css px tall under a max of 50`)
+      assert.equal(now.cssHeight <= 112, true, `pane ${now.cssHeight} css px tall under a max of 112`)
     })
 
     it('the page raised no error', () => {
@@ -500,27 +500,53 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
 
     it('Save keeps the limits and applies them at once', async () => {
-      await p.locator(MAX_HEIGHT_INPUT).fill('50')
+      await p.locator(MAX_HEIGHT_INPUT).fill('150')
       await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
       assert.equal(await data(MAX_WIDTH_KEY), 500)
-      assert.equal(await data(MAX_HEIGHT_KEY), 50)
+      assert.equal(await data(MAX_HEIGHT_KEY), 150)
       assert.equal(await settle(async () => (await pane(p)).cssWidth, 500), 500)
     })
 
-    it('a box holding no usable number keeps the saved limit', async () => {
+    const refusal = (text) => p.locator(STATUS).filter({ hasText: text })
+
+    it('a height under the drag floor, a negative and a non-number are refused: Not saved, the dialog stays open, nothing is saved', async () => {
       await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
-      await p.locator(MAX_WIDTH_INPUT).evaluate((el) => { el.value = '0' })
-      await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
-      assert.equal(await data(MAX_WIDTH_KEY), 500)
-      assert.equal(await data(MAX_HEIGHT_KEY), 50)
+      for (const [box, typed, message] of [
+        [MAX_HEIGHT_INPUT, '10', 'Max auto height must be a whole number of pixels, 112 or more'],
+        [MAX_HEIGHT_INPUT, '-5', 'Max auto height must be a whole number of pixels, 112 or more'],
+        [MAX_WIDTH_INPUT, '0', 'Max auto width must be a whole number of pixels, 240 or more'],
+        [MAX_HEIGHT_INPUT, '150.5', 'Max auto height must be a whole number of pixels']
+      ]) {
+        await p.locator(MAX_WIDTH_INPUT).fill('500')
+        await p.locator(MAX_HEIGHT_INPUT).fill('150')
+        await p.locator(box).evaluate((el, value) => { el.value = value }, typed)
+        await dialogButton(p, 'Save').click()
+        await refusal(`Not saved: ${message}`).waitFor()
+        assert.equal(await p.locator(MAX_WIDTH_INPUT).count(), 1, `${typed}: the dialog is still open`)
+        assert.equal(await data(MAX_WIDTH_KEY), 500)
+        assert.equal(await data(MAX_HEIGHT_KEY), 150)
+      }
+      await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
     })
 
-    it('shows the saved values on reopening, and clearing both and saving removes the keys and lifts the cap', async () => {
+    it('Restore defaults then Cancel leaves the saved limits and the puzzle\'s sizing alone', async () => {
+      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
+      const before = await pane(p)
+      await dialogButton(p, 'Restore defaults').click()
+      assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '')
+      assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
+      assert.equal(await data(MAX_WIDTH_KEY), 500, 'nothing is saved by the button')
+      await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
+      assert.equal(await data(MAX_WIDTH_KEY), 500)
+      assert.equal(await data(MAX_HEIGHT_KEY), 150)
+      assert.deepEqual(await pane(p), before)
+    })
+
+    it('shows the saved values on reopening, and Restore defaults then Save removes the keys and lifts the cap', async () => {
       await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '500')
-      assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '50')
-      await p.locator(MAX_WIDTH_INPUT).fill('')
-      await p.locator(MAX_HEIGHT_INPUT).fill('')
+      assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '150')
+      await dialogButton(p, 'Restore defaults').click()
       await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
       assert.equal(await data(MAX_WIDTH_KEY), null)
       assert.equal(await data(MAX_HEIGHT_KEY), null)
@@ -1129,7 +1155,7 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
     }
   })
 
-  it('Restore defaults in the dialog clears the puzzle\'s sizing', async () => {
+  it('Reset puzzle size in the dialog clears the puzzle\'s sizing at once, and Restore defaults does not', async () => {
     const opened = await startedFont(null)
     const { p } = opened
     try {
@@ -1137,6 +1163,10 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
       await settle(async () => (await savedSizing(p)) !== null, true)
       await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
       await p.getByRole('button', { name: 'Restore defaults' }).click()
+      await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
+      assert.equal((await savedSizing(p)) !== null, true, 'Restore defaults leaves the sizing')
+      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
+      await p.getByRole('button', { name: 'Reset puzzle size' }).click()
       assert.equal(await settle(async () => (await savedSizing(p)) === null, true), true, 'the key is gone')
       assert.equal(await settle(() => fontPx(p), opened.font), opened.font, 'back at the automatic size')
     } finally {
