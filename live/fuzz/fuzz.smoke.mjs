@@ -583,12 +583,15 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     const active = async (p) => { const { profiles: all, active: index } = await saved(p); return all[index] }
     const edit = (edits, save = true) => ['profile editor', [edits, save, false]]
     const digitsOf = (profile) => profile.groups.flatMap((g) => g.digits).sort().join('')
+    // Low/5/High's low group (digits 0-4) is palette key 6, the editor's sixth swatch (#953): the starting brush.
+    const LOW_KEY = '6'
+    const LOW_SWATCH = 5
 
     it('a digit key, a swatch key and a row key do what the keys do: a digit joins the brush\'s group, Down selects the next profile, and a name with & < > and a quote is saved as typed', async () => {
       const pressed = await afterSteps(puzzle, [edit([['digit key', 5, 9]])], active)
-      assert.equal(pressed.groups.find((g) => g.digits.includes('5')).key, '1', 'the digit 5 pressed on its chip joined the starting brush\'s group')
+      assert.equal(pressed.groups.find((g) => g.digits.includes('5')).key, LOW_KEY, 'the digit 5 pressed on its chip joined the starting brush\'s group')
       const brushed = await afterSteps(puzzle, [edit([['swatch key', 3, 4], ['digit key', 5, 9]])], active)
-      assert.notEqual(brushed.groups.find((g) => g.digits.includes('5')).key, '1', 'Enter on a swatch took its color as the brush')
+      assert.notEqual(brushed.groups.find((g) => g.digits.includes('5')).key, LOW_KEY, 'Enter on a swatch took its color as the brush')
       const [first, second] = (await afterSteps(puzzle, [edit([['row key', 0, 3], ['clear all']])], saved)).profiles
       assert.deepEqual([first.groups.length > 0, second.groups], [true, []], 'Down on the first row selected the second profile, which the Clear all after it emptied')
       assert.equal((await afterSteps(puzzle, [edit([['rename', 5]])], active)).name, PROFILE_NAMES[5])
@@ -596,8 +599,8 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     })
 
     it('a drag across the digits changes more of them than one click, and Clear all empties the groups', async () => {
-      const one = digitsOf(await afterSteps(puzzle, [edit([['paint', 0, 0]])], active))
-      const dragged = digitsOf(await afterSteps(puzzle, [edit([['paint drag', 0, 9, 0]])], active))
+      const one = digitsOf(await afterSteps(puzzle, [edit([['paint', 0, LOW_SWATCH]])], active))
+      const dragged = digitsOf(await afterSteps(puzzle, [edit([['paint drag', 0, 9, LOW_SWATCH]])], active))
       assert.ok(dragged.length < one.length, `a drag (${dragged}) changed more digits than one click (${one})`)
       assert.deepEqual((await afterSteps(puzzle, [edit([['clear all']])], active)).groups, [])
     })
