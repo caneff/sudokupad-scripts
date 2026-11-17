@@ -105,7 +105,7 @@ export const RULES_CORNERS = ['ur', 'dl']
 export const RULES_DRAG_REACH_PX = 500
 const CORNER_NAMES = { ur: 'top-right', dl: 'bottom-left' }
 // What is typed into a Max auto width or height box (a number box, which takes digits, a minus sign and an e): blank (no limit), sizes from under the rules box's floor to wider than the window,
-// and numbers that are no size (0 and a negative), which keep the limit as it was.
+// and numbers the box refuses (0 and a negative), which leave the dialog open with "Not saved".
 export const RULES_LIMIT_TEXTS = ['', '200', '400', '700', '2000', '0', '-5']
 const limitWords = (text) => (text === '' ? 'none' : text)
 

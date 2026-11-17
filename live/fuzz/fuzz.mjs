@@ -451,7 +451,15 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       await p.locator(MAX_WIDTH_INPUT).fill(maxWidth)
       await p.locator(MAX_HEIGHT_INPUT).fill(maxHeight)
       if (restore) await dialogButton(p, 'Restore defaults').click()
-      await closeDialogWith(p, save ? 'Save' : 'Cancel', MAX_WIDTH_INPUT)
+      if (save) {
+        // A text the script refuses leaves the dialog open with "Not saved"; that is its answer, so the dialog is then cancelled.
+        await dialogButton(p, 'Save').click()
+        const refused = p.locator(STATUS).filter({ hasText: 'Not saved' })
+        const closed = p.locator(MAX_WIDTH_INPUT).waitFor({ state: 'detached' }).then(() => false)
+        if (await Promise.race([closed, refused.waitFor().then(() => true)])) await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
+      } else {
+        await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
+      }
     },
     // `restore` presses Restore defaults after the color is picked.
     async darkPage (color, save, restore = false) {

@@ -7,7 +7,7 @@ const path = require('node:path')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { startScript } = require('./unit-start.js')
 const {
-  MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
+  MAX_WIDTH_KEY, MAX_HEIGHT_KEY, limitFromBox, LIMIT_FLOORS, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, offsetFontPx, fitRulesPane, clearFit,
   copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, loadSizing, saveSizing, noSizing, SIZING_KEY_PREFIX, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
 } = require('../auto-rules-resizer.user.js')
@@ -253,13 +253,6 @@ test('autoPaneFit: the font offset that took effect comes back, so a press the f
   assert.equal(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, fontOffsetPx: 5, fits: short }).fontOffsetPx, 0, 'the cap is 30')
 })
 
-test('normalizeLimit: a positive whole number of css px, else no limit', () => {
-  assert.equal(normalizeLimit(640), 640)
-  assert.equal(normalizeLimit('640'), 640)
-  assert.equal(normalizeLimit(' 640.4 '), 640)
-  for (const empty of [null, undefined, '', '  ', 0, -5, 'abc', NaN, Infinity, 0.2]) assert.equal(normalizeLimit(empty), null, String(empty))
-})
-
 test('readLimits: what is saved, in its envelope or from before it, and no limit for what is not', () => {
   assert.deepEqual(readLimits(fakeStore()), noLimits())
   assert.deepEqual(readLimits(fakeStore({ [MAX_WIDTH_KEY]: { v: 0, data: 700 }, [MAX_HEIGHT_KEY]: 500 })), { maxWidth: 700, maxHeight: 500 })
@@ -290,12 +283,38 @@ test('saveLimits: saves a limit in its envelope and removes the key of an empty 
   assert.deepEqual(store.data, {})
 })
 
-test('limitFromBox: blank is no limit, a usable number is the limit, anything else keeps the limit as it was', () => {
-  assert.equal(limitFromBox('', 600), null)
-  assert.equal(limitFromBox('  ', 600), null)
-  assert.equal(limitFromBox('700', 600), 700)
-  for (const slip of ['0', '-5', '0.2', 'abc']) assert.equal(limitFromBox(slip, 600), 600, slip)
-  assert.equal(limitFromBox('abc', null), null)
+test('limitFromBox: blank is no limit, a whole number at or above the floor is the limit, anything else throws a message naming the box', () => {
+  assert.equal(limitFromBox('', 'maxHeight'), null)
+  assert.equal(limitFromBox('  ', 'maxHeight'), null)
+  assert.equal(limitFromBox('700', 'maxHeight'), 700)
+  assert.equal(limitFromBox(String(LIMIT_FLOORS.maxHeight), 'maxHeight'), LIMIT_FLOORS.maxHeight, 'the floor itself is allowed')
+  assert.equal(limitFromBox(String(LIMIT_FLOORS.maxWidth), 'maxWidth'), LIMIT_FLOORS.maxWidth)
+  const refused = [
+    ['10', 'maxHeight', /Max auto height must be a whole number of pixels, 112 or more/],
+    [String(LIMIT_FLOORS.maxHeight - 1), 'maxHeight', /112 or more/],
+    ['-5', 'maxHeight', /Max auto height/],
+    ['0', 'maxHeight', /Max auto height/],
+    ['abc', 'maxHeight', /Max auto height/],
+    ['300.5', 'maxHeight', /whole number/],
+    ['100', 'maxWidth', /Max auto width must be a whole number of pixels, 240 or more/]
+  ]
+  for (const [text, name, message] of refused) assert.throws(() => limitFromBox(text, name), message, `${name} ${text}`)
+})
+
+test('the floors are the drag floors', () => {
+  assert.deepEqual(LIMIT_FLOORS, { maxWidth: 240, maxHeight: 112 })
+})
+
+test('readLimits and a paste refuse a limit below its floor the same way', () => {
+  const key = { maxHeight: MAX_HEIGHT_KEY, maxWidth: MAX_WIDTH_KEY }
+  for (const name of ['maxWidth', 'maxHeight']) {
+    for (const value of [LIMIT_FLOORS[name] - 1, LIMIT_FLOORS[name]]) {
+      const loaded = quietly(() => readLimits(fakeStore({ [key[name]]: value }))).result[name]
+      const pasted = readPaste(JSON.stringify({ [key[name]]: value })).values[key[name]]
+      assert.equal(loaded, value < LIMIT_FLOORS[name] ? null : value, `${name} ${value}`)
+      assert.equal(pasted, value < LIMIT_FLOORS[name] ? undefined : value, `${name} ${value}`)
+    }
+  }
 })
 
 test('fitRulesPane: rules that scroll even when widened and shrunk end at 70% of SudokuPad\'s font', () => {

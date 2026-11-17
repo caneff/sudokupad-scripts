@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.17
+// @version      0.7.18
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.17'
+  const VERSION = '0.7.18'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -44,19 +44,20 @@
 
   const noLimits = () => ({ maxWidth: null, maxHeight: null })
 
-  function normalizeLimit (raw) {
-    const px = Math.round(Number(raw))
-    return Number.isFinite(px) && px > 0 ? px : null
+  // A limit below the pane's drag floor would leave a pane the rules cannot be read in.
+  const LIMIT_FLOORS = { maxWidth: RULES_MIN.width, maxHeight: RULES_MIN.height }
+  const LIMIT_LABELS = { maxWidth: 'Max auto width', maxHeight: 'Max auto height' }
+
+  // A blank box is no limit; anything else that is not a whole number of px at or above the floor throws, so Save says so and stays open.
+  function limitFromBox (text, name) {
+    if (text.trim() === '') return null
+    const px = Number(text)
+    if (!Number.isInteger(px) || px < LIMIT_FLOORS[name]) throw new Error(`${LIMIT_LABELS[name]} must be a whole number of pixels, ${LIMIT_FLOORS[name]} or more`)
+    return px
   }
 
-  // A blank box is no limit; text that is no usable number keeps the limit as it was, so a slip never wipes a saved one.
-  function limitFromBox (text, current) {
-    return text.trim() === '' ? null : (normalizeLimit(text) ?? current)
-  }
-
-  // The one reader of a limit, saved or pasted: a whole number of pixels, or null for none; a string or boolean that `normalizeLimit`
-  // would coerce is not one.
-  const readLimit = (data) => (data === null || (Number.isInteger(data) && data > 0) ? data : undefined)
+  // The one reader of a limit, saved or pasted: a whole number of pixels at or above its floor, or null for none; a string or boolean is not one.
+  const readLimit = (name) => (data) => (data === null || (Number.isInteger(data) && data >= LIMIT_FLOORS[name]) ? data : undefined)
 
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
@@ -177,7 +178,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
   // Each limit is kept in the store's envelope; no limit is no key, so a fresh install saves nothing.
-  const LIMIT_ROWS = [['maxWidth', MAX_WIDTH_KEY], ['maxHeight', MAX_HEIGHT_KEY]].map(([name, key]) => ({ name, key, fallback: null, read: readLimit, envelope: { load, save } }))
+  const LIMIT_ROWS = [['maxWidth', MAX_WIDTH_KEY], ['maxHeight', MAX_HEIGHT_KEY]].map(([name, key]) => ({ name, key, fallback: null, read: readLimit(name), envelope: { load, save } }))
 
   const readLimits = (store) => readTable(LIMIT_ROWS, store)
 
@@ -1203,7 +1204,7 @@
       pastedSettings,
       pasteReport,
       MAX_HEIGHT_KEY,
-      normalizeLimit,
+      LIMIT_FLOORS,
       limitFromBox,
       readLimits,
       saveLimits,
@@ -1479,12 +1480,17 @@
   })
 
   function openDialog () {
-    const row = (id, label, value) => `<label for="${id}">${label}</label>` +
-      `<input type="number" id="${id}" min="1" step="1" placeholder="no limit" value="${value ?? ''}" style="width:6em">` +
+    const row = (id, name, value) => `<label for="${id}">${LIMIT_LABELS[name]}</label>` +
+      `<input type="number" id="${id}" min="${LIMIT_FLOORS[name]}" step="1" placeholder="no limit" value="${value ?? ''}" style="width:6em">` +
       '<span>px</span>'
+    // A number box holding text that is no number reads '', which would pass for blank.
+    const boxText = (id) => {
+      const box = document.getElementById(id)
+      return box.validity.badInput ? 'not a number' : box.value
+    }
     const typedLimits = () => ({
-      maxWidth: limitFromBox(document.getElementById(MAX_WIDTH_INPUT_ID).value, limits.maxWidth),
-      maxHeight: limitFromBox(document.getElementById(MAX_HEIGHT_INPUT_ID).value, limits.maxHeight)
+      maxWidth: limitFromBox(boxText(MAX_WIDTH_INPUT_ID), 'maxWidth'),
+      maxHeight: limitFromBox(boxText(MAX_HEIGHT_INPUT_ID), 'maxHeight')
     })
     const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
@@ -1495,8 +1501,11 @@
       changed: () => changedRows(LIMIT_ROWS, typedLimits(), limits).length > 0,
       snapshot: snapshotLimits,
       feature: maxSizeSettings,
-      // Restore defaults clears this puzzle's sizing at once; the limits are drafts and stay as they are.
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => rulesFit.run(restoreSizing) }],
+      // Restore defaults edits the draft like the other scripts'; resetting this puzzle's size is its own button, and acts at once.
+      extraButtons: [
+        { content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() },
+        { content: 'Reset puzzle size', role: 'reset-size', handler: () => resetPuzzleSize() }
+      ],
       save: () => {
         limits = typedLimits()
         saveLimits(savedLimits, limits)
@@ -1515,9 +1524,19 @@
       }
     })
     if (!body) return
+    const dialog = body.closest('.dialog')
+    const restoreDefaults = () => {
+      const defaults = noLimits()
+      document.getElementById(MAX_WIDTH_INPUT_ID).value = defaults.maxWidth ?? ''
+      document.getElementById(MAX_HEIGHT_INPUT_ID).value = defaults.maxHeight ?? ''
+    }
+    const resetPuzzleSize = () => {
+      rulesFit.run(restoreSizing)
+      setDialogStatus(dialog, 'This puzzle\'s size was reset.')
+    }
     body.innerHTML = '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
-      row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
-      '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
+      row(MAX_WIDTH_INPUT_ID, 'maxWidth', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'maxHeight', limits.maxHeight) +
+      '</div><div style="opacity:.7;max-width:22em">Empty means no limit; the least is 240 px wide or 112 px high. The limits cap only the automatic fit; a corner drag can go past them.</div>'
   }
 
   // The drag reads the puzzle's id, so it is the fit's.
