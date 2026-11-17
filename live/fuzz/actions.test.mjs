@@ -977,12 +977,18 @@ describe('focusing the actions on a script (#724)', () => {
       assert.equal(step(-120), 'wheel -120 over the rules box')
     })
 
-    // What the script makes of a typed limit is its own `limitFromBox`: the texts hold a blank, numbers, and text it takes no limit from.
+    // What the script makes of a typed limit is its own `limitFromBox`: the texts hold a blank, numbers, and text it refuses.
     it('the limit texts hold a blank, plain sizes and numbers that are no size', () => {
-      const parsed = RULES_LIMIT_TEXTS.map((t) => AUTO_RULES_RESIZER.limitFromBox(t, 'kept'))
+      const parsed = RULES_LIMIT_TEXTS.map((t) => {
+        try {
+          return AUTO_RULES_RESIZER.limitFromBox(t, 'maxHeight')
+        } catch (error) {
+          return error.message // the refusal is what the test counts
+        }
+      })
       assert.ok(parsed.includes(null), 'a blank clears the limit')
       assert.ok(parsed.filter((n) => Number.isInteger(n)).length >= 3, 'sizes')
-      assert.ok(parsed.includes('kept'), 'a text that is no size keeps the limit')
+      assert.ok(parsed.some((n) => typeof n === 'string'), 'a text that is no size is refused')
     })
 
     it('a dialog action types both limits, may press Restore defaults, and presses Save or Cancel', async () => {

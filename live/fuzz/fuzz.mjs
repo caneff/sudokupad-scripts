@@ -390,13 +390,13 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       const boxes = p.locator(CHECK_BOXES)
       return await boxes.count() === 0 ? null : middleOf(await boxes.first().boundingBox({ timeout: BOX_TIMEOUT_MS }))
     },
-    // With a note selected the button deletes it and asks nothing; otherwise it asks, and the question is answered like a player does.
+    // With a note selected the button deletes it and asks nothing; otherwise it asks, and the question is answered like a player does: ok presses Delete all.
     async clearNotes (ok) {
       // Picking the tool again ends the selection, which a clear after a click on a note needs kept.
       if (await noteTool(p) !== 'textanywhere') await pickNotes()
       const asks = await p.locator(SELECTED).count() === 0
       await clickIn(p, CLEAR_BUTTON)
-      if (asks) await closeDialogWith(p, ok ? 'OK' : 'Cancel', DIALOG)
+      if (asks) await closeDialogWith(p, ok ? 'Delete all' : 'Cancel', DIALOG)
     },
     // A key held down is time passing, not a verdict waited on a clock.
     holdFor: (ms) => sleep(ms),
@@ -451,7 +451,15 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       await p.locator(MAX_WIDTH_INPUT).fill(maxWidth)
       await p.locator(MAX_HEIGHT_INPUT).fill(maxHeight)
       if (restore) await dialogButton(p, 'Restore defaults').click()
-      await closeDialogWith(p, save ? 'Save' : 'Cancel', MAX_WIDTH_INPUT)
+      if (save) {
+        // A text the script refuses leaves the dialog open with "Not saved"; that is its answer, so the dialog is then cancelled.
+        await dialogButton(p, 'Save').click()
+        const refused = p.locator(STATUS).filter({ hasText: 'Not saved' })
+        const closed = p.locator(MAX_WIDTH_INPUT).waitFor({ state: 'detached' }).then(() => false)
+        if (await Promise.race([closed, refused.waitFor().then(() => true)])) await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
+      } else {
+        await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
+      }
     },
     // `restore` presses Restore defaults after the color is picked.
     async darkPage (color, save, restore = false) {

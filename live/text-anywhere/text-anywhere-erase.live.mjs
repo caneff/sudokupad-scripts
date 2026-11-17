@@ -301,13 +301,13 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
     assert.deepEqual(withTextAnywhere, stockMiddleClick)
   })
 
-  it('Clear all asks "Clear all notes?", and Cancel keeps every note', async () => {
+  it('Clear all asks "Delete all 2 notes? This cannot be undone.", and Cancel keeps every note', async () => {
     await pickTextAnywhere()
     await typeText(p, UPPER_AT, '15')
     await typeText(p, LOWER_AT, '20')
     assert.deepEqual(await texts(), ['15', '20'])
     await openClear()
-    assert.match(await p.locator(DIALOG).textContent(), /Clear all notes\?/)
+    assert.match(await p.locator(DIALOG).textContent(), /Delete all 2 notes\? This cannot be undone\./)
     await p.mouse.click(...await buttonOverBoard('Cancel'))
     await p.locator(DIALOG).waitFor({ state: 'detached' })
     assert.deepEqual(await texts(), ['15', '20'])
@@ -345,9 +345,9 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
     assert.equal(await tool(), 'textanywhere')
   })
 
-  it('Clear all\'s OK removes every note, opens no text box, and a reload shows none', async () => {
+  it('Clear all\'s Delete all removes every note, opens no text box, and a reload shows none', async () => {
     await openClear()
-    await pressDragRelease(await buttonOverBoard('OK'))
+    await pressDragRelease(await buttonOverBoard('Delete all'))
     await p.locator(DIALOG).waitFor({ state: 'detached' })
     assert.deepEqual(await settle(texts, []), [])
     assert.equal(await textBoxCount(), 0)
