@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.37
+// @version      0.46.38
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.37'
+  const VERSION = '0.46.38'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -1967,6 +1967,10 @@
             return fallback()
           }
         },
+        // The handler as a function that runs under `run`, for an event listener or a callback.
+        bind (handler, fallback) {
+          return (...args) => feature.run(() => handler(...args), fallback)
+        },
         // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
         // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
         runInDialog (fn) {
@@ -2192,8 +2196,6 @@
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const savedData = guard.storeFor(storage)
   const dialogs = guard.dialogsFor(settingsUi)
-  const under = (feature, handler) => (...args) => feature.run(() => handler(...args))
-  const onWindow = (feature, type, handler, options) => window.addEventListener(type, under(feature, handler), options)
 
   const boardSvg = () => Framework.app.svgRenderer.getElem()
 
@@ -2762,7 +2764,7 @@
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft.colors[color] })
     }
     draw()
-    box.addEventListener('change', under(settingsUi, (event) => {
+    box.addEventListener('change', settingsUi.bind((event) => {
       const target = event.target
       if (target.matches('[data-role="color-choice"]')) {
         draft = presetColorSet(target.value, pages, readCellColor, readPenColor)
@@ -2780,7 +2782,7 @@
         draw()
       }
     }))
-    box.addEventListener('click', under(settingsUi, (event) => {
+    box.addEventListener('click', settingsUi.bind((event) => {
       const button = event.target.closest('button[data-role$="-pick"]')
       if (!button) return
       const { role, value } = button.dataset
@@ -2857,7 +2859,7 @@
     const clear = document.createElement('button')
     clear.className = CLEAR_CLASS
     clear.innerHTML = controlIcon(CLEAR_ICON)
-    clear.addEventListener('click', under(textTool, () => {
+    clear.addEventListener('click', textTool.bind(() => {
       setNotesHidden(false)
       if (selected.length) deleteSelected()
       else confirmClear()
@@ -2867,14 +2869,14 @@
     settings.title = SETTINGS_LABEL
     settings.setAttribute('aria-label', SETTINGS_LABEL)
     settings.innerHTML = controlIcon(SETTINGS_ICON, SETTINGS_ICON_VIEWBOX)
-    settings.addEventListener('click', under(settingsUi, openDialog))
+    settings.addEventListener('click', settingsUi.bind(openDialog))
     const backgroundButton = document.createElement('button')
     backgroundButton.className = BACKGROUND_CLASS
     backgroundButton.innerHTML = controlIcon(BACKGROUND_ICON)
-    backgroundButton.addEventListener('click', under(textTool, pressBackground))
+    backgroundButton.addEventListener('click', textTool.bind(pressBackground))
     const hideAll = document.createElement('button')
     hideAll.className = HIDE_ALL_CLASS
-    hideAll.addEventListener('click', under(textTool, () => setNotesHidden(!notesHidden)))
+    hideAll.addEventListener('click', textTool.bind(() => setNotesHidden(!notesHidden)))
     const sliderRows = document.createElement('div')
     sliderRows.className = SLIDER_ROWS_CLASS
     sliderRows.innerHTML = sliderRowMarkup(SLIDER_ROW_CLASS, true, { id: SIZE_SLIDER, label: SIZE_LABEL, range: WIDTH_RANGE, value: look.width }) +
@@ -2883,8 +2885,8 @@
     sliders.className = SLIDERS_CLASS
     sliders.append(sliderRows, hideAll)
     // Arrow keys on a slider end in a change.
-    sliders.addEventListener('change', under(textTool, returnFocusToNote))
-    sliders.addEventListener('input', under(textTool, (event) => slideLook(event.target)))
+    sliders.addEventListener('change', textTool.bind(returnFocusToNote))
+    sliders.addEventListener('input', textTool.bind((event) => slideLook(event.target)))
     panelParts = [tray, clear, backgroundButton, ...(settingsUi.off ? [] : [settings]), sliders]
     keypad().append(...panelParts)
     showHideAllLook()
@@ -3175,8 +3177,8 @@
         const element = document.createElement('div')
         element.className = `${HANDLE_CLASS} ${ENTERING_CLASS}`
         element.style.cursor = cornerCursor(corner)
-        element.addEventListener('mousedown', under(textTool, (event) => startResize(event, corner)))
-        element.addEventListener('dblclick', under(textTool, resetSize))
+        element.addEventListener('mousedown', textTool.bind((event) => startResize(event, corner)))
+        element.addEventListener('dblclick', textTool.bind(resetSize))
         element.addEventListener('touchstart', (event) => event.stopPropagation())
         notesLayer().append(element)
         return { element, corner }
@@ -3529,13 +3531,13 @@
     element.spellcheck = false
     // As SudokuPad's own buttons do: a press in the note is the note's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) element.addEventListener(type, (event) => event.stopPropagation())
-    element.addEventListener('blur', under(textTool, (event) => {
+    element.addEventListener('blur', textTool.bind((event) => {
       if (!textBox || textBox.element !== element) return
       if (isPanelControl(event.relatedTarget)) textBox.caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null
       else finishText()
     }))
     // Typing grows the box, which carries the handles and may start the text scrolling.
-    element.addEventListener('input', under(textTool, (event) => {
+    element.addEventListener('input', textTool.bind((event) => {
       if (!textBox || textBox.element !== element) return
       // Only a typed character completes a symbol: deleting, pasting and Undo leave the text as it is.
       if (event.inputType === 'insertText') {
@@ -3544,7 +3546,7 @@
       }
       showTextBox(boardMap())
       clearTimeout(openNoteSaveTimer)
-      openNoteSaveTimer = setTimeout(under(textTool, saveOpenNote), OPEN_NOTE_SAVE_MS)
+      openNoteSaveTimer = setTimeout(textTool.bind(saveOpenNote), OPEN_NOTE_SAVE_MS)
     }))
     textBox = { index, item, element }
     notesLayer().append(element)
@@ -4187,7 +4189,7 @@
         { tag: 'text', content: ask.question },
         { tag: 'options', options: [{ tag: 'button', content: ask.button }, { tag: 'button', content: CANCEL_LABEL }] }
       ],
-      onButton: under(textTool, (label) => { if (label === ask.button) clearAll() }),
+      onButton: textTool.bind((label) => { if (label === ask.button) clearAll() }),
       centerOverBoard: true
     }))
   }
@@ -4360,35 +4362,35 @@
         button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
         tool
       })
-      onWindow(textTool, 'contextmenu', suppressMenu)
+      window.addEventListener('contextmenu', textTool.bind(suppressMenu))
       installColorPickers()
-      onWindow(textTool, 'blur', endGesture)
+      window.addEventListener('blur', textTool.bind(endGesture))
       installSliderGuards(`.${SLIDERS_CLASS}`)
-      onWindow(textTool, 'pointerdown', finishTextOnPress, { capture: true })
-      onWindow(textTool, 'mousedown', keepNoteFocus, { capture: true })
+      window.addEventListener('pointerdown', textTool.bind(finishTextOnPress), { capture: true })
+      window.addEventListener('mousedown', textTool.bind(keepNoteFocus), { capture: true })
       // After the slider guards' own release handler, which takes the focus off the slider.
-      onWindow(textTool, 'pointerup', returnFocusToNote, { capture: true })
-      onWindow(textTool, 'pointerup', () => { pressFinishedText = false; edgeNote = null }, { capture: true })
-      onWindow(textTool, 'wheel', scrollNote, { capture: true, passive: false })
-      onWindow(textTool, 'mousemove', resizeMove, { capture: true })
-      onWindow(textTool, 'mousemove', (event) => {
+      window.addEventListener('pointerup', textTool.bind(returnFocusToNote), { capture: true })
+      window.addEventListener('pointerup', textTool.bind(() => { pressFinishedText = false; edgeNote = null }), { capture: true })
+      window.addEventListener('wheel', textTool.bind(scrollNote), { capture: true, passive: false })
+      window.addEventListener('mousemove', textTool.bind(resizeMove), { capture: true })
+      window.addEventListener('mousemove', textTool.bind((event) => {
         showChrome()
         hoverPoint = overControl(event) ? null : eventPoint(event)
         showEdgeCursor(isHandle(event.target) ? null : hoverPoint)
         inFrame('hover', showHover)
-      }, { capture: true })
-      onWindow(textTool, 'mouseout', (event) => {
+      }), { capture: true })
+      window.addEventListener('mouseout', textTool.bind((event) => {
         if (event.relatedTarget) return
         hoverPoint = null
         inFrame('hover', showHover)
-      }, { capture: true })
-      onWindow(textTool, 'mouseup', endResize, { capture: true })
-      for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
-      onWindow(textTool, 'keydown', stopCellCopy, { capture: true })
-      onWindow(textTool, 'keydown', switchOnT, { capture: true })
-      onWindow(textTool, 'keyup', releaseKey, { capture: true })
-      onWindow(textTool, 'pagehide', saveOpenNote)
-      document.addEventListener('visibilitychange', under(textTool, () => {
+      }), { capture: true })
+      window.addEventListener('mouseup', textTool.bind(endResize), { capture: true })
+      for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, textTool.bind(keepBoxKeys), { capture: true })
+      window.addEventListener('keydown', textTool.bind(stopCellCopy), { capture: true })
+      window.addEventListener('keydown', textTool.bind(switchOnT), { capture: true })
+      window.addEventListener('keyup', textTool.bind(releaseKey), { capture: true })
+      window.addEventListener('pagehide', textTool.bind(saveOpenNote))
+      document.addEventListener('visibilitychange', textTool.bind(() => {
         if (document.visibilityState !== 'hidden') return
         stopSizeHold()
         saveOpenNote()
@@ -4396,16 +4398,16 @@
     })
     addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: 'Text Anywhere', open: openDialog })
     boardNotes.run(() => {
-      app.puzzle.on('loaded', under(boardNotes, showSavedNotes))
-      app.on('restarted', under(boardNotes, restartNotes))
+      app.puzzle.on('loaded', boardNotes.bind(showSavedNotes))
+      app.on('restarted', boardNotes.bind(restartNotes))
       if (app.puzzle.currentPuzzle) showSavedNotes()
     })
     undoRestart.run(() => {
-      app.puzzle.on('act', under(undoRestart, followUndo))
+      app.puzzle.on('act', undoRestart.bind(followUndo))
       // Another script may act after Restart in its own 'restarted' handler; the stack it leaves, read once all of them have run, is the empty one.
-      app.on('restarted', under(undoRestart, () => queueMicrotask(() => { emptyStackLength = Framework.app.puzzle.undoStack.length; undoWasEmpty = undoStackEmpty() })))
+      app.on('restarted', undoRestart.bind(() => queueMicrotask(() => { emptyStackLength = Framework.app.puzzle.undoStack.length; undoWasEmpty = undoStackEmpty() })))
       for (const event of ['reset', 'progressloaded']) {
-        app.puzzle.on(event, under(undoRestart, () => { emptyStackLength = 0; undoWasEmpty = undoStackEmpty() }))
+        app.puzzle.on(event, undoRestart.bind(() => { emptyStackLength = 0; undoWasEmpty = undoStackEmpty() }))
       }
     })
   }
