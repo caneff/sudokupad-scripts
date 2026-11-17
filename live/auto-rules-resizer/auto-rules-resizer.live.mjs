@@ -110,6 +110,43 @@ async function dragCorner (p, corner, dx, dy, midDrag) {
   await p.mouse.up()
 }
 
+// The line boxes of the pane's text that show (one per rendered line fragment, clipped to the pane's scrolling area), and each control's box.
+const controlBoxes = (p) => p.evaluate(([bar, ur, dl]) => {
+  const rect = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
+  const rules = document.querySelector('.puzzle-rules')
+  const r = rules.getBoundingClientRect()
+  const scale = r.height / rules.offsetHeight
+  const shown = { top: r.top + rules.clientTop * scale, bottom: r.top + (rules.clientTop + rules.clientHeight) * scale }
+  const range = document.createRange()
+  range.selectNodeContents(rules)
+  const lines = [...range.getClientRects()].filter((l) => l.width > 0)
+    .map((l) => ({ left: l.left, right: l.right, top: Math.max(l.top, shown.top), bottom: Math.min(l.bottom, shown.bottom) }))
+    .filter((l) => l.bottom > l.top)
+  return {
+    lines,
+    bar: rect(document.querySelector(bar)),
+    ur: rect(document.querySelector(ur)),
+    dl: rect(document.querySelector(dl)),
+    header: rect(document.querySelector('.puzzle-header'))
+  }
+}, [FONT_BAR, CORNER('ur'), CORNER('dl')])
+const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+
+// The box of every point within 40 px of `corner`'s own box where a press lands on that corner, read pixel by pixel.
+const hitArea = (p, corner) => p.evaluate((selector) => {
+  const el = document.querySelector(selector)
+  const r = el.getBoundingClientRect()
+  const hits = []
+  for (let x = Math.floor(r.left) - 40; x <= r.right + 40; x++) {
+    for (let y = Math.floor(r.top) - 40; y <= r.bottom + 40; y++) {
+      if (document.elementFromPoint(x + 0.5, y + 0.5) === el) hits.push([x, y])
+    }
+  }
+  const xs = hits.map(([x]) => x)
+  const ys = hits.map(([, y]) => y)
+  return { left: Math.min(...xs), right: Math.max(...xs) + 1, top: Math.min(...ys), bottom: Math.max(...ys) + 1 }
+}, CORNER(corner))
+
 describe('a sideways corner drag keeps the pane\'s height and never raises its font', { concurrency: false }, () => {
   const SIDEWAYS = [
     { corner: 'ur', name: 'wider', dx: 120 },
@@ -216,32 +253,38 @@ describe('a landscape window, long rules: what the pane\'s controls cover and ho
   })
   after(async () => { await context.close() })
 
-  // The line boxes of the pane's text, one per rendered line fragment, and each control's box.
-  const boxes = () => p.evaluate(([bar, ur, dl]) => {
-    const rect = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
-    const range = document.createRange()
-    range.selectNodeContents(document.querySelector('.puzzle-rules'))
-    const lines = [...range.getClientRects()].filter((r) => r.width > 0).map((r) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom }))
-    return {
-      lines,
-      bar: rect(document.querySelector(bar)),
-      ur: rect(document.querySelector(ur)),
-      dl: rect(document.querySelector(dl)),
-      header: rect(document.querySelector('.puzzle-header'))
-    }
-  }, [FONT_BAR, CORNER('ur'), CORNER('dl')])
-  const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
-
   it('while the pane is hovered, no drag corner overlaps a line of the rules', async () => {
-    const { lines, ur, dl } = await boxes()
+    const { lines, ur, dl } = await controlBoxes(p)
     assert.equal(lines.length > 3, true, `${lines.length} line boxes`)
     assert.deepEqual(lines.filter((l) => overlap(l, ur) || overlap(l, dl)), [], `corners ${JSON.stringify({ ur, dl })}`)
   })
 
   it('the f+ and f- bar overlaps neither the title ribbon nor a line of the rules', async () => {
-    const { lines, bar, header } = await boxes()
+    const { lines, bar, header } = await controlBoxes(p)
     assert.equal(overlap(bar, header), false, JSON.stringify({ bar, header }))
     assert.deepEqual(lines.filter((l) => overlap(l, bar)), [], JSON.stringify(bar))
+  })
+
+  it('each corner takes a press over at least 24 x 24 px, none of it on a line of the rules or the title ribbon', async () => {
+    const { lines, header } = await controlBoxes(p)
+    for (const corner of ['ur', 'dl']) {
+      const hit = await hitArea(p, corner)
+      assert.equal(hit.right - hit.left >= 24 && hit.bottom - hit.top >= 24, true, `${corner} takes a press over ${JSON.stringify(hit)}`)
+      assert.equal(overlap(hit, header), false, `${corner} ${JSON.stringify({ hit, header })}`)
+      assert.deepEqual(lines.filter((l) => overlap(l, hit)), [], `${corner} ${JSON.stringify(hit)}`)
+    }
+  })
+
+  it('f+ and f- are styled as SudokuPad\'s buttons: its face, border and purple label', async () => {
+    const looks = await p.evaluate((bar) => [...document.querySelectorAll(`${bar} button`)].map((button) => {
+      const s = window.getComputedStyle(button)
+      return { color: s.color, border: `${s.borderTopWidth} ${s.borderTopStyle} ${s.borderTopColor}`, background: s.backgroundColor }
+    }), FONT_BAR)
+    const own = await p.evaluate(() => {
+      const s = window.getComputedStyle(document.querySelector('#controls button[data-control="undo"]'))
+      return { color: s.color, border: `${s.borderTopWidth} ${s.borderTopStyle} ${s.borderTopColor}`, background: s.backgroundColor }
+    })
+    assert.deepEqual(looks, [own, own])
   })
 
   it('no line of the rules ends in a split word', async () => {
@@ -271,6 +314,37 @@ describe('a landscape window, long rules: what the pane\'s controls cover and ho
     })
     assert.equal(now.width >= NARROW_PANE_PX, true, `a ${now.width} px pane is wide`)
     assert.equal(now.hyphens, 'manual')
+  })
+})
+
+describe('a pane that scrolls, scrolled partway: what the pane\'s controls cover', { concurrency: false }, () => {
+  let context, p, errors
+
+  before(async () => {
+    ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, VERY_LONG_RULES))
+    await inject(p)
+    await stable(() => pane(p))
+    assert.equal((await pane(p)).scrolls, true)
+    await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      rules.scrollTop = Math.round((rules.scrollHeight - rules.clientHeight) / 2)
+    })
+    await hoverPane(p)
+    await p.locator(FONT_BAR).waitFor({ state: 'visible' })
+  })
+  after(async () => { await context.close() })
+
+  it('no shown line of the rules passes under the f+ and f- bar, a drag corner or a corner\'s hit area', async () => {
+    const { lines, bar, ur, dl } = await controlBoxes(p)
+    assert.equal(lines.length > 3, true, `${lines.length} line boxes`)
+    const controls = { bar, ur, dl, urHit: await hitArea(p, 'ur'), dlHit: await hitArea(p, 'dl') }
+    for (const [name, box] of Object.entries(controls)) {
+      assert.deepEqual(lines.filter((l) => overlap(l, box)), [], `${name} ${JSON.stringify(box)}`)
+    }
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
   })
 })
 
@@ -819,7 +893,7 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
       const rules = document.querySelector('.puzzle-rules')
       const r = rules.getBoundingClientRect()
       const style = window.getComputedStyle(rules)
-      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + parseFloat(style.paddingTop) + 2)
+      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + rules.clientTop + parseFloat(style.paddingTop) + 2)
       return at.offset
     })
     // A line and a half down: the probe lands in the middle of a line, not on the border of two.
@@ -861,7 +935,7 @@ describe('rules with blank lines (SudokuPad sets each newline as a break)', { co
       const rules = document.querySelector('.puzzle-rules')
       const r = rules.getBoundingClientRect()
       const style = window.getComputedStyle(rules)
-      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + parseFloat(style.paddingTop) + 2)
+      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + rules.clientTop + parseFloat(style.paddingTop) + 2)
       return { inRules: at.offsetNode === rules, offset: at.offset }
     })
     assert.equal((await pane(p)).scrolls, true, 'the blank lines scroll')

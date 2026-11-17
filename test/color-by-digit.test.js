@@ -1696,13 +1696,12 @@ test('renderChips draws a tinted chip over a white base, so it looks the same on
 
 test('renderChips draws every chip digit at 3:1 or more against its chip over white, in every mode, for colors from pale to dark', () => {
   const { contrastRatio } = require('./contrast.js')
-  const channels = (css) => css[0] === '#' ? (css.length === 4 ? [...css.slice(1)].map((h) => parseInt(h + h, 16)) : [1, 3, 5].map((i) => parseInt(css.slice(i, i + 2), 16))) : css.match(/[\d.]+/g).slice(0, 3).map(Number)
   for (const color of ['rgb(238, 119, 0)', 'rgb(255, 255, 0)', 'rgb(10, 10, 10)', 'rgb(240, 240, 240)', 'rgb(120, 200, 120)', 'rgb(200, 60, 60)']) {
     for (const style of ['cell', 'digit', 'both', 'off']) {
       const [cell] = runCells(renderChips(chipsOf([{ key: 'a', digits: ['3'] }], style), () => color, { size: 16, style }))
       const opacity = Number(cell.opacity ?? 1)
-      const shown = channels(cell.fill).map((c) => opacity * c + (1 - opacity) * 255)
-      assert.equal(contrastRatio(channels(cell.ink), shown) >= 3, true, `${style} on ${color}: ${cell.ink} on ${shown}`)
+      const shown = parseColor(cell.fill).map((c) => opacity * c + (1 - opacity) * 255)
+      assert.equal(contrastRatio(parseColor(cell.ink), shown) >= 3, true, `${style} on ${color}: ${cell.ink} on ${shown}`)
     }
   }
 })
@@ -2128,11 +2127,14 @@ test('gridTarget: arrows move by one along a row and by a row down a column, ski
   assert.equal(gridTarget('a', 0, usable, 3), null)
 })
 
+// Every step holds the cell profile in force; a test about the mode alone gives it this one.
+const IN_FORCE = { from: { name: 'A' }, to: { name: 'A' } }
+
 test('createModeHistory: Undo to a length below a step gives the mode before the earliest step taken back, Redo the mode after the latest put back', () => {
   const history = createModeHistory()
-  history.record(6, 'off', 'cell')
-  history.record(12, 'cell', 'digit')
-  history.record(18, 'digit', 'both')
+  history.record(6, 'off', 'cell', IN_FORCE)
+  history.record(12, 'cell', 'digit', IN_FORCE)
+  history.record(18, 'digit', 'both', IN_FORCE)
   assert.equal(history.undo(18), undefined)
   assert.equal(history.undo(5).mode, 'off')
   assert.equal(history.redo(5), undefined)
@@ -2154,19 +2156,6 @@ test('createModeHistory: Undo gives the cell profile before the earliest step ta
   assert.deepEqual(history.redo(12).profile, c)
 })
 
-test('createModeHistory: a step with no profile between two that have one is skipped, and a step with none alone gives none', () => {
-  const history = createModeHistory()
-  const a = { name: 'A' }
-  const b = { name: 'B' }
-  history.record(6, 'cell', 'cell', { from: a, to: b })
-  history.record(12, 'cell', 'digit')
-  history.record(18, 'digit', 'digit', { from: b, to: a })
-  assert.deepEqual(history.undo(0), { mode: 'cell', profile: a })
-  assert.deepEqual(history.redo(18), { mode: 'digit', profile: a })
-  assert.deepEqual(history.undo(17), { mode: 'digit', profile: b })
-  assert.equal(history.undo(11).profile, undefined)
-})
-
 test('createModeHistory: an Undo given the profile in force makes it the one a Redo of the latest step taken back puts back, so a pick outside the history survives the Undo and Redo', () => {
   const history = createModeHistory()
   const a = { name: 'A' }
@@ -2179,6 +2168,29 @@ test('createModeHistory: an Undo given the profile in force makes it the one a R
   assert.deepEqual(history.undo(0, b), { mode: 'cell', profile: a })
   assert.deepEqual(history.redo(6), { mode: 'cell', profile: a })
   assert.deepEqual(history.redo(12), { mode: 'digit', profile: b })
+})
+
+test('createModeHistory: an Undo given the profile the step already names keeps the step\'s groups, so a Redo of a Save puts the saved groups back', () => {
+  const history = createModeHistory()
+  const before = { name: 'A', groups: [{ key: 'a', digits: ['1'] }] }
+  const saved = { name: 'A', groups: [{ key: 'b', digits: ['1'] }] }
+  history.record(6, 'cell', 'cell', { from: before, to: saved })
+  assert.deepEqual(history.undo(0, { name: 'A' }).profile, before)
+  assert.deepEqual(history.redo(6).profile, saved)
+})
+
+test('createModeHistory and withCellProfile: an Undo across a mode step keeps the groups a Save in Digit mode gave the profile, since that Save left no undo step', () => {
+  const ones = [{ key: 'a', digits: ['1'] }]
+  const edited = [{ key: 'b', digits: ['1'] }]
+  const history = createModeHistory()
+  // Cell to Digit, with Odd/Even in force: the step names it and holds no groups.
+  history.record(12, 'cell', 'digit', { from: { name: 'A' }, to: { name: 'A' } })
+  // The Save in Digit mode: A's groups change, and no step is recorded.
+  const state = { profiles: [{ name: 'A', groups: edited }, { name: 'B', groups: ones }], active: 0 }
+  const target = history.undo(6, { name: 'A' })
+  assert.equal(target.mode, 'cell')
+  assert.deepEqual(withCellProfile(state, target.profile).profiles[0].groups, edited)
+  assert.deepEqual(withCellProfile(state, history.redo(12).profile).profiles[0].groups, edited)
 })
 
 test('withCellProfile: makes the named profile active, with its groups put back when the step holds them, and leaves the others', () => {
@@ -2209,19 +2221,19 @@ test('withCellProfile: a name no profile bears leaves the state as it is', () =>
 
 test('createModeHistory: a new step or forgetRedo drops the steps that could have been redone', () => {
   const history = createModeHistory()
-  history.record(6, 'off', 'cell')
+  history.record(6, 'off', 'cell', IN_FORCE)
   history.undo(0)
   history.forgetRedo()
   assert.equal(history.redo(99), undefined)
-  history.record(6, 'off', 'cell')
+  history.record(6, 'off', 'cell', IN_FORCE)
   history.undo(0)
-  history.record(4, 'off', 'both')
+  history.record(4, 'off', 'both', IN_FORCE)
   assert.equal(history.redo(99), undefined)
 })
 
 test('createModeHistory: a restart sets the steps aside, and the Undo that loads the board from before it brings them back', () => {
   const history = createModeHistory()
-  history.record(6, 'off', 'cell')
+  history.record(6, 'off', 'cell', IN_FORCE)
   history.restart()
   assert.equal(history.undo(0), undefined)
   history.restoreBeforeRestart()

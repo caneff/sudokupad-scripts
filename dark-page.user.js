@@ -1046,7 +1046,7 @@
           show(pageColor)
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => show(DEFAULT_COLOR) }]
     })
     if (!body) return
     body.innerHTML = `<label class="${CLASS_PREFIX}color-row">Page color <input type="color" id="${INPUT_ID}" value="${picked}"></label><div id="${SWATCH_ID}" style="background-color: ${picked}"></div>`
@@ -1070,9 +1070,6 @@
     closed.observe(document.body, { childList: true, subtree: true })
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase(); preview() })
-    function restoreDefaults () {
-      show(DEFAULT_COLOR)
-    }
   }
 
   // At DOMContentLoaded Framework exists (before the app is ready). What it reads is the saved color, and the early

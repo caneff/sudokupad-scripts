@@ -1,6 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MENU, MODE_KEY, openMenuOn, openSession, pressTo, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
+import { coloredCountOn, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, MENU, MODE_KEY, openEditorOn, openMenuOn, openSession, pressTo, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
+import { closeDialogWith } from '../settings.mjs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { POLL_MS, settle } from '../settle.mjs'
 import * as textAnywhere from '../text-anywhere/text-anywhere-fixtures.mjs'
@@ -264,5 +265,32 @@ describe('Undo into Cell after a profile pick in Digit mode', { concurrency: fal
     assert.equal(await settle(t.label, 'Digit'), 'Digit')
     assert.equal(await settle(activeName, 'Low/5/High'), 'Low/5/High', 'the Redo keeps the pick')
     assert.equal(await coloredCountOn(p), 0)
+  })
+})
+
+describe('Undo into Cell after a Save in Digit mode', { concurrency: false }, () => {
+  let context, p, t
+
+  const activeGroups = async () => { const state = await t.getState(); return state.profiles[state.active].groups }
+
+  before(async () => {
+    ({ context, p } = await openSession(browser(), script))
+    t = tools(p)
+  })
+  after(async () => { await context.close() })
+
+  // The Save in Digit mode colors no cell and leaves no undo step, so no Undo may take back what it saved.
+  it('the Undo of Cell to Digit keeps the groups the Save gave the active profile', async () => {
+    await pressTo(p, 'Cell')
+    await pressTo(p, 'Digit')
+    const before = await activeGroups()
+    await openEditorOn(p)
+    await p.locator(`${EDITOR} button[data-act=digit][data-digit="2"]`).click()
+    await closeDialogWith(p, 'Save', EDITOR)
+    const saved = await activeGroups()
+    assert.notDeepEqual(saved, before, 'the Save changed the active profile\'s groups')
+    await p.keyboard.press('Control+z')
+    assert.equal(await settle(t.label, 'Cell'), 'Cell')
+    assert.deepEqual(await activeGroups(), saved)
   })
 })

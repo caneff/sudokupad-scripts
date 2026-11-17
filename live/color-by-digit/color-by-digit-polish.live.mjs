@@ -251,7 +251,9 @@ describe('the mode button and its menu', { concurrency: false }, () => {
 // The grid draws a cell color at 60% opacity (SudokuPad's own, `color-by-digit.user.js` § darkenColor).
 const CELL_OPACITY = 0.6
 const WHITE = [255, 255, 255]
-const rgbChannels = (css) => css.match(/\d+/g).slice(0, 3).map(Number)
+// The channels of a computed color, `rgb()` or `rgba()`, alpha last when there is one.
+const channelsOf = (css) => (css.match(/[\d.]+/g) || []).map(Number)
+const rgbChannels = (css) => channelsOf(css).slice(0, 3)
 const onWhite = (channels) => channels.map((c) => CELL_OPACITY * c + (1 - CELL_OPACITY) * 255)
 const { contrastRatio } = createRequire(import.meta.url)('../../test/contrast.js')
 
@@ -280,7 +282,6 @@ describe('a fresh install\'s Low/5/High contrast', { concurrency: false }, () =>
 
 describe('the button with Dark Page installed', { concurrency: false }, () => {
   const darkPage = scriptSource('dark-page.user.js')
-  const channelsOf = (css) => (css.match(/[\d.]+/g) || []).map(Number)
 
   for (const mode of ['cell', 'digit', 'both', 'off']) {
     it(`${mode}: each chip digit reads at 3:1 or more against its chip as drawn over the dark button, and the mode word is 10 px or larger`, async () => {
@@ -313,7 +314,8 @@ describe('the button with Dark Page installed', { concurrency: false }, () => {
 const LONG_NAME = 'Mmmmmmmmmmmmmmmmmmmmmmmm'
 const LONG = { profiles: [{ name: 'Odd/Even', groups: SEED.profiles[0].groups }, { name: LONG_NAME, groups: SEED.profiles[1].groups }], active: 0, digitActive: 0 }
 const SIX_PROFILES = { ...LONG, profiles: Array.from({ length: 6 }, (_, i) => ({ name: `P${i}`, groups: SEED.profiles[i % 2].groups })) }
-const NORMAL_MENU_MAX_PX = 300
+// The longest name a fresh install shows: the menu's normal width is the one it has with it.
+const SHORT_NAME = 'Low/5/High'
 
 describe('the dialog\'s layout, keyboard and messages', { concurrency: false }, () => {
   let context, p
@@ -336,15 +338,32 @@ describe('the dialog\'s layout, keyboard and messages', { concurrency: false }, 
 
   it('a 24-character profile name is one line with an ellipsis and its full name as a tooltip', async () => {
     const name = p.locator(`${ROWS}[data-index="1"] .cbd-name`)
-    const look = await name.evaluate((el) => ({ high: el.getBoundingClientRect().height, rowHigh: el.parentElement.getBoundingClientRect().height, overflow: getComputedStyle(el).textOverflow, space: getComputedStyle(el).whiteSpace, title: el.title }))
-    assert.deepEqual({ oneLine: look.high <= look.rowHigh, overflow: look.overflow, space: look.space, title: look.title }, { oneLine: true, overflow: 'ellipsis', space: 'nowrap', title: LONG_NAME })
+    // One line is as tall as the name field holding a single letter; a wrapped name is taller.
+    const look = await name.evaluate((el) => {
+      const high = el.getBoundingClientRect().height
+      const text = el.textContent
+      el.textContent = 'M'
+      const lineHigh = el.getBoundingClientRect().height
+      el.textContent = text
+      return { high, lineHigh, overflow: getComputedStyle(el).textOverflow, space: getComputedStyle(el).whiteSpace, title: el.title }
+    })
+    assert.deepEqual({ oneLine: look.high === look.lineHigh, overflow: look.overflow, space: look.space, title: look.title }, { oneLine: true, overflow: 'ellipsis', space: 'nowrap', title: LONG_NAME }, `${look.high} px against ${look.lineHigh} px for one line`)
   })
 
-  it('the profile menu holds the long name within its normal width, cut with the full name as a tooltip', async () => {
+  it('the profile menu is as wide with the long name as with a preloaded one, the long name cut with its full name as a tooltip and the preloaded one whole', async () => {
     await closeDialogWith(p, 'Cancel', EDITOR)
     await openMenuOn(p)
-    const look = await p.locator(MENU).evaluate((menu) => ({ width: menu.getBoundingClientRect().width, title: [...menu.querySelectorAll('[data-role=name]')].map((n) => n.title) }))
-    assert.equal(look.width <= NORMAL_MENU_MAX_PX, true, `${look.width}`)
+    // The same menu with the long name swapped for a short one is the width a solver sees with ordinary names.
+    const look = await p.locator(MENU).evaluate((menu, short) => {
+      const names = [...menu.querySelectorAll('[data-role=name]')]
+      const width = menu.getBoundingClientRect().width
+      const cut = (name) => name.scrollWidth > name.clientWidth
+      const longCut = cut(names[1])
+      names[1].textContent = short
+      return { width, longCut, normal: menu.getBoundingClientRect().width, shortCut: cut(names[1]), title: names.map((n) => n.title) }
+    }, SHORT_NAME)
+    assert.equal(look.width, look.normal, `${look.width} px with the long name, ${look.normal} px with ${SHORT_NAME}`)
+    assert.deepEqual({ longCut: look.longCut, shortCut: look.shortCut }, { longCut: true, shortCut: false })
     assert.deepEqual(look.title, ['Odd/Even', LONG_NAME])
     await p.keyboard.press('Escape')
     await openEditorOn(p)

@@ -1986,13 +1986,13 @@
 
   const MENU_ROW = 'display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 6px;border-radius:6px'
   const MENU_DOT_COLUMN = 44
-  // A long name is cut with an ellipsis past this, rather than widen the menu.
-  const MENU_MAX_PX = 300
+  // The name column's width, which fits every preloaded name: a longer name is cut with an ellipsis, so no name changes the menu's width.
+  const MENU_NAME_EM = 7
   const DOT_RING = '#cfc7da'
   const chipColumn = (groups, colorOf) =>
     `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(cellChips(groups), colorOf, { size: CHIP_PX })}</span>`
-  // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
-  const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
+  // The column also shrinks in a narrow window, so the dots stay on screen.
+  const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:0 1 auto;width:${MENU_NAME_EM}em;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
   const dotColumn = (role, html, align, attributes = '') => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}"${attributes}>${html}</span>`
   const TARGET_NAMES = { cells: 'Cell', digits: 'Digit' }
 
@@ -2392,16 +2392,17 @@
         done.push({ at, from, to, profiles })
         undone = []
       },
-      // The mode, and the cell profile when a step holds it, before the earliest step an Undo down to `stackLength` took back.
+      // The mode and the cell profile before the earliest step an Undo down to `stackLength` took back.
       // `now` is the cell profile in force: a pick that left no undo step since the latest step taken back is the one a Redo of that step puts back.
+      // A step's own profile, groups and all, stays when `now` bears its name, so a Redo of a Save still puts the saved groups back.
       undo (stackLength, now) {
         const first = done.findIndex((step) => step.at > stackLength)
         if (first < 0) return undefined
         const taken = done.splice(first).reverse()
-        if (now && taken[0].profiles) taken[0].profiles = { ...taken[0].profiles, to: now }
+        if (now && now.name !== taken[0].profiles.to.name) taken[0].profiles = { ...taken[0].profiles, to: now }
         undone.push(...taken)
         const earliest = taken[taken.length - 1]
-        return { mode: earliest.from, profile: taken.findLast((step) => step.profiles)?.profiles.from }
+        return { mode: earliest.from, profile: earliest.profiles.from }
       },
       // The same after the latest step a Redo up to `stackLength` put back.
       redo (stackLength) {
@@ -2409,7 +2410,8 @@
         while (undone.length > 0 && undone[undone.length - 1].at <= stackLength) put.push(undone.pop())
         if (put.length === 0) return undefined
         done.push(...put)
-        return { mode: put[put.length - 1].to, profile: put.findLast((step) => step.profiles)?.profiles.to }
+        const latest = put[put.length - 1]
+        return { mode: latest.to, profile: latest.profiles.to }
       },
       forgetRedo () { undone = [] },
       // A Restart empties the undo stack, but SudokuPad's next Undo on the empty stack brings back the board from before it, stack included.
@@ -2568,8 +2570,11 @@
 
   const modeHistory = createModeHistory()
 
-  // A step that changes no cell profile still holds the one in force: the board an Undo brings back is colored by it, even after a pick that left no undo step.
-  function recordingModeStep (app, from, to, step, profiles = { from: cellProfile(loadState(), true), to: cellProfile(loadState(), true) }) {
+  // A step that changes no cell profile still holds the one in force, by name only: the board an Undo brings back is colored by it, even after a pick that left no undo step,
+  // and its groups stay as saved, since a Save in Off or Digit mode leaves no undo step to take them back.
+  function recordingModeStep (app, from, to, step, profiles) {
+    const inForce = cellProfile(loadState())
+    profiles ??= { from: inForce, to: inForce }
     coloring.run(() => {
       const before = app.puzzle.undoStack.length
       step()
@@ -2591,7 +2596,7 @@
   // Undo and Redo move the mode and the cell profile with the board: a step that colored or cleared cells is an undo step, so taking it back or putting it again changes them too.
   function followUndo (app, type) {
     const stackLength = app.puzzle.undoStack.length
-    const target = type === 'undo' ? modeHistory.undo(stackLength, cellProfile(loadState(), true)) : modeHistory.redo(stackLength)
+    const target = type === 'undo' ? modeHistory.undo(stackLength, cellProfile(loadState())) : modeHistory.redo(stackLength)
     if (target === undefined) return
     if (target.profile) saveState(withCellProfile(loadState(), target.profile))
     showMode(allowedMode(target.mode, usesDigitColors(loadState())))
@@ -2728,7 +2733,7 @@
     menu = document.createElement('div')
     menu.id = MENU.slice(1)
     menu.setAttribute('role', 'menu')
-    menu.style.cssText = `position:fixed;z-index:10000;width:max-content;max-width:min(calc(100vw - 8px), ${MENU_MAX_PX}px);box-sizing:border-box;padding:6px;border-radius:10px;background:#fff;color:#1d1b26;` +
+    menu.style.cssText = 'position:fixed;z-index:10000;width:max-content;max-width:calc(100vw - 8px);box-sizing:border-box;padding:6px;border-radius:10px;background:#fff;color:#1d1b26;' +
       'box-shadow:0 10px 30px rgba(30,20,60,.28),0 0 0 1px rgba(0,0,0,.08);font:14px/1.2 sans-serif;text-align:left;user-select:none'
     menu.innerHTML = renderMenu(loadState(), readColor)
     document.body.appendChild(menu)

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.19
+// @version      0.7.20
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.19'
+  const VERSION = '0.7.20'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -56,8 +56,9 @@
     return px
   }
 
-  // The one reader of a limit, saved or pasted: a whole number of pixels at or above its floor, or null for none; a string or boolean is not one.
-  const readLimit = (name) => (data) => (data === null || (Number.isInteger(data) && data >= LIMIT_FLOORS[name]) ? data : undefined)
+  // The one reader of a limit, saved or pasted: a whole number of pixels, or null for none; a string or boolean is not one. One below its floor,
+  // saved before the floor was raised, reads as the floor: only the dialog refuses a new one.
+  const readLimit = (name) => (data) => (data === null ? null : Number.isInteger(data) ? Math.max(data, LIMIT_FLOORS[name]) : undefined)
 
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
@@ -262,7 +263,7 @@
     return { width, ...font }
   }
 
-  // Automatic hyphens only in a pane this narrow or narrower (css px, about 35 characters a line at SudokuPad's font): a long word there
+  // Automatic hyphens only in a pane narrower than this (css px, about 35 characters a line at SudokuPad's font): a long word there
   // would otherwise break at any letter or overflow, and a wide pane has room to wrap at spaces. Set here, with the width, so every fit
   // measures the text as it will be set.
   const NARROW_PANE_PX = 360
@@ -340,7 +341,17 @@
   // SudokuPad's own rule in App.resize.
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
-  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY', 'hyphens']
+  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY', 'hyphens', 'paddingTop', 'paddingBottom', 'borderTop', 'borderBottom']
+
+  // SudokuPad's top and bottom padding scroll with the text, so a scrolled line would pass under the font bar and the corners that sit
+  // in them. A transparent border as wide holds still, and the text is clipped at it; the layout is the same, so it goes on after the fit.
+  function holdPadding (rules, padding) {
+    for (const side of ['Top', 'Bottom']) {
+      if (!(padding[side] > 0)) continue
+      rules.style[`border${side}`] = `${padding[side]}px solid transparent`
+      rules.style[`padding${side}`] = '0px'
+    }
+  }
 
   function clearFit (rules, controls) {
     for (const k of FIT_STYLES) rules.style[k] = ''
@@ -368,6 +379,7 @@
     const column = controls.getBoundingClientRect()
     const scale = home.width / natural
     const ownPx = parseFloat(getStyle(rules).fontSize)
+    const padding = { Top: parseFloat(getStyle(rules).paddingTop), Bottom: parseFloat(getStyle(rules).paddingBottom) }
     const visualRoom = rulesRoom({
       rulesTop: home.top,
       containerBottom: container.getBoundingClientRect().bottom,
@@ -441,6 +453,7 @@
     }
     // SudokuPad sets `overflow-y: scroll`, which draws an empty track beside rules that fit.
     if (rules.scrollHeight <= rules.clientHeight) rules.style.overflowY = 'auto'
+    holdPadding(rules, padding)
     return applied
   }
 
@@ -1254,6 +1267,9 @@
   // SudokuPad's rules pane pads its text by 16px: a corner this size sits wholly in the padding, and so does the font bar's height.
   const PANE_PADDING_PX = 16
   const CORNER_PX = PANE_PADDING_PX
+  // WCAG 2.2 SC 2.5.8: a target is at least this many px each way. A corner's hit area reaches past it, outward from the pane and along
+  // its side padding, so it covers neither the text nor the title ribbon above the pane.
+  const TARGET_PX = 24
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
   const cornerId = (corner) => `${ID}-drag-${corner}`
 
@@ -1266,14 +1282,19 @@
   // way. They sit in the pane's padding, so the pointer never leaves the pane on its way to them.
   const SHOW_WHEN = `body.${SHOWN_CLASS}:is(.${DRAG_CLASS}, :has(.puzzle-rules:hover, .${CORNER_CLASS}:hover, #${FONT_BAR_ID}:hover))`
 
+  // The font buttons are SudokuPad's own buttons in small: its light grey face, grey border, purple label and hover tint.
   const STYLE = `
-    #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; visibility: hidden; gap: 4px; height: ${PANE_PADDING_PX}px; font: 11px monospace; }
-    #${FONT_BAR_ID} button { all: unset; box-sizing: border-box; height: 100%; padding: 0 5px; border-radius: 4px; cursor: pointer;
-      background: rgba(0, 0, 0, .08); color: inherit; font: inherit; line-height: ${PANE_PADDING_PX}px; }
-    #${FONT_BAR_ID} button:hover { background: rgba(0, 0, 0, .18); }
+    #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; visibility: hidden; gap: 4px; height: ${PANE_PADDING_PX}px; }
+    #${FONT_BAR_ID} button { all: unset; box-sizing: border-box; height: 100%; min-width: ${TARGET_PX}px; padding: 0 4px; text-align: center;
+      border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: #eee; color: ${SUDOKUPAD_PURPLE};
+      font: 500 11px/${PANE_PADDING_PX - 2}px Roboto, Arial, sans-serif; }
+    #${FONT_BAR_ID} button:hover { background: #f3e5f5; }
     .${CORNER_CLASS} { position: fixed; z-index: 99999; display: none; width: ${CORNER_PX}px; height: ${CORNER_PX}px;
       box-sizing: border-box; border-radius: 8px; background: rgba(85, 255, 255, .4); border: 1px dotted rgba(85, 255, 255, .8);
       touch-action: none; }
+    .${CORNER_CLASS}::after { content: ''; position: absolute; width: ${TARGET_PX}px; height: ${TARGET_PX}px; }
+    #${cornerId('ur')}::after { top: -1px; left: -1px; }
+    #${cornerId('dl')}::after { bottom: -1px; right: -1px; }
     body.${SHOWN_CLASS} #${FONT_BAR_ID} { display: flex; }
     ${SHOW_WHEN} #${FONT_BAR_ID} { visibility: visible; }
     ${SHOW_WHEN} .${CORNER_CLASS} { display: block; }
@@ -1390,8 +1411,9 @@
     return line === null ? null : { ...at, above: contentTop(rules) - line }
   }
 
+  // Below the border the fit holds the top padding in.
   function contentTop (rules) {
-    return rules.getBoundingClientRect().top + (parseFloat(getStyle(rules).paddingTop) || 0)
+    return rules.getBoundingClientRect().top + rules.clientTop + (parseFloat(getStyle(rules).paddingTop) || 0)
   }
 
   // The top of the line holding a position: the character after it in a text node, else the element at it, which is the
@@ -1534,10 +1556,10 @@
     })
     if (!body) return
     const dialog = body.closest('.dialog')
+    // The default is no limit: both boxes empty.
     const restoreDefaults = () => {
-      const defaults = noLimits()
-      document.getElementById(MAX_WIDTH_INPUT_ID).value = defaults.maxWidth ?? ''
-      document.getElementById(MAX_HEIGHT_INPUT_ID).value = defaults.maxHeight ?? ''
+      document.getElementById(MAX_WIDTH_INPUT_ID).value = ''
+      document.getElementById(MAX_HEIGHT_INPUT_ID).value = ''
     }
     const resetPuzzleSize = () => {
       rulesFit.run(restoreSizing)
@@ -1545,7 +1567,7 @@
     }
     body.innerHTML = '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
       row(MAX_WIDTH_INPUT_ID, 'maxWidth', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'maxHeight', limits.maxHeight) +
-      '</div><div style="opacity:.7;max-width:22em">Empty means no limit; the least is 240 px wide or 112 px high. The limits cap only the automatic fit; a corner drag can go past them.</div>'
+      `</div><div style="opacity:.7;max-width:22em">Empty means no limit; the least is ${LIMIT_FLOORS.maxWidth} px wide or ${LIMIT_FLOORS.maxHeight} px high. The limits cap only the automatic fit; a corner drag can go past them.</div>`
   }
 
   // The drag reads the puzzle's id, so it is the fit's.

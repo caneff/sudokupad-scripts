@@ -91,8 +91,9 @@ test('offsetFontPx: one px per press from the automatic size, inside 70% to 150%
 // height follows its text at the current font and width, capped at 224 css px; the container wraps the pane;
 // SudokuPad's own font is 17.6 px. `scale` is visual px per css px, as SudokuPad scales the controls column.
 const VIEWPORT = { width: 2048, height: 1064 }
+const CLEARED = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '', hyphens: '', paddingTop: '', paddingBottom: '', borderTop: '', borderBottom: '' }
 function fakePane (chars, scale = 1, spareRoom = 0, pageSpare = 0, buttonsPx = 0) {
-  const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '', hyphens: '' }
+  const style = { ...CLEARED }
   const font = () => parseFloat(style.fontSize) || 17.6
   const width = () => parseFloat(style.width) || 480
   const scrollHeight = () => Math.ceil((chars * font() * 0.5) / (width() - 32)) * font() * 1.2 + 32
@@ -106,7 +107,7 @@ function fakePane (chars, scale = 1, spareRoom = 0, pageSpare = 0, buttonsPx = 0
     getBoundingClientRect: () => ({ left: 1000, top: 300, width: width() * scale, height: height() * scale })
   }
   const container = { getBoundingClientRect: () => ({ bottom: 300 + height() * scale + 8 + spareRoom }) }
-  const getStyle = (el) => (el === rules ? { fontSize: `${font()}px`, maxHeight: '224px' } : { paddingBottom: '0' })
+  const getStyle = (el) => (el === rules ? { fontSize: `${font()}px`, maxHeight: '224px', paddingTop: '16px', paddingBottom: '16px' } : { paddingBottom: '0' })
   // The controls column holds the pane. SudokuPad lays it out from 240 px down to `pageSpare` px above the window's bottom, with the
   // pane at its own height; a taller pane pushes the column's bottom down, and the column's `translate` moves it.
   const ownHeight = height()
@@ -305,14 +306,18 @@ test('the floors are the drag floors', () => {
   assert.deepEqual(LIMIT_FLOORS, { maxWidth: 240, maxHeight: 112 })
 })
 
-test('readLimits and a paste refuse a limit below its floor the same way', () => {
+test('readLimits and a paste read a limit below its floor as the floor, silently and with no copy kept aside', () => {
   const key = { maxHeight: MAX_HEIGHT_KEY, maxWidth: MAX_WIDTH_KEY }
   for (const name of ['maxWidth', 'maxHeight']) {
-    for (const value of [LIMIT_FLOORS[name] - 1, LIMIT_FLOORS[name]]) {
-      const loaded = quietly(() => readLimits(fakeStore({ [key[name]]: value }))).result[name]
+    for (const value of [100, LIMIT_FLOORS[name] - 1, LIMIT_FLOORS[name]]) {
+      // Saved in its envelope, as an older version with a lower floor saved it.
+      const store = fakeStore({ [key[name]]: { v: 0, data: value } })
+      const { result, warnings } = quietly(() => readLimits(store))
       const pasted = readPaste(JSON.stringify({ [key[name]]: value })).values[key[name]]
-      assert.equal(loaded, value < LIMIT_FLOORS[name] ? null : value, `${name} ${value}`)
-      assert.equal(pasted, value < LIMIT_FLOORS[name] ? undefined : value, `${name} ${value}`)
+      assert.equal(result[name], LIMIT_FLOORS[name], `${name} ${value}`)
+      assert.deepEqual(warnings, [], `${name} ${value}`)
+      assert.equal(`${key[name]}_unreadable` in store.data, false, `${name} ${value}`)
+      assert.equal(pasted, LIMIT_FLOORS[name], `${name} ${value}`)
     }
   }
 })
@@ -380,12 +385,23 @@ test('fitRulesPane: rules that fit lose SudokuPad\'s empty scrollbar track, rule
   assert.equal(long.rules.style.overflowY, '', 'rules that scroll even when widened and shrunk keep SudokuPad\'s scroll')
 })
 
+test('fitRulesPane: the top and bottom padding become a transparent border as wide, which scrolled text does not pass, and a clear gives the padding back', () => {
+  for (const chars of [140, 20000]) {
+    const { rules, controls, fit } = fakePane(chars)
+    fit()
+    const held = { paddingTop: '0px', paddingBottom: '0px', borderTop: '16px solid transparent', borderBottom: '16px solid transparent' }
+    assert.deepEqual({ paddingTop: rules.style.paddingTop, paddingBottom: rules.style.paddingBottom, borderTop: rules.style.borderTop, borderBottom: rules.style.borderBottom }, held, `${chars} chars`)
+    clearFit(rules, controls)
+    assert.deepEqual(rules.style, CLEARED)
+  }
+})
+
 test('fitRulesPane: a pane SudokuPad does not show (a puzzle with no rules) gets the fit and the drag taken off', () => {
   const { rules, controls, fit } = fakePane(140)
   fit({ box: { w: 0, h: 30, x: 0, y: -30 } })
   Object.defineProperty(rules, 'offsetWidth', { get: () => 0 })
   assert.equal(fit(), null)
-  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '', hyphens: '' })
+  assert.deepEqual(rules.style, CLEARED)
   assert.equal(controls.style.translate, '')
 })
 
@@ -481,7 +497,7 @@ test('clearFit: takes the fit\'s output off the pane and the controls', () => {
   fit({ box: { w: -20, h: 30, x: 20, y: -30 } })
   assert.notEqual(controls.style.translate, '')
   clearFit(rules, controls)
-  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '', hyphens: '' })
+  assert.deepEqual(rules.style, CLEARED)
   assert.equal(controls.style.translate, '')
 })
 
@@ -687,10 +703,10 @@ test('copiedSettings: both limits in force, null for no limit', () => {
   assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [MAX_HEIGHT_KEY]: 500 }))), { [MAX_WIDTH_KEY]: null, [MAX_HEIGHT_KEY]: 500 })
 })
 
-test('pastedSettings: a whole number of pixels or null is kept, anything else is skipped and counted, other keys are ignored', () => {
+test('pastedSettings: a whole number of pixels or null is kept (one below its floor as the floor), anything else is skipped and counted, other keys are ignored', () => {
   assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null, DarkPage_color: '#ffffff' })), { values: { [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null }, skipped: 0 })
   assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: 700.4, [MAX_HEIGHT_KEY]: 'tall' })), { values: {}, skipped: 2 })
-  assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: true, [MAX_HEIGHT_KEY]: -3 })), { values: {}, skipped: 2 })
+  assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: true, [MAX_HEIGHT_KEY]: -3 })), { values: { [MAX_HEIGHT_KEY]: LIMIT_FLOORS.maxHeight }, skipped: 1 })
 })
 
 test('the script has no pointerover or pointerout listener', () => {
