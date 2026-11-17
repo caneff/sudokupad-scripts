@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.55
+// @version      0.25.62
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.55'
+  const VERSION = '0.25.62'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -45,9 +45,9 @@
 
   const PRELOADS = {
     'Low/5/High': [
-      { key: '1', digits: ['0', '1', '2', '3', '4'] },
+      { key: '6', digits: ['0', '1', '2', '3', '4'] },
       { key: '5', digits: ['5'] },
-      { key: '9', digits: ['6', '7', '8', '9'] }
+      { key: 'q', digits: ['6', '7', '8', '9'] }
     ],
     'Odd/Even': [
       { key: '1', digits: ['1', '3', '5', '7', '9'] },
@@ -403,6 +403,13 @@
     return state
   }
 
+  // Low/5/High as it shipped before its colors changed, so a pre-profile install saved with it still reads as that preload.
+  const LEGACY_LOW_5_HIGH = [
+    { key: '1', digits: ['0', '1', '2', '3', '4'] },
+    { key: '5', digits: ['5'] },
+    { key: '9', digits: ['6', '7', '8', '9'] }
+  ]
+
   const isSynced = (state) => state.digitActive === undefined
   const usesDigitColors = (state) => state.useDigitColors !== false
   // `changes` names the fields that change (profiles, active, digitActive, useDigitColors); the rest carry over, profiles as copies when `changes` has none.
@@ -424,7 +431,7 @@
     const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
     if (!legacy) return preloadedState()
-    const equal = preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
+    const equal = sameGroups(LEGACY_LOW_5_HIGH, legacy) ? 0 : preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
     if (equal >= 0) return { profiles: preloads, active: equal }
     return { profiles: [{ name: CUSTOM_NAME, groups: legacy }, ...preloads], active: 0 }
   }
@@ -1012,12 +1019,17 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
+  // WCAG's contrast ratio of two [r, g, b] colors, from 1 (the same) to 21 (black on white); the order does not matter.
+  function contrastRatio (one, other) {
+    const a = wcagLuminance(one) + 0.05
+    const b = wcagLuminance(other) + 0.05
+    return Math.max(a, b) / Math.min(a, b)
+  }
+
   function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
-    const page = wcagLuminance(rgb) + 0.05
-    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(light) >= contrast(dark) ? light : dark
+    return contrastRatio(rgb, parseColor(light)) >= contrastRatio(rgb, parseColor(dark)) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
@@ -1407,13 +1419,13 @@
   function modeWordHtml (mode) {
     const on = mode !== 'off'
     return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-6px;top:-3px;padding:1px 3px;border-radius:3px;background:' + WORD_BACKGROUND + ';' +
-      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? SUDOKUPAD_PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
+      `font:${on ? 700 : 400} 10px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? SUDOKUPAD_PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
   // WCAG 2.2 SC 2.5.8: a target is at least this many px each way.
   const MIN_TARGET_PX = 24
   const ARROW_BOX_PX = 14
-  const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
+  const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by Digit profiles" title="Profiles" ' +
     'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:' + ARROW_BOX_PX + 'px;height:' + ARROW_BOX_PX + 'px;' +
     `border:1.5px solid ${SUDOKUPAD_PURPLE};border-radius:3px;background:#fff;color:${SUDOKUPAD_PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
 
@@ -1433,7 +1445,7 @@
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" overflow="visible" xmlns="http://www.w3.org/2000/svg">' +
     iconRun(mode, chips, colorOf) + '</svg>' + modeWordHtml(mode) + ARROW_BOX_HTML + '</div>'
 
-  const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
+  const buttonLabel = (mode) => `Color by Digit: ${MODE_NAMES[mode]}`
 
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
@@ -1602,9 +1614,29 @@
     cell: (color) => ({ fill: color || UNREADABLE_FILL, ink: ENTERED_DIGIT_BLUE, line: '#000' }),
     digit: (color, digitGroupColor) => ({ fill: '#fff', ink: shadeOf(digitGroupColor), line: '#000' }),
     both: (color, digitGroupColor) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(digitGroupColor), line: '#000' }),
-    off: () => ({ fill: '#fff', ink: '#999', line: DIM_LINE })
+    off: () => ({ fill: '#fff', ink: '#888', line: DIM_LINE })
   }
   const RUN_CELL = 10
+  const CHIP_INK_CONTRAST = 3
+
+  // A chip's digit, darkened until it reads at 3:1 on the chip's color, which sits on white; on a chip too dark for that it is lightened instead.
+  // The board's own blue and shades fall just short on orange.
+  function chipInk (ink, fill, opacity) {
+    const under = parseColor(fill)
+    const rgb = parseColor(ink)
+    if (!under || !rgb) return ink
+    const shown = under.map((c) => opacity * c + (1 - opacity) * 255)
+    const ratio = (text) => contrastRatio(shown, text)
+    const toward = (target) => {
+      let moved = rgb
+      while (ratio(moved) < CHIP_INK_CONTRAST && moved.some((c) => c !== target)) moved = moved.map((c) => Math.round(c + (target - c) * 0.05))
+      return moved
+    }
+    if (ratio(rgb) >= CHIP_INK_CONTRAST) return ink
+    const darker = toward(0)
+    const moved = ratio(darker) >= CHIP_INK_CONTRAST ? darker : toward(255)
+    return `rgb(${moved.join(', ')})`
+  }
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
 
   // The svg frame of a run of chips: `inner` is the cells and dividers, `outline` the stroke attributes of the one outline over them.
@@ -1635,9 +1667,13 @@
       const look = CHIP_LOOKS[style](cellKey === undefined ? '' : colorOf(cellKey), digitKey === undefined ? '' : colorOf(digitKey))
       // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
       const fill = cellKey === undefined ? '#fff' : look.fill
-      const tint = cellKey !== undefined && (style === 'cell' || style === 'both') ? ` fill-opacity="${CELL_COLOR_OPACITY}"` : ''
-      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"${tint}/>` +
-        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(look.ink)}">${escapeHtml(digit)}</text></g>`
+      const tinted = cellKey !== undefined && (style === 'cell' || style === 'both')
+      const tint = tinted ? ` fill-opacity="${CELL_COLOR_OPACITY}"` : ''
+      const ink = chipInk(look.ink, fill, tinted ? CELL_COLOR_OPACITY : 1)
+      // A tinted chip sits on white, so its digit reads against the same color on a dark button.
+      const base = tint ? `<rect data-role="chip-base" x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="#fff"/>` : ''
+      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}">${base}<rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"${tint}/>` +
+        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(ink)}">${escapeHtml(digit)}</text></g>`
     }).join('')
     const stroke = `stroke="${line}"`
     const dividers = chips.slice(1).map((_, i) => verticalLine(i + 1, stroke)).join('')
@@ -1662,13 +1698,27 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  const STATUS_ERROR_COLOR = '#b3261e'
+  // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
+  const CONTENT_INSET = '16px'
   // An inset layer darkens whatever fill the control has.
   const PRESS_LAYER = 'box-shadow: inset 0 0 0 100vmax rgb(0 0 0 / .1)'
   const STATUS_ATTRIBUTE = 'data-role="settings-status"'
   const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
 
-  function setDialogStatus (dialog, message) {
-    dialog.querySelector(STATUS_SELECTOR).textContent = message
+  function setDialogStatus (dialog, message, { error = false } = {}) {
+    const status = dialog.querySelector(STATUS_SELECTOR)
+    status.textContent = message
+    if (error) status.dataset.tone = 'error'
+    else delete status.dataset.tone
+  }
+
+  // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
+  function clearDialogError (dialog) {
+    if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
   // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
   // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
@@ -1780,7 +1830,7 @@
   }
 
   function wireErrorLog (dialog, win) {
-    const say = (message) => setDialogStatus(dialog, message)
+    const say = (message, options) => setDialogStatus(dialog, message, options)
     dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-error-log' && act !== 'clear-error-log') return
@@ -1788,8 +1838,11 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
           win.localStorage.removeItem(ERROR_LOG_KEY)
-          say('Error log cleared.')
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
         }
         const log = readErrorLog(win.localStorage)
@@ -1800,7 +1853,7 @@
         await win.navigator.clipboard.writeText(formatErrorLog(log))
         say('Error log copied.')
       } catch (error) {
-        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -1820,15 +1873,20 @@
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`,
+      `.${prefix}title-row ${STATUS_SELECTOR}[data-tone="error"] { color: ${STATUS_ERROR_COLOR}; font-weight: 600; }`
     ].join('\n')
   }
 
-  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
-  function buttonRowCss (bodyId) {
-    const row = `.dialog:has(#${bodyId}) .dialog-options`
+  // Scoped by the body's id, so SudokuPad's other dialogs are left alone. SudokuPad styles a dialog's buttons by tag, so each of those is forced.
+  function dialogShellCss (bodyId) {
+    const dialog = `.dialog:has(#${bodyId})`
+    const row = `${dialog} .dialog-options`
     return [
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      // Inherited by every checkbox, slider and other form control in the dialog, in place of the browser's blue.
+      `${dialog} { accent-color: ${SUDOKUPAD_PURPLE}; }`,
+      // The row sits on the text parts' box, so their side padding as its margin puts its edges, the top line's included, on the content column's.
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
       `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
       `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
@@ -1853,7 +1911,7 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    writeStyle(`settings-dialog-shell-${bodyId}`, dialogShellCss(bodyId), doc)
     if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
@@ -1864,15 +1922,17 @@
       } catch (error) {
         failed = true
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`, { error: true })
         return
       }
       close()
     }
+    const clearError = () => clearDialogError(doc.getElementById(bodyId).closest('.dialog'))
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      ...extraButtons
+      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
+      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
     ]
     framework.showDialog({
       centerOverBoard,
@@ -1889,6 +1949,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
+    // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
+    const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
+    for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -1913,6 +1976,7 @@
   const ACTIVE_INK = '#5b2a9a'
   const HOVER_FILL = '#f6f3f9'
   const NAME_PAD = 6
+  const FULL_NOTE = `${MAX_PROFILES} profiles is the most. Delete one to add another.`
   function renderProfiles (state, colorOf, selected) {
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
@@ -1920,22 +1984,26 @@
       return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
         `<span class="cbd-chips">${renderChips(cellChips(profile.groups), colorOf, { size: CHIP_PX })}</span>` +
-        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${escapeHtml(profile.name)}</span>`) +
+        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</span>`) +
         `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
     return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
       `<div role="radiogroup" aria-label="Profile to edit">${rows}</div>` +
-      `<button type="button" class="cbd-text-button" data-act="new-profile"${full ? ' disabled' : ''}>+ New profile</button>`
+      `<button type="button" class="cbd-text-button" data-act="new-profile"${full ? ` disabled title="${FULL_NOTE}"` : ''}>+ New profile</button>` +
+      (full ? `<div class="cbd-note" data-role="full-note">${FULL_NOTE}</div>` : '')
   }
 
   const MENU_ROW = 'display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 6px;border-radius:6px'
   const MENU_DOT_COLUMN = 44
+  // The name column's width: it fits every preloaded name and an ordinary name of about 17 characters (the site's 'Entropic, no blue'),
+  // and a longer name is cut with an ellipsis, so no name changes the menu's width.
+  const MENU_NAME_EM = 10
   const DOT_RING = '#cfc7da'
   const chipColumn = (groups, colorOf) =>
     `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(cellChips(groups), colorOf, { size: CHIP_PX })}</span>`
-  // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
-  const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
+  // The column also shrinks in a narrow window, so the dots stay on screen.
+  const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:0 1 auto;width:${MENU_NAME_EM}em;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
   const dotColumn = (role, html, align, attributes = '') => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}"${attributes}>${html}</span>`
   const TARGET_NAMES = { cells: 'Cell', digits: 'Digit' }
 
@@ -1982,10 +2050,15 @@
       '</div>'
   }
 
+  const RESTORE_ASK = 'Restore the preloaded profiles? Your own profiles and edits are removed when you Save.'
+  const renderRestoreConfirm = () => '<div class="cbd-note cbd-confirm" role="alertdialog" aria-label="Restore defaults" data-role="restore-confirm">' +
+    `<div>${RESTORE_ASK}</div><div class="cbd-confirm-buttons"><button type="button" class="cbd-button" data-act="restore-keep">Keep my profiles</button>` +
+    '<button type="button" class="cbd-button" data-act="restore-go">Restore defaults</button></div></div>'
+
   // Matched as text, not by a selector, since a custom palette's key may hold a quote.
   const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
 
-  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadable = false }) {
+  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadable = false, confirmHtml = '' }) {
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
@@ -1993,7 +2066,7 @@
       ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
       : renderPaint(groups, pages, shown, brush, colors)
     const kept = unreadable ? `<div class="cbd-note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${PROFILES_KEY}${UNREADABLE_SUFFIX}.</div>` : ''
-    return `${kept}${pulldownsHtml}` +
+    return `${kept}${confirmHtml}${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
       `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
   }
@@ -2015,11 +2088,13 @@
   ].join('\n')
 
   const STYLE_CSS = [
-    [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
+    [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px; height: 34px'],
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
     [DIALOG, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
     [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
     [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
+    [`${EDITOR} .cbd-confirm`, `background: ${ACTIVE_FILL}; border: 1px solid ${ACTIVE_RING}; border-radius: 8px; padding: 8px 10px; margin: 0 0 10px`],
+    [`${EDITOR} .cbd-confirm-buttons`, 'display: flex; gap: 8px; margin-top: 8px'],
     [`${EDITOR} .cbd-pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
     [`${EDITOR} .cbd-pulldown`, `display: grid; grid-template-columns: ${PULLDOWN_LABEL_WIDTH}px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left`],
     [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
@@ -2042,7 +2117,7 @@
     // One width for every run, so the names line up.
     [`${EDITOR} .cbd-chips`, `display: flex; flex: none; width: ${CHIP_COLUMN_PX}px`],
     // Its left padding is the name field's padding and border, so a name starts where the selected row's does.
-    [`${EDITOR} .cbd-name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400`],
+    [`${EDITOR} .cbd-name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: .9rem; font-weight: 400`],
     [`${EDITOR} .cbd-text-button`, `background: none; border: none; box-shadow: none; color: ${MUTED}; font-size: .9rem; font-weight: 500; padding: 2px 6px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 1.4; border-radius: 6px; cursor: pointer`],
     [`${EDITOR} .cbd-text-button:hover:not(:disabled)`, `background: ${HOVER_FILL}; color: #222`],
     [`${EDITOR} .cbd-text-button:disabled`, 'opacity: .4; cursor: default'],
@@ -2098,7 +2173,7 @@
   }
 
   function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
-    const say = (message) => setDialogStatus(root, message)
+    const say = (message, options) => setDialogStatus(root, message, options)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-settings' && act !== 'paste-settings') return
@@ -2114,7 +2189,7 @@
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -2318,7 +2393,7 @@
   const colorEnteredCells = (app) => recolor(app, (plans) => planCellColors(plans, loadGroups(), enteredIndices(plans)))
 
   // The mode and cell profile steps that left an undo step, each `at` the undo stack's length after it, so Undo and Redo can move them along.
-  // A step that changed the cell profile holds it before and after (`profiles`: `{ from, to }`, each a `cellProfile`).
+  // A step holds the cell profile before and after it (`profiles`: `{ from, to }`, each a `cellProfile`).
   function createModeHistory () {
     const done = []
     let undone = []
@@ -2328,14 +2403,17 @@
         done.push({ at, from, to, profiles })
         undone = []
       },
-      // The mode, and the cell profile when a step changed it, before the earliest step an Undo down to `stackLength` took back.
-      undo (stackLength) {
+      // The mode and the cell profile before the earliest step an Undo down to `stackLength` took back.
+      // `now` is the cell profile in force: a pick that left no undo step since the latest step taken back is the one a Redo of that step puts back.
+      // A step's own profile, groups and all, stays when `now` bears its name, so a Redo of a Save still puts the saved groups back.
+      undo (stackLength, now) {
         const first = done.findIndex((step) => step.at > stackLength)
         if (first < 0) return undefined
-        const taken = done.splice(first)
-        undone.push(...taken.reverse())
+        const taken = done.splice(first).reverse()
+        if (now && now.name !== taken[0].profiles.to.name) taken[0].profiles = { ...taken[0].profiles, to: now }
+        undone.push(...taken)
         const earliest = taken[taken.length - 1]
-        return { mode: earliest.from, profile: taken.findLast((step) => step.profiles)?.profiles.from }
+        return { mode: earliest.from, profile: earliest.profiles.from }
       },
       // The same after the latest step a Redo up to `stackLength` put back.
       redo (stackLength) {
@@ -2343,7 +2421,8 @@
         while (undone.length > 0 && undone[undone.length - 1].at <= stackLength) put.push(undone.pop())
         if (put.length === 0) return undefined
         done.push(...put)
-        return { mode: put[put.length - 1].to, profile: put.findLast((step) => step.profiles)?.profiles.to }
+        const latest = put[put.length - 1]
+        return { mode: latest.to, profile: latest.profiles.to }
       },
       forgetRedo () { undone = [] },
       // A Restart empties the undo stack, but SudokuPad's next Undo on the empty stack brings back the board from before it, stack included.
@@ -2502,7 +2581,11 @@
 
   const modeHistory = createModeHistory()
 
+  // A step that changes no cell profile still holds the one in force, by name only: the board an Undo brings back is colored by it, even after a pick that left no undo step,
+  // and its groups stay as saved, since a Save in Off or Digit mode leaves no undo step to take them back.
   function recordingModeStep (app, from, to, step, profiles) {
+    const inForce = cellProfile(loadState())
+    profiles ??= { from: inForce, to: inForce }
     coloring.run(() => {
       const before = app.puzzle.undoStack.length
       step()
@@ -2524,7 +2607,7 @@
   // Undo and Redo move the mode and the cell profile with the board: a step that colored or cleared cells is an undo step, so taking it back or putting it again changes them too.
   function followUndo (app, type) {
     const stackLength = app.puzzle.undoStack.length
-    const target = type === 'undo' ? modeHistory.undo(stackLength) : modeHistory.redo(stackLength)
+    const target = type === 'undo' ? modeHistory.undo(stackLength, cellProfile(loadState())) : modeHistory.redo(stackLength)
     if (target === undefined) return
     if (target.profile) saveState(withCellProfile(loadState(), target.profile))
     showMode(allowedMode(target.mode, usesDigitColors(loadState())))
@@ -2773,11 +2856,10 @@
     const oldGroups = activeGroups(oldState)
     const groups = activeGroups(draft)
     const profiles = { from: cellProfile(oldState, true), to: cellProfile(draft, true) }
-    const changed = JSON.stringify(profiles.from) !== JSON.stringify(profiles.to)
     if (colorsCells(next) && !sameGroups(oldGroups, groups)) {
       recordingModeStep(app, mode, next, () => recolor(app, (plans) => planSwitch(plans, oldGroups, groups)), profiles)
     }
-    setMode(app, next, groupKeys([...oldGroups, ...groups]), changed ? profiles : undefined)
+    setMode(app, next, groupKeys([...oldGroups, ...groups]), profiles)
   }
 
   // The profiles, the mode and the added-preload marks as stored, and the mode as shown, as a function that puts them back after a Save or Paste that failed half-way. Cells a failed Save already colored or cleared stay as they are, an undo step of their own.
@@ -2818,19 +2900,32 @@
           draw()
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: () => restoreDefaults() }]
     })
     if (!box) return
     // The draft takes the preloaded profiles, and Save or Cancel decides. Profiles of the user's own are lost on Save, so a draft that holds any asks first.
+    let confirming = false
     const restoreDefaults = () => {
-      if (JSON.stringify(draft.state.profiles) !== JSON.stringify(preloadedState().profiles) && !window.confirm('Restore the preloaded profiles? Your own profiles and edits are removed when you Save.')) return
+      if (JSON.stringify(draft.state.profiles) !== JSON.stringify(preloadedState().profiles)) {
+        confirming = true
+        draw()
+        box.querySelector('[data-act="restore-keep"]').focus()
+        return
+      }
       edit({ type: 'restore' })
       draw()
     }
+    // Each paint grid is one Tab stop, the pressed swatch or the last key focused, and the arrow keys move within it.
+    const setStop = (grid, stop) => grid.querySelectorAll('button').forEach((button) => { button.tabIndex = button === stop ? 0 : -1 })
     const draw = () => {
       const { state, mode: draftMode, selected, pages, page, brush } = draft
-      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadable })
+      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadable, confirmHtml: confirming ? renderRestoreConfirm() : '' })
+      box.querySelectorAll(PAINT_GRIDS).forEach((grid) => setStop(grid, grid.querySelector('[aria-pressed="true"]') || grid.querySelector('button')))
     }
+    box.addEventListener('focusin', (event) => {
+      const grid = event.target.closest(PAINT_GRIDS)
+      if (grid && event.target.matches('button')) setStop(grid, event.target)
+    })
     const edit = (event) => {
       const before = draft
       draft = reduceDraft(draft, event)
@@ -2973,6 +3068,13 @@
       event.preventDefault()
       event.stopPropagation()
       const act = el.dataset.act
+      if (act === 'restore-keep' || act === 'restore-go') {
+        confirming = false
+        if (act === 'restore-go') edit({ type: 'restore' })
+        draw()
+        box.closest('.dialog').querySelector('[data-role="restore"]').focus()
+        return
+      }
       if (act === 'new-profile') {
         if (!edit({ type: 'new-profile' })) return
         draw()

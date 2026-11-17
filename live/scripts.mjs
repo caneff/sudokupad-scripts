@@ -13,9 +13,9 @@ export const numberPadText = (p) => p.evaluate(() => [...document.querySelectorA
 // Text Anywhere's tool button and settings dialog, named here once: a shared module imports no script's fixtures, which re-export them.
 export const TEXT_ANYWHERE_BUTTON = '#control-textanywhere'
 export const TEXT_ANYWHERE_EDITOR = '#text-anywhere-dialog'
-// Color by Digit's button and its aria-label, `Color by digit: ` and then the mode's word, and the mode read back off the label.
+// Color by Digit's button and its aria-label, `Color by Digit: ` and then the mode's word, and the mode read back off the label.
 const COLOR_BY_DIGIT_BUTTON = '#control-colorbydigit'
-const LABEL_PREFIX = 'Color by digit: '
+const LABEL_PREFIX = 'Color by Digit: '
 export const modeLabel = (mode) => `${LABEL_PREFIX}${mode}`
 export const labelOn = async (p) => {
   const label = await p.locator(COLOR_BY_DIGIT_BUTTON).getAttribute('aria-label')

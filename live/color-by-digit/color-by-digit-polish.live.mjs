@@ -2,9 +2,11 @@
 /* global document, window, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ARROW, BUTTON, EDITOR, center, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState, openEditorOn } from './color-by-digit-fixtures.mjs'
-import { dialogButton } from '../settings.mjs'
-import { settle } from '../settle.mjs'
+import { createRequire } from 'node:module'
+import { ARROW, BUTTON, DEFAULT_FILL, EDITOR, allFillsOn, center, paletteColorOn, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState, openEditorOn, openMenuOn } from './color-by-digit-fixtures.mjs'
+import { selectCell } from '../board.mjs'
+import { closeDialogWith, dialogButton } from '../settings.mjs'
+import { readUntil, settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -243,5 +245,187 @@ describe('the mode button and its menu', { concurrency: false }, () => {
     assert.equal(await digitProfile(), 0)
     await p.mouse.click(box.x + 3, box.y + 3)
     assert.equal(await settle(digitProfile, 1), 1)
+  })
+})
+
+// The grid draws a cell color at 60% opacity (SudokuPad's own, `color-by-digit.user.js` § darkenColor).
+const CELL_OPACITY = 0.6
+const WHITE = [255, 255, 255]
+// The channels of a computed color, `rgb()` or `rgba()`, alpha last when there is one.
+const channelsOf = (css) => (css.match(/[\d.]+/g) || []).map(Number)
+const rgbChannels = (css) => channelsOf(css).slice(0, 3)
+const onWhite = (channels) => channels.map((c) => CELL_OPACITY * c + (1 - CELL_OPACITY) * 255)
+const { contrastRatio } = createRequire(import.meta.url)('../../test/contrast.js')
+
+describe('a fresh install\'s Low/5/High contrast', { concurrency: false }, () => {
+  const withDigit = async (mode, digit, check) => {
+    const { context, p } = await openSession(browser(), script, { saved: { [MODE_STORAGE_KEY]: mode } })
+    try {
+      await selectCell(p, 0, 2)
+      await p.keyboard.press(digit)
+      await check(p)
+    } finally { await context.close() }
+  }
+
+  it('Digit: a low digit on white reads at 4.5:1 or more', () => withDigit('digit', '3', async (p) => {
+    const fills = await readUntil(allFillsOn(p, 'entered', '3'), (v) => v.length === 1 && v[0] !== DEFAULT_FILL)
+    const ratio = contrastRatio(rgbChannels(fills[0]), WHITE)
+    assert.equal(ratio >= 4.5, true, `${ratio}`)
+  }))
+
+  it('Cell: SudokuPad\'s blue entered digit on a High cell reads at 3.5:1 or more', () => withDigit('cell', '7', async (p) => {
+    const key = await readUntil(() => p.evaluate(() => Framework.app.puzzle.cells[2].colours?.[0]), (v) => v !== undefined)
+    const ratio = contrastRatio(rgbChannels(DEFAULT_FILL), onWhite(rgbChannels(await paletteColorOn(p, key))))
+    assert.equal(ratio >= 3.5, true, `key ${key}: ${ratio}`)
+  }))
+})
+
+describe('the button with Dark Page installed', { concurrency: false }, () => {
+  const darkPage = scriptSource('dark-page.user.js')
+
+  for (const mode of ['cell', 'digit', 'both', 'off']) {
+    it(`${mode}: each chip digit reads at 3:1 or more against its chip as drawn over the dark button, and the mode word is 10 px or larger`, async () => {
+      const { context, p } = await openSession(browser(), script, { saved: { [MODE_STORAGE_KEY]: mode }, also: [darkPage] })
+      try {
+        const look = await p.locator(BUTTON).evaluate((button) => {
+          const read = (el) => { const s = getComputedStyle(el); return [s.fill, s.fillOpacity] }
+          return {
+            button: getComputedStyle(button).backgroundColor,
+            chips: [...button.querySelectorAll('[data-role="chip"]')].map((g) => ({ rects: [...g.querySelectorAll('rect')].map(read), ink: getComputedStyle(g.querySelector('text')).fill })),
+            wordSize: getComputedStyle(button.querySelector('[data-role="mode"]')).fontSize
+          }
+        })
+        assert.equal(parseFloat(look.wordSize) >= 10, true, look.wordSize)
+        assert.equal(look.chips.length > 0, true)
+        for (const chip of look.chips) {
+          const shown = chip.rects.reduce((under, [fill, opacity]) => {
+            const [r, g, b, a = 1] = channelsOf(fill)
+            const alpha = a * Number(opacity)
+            return [r, g, b].map((c, i) => alpha * c + (1 - alpha) * under[i])
+          }, channelsOf(look.button).slice(0, 3))
+          const ratio = contrastRatio(channelsOf(chip.ink).slice(0, 3), shown)
+          assert.equal(ratio >= 3, true, `${mode}: ink ${chip.ink} on ${shown}: ${ratio}`)
+        }
+      } finally { await context.close() }
+    })
+  }
+})
+
+const LONG_NAME = 'Mmmmmmmmmmmmmmmmmmmmmmmm'
+const LONG = { profiles: [{ name: 'Odd/Even', groups: SEED.profiles[0].groups }, { name: LONG_NAME, groups: SEED.profiles[1].groups }], active: 0, digitActive: 0 }
+const SIX_PROFILES = { ...LONG, profiles: Array.from({ length: 6 }, (_, i) => ({ name: `P${i}`, groups: SEED.profiles[i % 2].groups })) }
+// The longest name a fresh install shows: the menu's normal width is the one it has with it.
+const SHORT_NAME = 'Low/5/High'
+
+describe('the dialog\'s layout, keyboard and messages', { concurrency: false }, () => {
+  let context, p
+  before(async () => {
+    ({ context, p } = await openSession(browser(), script, { saved: savedProfiles(LONG) }))
+    await openEditorOn(p)
+  })
+  after(async () => { await context?.close() })
+
+  it('both headings and their first rows share a top edge and a height', async () => {
+    const tops = await p.evaluate((editor) => {
+      const top = (el) => Math.round(el.getBoundingClientRect().top * 10) / 10
+      const [profiles, digits] = [...document.querySelectorAll(`${editor} .cbd-heading`)]
+      return { headings: [top(profiles), top(digits)], heights: [profiles.offsetHeight, digits.offsetHeight], rows: [top(document.querySelector(`${editor} [data-role=profile-row]`)), top(document.querySelector(`${editor} .cbd-color-choice`))] }
+    }, EDITOR)
+    assert.equal(tops.headings[0], tops.headings[1])
+    assert.equal(tops.heights[0], tops.heights[1])
+    assert.equal(tops.rows[0], tops.rows[1])
+  })
+
+  it('a 24-character profile name is one line with an ellipsis and its full name as a tooltip', async () => {
+    const name = p.locator(`${ROWS}[data-index="1"] .cbd-name`)
+    // One line is as tall as the name field holding a single letter; a wrapped name is taller.
+    const look = await name.evaluate((el) => {
+      const high = el.getBoundingClientRect().height
+      const text = el.textContent
+      el.textContent = 'M'
+      const lineHigh = el.getBoundingClientRect().height
+      el.textContent = text
+      return { high, lineHigh, overflow: getComputedStyle(el).textOverflow, space: getComputedStyle(el).whiteSpace, title: el.title }
+    })
+    assert.deepEqual({ oneLine: look.high === look.lineHigh, overflow: look.overflow, space: look.space, title: look.title }, { oneLine: true, overflow: 'ellipsis', space: 'nowrap', title: LONG_NAME }, `${look.high} px against ${look.lineHigh} px for one line`)
+  })
+
+  it('the profile menu is as wide with the long name as with a preloaded one, the long name cut with its full name as a tooltip and the preloaded one whole', async () => {
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    await openMenuOn(p)
+    // The same menu with the long name swapped for a short one is the width a solver sees with ordinary names.
+    const look = await p.locator(MENU).evaluate((menu, short) => {
+      const names = [...menu.querySelectorAll('[data-role=name]')]
+      const width = menu.getBoundingClientRect().width
+      const cut = (name) => name.scrollWidth > name.clientWidth
+      const longCut = cut(names[1])
+      names[1].textContent = short
+      return { width, longCut, normal: menu.getBoundingClientRect().width, shortCut: cut(names[1]), title: names.map((n) => n.title) }
+    }, SHORT_NAME)
+    assert.equal(look.width, look.normal, `${look.width} px with the long name, ${look.normal} px with ${SHORT_NAME}`)
+    assert.deepEqual({ longCut: look.longCut, shortCut: look.shortCut }, { longCut: true, shortCut: false })
+    assert.deepEqual(look.title, ['Odd/Even', LONG_NAME])
+    await p.keyboard.press('Escape')
+    await openEditorOn(p)
+  })
+
+  it('each grid is one Tab stop, and Tab reaches Cancel in a handful of presses', async () => {
+    const stops = await p.evaluate((editor) => ({
+      swatches: [...document.querySelectorAll(`${editor} button[data-role=swatch]`)].filter((b) => b.tabIndex >= 0).length,
+      digits: [...document.querySelectorAll(`${editor} button[data-act=digit]`)].filter((b) => b.tabIndex >= 0).length
+    }), EDITOR)
+    assert.deepEqual(stops, { swatches: 1, digits: 1 })
+    await keyboardFocus(p, p.locator(`${EDITOR} select[data-role=mode-draft]`))
+    let presses = 0
+    while (presses < 40 && await p.evaluate(() => document.activeElement.textContent.trim()) !== 'Cancel') {
+      await p.keyboard.press('Tab')
+      presses++
+    }
+    assert.equal(presses <= 14, true, `${presses} presses`)
+  })
+
+  it('the Tab stop follows the arrow keys, so a grid is left and re-entered where it was', async () => {
+    await keyboardFocus(p, p.locator(SWATCH).first())
+    await p.keyboard.press('ArrowRight')
+    await p.keyboard.press('Shift+Tab')
+    await p.keyboard.press('Tab')
+    assert.equal(await activeSlot(p, SWATCHES), 1)
+    await keyboardFocus(p, p.locator(DIGIT(7)))
+    await p.keyboard.press('ArrowRight')
+    assert.equal(await p.evaluate((editor) => document.querySelector(`${editor} button[data-act=digit][tabindex="0"]`).dataset.digit, EDITOR), '8')
+  })
+
+  it('Restore defaults asks inside the dialog, with no native confirm box', async () => {
+    const native = []
+    const count = (dialog) => { native.push(dialog.message()); return dialog.dismiss() }
+    p.on('dialog', count)
+    await dialogButton(p, 'Restore defaults').click()
+    const ask = p.locator(`${EDITOR} [data-role=restore-confirm]`)
+    await ask.waitFor({ state: 'visible' })
+    assert.match(await ask.innerText(), /own profiles/)
+    await ask.getByRole('button', { name: 'Keep my profiles' }).click()
+    assert.equal(await ask.count(), 0)
+    assert.deepEqual(await p.$$eval(ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label'))), ['Odd/Even', LONG_NAME])
+    await dialogButton(p, 'Restore defaults').click()
+    await ask.getByRole('button', { name: 'Restore defaults' }).click()
+    assert.deepEqual(await p.$$eval(ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label'))), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
+    p.off('dialog', count)
+    assert.deepEqual(native, [])
+  })
+})
+
+describe('+ New profile at six profiles', { concurrency: false }, () => {
+  let context, p
+  before(async () => {
+    ({ context, p } = await openSession(browser(), script, { saved: savedProfiles(SIX_PROFILES) }))
+    await openEditorOn(p)
+  })
+  after(async () => { await context?.close() })
+
+  it('is disabled and says why, in a tooltip and in the dialog', async () => {
+    const button = p.locator(`${EDITOR} button[data-act=new-profile]`)
+    assert.equal(await button.isDisabled(), true)
+    assert.match(await button.getAttribute('title'), /6 profiles/)
+    assert.match(await p.locator(`${EDITOR} [data-role=full-note]`).innerText(), /Delete one/)
   })
 })

@@ -78,7 +78,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
   })
 
   it('the text is solid, in the current note color, at the default size', async () => {
-    assert.deepEqual(await textStyle('15'), { color: await penColor(1), size: 20 })
+    assert.deepEqual(await textStyle('15'), { color: await penColor(2), size: 20 })
   })
 
   it('a click elsewhere finishes the box as Escape does, and opens no second box', async () => {
@@ -182,7 +182,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
     await p.keyboard.type('6')
     await finishNote(p)
     assert.deepEqual(await textStyle('6'), { color: await penColor(4), size: 26 })
-    assert.deepEqual(await textStyle('23'), { color: await penColor(1), size: 20 })
+    assert.deepEqual(await textStyle('23'), { color: await penColor(2), size: 20 })
   })
 
   it('the text and the size come back after a reload', async () => {

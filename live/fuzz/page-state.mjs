@@ -9,7 +9,9 @@ import { POLL_MS } from '../settle.mjs'
 import { rulesPaneFits } from './rules.mjs'
 
 const { stateFromStored, activeGroups } = createRequire(import.meta.url)('../../color-by-digit.user.js')
-const { boxFill, readBoxColor } = createRequire(import.meta.url)('../../text-anywhere.user.js')
+const { boxFill, readBoxColor, noteBackdrop } = createRequire(import.meta.url)('../../text-anywhere.user.js')
+// A note whose middle is this close to the board's edge may be read on either side of it: the page's box and the script's own differ by a fraction of a pixel.
+const EDGE_PX = 2
 
 // The saved sizing's key before the puzzle's own part (`SIZING_KEY_PREFIX` of auto-rules-resizer.user.js, typed out like the keys of the other scripts' fixtures).
 const SIZING_KEY_PREFIX = 'AutoRulesResizer_sizing_'
@@ -17,7 +19,7 @@ const PEN_TOOL = 'pen'
 const NOTE_TOOL = 'textanywhere'
 // A note selected (its outline) or open for typing (its box): Text Anywhere's panel then shows that note's look, not the next note's.
 const NOTE_BUSY = `${SELECTION}, ${TEXT_BOX}`
-const COLOR_BUTTON_TITLE = /^Color by digit: (\w+)$/
+const COLOR_BUTTON_TITLE = /^Color by Digit: (\w+)$/
 // Auto Rules Resizer refits 100 ms after the last resize, and the rules are read once they fit or this long has passed: a wait on a condition, so a slow box
 // reads the finished fit, and a pane that never fits is still read and reported.
 const RULES_FIT_MS = 2000
@@ -62,8 +64,13 @@ const readDom = ({ texts, seenTexts, boxedTexts, boxKey, profilesKey, sizingKeyP
     notesDrawn: [...document.querySelectorAll(texts)].map((e) => e.textContent),
     // What the player sees: the note open for typing too, once something is typed in it (an empty box is no text).
     notesSeen: [...document.querySelectorAll(seenTexts)].map((e) => e.textContent).filter((t) => t !== ''),
-    // A boxed note's fill and text color as computed, with the box color Text Anywhere has saved (read raw; the node side turns it into the fill it should give).
-    boxedNotes: [...document.querySelectorAll(boxedTexts)].map((e) => { const style = window.getComputedStyle(e); return { text: e.textContent, fill: style.backgroundColor, color: style.color } }),
+    // A boxed note's fill, text color and middle as computed, with the box color Text Anywhere has saved (read raw; the node side turns it into the fill it should give).
+    boxedNotes: [...document.querySelectorAll(boxedTexts)].map((e) => {
+      const style = window.getComputedStyle(e)
+      const box = e.getBoundingClientRect()
+      return { text: e.textContent, fill: style.backgroundColor, color: style.color, middle: [box.left + box.width / 2, box.top + box.height / 2] }
+    }),
+    board: (({ left, top, right, bottom }) => ({ left, top, right, bottom }))(document.getElementById('svgrenderer').getBoundingClientRect()),
     savedBox: Framework.getData(boxKey) ?? null,
     buttonTitle: document.querySelector('#control-colorbydigit')?.title ?? null,
     profiles: Framework.getData(profilesKey),
@@ -79,15 +86,19 @@ const readDom = ({ texts, seenTexts, boxedTexts, boxKey, profilesKey, sizingKeyP
   }
 }
 
-// Each boxed note as `{ text, fill, expected }`: `expected` is the fill of `boxFill` of the saved box color and the note's own color, as the page computes it
+// A note off the board's own box has the page color behind it, one on it the board's (noteBackdrop); one at the edge is left out.
+const within = ([x, y], { left, top, right, bottom }, by) => x >= left - by && x <= right + by && y >= top - by && y <= bottom + by
+const nearEdge = (middle, board) => within(middle, board, EDGE_PX) && !within(middle, board, -EDGE_PX)
+
+// Each boxed note as `{ text, fill, expected }`: `expected` is the fill of `boxFill` of the saved box color, the note's own color and the color behind it, as the page computes it
 // (the fill is CSS that may hold `var(--body-bg)` or `color-mix`, which only the page can resolve).
-const withExpectedFills = (p, boxedNotes, boxColor) => p.evaluate(([notes, wanted]) => notes.map(({ text, fill }, i) => {
+const withExpectedFills = (p, boxedNotes, boxColor, board) => p.evaluate(([notes, wanted]) => notes.map(({ text, fill }, i) => {
   const probe = document.body.appendChild(document.createElement('div'))
   probe.style.background = wanted[i]
   const expected = window.getComputedStyle(probe).backgroundColor
   probe.remove()
   return { text, fill, expected }
-}), [boxedNotes, boxedNotes.map(({ color }) => boxFill(boxColor, color))])
+}), [boxedNotes, boxedNotes.map(({ color, middle }) => boxFill(boxColor, color, noteBackdrop(middle, board)))])
 
 // `expectRules` says whether the puzzle has rules text. A puzzle that does must show the pane (or the read throws); the snapshot's `rulesPane` is null when no pane is shown.
 export async function readPageState (p, { expectRules }) {
@@ -100,7 +111,7 @@ export async function readPageState (p, { expectRules }) {
   const notesSaved = await savedNotes(p)
   const mode = COLOR_BUTTON_TITLE.exec(dom.buttonTitle ?? '')?.[1]
   if (!mode) throw new Error(`Color by Digit's button has no mode in its title: ${JSON.stringify(dom.buttonTitle)}`)
-  const { profiles, digits, buttonTitle, boxedNotes, savedBox, ...rest } = dom
-  const noteBoxes = await withExpectedFills(p, boxedNotes, readBoxColor(savedBox))
+  const { profiles, digits, buttonTitle, boxedNotes, savedBox, board, ...rest } = dom
+  const noteBoxes = await withExpectedFills(p, boxedNotes.filter(({ middle }) => !nearEdge(middle, board)), readBoxColor(savedBox), board)
   return { ...rest, notesSaved, noteBoxes, colorByDigit: { mode, groups: activeGroups(stateFromStored({ getData: () => profiles })), cells: digits } }
 }

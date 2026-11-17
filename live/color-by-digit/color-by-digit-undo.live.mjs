@@ -1,6 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo } from './color-by-digit-fixtures.mjs'
+import { coloredCountOn, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, MENU, MODE_KEY, openEditorOn, openMenuOn, openSession, pressTo, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
+import { closeDialogWith } from '../settings.mjs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { POLL_MS, settle } from '../settle.mjs'
 import * as textAnywhere from '../text-anywhere/text-anywhere-fixtures.mjs'
@@ -230,5 +231,66 @@ describe('The first Undo after a Restart, with Text Anywhere loaded', { concurre
     } finally {
       await both.context.close()
     }
+  })
+})
+
+describe('Undo into Cell after a profile pick in Digit mode', { concurrency: false }, () => {
+  let context, p, t
+
+  const activeGroups = async () => { const state = await t.getState(); return state.profiles[state.active].groups }
+  const activeName = async () => { const state = await t.getState(); return state.profiles[state.active].name }
+  // How many cells hold a color other than the active profile's for their digit.
+  const offProfile = async () => wrongCountOn(p, await activeGroups())
+
+  before(async () => {
+    ({ context, p } = await openSession(browser(), script))
+    t = tools(p)
+  })
+  after(async () => { await context.close() })
+
+  // The pick in Digit mode colors no cell and leaves no undo step, so the board the Undo brings back is colored by the profile before it (#1011).
+  it('the Undo of Cell to Digit brings back the profile the board was colored by, and the Redo the one picked', async () => {
+    await pressTo(p, 'Cell')
+    assert.equal(await activeName(), 'Odd/Even')
+    assert.equal(await settle(offProfile, 0), 0, 'Cell colors the board by Odd/Even')
+    await pressTo(p, 'Digit')
+    await openMenuOn(p)
+    await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).click()
+    assert.equal(await settle(activeName, 'Low/5/High'), 'Low/5/High')
+    await p.keyboard.press('Control+z')
+    assert.equal(await settle(t.label, 'Cell'), 'Cell')
+    assert.equal(await settle(offProfile, 0), 0, `the cells follow the active profile, ${await activeName()}`)
+    assert.equal(await activeName(), 'Odd/Even')
+    await p.click('#control-redo')
+    assert.equal(await settle(t.label, 'Digit'), 'Digit')
+    assert.equal(await settle(activeName, 'Low/5/High'), 'Low/5/High', 'the Redo keeps the pick')
+    assert.equal(await coloredCountOn(p), 0)
+  })
+})
+
+describe('Undo into Cell after a Save in Digit mode', { concurrency: false }, () => {
+  let context, p, t
+
+  const activeGroups = async () => { const state = await t.getState(); return state.profiles[state.active].groups }
+
+  before(async () => {
+    ({ context, p } = await openSession(browser(), script))
+    t = tools(p)
+  })
+  after(async () => { await context.close() })
+
+  // The Save in Digit mode colors no cell and leaves no undo step, so no Undo may take back what it saved.
+  it('the Undo of Cell to Digit keeps the groups the Save gave the active profile', async () => {
+    await pressTo(p, 'Cell')
+    await pressTo(p, 'Digit')
+    const before = await activeGroups()
+    await openEditorOn(p)
+    await p.locator(`${EDITOR} button[data-act=digit][data-digit="2"]`).click()
+    await closeDialogWith(p, 'Save', EDITOR)
+    const saved = await activeGroups()
+    assert.notDeepEqual(saved, before, 'the Save changed the active profile\'s groups')
+    await p.keyboard.press('Control+z')
+    assert.equal(await settle(t.label, 'Cell'), 'Cell')
+    assert.deepEqual(await activeGroups(), saved)
   })
 })

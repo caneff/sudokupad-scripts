@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { openPage } from './page.mjs'
 import { TEXTS } from './text-anywhere/text-anywhere-fixtures.mjs'
-import { cellCentre, clickCell, mouseDrag, placeNote } from './board.mjs'
+import { cellCentre, clickCell, mouseDrag, pickTool, placeNote } from './board.mjs'
 import { openPenTool, penEntries } from './pen.mjs'
 import { boardOf, CLASSIC_GIVENS, installAll, NOTE_POINT, openPuzzleId, puzzleData, puzzleIdFor, useTool } from './puzzles.mjs'
 import { seedOddEvenCells } from './color-by-digit/color-by-digit-fixtures.mjs'
@@ -18,6 +18,7 @@ const NOTE_OUTLINE = '#text-anywhere-layer .text-anywhere-selection'
 // The selection outline's line is 2 px wide, 2 px outside the note's box: its middle is 3 px out.
 const OUTLINE_MIDDLE_PX = 3
 const NEAR_PX = 0.6
+const SMALLER_NOTE_STEPS = 18
 // Color by Digit's groups hold the digits 0 to 9 only, the keys SudokuPad's keypad has even on a 16x16, so the givens 12 and 16 are in no group.
 // Odd digits take one Color by Digit color and even digits another (`seedOddEvenCells`).
 const ODD = 1
@@ -71,6 +72,10 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
 
   // A note '15' in the middle of the grid, dragged slowly until its outline is 2 px right of the last inner column line: the outline lies on the line with its guide.
   const snapsToLastColumnLine = async (rows, cols) => {
+    // A new note is as tall on screen on every grid, so on a 16x16 it is nearly a cell wide and its far edge or its middle can snap before its near edge does. Smaller steps of the size
+    // slider keep it narrow, so the near edge is the one that snaps.
+    await pickTool(p, 'textanywhere')
+    for (let step = 0; step < SMALLER_NOTE_STEPS; step++) await p.keyboard.press('-')
     await placeNote(p, [Math.min(2.5, rows - 0.5), Math.max(0.5, cols - 2.5)], '15')
     const note = await p.locator(TEXTS, { hasText: '15' }).boundingBox()
     const line = await lineX(cols - 1)

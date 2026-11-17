@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.26
+// @version      1.32.33
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.26'
+  const VERSION = '1.32.33'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -505,13 +505,27 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  const STATUS_ERROR_COLOR = '#b3261e'
+  // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
+  const CONTENT_INSET = '16px'
   // An inset layer darkens whatever fill the control has.
   const PRESS_LAYER = 'box-shadow: inset 0 0 0 100vmax rgb(0 0 0 / .1)'
   const STATUS_ATTRIBUTE = 'data-role="settings-status"'
   const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
 
-  function setDialogStatus (dialog, message) {
-    dialog.querySelector(STATUS_SELECTOR).textContent = message
+  function setDialogStatus (dialog, message, { error = false } = {}) {
+    const status = dialog.querySelector(STATUS_SELECTOR)
+    status.textContent = message
+    if (error) status.dataset.tone = 'error'
+    else delete status.dataset.tone
+  }
+
+  // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
+  function clearDialogError (dialog) {
+    if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
   // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
   // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
@@ -623,7 +637,7 @@
   }
 
   function wireErrorLog (dialog, win) {
-    const say = (message) => setDialogStatus(dialog, message)
+    const say = (message, options) => setDialogStatus(dialog, message, options)
     dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-error-log' && act !== 'clear-error-log') return
@@ -631,8 +645,11 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
           win.localStorage.removeItem(ERROR_LOG_KEY)
-          say('Error log cleared.')
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
         }
         const log = readErrorLog(win.localStorage)
@@ -643,7 +660,7 @@
         await win.navigator.clipboard.writeText(formatErrorLog(log))
         say('Error log copied.')
       } catch (error) {
-        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -663,15 +680,20 @@
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`,
+      `.${prefix}title-row ${STATUS_SELECTOR}[data-tone="error"] { color: ${STATUS_ERROR_COLOR}; font-weight: 600; }`
     ].join('\n')
   }
 
-  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
-  function buttonRowCss (bodyId) {
-    const row = `.dialog:has(#${bodyId}) .dialog-options`
+  // Scoped by the body's id, so SudokuPad's other dialogs are left alone. SudokuPad styles a dialog's buttons by tag, so each of those is forced.
+  function dialogShellCss (bodyId) {
+    const dialog = `.dialog:has(#${bodyId})`
+    const row = `${dialog} .dialog-options`
     return [
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      // Inherited by every checkbox, slider and other form control in the dialog, in place of the browser's blue.
+      `${dialog} { accent-color: ${SUDOKUPAD_PURPLE}; }`,
+      // The row sits on the text parts' box, so their side padding as its margin puts its edges, the top line's included, on the content column's.
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
       `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
       `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
@@ -696,7 +718,7 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    writeStyle(`settings-dialog-shell-${bodyId}`, dialogShellCss(bodyId), doc)
     if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
@@ -707,15 +729,17 @@
       } catch (error) {
         failed = true
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`, { error: true })
         return
       }
       close()
     }
+    const clearError = () => clearDialogError(doc.getElementById(bodyId).closest('.dialog'))
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      ...extraButtons
+      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
+      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
     ]
     framework.showDialog({
       centerOverBoard,
@@ -732,6 +756,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
+    // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
+    const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
+    for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -772,7 +799,7 @@
   }
 
   function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
-    const say = (message) => setDialogStatus(root, message)
+    const say = (message, options) => setDialogStatus(root, message, options)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-settings' && act !== 'paste-settings') return
@@ -788,7 +815,7 @@
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -1320,12 +1347,17 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
+  // WCAG's contrast ratio of two [r, g, b] colors, from 1 (the same) to 21 (black on white); the order does not matter.
+  function contrastRatio (one, other) {
+    const a = wcagLuminance(one) + 0.05
+    const b = wcagLuminance(other) + 0.05
+    return Math.max(a, b) / Math.min(a, b)
+  }
+
   function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
-    const page = wcagLuminance(rgb) + 0.05
-    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(light) >= contrast(dark) ? light : dark
+    return contrastRatio(rgb, parseColor(light)) >= contrastRatio(rgb, parseColor(dark)) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
@@ -2687,6 +2719,8 @@
   const SLIDERS_ROW = CONTROLS_ROW + 1
   const CONTROLS_GAP_REM = 0.75
   const TRAY_RADIUS_PX = 14
+  const SELECTED_RING_PX = 3
+  const PICKER_INSET_PX = 4
   // A pressed button shrinks to this scale over this long, so a click shows before it lets go; SudokuPad's own buttons have no pressed look.
   const PRESS_SCALE = 0.97
   const PRESS_MS = 120
@@ -2712,8 +2746,8 @@
       : `<div class="${sliderRow}" data-empty></div>`
   }
 
-  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders` and `sliderRow` are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
-  function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
+  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders`, `sliderRow` and `picker` (the hold-to-edit picker's) are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
+  function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, picker, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
     const pressable = [`${panel} ${colorButton}`, controlButtons, ...(pressButtons ? [pressButtons] : [])].join(', ')
     const pressed = `:is(${pressable}):active`
@@ -2723,6 +2757,10 @@
       `${panel} button[data-key="0"], ${panel} button[data-control="delete"] { display: none !important; }`,
       // Each color button keeps `position: relative`, since its color line is its `::after`.
       `${panel} ${colorButton} { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
+      // The selected color keeps a white face and takes a ring, since a dark color vanishes on SudokuPad's purple fill. An inset shadow takes no room, so no button moves.
+      `${panel} ${colorButton}.current { background-color: #fff; box-shadow: inset 0 0 0 ${SELECTED_RING_PX}px ${SUDOKUPAD_PURPLE}; }`,
+      // A picker sits inside its color button's frame, not over it.
+      `${panel} .${picker} input { width: calc(${PANEL_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); height: calc(${COLOR_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); }`,
       `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${SUDOKUPAD_PURPLE}; }`,
       `.${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
       // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
@@ -2783,8 +2821,9 @@
   const controlButtons = CONTROL_BUTTONS.map((name) => `${PEN_PANEL} button.${name}`).join(', ')
   const PANEL_CSS = [
     `${LINE_MODE_PULLDOWN} { display: none; }`,
-    ...panelCss({ panel: PEN_PANEL, colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
-    ...CONTROL_BUTTONS.map((name, i) => `${PEN_PANEL} button.${name} { order: ${i + 1}; }`),
+    ...panelCss({ panel: PEN_PANEL, colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, picker: `${CLASS_PREFIX}picker`, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
+    // Each control has its own column, so the gear stays in the third when the page button is left out.
+    ...CONTROL_BUTTONS.map((name, i) => `${PEN_PANEL} button.${name} { order: ${i + 1}; grid-column: ${i + 1}; }`),
     `.${LINE_MODE_BUTTON} svg, .${PAGE_BUTTON} svg, .${SETTINGS_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
     `.${LINE_MODE_BUTTON} path, .${SETTINGS_BUTTON} path, .${SETTINGS_BUTTON} circle { fill: none !important; }`
@@ -2991,7 +3030,7 @@
 
   // Scoped by the editor's id, so SudokuPad's other dialogs are left alone; `:has` reaches the dialog and its buttons from the editor, so they are styled from the first frame.
   const OPTIONS = `.dialog:has(${EDITOR}) .dialog-options`
-  const hiddenRowCss = (name) => `${EDITOR}:not(:has(input[data-box="${SETTINGS[name].dialog.under}"]:checked)) [data-row="${name}"] { display: none; }`
+  const hiddenRowCss = (name) => `${EDITOR}:not(:has(input[data-box="${SETTINGS[name].dialog.under}"]:checked)) [data-row="${name}"] { visibility: hidden; }`
   const DIALOG_CSS = [
     // Sized to its content and centred in the window; the paragraph around the editor loses SudokuPad's bottom margin so the vertical line meets the footer's line.
     `.dialog:has(${EDITOR}) { width: fit-content !important; max-width: 96vw !important; }`,
@@ -3152,7 +3191,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
           draw()
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: restoreDefaults }]
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: restoreDefaults }]
     })
     if (!box) return
     draw()

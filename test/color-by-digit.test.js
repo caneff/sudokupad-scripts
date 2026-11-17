@@ -123,8 +123,8 @@ test('an empty list of groups plans nothing', () => {
 const allDigits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => ({ value: String(d) }))
 const byDigit = (g) => plan(allDigits, g).map((p) => p.key).join('')
 
-test('Low/5/High maps 0-4 to key 1, 5 to key 5, 6-9 to key 9', () => {
-  assert.equal(byDigit(PRELOADS['Low/5/High']), '1111159999')
+test('Low/5/High maps 0-4 to key 6 (orange), 5 to key 5, 6-9 to key q (light blue)', () => {
+  assert.equal(byDigit(PRELOADS['Low/5/High']), '666665qqqq')
 })
 
 test('Odd/Even maps odd to key 1, even and 0 to key 2', () => {
@@ -207,6 +207,20 @@ test('saved groups equal to a preload make that preload the active profile, besi
   assert.equal(state.active, 1)
   assert.deepEqual(activeGroups(fromStored(undefined, structuredClone(LOW))), LOW)
   assert.equal(fromStored(undefined, structuredClone(LOW)).active, 0)
+})
+
+const OLD_LOW = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
+
+test('saved groups equal to the old Low/5/High (keys 1, 5, 9) make the new Low/5/High active, with no Custom profile', () => {
+  const state = fromStored(null, structuredClone(OLD_LOW))
+  assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
+  assert.equal(state.active, 0)
+  assert.deepEqual(activeGroups(state), LOW)
+})
+
+test('an install with saved profiles keeps the old Low/5/High keys', () => {
+  const saved = { profiles: [{ name: 'Low/5/High', groups: OLD_LOW }], active: 0 }
+  assert.deepEqual(activeGroups(fromStored(structuredClone(saved), null)), OLD_LOW)
 })
 
 test('saved groups that equal no preload become the active profile named Custom, first, beside the five preloads, even when empty', () => {
@@ -849,7 +863,7 @@ test('renderProfiles puts the name of the selected row in an editable box in pla
   assert.match(html, new RegExp(`<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="Mine &quot;x&quot;" aria-label="Profile name">`))
   assert.equal(count(html, /data-role="profile-name"/g), 1)
   assert.equal(count(html, /class="cbd-name"/g), 1)
-  assert.match(html, /<span class="cbd-name">Odd\/Even<\/span>/)
+  assert.match(html, /<span class="cbd-name" title="Odd\/Even">Odd\/Even<\/span>/)
   assert.equal(html.indexOf('data-role="profile-row"') < html.indexOf('data-role="profile-name"'), true)
   assert.equal(html.indexOf('data-role="profile-name"') < html.indexOf('data-index="1" role="radio"'), true)
 })
@@ -892,7 +906,7 @@ test('renderMenu has no heading: one dense row per profile in order with the act
   assert.ok(html.indexOf('data-act="edit"') > html.lastIndexOf('data-act="pick"'))
 })
 
-test('installButton: adds an icon button titled "Color by digit" in the bottom row, then refreshControls so the click handler binds', () => {
+test('installButton: adds an icon button titled "Color by Digit" in the bottom row, then refreshControls so the click handler binds', () => {
   const calls = []
   const framework = {
     addControlButton: (spec) => calls.push(['add', spec]),
@@ -904,7 +918,7 @@ test('installButton: adds an icon button titled "Color by digit" in the bottom r
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
   assert.equal(spec.parent, '.controls-aux')
-  assert.equal(spec.title, 'Color by digit: Off')
+  assert.equal(spec.title, 'Color by Digit: Off')
   assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="mode"[\s\S]*<\/span><span data-role="menu"[\s\S]*<\/span><\/div>$/)
   assert.equal(typeof spec.onClick, 'function')
 })
@@ -1131,7 +1145,7 @@ test('use digit colors: saved off, a saved Both loads as Cell and colors the giv
   const profiles = { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0, useDigitColors: false }
   for (const [savedMode, label, colours] of [['both', 'Cell', [['1'], ['2']]], ['digit', 'Off', [[], []]]]) {
     await startedWith(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
-      assert.equal(app.buttonTitle, `Color by digit: ${label}`, savedMode)
+      assert.equal(app.buttonTitle, `Color by Digit: ${label}`, savedMode)
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), colours, savedMode)
     }, { ColorByDigit_profiles: profiles, ColorByDigit_mode: savedMode })
   }
@@ -1164,7 +1178,7 @@ test('sync: unsynced in Both, a Cells pick recolors the cells: a 6 goes from Odd
     assert.deepEqual(app.puzzle.cells[0].colours, ['2'])
     pickRow('cells', 1)
     assert.equal(app.stored.ColorByDigit_profiles.data.active, 1)
-    assert.deepEqual(app.puzzle.cells[0].colours, ['9'])
+    assert.deepEqual(app.puzzle.cells[0].colours, ['q'])
   }, UNSYNCED_BOTH)
 })
 
@@ -1612,7 +1626,7 @@ test('digitOfText reads a single digit and nothing else', () => {
   for (const bad of ['', '12', 'x', '-1', null, undefined]) assert.equal(digitOfText(bad), null, String(bad))
 })
 
-const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*)"><rect x="([\d.]+)" y="0" width="([\d.]+)" height="[\d.]+" fill="([^"]*)"(?: fill-opacity="([\d.]+)")?\/><text[^>]*fill="([^"]*)"[^>]*>([^<]*)<\/text><\/g>/g)]
+const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*)">(?:<rect data-role="chip-base"[^>]*fill="#fff"\/>)?<rect x="([\d.]+)" y="0" width="([\d.]+)" height="[\d.]+" fill="([^"]*)"(?: fill-opacity="([\d.]+)")?\/><text[^>]*fill="([^"]*)"[^>]*>([^<]*)<\/text><\/g>/g)]
   .map((m) => ({ key: m[1], x: Number(m[2]), width: Number(m[3]), fill: m[4], opacity: m[5], ink: m[6], digit: m[7] }))
 
 test('renderChips draws a joined run of square cells: one outer outline, n-1 single dividers, no rounded corners and no gaps', () => {
@@ -1639,17 +1653,17 @@ test('renderChips shows at most three cells, so a profile of six groups draws th
 test('renderChips draws each mode the way it colors the board: Cell fills with blue digits, Digit white with shades, Both fills with shades, Off white and grey', () => {
   const groups = [{ key: 'a', digits: ['3'] }, { key: 'b', digits: ['7'] }]
   const shadeA = darkenColor([10, 10, 10])
-  const shadeB = darkenColor([240, 240, 240])
   const look = (style) => {
     const svg = renderChips(chipsOf(groups, style), colorFor, { size: 16, style })
     const outline = /<rect [^>]*fill="none" stroke="([^"]*)"/.exec(svg)[1]
     const dividers = [...svg.matchAll(/<line [^>]*stroke="([^"]*)"/g)].map((m) => m[1])
     return { cells: runCells(svg).map((c) => [c.fill, c.ink]), outline, dividers }
   }
-  assert.deepEqual(look('cell'), { cells: [['rgb(10, 10, 10)', 'rgb(29, 106, 229)'], ['rgb(240, 240, 240)', 'rgb(29, 106, 229)']], outline: '#000', dividers: ['#000'] })
-  assert.deepEqual(look('digit'), { cells: [['#fff', shadeA], ['#fff', shadeB]], outline: '#000', dividers: ['#000'] })
-  assert.deepEqual(look('both'), { cells: [['rgb(10, 10, 10)', shadeA], ['rgb(240, 240, 240)', shadeB]], outline: '#000', dividers: ['#000'] })
-  assert.deepEqual(look('off'), { cells: [['#fff', '#999'], ['#fff', '#999']], outline: '#aaa', dividers: ['#aaa'] })
+  // A pale group's shade is darkened until it reads at 3:1, and the blue on the near-black chip is darkened until it reads at 3:1 (the next test); on the pale one it stays SudokuPad's.
+  assert.deepEqual(look('cell'), { cells: [['rgb(10, 10, 10)', 'rgb(10, 33, 70)'], ['rgb(240, 240, 240)', 'rgb(29, 106, 229)']], outline: '#000', dividers: ['#000'] })
+  assert.deepEqual(look('digit'), { cells: [['#fff', shadeA], ['#fff', 'rgb(147, 147, 147)']], outline: '#000', dividers: ['#000'] })
+  assert.deepEqual(look('both'), { cells: [['rgb(10, 10, 10)', shadeA], ['rgb(240, 240, 240)', 'rgb(140, 140, 140)']], outline: '#000', dividers: ['#000'] })
+  assert.deepEqual(look('off'), { cells: [['#fff', '#888'], ['#fff', '#888']], outline: '#aaa', dividers: ['#aaa'] })
 })
 
 test('renderChips gives a group whose palette color is unreadable a grey cell, and in Digit and Both SudokuPad\'s own digit color, as the board keeps it', () => {
@@ -1669,6 +1683,27 @@ test('renderChips draws a group color at SudokuPad\'s 60% cell opacity, and a wh
   // A digit in no cell group is a white chip, not a grey tinted one.
   const uncovered = runCells(renderChips([{ digit: '8', cellKey: undefined, digitKey: undefined }], colorFor, { size: 16 }))
   assert.deepEqual(uncovered.map((c) => [c.fill, c.opacity]), [['#fff', undefined]])
+})
+
+test('renderChips draws a tinted chip over a white base, so it looks the same on any button color, and no base under a whole chip', () => {
+  const bases = (style) => count(renderChips(chipsOf([{ key: 'a', digits: ['3'] }], style), colorFor, { size: 16, style }), /data-role="chip-base"/g)
+  assert.equal(bases('cell'), 1)
+  assert.equal(bases('both'), 1)
+  assert.equal(bases('digit'), 0)
+  assert.equal(bases('off'), 0)
+  assert.match(renderChips(chipsOf([{ key: 'a', digits: ['3'] }]), colorFor, { size: 16 }), /<rect data-role="chip-base"[^>]*fill="#fff"\/><rect [^>]*fill-opacity="0.6"/)
+})
+
+test('renderChips draws every chip digit at 3:1 or more against its chip over white, in every mode, for colors from pale to dark', () => {
+  const { contrastRatio } = require('./contrast.js')
+  for (const color of ['rgb(238, 119, 0)', 'rgb(255, 255, 0)', 'rgb(10, 10, 10)', 'rgb(240, 240, 240)', 'rgb(120, 200, 120)', 'rgb(200, 60, 60)']) {
+    for (const style of ['cell', 'digit', 'both', 'off']) {
+      const [cell] = runCells(renderChips(chipsOf([{ key: 'a', digits: ['3'] }], style), () => color, { size: 16, style }))
+      const opacity = Number(cell.opacity ?? 1)
+      const shown = parseColor(cell.fill).map((c) => opacity * c + (1 - opacity) * 255)
+      assert.equal(contrastRatio(parseColor(cell.ink), shown) >= 3, true, `${style} on ${color}: ${cell.ink} on ${shown}`)
+    }
+  }
 })
 
 test('renderChips draws three blank dashed cells for a profile with no groups, in a run as wide as three chips', () => {
@@ -1702,6 +1737,8 @@ test('iconHtml draws the run of cells in the mode\'s look with the mode word, an
     const word = /<span data-role="mode" style="([^"]*)">([^<]*)<\/span>/.exec(html)
     assert.equal(word[2], mode.toUpperCase())
     assert.match(word[1], /pointer-events:none/)
+    assert.match(word[1], mode === 'off' ? /font:400 10px\// : /font:700 10px\//)
+    assert.match(html, /aria-label="Color by Digit profiles"/)
     assert.match(word[1], mode === 'off' ? /color:#8a8299/ : new RegExp(`color:${SUDOKUPAD_PURPLE}`))
     // A translucent white rounded box behind every word, and no text-shadow, so it reads on Dark Page's dark button.
     assert.match(word[1], /background:rgba\(255,255,255,\.9\)/)
@@ -1712,10 +1749,10 @@ test('iconHtml draws the run of cells in the mode\'s look with the mode word, an
 })
 
 test('the button is titled and labelled with its mode in words', () => {
-  assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
+  assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by Digit: Cell', 'Color by Digit: Digit', 'Color by Digit: Both', 'Color by Digit: Off'])
   let spec
   installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', chipsOf(ODD, 'both'), colorFor)
-  assert.equal(spec.title, 'Color by digit: Both')
+  assert.equal(spec.title, 'Color by Digit: Both')
 })
 
 test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a column of one fixed width, so the names line up', () => {
@@ -1786,7 +1823,7 @@ test('shownChips: Both with Low/5/High cells and Odd/Even digits shows 1 5 6, th
 
 test('shownChips: Both names each chip\'s cell group and digit group', () => {
   assert.deepEqual(shownChips('both', LOW, ODD), [
-    { digit: '1', cellKey: '1', digitKey: '1' }, { digit: '5', cellKey: '5', digitKey: '1' }, { digit: '6', cellKey: '9', digitKey: '2' }])
+    { digit: '1', cellKey: '6', digitKey: '1' }, { digit: '5', cellKey: '5', digitKey: '1' }, { digit: '6', cellKey: 'q', digitKey: '2' }])
 })
 
 test('shownChips: Both with a synced profile shows the Cell strip', () => {
@@ -2090,11 +2127,14 @@ test('gridTarget: arrows move by one along a row and by a row down a column, ski
   assert.equal(gridTarget('a', 0, usable, 3), null)
 })
 
+// Every step holds the cell profile in force; a test about the mode alone gives it this one.
+const IN_FORCE = { from: { name: 'A' }, to: { name: 'A' } }
+
 test('createModeHistory: Undo to a length below a step gives the mode before the earliest step taken back, Redo the mode after the latest put back', () => {
   const history = createModeHistory()
-  history.record(6, 'off', 'cell')
-  history.record(12, 'cell', 'digit')
-  history.record(18, 'digit', 'both')
+  history.record(6, 'off', 'cell', IN_FORCE)
+  history.record(12, 'cell', 'digit', IN_FORCE)
+  history.record(18, 'digit', 'both', IN_FORCE)
   assert.equal(history.undo(18), undefined)
   assert.equal(history.undo(5).mode, 'off')
   assert.equal(history.redo(5), undefined)
@@ -2116,17 +2156,41 @@ test('createModeHistory: Undo gives the cell profile before the earliest step ta
   assert.deepEqual(history.redo(12).profile, c)
 })
 
-test('createModeHistory: a step with no profile between two that have one is skipped, and a step with none alone gives none', () => {
+test('createModeHistory: an Undo given the profile in force makes it the one a Redo of the latest step taken back puts back, so a pick outside the history survives the Undo and Redo', () => {
   const history = createModeHistory()
   const a = { name: 'A' }
   const b = { name: 'B' }
-  history.record(6, 'cell', 'cell', { from: a, to: b })
-  history.record(12, 'cell', 'digit')
-  history.record(18, 'digit', 'digit', { from: b, to: a })
-  assert.deepEqual(history.undo(0), { mode: 'cell', profile: a })
-  assert.deepEqual(history.redo(18), { mode: 'digit', profile: a })
-  assert.deepEqual(history.undo(17), { mode: 'digit', profile: b })
-  assert.equal(history.undo(11).profile, undefined)
+  history.record(6, 'cell', 'cell', { from: a, to: a })
+  history.record(12, 'cell', 'digit', { from: a, to: a })
+  // B picked in Digit mode: no undo step, so no record.
+  assert.deepEqual(history.undo(6, b), { mode: 'cell', profile: a })
+  assert.deepEqual(history.redo(12), { mode: 'digit', profile: b })
+  assert.deepEqual(history.undo(0, b), { mode: 'cell', profile: a })
+  assert.deepEqual(history.redo(6), { mode: 'cell', profile: a })
+  assert.deepEqual(history.redo(12), { mode: 'digit', profile: b })
+})
+
+test('createModeHistory: an Undo given the profile the step already names keeps the step\'s groups, so a Redo of a Save puts the saved groups back', () => {
+  const history = createModeHistory()
+  const before = { name: 'A', groups: [{ key: 'a', digits: ['1'] }] }
+  const saved = { name: 'A', groups: [{ key: 'b', digits: ['1'] }] }
+  history.record(6, 'cell', 'cell', { from: before, to: saved })
+  assert.deepEqual(history.undo(0, { name: 'A' }).profile, before)
+  assert.deepEqual(history.redo(6).profile, saved)
+})
+
+test('createModeHistory and withCellProfile: an Undo across a mode step keeps the groups a Save in Digit mode gave the profile, since that Save left no undo step', () => {
+  const ones = [{ key: 'a', digits: ['1'] }]
+  const edited = [{ key: 'b', digits: ['1'] }]
+  const history = createModeHistory()
+  // Cell to Digit, with Odd/Even in force: the step names it and holds no groups.
+  history.record(12, 'cell', 'digit', { from: { name: 'A' }, to: { name: 'A' } })
+  // The Save in Digit mode: A's groups change, and no step is recorded.
+  const state = { profiles: [{ name: 'A', groups: edited }, { name: 'B', groups: ones }], active: 0 }
+  const target = history.undo(6, { name: 'A' })
+  assert.equal(target.mode, 'cell')
+  assert.deepEqual(withCellProfile(state, target.profile).profiles[0].groups, edited)
+  assert.deepEqual(withCellProfile(state, history.redo(12).profile).profiles[0].groups, edited)
 })
 
 test('withCellProfile: makes the named profile active, with its groups put back when the step holds them, and leaves the others', () => {
@@ -2157,19 +2221,19 @@ test('withCellProfile: a name no profile bears leaves the state as it is', () =>
 
 test('createModeHistory: a new step or forgetRedo drops the steps that could have been redone', () => {
   const history = createModeHistory()
-  history.record(6, 'off', 'cell')
+  history.record(6, 'off', 'cell', IN_FORCE)
   history.undo(0)
   history.forgetRedo()
   assert.equal(history.redo(99), undefined)
-  history.record(6, 'off', 'cell')
+  history.record(6, 'off', 'cell', IN_FORCE)
   history.undo(0)
-  history.record(4, 'off', 'both')
+  history.record(4, 'off', 'both', IN_FORCE)
   assert.equal(history.redo(99), undefined)
 })
 
 test('createModeHistory: a restart sets the steps aside, and the Undo that loads the board from before it brings them back', () => {
   const history = createModeHistory()
-  history.record(6, 'off', 'cell')
+  history.record(6, 'off', 'cell', IN_FORCE)
   history.restart()
   assert.equal(history.undo(0), undefined)
   history.restoreBeforeRestart()

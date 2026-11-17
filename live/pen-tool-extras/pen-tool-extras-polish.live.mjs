@@ -1,5 +1,6 @@
 // #547.
 // The floor is checked on a grid scaled to half size (a 35 px cell at 1200 x 900), which is what a big grid does to its cells.
+/* global Framework, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -10,7 +11,9 @@ import { drag, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../p
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
-const { HOLD_TO_EDIT_MS, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
+const require = createRequire(import.meta.url)
+const { HOLD_TO_EDIT_MS, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX } = require('../../pen-tool-extras.user.js')
+const { contrastRatio } = require('../../test/contrast.js')
 
 const MARKS_KEY = 'EdgeMarks_marks'
 const PICKERS = '.tool-pen .pen-tool-extras-picker'
@@ -175,5 +178,89 @@ describe('Pen Tool Extras: the hit floor on a grid with small cells', { concurre
     const [nx, ny] = await gridPoint(p, [0.5 + 0.22, 3])
     await p.mouse.click(nx, ny, { button: 'right' })
     assert.deepEqual((await settle(async () => (await penEntries(p)).filter((e) => !e.includes(':u') && !e.includes(':3')), [])), [], 'a right click 0.22 cells off erases it')
+  })
+})
+
+// #955: the selected pen, the gear's column and the pickers' inset. The line mode icon's grid stays as it was: docs/research/pen-tool-extras/line-icon-grid-scaling.md.
+const PURPLE = 'rgb(106, 27, 154)'
+const LINE_STYLES_KEY = 'PenColor_linestyles'
+const RING_PX = 3
+const PICKER_INSET_PX = 3.5
+const MIN_CONTRAST = 3
+
+// A computed color, `rgb()`, `rgba()` or `color(srgb ...)`, as [r, g, b] on 0-255 and its alpha.
+const channelsOf = (css) => {
+  const [r, g, b, alpha = 1] = css.match(/[\d.]+/g).map(Number)
+  const scale = css.startsWith('color(') ? 255 : 1
+  return { rgb: [r, g, b].map((c) => c * scale), alpha }
+}
+// A see-through color over an opaque one, so a transparent line reads as the face it lets through.
+const over = (top, face) => face.map((c, i) => top.alpha * top.rgb[i] + (1 - top.alpha) * c)
+
+const rectOf = (p, selector) => p.locator(selector).evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom } })
+
+describe('Pen Tool Extras panel polish', { concurrency: false }, () => {
+  let context, p
+  before(async () => { ;({ context, p } = await extras.open(browser())) })
+  after(async () => { await context.close() })
+
+  it('the selected pen keeps a white face and shows a 3 px purple ring, and no button moves with the selection', async () => {
+    const boxes = () => Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => rectOf(p, `.tool-pen button[data-key="${n}"]`)))
+    await p.locator('.tool-pen button[data-key="1"]').click()
+    const first = await boxes()
+    await p.locator('.tool-pen button[data-key="2"]').click()
+    assert.deepEqual(await boxes(), first, 'the buttons with pen 2 selected')
+    const face = await p.locator('.tool-pen button[data-key="2"]').evaluate((el) => { const s = getComputedStyle(el); return { background: s.backgroundColor, shadow: s.boxShadow } })
+    assert.equal(face.background, 'rgb(255, 255, 255)')
+    assert.equal(face.shadow.includes(PURPLE) && face.shadow.includes('inset') && face.shadow.includes(`${RING_PX}px`), true, face.shadow)
+  })
+
+  it('each selected pen\'s line is at least 3:1 against its button face, for pens 1, 2, 3 and 9', async () => {
+    for (const n of [1, 2, 3, 9]) {
+      await p.locator(`.tool-pen button[data-key="${n}"]`).click()
+      const { line, face } = await p.locator(`.tool-pen button[data-key="${n}"]`).evaluate((el) => ({ line: getComputedStyle(el, '::after').backgroundColor, face: getComputedStyle(el).backgroundColor }))
+      const faceColor = channelsOf(face)
+      assert.equal(faceColor.alpha, 1, `pen ${n}'s face is opaque: ${face}`)
+      const ratio = contrastRatio(over(channelsOf(line), faceColor.rgb), faceColor.rgb)
+      assert.equal(ratio >= MIN_CONTRAST, true, `pen ${n}: ${ratio} for ${line} on ${face}`)
+    }
+  })
+
+  it('the settings gear keeps its column when the page button hides', async () => {
+    const gearX = async () => (await rectOf(p, '.pen-tool-extras-settings')).x
+    const withPage = await gearX()
+    await p.evaluate(([key]) => Framework.setData(key, { dashed: false, arrows: false }), [LINE_STYLES_KEY])
+    await extras.reload(p, { penTool: false })
+    await openPenTool(p)
+    await p.locator('.pen-tool-extras-settings').waitFor({ state: 'visible' })
+    assert.equal(await p.locator('.pen-tool-extras-page').count(), 0, 'the page button is gone')
+    assert.equal(await gearX(), withPage)
+    await p.evaluate(([key]) => Framework.removeData(key), [LINE_STYLES_KEY])
+    await extras.reload(p)
+  })
+
+  it('the hold-to-edit pickers sit inside their button frames, at least 3.5 px in', async () => {
+    const box = await p.locator('.tool-pen button[data-key="1"]').boundingBox()
+    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await p.mouse.down()
+    try {
+      await p.locator(`${PICKERS} input[data-key="9"]`).waitFor({ state: 'attached', timeout: HOLD_TO_EDIT_MS + 5000 })
+    } finally {
+      await p.mouse.up()
+    }
+    try {
+      for (let n = 1; n <= 9; n++) {
+        const button = await rectOf(p, `.tool-pen button[data-key="${n}"]`)
+        const picker = await rectOf(p, `${PICKERS} input[data-key="${n}"]`)
+        const insets = [picker.x - button.x, picker.y - button.y, button.right - picker.right, button.bottom - picker.bottom]
+        assert.equal(insets.every((inset) => inset >= PICKER_INSET_PX), true, `picker ${n} insets ${insets}`)
+      }
+    } finally {
+      const held = await p.locator(`${PICKERS} input[data-key="4"]`).boundingBox()
+      await p.mouse.move(held.x + held.width / 2, held.y + held.height / 2)
+      await p.mouse.down()
+      await p.locator(PICKERS).first().waitFor({ state: 'detached', timeout: HOLD_TO_EDIT_MS + 5000 })
+      await p.mouse.up()
+    }
   })
 })

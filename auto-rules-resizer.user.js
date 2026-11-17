@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.16
+// @version      0.7.23
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.16'
+  const VERSION = '0.7.23'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -44,19 +44,21 @@
 
   const noLimits = () => ({ maxWidth: null, maxHeight: null })
 
-  function normalizeLimit (raw) {
-    const px = Math.round(Number(raw))
-    return Number.isFinite(px) && px > 0 ? px : null
+  // A limit below the pane's drag floor would leave a pane the rules cannot be read in.
+  const LIMIT_FLOORS = { maxWidth: RULES_MIN.width, maxHeight: RULES_MIN.height }
+  const LIMIT_LABELS = { maxWidth: 'Max auto width', maxHeight: 'Max auto height' }
+
+  // A blank box is no limit; anything else that is not a whole number of px at or above the floor throws, so Save says so and stays open.
+  function limitFromBox (text, name) {
+    if (text.trim() === '') return null
+    const px = Number(text)
+    if (!Number.isInteger(px) || px < LIMIT_FLOORS[name]) throw new Error(`${LIMIT_LABELS[name]} must be a whole number of pixels, ${LIMIT_FLOORS[name]} or more`)
+    return px
   }
 
-  // A blank box is no limit; text that is no usable number keeps the limit as it was, so a slip never wipes a saved one.
-  function limitFromBox (text, current) {
-    return text.trim() === '' ? null : (normalizeLimit(text) ?? current)
-  }
-
-  // The one reader of a limit, saved or pasted: a whole number of pixels, or null for none; a string or boolean that `normalizeLimit`
-  // would coerce is not one.
-  const readLimit = (data) => (data === null || (Number.isInteger(data) && data > 0) ? data : undefined)
+  // The one reader of a limit, saved or pasted: a whole number of pixels, or null for none; a string or boolean is not one. One below its floor,
+  // saved before the floor was raised, reads as the floor: only the dialog refuses a new one.
+  const readLimit = (name) => (data) => (data === null ? null : Number.isInteger(data) ? Math.max(data, LIMIT_FLOORS[name]) : undefined)
 
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
@@ -177,7 +179,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
   // Each limit is kept in the store's envelope; no limit is no key, so a fresh install saves nothing.
-  const LIMIT_ROWS = [['maxWidth', MAX_WIDTH_KEY], ['maxHeight', MAX_HEIGHT_KEY]].map(([name, key]) => ({ name, key, fallback: null, read: readLimit, envelope: { load, save } }))
+  const LIMIT_ROWS = [['maxWidth', MAX_WIDTH_KEY], ['maxHeight', MAX_HEIGHT_KEY]].map(([name, key]) => ({ name, key, fallback: null, read: readLimit(name), envelope: { load, save } }))
 
   const readLimits = (store) => readTable(LIMIT_ROWS, store)
 
@@ -261,7 +263,12 @@
     return { width, ...font }
   }
 
+  // Automatic hyphens only in a pane narrower than this (css px, about 35 characters a line at SudokuPad's font): a long word there
+  // would otherwise break at any letter or overflow, and a wide pane has room to wrap at spaces. Set here, with the width, so every fit
+  // measures the text as it will be set.
+  const NARROW_PANE_PX = 360
   function setPaneWidth (rules, width, natural) {
+    rules.style.hyphens = width < NARROW_PANE_PX ? 'auto' : 'manual'
     if (width === natural) Object.assign(rules.style, { boxSizing: '', maxWidth: '', width: '' })
     else Object.assign(rules.style, { boxSizing: 'border-box', maxWidth: 'none', width: `${width}px` })
   }
@@ -334,7 +341,17 @@
   // SudokuPad's own rule in App.resize.
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
-  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY']
+  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY', 'hyphens', 'paddingTop', 'paddingBottom', 'borderTop', 'borderBottom']
+
+  // SudokuPad's top and bottom padding scroll with the text, so a scrolled line would pass under the font bar and the corners that sit
+  // in them. A transparent border as wide holds still, and the text is clipped at it; the layout is the same, so it goes on after the fit.
+  function holdPadding (rules, padding) {
+    for (const side of ['Top', 'Bottom']) {
+      if (!(padding[side] > 0)) continue
+      rules.style[`border${side}`] = `${padding[side]}px solid transparent`
+      rules.style[`padding${side}`] = '0px'
+    }
+  }
 
   function clearFit (rules, controls) {
     for (const k of FIT_STYLES) rules.style[k] = ''
@@ -362,6 +379,7 @@
     const column = controls.getBoundingClientRect()
     const scale = home.width / natural
     const ownPx = parseFloat(getStyle(rules).fontSize)
+    const padding = { Top: parseFloat(getStyle(rules).paddingTop), Bottom: parseFloat(getStyle(rules).paddingBottom) }
     const visualRoom = rulesRoom({
       rulesTop: home.top,
       containerBottom: container.getBoundingClientRect().bottom,
@@ -435,6 +453,7 @@
     }
     // SudokuPad sets `overflow-y: scroll`, which draws an empty track beside rules that fit.
     if (rules.scrollHeight <= rules.clientHeight) rules.style.overflowY = 'auto'
+    holdPadding(rules, padding)
     return applied
   }
 
@@ -500,13 +519,27 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  const STATUS_ERROR_COLOR = '#b3261e'
+  // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
+  const CONTENT_INSET = '16px'
   // An inset layer darkens whatever fill the control has.
   const PRESS_LAYER = 'box-shadow: inset 0 0 0 100vmax rgb(0 0 0 / .1)'
   const STATUS_ATTRIBUTE = 'data-role="settings-status"'
   const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
 
-  function setDialogStatus (dialog, message) {
-    dialog.querySelector(STATUS_SELECTOR).textContent = message
+  function setDialogStatus (dialog, message, { error = false } = {}) {
+    const status = dialog.querySelector(STATUS_SELECTOR)
+    status.textContent = message
+    if (error) status.dataset.tone = 'error'
+    else delete status.dataset.tone
+  }
+
+  // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
+  function clearDialogError (dialog) {
+    if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
   // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
   // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
@@ -618,7 +651,7 @@
   }
 
   function wireErrorLog (dialog, win) {
-    const say = (message) => setDialogStatus(dialog, message)
+    const say = (message, options) => setDialogStatus(dialog, message, options)
     dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-error-log' && act !== 'clear-error-log') return
@@ -626,8 +659,11 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
           win.localStorage.removeItem(ERROR_LOG_KEY)
-          say('Error log cleared.')
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
         }
         const log = readErrorLog(win.localStorage)
@@ -638,7 +674,7 @@
         await win.navigator.clipboard.writeText(formatErrorLog(log))
         say('Error log copied.')
       } catch (error) {
-        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -658,15 +694,20 @@
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`,
+      `.${prefix}title-row ${STATUS_SELECTOR}[data-tone="error"] { color: ${STATUS_ERROR_COLOR}; font-weight: 600; }`
     ].join('\n')
   }
 
-  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
-  function buttonRowCss (bodyId) {
-    const row = `.dialog:has(#${bodyId}) .dialog-options`
+  // Scoped by the body's id, so SudokuPad's other dialogs are left alone. SudokuPad styles a dialog's buttons by tag, so each of those is forced.
+  function dialogShellCss (bodyId) {
+    const dialog = `.dialog:has(#${bodyId})`
+    const row = `${dialog} .dialog-options`
     return [
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      // Inherited by every checkbox, slider and other form control in the dialog, in place of the browser's blue.
+      `${dialog} { accent-color: ${SUDOKUPAD_PURPLE}; }`,
+      // The row sits on the text parts' box, so their side padding as its margin puts its edges, the top line's included, on the content column's.
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
       `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
       `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
@@ -691,7 +732,7 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    writeStyle(`settings-dialog-shell-${bodyId}`, dialogShellCss(bodyId), doc)
     if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
@@ -702,15 +743,17 @@
       } catch (error) {
         failed = true
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`, { error: true })
         return
       }
       close()
     }
+    const clearError = () => clearDialogError(doc.getElementById(bodyId).closest('.dialog'))
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      ...extraButtons
+      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
+      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
     ]
     framework.showDialog({
       centerOverBoard,
@@ -727,6 +770,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
+    // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
+    const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
+    for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -767,7 +813,7 @@
   }
 
   function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
-    const say = (message) => setDialogStatus(root, message)
+    const say = (message, options) => setDialogStatus(root, message, options)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-settings' && act !== 'paste-settings') return
@@ -783,7 +829,7 @@
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -1182,7 +1228,7 @@
       pastedSettings,
       pasteReport,
       MAX_HEIGHT_KEY,
-      normalizeLimit,
+      LIMIT_FLOORS,
       limitFromBox,
       readLimits,
       saveLimits,
@@ -1223,7 +1269,12 @@
   const DRAG_CLASS = `${ID}-dragging`
   const MAX_WIDTH_INPUT_ID = `${ID}-max-width`
   const MAX_HEIGHT_INPUT_ID = `${ID}-max-height`
-  const CORNER_PX = 28
+  // SudokuPad's rules pane pads its text by 16px: a corner this size sits wholly in the padding, and so does the font bar's height.
+  const PANE_PADDING_PX = 16
+  const CORNER_PX = PANE_PADDING_PX
+  // WCAG 2.2 SC 2.5.8: a target is at least this many px each way. A corner's hit area reaches past it, outward from the pane and along
+  // its side padding, so it covers neither the text nor the title ribbon above the pane.
+  const TARGET_PX = 24
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
   const cornerId = (corner) => `${ID}-drag-${corner}`
 
@@ -1233,19 +1284,26 @@
   const TEXT_CLASS = `${ID}-text`
 
   // The corners and the font bar show while the pointer is over the pane, a corner or the bar, or a drag is under
-  // way. The bar sits flush against the pane, so the pointer never leaves them on its way up.
+  // way. They sit in the pane's padding, so the pointer never leaves the pane on its way to them.
   const SHOW_WHEN = `body.${SHOWN_CLASS}:is(.${DRAG_CLASS}, :has(.puzzle-rules:hover, .${CORNER_CLASS}:hover, #${FONT_BAR_ID}:hover))`
 
+  // The font buttons are SudokuPad's own buttons in small: its light grey face, grey border, purple label and hover tint.
   const STYLE = `
-    #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; visibility: hidden; gap: 4px; font: 14px monospace; }
-    #${FONT_BAR_ID} button { all: revert; padding: 0 6px; border-radius: 8px; opacity: .7; cursor: pointer; font: inherit; }
+    #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; visibility: hidden; gap: 4px; height: ${PANE_PADDING_PX}px; }
+    #${FONT_BAR_ID} button { all: unset; box-sizing: border-box; height: 100%; min-width: ${TARGET_PX}px; padding: 0 4px; text-align: center;
+      border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: #eee; color: ${SUDOKUPAD_PURPLE};
+      font: 500 11px/${PANE_PADDING_PX - 2}px Roboto, Arial, sans-serif; }
+    #${FONT_BAR_ID} button:hover { background: #f3e5f5; }
     .${CORNER_CLASS} { position: fixed; z-index: 99999; display: none; width: ${CORNER_PX}px; height: ${CORNER_PX}px;
       box-sizing: border-box; border-radius: 8px; background: rgba(85, 255, 255, .4); border: 1px dotted rgba(85, 255, 255, .8);
       touch-action: none; }
+    .${CORNER_CLASS}::after { content: ''; position: absolute; width: ${TARGET_PX}px; height: ${TARGET_PX}px; }
+    #${cornerId('ur')}::after { top: -1px; left: -1px; }
+    #${cornerId('dl')}::after { bottom: -1px; right: -1px; }
     body.${SHOWN_CLASS} #${FONT_BAR_ID} { display: flex; }
     ${SHOW_WHEN} #${FONT_BAR_ID} { visibility: visible; }
     ${SHOW_WHEN} .${CORNER_CLASS} { display: block; }
-    .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; hyphens: auto; }
+    .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; }
   `
 
   let limits = noLimits()
@@ -1323,15 +1381,14 @@
     el.style.top = `${Math.max(0, Math.min(top, window.innerHeight - height))}px`
   }
 
-  // The font bar sits at the pane's top-left corner, which a widening pane leaves where it is, directly above the
-  // pane so it covers none of the rules, or directly below it when the pane reaches the window's top. It starts
-  // right of SudokuPad's copy-rules icon, which hangs over that corner.
+  // The font bar sits in the pane's top padding at its top-left corner, which a widening pane leaves where it is,
+  // so it covers neither the title ribbon above the pane nor a line of the rules. It starts right of SudokuPad's
+  // copy-rules icon, which hangs over that corner.
   function placeControls (rules) {
     const r = rules.getBoundingClientRect()
     const bar = document.getElementById(FONT_BAR_ID)
-    const above = r.top - bar.offsetHeight
     const copyIcon = document.querySelector(COPY_ICON)
-    place(bar, r.left + (copyIcon ? copyIcon.getBoundingClientRect().width : 0), above >= 0 ? above : r.bottom, bar.offsetWidth, bar.offsetHeight)
+    place(bar, r.left + (copyIcon ? copyIcon.getBoundingClientRect().width : 0), r.top, bar.offsetWidth, bar.offsetHeight)
     place(document.getElementById(cornerId('ur')), r.right - CORNER_PX, r.top, CORNER_PX, CORNER_PX)
     place(document.getElementById(cornerId('dl')), r.left, r.bottom - CORNER_PX, CORNER_PX, CORNER_PX)
   }
@@ -1359,8 +1416,9 @@
     return line === null ? null : { ...at, above: contentTop(rules) - line }
   }
 
+  // Below the border the fit holds the top padding in.
   function contentTop (rules) {
-    return rules.getBoundingClientRect().top + (parseFloat(getStyle(rules).paddingTop) || 0)
+    return rules.getBoundingClientRect().top + rules.clientTop + (parseFloat(getStyle(rules).paddingTop) || 0)
   }
 
   // The top of the line holding a position: the character after it in a text node, else the element at it, which is the
@@ -1458,12 +1516,17 @@
   })
 
   function openDialog () {
-    const row = (id, label, value) => `<label for="${id}">${label}</label>` +
-      `<input type="number" id="${id}" min="1" step="1" placeholder="no limit" value="${value ?? ''}" style="width:6em">` +
+    const row = (id, name, value) => `<label for="${id}">${LIMIT_LABELS[name]}</label>` +
+      `<input type="number" id="${id}" min="${LIMIT_FLOORS[name]}" step="1" placeholder="no limit" value="${value ?? ''}" style="width:6em">` +
       '<span>px</span>'
+    // A number box holding text that is no number reads '', which would pass for blank.
+    const boxText = (id) => {
+      const box = document.getElementById(id)
+      return box.validity.badInput ? 'not a number' : box.value
+    }
     const typedLimits = () => ({
-      maxWidth: limitFromBox(document.getElementById(MAX_WIDTH_INPUT_ID).value, limits.maxWidth),
-      maxHeight: limitFromBox(document.getElementById(MAX_HEIGHT_INPUT_ID).value, limits.maxHeight)
+      maxWidth: limitFromBox(boxText(MAX_WIDTH_INPUT_ID), 'maxWidth'),
+      maxHeight: limitFromBox(boxText(MAX_HEIGHT_INPUT_ID), 'maxHeight')
     })
     const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
@@ -1474,8 +1537,11 @@
       changed: () => changedRows(LIMIT_ROWS, typedLimits(), limits).length > 0,
       snapshot: snapshotLimits,
       feature: maxSizeSettings,
-      // Restore defaults clears this puzzle's sizing at once; the limits are drafts and stay as they are.
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => rulesFit.run(restoreSizing) }],
+      // Restore defaults edits the draft like the other scripts'; resetting this puzzle's size is its own button, and acts at once.
+      extraButtons: [
+        { content: 'Restore defaults', role: 'restore', edits: true, handler: () => restoreDefaults() },
+        { content: 'Reset puzzle size', role: 'reset-size', handler: () => resetPuzzleSize() }
+      ],
       save: () => {
         limits = typedLimits()
         saveLimits(savedLimits, limits)
@@ -1494,9 +1560,19 @@
       }
     })
     if (!body) return
+    const dialog = body.closest('.dialog')
+    // The default is no limit: both boxes empty.
+    const restoreDefaults = () => {
+      document.getElementById(MAX_WIDTH_INPUT_ID).value = ''
+      document.getElementById(MAX_HEIGHT_INPUT_ID).value = ''
+    }
+    const resetPuzzleSize = () => {
+      rulesFit.run(restoreSizing)
+      setDialogStatus(dialog, 'This puzzle\'s size was reset.')
+    }
     body.innerHTML = '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
-      row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
-      '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
+      row(MAX_WIDTH_INPUT_ID, 'maxWidth', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'maxHeight', limits.maxHeight) +
+      `</div><div style="opacity:.7;max-width:22em">Empty means no limit; the least is ${LIMIT_FLOORS.maxWidth} px wide or ${LIMIT_FLOORS.maxHeight} px high. The limits cap only the automatic fit; a corner drag can go past them.</div>`
   }
 
   // The drag reads the puzzle's id, so it is the fit's.

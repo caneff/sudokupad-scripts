@@ -168,6 +168,19 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
+  it('ticking or unticking Dashed lines, Directional arrow lines or White outlines leaves the dialog\'s rect unchanged', async () => {
+    await openSettledEditor(p)
+    for (const box of ['lineStyles.dashed', 'lineStyles.arrows', 'outline']) {
+      const input = editor().locator(`input[data-box="${box}"]`)
+      const before = await rect('.dialog')
+      await input.uncheck()
+      assert.deepEqual(await rect('.dialog'), before, `${box} unticked`)
+      await input.check()
+      assert.deepEqual(await rect('.dialog'), before, `${box} ticked`)
+    }
+    await closeExtrasEditorWith(p, 'Cancel')
+  })
+
   it('the dialog is sized to its content and centred in the window, not over the board', async () => {
     await openSettledEditor(p)
     const dialog = await rect('.dialog')

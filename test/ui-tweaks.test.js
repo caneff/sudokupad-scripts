@@ -63,7 +63,7 @@ test('buildCss: the defaults add no rule', () => {
   assert.equal(buildCss(DEFAULT_OPTIONS), '')
 })
 
-test('buildCss: Hide the Toggle Selection button hides only that button, in the bottom row', () => {
+test('buildCss: Hide the Select button hides only that button, in the bottom row', () => {
   assert.equal(buildCss({ ...DEFAULT_OPTIONS, hideSelect: true }), '.controls-aux [data-control="select"] { display: none !important; }')
 })
 
@@ -184,4 +184,11 @@ test('the header names the script, points updates at its own file and asks for n
   assert.match(source, /^\/\/ @updateURL\s+https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/ui-tweaks\.user\.js$/m)
   assert.match(source, /^\/\/ @grant\s+none$/m)
   assert.doesNotMatch(source, /GM_registerMenuCommand/)
+})
+
+test('the hints: the Select button is named as its tooltip names it, and Wrap buttons says Color by Digit makes it do nothing', () => {
+  const byId = Object.fromEntries(OPTIONS.map((o) => [o.id, o]))
+  assert.equal(byId.hideSelect.label, 'Hide the Select button')
+  assert.doesNotMatch(byId.hideSelect.label + byId.hideSelect.hint, /Toggle Selection/)
+  assert.match(byId.wrapButtons.hint, /no effect with Color by Digit installed/)
 })

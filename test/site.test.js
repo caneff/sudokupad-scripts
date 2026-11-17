@@ -517,7 +517,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. Restore defaults brings back the five preloaded profiles and the Cell and Digit pulldowns\' starting picks, after asking when it would remove your own profiles. Save keeps them and Cancel drops them. From the keyboard, Tab and the arrow keys move around the colors and the digit keys, and typing 0 to 9 paints that digit.')
+  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. Restore defaults brings back the five preloaded profiles and the Cell and Digit pulldowns\' starting picks, after asking in the dialog when it would remove your own profiles. Save keeps them and Cancel drops them. From the keyboard, the colors and the digit keys are one Tab stop each, the arrow keys move within them, and typing 0 to 9 paints that digit.')
 })
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
@@ -543,7 +543,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Formatting Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and ->, != or sum typed as → ≠ Σ. One note below shows every style, and the text that made it.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',
-    'Colors, size and opacity Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make each selected note, or the next note, one Size step bigger or smaller than it is. A color, size, opacity or Background you set on a note also becomes the setting for the next note.',
+    'Colors, size and opacity Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make each selected note, or the next note, one Size step bigger or smaller than it is, and holding one keeps going, faster the longer you hold. New notes start in a dark grey (color 2) at a size that fits the grid; a color you pick stays your default. A color, size, opacity or Background you set on a note also becomes the setting for the next note.',
     'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
     'Key to switch on Press T to pick the Text tool (not while you are typing in a note, a dialog or the Letter tool).',
     'Hide all notes The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.',
@@ -633,3 +633,10 @@ for (const { heading, page: file } of SHOWS) {
     assert.equal(sizes.size, 1, `slide sizes: ${[...sizes].join(', ')}`)
   })
 }
+
+test('the homepage words UI Tweaks\' options as its settings dialog does', () => {
+  const { OPTIONS } = require('../ui-tweaks.user.js')
+  const home = plain(read(HOME))
+  for (const option of OPTIONS) assert.ok(home.includes(option.label), `the homepage names "${option.label}"`)
+  assert.ok(home.includes('no effect with Color by Digit installed'))
+})

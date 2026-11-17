@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.27
+// @version      0.7.33
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.27'
+  const VERSION = '0.7.33'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -31,6 +31,18 @@
   const BUTTON_ACCENT = '#d2a8f0'
   const BUTTON_BORDER = '#4a4a4a'
   const BUTTON_GROUPS = ['.controls-app', '.controls-tool', '.controls-aux']
+  // Pen Tool Extras' and Text Anywhere's trays, light purple boxes behind their panels' control buttons. Each panel's color buttons carry a `data-key`; every other button in it sits on the tray.
+  const TRAYS = ['.pen-tool-extras-tray', '.text-anywhere-tray']
+  const TRAY_PANELS = TRAYS.map((tray) => `.controls-input:has(${tray})`)
+  const TRAY_BUTTON = 'button:not([data-key])'
+  // Auto Rules Resizer's f+ and f- bar, on the page's body beside the rules pane, wears SudokuPad's button face, so it goes dark with SudokuPad's buttons.
+  const SCRIPT_BUTTONS = ['#auto-rules-resizer-font button']
+  // A step above a black page and below BUTTON_BG, as the light tray sits between SudokuPad's white page and its white buttons.
+  const TRAY_BG = '#1d1a20'
+  // SudokuPad's own overlay is rgba(60, 60, 60, .7), which lightens any page darker than #3c3c3c.
+  const OVERLAY_BG = 'rgb(0 0 0 / 0.6)'
+  // The page color in force, on the body for a script that draws on the page: Text Anywhere's notes off the board take it.
+  const PAGE_COLOR_VAR = '--dark-page-color'
   // Material 3 state layers: BUTTON_ACCENT at 8% (hover) and 10% (press) over BUTTON_BG, worked out by hand; recompute both when either of those changes.
   const BUTTON_HOVER_BG = '#37343a'
   const BUTTON_PRESS_BG = '#3b373e'
@@ -229,17 +241,22 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
+  // WCAG's contrast ratio of two [r, g, b] colors, from 1 (the same) to 21 (black on white); the order does not matter.
+  function contrastRatio (one, other) {
+    const a = wcagLuminance(one) + 0.05
+    const b = wcagLuminance(other) + 0.05
+    return Math.max(a, b) / Math.min(a, b)
+  }
+
   function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
-    const page = wcagLuminance(rgb) + 0.05
-    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(light) >= contrast(dark) ? light : dark
+    return contrastRatio(rgb, parseColor(light)) >= contrastRatio(rgb, parseColor(dark)) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
 
-  // No variable is declared: SudokuPad's theme variables sit on `:root` and color the grid too.
+  // No SudokuPad variable is declared: its theme variables sit on `:root` and color the grid too. PAGE_COLOR_VAR is Dark Page's own.
   // `!important` outranks SudokuPad's rules, `.setting-darkmode`'s included. The board's own box
   // (`#svgrenderer`) takes `--body-bg`, what SudokuPad gives `body`: the puzzle has no background and
   // shows `body` through it, and the svg's box clips everything the puzzle draws, so no drawn pixel
@@ -249,22 +266,32 @@
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     const pageRule = (selectors, ...declarations) => rule(selectors.map((selector) => `${PAGE} ${selector}`).join(', '), ...declarations)
     const textColor = textColorFor(pageColor, PAGE_LIGHT_TEXT, PAGE_DARK_TEXT)
-    const darkButtons = [
-      pageRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
+    const trayButtons = (state) => TRAY_PANELS.map((panel) => `${panel} ${TRAY_BUTTON}${state}`)
+    // A tray button that is on (`aria-pressed`) keeps the tray's fill under its outline, as it does on a light page.
+    const offTrayButton = ':not([aria-pressed="true"])'
+    const scriptButtons = (state) => SCRIPT_BUTTONS.map((button) => `${button}${state}`)
+    const darkRules = [
+      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), ...trayButtons(offTrayButton), ...scriptButtons('')], `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
       pageRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]), `border-color: ${BUTTON_ACCENT}`),
-      pageRule(['.button-row button'], `border-color: ${BUTTON_BORDER}`),
+      // SudokuPad's keypad keeps its own fill under the softer border; the two script panels' white color buttons keep their own border.
+      pageRule(['.controls-main:not(.tool-pen):not(.tool-textanywhere) .button-row button'], `border-color: ${BUTTON_BORDER}`),
       // SudokuPad's own focus shadow cannot be seen on BUTTON_BG.
       pageRule(BUTTON_GROUPS.map((group) => `${group} button:focus-visible`), `outline: 2px solid ${BUTTON_ACCENT}`, 'outline-offset: 2px'),
-      pageRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), `background-color: ${BUTTON_HOVER_BG}`),
-      pageRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), `background-color: ${BUTTON_PRESS_BG}`)
+      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), ...trayButtons(`${offTrayButton}:hover`), ...scriptButtons(':hover')], `background-color: ${BUTTON_HOVER_BG}`),
+      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), ...trayButtons(`${offTrayButton}:active`), ...scriptButtons(':active')], `background-color: ${BUTTON_PRESS_BG}`),
+      pageRule(['true', 'mixed'].flatMap((state) => trayButtons(`[aria-pressed="${state}"]`)), `outline-color: ${BUTTON_ACCENT}`),
+      pageRule(TRAY_PANELS.map((panel) => `${panel} button[aria-pressed="true"]`), `background-color: ${TRAY_BG}`),
+      pageRule(TRAYS, `background-color: ${TRAY_BG}`),
+      pageRule(['.dialog-overlay'], `background-color: ${OVERLAY_BG}`),
+      pageRule(['.controls-input::after'], `border-color: ${BUTTON_BORDER}`)
     ]
     return [
-      rule(PAGE, `background-color: ${pageColor}`),
+      rule(PAGE, `background-color: ${pageColor}`, `${PAGE_COLOR_VAR}: ${pageColor}`),
       pageRule([`#${BOARD_ID}`], 'background-color: var(--body-bg)'),
       pageRule(['.controls-footer', '.controls-footer a'], `color: ${textColor}`),
       pageRule(['.controls-input::after'], `color: ${textColor}`),
       // The buttons go dark on the shared light-text test, not on Dark Page's own text pair.
-      ...(textColorFor(pageColor) === LIGHT_TEXT ? darkButtons : [])
+      ...(textColorFor(pageColor) === LIGHT_TEXT ? darkRules : [])
     ].join('\n')
   }
 
@@ -294,13 +321,27 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  const STATUS_ERROR_COLOR = '#b3261e'
+  // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
+  const CONTENT_INSET = '16px'
   // An inset layer darkens whatever fill the control has.
   const PRESS_LAYER = 'box-shadow: inset 0 0 0 100vmax rgb(0 0 0 / .1)'
   const STATUS_ATTRIBUTE = 'data-role="settings-status"'
   const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
 
-  function setDialogStatus (dialog, message) {
-    dialog.querySelector(STATUS_SELECTOR).textContent = message
+  function setDialogStatus (dialog, message, { error = false } = {}) {
+    const status = dialog.querySelector(STATUS_SELECTOR)
+    status.textContent = message
+    if (error) status.dataset.tone = 'error'
+    else delete status.dataset.tone
+  }
+
+  // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
+  function clearDialogError (dialog) {
+    if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
   // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
   // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
@@ -412,7 +453,7 @@
   }
 
   function wireErrorLog (dialog, win) {
-    const say = (message) => setDialogStatus(dialog, message)
+    const say = (message, options) => setDialogStatus(dialog, message, options)
     dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-error-log' && act !== 'clear-error-log') return
@@ -420,8 +461,11 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
           win.localStorage.removeItem(ERROR_LOG_KEY)
-          say('Error log cleared.')
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
         }
         const log = readErrorLog(win.localStorage)
@@ -432,7 +476,7 @@
         await win.navigator.clipboard.writeText(formatErrorLog(log))
         say('Error log copied.')
       } catch (error) {
-        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -452,15 +496,20 @@
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`,
+      `.${prefix}title-row ${STATUS_SELECTOR}[data-tone="error"] { color: ${STATUS_ERROR_COLOR}; font-weight: 600; }`
     ].join('\n')
   }
 
-  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
-  function buttonRowCss (bodyId) {
-    const row = `.dialog:has(#${bodyId}) .dialog-options`
+  // Scoped by the body's id, so SudokuPad's other dialogs are left alone. SudokuPad styles a dialog's buttons by tag, so each of those is forced.
+  function dialogShellCss (bodyId) {
+    const dialog = `.dialog:has(#${bodyId})`
+    const row = `${dialog} .dialog-options`
     return [
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      // Inherited by every checkbox, slider and other form control in the dialog, in place of the browser's blue.
+      `${dialog} { accent-color: ${SUDOKUPAD_PURPLE}; }`,
+      // The row sits on the text parts' box, so their side padding as its margin puts its edges, the top line's included, on the content column's.
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
       `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
       `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
@@ -485,7 +534,7 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    writeStyle(`settings-dialog-shell-${bodyId}`, dialogShellCss(bodyId), doc)
     if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
@@ -496,15 +545,17 @@
       } catch (error) {
         failed = true
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`, { error: true })
         return
       }
       close()
     }
+    const clearError = () => clearDialogError(doc.getElementById(bodyId).closest('.dialog'))
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      ...extraButtons
+      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
+      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
     ]
     framework.showDialog({
       centerOverBoard,
@@ -521,6 +572,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
+    // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
+    const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
+    for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -561,7 +615,7 @@
   }
 
   function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
-    const say = (message) => setDialogStatus(root, message)
+    const say = (message, options) => setDialogStatus(root, message, options)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-settings' && act !== 'paste-settings') return
@@ -577,7 +631,7 @@
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -931,7 +985,7 @@
   const { savedPageColor, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, pageColorOf, earlyColor, LOCAL_DATA_KEY, buildCss, PAGE, BOARD_ID, STYLE_ID, lackingInternals, FEATURES }
+    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, pageColorOf, earlyColor, LOCAL_DATA_KEY, buildCss, PAGE, BOARD_ID, STYLE_ID, PAGE_COLOR_VAR, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -969,6 +1023,14 @@
 
   const CLASS_PREFIX = 'dark-page-'
   const DIALOG_ID = 'dark-page-dialog'
+  const INPUT_ID = 'dark-page-input'
+  const SWATCH_ID = 'dark-page-swatch'
+  // SudokuPad's overlay covers the page while the dialog is open, so the swatch shows the picked color: the page around a white square for the board.
+  const DIALOG_CSS = [
+    `.${CLASS_PREFIX}color-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }`,
+    `#${SWATCH_ID} { display: flex; align-items: center; justify-content: center; height: 64px; margin: 6px 0; border: 1px solid #cfc9db; border-radius: 8px; }`,
+    `#${SWATCH_ID}::after { content: ""; width: 32px; height: 32px; background: #fff; }`
+  ].join('\n')
   const dialogs = guard.dialogsFor(settingsEntry)
   // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
   const snapshotColor = () => snapshotStore(savedSettings, tableKeys(SETTING_ROWS))
@@ -981,6 +1043,8 @@
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
+      styleId: `${DIALOG_ID}-style`,
+      css: DIALOG_CSS,
       changed: () => picked !== pageColor,
       snapshot: snapshotColor,
       feature: settingsEntry,
@@ -992,16 +1056,24 @@
         apply: (values) => {
           if (!(DATA_KEY in values)) return
           saveColor(values[DATA_KEY])
-          picked = pageColor
-          input.value = picked
+          show(pageColor)
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: () => show(DEFAULT_COLOR) }]
     })
     if (!body) return
-    body.innerHTML = `<div style="margin:6px 0"><input type="color" id="dark-page-input" value="${picked}"></div>`
-    const input = document.getElementById('dark-page-input')
-    const preview = () => { style.textContent = buildCss(picked) }
+    body.innerHTML = `<label class="${CLASS_PREFIX}color-row">Page color <input type="color" id="${INPUT_ID}" value="${picked}"></label><div id="${SWATCH_ID}" style="background-color: ${picked}"></div>`
+    const input = document.getElementById(INPUT_ID)
+    const swatch = document.getElementById(SWATCH_ID)
+    const preview = () => {
+      swatch.style.backgroundColor = picked
+      style.textContent = buildCss(picked)
+    }
+    const show = (color) => {
+      picked = color
+      input.value = color
+      preview()
+    }
     // However the dialog closes (Save, Cancel, Escape), the page goes back to the saved color; a Save has already made it the saved one.
     const closed = new window.MutationObserver(() => {
       if (body.isConnected) return
@@ -1011,11 +1083,6 @@
     closed.observe(document.body, { childList: true, subtree: true })
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase(); preview() })
-    function restoreDefaults () {
-      picked = DEFAULT_COLOR
-      input.value = DEFAULT_COLOR
-      preview()
-    }
   }
 
   // At DOMContentLoaded Framework exists (before the app is ready). What it reads is the saved color, and the early

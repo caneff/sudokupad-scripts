@@ -66,7 +66,7 @@ const SETTINGS_DIALOGS = Object.fromEntries(SETTINGS_SCRIPTS.map((script) => [sc
 const PEN_SETTINGS_BUTTON = '.pen-tool-extras-settings'
 const NOTE_COLOR_PRESET = `${SETTINGS_EDITOR} select[data-role="color-choice"]`
 // What a press of Copy error log or Clear is answered with on a page where nothing is broken (a log with records is copied, an empty one says so); any other answer is a failure.
-const ERROR_LOG_ANSWERS = { copy: /^(Error log copied\.|The error log is empty\.)$/, clear: /^Error log cleared\.$/ }
+const ERROR_LOG_ANSWERS = { copy: /^(Error log copied\.|The error log is empty\.)$/, clear: /^(Error log cleared\.|The error log was already empty\.)$/ }
 const isSettingsObject = (text) => {
   try {
     const data = JSON.parse(text)
@@ -390,13 +390,14 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       const boxes = p.locator(CHECK_BOXES)
       return await boxes.count() === 0 ? null : middleOf(await boxes.first().boundingBox({ timeout: BOX_TIMEOUT_MS }))
     },
-    // With a note selected the button deletes it and asks nothing; otherwise it asks, and the question is answered like a player does.
+    // With a note selected the button deletes it and asks nothing, and with no notes there is nothing to ask; otherwise it asks, and the question is
+    // answered like a player does: ok presses its Delete button ("Delete" for one note, "Delete all" for more).
     async clearNotes (ok) {
       // Picking the tool again ends the selection, which a clear after a click on a note needs kept.
       if (await noteTool(p) !== 'textanywhere') await pickNotes()
-      const asks = await p.locator(SELECTED).count() === 0
+      const asks = await p.locator(SELECTED).count() === 0 && await p.locator(TEXTS).count() > 0
       await clickIn(p, CLEAR_BUTTON)
-      if (asks) await closeDialogWith(p, ok ? 'OK' : 'Cancel', DIALOG)
+      if (asks) await closeDialogWith(p, ok ? 'Delete(?: all)?' : 'Cancel', DIALOG)
     },
     // A key held down is time passing, not a verdict waited on a clock.
     holdFor: (ms) => sleep(ms),
@@ -445,13 +446,21 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       if (!await hoverRules(p)) return
       await p.mouse.wheel(0, dy)
     },
-    // A limit typed is a limit saved only on Save; Restore defaults clears this puzzle's sizing at once, so a Cancel after it still keeps the clearing.
+    // A limit typed is a limit saved only on Save; Restore defaults empties both boxes in the draft, so a Cancel after it undoes it.
     async rulesDialog ({ maxWidth, maxHeight, restore }, save) {
       await settingsScript('auto-rules-resizer.user.js').open(p)
       await p.locator(MAX_WIDTH_INPUT).fill(maxWidth)
       await p.locator(MAX_HEIGHT_INPUT).fill(maxHeight)
       if (restore) await dialogButton(p, 'Restore defaults').click()
-      await closeDialogWith(p, save ? 'Save' : 'Cancel', MAX_WIDTH_INPUT)
+      if (save) {
+        // A text the script refuses leaves the dialog open with "Not saved"; that is its answer, so the dialog is then cancelled.
+        await dialogButton(p, 'Save').click()
+        const refused = p.locator(STATUS).filter({ hasText: 'Not saved' })
+        const closed = p.locator(MAX_WIDTH_INPUT).waitFor({ state: 'detached' }).then(() => false)
+        if (await Promise.race([closed, refused.waitFor().then(() => true)])) await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
+      } else {
+        await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
+      }
     },
     // `restore` presses Restore defaults after the color is picked.
     async darkPage (color, save, restore = false) {
@@ -477,14 +486,10 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     async restoreDefaults (script, save) {
       const { editor, open } = SETTINGS_DIALOGS[script]
       await open(p)
-      // Color by Digit asks first when the draft holds profiles of the player's own, and an unanswered confirm is dismissed, which would skip the restore: the player says OK.
-      const onConfirm = (dialog) => dialog.accept()
-      p.once('dialog', onConfirm)
-      try {
-        await dialogButton(p, 'Restore defaults').click()
-      } finally {
-        p.off('dialog', onConfirm)
-      }
+      await dialogButton(p, 'Restore defaults').click()
+      // Color by Digit asks first, inside its dialog, when the draft holds profiles of the player's own: the player says Restore defaults, or the restore is skipped.
+      const ask = p.locator(`${editor} [data-role="restore-confirm"]`)
+      if (await ask.count()) await ask.getByRole('button', { name: 'Restore defaults' }).click()
       await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
     },
     // Clear empties the shared log the run reads its failure's records from, which is a report's context only: a failure is a crash signal or a broken rule, read from the page.

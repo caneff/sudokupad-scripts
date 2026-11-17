@@ -9,7 +9,7 @@ import { loadInPlace } from '../puzzles.mjs'
 import { RULES_TEXT } from '../fuzz/puzzle-set.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
-import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
+import { closeDialogWith, dialogButton, headerVersion, openScriptDialog, openSettings, STATUS } from '../settings.mjs'
 import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, STYLE } from './auto-rules-resizer-fixtures.mjs'
 
 const SCRIPT_FILE = 'auto-rules-resizer.user.js'
@@ -34,6 +34,8 @@ const SUDOKUPAD_FONT_PX = 17.6
 const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7
 const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5
 const EDGE_PX = 8
+// The script's own threshold below which a pane hyphenates automatically.
+const NARROW_PANE_PX = 360
 const PORTRAIT = { width: 800, height: 1100 }
 const WARNING = /^auto-rules-resizer: /
 
@@ -107,6 +109,43 @@ async function dragCorner (p, corner, dx, dy, midDrag) {
   await midDrag?.()
   await p.mouse.up()
 }
+
+// The line boxes of the pane's text that show (one per rendered line fragment, clipped to the pane's scrolling area), and each control's box.
+const controlBoxes = (p) => p.evaluate(([bar, ur, dl]) => {
+  const rect = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
+  const rules = document.querySelector('.puzzle-rules')
+  const r = rules.getBoundingClientRect()
+  const scale = r.height / rules.offsetHeight
+  const shown = { top: r.top + rules.clientTop * scale, bottom: r.top + (rules.clientTop + rules.clientHeight) * scale }
+  const range = document.createRange()
+  range.selectNodeContents(rules)
+  const lines = [...range.getClientRects()].filter((l) => l.width > 0)
+    .map((l) => ({ left: l.left, right: l.right, top: Math.max(l.top, shown.top), bottom: Math.min(l.bottom, shown.bottom) }))
+    .filter((l) => l.bottom > l.top)
+  return {
+    lines,
+    bar: rect(document.querySelector(bar)),
+    ur: rect(document.querySelector(ur)),
+    dl: rect(document.querySelector(dl)),
+    header: rect(document.querySelector('.puzzle-header'))
+  }
+}, [FONT_BAR, CORNER('ur'), CORNER('dl')])
+const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+
+// The box of every point within 40 px of `corner`'s own box where a press lands on that corner, read pixel by pixel.
+const hitArea = (p, corner) => p.evaluate((selector) => {
+  const el = document.querySelector(selector)
+  const r = el.getBoundingClientRect()
+  const hits = []
+  for (let x = Math.floor(r.left) - 40; x <= r.right + 40; x++) {
+    for (let y = Math.floor(r.top) - 40; y <= r.bottom + 40; y++) {
+      if (document.elementFromPoint(x + 0.5, y + 0.5) === el) hits.push([x, y])
+    }
+  }
+  const xs = hits.map(([x]) => x)
+  const ys = hits.map(([, y]) => y)
+  return { left: Math.min(...xs), right: Math.max(...xs) + 1, top: Math.min(...ys), bottom: Math.max(...ys) + 1 }
+}, CORNER(corner))
 
 describe('a sideways corner drag keeps the pane\'s height and never raises its font', { concurrency: false }, () => {
   const SIDEWAYS = [
@@ -202,6 +241,143 @@ describe('a dl corner drag that shrinks a pane at the window\'s edge', { concurr
   }
 })
 
+describe('a landscape window, long rules: what the pane\'s controls cover and how its lines break', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await rulesPage(LANDSCAPE, null, LONG_RULES))
+    await inject(p)
+    await settle(async () => (await pane(p)).scrolls, false)
+    await hoverPane(p)
+    await p.locator(FONT_BAR).waitFor({ state: 'visible' })
+  })
+  after(async () => { await context.close() })
+
+  it('while the pane is hovered, no drag corner overlaps a line of the rules', async () => {
+    const { lines, ur, dl } = await controlBoxes(p)
+    assert.equal(lines.length > 3, true, `${lines.length} line boxes`)
+    assert.deepEqual(lines.filter((l) => overlap(l, ur) || overlap(l, dl)), [], `corners ${JSON.stringify({ ur, dl })}`)
+  })
+
+  it('the f+ and f- bar overlaps neither the title ribbon nor a line of the rules', async () => {
+    const { lines, bar, header } = await controlBoxes(p)
+    assert.equal(overlap(bar, header), false, JSON.stringify({ bar, header }))
+    assert.deepEqual(lines.filter((l) => overlap(l, bar)), [], JSON.stringify(bar))
+  })
+
+  it('each corner takes a press over at least 24 x 24 px, none of it on a line of the rules or the title ribbon', async () => {
+    const { lines, header } = await controlBoxes(p)
+    for (const corner of ['ur', 'dl']) {
+      const hit = await hitArea(p, corner)
+      assert.equal(hit.right - hit.left >= 24 && hit.bottom - hit.top >= 24, true, `${corner} takes a press over ${JSON.stringify(hit)}`)
+      assert.equal(overlap(hit, header), false, `${corner} ${JSON.stringify({ hit, header })}`)
+      assert.deepEqual(lines.filter((l) => overlap(l, hit)), [], `${corner} ${JSON.stringify(hit)}`)
+    }
+  })
+
+  it('f+ and f- are styled as SudokuPad\'s buttons: its face, border and purple label', async () => {
+    const looks = await p.evaluate((bar) => [...document.querySelectorAll(`${bar} button`)].map((button) => {
+      const s = window.getComputedStyle(button)
+      return { color: s.color, border: `${s.borderTopWidth} ${s.borderTopStyle} ${s.borderTopColor}`, background: s.backgroundColor }
+    }), FONT_BAR)
+    const own = await p.evaluate(() => {
+      const s = window.getComputedStyle(document.querySelector('#controls button[data-control="undo"]'))
+      return { color: s.color, border: `${s.borderTopWidth} ${s.borderTopStyle} ${s.borderTopColor}`, background: s.backgroundColor }
+    })
+    assert.deepEqual(looks, [own, own])
+  })
+
+  it('no line of the rules ends in a split word', async () => {
+    const split = await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      const walker = document.createTreeWalker(rules, 4) // 4 is NodeFilter.SHOW_TEXT
+      const chars = []
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        for (let i = 0; i < node.length; i++) {
+          const range = document.createRange()
+          range.setStart(node, i)
+          range.setEnd(node, i + 1)
+          const r = range.getClientRects()[0]
+          if (r) chars.push({ c: node.data[i], top: Math.round(r.top) })
+        }
+      }
+      // A word broken across lines has a letter on both sides of the break; an ordinary break has a space.
+      return chars.slice(1).filter((ch, i) => ch.top > chars[i].top && /\S/.test(ch.c) && /\S/.test(chars[i].c)).length
+    })
+    assert.equal(split, 0, `${split} lines break inside a word`)
+  })
+
+  it('a wide pane does not hyphenate automatically', async () => {
+    const now = await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      return { hyphens: window.getComputedStyle(rules).hyphens, width: rules.offsetWidth }
+    })
+    assert.equal(now.width >= NARROW_PANE_PX, true, `a ${now.width} px pane is wide`)
+    assert.equal(now.hyphens, 'manual')
+  })
+})
+
+describe('a pane that scrolls, scrolled partway: what the pane\'s controls cover', { concurrency: false }, () => {
+  let context, p, errors
+
+  before(async () => {
+    ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, VERY_LONG_RULES))
+    await inject(p)
+    await stable(() => pane(p))
+    assert.equal((await pane(p)).scrolls, true)
+    await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      rules.scrollTop = Math.round((rules.scrollHeight - rules.clientHeight) / 2)
+    })
+    await hoverPane(p)
+    await p.locator(FONT_BAR).waitFor({ state: 'visible' })
+  })
+  after(async () => { await context.close() })
+
+  it('no shown line of the rules passes under the f+ and f- bar, a drag corner or a corner\'s hit area', async () => {
+    const { lines, bar, ur, dl } = await controlBoxes(p)
+    assert.equal(lines.length > 3, true, `${lines.length} line boxes`)
+    const controls = { bar, ur, dl, urHit: await hitArea(p, 'ur'), dlHit: await hitArea(p, 'dl') }
+    for (const [name, box] of Object.entries(controls)) {
+      assert.deepEqual(lines.filter((l) => overlap(l, box)), [], `${name} ${JSON.stringify(box)}`)
+    }
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('a landscape window, short rules: automatic hyphens follow the pane\'s width', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await rulesPage(LANDSCAPE, null, RULES))
+    await inject(p)
+    await settle(() => p.evaluate(() => document.querySelector('.puzzle-rules').style.hyphens !== ''), true)
+  })
+  after(async () => { await context.close() })
+
+  const hyphensAndWidth = () => p.evaluate(() => {
+    const rules = document.querySelector('.puzzle-rules')
+    return { hyphens: window.getComputedStyle(rules).hyphens, width: rules.offsetWidth }
+  })
+
+  it('a pane dragged narrower than the threshold hyphenates, and one dragged back wide stops', async () => {
+    const wide = await hyphensAndWidth()
+    assert.equal(wide.width >= NARROW_PANE_PX, true, `a ${wide.width} px pane is wide`)
+    assert.equal(wide.hyphens, 'manual')
+    await dragCorner(p, 'dl', 250, 0)
+    const narrow = await stable(hyphensAndWidth)
+    assert.equal(narrow.width < NARROW_PANE_PX, true, `a ${narrow.width} px pane is narrow`)
+    assert.equal(narrow.hyphens, 'auto')
+    await dragCorner(p, 'dl', -250, 0)
+    const back = await stable(hyphensAndWidth)
+    assert.equal(back.width >= NARROW_PANE_PX, true, `a ${back.width} px pane is wide again`)
+    assert.equal(back.hyphens, 'manual')
+  })
+})
+
 describe('a landscape window, rules that fill the pane at SudokuPad\'s width', { concurrency: false }, () => {
   let context, p, errors, own
 
@@ -280,10 +456,10 @@ describe('a landscape window, rules that fill the pane at SudokuPad\'s width', {
     const start = await pane(p)
     // The fit lifts the column so the grown pane stays on the page; the drag adds to the lift.
     const lift = parseFloat((await controlsMoved(p)).split(' ')[1]) || 0
-    await dragCorner(p, 'ur', 0, -60)
-    assert.equal(await settle(() => controlsMoved(p), `0px ${lift - 60}px`), `0px ${lift - 60}px`)
+    await dragCorner(p, 'ur', 0, -30)
+    assert.equal(await settle(() => controlsMoved(p), `0px ${lift - 30}px`), `0px ${lift - 30}px`)
     const now = await pane(p)
-    assert.equal(now.top, start.top - 60)
+    assert.equal(now.top, start.top - 30)
     assert.equal(now.right, start.right, 'a top-right drag straight up grows no wider')
   })
 
@@ -452,7 +628,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     let context, p, errors
 
     before(async () => {
-      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved(null, 50)))
+      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved(null, 112), LONG_RULES))
       await inject(p)
     })
     after(async () => { await context.close() })
@@ -461,7 +637,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
       assert.equal(await settle(() => p.locator(FONT_BAR).count(), 1), 1)
       const now = await stable(() => pane(p))
       assert.equal(now.font, MIN_FONT_PX)
-      assert.equal(now.cssHeight <= 50, true, `pane ${now.cssHeight} css px tall under a max of 50`)
+      assert.equal(now.cssHeight <= 112, true, `pane ${now.cssHeight} css px tall under a max of 112`)
     })
 
     it('the page raised no error', () => {
@@ -500,27 +676,53 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
 
     it('Save keeps the limits and applies them at once', async () => {
-      await p.locator(MAX_HEIGHT_INPUT).fill('50')
+      await p.locator(MAX_HEIGHT_INPUT).fill('150')
       await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
       assert.equal(await data(MAX_WIDTH_KEY), 500)
-      assert.equal(await data(MAX_HEIGHT_KEY), 50)
+      assert.equal(await data(MAX_HEIGHT_KEY), 150)
       assert.equal(await settle(async () => (await pane(p)).cssWidth, 500), 500)
     })
 
-    it('a box holding no usable number keeps the saved limit', async () => {
+    const refusal = (text) => p.locator(STATUS).filter({ hasText: text })
+
+    it('a height under the drag floor, a negative and a non-number are refused: Not saved, the dialog stays open, nothing is saved', async () => {
       await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
-      await p.locator(MAX_WIDTH_INPUT).evaluate((el) => { el.value = '0' })
-      await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
-      assert.equal(await data(MAX_WIDTH_KEY), 500)
-      assert.equal(await data(MAX_HEIGHT_KEY), 50)
+      for (const [box, typed, message] of [
+        [MAX_HEIGHT_INPUT, '10', 'Max auto height must be a whole number of pixels, 112 or more'],
+        [MAX_HEIGHT_INPUT, '-5', 'Max auto height must be a whole number of pixels, 112 or more'],
+        [MAX_WIDTH_INPUT, '0', 'Max auto width must be a whole number of pixels, 240 or more'],
+        [MAX_HEIGHT_INPUT, '150.5', 'Max auto height must be a whole number of pixels']
+      ]) {
+        await p.locator(MAX_WIDTH_INPUT).fill('500')
+        await p.locator(MAX_HEIGHT_INPUT).fill('150')
+        await p.locator(box).evaluate((el, value) => { el.value = value }, typed)
+        await dialogButton(p, 'Save').click()
+        await refusal(`Not saved: ${message}`).waitFor()
+        assert.equal(await p.locator(MAX_WIDTH_INPUT).count(), 1, `${typed}: the dialog is still open`)
+        assert.equal(await data(MAX_WIDTH_KEY), 500)
+        assert.equal(await data(MAX_HEIGHT_KEY), 150)
+      }
+      await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
     })
 
-    it('shows the saved values on reopening, and clearing both and saving removes the keys and lifts the cap', async () => {
+    it('Restore defaults then Cancel leaves the saved limits and the puzzle\'s sizing alone', async () => {
+      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
+      const before = await pane(p)
+      await dialogButton(p, 'Restore defaults').click()
+      assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '')
+      assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
+      assert.equal(await data(MAX_WIDTH_KEY), 500, 'nothing is saved by the button')
+      await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
+      assert.equal(await data(MAX_WIDTH_KEY), 500)
+      assert.equal(await data(MAX_HEIGHT_KEY), 150)
+      assert.deepEqual(await pane(p), before)
+    })
+
+    it('shows the saved values on reopening, and Restore defaults then Save removes the keys and lifts the cap', async () => {
       await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '500')
-      assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '50')
-      await p.locator(MAX_WIDTH_INPUT).fill('')
-      await p.locator(MAX_HEIGHT_INPUT).fill('')
+      assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '150')
+      await dialogButton(p, 'Restore defaults').click()
       await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
       assert.equal(await data(MAX_WIDTH_KEY), null)
       assert.equal(await data(MAX_HEIGHT_KEY), null)
@@ -574,12 +776,12 @@ describe('the text of the fitted pane', { concurrency: false }, () => {
     assert.equal((await pane(p)).scrolls, false)
   })
 
-  it('sets the text with pretty wrapping and automatic hyphens', async () => {
+  it('sets the text with pretty wrapping', async () => {
     const style = await p.evaluate(() => {
       const s = window.getComputedStyle(document.querySelector('.puzzle-rules'))
-      return { wrap: s.textWrapStyle, hyphens: s.hyphens }
+      return { wrap: s.textWrapStyle }
     })
-    assert.deepEqual(style, { wrap: 'pretty', hyphens: 'auto' })
+    assert.deepEqual(style, { wrap: 'pretty' })
   })
 
   it('keeps the font bar off SudokuPad\'s copy icon', async () => {
@@ -691,7 +893,7 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
       const rules = document.querySelector('.puzzle-rules')
       const r = rules.getBoundingClientRect()
       const style = window.getComputedStyle(rules)
-      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + parseFloat(style.paddingTop) + 2)
+      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + rules.clientTop + parseFloat(style.paddingTop) + 2)
       return at.offset
     })
     // A line and a half down: the probe lands in the middle of a line, not on the border of two.
@@ -733,7 +935,7 @@ describe('rules with blank lines (SudokuPad sets each newline as a break)', { co
       const rules = document.querySelector('.puzzle-rules')
       const r = rules.getBoundingClientRect()
       const style = window.getComputedStyle(rules)
-      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + parseFloat(style.paddingTop) + 2)
+      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + rules.clientTop + parseFloat(style.paddingTop) + 2)
       return { inRules: at.offsetNode === rules, offset: at.offset }
     })
     assert.equal((await pane(p)).scrolls, true, 'the blank lines scroll')
@@ -1129,7 +1331,7 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
     }
   })
 
-  it('Restore defaults in the dialog clears the puzzle\'s sizing', async () => {
+  it('Reset puzzle size in the dialog clears the puzzle\'s sizing at once, and Restore defaults does not', async () => {
     const opened = await startedFont(null)
     const { p } = opened
     try {
@@ -1137,6 +1339,10 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
       await settle(async () => (await savedSizing(p)) !== null, true)
       await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
       await p.getByRole('button', { name: 'Restore defaults' }).click()
+      await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
+      assert.equal((await savedSizing(p)) !== null, true, 'Restore defaults leaves the sizing')
+      await openScriptDialog(p, 'Auto Rules Resizer', MAX_WIDTH_INPUT)
+      await p.getByRole('button', { name: 'Reset puzzle size' }).click()
       assert.equal(await settle(async () => (await savedSizing(p)) === null, true), true, 'the key is gone')
       assert.equal(await settle(() => fontPx(p), opened.font), opened.font, 'back at the automatic size')
     } finally {

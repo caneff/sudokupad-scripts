@@ -133,17 +133,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reload()
   })
 
-  it('with no page to turn to the line type button is gone, and the settings button takes its place beside the line mode button', async () => {
+  it('with no page to turn to the line type button is gone, and the settings button stays in its own column, after the line mode button', async () => {
     const setStyles = async (on) => {
       await openExtrasEditor(p)
       for (const key of ['dashed', 'arrows']) await editor().locator(`input[data-box="lineStyles.${key}"]`).setChecked(on)
       await dialogButton(p, 'Save').click()
     }
-    const pageBox = await p.locator('.pen-tool-extras-page').boundingBox()
+    const settingsBefore = await p.locator('.pen-tool-extras-settings').boundingBox()
     await setStyles(false)
     assert.equal(await p.locator('.pen-tool-extras-page').count(), 0)
     const [mode, settings] = await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-settings'].map((s) => p.locator(s).boundingBox()))
-    assert.equal(Math.abs(settings.x - pageBox.x) <= 1, true, JSON.stringify({ settings, pageBox }))
+    assert.deepEqual(settings, settingsBefore)
     assert.equal(mode.x + mode.width <= settings.x, true, JSON.stringify({ mode, settings }))
     await setStyles(true)
     assert.equal(await p.locator('.pen-tool-extras-page').count(), 1)
@@ -442,9 +442,9 @@ describe('with Dark Page on', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('the sliders sit on the tray, which stays light on Dark Page, with no box behind them', async () => {
-    assert.notEqual(await p.locator('.tool-pen button[data-key="9"]').evaluate((el) => getComputedStyle(el).borderTopColor), 'rgb(204, 204, 204)', 'Dark Page restyles the buttons')
+  it('the sliders sit on the tray, which Dark Page darkens, with no box behind them, and the pen buttons keep their own border', async () => {
+    assert.equal(await p.locator('.pen-tool-extras-tray').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgb(29, 26, 32)')
     assert.equal(await p.locator('.pen-tool-extras-sliders-box').count(), 0)
-    assert.equal(await p.locator('.pen-tool-extras-tray').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgb(239, 234, 244)')
+    assert.equal(await p.locator('.tool-pen button[data-key="9"]').evaluate((el) => getComputedStyle(el).borderTopColor), 'rgb(204, 204, 204)')
   })
 })

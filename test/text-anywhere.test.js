@@ -8,7 +8,7 @@ const { headerField, headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet } = require('../text-anywhere.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet, noteBackdrop } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -252,10 +252,10 @@ test('Paste settings copied before the rename, under DrawTool_ keys, returns the
   assert.deepEqual(readPaste(JSON.stringify({ [oldKey(WIDTH_KEY)]: 99 })), { values: {}, skipped: 1 }, 'an old value is checked as a new one is')
 })
 
-test('the size slider runs 1 to 16 and starts at 6, a new note is fully opaque, and color 1 is the default', () => {
+test('the size slider runs 1 to 16 and starts at 6, a new note is fully opaque, and color 2 is the default', () => {
   assert.deepEqual([MIN_WIDTH, MAX_WIDTH, DEFAULT_WIDTH], [1, 16, 6])
   assert.equal(DEFAULT_OPACITY, 100)
-  assert.equal(DEFAULT_COLOR, 1)
+  assert.equal(DEFAULT_COLOR, 2)
 })
 
 test('a text is 2 x the size value + 8 tall: 10 to 40, and 20 at the default size', () => {
@@ -274,8 +274,9 @@ test('noteColorNumber reads 1 to 9, as text or a number, and nothing else', () =
   for (const value of ['0', 0, 10, '10', 'a', '1.5', 1.5, '', null, undefined, {}, [3]]) assert.equal(noteColorNumber(value), undefined, JSON.stringify(value))
 })
 
-test('a saved color reads back, and a missing or bad one reads as note color 1', () => {
+test('a saved color reads back, and a missing or bad one reads as note color 2', () => {
   assert.equal(readColor(4), 4)
+  assert.equal(readColor(1), 1, 'a saved color 1 is kept')
   for (const saved of [null, undefined, 0, 12, 'red', '', {}]) assert.equal(readColor(saved), DEFAULT_COLOR, JSON.stringify(saved))
 })
 
@@ -499,6 +500,19 @@ test('the box is filled with the page color, white, the yellow, a tint of the no
   assert.equal(boxFill('#123456', 'var(--c)'), '#123456')
   assert.equal(boxFill('tint', 'var(--c)'), 'color-mix(in srgb, var(--c) 15%, var(--body-bg, #fff))')
   assert.notEqual(boxFill('tint', 'red'), boxFill('tint', 'blue'))
+})
+
+test('a Page or Tint box off the board takes the color behind it', () => {
+  const behind = 'var(--dark-page-color, var(--body-bg, #fff))'
+  assert.equal(boxFill('page', 'var(--c)', behind), behind)
+  assert.equal(boxFill('tint', 'var(--c)', behind), `color-mix(in srgb, var(--c) 15%, ${behind})`)
+  assert.equal(boxFill('white', 'var(--c)', behind), '#ffffff')
+})
+
+test('a note whose middle is on the board has the board\'s color behind it, and one off the board the page color Dark Page paints', () => {
+  const board = { left: 100, top: 100, right: 500, bottom: 500 }
+  for (const middle of [[300, 300], [100, 100], [500, 500]]) assert.equal(noteBackdrop(middle, board), 'var(--body-bg, #fff)', String(middle))
+  for (const middle of [[99, 300], [501, 300], [300, 99], [300, 501]]) assert.equal(noteBackdrop(middle, board), 'var(--dark-page-color, var(--body-bg, #fff))', String(middle))
 })
 
 test('the yellow keeps every one of SudokuPad\'s nine colors about as readable as white does', () => {
@@ -1358,9 +1372,9 @@ test('the Own color input shows under the row only while Own is picked', () => {
 
 test('each of the three sample rows has its sub-line', () => {
   const html = samples()
-  contains(html, 'For notes without a box, so they read over digits and grid lines.')
-  contains(html, 'For notes made with the Background button on.')
-  contains(html, 'The line round a note with a box.')
+  contains(html, 'for notes without a box')
+  contains(html, 'for notes with Background on')
+  contains(html, 'the line round a note with a box')
 })
 
 // Ten column lines 64 px apart from 100: the board's span is 100..676, middles at 132, 196 ... 644.
@@ -1749,4 +1763,38 @@ test('a pasted color set is read as a whole record, with no missing pens and no 
   assert.deepEqual(storedColorSet(after), pasted)
   assert.deepEqual(storedColorSet(savedColorSet(hexes('#445566'))), hexes('#445566'), 'a pasted Custom set is stored with no preset')
   assert.equal(savedColorSet(null), null)
+})
+
+test('a held + or - waits out the pause, then steps once and ramps to the most steps a tick', () => {
+  assert.equal(sizeHoldSteps(0), 0)
+  assert.equal(sizeHoldSteps(NUDGE_REPEAT_MS - 1), 0)
+  assert.equal(sizeHoldSteps(NUDGE_REPEAT_MS), 1)
+  assert.equal(sizeHoldSteps(NUDGE_REPEAT_MS + NUDGE_RAMP_MS / 2) > 1, true)
+  assert.equal(sizeHoldSteps(NUDGE_RAMP_MS * 10), SIZE_HOLD_MAX_STEPS)
+})
+
+test('a new note keeps about one on-screen height on any grid: its width over the grid size is the 9x9\'s, kept inside the slider', () => {
+  const onScreen = (gridSize) => textSizeFor(newNoteWidth(DEFAULT_WIDTH, gridSize)) / gridSize
+  assert.equal(newNoteWidth(DEFAULT_WIDTH, REFERENCE_GRID), DEFAULT_WIDTH)
+  for (const gridSize of [4, 16]) assert.ok(Math.abs(onScreen(gridSize) / onScreen(REFERENCE_GRID) - 1) < 0.2, `${gridSize}: ${onScreen(gridSize)}`)
+  assert.equal(newNoteWidth(MAX_WIDTH, 16), MAX_WIDTH)
+  assert.equal(newNoteWidth(MIN_WIDTH, 4), MIN_WIDTH)
+  assert.equal(newNoteWidth(DEFAULT_WIDTH, NaN), DEFAULT_WIDTH)
+})
+
+test('a size taken from a note on this grid is saved for the next note in 9x9 units, so the next 9x9 note is not shrunk by a 4x4\'s', () => {
+  for (const gridSize of [6, 12, 16]) {
+    for (const width of [4, DEFAULT_WIDTH, 8]) assert.ok(Math.abs(nextNoteWidth(newNoteWidth(width, gridSize), gridSize) - width) <= 0.5, `${width} on ${gridSize}x${gridSize}`)
+  }
+  assert.equal(nextNoteWidth(7.5, REFERENCE_GRID), 7.5)
+  assert.equal(nextNoteWidth(7.5, NaN), 7.5)
+  // One + on a new 4x4 note: the next 9x9 note comes out at least the default's size, not 11.
+  const stepped = sizeStep(newNoteWidth(DEFAULT_WIDTH, 4), 1)
+  assert.equal(textSizeFor(newNoteWidth(nextNoteWidth(stepped, 4), REFERENCE_GRID)) >= textSizeFor(DEFAULT_WIDTH), true)
+})
+
+test('Clear all asks nothing with no notes, speaks of the one note with one, and counts them with more', () => {
+  assert.equal(clearAsk(0), null)
+  assert.deepEqual(clearAsk(1), { question: 'Delete the note? This cannot be undone.', button: 'Delete' })
+  assert.deepEqual(clearAsk(2), { question: 'Delete all 2 notes? This cannot be undone.', button: 'Delete all' })
 })

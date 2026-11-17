@@ -2,7 +2,7 @@
 // or off, and a color is picked by setting the picker's value and firing the same `input` event a real pick fires. The browser's own
 // color dialog is drawn by the operating system, which a page screenshot cannot capture, so the dialog itself is never shown.
 import { createRequire } from 'node:module'
-import { setInputValue } from '../../../live/pen.mjs'
+import { setInputValue } from '../../../live/input.mjs'
 
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../../pen-tool-extras.user.js')
 // A press this much longer than the script's hold is certain to have run it.

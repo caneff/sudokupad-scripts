@@ -5,7 +5,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { startScript } = require('./unit-start.js')
-const { buildCss, PAGE, BOARD_ID, DEFAULT_COLOR, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { buildCss, PAGE, BOARD_ID, DEFAULT_COLOR, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, PAGE_COLOR_VAR } = require('../dark-page.user.js')
 const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -21,12 +21,12 @@ const rule = (selector) => rules().find((r) => r.selector === selector)
 
 test('the page background is black by default', () => {
   assert.equal(DEFAULT_COLOR, '#000000')
-  assert.deepEqual(rule(PAGE), { selector: PAGE, declarations: 'background-color: #000000 !important' })
+  assert.equal(rule(PAGE).declarations.split('; ')[0], 'background-color: #000000 !important')
 })
 
 test('the page background is the color given', () => {
   const given = buildCss('#336699').split('\n').find((line) => line.startsWith(`${PAGE} {`))
-  assert.equal(given, `${PAGE} { background-color: #336699 !important }`)
+  assert.match(given, /^body:has\(#svgrenderer\) \{ background-color: #336699 !important;/)
 })
 
 test('readSaved reads the saved color through the Framework, and lets a Framework it cannot read throw', () => {
@@ -72,24 +72,51 @@ test('the replay tool\'s readout (the ::after of .controls-input) takes the text
   assert.equal(readout('#ffcc00'), `${PAGE} .controls-input::after { color: #000000 !important }`)
 })
 
+const TRAYS = ['.pen-tool-extras-tray', '.text-anywhere-tray']
+// The script panels' buttons on a tray: every button of the panel but its color buttons, which carry a `data-key`.
+const TRAY_PANELS = TRAYS.map((tray) => `.controls-input:has(${tray})`)
+// Every rule but the four a page of any color gets: its color, the board box, the credit line and the readout's text.
+const ALWAYS = [`${PAGE} {`, `${PAGE} #${BOARD_ID} {`, `${PAGE} .controls-footer,`, `${PAGE} .controls-input::after { color:`]
+const darkRules = (color) => buildCss(color).split('\n').filter((line) => !ALWAYS.some((start) => line.startsWith(start)))
 const buttonRules = (color) => buildCss(color).split('\n').filter((line) => /button/.test(line.split(' {')[0]))
+const scoped = (selectors) => selectors.map((selector) => `${PAGE} ${selector}`).join(', ')
 
 test('on a dark page color the control buttons go dark gray with light purple text, and a button that is on keeps its own fill and gets a purple border', () => {
-  const scoped = (selectors) => selectors.map((selector) => `${PAGE} ${selector}`).join(', ')
   const groups = ['.controls-app', '.controls-tool', '.controls-aux']
+  const trayButton = (state) => TRAY_PANELS.map((panel) => `${panel} button:not([data-key])${state}`)
+  // Auto Rules Resizer's f+ and f- buttons wear SudokuPad's button face, so they go dark with SudokuPad's.
+  const fontBar = (state) => [`#auto-rules-resizer-font button${state}`]
   assert.deepEqual(buttonRules('#000000'), [
-    `${scoped(groups.map((g) => `${g} button:not(.selected):not(.selectedperm)`))} { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }`,
+    `${scoped([...groups.map((g) => `${g} button:not(.selected):not(.selectedperm)`), ...trayButton(':not([aria-pressed="true"])'), ...fontBar('')])} { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }`,
     `${scoped(groups.flatMap((g) => [`${g} button.selected`, `${g} button.selectedperm`]))} { border-color: #d2a8f0 !important }`,
-    `${scoped(['.button-row button'])} { border-color: #4a4a4a !important }`,
+    `${scoped(['.controls-main:not(.tool-pen):not(.tool-textanywhere) .button-row button'])} { border-color: #4a4a4a !important }`,
     `${scoped(groups.map((g) => `${g} button:focus-visible`))} { outline: 2px solid #d2a8f0 !important; outline-offset: 2px !important }`,
-    `${scoped(groups.map((g) => `${g} button:not(.selected):not(.selectedperm):hover`))} { background-color: #37343a !important }`,
-    `${scoped(groups.map((g) => `${g} button:not(.selected):not(.selectedperm):active`))} { background-color: #3b373e !important }`
+    `${scoped([...groups.map((g) => `${g} button:not(.selected):not(.selectedperm):hover`), ...trayButton(':not([aria-pressed="true"]):hover'), ...fontBar(':hover')])} { background-color: #37343a !important }`,
+    `${scoped([...groups.map((g) => `${g} button:not(.selected):not(.selectedperm):active`), ...trayButton(':not([aria-pressed="true"]):active'), ...fontBar(':active')])} { background-color: #3b373e !important }`,
+    `${scoped(['true', 'mixed'].flatMap((state) => trayButton(`[aria-pressed="${state}"]`)))} { outline-color: #d2a8f0 !important }`,
+    `${scoped(TRAY_PANELS.map((panel) => `${panel} button[aria-pressed="true"]`))} { background-color: #1d1a20 !important }`
   ])
 })
 
-test('on a light page color SudokuPad\'s buttons are left as they are', () => {
-  assert.deepEqual(buttonRules('#ffffff'), [])
-  assert.deepEqual(buttonRules('#ffcc00'), [])
+test('on a dark page color the two script trays go dark, a step above the page and below the buttons', () => {
+  assert.ok(buildCss('#000000').split('\n').includes(`${scoped(TRAYS)} { background-color: #1d1a20 !important }`))
+})
+
+test('on a dark page color a dialog\'s overlay dims the page with black, and the replay readout box takes the dark button border', () => {
+  const lines = buildCss('#000000').split('\n')
+  assert.ok(lines.includes(`${scoped(['.dialog-overlay'])} { background-color: rgb(0 0 0 / 0.6) !important }`), 'overlay')
+  assert.ok(lines.includes(`${scoped(['.controls-input::after'])} { border-color: #4a4a4a !important }`), 'readout border')
+})
+
+test('on a light page color SudokuPad\'s buttons, trays, overlay and readout box are left as they are', () => {
+  for (const color of ['#ffffff', '#ffcc00']) assert.deepEqual(darkRules(color), [], color)
+})
+
+test('the page color is on the body as --dark-page-color, which Text Anywhere reads for a note off the board', () => {
+  assert.equal(PAGE_COLOR_VAR, '--dark-page-color')
+  for (const color of ['#000000', '#ffcc00']) {
+    assert.equal(buildCss(color).split('\n')[0], `${PAGE} { background-color: ${color} !important; ${PAGE_COLOR_VAR}: ${color} !important }`)
+  }
 })
 
 test('the page text is white up to #757575 and black from #767676', () => {
@@ -125,9 +152,10 @@ test('every declaration is !important, so SudokuPad\'s own rules, dark mode incl
   }
 })
 
-test('no rule declares a theme variable, which would reach the grid through the shared :root', () => {
+test('no rule declares a theme variable, which would reach the grid through the shared :root; the one variable is Dark Page\'s own', () => {
   for (const { selector, declarations } of rules()) {
-    assert.ok(!/(^|[;\s])--[\w-]+\s*:/.test(declarations), `${selector} declares a variable`)
+    const declared = [...declarations.matchAll(/(?:^|[;\s])(--[\w-]+)\s*:/g)].map((m) => m[1])
+    assert.deepEqual(declared, selector === PAGE ? [PAGE_COLOR_VAR] : [], `${selector} declares a variable`)
     assert.ok(!/:root|\bhtml\b/.test(selector), `${selector} reaches the root`)
   }
 })

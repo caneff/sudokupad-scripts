@@ -1131,8 +1131,8 @@ test('an unticked line style is drawn unticked and the stylesheet hides its slid
   const html = renderEditor(editorState({ dash: 6, lineStyles: { dashed: false, arrows: true } }))
   assert.doesNotMatch(html, /data-box="lineStyles.dashed"[^>]* checked/)
   assert.match(rowOf(html, 'dash'), /value="6"/)
-  assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="lineStyles\.dashed"\]:checked\)\) \[data-row="dash"\] \{ display: none; \}/)
-  assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="lineStyles\.arrows"\]:checked\)\) \[data-row="arrowSpacing"\] \{ display: none; \}/)
+  assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="lineStyles\.dashed"\]:checked\)\) \[data-row="dash"\] \{ visibility: hidden; \}/)
+  assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="lineStyles\.arrows"\]:checked\)\) \[data-row="arrowSpacing"\] \{ visibility: hidden; \}/)
 })
 
 test('Marks to cycle is one 3 by 4 table: headings X, circle, an up arrow head and a down arrow head, dot; rows Edge (X, circle, directions), Corner (X and circle) and Cell (cross, circle, dot)', () => {
@@ -1189,7 +1189,7 @@ test('Other: the White outlines box has its own line with Outline width under it
   assert.match(rowOf(html, 'outlineWidth'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
   assert.match(rowOf(html, 'outlineWidth'), /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
-  assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="outline"\]:checked\)\) \[data-row="outlineWidth"\] \{ display: none; \}/)
+  assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="outline"\]:checked\)\) \[data-row="outlineWidth"\] \{ visibility: hidden; \}/)
   const off = renderEditor(editorState({ outline: false, outlineWidth: 5 }))
   assert.doesNotMatch(off, /data-box="outline" checked/)
   assert.match(rowOf(off, 'outlineWidth'), /value="5"/)

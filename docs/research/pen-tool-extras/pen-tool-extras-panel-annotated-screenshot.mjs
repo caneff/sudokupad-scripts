@@ -51,10 +51,13 @@ const modeButton = await box('.tool-pen button.pen-tool-extras-mode')
 const typeButton = await box('.tool-pen button.pen-tool-extras-page')
 const gearButton = await box('.tool-pen button.pen-tool-extras-settings')
 const sliders = await box('.pen-tool-extras-sliders')
-const panelPng = (await page.screenshot({ clip: panel })).toString('base64')
+// The tray's rounded corners reach past the panel's box, so the crop keeps a margin of page pixels on every side (the page behind is white there).
+const MARGIN = 8
+const shot = { x: panel.x - MARGIN, y: panel.y - MARGIN, width: panel.width + 2 * MARGIN, height: panel.height + 2 * MARGIN }
+const panelPng = (await page.screenshot({ clip: shot })).toString('base64')
 
 // Positions inside the panel picture, whose top left is (0, 0).
-const rel = (b) => ({ x: b.x - panel.x, y: b.y - panel.y, w: b.width, h: b.height, cx: b.x - panel.x + b.width / 2, cy: b.y - panel.y + b.height / 2 })
+const rel = (b) => ({ x: b.x - shot.x, y: b.y - shot.y, w: b.width, h: b.height, cx: b.x - shot.x + b.width / 2, cy: b.y - shot.y + b.height / 2 })
 const colorBlock = { x: Math.min(...colors.map((b) => b.x)), y: colors[0].y, width: colors[0].width, height: colors[2].y + colors[2].height - colors[0].y }
 const part = { colors: rel(colorBlock), mode: rel(modeButton), type: rel(typeButton), gear: rel(gearButton), sliders: rel(sliders) }
 // The gaps above and below the buttons row, where the line type and settings buttons' lines run in from the left.
@@ -72,9 +75,9 @@ const labels = [
   { text: 'Line thickness and opacity', y: part.sliders.cy, to: [[part.sliders.x + 10, part.sliders.cy]] }
 ]
 
-const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + panel.width
+const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + shot.width
 const panelLeft = PAD + LABEL_WIDTH + SIDE_GAP
-const height = panel.height + 2 * PAD
+const height = shot.height + 2 * PAD
 const html = labels.map((l) => {
   return `<div class="l" style="left:${PAD}px;top:${PAD + l.y}px">${l.text}</div>`
 }).join('')
@@ -86,7 +89,7 @@ const lines = labels.map((l) => {
 const p = await (await browser.newContext({ viewport: { width: Math.ceil(width), height: Math.ceil(height) }, deviceScaleFactor: 3 })).newPage()
 await p.setContent(`<body style="margin:0;background:#fff"><div id="c" style="position:relative;width:${width}px;height:${height}px;font:${FONT};color:#222">
 <style>.l{position:absolute;width:${LABEL_WIDTH}px;transform:translateY(-50%);line-height:1.25;text-align:right;white-space:nowrap}</style>
-<img id="panel" src="data:image/png;base64,${panelPng}" style="position:absolute;left:${panelLeft}px;top:${PAD}px;width:${panel.width}px;height:${panel.height}px">
+<img id="panel" src="data:image/png;base64,${panelPng}" style="position:absolute;left:${panelLeft}px;top:${PAD}px;width:${shot.width}px;height:${shot.height}px">
 <svg width="${width}" height="${height}" style="position:absolute;left:0;top:0">${lines}</svg>${html}</div></body>`)
 await p.locator('#panel').evaluate((i) => i.decode())
 writeFileSync(out, await p.locator('#c').screenshot())

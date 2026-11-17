@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
@@ -64,7 +64,7 @@ describe('profiles on a fresh install, injected after Start Puzzle', { concurren
 
   it('a fresh install starts in Cell and colors every given by Low/5/High, as the active profile', async () => {
     assert.equal(await t.label(), 'Cell')
-    assert.equal(await settle(() => t.wrongCount(LOW_FIVE_HIGH), 0), 0)
+    assert.equal(await settle(() => t.wrongCount(PRELOADED_LOW_FIVE_HIGH), 0), 0)
     assert.notEqual(await t.coloredCount(), 0)
   })
 
@@ -673,35 +673,36 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal((await t.getState()).active, 0)
   })
 
-  it('Restore defaults asks first: a refusal changes nothing; accepted, the draft holds the five preloads, Cancel drops it and Save stores it', async () => {
+  it('Restore defaults asks first, inside the dialog: keeping changes nothing; restoring, the draft holds the five preloads, Cancel drops it and Save stores it', async () => {
     const before = await t.names()
     assert.equal(before.length, 1, 'one profile of the install\'s own is saved')
-    const asks = []
-    const answer = (accept) => p.once('dialog', (dialog) => { asks.push(dialog.message()); return accept ? dialog.accept() : dialog.dismiss() })
+    const native = []
+    // A native box nobody listens for is dismissed unseen, so any is counted.
+    const count = (dialog) => { native.push(dialog.message()); return dialog.dismiss() }
+    p.on('dialog', count)
+    const ask = p.locator(`${EDITOR} [data-role=restore-confirm]`)
+    const answer = (name) => ask.getByRole('button', { name }).click()
     await openEditorOn(p)
-    answer(false)
     await dialogButton(p, 'Restore defaults').click()
+    assert.match(await ask.innerText(), /own profiles/)
+    await answer('Keep my profiles')
     assert.deepEqual(await t.rowNames(), before)
-    answer(true)
     await dialogButton(p, 'Restore defaults').click()
+    await answer('Restore defaults')
     assert.deepEqual(await t.rowNames(), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
     assert.equal(await t.selectedRow(), 0)
-    assert.equal(asks.length, 2)
-    assert.match(asks[0], /own profiles/)
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual(await t.names(), before, 'Restore defaults saves nothing by itself')
     await openEditorOn(p)
-    answer(true)
     await dialogButton(p, 'Restore defaults').click()
+    await answer('Restore defaults')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit']), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
     await openEditorOn(p)
-    // A dialog nobody listens for is dismissed unseen, so this one is counted.
-    const count = (dialog) => { asks.push(dialog.message()); return dialog.dismiss() }
-    p.on('dialog', count)
     await dialogButton(p, 'Restore defaults').click()
+    assert.equal(await ask.count(), 0, 'the preloads alone lose nothing, so Restore defaults does not ask again')
     p.off('dialog', count)
-    assert.equal(asks.length, 3, 'the preloads alone lose nothing, so Restore defaults does not ask again')
+    assert.deepEqual(native, [])
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 

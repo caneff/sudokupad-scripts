@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.26
+// @version      0.46.33
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.26'
+  const VERSION = '0.46.33'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -35,7 +35,8 @@
   // An item saves its color as a number, 1 to 9, the number of one of the nine colors, so a recolor recolors it.
   const NOTE_COLOR_COUNT = 9
   const COLOR_NUMBERS = Array.from({ length: NOTE_COLOR_COUNT }, (_, i) => i + 1)
-  const DEFAULT_COLOR = 1
+  // Color 2 is #525252 by default, 7.81:1 on white; color 1 (#919191) is 3.15:1.
+  const DEFAULT_COLOR = 2
   const KEY_PREFIX = 'TextAnywhere_'
   // Every key was saved under this prefix before 0.45.0. Each is copied to its new name and kept, so a rolled-back version still finds it.
   const OLD_KEY_PREFIX = 'DrawTool_'
@@ -160,8 +161,10 @@
   const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
   /* eslint-enable no-unused-vars */
   // </lib:palette>
-  // The page's own color, as SudokuPad's buttons use it behind their icons.
+  // The page's own color, as SudokuPad's buttons use it behind their icons. Dark Page leaves it on the board's box and paints the page around it its own color, which it puts in
+  // `--dark-page-color`: a note off the board takes that.
   const PAGE_COLOR = 'var(--body-bg, #fff)'
+  const MARGIN_COLOR = `var(--dark-page-color, ${PAGE_COLOR})`
   const PEN_PRESET = 'pen'
   const CUSTOM = 'custom'
   const PRESET_LABELS = {
@@ -252,7 +255,12 @@
   const CLASS_PREFIX = 'text-anywhere-'
   const COLORS_STYLE_ID = 'text-anywhere-colors'
   const PANEL_STYLE_ID = 'text-anywhere-style'
-  const CLEAR_QUESTION = 'Clear all notes?'
+  // Clear all with no notes asks nothing; with one it speaks of the one.
+  const clearAsk = (count) => count === 0
+    ? null
+    : count === 1
+      ? { question: 'Delete the note? This cannot be undone.', button: 'Delete' }
+      : { question: `Delete all ${count} notes? This cannot be undone.`, button: 'Delete all' }
   const OK_LABEL = 'OK'
   const NOTES_PREFIX = KEY_PREFIX + 'notes_'
   const OLD_NOTES_PREFIX = OLD_KEY_PREFIX + 'drawing_'
@@ -554,6 +562,8 @@
     return { left, right, top, bottom }
   }
 
+  const noteBackdrop = (middle, board) => inBox(middle, board) ? PAGE_COLOR : MARGIN_COLOR
+
   function noteMiddle (item, map, outline) {
     const { left, right, top, bottom } = noteScreenBox(item, map, outline)
     return [(left + right) / 2, (top + bottom) / 2]
@@ -616,12 +626,13 @@
   const readBoxColor = (saved) => Object.hasOwn(BOX_PRESETS, saved) ? saved : savedHex(saved) ?? DEFAULT_BOX_COLOR
   const boxChoice = (setting) => Object.hasOwn(BOX_PRESETS, setting) ? setting : BOX_CUSTOM
   const BOX_FILLS = {
-    page: () => PAGE_COLOR,
+    page: (noteColor, backdrop) => backdrop,
     white: () => BOX_WHITE,
     yellow: () => BOX_YELLOW,
-    tint: (noteColor) => `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${PAGE_COLOR})`
+    tint: (noteColor, backdrop) => `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${backdrop})`
   }
-  const boxFill = (setting, noteColor) => BOX_FILLS[setting]?.(noteColor) ?? setting
+  // `backdrop` is the color behind the note (noteBackdrop).
+  const boxFill = (setting, noteColor, backdrop = PAGE_COLOR) => BOX_FILLS[setting]?.(noteColor, backdrop) ?? setting
   // The frame is one screen pixel: PIXEL_VAR is that in the units of a note's group, and a fixed note's group, in screen pixels, sets none.
   const FRAME_COLOR = '#c4c4c4'
   const readFrame = readFlag
@@ -642,16 +653,16 @@
   function renderSamplePicks ({ outline, box, custom, frame, textColor }) {
     const pickButton = (role, value, label, pressed, sample) =>
       `<button type="button" class="${CLASS_PREFIX}pick" data-role="${role}" data-value="${value}" aria-label="${escapeHtml(label)}" aria-pressed="${pressed}">${sample}<span class="${CLASS_PREFIX}pick-label">${escapeHtml(label)}</span></button>`
-    const row = (title, note, buttons, after = '') => `<div class="${CLASS_PREFIX}section-title">${title}</div><div class="${CLASS_PREFIX}pick-note">${note}</div><div class="${CLASS_PREFIX}pick-row">${buttons.join('')}</div>${after}`
-    const halo = (name) => `<span class="${CLASS_PREFIX}sample" data-cell style="background:${HALO_CELL_COLOR};color:${escapeHtml(textColor)};font-size:26px;text-shadow:${escapeHtml(haloShadow(name, PAGE_COLOR))}">A</span>`
+    const row = (title, note, buttons, after = '') => `<div class="${CLASS_PREFIX}section-title">${title}<span class="${CLASS_PREFIX}pick-note">${note}</span></div><div class="${CLASS_PREFIX}pick-row">${buttons.join('')}</div>${after}`
+    const halo = (name) => `<span class="${CLASS_PREFIX}sample" data-cell style="background:${HALO_CELL_COLOR};color:${escapeHtml(textColor)};font-size:20px;text-shadow:${escapeHtml(haloShadow(name, PAGE_COLOR))}">A</span>`
     const boxed = (fill, framed) => `<span class="${CLASS_PREFIX}sample" style="color:${escapeHtml(textColor)};font-size:18px"><span style="${SAMPLE_BOX_STYLE};background:${escapeHtml(fill)};box-shadow:${frameShadow(framed)}">A=B</span></span>`
     const choice = boxChoice(box)
     const fillFor = (id) => id === BOX_CUSTOM ? custom : boxFill(id, textColor)
-    return row('Halo round the letters', 'For notes without a box, so they read over digits and grid lines.', OUTLINES.map((name) => pickButton('outline-pick', name, OUTLINE_LABELS[name], outline === name, halo(name)))) +
-      row('Box color', 'For notes made with the Background button on.',
+    return row('Halo round the letters', 'for notes without a box', OUTLINES.map((name) => pickButton('outline-pick', name, OUTLINE_LABELS[name], outline === name, halo(name)))) +
+      row('Box color', 'for notes with Background on',
         [...Object.keys(BOX_PRESETS), BOX_CUSTOM].map((id) => pickButton('box-pick', id, BOX_PRESETS[id] ?? BOX_CUSTOM_LABEL, choice === id, boxed(fillFor(id), frame))),
         choice === BOX_CUSTOM ? `<input type="color" class="${CLASS_PREFIX}swatch" data-role="box-custom" value="${escapeHtml(custom)}" aria-label="Own box color" title="Own box color">` : '') +
-      row('Box border', 'The line round a note with a box.',
+      row('Box border', 'the line round a note with a box',
         FRAME_CHOICES.map(([value, label]) => pickButton('frame-pick', value, label, frame === (value === 'on'), boxed(fillFor(choice), value === 'on'))))
   }
   // Board units, as a text's height.
@@ -659,6 +670,19 @@
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
   const sizeStep = (width, direction) => steppedSlider(WIDTH_RANGE, width, direction)
+  // The 9x9's width is the slider's own; a bigger grid has smaller cells on screen, so a new note's width grows with the grid to keep its line about as tall on screen.
+  const REFERENCE_GRID = 9
+  const gridScaledWidth = (width, ratio) => {
+    const stepped = Math.round(widthFor(textSizeFor(width) * ratio) / WIDTH_STEP) * WIDTH_STEP
+    return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, stepped))
+  }
+  const gridRatio = (gridSize) => (gridSize > 0 ? gridSize : REFERENCE_GRID) / REFERENCE_GRID
+  const newNoteWidth = (width, gridSize) => gridScaledWidth(width, gridRatio(gridSize))
+  // The saved next-note size stays in 9x9 units, so a size taken from a note on this grid is scaled back.
+  const nextNoteWidth = (noteWidth, gridSize) => gridScaledWidth(noteWidth, 1 / gridRatio(gridSize))
+  // A held + or - steps the size like a held arrow nudges: after the pause, one step a tick, ramping to this many.
+  const SIZE_HOLD_MAX_STEPS = 4
+  const sizeHoldSteps = (heldMs) => heldRamp(heldMs, 1, SIZE_HOLD_MAX_STEPS)
   // A note steps from its own size, not from the width the panel shows for the first selected note.
   const steppedNote = (item, direction) => ({ ...item, size: textSizeFor(sizeStep(widthFor(item.size), direction)) })
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
@@ -958,12 +982,17 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
+  // WCAG's contrast ratio of two [r, g, b] colors, from 1 (the same) to 21 (black on white); the order does not matter.
+  function contrastRatio (one, other) {
+    const a = wcagLuminance(one) + 0.05
+    const b = wcagLuminance(other) + 0.05
+    return Math.max(a, b) / Math.min(a, b)
+  }
+
   function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
-    const page = wcagLuminance(rgb) + 0.05
-    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(light) >= contrast(dark) ? light : dark
+    return contrastRatio(rgb, parseColor(light)) >= contrastRatio(rgb, parseColor(dark)) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
@@ -1386,13 +1415,27 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  const STATUS_ERROR_COLOR = '#b3261e'
+  // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
+  const CONTENT_INSET = '16px'
   // An inset layer darkens whatever fill the control has.
   const PRESS_LAYER = 'box-shadow: inset 0 0 0 100vmax rgb(0 0 0 / .1)'
   const STATUS_ATTRIBUTE = 'data-role="settings-status"'
   const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
 
-  function setDialogStatus (dialog, message) {
-    dialog.querySelector(STATUS_SELECTOR).textContent = message
+  function setDialogStatus (dialog, message, { error = false } = {}) {
+    const status = dialog.querySelector(STATUS_SELECTOR)
+    status.textContent = message
+    if (error) status.dataset.tone = 'error'
+    else delete status.dataset.tone
+  }
+
+  // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
+  function clearDialogError (dialog) {
+    if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
   // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
   // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
@@ -1504,7 +1547,7 @@
   }
 
   function wireErrorLog (dialog, win) {
-    const say = (message) => setDialogStatus(dialog, message)
+    const say = (message, options) => setDialogStatus(dialog, message, options)
     dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-error-log' && act !== 'clear-error-log') return
@@ -1512,8 +1555,11 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
           win.localStorage.removeItem(ERROR_LOG_KEY)
-          say('Error log cleared.')
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
         }
         const log = readErrorLog(win.localStorage)
@@ -1524,7 +1570,7 @@
         await win.navigator.clipboard.writeText(formatErrorLog(log))
         say('Error log copied.')
       } catch (error) {
-        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -1544,15 +1590,20 @@
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`,
+      `.${prefix}title-row ${STATUS_SELECTOR}[data-tone="error"] { color: ${STATUS_ERROR_COLOR}; font-weight: 600; }`
     ].join('\n')
   }
 
-  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
-  function buttonRowCss (bodyId) {
-    const row = `.dialog:has(#${bodyId}) .dialog-options`
+  // Scoped by the body's id, so SudokuPad's other dialogs are left alone. SudokuPad styles a dialog's buttons by tag, so each of those is forced.
+  function dialogShellCss (bodyId) {
+    const dialog = `.dialog:has(#${bodyId})`
+    const row = `${dialog} .dialog-options`
     return [
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      // Inherited by every checkbox, slider and other form control in the dialog, in place of the browser's blue.
+      `${dialog} { accent-color: ${SUDOKUPAD_PURPLE}; }`,
+      // The row sits on the text parts' box, so their side padding as its margin puts its edges, the top line's included, on the content column's.
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
       `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
       `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
@@ -1577,7 +1628,7 @@
   function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
-    writeStyle(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    writeStyle(`settings-dialog-shell-${bodyId}`, dialogShellCss(bodyId), doc)
     if (css) writeStyle(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
@@ -1588,15 +1639,17 @@
       } catch (error) {
         failed = true
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`, { error: true })
         return
       }
       close()
     }
+    const clearError = () => clearDialogError(doc.getElementById(bodyId).closest('.dialog'))
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      ...extraButtons
+      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
+      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
     ]
     framework.showDialog({
       centerOverBoard,
@@ -1613,6 +1666,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
+    // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
+    const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
+    for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -1653,7 +1709,7 @@
   }
 
   function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
-    const say = (message) => setDialogStatus(root, message)
+    const say = (message, options) => setDialogStatus(root, message, options)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-settings' && act !== 'paste-settings') return
@@ -1669,7 +1725,7 @@
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`)
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -2108,13 +2164,14 @@
     const [x, y] = reachablePoint(middle, [box.right - box.left, box.bottom - box.top], room)
     return [x - middle[0], y - middle[1]]
   }
-  function nudgeStep (heldMs, shift) {
+  // A held key does nothing more until the pause, then `from` a tick, ramping to `to`.
+  function heldRamp (heldMs, from, to) {
     if (heldMs < NUDGE_REPEAT_MS) return 0
-    const [from, to] = shift ? [NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX] : [NUDGE_PX, NUDGE_MAX_PX]
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
+  const nudgeStep = (heldMs, shift) => shift ? heldRamp(heldMs, NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX) : heldRamp(heldMs, NUDGE_PX, NUDGE_MAX_PX)
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet, noteBackdrop }
   }
   if (typeof document === 'undefined') return
 
@@ -2167,6 +2224,9 @@
 
   const eventPoint = (event) => [event.clientX, event.clientY]
 
+  // The board is fitted to the screen by its longer side; newNoteWidth reads a missing size as the 9x9's.
+  const gridSize = () => Math.max(Framework.app.puzzle.rows, Framework.app.puzzle.cols)
+
   function boardMap () {
     const svg = boardSvg()
     const ctm = svg.getScreenCTM()
@@ -2182,7 +2242,7 @@
   const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
 
   // `scale` is pixels of the note's box per board unit. A note with no background is padded by its halo's reach, since its box clips what overflows it.
-  function noteStyle (item, [x, y], scale) {
+  function noteStyle (item, [x, y], scale, backdrop) {
     const px = (units) => `${roundToTenth(units * scale)}px`
     const [width, height] = item.box ? item.box.map(px) : ['', '']
     const limit = item.box ? 'none' : ''
@@ -2201,9 +2261,9 @@
       opacity: String(noteOpacity(item)),
       [NOTE_OPACITY_VAR]: String(noteOpacity(item)),
       [NOTE_COLOR_VAR]: itemColor(item.color),
-      backgroundColor: item.bg ? boxFill(look.boxColor, itemColor(item.color)) : 'transparent',
+      backgroundColor: item.bg ? boxFill(look.boxColor, itemColor(item.color), backdrop) : 'transparent',
       boxShadow: item.bg ? frameShadow(look.frame) : 'none',
-      textShadow: item.bg ? 'none' : haloShadow(look.outline, PAGE_COLOR),
+      textShadow: item.bg ? 'none' : haloShadow(look.outline, backdrop),
       padding: `${padY} ${padX}`,
       borderRadius: item.bg ? px(BACKGROUND_RADIUS * item.size) : '0'
     }
@@ -2217,8 +2277,10 @@
     }
   }
 
+  const backdropOf = (item, map) => noteBackdrop(noteMiddle(item, map, look.outline), map.box)
+
   function styleNote (element, item, map) {
-    applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale))
+    applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale, backdropOf(item, map)))
     element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
   }
 
@@ -2339,6 +2401,8 @@
   const SLIDERS_ROW = CONTROLS_ROW + 1
   const CONTROLS_GAP_REM = 0.75
   const TRAY_RADIUS_PX = 14
+  const SELECTED_RING_PX = 3
+  const PICKER_INSET_PX = 4
   // A pressed button shrinks to this scale over this long, so a click shows before it lets go; SudokuPad's own buttons have no pressed look.
   const PRESS_SCALE = 0.97
   const PRESS_MS = 120
@@ -2364,8 +2428,8 @@
       : `<div class="${sliderRow}" data-empty></div>`
   }
 
-  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders` and `sliderRow` are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
-  function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
+  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders`, `sliderRow` and `picker` (the hold-to-edit picker's) are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
+  function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, picker, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
     const pressable = [`${panel} ${colorButton}`, controlButtons, ...(pressButtons ? [pressButtons] : [])].join(', ')
     const pressed = `:is(${pressable}):active`
@@ -2375,6 +2439,10 @@
       `${panel} button[data-key="0"], ${panel} button[data-control="delete"] { display: none !important; }`,
       // Each color button keeps `position: relative`, since its color line is its `::after`.
       `${panel} ${colorButton} { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
+      // The selected color keeps a white face and takes a ring, since a dark color vanishes on SudokuPad's purple fill. An inset shadow takes no room, so no button moves.
+      `${panel} ${colorButton}.current { background-color: #fff; box-shadow: inset 0 0 0 ${SELECTED_RING_PX}px ${SUDOKUPAD_PURPLE}; }`,
+      // A picker sits inside its color button's frame, not over it.
+      `${panel} .${picker} input { width: calc(${PANEL_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); height: calc(${COLOR_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); }`,
       `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${SUDOKUPAD_PURPLE}; }`,
       `.${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
       // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
@@ -2432,7 +2500,7 @@
   const hoverLook = (outlinePercent, fillPercent) => `outline: 1px solid ${hoverShare(outlinePercent)}; outline-offset: 2px; background-image: linear-gradient(${hoverShare(fillPercent)}, ${hoverShare(fillPercent)});`
   const IDLE_NOTE = `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS})`
   const PANEL_CSS = [
-    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, pressButtons: HIDE_ALL, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
+    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, pressButtons: HIDE_ALL, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, picker: `${CLASS_PREFIX}picker`, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
     `${PANEL} button.digit::after { content: "Aa"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-indent: 0; font-size: ${COLOR_LABEL_REM}rem; font-weight: 600; line-height: 1; }`,
@@ -2590,12 +2658,14 @@
   const DIALOG_ID = 'text-anywhere-dialog'
   const DIALOG_STYLE_ID = 'text-anywhere-dialog-style'
   const DIALOG_CSS = [
-    `#${DIALOG_ID} .${CLASS_PREFIX}section-title { font-weight: 600; margin: 6px 0 0; }`,
-    `#${DIALOG_ID} .${CLASS_PREFIX}pick-note { margin: 2px 0 0; font-size: 0.85em; opacity: 0.8; }`,
-    `#${DIALOG_ID} .${CLASS_PREFIX}pick-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}section-title { font-weight: 600; margin: 4px 0 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}pick-note { display: inline; margin: 0 0 0 8px; font-weight: 400; font-size: 0.85em; opacity: 0.8; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}font-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}font-row .${CLASS_PREFIX}section-title { margin: 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}pick-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}pick { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 4px; width: auto; height: auto; min-width: 0; margin: 0; padding: 4px 4px 6px; line-height: 1.2; border: 2px solid transparent; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}pick[aria-pressed="true"] { border-color: #000; }`,
-    `#${DIALOG_ID} .${CLASS_PREFIX}sample { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 64px; height: 44px; border-radius: 6px; font-weight: 600; line-height: 1; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}sample { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 64px; height: 22px; border-radius: 6px; font-weight: 600; line-height: 1; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}sample[data-cell] { border: 1px solid rgb(0 0 0 / .25); }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}pick-label { font-size: 0.85em; }`,
     `#${DIALOG_ID} input.${CLASS_PREFIX}swatch[data-role="box-custom"] { display: block; margin: 0 0 6px; }`,
@@ -2603,7 +2673,8 @@
     // The pulldowns are as wide as their longest option, not as the dialog's column (after colorBlockCss, whose rule they override).
     `#${DIALOG_ID} .${CLASS_PREFIX}color-choice { width: auto; min-width: 0; }`,
     // The block is as wide as its pulldown, so the swatch grid, which takes the block's width, ends where the pulldown does.
-    `#${DIALOG_ID} .${CLASS_PREFIX}color-block { justify-content: start; }`
+    `#${DIALOG_ID} .${CLASS_PREFIX}color-block { justify-content: start; gap: 4px; margin: 4px 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}font-row .${CLASS_PREFIX}color-block { margin: 0; }`
   ].join('\n')
 
   // A pasted value is saved and shown at once, whether or not Text Anywhere is current.
@@ -2662,7 +2733,7 @@
           draw()
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: () => restoreDefaults() }]
     }), () => null)
     if (!box) return
     // Like Pen Tool Extras: the draft takes the defaults, and Save or Cancel decides.
@@ -2678,7 +2749,7 @@
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft.colors[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
         (draft.missing.length ? `<div data-role="missing-note">${missingColorsText(draft.missing, draft.fromPreset)}</div>` : '') +
-        `<div class="${CLASS_PREFIX}section-title">Font</div>${renderFontChoice(draftLooks.noteFont)}` +
+        `<div class="${CLASS_PREFIX}font-row"><span class="${CLASS_PREFIX}section-title">Font</span>${renderFontChoice(draftLooks.noteFont)}</div>` +
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft.colors[color] })
     }
     draw()
@@ -2753,16 +2824,21 @@
     [OPACITY_SLIDER]: { name: 'opacity', change: (value) => (item) => ({ ...item, opacity: value }) }
   }
 
+  // A width the panel shows for a note is that note's, scaled to this grid; the next note's is saved in 9x9 units.
+  const setNextLook = (name, value) => setLook(name, name === 'width' && targetNotes() ? lookRow(name).read(nextNoteWidth(value, gridSize())) : value)
+
   function slideLook (input) {
     const { name, change } = SLIDER_LOOKS[input.id]
     const value = lookRow(name).read(Number(input.value))
-    applyLook(change(value), () => setLook(name, value))
+    applyLook(change(value), () => setNextLook(name, value))
   }
 
-  function stepSize (direction) {
-    // The next note takes the first note's new size, as the panel shows it.
-    const next = sizeStep(panelValues().width, direction)
-    applyLook((item) => steppedNote(item, direction), () => setLook('width', lookRow('width').read(next)))
+  function stepSize (direction, steps = 1) {
+    for (let i = 0; i < steps; i++) {
+      // The next note takes the first note's new size, as the panel shows it.
+      const next = sizeStep(panelValues().width, direction)
+      applyLook((item) => steppedNote(item, direction), () => setNextLook('width', lookRow('width').read(next)))
+    }
     showPanelValues()
   }
 
@@ -2850,6 +2926,8 @@
   let puzzleNotes = []
   let keptEntries = []
   let selected = []
+  // The selection a rectangle being dragged would leave at its release, outlined in place of the selection; null with no rectangle.
+  let previewed = null
   // False while this puzzle's saved notes cannot be read: no save writes over them but an explicit wipe's.
   let savable = true
   const reported = new Set()
@@ -2925,7 +3003,8 @@
   function showNote (element, item, map) {
     const shown = shownNotes.get(element) ?? {}
     if (shown.text !== item.text) element.replaceChildren(...noteContent(item.text))
-    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale) : noteStyle(item, item.at, 1)
+    const backdrop = backdropOf(item, map)
+    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale, backdrop) : noteStyle(item, item.at, 1, backdrop)
     const look = JSON.stringify(style)
     if (look !== shown.look) {
       applyNoteStyle(element, style)
@@ -3054,7 +3133,7 @@
   }
 
   function showSelection (map, offset = [0, 0]) {
-    const outlines = textBox ? [{ box: textBox.box, color: itemColor(textBox.item.color) }] : selected.map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
+    const outlines = textBox ? [{ box: textBox.box, color: itemColor(textBox.item.color) }] : (previewed ?? selected).map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
     const layer = notesLayer()
     const shown = [...layer.querySelectorAll(`.${SELECTION_CLASS}`)]
     for (const element of shown.slice(outlines.length)) element.remove()
@@ -3388,7 +3467,7 @@
   // A new note starts at screen point `point`: its first line's middle is on the point, so its stored point is a half line up. Whether it is pinned to the board or fixed on the
   // screen is decided by the point clicked.
   function newNote (point, map) {
-    const size = textSizeFor(look.width)
+    const size = textSizeFor(newNoteWidth(look.width, gridSize()))
     const placed = placedItem(textItem(map.toBoard(point), '', color, size, background, look.opacity), point, map)
     const halfLine = LINE_HEIGHT * size / 2
     return placed.fixed
@@ -3663,6 +3742,10 @@
     clearTimeout(d.settle)
     between()
     d.rectangle?.remove()
+    if (previewed) {
+      previewed = null
+      showSelection(boardMap())
+    }
   }
 
   function endDrag (click = () => {}) {
@@ -3693,6 +3776,7 @@
   // A press that never moved opens no text box. A lost pointer (a blur, a tool switch, a move with the button up) cancels an erase, so nothing goes that the release never confirmed.
   function endGesture () {
     stopHold()
+    stopSizeHold()
     flushFrame()
     erasing = null
     if (drag) endDrag()
@@ -3714,6 +3798,8 @@
     return { left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) }
   }
 
+  const notesInRectangle = (d, map) => notesHidden ? [] : notesTouched(notesOnBoard(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]))
+
   function showRectangle (d) {
     if (!d.rectangle) {
       d.rectangle = document.createElement('div')
@@ -3722,13 +3808,18 @@
     }
     const box = rectangleBox(d)
     placeOver(d.rectangle, { left: box.left, top: box.top, right: box.left + box.width, bottom: box.top + box.height })
+    const map = boardMap()
+    previewed = rectangleSelection(d, notesInRectangle(d, map))
+    showSelection(map)
   }
+
+  const rectangleSelection = (d, touched) => d.shift ? [...new Set([...selected, ...touched])] : touched
 
   function selectInRectangle (d, click) {
     const map = boardMap()
-    const touched = notesHidden ? [] : notesTouched(notesOnBoard(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]))
+    const touched = notesInRectangle(d, map)
     if (touched.length === 0 && isSmallRectangle(d.points)) return click(d)
-    select(d.shift ? [...selected, ...touched] : touched)
+    select(rectangleSelection(d, touched))
   }
 
   const dragDelta = (d, [px, py] = d.points[d.points.length - 1]) => [px - d.points[0][0], py - d.points[0][1]]
@@ -3910,7 +4001,28 @@
     heldArrows.add(key)
   }
 
+  let sizeHold = null
+
+  function stopSizeHold () {
+    clearInterval(sizeHold?.timer)
+    sizeHold = null
+  }
+
+  // With nothing selected a hold steps the next note's size.
+  function repeatSize () {
+    if (textBox || drag || resizing) return stopSizeHold()
+    const steps = sizeHoldSteps(Date.now() - sizeHold.start)
+    if (steps > 0) stepSize(sizeHold.direction, steps)
+  }
+
+  // The hold is the physical key's: releasing Shift before = turns a held + into =.
+  function pressSizeKey (code, direction) {
+    stepSize(direction)
+    if (!sizeHold) sizeHold = { code, direction, start: Date.now(), timer: setInterval(repeatSize, NUDGE_TICK_MS) }
+  }
+
   function releaseKey (event) {
+    if (sizeHold?.code === event.code) stopSizeHold()
     heldArrows.delete(event.key)
     if (heldArrows.size > 0) return
     stopHold()
@@ -4059,12 +4171,14 @@
   }
 
   function confirmClear () {
+    const ask = clearAsk(puzzleNotes.filter((item) => item.kind === TEXT_KIND).length)
+    if (!ask) return
     textTool.run(() => Framework.showDialog({
       parts: [
-        { tag: 'text', content: CLEAR_QUESTION },
-        { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }, { tag: 'button', content: CANCEL_LABEL }] }
+        { tag: 'text', content: ask.question },
+        { tag: 'options', options: [{ tag: 'button', content: ask.button }, { tag: 'button', content: CANCEL_LABEL }] }
       ],
-      onButton: under(textTool, (label) => { if (label === OK_LABEL) clearAll() }),
+      onButton: under(textTool, (label) => { if (label === ask.button) clearAll() }),
       centerOverBoard: true
     }))
   }
@@ -4196,7 +4310,7 @@
       const sizeDirection = hasChord(event) ? undefined : SLIDER_STEP_KEYS[event.key]
       if (sizeDirection && !textBox) {
         // A gesture holds its notes as they were at the press, and its release would put the old size back.
-        if (!drag && !resizing) stepSize(sizeDirection)
+        if (!drag && !resizing) pressSizeKey(event.code, sizeDirection)
         return true
       }
       if (selected.length === 0) return false
@@ -4265,7 +4379,11 @@
       onWindow(textTool, 'keydown', switchOnT, { capture: true })
       onWindow(textTool, 'keyup', releaseKey, { capture: true })
       onWindow(textTool, 'pagehide', saveOpenNote)
-      document.addEventListener('visibilitychange', under(textTool, () => { if (document.visibilityState === 'hidden') saveOpenNote() }))
+      document.addEventListener('visibilitychange', under(textTool, () => {
+        if (document.visibilityState !== 'hidden') return
+        stopSizeHold()
+        saveOpenNote()
+      }))
     })
     addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: 'Text Anywhere', open: openDialog })
     boardNotes.run(() => {
