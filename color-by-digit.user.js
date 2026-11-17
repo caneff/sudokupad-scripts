@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.66
+// @version      0.25.67
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.66'
+  const VERSION = '0.25.67'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -819,6 +819,10 @@
             feature.skip(error)
             return fallback()
           }
+        },
+        // The handler as a function that runs under `run`, for an event listener or a callback.
+        bind (handler, fallback) {
+          return (...args) => feature.run(() => handler(...args), fallback)
         },
         // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
         // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
@@ -2795,12 +2799,11 @@
       else openMenu()
     }
     // A handler that throws turns the button off, and an off button's handlers do nothing.
-    const listen = (type, handler, options) => document.addEventListener(type, (event) => modeButton.run(() => handler(event)), options)
-    listen('mousedown', (event) => {
+    document.addEventListener('mousedown', modeButton.bind((event) => {
       if (onButtonProper(event)) event.stopPropagation()
       if (onArrow(event) || onButtonProper(event) || within(event, MENU)) event.preventDefault()
-    }, true)
-    listen('click', (event) => {
+    }), true)
+    document.addEventListener('click', modeButton.bind((event) => {
       if (onArrow(event)) return toggleMenu(event)
       const row = within(event, `${MENU} [data-act]`)
       if (!row) return
@@ -2812,23 +2815,23 @@
       } else {
         switchProfile(app, Number(row.dataset.index), row.dataset.target, row.closest('[data-role="menu-row"]'))
       }
-    }, true)
-    listen('touchstart', (event) => {
+    }), true)
+    document.addEventListener('touchstart', modeButton.bind((event) => {
       if (onArrow(event)) toggleMenu(event)
       else if (onButtonProper(event)) { event.preventDefault(); event.stopPropagation() }
-    }, { capture: true, passive: false })
-    listen('contextmenu', (event) => {
+    }), { capture: true, passive: false })
+    document.addEventListener('contextmenu', modeButton.bind((event) => {
       if (!within(event, BUTTON)) return
       event.preventDefault()
       if (!menu) openMenu()
-    }, true)
+    }), true)
     let hold = null
     const endHold = () => {
       clearTimeout(hold)
       hold = null
     }
     const setPressed = (on) => document.querySelector(BUTTON)?.classList.toggle(PRESSED_CLASS, on)
-    listen('pointerdown', (event) => {
+    document.addEventListener('pointerdown', modeButton.bind((event) => {
       if (menu && !within(event, MENU) && !onArrow(event)) closeMenu()
       endHold()
       if (!onButtonProper(event) || (event.pointerType === 'mouse' && event.button !== 0)) return
@@ -2847,13 +2850,13 @@
           endHold()
         }
       })
-    }, true)
-    listen('keydown', (event) => {
+    }), true)
+    document.addEventListener('keydown', modeButton.bind((event) => {
       if (event.key !== 'Escape' || !menu) return
       event.preventDefault()
       event.stopPropagation()
       closeMenu()
-    }, true)
+    }), true)
     window.addEventListener('resize', closeMenu)
   }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.37
+// @version      1.32.38
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.37'
+  const VERSION = '1.32.38'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -405,6 +405,10 @@
             feature.skip(error)
             return fallback()
           }
+        },
+        // The handler as a function that runs under `run`, for an event listener or a callback.
+        bind (handler, fallback) {
+          return (...args) => feature.run(() => handler(...args), fallback)
         },
         // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
         // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
@@ -2064,8 +2068,6 @@
   // 6. Marks: edge marks, grid-corner marks, cell marks and the marks layer
   const overGridInPenTool = (app, event) => app.tool === 'pen' && Boolean(event.target.closest && event.target.closest(GRID_SELECTOR))
 
-  const guardedBy = (step, fallback) => (handler) => (event) => step.run(() => handler(event), fallback)
-
   // Every edge mark, grid-corner mark and cell circle, cross and dot is drawn here, last in the pen layer: SudokuPad adds a cell's strokes in cell order, so a later
   // cell's line would otherwise cover an earlier cell's mark. The pen layer's opacity then fades marks and lines as one picture.
   const MARKS_LAYER_ID = 'pen-tool-extras-marks'
@@ -2509,8 +2511,8 @@
     steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => isEraseButton(lastButton) ? undefined : stock(...args))
     const erasePress = (event) => isEraseButton(event.button) && overGridInPenTool(app, event)
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
-    const guarded = guardedBy(steps.lineErase, () => { erase = null; menuOwed = false })
-    window.addEventListener('pointerdown', guarded((event) => {
+    const resetErase = () => { erase = null; menuOwed = false }
+    window.addEventListener('pointerdown', steps.lineErase.bind((event) => {
       erase = null
       menuOwed = false
       if (!erasePress(event)) return
@@ -2523,30 +2525,30 @@
       crossPoint(marksAt, started, point)
       // A `pointerup` comes only once the last button is up, whichever it is, so a drag with a second button pressed ends at that release.
       trackPointer(window, {
-        move: guarded((moveEvent) => {
+        move: steps.lineErase.bind((moveEvent) => {
           if (erase === started && (moveEvent.buttons & RIGHT_BIT)) {
             crossTo(marksAt, started, pointOf(moveEvent))
           }
-        }),
-        end: guarded((endEvent) => {
+        }, resetErase),
+        end: steps.lineErase.bind((endEvent) => {
           if (erase !== started) return
           erase = null
           if (endEvent.type === 'pointercancel') return
           crossTo(marksAt, started, pointOf(endEvent))
           finishErase(tool, started)
-        })
+        }, resetErase)
       })
-    }), true)
+    }, resetErase), true)
     // The release then finds no erase and sends nothing; the menu is still owed its refusal.
-    window.addEventListener('keydown', guarded((event) => {
+    window.addEventListener('keydown', steps.lineErase.bind((event) => {
       if (event.key !== 'Escape' || erase === null) return
       erase = null
-    }), true)
-    document.addEventListener('contextmenu', guarded((event) => {
+    }, resetErase), true)
+    document.addEventListener('contextmenu', steps.lineErase.bind((event) => {
       const overGrid = inForce.eraseClicks && overGridInPenTool(app, event)
       if (overGrid || menuOwed) event.preventDefault()
       menuOwed = false
-    }), true)
+    }, resetErase), true)
   }
 
   // 8. Line look: thickness, opacity, white outline and the hint layer
