@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.27
+// @version      0.46.28
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.27'
+  const VERSION = '0.46.28'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -1535,8 +1535,9 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
+          const wasEmpty = readErrorLog(win.localStorage).length === 0
           win.localStorage.removeItem(ERROR_LOG_KEY)
-          say('Error log cleared.')
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
         }
         const log = readErrorLog(win.localStorage)

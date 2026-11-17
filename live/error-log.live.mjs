@@ -50,6 +50,11 @@ describe('the error log', { concurrency: false }, () => {
     await p.locator(STATUS).filter({ hasText: 'The error log is empty.' }).waitFor()
   })
 
+  it('Clear on a log that is already empty says so', async () => {
+    await actButton(p, 'clear-error-log').click()
+    await p.locator(STATUS).filter({ hasText: 'The error log was already empty.' }).waitFor()
+  })
+
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
   })
