@@ -34,7 +34,6 @@ describe('Text Anywhere\'s new note size follows the grid', { concurrency: false
     const heights = {}
     for (const shape of SHAPES) {
       heights[shape[0]] = await lineHeight(shape)
-      await p.evaluate(() => Object.keys(localStorage).filter((k) => k.includes('TextAnywhere_notes')).forEach((k) => localStorage.removeItem(k)))
     }
     for (const name of ['4x4', '16x16']) assert.ok(Math.abs(heights[name] / heights['9x9'] - 1) < WITHIN, `${name} ${heights[name]}px against the 9x9's ${heights['9x9']}px`)
   })
