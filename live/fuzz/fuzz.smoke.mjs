@@ -453,8 +453,8 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.equal(await afterSteps(puzzleByName('4x4'), [['rules wheel', 400]], (p) => p.locator('.puzzle-rules').isVisible()), false, 'no rules box to turn')
     })
 
-    it('Restore defaults saves no sizing at all', async () => {
-      assert.equal(await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['rules font', [-1, 1]], ['rules dialog', ['', '', true, false]]], sizing), undefined)
+    it('Restore defaults leaves the puzzle\'s sizing saved', async () => {
+      assert.notEqual(await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['rules font', [-1, 1]], ['rules dialog', ['', '', true, false]]], sizing), undefined)
     })
 
     it('a saved box is read back when the page loads again: the pane is as wide as after the drag, and wider than undragged', async () => {
@@ -469,9 +469,9 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.deepEqual(await afterSteps(puzzleByName('4x4'), [['rules drag', ['ur', 100, -100]], ['rules font', [1, 3]]], saved), {})
     })
 
-    it('Save keeps both limits, a blank clears one, a number that is no size keeps the one before, and Cancel keeps none', async () => {
+    it('Save keeps both limits, a blank clears one, a number that is no size is refused and saves neither, and Cancel keeps none', async () => {
       assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, true]]], saved), { maxWidth: 400, maxHeight: 300 })
-      assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, true]], ['rules dialog', ['', '0', false, true]]], saved), { maxHeight: 300 })
+      assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, true]], ['rules dialog', ['', '0', false, true]]], saved), { maxWidth: 400, maxHeight: 300 })
       assert.deepEqual(await afterSteps(puzzle, [['rules dialog', ['400', '300', false, false]]], saved), {})
     })
   })
