@@ -485,14 +485,10 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     async restoreDefaults (script, save) {
       const { editor, open } = SETTINGS_DIALOGS[script]
       await open(p)
-      // Color by Digit asks first when the draft holds profiles of the player's own, and an unanswered confirm is dismissed, which would skip the restore: the player says OK.
-      const onConfirm = (dialog) => dialog.accept()
-      p.once('dialog', onConfirm)
-      try {
-        await dialogButton(p, 'Restore defaults').click()
-      } finally {
-        p.off('dialog', onConfirm)
-      }
+      await dialogButton(p, 'Restore defaults').click()
+      // Color by Digit asks first, inside its dialog, when the draft holds profiles of the player's own: the player says Restore defaults, or the restore is skipped.
+      const ask = p.locator(`${editor} [data-role="restore-confirm"]`)
+      if (await ask.count()) await ask.getByRole('button', { name: 'Restore defaults' }).click()
       await closeDialogWith(p, save ? 'Save' : 'Cancel', editor)
     },
     // Clear empties the shared log the run reads its failure's records from, which is a report's context only: a failure is a crash signal or a broken rule, read from the page.

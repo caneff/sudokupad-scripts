@@ -863,7 +863,7 @@ test('renderProfiles puts the name of the selected row in an editable box in pla
   assert.match(html, new RegExp(`<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="Mine &quot;x&quot;" aria-label="Profile name">`))
   assert.equal(count(html, /data-role="profile-name"/g), 1)
   assert.equal(count(html, /class="cbd-name"/g), 1)
-  assert.match(html, /<span class="cbd-name">Odd\/Even<\/span>/)
+  assert.match(html, /<span class="cbd-name" title="Odd\/Even">Odd\/Even<\/span>/)
   assert.equal(html.indexOf('data-role="profile-row"') < html.indexOf('data-role="profile-name"'), true)
   assert.equal(html.indexOf('data-role="profile-name"') < html.indexOf('data-index="1" role="radio"'), true)
 })

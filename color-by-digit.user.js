@@ -1965,6 +1965,7 @@
   const ACTIVE_INK = '#5b2a9a'
   const HOVER_FILL = '#f6f3f9'
   const NAME_PAD = 6
+  const FULL_NOTE = `${MAX_PROFILES} profiles is the most. Delete one to add another.`
   function renderProfiles (state, colorOf, selected) {
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
@@ -1972,17 +1973,20 @@
       return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
         `<span class="cbd-chips">${renderChips(cellChips(profile.groups), colorOf, { size: CHIP_PX })}</span>` +
-        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${escapeHtml(profile.name)}</span>`) +
+        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</span>`) +
         `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
     return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
       `<div role="radiogroup" aria-label="Profile to edit">${rows}</div>` +
-      `<button type="button" class="cbd-text-button" data-act="new-profile"${full ? ' disabled' : ''}>+ New profile</button>`
+      `<button type="button" class="cbd-text-button" data-act="new-profile"${full ? ` disabled title="${FULL_NOTE}"` : ''}>+ New profile</button>` +
+      (full ? `<div class="cbd-note" data-role="full-note">${FULL_NOTE}</div>` : '')
   }
 
   const MENU_ROW = 'display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 6px;border-radius:6px'
   const MENU_DOT_COLUMN = 44
+  // A long name is cut with an ellipsis past this, rather than widen the menu.
+  const MENU_MAX_PX = 300
   const DOT_RING = '#cfc7da'
   const chipColumn = (groups, colorOf) =>
     `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(cellChips(groups), colorOf, { size: CHIP_PX })}</span>`
@@ -2034,10 +2038,15 @@
       '</div>'
   }
 
+  const RESTORE_ASK = 'Restore the preloaded profiles? Your own profiles and edits are removed when you Save.'
+  const renderRestoreConfirm = () => '<div class="cbd-note cbd-confirm" role="alertdialog" aria-label="Restore defaults" data-role="restore-confirm">' +
+    `<div>${RESTORE_ASK}</div><div class="cbd-confirm-buttons"><button type="button" class="cbd-button" data-act="restore-keep">Keep my profiles</button>` +
+    '<button type="button" class="cbd-button" data-act="restore-go">Restore defaults</button></div></div>'
+
   // Matched as text, not by a selector, since a custom palette's key may hold a quote.
   const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
 
-  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadable = false }) {
+  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadable = false, confirmHtml = '' }) {
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
@@ -2045,7 +2054,7 @@
       ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
       : renderPaint(groups, pages, shown, brush, colors)
     const kept = unreadable ? `<div class="cbd-note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${PROFILES_KEY}${UNREADABLE_SUFFIX}.</div>` : ''
-    return `${kept}${pulldownsHtml}` +
+    return `${kept}${confirmHtml}${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
       `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
   }
@@ -2067,11 +2076,13 @@
   ].join('\n')
 
   const STYLE_CSS = [
-    [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
+    [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px; height: 34px'],
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
     [DIALOG, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
     [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
     [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
+    [`${EDITOR} .cbd-confirm`, `background: ${ACTIVE_FILL}; border: 1px solid ${ACTIVE_RING}; border-radius: 8px; padding: 8px 10px; margin: 0 0 10px`],
+    [`${EDITOR} .cbd-confirm-buttons`, 'display: flex; gap: 8px; margin-top: 8px'],
     [`${EDITOR} .cbd-pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
     [`${EDITOR} .cbd-pulldown`, `display: grid; grid-template-columns: ${PULLDOWN_LABEL_WIDTH}px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left`],
     [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
@@ -2094,7 +2105,7 @@
     // One width for every run, so the names line up.
     [`${EDITOR} .cbd-chips`, `display: flex; flex: none; width: ${CHIP_COLUMN_PX}px`],
     // Its left padding is the name field's padding and border, so a name starts where the selected row's does.
-    [`${EDITOR} .cbd-name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400`],
+    [`${EDITOR} .cbd-name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: .9rem; font-weight: 400`],
     [`${EDITOR} .cbd-text-button`, `background: none; border: none; box-shadow: none; color: ${MUTED}; font-size: .9rem; font-weight: 500; padding: 2px 6px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 1.4; border-radius: 6px; cursor: pointer`],
     [`${EDITOR} .cbd-text-button:hover:not(:disabled)`, `background: ${HOVER_FILL}; color: #222`],
     [`${EDITOR} .cbd-text-button:disabled`, 'opacity: .4; cursor: default'],
@@ -2713,7 +2724,7 @@
     menu = document.createElement('div')
     menu.id = MENU.slice(1)
     menu.setAttribute('role', 'menu')
-    menu.style.cssText = 'position:fixed;z-index:10000;width:max-content;max-width:calc(100vw - 8px);box-sizing:border-box;padding:6px;border-radius:10px;background:#fff;color:#1d1b26;' +
+    menu.style.cssText = `position:fixed;z-index:10000;width:max-content;max-width:min(calc(100vw - 8px), ${MENU_MAX_PX}px);box-sizing:border-box;padding:6px;border-radius:10px;background:#fff;color:#1d1b26;` +
       'box-shadow:0 10px 30px rgba(30,20,60,.28),0 0 0 1px rgba(0,0,0,.08);font:14px/1.2 sans-serif;text-align:left;user-select:none'
     menu.innerHTML = renderMenu(loadState(), readColor)
     document.body.appendChild(menu)
@@ -2874,15 +2885,28 @@
     })
     if (!box) return
     // The draft takes the preloaded profiles, and Save or Cancel decides. Profiles of the user's own are lost on Save, so a draft that holds any asks first.
+    let confirming = false
     const restoreDefaults = () => {
-      if (JSON.stringify(draft.state.profiles) !== JSON.stringify(preloadedState().profiles) && !window.confirm('Restore the preloaded profiles? Your own profiles and edits are removed when you Save.')) return
+      if (JSON.stringify(draft.state.profiles) !== JSON.stringify(preloadedState().profiles)) {
+        confirming = true
+        draw()
+        box.querySelector('[data-act="restore-keep"]').focus()
+        return
+      }
       edit({ type: 'restore' })
       draw()
     }
+    // Each paint grid is one Tab stop, the pressed swatch or the last key focused, and the arrow keys move within it.
+    const setStop = (grid, stop) => grid.querySelectorAll('button').forEach((button) => { button.tabIndex = button === stop ? 0 : -1 })
     const draw = () => {
       const { state, mode: draftMode, selected, pages, page, brush } = draft
-      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadable })
+      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadable, confirmHtml: confirming ? renderRestoreConfirm() : '' })
+      box.querySelectorAll(PAINT_GRIDS).forEach((grid) => setStop(grid, grid.querySelector('[aria-pressed="true"]') || grid.querySelector('button')))
     }
+    box.addEventListener('focusin', (event) => {
+      const grid = event.target.closest(PAINT_GRIDS)
+      if (grid && event.target.matches('button')) setStop(grid, event.target)
+    })
     const edit = (event) => {
       const before = draft
       draft = reduceDraft(draft, event)
@@ -3025,6 +3049,13 @@
       event.preventDefault()
       event.stopPropagation()
       const act = el.dataset.act
+      if (act === 'restore-keep' || act === 'restore-go') {
+        confirming = false
+        if (act === 'restore-go') edit({ type: 'restore' })
+        draw()
+        box.closest('.dialog').querySelector('[data-role="restore"]').focus()
+        return
+      }
       if (act === 'new-profile') {
         if (!edit({ type: 'new-profile' })) return
         draw()

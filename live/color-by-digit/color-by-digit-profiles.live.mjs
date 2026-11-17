@@ -673,35 +673,36 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal((await t.getState()).active, 0)
   })
 
-  it('Restore defaults asks first: a refusal changes nothing; accepted, the draft holds the five preloads, Cancel drops it and Save stores it', async () => {
+  it('Restore defaults asks first, inside the dialog: keeping changes nothing; restoring, the draft holds the five preloads, Cancel drops it and Save stores it', async () => {
     const before = await t.names()
     assert.equal(before.length, 1, 'one profile of the install\'s own is saved')
-    const asks = []
-    const answer = (accept) => p.once('dialog', (dialog) => { asks.push(dialog.message()); return accept ? dialog.accept() : dialog.dismiss() })
+    const native = []
+    // A native box nobody listens for is dismissed unseen, so any is counted.
+    const count = (dialog) => { native.push(dialog.message()); return dialog.dismiss() }
+    p.on('dialog', count)
+    const ask = p.locator(`${EDITOR} [data-role=restore-confirm]`)
+    const answer = (name) => ask.getByRole('button', { name }).click()
     await openEditorOn(p)
-    answer(false)
     await dialogButton(p, 'Restore defaults').click()
+    assert.match(await ask.innerText(), /own profiles/)
+    await answer('Keep my profiles')
     assert.deepEqual(await t.rowNames(), before)
-    answer(true)
     await dialogButton(p, 'Restore defaults').click()
+    await answer('Restore defaults')
     assert.deepEqual(await t.rowNames(), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
     assert.equal(await t.selectedRow(), 0)
-    assert.equal(asks.length, 2)
-    assert.match(asks[0], /own profiles/)
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual(await t.names(), before, 'Restore defaults saves nothing by itself')
     await openEditorOn(p)
-    answer(true)
     await dialogButton(p, 'Restore defaults').click()
+    await answer('Restore defaults')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit']), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
     await openEditorOn(p)
-    // A dialog nobody listens for is dismissed unseen, so this one is counted.
-    const count = (dialog) => { asks.push(dialog.message()); return dialog.dismiss() }
-    p.on('dialog', count)
     await dialogButton(p, 'Restore defaults').click()
+    assert.equal(await ask.count(), 0, 'the preloads alone lose nothing, so Restore defaults does not ask again')
     p.off('dialog', count)
-    assert.equal(asks.length, 3, 'the preloads alone lose nothing, so Restore defaults does not ask again')
+    assert.deepEqual(native, [])
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
