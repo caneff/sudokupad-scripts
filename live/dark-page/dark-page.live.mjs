@@ -3,7 +3,8 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { captureConsoleErrors, START } from '../page.mjs'
-import { selectCell } from '../board.mjs'
+import { pickTool, placeNote, selectCell } from '../board.mjs'
+import { openWithAllScripts } from '../attacks.mjs'
 import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 import { openWith, reloadWith, scriptSource, useBrowser } from '../session.mjs'
@@ -31,6 +32,7 @@ const OWN_BUTTON_BG = 'rgb(238, 238, 238)'
 // SudokuPad's own purple for the keypad and for a button that is on, read with no script installed.
 const OWN_PURPLE = 'rgb(106, 27, 154)'
 const PICKER = 'input[type=color]'
+const SWATCH = '.dialog #dark-page-swatch'
 // SudokuPad's red accent (`--main-color` of `.setting-uitheme-red`), read with no script installed.
 const ACCENT_RED = 'rgb(212, 17, 89)'
 // Boards of other sizes, in the page's own puzzle format. Outside text is drawn the way little
@@ -543,6 +545,27 @@ describe('the page color dialog', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
+  it('the color input is labelled Page color, and a swatch the overlay does not cover shows the color being picked', async () => {
+    await openDialog()
+    try {
+      const input = p.locator('.dialog').getByLabel('Page color')
+      assert.equal(await input.getAttribute('type'), 'color')
+      await input.fill('#336699')
+      const swatch = p.locator(SWATCH)
+      assert.equal(await swatch.evaluate((el) => window.getComputedStyle(el).backgroundColor), 'rgb(51, 102, 153)')
+      const onTop = await swatch.evaluate((el) => {
+        const box = el.getBoundingClientRect()
+        return document.elementFromPoint(box.x + 4, box.y + box.height / 2) === el
+      })
+      assert.equal(onTop, true, 'a click at the swatch\'s edge reaches the swatch')
+      await dialogButton('Restore defaults').click()
+      assert.equal(await swatch.evaluate((el) => window.getComputedStyle(el).backgroundColor), BLACK)
+    } finally {
+      await dialogButton('Cancel').click()
+      await p.locator('.dialog').waitFor({ state: 'detached' })
+    }
+  })
+
   it('Save applies a light color without a reload, with dark text on it, and saves it', async () => {
     await openDialog()
     await p.locator(`.dialog ${PICKER}`).fill('#ffcc00')
@@ -557,7 +580,7 @@ describe('the page color dialog', { concurrency: false }, () => {
   it('the stylesheet the script first writes after a reload already holds the saved color, never black', async () => {
     await load()
     const firstCss = await p.evaluate(() => window.__firstCss)
-    assert.ok(firstCss.includes(`${PAGE} { background-color: #ffcc00 !important }`), firstCss)
+    assert.ok(firstCss.includes(`${PAGE} { background-color: #ffcc00 !important;`), firstCss)
     assert.doesNotMatch(firstCss, /background-color: #000000/)
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
     await openDialog()
@@ -682,5 +705,97 @@ describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => 
   it('the page raised no error, and no further warning came', () => {
     assert.deepEqual(errors, [])
     assert.equal(warned.length, 1, warned.join('\n'))
+  })
+})
+
+// Every script installed, on a black page: the two script trays and their buttons go dark, the selected color keeps its ring, a dialog's
+// overlay dims the page, the replay readout box takes the dark border, and a note off the board has a halo of the page color.
+describe('with every script installed', { concurrency: false }, () => {
+  let context, p, errors
+  const TRAY_BG = 'rgb(29, 26, 32)'
+  const RING = `${OWN_PURPLE} 0px 0px 0px 3px inset`
+  const WHITE = 'rgb(255, 255, 255)'
+  const read = (fn, arg) => p.evaluate(fn, arg)
+  const readButton = (selector) => read((selector) => { const c = window.getComputedStyle(document.querySelector(selector)); return { bg: c.backgroundColor, fg: c.color, border: c.borderTopColor } }, selector)
+  const computed = (selector, property) => read(([selector, property]) => window.getComputedStyle(document.querySelector(selector))[property], [selector, property])
+  const setScript = (on) => read(([selector, on]) => { document.querySelector(selector).media = on ? '' : 'not all' }, [STYLE, on])
+  const borders = (selector) => read((selector) => [...document.querySelectorAll(selector)].map((b) => window.getComputedStyle(b).borderTopColor), selector)
+  const DARK = { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER }
+
+  before(async () => {
+    ;({ context, p, errors } = await openWithAllScripts(browser()))
+    await p.locator(STYLE).waitFor({ state: 'attached' })
+  })
+  after(async () => { await context.close() })
+
+  it('Pen Tool Extras\' tray and its buttons are dark, the selected pen keeps its white face and purple ring, and the pen buttons keep their own border', async () => {
+    await pickTool(p, 'pen')
+    assert.equal(await computed('.pen-tool-extras-tray', 'backgroundColor'), TRAY_BG)
+    for (const selector of ['.tool-pen button.pen-tool-extras-mode', '.tool-pen button.pen-tool-extras-settings']) assert.deepEqual(await readButton(selector), DARK, selector)
+    const current = '.tool-pen .controls-input button[data-key].current'
+    assert.equal(await computed(current, 'backgroundColor'), WHITE)
+    assert.equal(await computed(current, 'boxShadow'), RING)
+    const pens = '.tool-pen .controls-input button[data-key]'
+    const on = await borders(pens)
+    await setScript(false)
+    const off = await borders(pens)
+    await setScript(true)
+    assert.ok(on.length >= 9, `${on.length} pen buttons`)
+    assert.deepEqual(on, off)
+  })
+
+  it('Text Anywhere\'s tray and its buttons are dark, a pressed Background button keeps the tray\'s fill with a light purple outline, and the selected color keeps its ring', async () => {
+    await pickTool(p, 'textanywhere')
+    assert.equal(await computed('.text-anywhere-tray', 'backgroundColor'), TRAY_BG)
+    for (const selector of ['.text-anywhere-clear', '.text-anywhere-settings', '.text-anywhere-background', '.text-anywhere-hide-all']) assert.deepEqual(await readButton(selector), DARK, selector)
+    const current = '.tool-textanywhere .controls-input button.digit.current'
+    assert.equal(await computed(current, 'backgroundColor'), WHITE)
+    assert.equal(await computed(current, 'boxShadow'), RING)
+    await p.click('.text-anywhere-background')
+    try {
+      await p.waitForSelector('.text-anywhere-background[aria-pressed="true"]')
+      await p.mouse.move(5, 5)
+      assert.equal(await computed('.text-anywhere-background', 'backgroundColor'), TRAY_BG)
+      assert.equal(await computed('.text-anywhere-background', 'outlineColor'), BUTTON_ACCENT)
+    } finally {
+      await p.click('.text-anywhere-background')
+      await p.waitForSelector('.text-anywhere-background[aria-pressed="false"]')
+    }
+  })
+
+  it('a note off the board has a halo of the page color, and a note on the board keeps the board\'s white', async () => {
+    // A cell's width to the left of the board's own box, which is white.
+    const margin = await read((board) => {
+      const box = document.getElementById(board).getBoundingClientRect()
+      const cell = Framework.app.puzzle.cells.find((c) => c.row === 0 && c.col === 0).elem.getBoundingClientRect()
+      return [4.5, (box.left - cell.width - cell.left) / cell.width]
+    }, BOARD_ID)
+    await placeNote(p, margin, 'off')
+    await placeNote(p, [4.5, 4.5], 'on')
+    const halo = (text) => read(([selector, text]) => window.getComputedStyle([...document.querySelectorAll(selector)].find((n) => n.textContent === text)).textShadow, ['#text-anywhere-layer .text-anywhere-text', text])
+    const off = await halo('off')
+    assert.match(off, /^rgb\(0, 0, 0\) /)
+    assert.doesNotMatch(off, /255, 255, 255/)
+    assert.match(await halo('on'), /^rgb\(255, 255, 255\) /)
+  })
+
+  it('the replay readout box takes the dark button border', async () => {
+    assert.equal(await read(() => window.getComputedStyle(document.querySelector('.controls-input'), '::after').borderTopColor), BUTTON_BORDER)
+  })
+
+  it('a dialog\'s overlay leaves the black page black', async () => {
+    await openSettings(p)
+    try {
+      assert.equal(await computed('.dialog-overlay', 'backgroundColor'), 'rgba(0, 0, 0, 0.6)')
+      const { data } = await decode(p, await settledShot(p, { x: 2, y: 2, width: 1, height: 1 }))
+      assert.deepEqual([...data.subarray(0, 3)], [0, 0, 0])
+    } finally {
+      await p.keyboard.press('Escape')
+      await p.locator('.dialog').waitFor({ state: 'detached' })
+    }
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
   })
 })
