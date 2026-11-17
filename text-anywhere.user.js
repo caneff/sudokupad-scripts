@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.35
+// @version      0.46.36
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.35'
+  const VERSION = '0.46.36'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -2024,7 +2024,7 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
+    // A write or read that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
     // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
@@ -2043,8 +2043,18 @@
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
         }
       }
+      // In a dialog action a read that throws goes on to the caller, as a write does, so Copy says why it could not read.
+      const read = (key) => {
+        if (feature.off) return null
+        try {
+          return Framework.getData(key)
+        } catch (error) {
+          if (Object(error) === error) storeFailures.add(error)
+          throw error
+        }
+      }
       return {
-        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        getData: (key) => (dialogActions > 0 ? read(key) : feature.run(() => Framework.getData(key), () => null)),
         setData: (key, value) => write(() => Framework.setData(key, value)),
         removeData: (key) => write(() => Framework.removeData(key)),
         keep: (key, value) => feature.run(() => Framework.setData(key, value))
