@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.38
+// @version      0.46.39
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.38'
+  const VERSION = '0.46.39'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -779,10 +779,12 @@
   const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
 
   // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
+  const slotName = (key, n) => key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+
   function keptSlot (store, key, raw) {
     const same = JSON.stringify(raw)
     for (let n = 1; ; n++) {
-      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const slot = slotName(key, n)
       const held = store.getData(slot)
       if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
     }
@@ -810,11 +812,16 @@
         else store.setData(slot, raw)
         console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
       }
-      return { value: undefined, unreadable }
+      return { value: undefined, unreadable, slot }
     }
   }
 
-  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
+  // Slots fill in order, so the first empty one ends the list.
+  function unreadableSlots (store, key) {
+    const slots = []
+    while (store.getData(slotName(key, slots.length + 1)) !== null) slots.push(slotName(key, slots.length + 1))
+    return slots
+  }
 
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)

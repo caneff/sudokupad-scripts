@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.67
+// @version      0.25.68
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.67'
+  const VERSION = '0.25.68'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -283,10 +283,12 @@
   const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
 
   // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
+  const slotName = (key, n) => key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+
   function keptSlot (store, key, raw) {
     const same = JSON.stringify(raw)
     for (let n = 1; ; n++) {
-      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const slot = slotName(key, n)
       const held = store.getData(slot)
       if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
     }
@@ -314,11 +316,16 @@
         else store.setData(slot, raw)
         console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
       }
-      return { value: undefined, unreadable }
+      return { value: undefined, unreadable, slot }
     }
   }
 
-  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
+  // Slots fill in order, so the first empty one ends the list.
+  function unreadableSlots (store, key) {
+    const slots = []
+    while (store.getData(slotName(key, slots.length + 1)) !== null) slots.push(slotName(key, slots.length + 1))
+    return slots
+  }
 
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
@@ -2123,14 +2130,14 @@
   // Matched as text, not by a selector, since a custom palette's key may hold a quote.
   const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
 
-  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadable = false, confirmHtml = '' }) {
+  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadableSlots = [], confirmHtml = '' }) {
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
     const paint = colors.length === 0
       ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
       : renderPaint(groups, pages, shown, brush, colors)
-    const kept = unreadable ? `<div class="cbd-note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${PROFILES_KEY}${UNREADABLE_SUFFIX}.</div>` : ''
+    const kept = unreadableSlots.length ? `<div class="cbd-note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${unreadableSlots.join(' and ')}.</div>` : ''
     return `${kept}${confirmHtml}${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
       `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
@@ -2883,7 +2890,7 @@
 
   function openDialog (app) {
     let savedState = loadState()
-    const unreadable = hasUnreadable(savedData, PROFILES_KEY)
+    const keptSlots = unreadableSlots(savedData, PROFILES_KEY)
     let draft = openingDraft(savedState, mode, readPages())
     const box = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
@@ -2929,7 +2936,7 @@
     const setStop = (grid, stop) => grid.querySelectorAll('button').forEach((button) => { button.tabIndex = button === stop ? 0 : -1 })
     const draw = () => {
       const { state, mode: draftMode, selected, pages, page, brush } = draft
-      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadable, confirmHtml: confirming ? renderRestoreConfirm() : '' })
+      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadableSlots: keptSlots, confirmHtml: confirming ? renderRestoreConfirm() : '' })
       box.querySelectorAll(PAINT_GRIDS).forEach((grid) => setStop(grid, grid.querySelector('[aria-pressed="true"]') || grid.querySelector('button')))
     }
     box.addEventListener('focusin', (event) => {

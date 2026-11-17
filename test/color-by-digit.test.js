@@ -480,10 +480,11 @@ test('the right column has no name box: the digit keys come straight after the D
   assert.match(html, /<div class="cbd-column"><div class="cbd-heading">Digits/)
 })
 
-test('renderEditor shows one line, first, saying saved profiles could not be read and are kept, only while a copy is kept', () => {
-  const editor = (unreadable) => renderEditor({ groups: [], pages: [], page: 0, brush: null, unreadable })
-  assert.match(editor(true), /^<div class="cbd-note" data-role="unreadable">[^<]*could not be read[^<]*kept under ColorByDigit_profiles_unreadable[^<]*<\/div>/)
-  assert.doesNotMatch(editor(false), /data-role="unreadable"/)
+test('renderEditor shows one line, first, saying saved profiles could not be read and naming every slot they are kept under, only while a copy is kept', () => {
+  const editor = (unreadableSlots) => renderEditor({ groups: [], pages: [], page: 0, brush: null, unreadableSlots })
+  assert.match(editor(['ColorByDigit_profiles_unreadable']), /^<div class="cbd-note" data-role="unreadable">[^<]*could not be read[^<]*kept under ColorByDigit_profiles_unreadable\.<\/div>/)
+  assert.match(editor(['ColorByDigit_profiles_unreadable', 'ColorByDigit_profiles_unreadable2']), /kept under ColorByDigit_profiles_unreadable and ColorByDigit_profiles_unreadable2\./)
+  assert.doesNotMatch(editor([]), /data-role="unreadable"/)
 })
 
 // `synced` with a first name that needs escaping, and the same with the digits on that first profile.
