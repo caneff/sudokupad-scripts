@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.39
+// @version      1.32.40
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.39'
+  const VERSION = '1.32.40'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -3155,7 +3155,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
-      const picked = steps.colors.run(() => presetColorSet(id, readyColorTool().palette.pages, readCellColor), () => null)
+      const picked = id === SUDOKUPAD_PRESET ? { ...SUDOKUPAD_SET, fromPreset: id } : steps.colors.run(() => presetColorSet(id, readyColorTool().palette.pages, readCellColor), () => null)
       if (picked) {
         set = picked
         colorsChosen = true
