@@ -262,7 +262,12 @@
     return { width, ...font }
   }
 
+  // Automatic hyphens only in a pane this narrow or narrower (css px, about 35 characters a line at SudokuPad's font): a long word there
+  // would otherwise break at any letter or overflow, and a wide pane has room to wrap at spaces. Set here, with the width, so every fit
+  // measures the text as it will be set.
+  const NARROW_PANE_PX = 360
   function setPaneWidth (rules, width, natural) {
+    rules.style.hyphens = width < NARROW_PANE_PX ? 'auto' : 'manual'
     if (width === natural) Object.assign(rules.style, { boxSizing: '', maxWidth: '', width: '' })
     else Object.assign(rules.style, { boxSizing: 'border-box', maxWidth: 'none', width: `${width}px` })
   }
@@ -335,7 +340,7 @@
   // SudokuPad's own rule in App.resize.
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
-  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY']
+  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY', 'hyphens']
 
   function clearFit (rules, controls) {
     for (const k of FIT_STYLES) rules.style[k] = ''
@@ -1246,7 +1251,9 @@
   const DRAG_CLASS = `${ID}-dragging`
   const MAX_WIDTH_INPUT_ID = `${ID}-max-width`
   const MAX_HEIGHT_INPUT_ID = `${ID}-max-height`
-  const CORNER_PX = 28
+  // SudokuPad's rules pane pads its text by 16px: a corner this size sits wholly in the padding, and so does the font bar's height.
+  const PANE_PADDING_PX = 16
+  const CORNER_PX = PANE_PADDING_PX
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
   const cornerId = (corner) => `${ID}-drag-${corner}`
 
@@ -1256,19 +1263,21 @@
   const TEXT_CLASS = `${ID}-text`
 
   // The corners and the font bar show while the pointer is over the pane, a corner or the bar, or a drag is under
-  // way. The bar sits flush against the pane, so the pointer never leaves them on its way up.
+  // way. They sit in the pane's padding, so the pointer never leaves the pane on its way to them.
   const SHOW_WHEN = `body.${SHOWN_CLASS}:is(.${DRAG_CLASS}, :has(.puzzle-rules:hover, .${CORNER_CLASS}:hover, #${FONT_BAR_ID}:hover))`
 
   const STYLE = `
-    #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; visibility: hidden; gap: 4px; font: 14px monospace; }
-    #${FONT_BAR_ID} button { all: revert; padding: 0 6px; border-radius: 8px; opacity: .7; cursor: pointer; font: inherit; }
+    #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; visibility: hidden; gap: 4px; height: ${PANE_PADDING_PX}px; font: 11px monospace; }
+    #${FONT_BAR_ID} button { all: unset; box-sizing: border-box; height: 100%; padding: 0 5px; border-radius: 4px; cursor: pointer;
+      background: rgba(0, 0, 0, .08); color: inherit; font: inherit; line-height: ${PANE_PADDING_PX}px; }
+    #${FONT_BAR_ID} button:hover { background: rgba(0, 0, 0, .18); }
     .${CORNER_CLASS} { position: fixed; z-index: 99999; display: none; width: ${CORNER_PX}px; height: ${CORNER_PX}px;
       box-sizing: border-box; border-radius: 8px; background: rgba(85, 255, 255, .4); border: 1px dotted rgba(85, 255, 255, .8);
       touch-action: none; }
     body.${SHOWN_CLASS} #${FONT_BAR_ID} { display: flex; }
     ${SHOW_WHEN} #${FONT_BAR_ID} { visibility: visible; }
     ${SHOW_WHEN} .${CORNER_CLASS} { display: block; }
-    .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; hyphens: auto; }
+    .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; }
   `
 
   let limits = noLimits()
@@ -1346,15 +1355,14 @@
     el.style.top = `${Math.max(0, Math.min(top, window.innerHeight - height))}px`
   }
 
-  // The font bar sits at the pane's top-left corner, which a widening pane leaves where it is, directly above the
-  // pane so it covers none of the rules, or directly below it when the pane reaches the window's top. It starts
-  // right of SudokuPad's copy-rules icon, which hangs over that corner.
+  // The font bar sits in the pane's top padding at its top-left corner, which a widening pane leaves where it is,
+  // so it covers neither the title ribbon above the pane nor a line of the rules. It starts right of SudokuPad's
+  // copy-rules icon, which hangs over that corner.
   function placeControls (rules) {
     const r = rules.getBoundingClientRect()
     const bar = document.getElementById(FONT_BAR_ID)
-    const above = r.top - bar.offsetHeight
     const copyIcon = document.querySelector(COPY_ICON)
-    place(bar, r.left + (copyIcon ? copyIcon.getBoundingClientRect().width : 0), above >= 0 ? above : r.bottom, bar.offsetWidth, bar.offsetHeight)
+    place(bar, r.left + (copyIcon ? copyIcon.getBoundingClientRect().width : 0), r.top, bar.offsetWidth, bar.offsetHeight)
     place(document.getElementById(cornerId('ur')), r.right - CORNER_PX, r.top, CORNER_PX, CORNER_PX)
     place(document.getElementById(cornerId('dl')), r.left, r.bottom - CORNER_PX, CORNER_PX, CORNER_PX)
   }

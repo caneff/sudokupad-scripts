@@ -92,7 +92,7 @@ test('offsetFontPx: one px per press from the automatic size, inside 70% to 150%
 // SudokuPad's own font is 17.6 px. `scale` is visual px per css px, as SudokuPad scales the controls column.
 const VIEWPORT = { width: 2048, height: 1064 }
 function fakePane (chars, scale = 1, spareRoom = 0, pageSpare = 0, buttonsPx = 0) {
-  const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '' }
+  const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '', hyphens: '' }
   const font = () => parseFloat(style.fontSize) || 17.6
   const width = () => parseFloat(style.width) || 480
   const scrollHeight = () => Math.ceil((chars * font() * 0.5) / (width() - 32)) * font() * 1.2 + 32
@@ -385,7 +385,7 @@ test('fitRulesPane: a pane SudokuPad does not show (a puzzle with no rules) gets
   fit({ box: { w: 0, h: 30, x: 0, y: -30 } })
   Object.defineProperty(rules, 'offsetWidth', { get: () => 0 })
   assert.equal(fit(), null)
-  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '' })
+  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '', hyphens: '' })
   assert.equal(controls.style.translate, '')
 })
 
@@ -481,7 +481,7 @@ test('clearFit: takes the fit\'s output off the pane and the controls', () => {
   fit({ box: { w: -20, h: 30, x: 20, y: -30 } })
   assert.notEqual(controls.style.translate, '')
   clearFit(rules, controls)
-  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '' })
+  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '', hyphens: '' })
   assert.equal(controls.style.translate, '')
 })
 

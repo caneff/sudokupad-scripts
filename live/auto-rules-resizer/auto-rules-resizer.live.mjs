@@ -34,6 +34,8 @@ const SUDOKUPAD_FONT_PX = 17.6
 const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7
 const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5
 const EDGE_PX = 8
+// The script's own threshold below which a pane hyphenates automatically.
+const NARROW_PANE_PX = 360
 const PORTRAIT = { width: 800, height: 1100 }
 const WARNING = /^auto-rules-resizer: /
 
@@ -202,6 +204,106 @@ describe('a dl corner drag that shrinks a pane at the window\'s edge', { concurr
   }
 })
 
+describe('a landscape window, long rules: what the pane\'s controls cover and how its lines break', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await rulesPage(LANDSCAPE, null, LONG_RULES))
+    await inject(p)
+    await settle(async () => (await pane(p)).scrolls, false)
+    await hoverPane(p)
+    await p.locator(FONT_BAR).waitFor({ state: 'visible' })
+  })
+  after(async () => { await context.close() })
+
+  // The line boxes of the pane's text, one per rendered line fragment, and each control's box.
+  const boxes = () => p.evaluate(([bar, ur, dl]) => {
+    const rect = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
+    const range = document.createRange()
+    range.selectNodeContents(document.querySelector('.puzzle-rules'))
+    const lines = [...range.getClientRects()].filter((r) => r.width > 0).map((r) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom }))
+    return {
+      lines,
+      bar: rect(document.querySelector(bar)),
+      ur: rect(document.querySelector(ur)),
+      dl: rect(document.querySelector(dl)),
+      header: rect(document.querySelector('.puzzle-header'))
+    }
+  }, [FONT_BAR, CORNER('ur'), CORNER('dl')])
+  const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+
+  it('while the pane is hovered, no drag corner overlaps a line of the rules', async () => {
+    const { lines, ur, dl } = await boxes()
+    assert.equal(lines.length > 3, true, `${lines.length} line boxes`)
+    assert.deepEqual(lines.filter((l) => overlap(l, ur) || overlap(l, dl)), [], `corners ${JSON.stringify({ ur, dl })}`)
+  })
+
+  it('the f+ and f- bar overlaps neither the title ribbon nor a line of the rules', async () => {
+    const { lines, bar, header } = await boxes()
+    assert.equal(overlap(bar, header), false, JSON.stringify({ bar, header }))
+    assert.deepEqual(lines.filter((l) => overlap(l, bar)), [], JSON.stringify(bar))
+  })
+
+  it('no line of the rules ends in a split word', async () => {
+    const split = await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      const walker = document.createTreeWalker(rules, 4) // 4 is NodeFilter.SHOW_TEXT
+      const chars = []
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        for (let i = 0; i < node.length; i++) {
+          const range = document.createRange()
+          range.setStart(node, i)
+          range.setEnd(node, i + 1)
+          const r = range.getClientRects()[0]
+          if (r) chars.push({ c: node.data[i], top: Math.round(r.top) })
+        }
+      }
+      // A word broken across lines has a letter on both sides of the break; an ordinary break has a space.
+      return chars.slice(1).filter((ch, i) => ch.top > chars[i].top && /\S/.test(ch.c) && /\S/.test(chars[i].c)).length
+    })
+    assert.equal(split, 0, `${split} lines break inside a word`)
+  })
+
+  it('a wide pane does not hyphenate automatically', async () => {
+    const now = await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      return { hyphens: window.getComputedStyle(rules).hyphens, width: rules.offsetWidth }
+    })
+    assert.equal(now.width >= NARROW_PANE_PX, true, `a ${now.width} px pane is wide`)
+    assert.equal(now.hyphens, 'manual')
+  })
+})
+
+describe('a landscape window, short rules: automatic hyphens follow the pane\'s width', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await rulesPage(LANDSCAPE, null, RULES))
+    await inject(p)
+    await settle(() => p.evaluate(() => document.querySelector('.puzzle-rules').style.hyphens !== ''), true)
+  })
+  after(async () => { await context.close() })
+
+  const hyphensAndWidth = () => p.evaluate(() => {
+    const rules = document.querySelector('.puzzle-rules')
+    return { hyphens: window.getComputedStyle(rules).hyphens, width: rules.offsetWidth }
+  })
+
+  it('a pane dragged narrower than the threshold hyphenates, and one dragged back wide stops', async () => {
+    const wide = await hyphensAndWidth()
+    assert.equal(wide.width >= NARROW_PANE_PX, true, `a ${wide.width} px pane is wide`)
+    assert.equal(wide.hyphens, 'manual')
+    await dragCorner(p, 'dl', 250, 0)
+    const narrow = await stable(hyphensAndWidth)
+    assert.equal(narrow.width < NARROW_PANE_PX, true, `a ${narrow.width} px pane is narrow`)
+    assert.equal(narrow.hyphens, 'auto')
+    await dragCorner(p, 'dl', -250, 0)
+    const back = await stable(hyphensAndWidth)
+    assert.equal(back.width >= NARROW_PANE_PX, true, `a ${back.width} px pane is wide again`)
+    assert.equal(back.hyphens, 'manual')
+  })
+})
+
 describe('a landscape window, rules that fill the pane at SudokuPad\'s width', { concurrency: false }, () => {
   let context, p, errors, own
 
@@ -280,10 +382,10 @@ describe('a landscape window, rules that fill the pane at SudokuPad\'s width', {
     const start = await pane(p)
     // The fit lifts the column so the grown pane stays on the page; the drag adds to the lift.
     const lift = parseFloat((await controlsMoved(p)).split(' ')[1]) || 0
-    await dragCorner(p, 'ur', 0, -60)
-    assert.equal(await settle(() => controlsMoved(p), `0px ${lift - 60}px`), `0px ${lift - 60}px`)
+    await dragCorner(p, 'ur', 0, -30)
+    assert.equal(await settle(() => controlsMoved(p), `0px ${lift - 30}px`), `0px ${lift - 30}px`)
     const now = await pane(p)
-    assert.equal(now.top, start.top - 60)
+    assert.equal(now.top, start.top - 30)
     assert.equal(now.right, start.right, 'a top-right drag straight up grows no wider')
   })
 
@@ -600,12 +702,12 @@ describe('the text of the fitted pane', { concurrency: false }, () => {
     assert.equal((await pane(p)).scrolls, false)
   })
 
-  it('sets the text with pretty wrapping and automatic hyphens', async () => {
+  it('sets the text with pretty wrapping', async () => {
     const style = await p.evaluate(() => {
       const s = window.getComputedStyle(document.querySelector('.puzzle-rules'))
-      return { wrap: s.textWrapStyle, hyphens: s.hyphens }
+      return { wrap: s.textWrapStyle }
     })
-    assert.deepEqual(style, { wrap: 'pretty', hyphens: 'auto' })
+    assert.deepEqual(style, { wrap: 'pretty' })
   })
 
   it('keeps the font bar off SudokuPad\'s copy icon', async () => {
