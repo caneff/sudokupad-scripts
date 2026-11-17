@@ -107,6 +107,12 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle, steps: [['place note', [0, at(0, 2)]], ['click cell', at(0, 3)], ['type digit', '1'], ['reload', null]] })
   })
 
+  it('a reload after Color by Digit, a Restart and a UI Tweaks Cancel changes nothing the player sees (#943)', async () => {
+    // Seed 2066036500's shrink: two cells showed a color before the reload and none after it.
+    const steps = [['color mode', null], ['restart', false], ['ui tweaks dialog', [false, true, true, true, false]], ['reload', null]]
+    await fuzzScripted({ browser: browser(), puzzle: puzzleByName('recorded 9x9'), steps })
+  })
+
   async function snapshotAfter (puzzle, steps) {
     const target = await openTarget(browser(), puzzle, {})
     try {
