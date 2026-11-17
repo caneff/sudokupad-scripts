@@ -18,7 +18,6 @@ const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit
   'Digits in a grey-shaded region form a palindrome, reading the same from either end. ' +
   'Two cells joined by a line between their centers differ by at least five.'
 const MARGIN = 12
-const BUTTONS_PX = 24 // room above the pane for the font buttons
 
 const browser = await chromium.launch()
 const { p } = await openPage(browser, { contextOptions: { viewport: { width: 1920, height: 1080 } } })
@@ -43,9 +42,9 @@ await p.screenshot({
   path: out,
   clip: {
     x: Math.floor(area.left - MARGIN),
-    y: Math.floor(area.top - MARGIN - BUTTONS_PX),
+    y: Math.floor(area.top - MARGIN),
     width: Math.ceil(area.right - area.left + 2 * MARGIN),
-    height: Math.ceil(area.bottom - area.top + MARGIN + BUTTONS_PX + 4) // 4px under the pane: the buttons below it stay out
+    height: Math.ceil(area.bottom - area.top + MARGIN + 4)
   }
 })
 await browser.close()
