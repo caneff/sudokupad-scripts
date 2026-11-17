@@ -262,7 +262,12 @@
     return { width, ...font }
   }
 
+  // Automatic hyphens only in a pane this narrow or narrower (css px, about 35 characters a line at SudokuPad's font): a long word there
+  // would otherwise break at any letter or overflow, and a wide pane has room to wrap at spaces. Set here, with the width, so every fit
+  // measures the text as it will be set.
+  const NARROW_PANE_PX = 360
   function setPaneWidth (rules, width, natural) {
+    rules.style.hyphens = width < NARROW_PANE_PX ? 'auto' : 'manual'
     if (width === natural) Object.assign(rules.style, { boxSizing: '', maxWidth: '', width: '' })
     else Object.assign(rules.style, { boxSizing: 'border-box', maxWidth: 'none', width: `${width}px` })
   }
@@ -335,7 +340,7 @@
   // SudokuPad's own rule in App.resize.
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
-  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY']
+  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY', 'hyphens']
 
   function clearFit (rules, controls) {
     for (const k of FIT_STYLES) rules.style[k] = ''
@@ -1271,7 +1276,7 @@
     body.${SHOWN_CLASS} #${FONT_BAR_ID} { display: flex; }
     ${SHOW_WHEN} #${FONT_BAR_ID} { visibility: visible; }
     ${SHOW_WHEN} .${CORNER_CLASS} { display: block; }
-    .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; hyphens: manual; }
+    .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; }
   `
 
   let limits = noLimits()

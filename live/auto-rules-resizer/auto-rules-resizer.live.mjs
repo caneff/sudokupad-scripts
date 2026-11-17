@@ -34,6 +34,8 @@ const SUDOKUPAD_FONT_PX = 17.6
 const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7
 const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5
 const EDGE_PX = 8
+// The script's own threshold below which a pane hyphenates automatically.
+const NARROW_PANE_PX = 360
 const PORTRAIT = { width: 800, height: 1100 }
 const WARNING = /^auto-rules-resizer: /
 
@@ -262,9 +264,43 @@ describe('a landscape window, long rules: what the pane\'s controls cover and ho
     assert.equal(split, 0, `${split} lines break inside a word`)
   })
 
-  it('does not hyphenate automatically', async () => {
-    const hyphens = await p.evaluate(() => window.getComputedStyle(document.querySelector('.puzzle-rules')).hyphens)
-    assert.equal(hyphens, 'manual')
+  it('a wide pane does not hyphenate automatically', async () => {
+    const now = await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      return { hyphens: window.getComputedStyle(rules).hyphens, width: rules.offsetWidth }
+    })
+    assert.equal(now.width >= NARROW_PANE_PX, true, `a ${now.width} px pane is wide`)
+    assert.equal(now.hyphens, 'manual')
+  })
+})
+
+describe('a landscape window, short rules: automatic hyphens follow the pane\'s width', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await rulesPage(LANDSCAPE, null, RULES))
+    await inject(p)
+    await settle(() => p.evaluate(() => document.querySelector('.puzzle-rules').style.hyphens !== ''), true)
+  })
+  after(async () => { await context.close() })
+
+  const hyphensAndWidth = () => p.evaluate(() => {
+    const rules = document.querySelector('.puzzle-rules')
+    return { hyphens: window.getComputedStyle(rules).hyphens, width: rules.offsetWidth }
+  })
+
+  it('a pane dragged narrower than the threshold hyphenates, and one dragged back wide stops', async () => {
+    const wide = await hyphensAndWidth()
+    assert.equal(wide.width >= NARROW_PANE_PX, true, `a ${wide.width} px pane is wide`)
+    assert.equal(wide.hyphens, 'manual')
+    await dragCorner(p, 'dl', 250, 0)
+    const narrow = await stable(hyphensAndWidth)
+    assert.equal(narrow.width < NARROW_PANE_PX, true, `a ${narrow.width} px pane is narrow`)
+    assert.equal(narrow.hyphens, 'auto')
+    await dragCorner(p, 'dl', -250, 0)
+    const back = await stable(hyphensAndWidth)
+    assert.equal(back.width >= NARROW_PANE_PX, true, `a ${back.width} px pane is wide again`)
+    assert.equal(back.hyphens, 'manual')
   })
 })
 
@@ -666,12 +702,12 @@ describe('the text of the fitted pane', { concurrency: false }, () => {
     assert.equal((await pane(p)).scrolls, false)
   })
 
-  it('sets the text with pretty wrapping and no automatic hyphens', async () => {
+  it('sets the text with pretty wrapping', async () => {
     const style = await p.evaluate(() => {
       const s = window.getComputedStyle(document.querySelector('.puzzle-rules'))
-      return { wrap: s.textWrapStyle, hyphens: s.hyphens }
+      return { wrap: s.textWrapStyle }
     })
-    assert.deepEqual(style, { wrap: 'pretty', hyphens: 'manual' })
+    assert.deepEqual(style, { wrap: 'pretty' })
   })
 
   it('keeps the font bar off SudokuPad\'s copy icon', async () => {
