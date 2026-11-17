@@ -2167,6 +2167,20 @@ test('createModeHistory: a step with no profile between two that have one is ski
   assert.equal(history.undo(11).profile, undefined)
 })
 
+test('createModeHistory: an Undo given the profile in force makes it the one a Redo of the latest step taken back puts back, so a pick outside the history survives the Undo and Redo', () => {
+  const history = createModeHistory()
+  const a = { name: 'A' }
+  const b = { name: 'B' }
+  history.record(6, 'cell', 'cell', { from: a, to: a })
+  history.record(12, 'cell', 'digit', { from: a, to: a })
+  // B picked in Digit mode: no undo step, so no record.
+  assert.deepEqual(history.undo(6, b), { mode: 'cell', profile: a })
+  assert.deepEqual(history.redo(12), { mode: 'digit', profile: b })
+  assert.deepEqual(history.undo(0, b), { mode: 'cell', profile: a })
+  assert.deepEqual(history.redo(6), { mode: 'cell', profile: a })
+  assert.deepEqual(history.redo(12), { mode: 'digit', profile: b })
+})
+
 test('withCellProfile: makes the named profile active, with its groups put back when the step holds them, and leaves the others', () => {
   const state = { profiles: [{ name: 'A', groups: [{ key: 'a', digits: ['1'] }] }, { name: 'B', groups: [{ key: 'b', digits: ['2'] }] }], active: 1 }
   const named = withCellProfile(state, { name: 'A' })

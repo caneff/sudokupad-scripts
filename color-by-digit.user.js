@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.57
+// @version      0.25.58
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.57'
+  const VERSION = '0.25.58'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -2382,7 +2382,7 @@
   const colorEnteredCells = (app) => recolor(app, (plans) => planCellColors(plans, loadGroups(), enteredIndices(plans)))
 
   // The mode and cell profile steps that left an undo step, each `at` the undo stack's length after it, so Undo and Redo can move them along.
-  // A step that changed the cell profile holds it before and after (`profiles`: `{ from, to }`, each a `cellProfile`).
+  // A step holds the cell profile before and after it (`profiles`: `{ from, to }`, each a `cellProfile`).
   function createModeHistory () {
     const done = []
     let undone = []
@@ -2392,12 +2392,14 @@
         done.push({ at, from, to, profiles })
         undone = []
       },
-      // The mode, and the cell profile when a step changed it, before the earliest step an Undo down to `stackLength` took back.
-      undo (stackLength) {
+      // The mode, and the cell profile when a step holds it, before the earliest step an Undo down to `stackLength` took back.
+      // `now` is the cell profile in force: a pick that left no undo step since the latest step taken back is the one a Redo of that step puts back.
+      undo (stackLength, now) {
         const first = done.findIndex((step) => step.at > stackLength)
         if (first < 0) return undefined
-        const taken = done.splice(first)
-        undone.push(...taken.reverse())
+        const taken = done.splice(first).reverse()
+        if (now && taken[0].profiles) taken[0].profiles = { ...taken[0].profiles, to: now }
+        undone.push(...taken)
         const earliest = taken[taken.length - 1]
         return { mode: earliest.from, profile: taken.findLast((step) => step.profiles)?.profiles.from }
       },
@@ -2566,7 +2568,8 @@
 
   const modeHistory = createModeHistory()
 
-  function recordingModeStep (app, from, to, step, profiles) {
+  // A step that changes no cell profile still holds the one in force: the board an Undo brings back is colored by it, even after a pick that left no undo step.
+  function recordingModeStep (app, from, to, step, profiles = { from: cellProfile(loadState(), true), to: cellProfile(loadState(), true) }) {
     coloring.run(() => {
       const before = app.puzzle.undoStack.length
       step()
@@ -2588,7 +2591,7 @@
   // Undo and Redo move the mode and the cell profile with the board: a step that colored or cleared cells is an undo step, so taking it back or putting it again changes them too.
   function followUndo (app, type) {
     const stackLength = app.puzzle.undoStack.length
-    const target = type === 'undo' ? modeHistory.undo(stackLength) : modeHistory.redo(stackLength)
+    const target = type === 'undo' ? modeHistory.undo(stackLength, cellProfile(loadState(), true)) : modeHistory.redo(stackLength)
     if (target === undefined) return
     if (target.profile) saveState(withCellProfile(loadState(), target.profile))
     showMode(allowedMode(target.mode, usesDigitColors(loadState())))
@@ -2837,11 +2840,10 @@
     const oldGroups = activeGroups(oldState)
     const groups = activeGroups(draft)
     const profiles = { from: cellProfile(oldState, true), to: cellProfile(draft, true) }
-    const changed = JSON.stringify(profiles.from) !== JSON.stringify(profiles.to)
     if (colorsCells(next) && !sameGroups(oldGroups, groups)) {
       recordingModeStep(app, mode, next, () => recolor(app, (plans) => planSwitch(plans, oldGroups, groups)), profiles)
     }
-    setMode(app, next, groupKeys([...oldGroups, ...groups]), changed ? profiles : undefined)
+    setMode(app, next, groupKeys([...oldGroups, ...groups]), profiles)
   }
 
   // The profiles, the mode and the added-preload marks as stored, and the mode as shown, as a function that puts them back after a Save or Paste that failed half-way. Cells a failed Save already colored or cleared stay as they are, an undo step of their own.
