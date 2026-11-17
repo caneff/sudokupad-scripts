@@ -32,7 +32,7 @@ test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is 
   const cycle = ['cell']
   for (let i = 0; i < 4; i++) cycle.push(nextMode(cycle[i], true))
   assert.deepEqual(cycle, ['cell', 'digit', 'both', 'off', 'cell'])
-  assert.deepEqual(cycle.slice(0, 4).map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
+  assert.deepEqual(cycle.slice(0, 4).map(buttonLabel), ['Color by Digit: Cell', 'Color by Digit: Digit', 'Color by Digit: Both', 'Color by Digit: Off'])
   assert.doesNotMatch(byDigit.iconHtml('cell', byDigit.shownChips('cell', ODD_EVEN, ODD_EVEN), colorOf), /AUTO/)
 
   // Starting mode: the saved one, else Cell, or Off when auto mode was saved off.

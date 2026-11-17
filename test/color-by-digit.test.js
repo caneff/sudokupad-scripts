@@ -906,7 +906,7 @@ test('renderMenu has no heading: one dense row per profile in order with the act
   assert.ok(html.indexOf('data-act="edit"') > html.lastIndexOf('data-act="pick"'))
 })
 
-test('installButton: adds an icon button titled "Color by digit" in the bottom row, then refreshControls so the click handler binds', () => {
+test('installButton: adds an icon button titled "Color by Digit" in the bottom row, then refreshControls so the click handler binds', () => {
   const calls = []
   const framework = {
     addControlButton: (spec) => calls.push(['add', spec]),
@@ -918,7 +918,7 @@ test('installButton: adds an icon button titled "Color by digit" in the bottom r
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
   assert.equal(spec.parent, '.controls-aux')
-  assert.equal(spec.title, 'Color by digit: Off')
+  assert.equal(spec.title, 'Color by Digit: Off')
   assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="mode"[\s\S]*<\/span><span data-role="menu"[\s\S]*<\/span><\/div>$/)
   assert.equal(typeof spec.onClick, 'function')
 })
@@ -1145,7 +1145,7 @@ test('use digit colors: saved off, a saved Both loads as Cell and colors the giv
   const profiles = { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0, useDigitColors: false }
   for (const [savedMode, label, colours] of [['both', 'Cell', [['1'], ['2']]], ['digit', 'Off', [[], []]]]) {
     await startedWith(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
-      assert.equal(app.buttonTitle, `Color by digit: ${label}`, savedMode)
+      assert.equal(app.buttonTitle, `Color by Digit: ${label}`, savedMode)
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), colours, savedMode)
     }, { ColorByDigit_profiles: profiles, ColorByDigit_mode: savedMode })
   }
@@ -1626,7 +1626,7 @@ test('digitOfText reads a single digit and nothing else', () => {
   for (const bad of ['', '12', 'x', '-1', null, undefined]) assert.equal(digitOfText(bad), null, String(bad))
 })
 
-const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*)"><rect x="([\d.]+)" y="0" width="([\d.]+)" height="[\d.]+" fill="([^"]*)"(?: fill-opacity="([\d.]+)")?\/><text[^>]*fill="([^"]*)"[^>]*>([^<]*)<\/text><\/g>/g)]
+const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*)">(?:<rect data-role="chip-base"[^>]*fill="#fff"\/>)?<rect x="([\d.]+)" y="0" width="([\d.]+)" height="[\d.]+" fill="([^"]*)"(?: fill-opacity="([\d.]+)")?\/><text[^>]*fill="([^"]*)"[^>]*>([^<]*)<\/text><\/g>/g)]
   .map((m) => ({ key: m[1], x: Number(m[2]), width: Number(m[3]), fill: m[4], opacity: m[5], ink: m[6], digit: m[7] }))
 
 test('renderChips draws a joined run of square cells: one outer outline, n-1 single dividers, no rounded corners and no gaps', () => {
@@ -1653,17 +1653,17 @@ test('renderChips shows at most three cells, so a profile of six groups draws th
 test('renderChips draws each mode the way it colors the board: Cell fills with blue digits, Digit white with shades, Both fills with shades, Off white and grey', () => {
   const groups = [{ key: 'a', digits: ['3'] }, { key: 'b', digits: ['7'] }]
   const shadeA = darkenColor([10, 10, 10])
-  const shadeB = darkenColor([240, 240, 240])
   const look = (style) => {
     const svg = renderChips(chipsOf(groups, style), colorFor, { size: 16, style })
     const outline = /<rect [^>]*fill="none" stroke="([^"]*)"/.exec(svg)[1]
     const dividers = [...svg.matchAll(/<line [^>]*stroke="([^"]*)"/g)].map((m) => m[1])
     return { cells: runCells(svg).map((c) => [c.fill, c.ink]), outline, dividers }
   }
-  assert.deepEqual(look('cell'), { cells: [['rgb(10, 10, 10)', 'rgb(29, 106, 229)'], ['rgb(240, 240, 240)', 'rgb(29, 106, 229)']], outline: '#000', dividers: ['#000'] })
-  assert.deepEqual(look('digit'), { cells: [['#fff', shadeA], ['#fff', shadeB]], outline: '#000', dividers: ['#000'] })
-  assert.deepEqual(look('both'), { cells: [['rgb(10, 10, 10)', shadeA], ['rgb(240, 240, 240)', shadeB]], outline: '#000', dividers: ['#000'] })
-  assert.deepEqual(look('off'), { cells: [['#fff', '#999'], ['#fff', '#999']], outline: '#aaa', dividers: ['#aaa'] })
+  // A pale group's shade is darkened until it reads at 3:1, and the blue on the near-black chip is darkened until it reads at 3:1 (the next test); on the pale one it stays SudokuPad's.
+  assert.deepEqual(look('cell'), { cells: [['rgb(10, 10, 10)', 'rgb(10, 33, 70)'], ['rgb(240, 240, 240)', 'rgb(29, 106, 229)']], outline: '#000', dividers: ['#000'] })
+  assert.deepEqual(look('digit'), { cells: [['#fff', shadeA], ['#fff', 'rgb(147, 147, 147)']], outline: '#000', dividers: ['#000'] })
+  assert.deepEqual(look('both'), { cells: [['rgb(10, 10, 10)', shadeA], ['rgb(240, 240, 240)', 'rgb(140, 140, 140)']], outline: '#000', dividers: ['#000'] })
+  assert.deepEqual(look('off'), { cells: [['#fff', '#888'], ['#fff', '#888']], outline: '#aaa', dividers: ['#aaa'] })
 })
 
 test('renderChips gives a group whose palette color is unreadable a grey cell, and in Digit and Both SudokuPad\'s own digit color, as the board keeps it', () => {
@@ -1683,6 +1683,28 @@ test('renderChips draws a group color at SudokuPad\'s 60% cell opacity, and a wh
   // A digit in no cell group is a white chip, not a grey tinted one.
   const uncovered = runCells(renderChips([{ digit: '8', cellKey: undefined, digitKey: undefined }], colorFor, { size: 16 }))
   assert.deepEqual(uncovered.map((c) => [c.fill, c.opacity]), [['#fff', undefined]])
+})
+
+test('renderChips draws a tinted chip over a white base, so it looks the same on any button color, and no base under a whole chip', () => {
+  const bases = (style) => count(renderChips(chipsOf([{ key: 'a', digits: ['3'] }], style), colorFor, { size: 16, style }), /data-role="chip-base"/g)
+  assert.equal(bases('cell'), 1)
+  assert.equal(bases('both'), 1)
+  assert.equal(bases('digit'), 0)
+  assert.equal(bases('off'), 0)
+  assert.match(renderChips(chipsOf([{ key: 'a', digits: ['3'] }]), colorFor, { size: 16 }), /<rect data-role="chip-base"[^>]*fill="#fff"\/><rect [^>]*fill-opacity="0.6"/)
+})
+
+test('renderChips draws every chip digit at 3:1 or more against its chip over white, in every mode, for colors from pale to dark', () => {
+  const { contrastRatio } = require('./contrast.js')
+  const channels = (css) => css[0] === '#' ? (css.length === 4 ? [...css.slice(1)].map((h) => parseInt(h + h, 16)) : [1, 3, 5].map((i) => parseInt(css.slice(i, i + 2), 16))) : css.match(/[\d.]+/g).slice(0, 3).map(Number)
+  for (const color of ['rgb(238, 119, 0)', 'rgb(255, 255, 0)', 'rgb(10, 10, 10)', 'rgb(240, 240, 240)', 'rgb(120, 200, 120)', 'rgb(200, 60, 60)']) {
+    for (const style of ['cell', 'digit', 'both', 'off']) {
+      const [cell] = runCells(renderChips(chipsOf([{ key: 'a', digits: ['3'] }], style), () => color, { size: 16, style }))
+      const opacity = Number(cell.opacity ?? 1)
+      const shown = channels(cell.fill).map((c) => opacity * c + (1 - opacity) * 255)
+      assert.equal(contrastRatio(channels(cell.ink), shown) >= 3, true, `${style} on ${color}: ${cell.ink} on ${shown}`)
+    }
+  }
 })
 
 test('renderChips draws three blank dashed cells for a profile with no groups, in a run as wide as three chips', () => {
@@ -1716,6 +1738,8 @@ test('iconHtml draws the run of cells in the mode\'s look with the mode word, an
     const word = /<span data-role="mode" style="([^"]*)">([^<]*)<\/span>/.exec(html)
     assert.equal(word[2], mode.toUpperCase())
     assert.match(word[1], /pointer-events:none/)
+    assert.match(word[1], mode === 'off' ? /font:400 10px\// : /font:700 10px\//)
+    assert.match(html, /aria-label="Color by Digit profiles"/)
     assert.match(word[1], mode === 'off' ? /color:#8a8299/ : new RegExp(`color:${SUDOKUPAD_PURPLE}`))
     // A translucent white rounded box behind every word, and no text-shadow, so it reads on Dark Page's dark button.
     assert.match(word[1], /background:rgba\(255,255,255,\.9\)/)
@@ -1726,10 +1750,10 @@ test('iconHtml draws the run of cells in the mode\'s look with the mode word, an
 })
 
 test('the button is titled and labelled with its mode in words', () => {
-  assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
+  assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by Digit: Cell', 'Color by Digit: Digit', 'Color by Digit: Both', 'Color by Digit: Off'])
   let spec
   installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', chipsOf(ODD, 'both'), colorFor)
-  assert.equal(spec.title, 'Color by digit: Both')
+  assert.equal(spec.title, 'Color by Digit: Both')
 })
 
 test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a column of one fixed width, so the names line up', () => {
