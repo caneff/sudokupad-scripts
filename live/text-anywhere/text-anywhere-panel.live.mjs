@@ -141,14 +141,17 @@ describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
     assert.deepEqual(NINE.map((n) => rgb(colors[n])), pens.map((c) => c.replace(/^rgb\(-\d+, -\d+, -\d+\)$/, 'rgb(0, 0, 0)')))
   })
 
-  it('with Text Anywhere current the keypad shows Aa in each color, digits hidden, with color 1 marked, the default size, Clear all, Background off and the gear', async () => {
+  it('with Text Anywhere current the keypad shows Aa in each color, digits hidden, with color 2 marked, the default size, Clear all, Background off and the gear', async () => {
     const colors = await savedColors()
     const buttons = await keypad()
     assert.deepEqual(buttons.map((b) => b.swatch), NINE.map((n) => rgb(colors[n])))
     assert.deepEqual(buttons.map((b) => b.label), Array(9).fill('"Aa"'))
     assert.deepEqual(buttons.map((b) => b.text), Array(9).fill('rgba(0, 0, 0, 0)'), 'the digits are not shown')
-    assert.deepEqual(await currentKey(), ['1'])
+    assert.deepEqual(await currentKey(), ['2'])
     assert.equal(await sizeShown(), 20)
+    const marked = await p.locator('.controls-input button.digit.current').evaluate((e) => { const style = window.getComputedStyle(e); return { face: style.backgroundColor, ring: style.boxShadow } })
+    assert.equal(marked.face, 'rgb(255, 255, 255)', 'the marked color has a white face')
+    assert.match(marked.ring, /rgb\(106, 27, 154\) 0px 0px 0px 3px inset/, 'and a 3px inset purple ring')
     assert.equal(await p.locator(CLEAR_BUTTON).isVisible(), true)
     assert.equal(await p.locator(CLEAR_BUTTON).getAttribute('title'), 'Clear all')
     assert.equal(await p.locator(CLEAR_BUTTON).getAttribute('aria-label'), 'Clear all')
@@ -249,15 +252,24 @@ describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
     assert.deepEqual(await lastNote(), { color: rgb((await savedColors())[7]), size: 32 })
   })
 
-  it('bad saved values read as color 1 and the default size', async () => {
+  it('bad saved values read as color 2 and the default size', async () => {
     await plantUnchecked(p, COLOR_KEY, '"purple"')
     await plantUnchecked(p, WIDTH_KEY, '7.25')
     await reload()
     await pickTextAnywhere()
-    assert.deepEqual(await currentKey(), ['1'])
+    assert.deepEqual(await currentKey(), ['2'])
     assert.equal(await sizeShown(), 20)
     await makeNote()
-    assert.deepEqual(await lastNote(), { color: rgb((await savedColors())[1]), size: 20 })
+    assert.deepEqual(await lastNote(), { color: rgb((await savedColors())[2]), size: 20 })
+  })
+
+  it('a saved color 1 stays color 1: the new default never overrides a saved choice', async () => {
+    await plantUnchecked(p, COLOR_KEY, '1')
+    await reload()
+    await pickTextAnywhere()
+    assert.deepEqual(await currentKey(), ['1'])
+    await makeNote()
+    assert.deepEqual((await lastNote()).color, rgb((await savedColors())[1]))
   })
 
   it('another tool gets SudokuPad\'s own keypad back, and its digit keys enter digits again', async () => {

@@ -114,7 +114,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   it('a color picked with three notes selected recolors only those three, and the next new note takes the color picked', async () => {
     await selectThree()
     await p.click(`${KEYPAD} button[data-key="6"]`)
-    assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => (await savedNote(t)).color)), [6, 6, 6, 1])
+    assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => (await savedNote(t)).color)), [6, 6, 6, 2])
     assert.equal(await markedColor(), '6', 'the panel shows the selection\'s color')
     assert.equal(await p.evaluate((key) => Framework.getData(key), COLOR_KEY), 6, 'the color picked is also the next-note color')
     await clickAt(p, EMPTY)
