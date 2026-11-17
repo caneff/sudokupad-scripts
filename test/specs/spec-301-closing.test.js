@@ -35,12 +35,12 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   assert.deepEqual(textAnywhere.readNotes([{ ...text, opacity: 10 }]).items, [{ ...text, opacity: 10 }])
   assert.deepEqual(textAnywhere.readNotes([{ ...text, opacity: 0 }]), { items: [], kept: [{ ...text, opacity: 0 }] })
 
-  // Its own colors: nothing saved means the pen colors are still to be copied; once saved they are its own, and a
-  // saved value that cannot be read is kept, never overwritten by the copy.
-  assert.equal(textAnywhere.readNoteColors(null), null)
+  // Its own colors: nothing usable saved means the pen colors are still to be copied; once saved they are its own. A saved
+  // value with no usable color counts as nothing saved, as in Pen Tool Extras (spec #964, ruled by Chris 2026-11-17).
+  assert.equal(textAnywhere.readNoteColorSet(null), null)
   assert.deepEqual(textAnywhere.copiedPenColors(readPen), PEN)
-  assert.deepEqual(textAnywhere.readNoteColors(PEN), PEN)
-  assert.notEqual(textAnywhere.readNoteColors('garbage'), null)
+  assert.deepEqual(textAnywhere.readNoteColorSet(PEN).colors, PEN)
+  assert.equal(textAnywhere.readNoteColorSet('garbage'), null)
 
   // Presets: "Pen colors" and "SudokuPad colors" always, with a "Darker page" per palette page between them.
   assert.deepEqual(textAnywhere.presetOptions(3).map((id) => textAnywhere.PRESET_LABELS[id]), ['Pen colors', 'Darker page 1', 'Darker page 2', 'Darker page 3', 'SudokuPad colors'])

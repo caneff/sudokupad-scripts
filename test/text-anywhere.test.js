@@ -8,7 +8,7 @@ const { headerField, headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet, noteBackdrop } = require('../text-anywhere.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -280,30 +280,13 @@ test('a saved color reads back, and a missing or bad one reads as note color 2',
   for (const saved of [null, undefined, 0, 12, 'red', '', {}]) assert.equal(readColor(saved), DEFAULT_COLOR, JSON.stringify(saved))
 })
 
-test('hexColor reads #rgb, #rrggbb, rgb() and rgba() as lowercase #rrggbb, clamping each channel', () => {
-  assert.equal(hexColor('#1F8020'), '#1f8020')
-  assert.equal(hexColor('#abc'), '#aabbcc')
-  assert.equal(hexColor('rgb(31, 128, 32)'), '#1f8020')
-  assert.equal(hexColor('rgba(232, 124, 241, 0.5)'), '#e87cf1')
-  assert.equal(hexColor(' rgb(-4, 300, 0) '), '#00ff00')
-  for (const text of ['', 'red', 'transparent', 'rgba(0, 0, 0, 0)', 'rgba(1, 2, 3, -1)', '#12345', null, undefined, 7]) assert.equal(hexColor(text), undefined, JSON.stringify(text))
+test('nothing usable saved reads as no note colors, so the first-use copy of the pen colors is owed and may replace it', () => {
+  for (const saved of [null, undefined, 'red', [], ['#000000'], {}, { 1: 'red', 2: 5 }]) assert.equal(readNoteColorSet(saved), null, JSON.stringify(saved))
 })
 
-test('nothing saved reads as no note colors, so the pen colors are copied', () => {
-  for (const saved of [null, undefined]) assert.equal(readNoteColors(saved), null, String(saved))
-})
-
-test('a saved value with no usable color still reads as saved, so the copy never writes over it, and shows SudokuPad\'s own colors', () => {
-  for (const saved of ['red', [], ['#000000'], {}, { 1: 'red', 2: 5 }]) assert.deepEqual(readNoteColors(saved), SUDOKUPAD_PEN_COLORS, JSON.stringify(saved))
-})
-
-test('saved note colors read back as the nine #rrggbb colors, a bad entry beside a usable one reading as SudokuPad\'s own pen color', () => {
-  const nine = Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, `#00000${n}`]))
-  assert.deepEqual(readNoteColors(JSON.parse(JSON.stringify(nine))), nine)
-  const partial = readNoteColors({ 1: '#ABCDEF', 2: 'pink' })
-  assert.equal(partial[1], '#abcdef')
-  assert.equal(partial[2], SUDOKUPAD_PEN_COLORS[2])
-  assert.equal(partial[9], SUDOKUPAD_PEN_COLORS[9])
+test('saved note colors read Text Anywhere\'s presets, the pen preset among them', () => {
+  for (const preset of ['pen', 'page-1', 'page-2', 'page-3', 'sudokupad']) assert.deepEqual(readNoteColorSet({ ...hexes('#112233'), preset }), { colors: hexes('#112233'), preset, missing: [], fromPreset: null })
+  assert.equal(readNoteColorSet({ ...hexes('#112233'), preset: 'nope' }).preset, 'custom')
 })
 
 test('the first-use copy takes each pen color as #rrggbb, and SudokuPad\'s own for one it cannot read', () => {
@@ -314,22 +297,7 @@ test('the first-use copy takes each pen color as #rrggbb, and SudokuPad\'s own f
   assert.equal(copied[2], '#e87cf1')
   assert.equal(copied[3], SUDOKUPAD_PEN_COLORS[3])
   assert.equal(copied[4], '#000000')
-  assert.deepEqual(readNoteColors(JSON.parse(JSON.stringify(copied))), copied, 'the copy saved reads back as it is')
-})
-
-test('editing a note color changes that color only, and refuses a color number or a color it cannot take', () => {
-  const colors = { ...SUDOKUPAD_PEN_COLORS }
-  const edited = editedColor(colors, 4, '#ABCDEF')
-  assert.deepEqual(edited, { ...colors, 4: '#abcdef' })
-  assert.equal(colors[4], SUDOKUPAD_PEN_COLORS[4], 'the colors given are left as they were')
-  assert.throws(() => editedColor(colors, 10, '#000000'), RangeError)
-  assert.throws(() => editedColor(colors, 4, 'red'), RangeError)
-})
-
-test('the colors\' CSS sets one variable per note color', () => {
-  const css = colorsCss({ ...SUDOKUPAD_PEN_COLORS, 3: '#123456' })
-  assert.match(css, /--text-anywhere-color-3: #123456;/)
-  for (let n = 1; n <= 9; n++) assert.match(css, new RegExp(`--text-anywhere-color-${n}: #[0-9a-f]{6};`))
+  assert.deepEqual(readNoteColorSet(JSON.parse(JSON.stringify(copied))).colors, copied, 'the copy saved reads back as it is')
 })
 
 test('a saved width reads back for any slider value, and a missing or bad one reads as the default width', () => {
@@ -1715,17 +1683,6 @@ test('nothing but the old stored keys, the old install address and site page, an
   assert.deepEqual(found, [])
 })
 
-test('a saved preset id is read back when it is one of the presets, and anything else is Custom', () => {
-  for (const id of ['pen', 'page-1', 'page-2', 'page-3', 'sudokupad']) assert.equal(readNotePreset({ ...hexes('#112233'), preset: id }), id)
-  for (const saved of [null, undefined, 'pen', [], hexes('#112233'), { ...hexes('#112233'), preset: 'nope' }, { ...hexes('#112233'), preset: 7 }]) assert.equal(readNotePreset(saved), null, JSON.stringify(saved))
-})
-
-test('colors are stored with their preset id beside them, and a Custom set with none; readNoteColors ignores it', () => {
-  assert.deepEqual(storedNoteColors(hexes('#112233'), 'page-2'), { ...hexes('#112233'), preset: 'page-2' })
-  assert.deepEqual(storedNoteColors(hexes('#112233'), null), hexes('#112233'))
-  assert.deepEqual(readNoteColors({ ...hexes('#112233'), preset: 'page-2' }), hexes('#112233'))
-})
-
 test('Copy settings carries the saved preset id with the colors, and Paste keeps it', () => {
   const colors = { ...hexes('#112233'), preset: 'sudokupad' }
   assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [COLORS_KEY]: colors })))[COLORS_KEY], colors)
@@ -1750,18 +1707,10 @@ test('a color set is one record: colors, preset, the pens a page preset missed, 
   const picked = presetColorSet('page-1', pages, cell, () => undefined)
   assert.deepEqual([picked.preset, picked.missing, picked.fromPreset], ['page-1', [4], 'page-1'])
   assert.deepEqual(penColorSet((n) => `rgb(${n}, 0, 0)`), { colors: copiedPenColors((n) => `rgb(${n}, 0, 0)`), preset: 'pen', missing: [], fromPreset: null })
-  const edited = editedColorSet(picked, 4, '#123456')
-  assert.deepEqual([edited.colors[4], edited.preset, edited.missing, edited.fromPreset], ['#123456', null, [], 'page-1'], 'an edit makes the set Custom, drops that pen from the missing and keeps the preset it came from')
-  assert.equal(picked.colors[4], SUDOKUPAD_PEN_COLORS[4], 'the edit leaves the set it was made from')
 })
 
-test('a pasted color set is read as a whole record, with no missing pens and no preset they came from, and is stored as it was pasted', () => {
-  const pasted = { ...hexes('#112233'), preset: 'page-2' }
-  const after = savedColorSet(READERS[COLORS_KEY](pasted))
-  assert.deepEqual(after, { colors: hexes('#112233'), preset: 'page-2', missing: [], fromPreset: null })
-  assert.deepEqual(storedColorSet(after), pasted)
-  assert.deepEqual(storedColorSet(savedColorSet(hexes('#445566'))), hexes('#445566'), 'a pasted Custom set is stored with no preset')
-  assert.equal(savedColorSet(null), null)
+test('a pasted color set is read as a whole record, with no missing pens and no preset they came from', () => {
+  assert.deepEqual(readNoteColorSet(READERS[COLORS_KEY]({ ...hexes('#112233'), preset: 'page-2' })), { colors: hexes('#112233'), preset: 'page-2', missing: [], fromPreset: null })
 })
 
 test('a held + or - waits out the pause, then steps once and ramps to the most steps a tick', () => {
