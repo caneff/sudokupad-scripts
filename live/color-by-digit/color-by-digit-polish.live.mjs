@@ -3,9 +3,9 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { ARROW, BUTTON, DEFAULT_FILL, EDITOR, allFillsOn, center, paletteColorOn, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, BUTTON, DEFAULT_FILL, EDITOR, allFillsOn, center, paletteColorOn, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState, openEditorOn, openMenuOn } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
-import { dialogButton } from '../settings.mjs'
+import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { readUntil, settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -308,4 +308,105 @@ describe('the button with Dark Page installed', { concurrency: false }, () => {
       } finally { await context.close() }
     })
   }
+})
+
+const LONG_NAME = 'Mmmmmmmmmmmmmmmmmmmmmmmm'
+const LONG = { profiles: [{ name: 'Odd/Even', groups: SEED.profiles[0].groups }, { name: LONG_NAME, groups: SEED.profiles[1].groups }], active: 0, digitActive: 0 }
+const SIX_PROFILES = { ...LONG, profiles: Array.from({ length: 6 }, (_, i) => ({ name: `P${i}`, groups: SEED.profiles[i % 2].groups })) }
+const NORMAL_MENU_MAX_PX = 300
+
+describe('the dialog\'s layout, keyboard and messages', { concurrency: false }, () => {
+  let context, p
+  before(async () => {
+    ({ context, p } = await openSession(browser(), script, { saved: savedProfiles(LONG) }))
+    await openEditorOn(p)
+  })
+  after(async () => { await context?.close() })
+
+  it('both headings and their first rows share a top edge and a height', async () => {
+    const tops = await p.evaluate((editor) => {
+      const top = (el) => Math.round(el.getBoundingClientRect().top * 10) / 10
+      const [profiles, digits] = [...document.querySelectorAll(`${editor} .cbd-heading`)]
+      return { headings: [top(profiles), top(digits)], heights: [profiles.offsetHeight, digits.offsetHeight], rows: [top(document.querySelector(`${editor} [data-role=profile-row]`)), top(document.querySelector(`${editor} .cbd-color-choice`))] }
+    }, EDITOR)
+    assert.equal(tops.headings[0], tops.headings[1])
+    assert.equal(tops.heights[0], tops.heights[1])
+    assert.equal(tops.rows[0], tops.rows[1])
+  })
+
+  it('a 24-character profile name is one line with an ellipsis and its full name as a tooltip', async () => {
+    const name = p.locator(`${ROWS}[data-index="1"] .cbd-name`)
+    const look = await name.evaluate((el) => ({ high: el.getBoundingClientRect().height, rowHigh: el.parentElement.getBoundingClientRect().height, overflow: getComputedStyle(el).textOverflow, space: getComputedStyle(el).whiteSpace, title: el.title }))
+    assert.deepEqual({ oneLine: look.high <= look.rowHigh, overflow: look.overflow, space: look.space, title: look.title }, { oneLine: true, overflow: 'ellipsis', space: 'nowrap', title: LONG_NAME })
+  })
+
+  it('the profile menu holds the long name within its normal width, cut with the full name as a tooltip', async () => {
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    await openMenuOn(p)
+    const look = await p.locator(MENU).evaluate((menu) => ({ width: menu.getBoundingClientRect().width, title: [...menu.querySelectorAll('[data-role=name]')].map((n) => n.title) }))
+    assert.equal(look.width <= NORMAL_MENU_MAX_PX, true, `${look.width}`)
+    assert.deepEqual(look.title, ['Odd/Even', LONG_NAME])
+    await p.keyboard.press('Escape')
+    await openEditorOn(p)
+  })
+
+  it('each grid is one Tab stop, and Tab reaches Cancel in a handful of presses', async () => {
+    const stops = await p.evaluate((editor) => ({
+      swatches: [...document.querySelectorAll(`${editor} button[data-role=swatch]`)].filter((b) => b.tabIndex >= 0).length,
+      digits: [...document.querySelectorAll(`${editor} button[data-act=digit]`)].filter((b) => b.tabIndex >= 0).length
+    }), EDITOR)
+    assert.deepEqual(stops, { swatches: 1, digits: 1 })
+    await keyboardFocus(p, p.locator(`${EDITOR} select[data-role=mode-draft]`))
+    let presses = 0
+    while (presses < 40 && await p.evaluate(() => document.activeElement.textContent.trim()) !== 'Cancel') {
+      await p.keyboard.press('Tab')
+      presses++
+    }
+    assert.equal(presses <= 14, true, `${presses} presses`)
+  })
+
+  it('the Tab stop follows the arrow keys, so a grid is left and re-entered where it was', async () => {
+    await keyboardFocus(p, p.locator(SWATCH).first())
+    await p.keyboard.press('ArrowRight')
+    await p.keyboard.press('Shift+Tab')
+    await p.keyboard.press('Tab')
+    assert.equal(await activeSlot(p, SWATCHES), 1)
+    await keyboardFocus(p, p.locator(DIGIT(7)))
+    await p.keyboard.press('ArrowRight')
+    assert.equal(await p.evaluate((editor) => document.querySelector(`${editor} button[data-act=digit][tabindex="0"]`).dataset.digit, EDITOR), '8')
+  })
+
+  it('Restore defaults asks inside the dialog, with no native confirm box', async () => {
+    const native = []
+    const count = (dialog) => { native.push(dialog.message()); return dialog.dismiss() }
+    p.on('dialog', count)
+    await dialogButton(p, 'Restore defaults').click()
+    const ask = p.locator(`${EDITOR} [data-role=restore-confirm]`)
+    await ask.waitFor({ state: 'visible' })
+    assert.match(await ask.innerText(), /own profiles/)
+    await ask.getByRole('button', { name: 'Keep my profiles' }).click()
+    assert.equal(await ask.count(), 0)
+    assert.deepEqual(await p.$$eval(ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label'))), ['Odd/Even', LONG_NAME])
+    await dialogButton(p, 'Restore defaults').click()
+    await ask.getByRole('button', { name: 'Restore defaults' }).click()
+    assert.deepEqual(await p.$$eval(ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label'))), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
+    p.off('dialog', count)
+    assert.deepEqual(native, [])
+  })
+})
+
+describe('+ New profile at six profiles', { concurrency: false }, () => {
+  let context, p
+  before(async () => {
+    ({ context, p } = await openSession(browser(), script, { saved: savedProfiles(SIX_PROFILES) }))
+    await openEditorOn(p)
+  })
+  after(async () => { await context?.close() })
+
+  it('is disabled and says why, in a tooltip and in the dialog', async () => {
+    const button = p.locator(`${EDITOR} button[data-act=new-profile]`)
+    assert.equal(await button.isDisabled(), true)
+    assert.match(await button.getAttribute('title'), /6 profiles/)
+    assert.match(await p.locator(`${EDITOR} [data-role=full-note]`).innerText(), /Delete one/)
+  })
 })
