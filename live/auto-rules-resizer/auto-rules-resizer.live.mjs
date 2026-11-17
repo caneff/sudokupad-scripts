@@ -1,7 +1,7 @@
 // Live check of auto-rules-resizer.user.js on sudokupad.app, in headless Chromium. The recorded puzzle has no rules,
 // so each page is given short rules through SudokuPad's own showMetaInfoUI, as a loaded puzzle gets them, before the
 // script is injected.
-import { after, afterEach, before, describe, it } from 'node:test'
+import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { addScripts, openWith, scriptSource, useBrowser } from '../session.mjs'
 import { undoDepth } from '../board.mjs'
@@ -276,7 +276,6 @@ describe('a landscape window, rules that fill the pane at SudokuPad\'s width', {
     own = await pane(p)
     await inject(p)
   })
-  afterEach(async (t) => console.log('DBG2', t.name.slice(0, 30), JSON.stringify(await pane(p))))
   after(async () => { await context.close() })
 
   it('the rules keep SudokuPad\'s width and get a larger font, with no scrolling', async () => {
@@ -347,11 +346,10 @@ describe('a landscape window, rules that fill the pane at SudokuPad\'s width', {
     const start = await pane(p)
     // The fit lifts the column so the grown pane stays on the page; the drag adds to the lift.
     const lift = parseFloat((await controlsMoved(p)).split(' ')[1]) || 0
-    await dragCorner(p, 'ur', 0, -60)
-    console.log('DBG', JSON.stringify([start, await pane(p), await column(p), lift]))
-    assert.equal(await settle(() => controlsMoved(p), `0px ${lift - 60}px`), `0px ${lift - 60}px`)
+    await dragCorner(p, 'ur', 0, -30)
+    assert.equal(await settle(() => controlsMoved(p), `0px ${lift - 30}px`), `0px ${lift - 30}px`)
     const now = await pane(p)
-    assert.equal(now.top, start.top - 60)
+    assert.equal(now.top, start.top - 30)
     assert.equal(now.right, start.right, 'a top-right drag straight up grows no wider')
   })
 

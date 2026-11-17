@@ -1247,7 +1247,7 @@
   const MAX_HEIGHT_INPUT_ID = `${ID}-max-height`
   // SudokuPad's rules pane pads its text by 16px: a corner this size sits wholly in the padding, and so does the font bar's height.
   const PANE_PADDING_PX = 16
-  const CORNER_PX = 28
+  const CORNER_PX = PANE_PADDING_PX
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
   const cornerId = (corner) => `${ID}-drag-${corner}`
 
