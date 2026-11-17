@@ -5,7 +5,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { startScript } = require('./unit-start.js')
-const { buildCss, PAGE, BOARD_ID, DEFAULT_COLOR, pageColorOf, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, PAGE_COLOR_VAR } = require('../dark-page.user.js')
+const { buildCss, PAGE, BOARD_ID, DEFAULT_COLOR, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, PAGE_COLOR_VAR } = require('../dark-page.user.js')
 const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -130,10 +130,16 @@ test('the buttons go dark on #747474 and darker, and stay light from #757575 up 
   assert.equal(buttonRules('#757575').length, 0)
 })
 
-test('pageColorOf reads a saved #rrggbb string as lowercase, and anything else as nothing saved', () => {
-  assert.equal(pageColorOf('#336699'), '#336699')
-  assert.equal(pageColorOf('#ABCDEF'), '#abcdef')
-  for (const bad of [null, undefined, '', 'red', '#fff', '#12345g', 5, {}, ['#000000']]) assert.equal(pageColorOf(bad), null, String(bad))
+test('the page color row reads a saved #rrggbb string as lowercase and refuses anything else, for the saved reader and the paste reader alike', () => {
+  const readSavedAs = (data) => readSaved({ getData: () => data })
+  const earlyAs = (data) => earlyColor({ getItem: () => data })
+  assert.equal(readSavedAs('#ABCDEF'), '#abcdef')
+  assert.equal(READERS[DATA_KEY]('#ABCDEF'), '#abcdef')
+  for (const bad of [null, undefined, '', 'red', '#fff', '#12345g', 5, {}, ['#000000']]) {
+    assert.equal(READERS[DATA_KEY](bad), undefined, `paste ${String(bad)}`)
+    assert.equal(readSavedAs(bad), DEFAULT_COLOR, `saved ${String(bad)}`)
+    assert.equal(earlyAs(bad), null, `early ${String(bad)}`)
+  }
 })
 
 test('the board\'s own box takes SudokuPad\'s own page background, so it follows SudokuPad\'s dark mode', () => {

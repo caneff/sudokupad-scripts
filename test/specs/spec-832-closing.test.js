@@ -16,7 +16,7 @@ const SCRIPTS = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'pen-tool-
 const scripts = Object.fromEntries(SCRIPTS.map((name) => [name, require(join(ROOT, `${name}.user.js`))]))
 const lib = loadLib(
   ['plain', 'sudokupad', 'color-math', 'slider-keys', 'panel', 'write-style', 'store', 'settings-table'],
-  ['savedHex', 'onSliderStep', 'sliderRowMarkup', 'writeStyle', 'save', 'sameValue', 'pastedByName', 'withPasted']
+  ['savedHex', 'onSliderStep', 'sliderRowMarkup', 'writeStyle', 'save', 'sameValue']
 )
 
 test('#832: each of the six scripts copies its settings through its table, and every key it copies has a paste reader that takes the copied value', () => {
@@ -38,13 +38,11 @@ test('#832: UI Tweaks saves an option at its default by removing its key, so a l
   assert.deepEqual(savedOptions(store), DEFAULT_OPTIONS)
 })
 
-test('#832: a paste puts only the pasted rows into a draft, reading a value not yet saved through pastedByName', () => {
+test('#832: a paste puts only the pasted rows into a draft, from the pasted values themselves', () => {
   const { OPTIONS, DEFAULT_OPTIONS, pastedOptions } = scripts['ui-tweaks']
   const [first, second] = OPTIONS
   const draft = { ...DEFAULT_OPTIONS, [second.id]: !second.default }
   assert.deepEqual(pastedOptions(draft, { [first.key]: !first.default }), { ...draft, [first.id]: !first.default })
-  const rows = [{ name: 'a', key: 'K_a' }, { name: 'b', key: 'K_b' }]
-  assert.deepEqual(lib.pastedByName(rows, { K_a: 1 }), { a: 1, b: undefined })
 })
 
 test('#832: every script\'s settings feature declares the three dialog calls, and a SudokuPad lacking one turns the feature off', () => {

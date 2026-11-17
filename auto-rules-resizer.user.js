@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.24
+// @version      0.7.25
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.24'
+  const VERSION = '0.7.25'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -138,9 +138,10 @@
   /* eslint-disable no-unused-vars */
   // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
-  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
-  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
+  // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -149,7 +150,7 @@
 
   const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
 
-  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+  const readRow = (row, store) => (row.envelope ? row.envelope.load(store, row).value : row.read(store.getData(row.key))) ?? row.fallback
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
@@ -159,16 +160,13 @@
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
   const copiedTable = (rows, store) => readByField(rows, store, 'key')
 
-  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
-  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
-
-  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
-  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+  // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, values[row.key]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
   function saveRow (store, row, value) {
@@ -176,6 +174,8 @@
     else if (row.envelope) row.envelope.save(store, row.key, value)
     else store.setData(row.key, value)
   }
+
+  const saveTable = (store, rows, values) => rows.forEach((row) => saveRow(store, row, values[row.name]))
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
   // Each limit is kept in the store's envelope; no limit is no key, so a fresh install saves nothing.
@@ -183,9 +183,7 @@
 
   const readLimits = (store) => readTable(LIMIT_ROWS, store)
 
-  function saveLimits (store, limits) {
-    LIMIT_ROWS.forEach((row) => saveRow(store, row, limits[row.name]))
-  }
+  const saveLimits = (store, limits) => saveTable(store, LIMIT_ROWS, limits)
 
   const READERS = pasteReaders(LIMIT_ROWS)
 
@@ -1546,7 +1544,7 @@
         copied: () => maxSizeSettings.runInDialog(() => copiedSettings(Framework)),
         readers: READERS,
         apply: (values) => {
-          limits = withPasted(LIMIT_ROWS, limits, pastedByName(LIMIT_ROWS, values), values)
+          limits = withPasted(LIMIT_ROWS, limits, values)
           saveLimits(savedLimits, limits)
           if (MAX_WIDTH_KEY in values) document.getElementById(MAX_WIDTH_INPUT_ID).value = limits.maxWidth ?? ''
           if (MAX_HEIGHT_KEY in values) document.getElementById(MAX_HEIGHT_INPUT_ID).value = limits.maxHeight ?? ''
