@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
@@ -64,7 +64,7 @@ describe('profiles on a fresh install, injected after Start Puzzle', { concurren
 
   it('a fresh install starts in Cell and colors every given by Low/5/High, as the active profile', async () => {
     assert.equal(await t.label(), 'Cell')
-    assert.equal(await settle(() => t.wrongCount(LOW_FIVE_HIGH), 0), 0)
+    assert.equal(await settle(() => t.wrongCount(PRELOADED_LOW_FIVE_HIGH), 0), 0)
     assert.notEqual(await t.coloredCount(), 0)
   })
 

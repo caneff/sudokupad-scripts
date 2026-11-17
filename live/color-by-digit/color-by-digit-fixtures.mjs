@@ -16,7 +16,10 @@ export const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 // The group builder, the Odd/Even groups and the button's label readers are the shared record's (`live/scripts.mjs`); the suites take them from here.
 export { group, labelOn, modeLabel, ODD_EVEN }
 
+// Low/5/High as installs before #953 saved it (keys 1, 5, 9): the seeded and legacy profiles.
 export const LOW_FIVE_HIGH = [group('1', ['0', '1', '2', '3', '4']), group('5', ['5']), group('9', ['6', '7', '8', '9'])]
+// Low/5/High as a fresh install preloads it since #953 (keys 6, 5, q).
+export const PRELOADED_LOW_FIVE_HIGH = [group('6', ['0', '1', '2', '3', '4']), group('5', ['5']), group('q', ['6', '7', '8', '9'])]
 
 export const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
 
