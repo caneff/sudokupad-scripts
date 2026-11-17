@@ -127,7 +127,7 @@ export const center = async (locator) => { const b = await locator.boundingBox()
 export const ROW_CORNER = { position: { x: 2, y: 2 } }
 
 export const chipLookOn = (p) => p.locator(`${BUTTON} svg[data-role="chips"]`).evaluate((run) => ({
-  cells: [...run.querySelectorAll('[data-role="chip"]')].map((g) => [window.getComputedStyle(g.querySelector('rect')).fill, window.getComputedStyle(g.querySelector('text')).fill]),
+  cells: [...run.querySelectorAll('[data-role="chip"]')].map((g) => [window.getComputedStyle(g.querySelector('rect:not([data-role="chip-base"])')).fill, window.getComputedStyle(g.querySelector('text')).fill]),
   outline: window.getComputedStyle(run.querySelector(':scope > rect[fill="none"]')).stroke
 }))
 
