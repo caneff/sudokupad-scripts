@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.31
+// @version      0.46.33
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.31'
+  const VERSION = '0.46.33'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -1432,7 +1432,7 @@
   }
 
   // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
-  // An edit is a field's `input` or `change`, a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
   // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
@@ -1666,9 +1666,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
-    // A press on a button as well as a field's input or change, since some scripts' controls are buttons (a swatch, a digit key).
+    // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
     const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
-    for (const type of ['input', 'change', 'click']) body.addEventListener(type, clearOnEdit)
+    for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.

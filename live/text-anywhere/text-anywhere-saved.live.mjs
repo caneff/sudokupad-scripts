@@ -268,7 +268,8 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.deepEqual(await settle(texts, ['15']), ['15'])
     await pickTextAnywhere()
     await p.click('.text-anywhere-clear')
-    await p.locator(`${DIALOG} button`).filter({ hasText: 'Delete all' }).click()
+    // One note on the page, so the question names one note and its button is Delete.
+    await p.locator(`${DIALOG} button`).filter({ hasText: /^\s*Delete\s*$/ }).click()
     assert.deepEqual(await settle(texts, []), [])
     assert.deepEqual(await saved(), [OLD_STROKE, OLD_SHAPE])
   })
