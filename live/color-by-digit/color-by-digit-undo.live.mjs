@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo } from './color-by-digit-fixtures.mjs'
+import { coloredCountOn, GIVEN_COUNT, givensColoredOn, labelOn, MENU, MODE_KEY, openMenuOn, openSession, pressTo, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { POLL_MS, settle } from '../settle.mjs'
 import * as textAnywhere from '../text-anywhere/text-anywhere-fixtures.mjs'
@@ -230,5 +230,39 @@ describe('The first Undo after a Restart, with Text Anywhere loaded', { concurre
     } finally {
       await both.context.close()
     }
+  })
+})
+
+describe('Undo into Cell after a profile pick in Digit mode', { concurrency: false }, () => {
+  let context, p, t
+
+  const activeGroups = async () => { const state = await t.getState(); return state.profiles[state.active].groups }
+  const activeName = async () => { const state = await t.getState(); return state.profiles[state.active].name }
+  // How many cells hold a color other than the active profile's for their digit.
+  const offProfile = async () => wrongCountOn(p, await activeGroups())
+
+  before(async () => {
+    ({ context, p } = await openSession(browser(), script))
+    t = tools(p)
+  })
+  after(async () => { await context.close() })
+
+  // The pick in Digit mode colors no cell and leaves no undo step, so the board the Undo brings back is colored by the profile before it (#1011).
+  it('the Undo of Cell to Digit brings back the profile the board was colored by, and the Redo the one picked', async () => {
+    await pressTo(p, 'Cell')
+    assert.equal(await activeName(), 'Odd/Even')
+    assert.equal(await settle(offProfile, 0), 0, 'Cell colors the board by Odd/Even')
+    await pressTo(p, 'Digit')
+    await openMenuOn(p)
+    await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).click()
+    assert.equal(await settle(activeName, 'Low/5/High'), 'Low/5/High')
+    await p.keyboard.press('Control+z')
+    assert.equal(await settle(t.label, 'Cell'), 'Cell')
+    assert.equal(await settle(offProfile, 0), 0, `the cells follow the active profile, ${await activeName()}`)
+    assert.equal(await activeName(), 'Odd/Even')
+    await p.click('#control-redo')
+    assert.equal(await settle(t.label, 'Digit'), 'Digit')
+    assert.equal(await settle(activeName, 'Low/5/High'), 'Low/5/High', 'the Redo keeps the pick')
+    assert.equal(await coloredCountOn(p), 0)
   })
 })
