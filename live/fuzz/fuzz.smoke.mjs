@@ -180,7 +180,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.ok(Array.isArray(resized.box), JSON.stringify(resized))
     })
 
-    it('Clear all with OK removes every note, Cancel keeps them, and with a note selected it deletes just that one with no question', async () => {
+    it('Clear all with Delete all removes every note, Cancel keeps them, and with a note selected it deletes just that one with no question', async () => {
       const two = [NOTE, ['place note', [1, at(1, 1)]]]
       assert.deepEqual(savedTexts((await snapshotAfter(puzzle, [...two, ['clear notes', [[0, NOTE_AT], false, true]]])).page), [])
       assert.equal(savedTexts((await snapshotAfter(puzzle, [...two, ['clear notes', [[0, NOTE_AT], false, false]]])).page).length, 2)
