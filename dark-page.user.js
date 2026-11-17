@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.29
+// @version      0.7.31
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.29'
+  const VERSION = '0.7.31'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -35,6 +35,8 @@
   const TRAYS = ['.pen-tool-extras-tray', '.text-anywhere-tray']
   const TRAY_PANELS = TRAYS.map((tray) => `.controls-input:has(${tray})`)
   const TRAY_BUTTON = 'button:not([data-key])'
+  // Auto Rules Resizer's f+ and f- bar, on the page's body beside the rules pane, wears SudokuPad's button face, so it goes dark with SudokuPad's buttons.
+  const SCRIPT_BUTTONS = ['#auto-rules-resizer-font button']
   // A step above a black page and below BUTTON_BG, as the light tray sits between SudokuPad's white page and its white buttons.
   const TRAY_BG = '#1d1a20'
   // SudokuPad's own overlay is rgba(60, 60, 60, .7), which lightens any page darker than #3c3c3c.
@@ -239,12 +241,17 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
+  // WCAG's contrast ratio of two [r, g, b] colors, from 1 (the same) to 21 (black on white); the order does not matter.
+  function contrastRatio (one, other) {
+    const a = wcagLuminance(one) + 0.05
+    const b = wcagLuminance(other) + 0.05
+    return Math.max(a, b) / Math.min(a, b)
+  }
+
   function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
-    const page = wcagLuminance(rgb) + 0.05
-    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(light) >= contrast(dark) ? light : dark
+    return contrastRatio(rgb, parseColor(light)) >= contrastRatio(rgb, parseColor(dark)) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
@@ -262,15 +269,16 @@
     const trayButtons = (state) => TRAY_PANELS.map((panel) => `${panel} ${TRAY_BUTTON}${state}`)
     // A tray button that is on (`aria-pressed`) keeps the tray's fill under its outline, as it does on a light page.
     const offTrayButton = ':not([aria-pressed="true"])'
+    const scriptButtons = (state) => SCRIPT_BUTTONS.map((button) => `${button}${state}`)
     const darkRules = [
-      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), ...trayButtons(offTrayButton)], `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
+      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), ...trayButtons(offTrayButton), ...scriptButtons('')], `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
       pageRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]), `border-color: ${BUTTON_ACCENT}`),
       // SudokuPad's keypad keeps its own fill under the softer border; the two script panels' white color buttons keep their own border.
       pageRule(['.controls-main:not(.tool-pen):not(.tool-textanywhere) .button-row button'], `border-color: ${BUTTON_BORDER}`),
       // SudokuPad's own focus shadow cannot be seen on BUTTON_BG.
       pageRule(BUTTON_GROUPS.map((group) => `${group} button:focus-visible`), `outline: 2px solid ${BUTTON_ACCENT}`, 'outline-offset: 2px'),
-      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), ...trayButtons(`${offTrayButton}:hover`)], `background-color: ${BUTTON_HOVER_BG}`),
-      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), ...trayButtons(`${offTrayButton}:active`)], `background-color: ${BUTTON_PRESS_BG}`),
+      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), ...trayButtons(`${offTrayButton}:hover`), ...scriptButtons(':hover')], `background-color: ${BUTTON_HOVER_BG}`),
+      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), ...trayButtons(`${offTrayButton}:active`), ...scriptButtons(':active')], `background-color: ${BUTTON_PRESS_BG}`),
       pageRule(['true', 'mixed'].flatMap((state) => trayButtons(`[aria-pressed="${state}"]`)), `outline-color: ${BUTTON_ACCENT}`),
       pageRule(TRAY_PANELS.map((panel) => `${panel} button[aria-pressed="true"]`), `background-color: ${TRAY_BG}`),
       pageRule(TRAYS, `background-color: ${TRAY_BG}`),
@@ -330,6 +338,8 @@
   }
 
   // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
+  // An edit is a field's `input` or `change`, a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
@@ -451,7 +461,9 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
-          const wasEmpty = readErrorLog(win.localStorage).length === 0
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
           win.localStorage.removeItem(ERROR_LOG_KEY)
           say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
@@ -542,8 +554,8 @@
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      // An extra button, such as Restore defaults, edits the draft, so it clears an error first.
-      ...extraButtons.map((button) => ({ ...button, handler: () => { clearError(); button.handler() } }))
+      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
+      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
     ]
     framework.showDialog({
       centerOverBoard,
@@ -560,8 +572,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
-    // A click as well as an input, since some scripts' controls are buttons (a swatch, a digit key).
-    for (const type of ['input', 'click']) body.addEventListener(type, clearError)
+    // A press on a button as well as a field's input or change, since some scripts' controls are buttons (a swatch, a digit key).
+    const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
+    for (const type of ['input', 'change', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -1046,7 +1059,7 @@
           show(pageColor)
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => show(DEFAULT_COLOR) }]
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: () => show(DEFAULT_COLOR) }]
     })
     if (!body) return
     body.innerHTML = `<label class="${CLASS_PREFIX}color-row">Page color <input type="color" id="${INPUT_ID}" value="${picked}"></label><div id="${SWATCH_ID}" style="background-color: ${picked}"></div>`

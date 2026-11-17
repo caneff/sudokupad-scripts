@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.20
+// @version      0.7.21
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.20'
+  const VERSION = '0.7.21'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -536,6 +536,8 @@
   }
 
   // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
+  // An edit is a field's `input` or `change`, a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
@@ -657,7 +659,9 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
-          const wasEmpty = readErrorLog(win.localStorage).length === 0
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
           win.localStorage.removeItem(ERROR_LOG_KEY)
           say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
@@ -748,8 +752,8 @@
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      // An extra button, such as Restore defaults, edits the draft, so it clears an error first.
-      ...extraButtons.map((button) => ({ ...button, handler: () => { clearError(); button.handler() } }))
+      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
+      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
     ]
     framework.showDialog({
       centerOverBoard,
@@ -766,8 +770,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
-    // A click as well as an input, since some scripts' controls are buttons (a swatch, a digit key).
-    for (const type of ['input', 'click']) body.addEventListener(type, clearError)
+    // A press on a button as well as a field's input or change, since some scripts' controls are buttons (a swatch, a digit key).
+    const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
+    for (const type of ['input', 'change', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -1534,7 +1539,7 @@
       feature: maxSizeSettings,
       // Restore defaults edits the draft like the other scripts'; resetting this puzzle's size is its own button, and acts at once.
       extraButtons: [
-        { content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() },
+        { content: 'Restore defaults', role: 'restore', edits: true, handler: () => restoreDefaults() },
         { content: 'Reset puzzle size', role: 'reset-size', handler: () => resetPuzzleSize() }
       ],
       save: () => {

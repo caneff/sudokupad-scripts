@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.29
+// @version      1.32.31
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.29'
+  const VERSION = '1.32.31'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -522,6 +522,8 @@
   }
 
   // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
+  // An edit is a field's `input` or `change`, a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
@@ -643,7 +645,9 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
-          const wasEmpty = readErrorLog(win.localStorage).length === 0
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
           win.localStorage.removeItem(ERROR_LOG_KEY)
           say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
@@ -734,8 +738,8 @@
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      // An extra button, such as Restore defaults, edits the draft, so it clears an error first.
-      ...extraButtons.map((button) => ({ ...button, handler: () => { clearError(); button.handler() } }))
+      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
+      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
     ]
     framework.showDialog({
       centerOverBoard,
@@ -752,8 +756,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
-    // A click as well as an input, since some scripts' controls are buttons (a swatch, a digit key).
-    for (const type of ['input', 'click']) body.addEventListener(type, clearError)
+    // A press on a button as well as a field's input or change, since some scripts' controls are buttons (a swatch, a digit key).
+    const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
+    for (const type of ['input', 'change', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -1342,12 +1347,17 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
+  // WCAG's contrast ratio of two [r, g, b] colors, from 1 (the same) to 21 (black on white); the order does not matter.
+  function contrastRatio (one, other) {
+    const a = wcagLuminance(one) + 0.05
+    const b = wcagLuminance(other) + 0.05
+    return Math.max(a, b) / Math.min(a, b)
+  }
+
   function textColorFor (background, light = LIGHT_TEXT, dark = DARK_TEXT) {
     const rgb = parseColor(background)
     if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
-    const page = wcagLuminance(rgb) + 0.05
-    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
-    return contrast(light) >= contrast(dark) ? light : dark
+    return contrastRatio(rgb, parseColor(light)) >= contrastRatio(rgb, parseColor(dark)) ? light : dark
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
@@ -3181,7 +3191,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
           draw()
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: restoreDefaults }]
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: restoreDefaults }]
     })
     if (!box) return
     draw()

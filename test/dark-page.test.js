@@ -84,13 +84,15 @@ const scoped = (selectors) => selectors.map((selector) => `${PAGE} ${selector}`)
 test('on a dark page color the control buttons go dark gray with light purple text, and a button that is on keeps its own fill and gets a purple border', () => {
   const groups = ['.controls-app', '.controls-tool', '.controls-aux']
   const trayButton = (state) => TRAY_PANELS.map((panel) => `${panel} button:not([data-key])${state}`)
+  // Auto Rules Resizer's f+ and f- buttons wear SudokuPad's button face, so they go dark with SudokuPad's.
+  const fontBar = (state) => [`#auto-rules-resizer-font button${state}`]
   assert.deepEqual(buttonRules('#000000'), [
-    `${scoped([...groups.map((g) => `${g} button:not(.selected):not(.selectedperm)`), ...trayButton(':not([aria-pressed="true"])')])} { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }`,
+    `${scoped([...groups.map((g) => `${g} button:not(.selected):not(.selectedperm)`), ...trayButton(':not([aria-pressed="true"])'), ...fontBar('')])} { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }`,
     `${scoped(groups.flatMap((g) => [`${g} button.selected`, `${g} button.selectedperm`]))} { border-color: #d2a8f0 !important }`,
     `${scoped(['.controls-main:not(.tool-pen):not(.tool-textanywhere) .button-row button'])} { border-color: #4a4a4a !important }`,
     `${scoped(groups.map((g) => `${g} button:focus-visible`))} { outline: 2px solid #d2a8f0 !important; outline-offset: 2px !important }`,
-    `${scoped([...groups.map((g) => `${g} button:not(.selected):not(.selectedperm):hover`), ...trayButton(':not([aria-pressed="true"]):hover')])} { background-color: #37343a !important }`,
-    `${scoped([...groups.map((g) => `${g} button:not(.selected):not(.selectedperm):active`), ...trayButton(':not([aria-pressed="true"]):active')])} { background-color: #3b373e !important }`,
+    `${scoped([...groups.map((g) => `${g} button:not(.selected):not(.selectedperm):hover`), ...trayButton(':not([aria-pressed="true"]):hover'), ...fontBar(':hover')])} { background-color: #37343a !important }`,
+    `${scoped([...groups.map((g) => `${g} button:not(.selected):not(.selectedperm):active`), ...trayButton(':not([aria-pressed="true"]):active'), ...fontBar(':active')])} { background-color: #3b373e !important }`,
     `${scoped(['true', 'mixed'].flatMap((state) => trayButton(`[aria-pressed="${state}"]`)))} { outline-color: #d2a8f0 !important }`,
     `${scoped(TRAY_PANELS.map((panel) => `${panel} button[aria-pressed="true"]`))} { background-color: #1d1a20 !important }`
   ])

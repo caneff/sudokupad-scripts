@@ -8,6 +8,7 @@ import { openWithAllScripts } from '../attacks.mjs'
 import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 import { openWith, reloadWith, scriptSource, useBrowser } from '../session.mjs'
+import { FONT_BAR } from '../auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 
 const script = scriptSource('dark-page.user.js')
 const { PAGE, BOARD_ID, STYLE_ID, LOCAL_DATA_KEY } = createRequire(import.meta.url)('../../dark-page.user.js')
@@ -782,6 +783,15 @@ describe('with every script installed', { concurrency: false }, () => {
 
   it('the replay readout box takes the dark button border', async () => {
     assert.equal(await read(() => window.getComputedStyle(document.querySelector('.controls-input'), '::after').borderTopColor), BUTTON_BORDER)
+  })
+
+  it('Auto Rules Resizer\'s f+ and f- buttons go dark as SudokuPad\'s own buttons do', async () => {
+    const looks = await read((bar) => [...document.querySelectorAll(`${bar} button`)].map((button) => {
+      const c = window.getComputedStyle(button)
+      return { bg: c.backgroundColor, fg: c.color, border: c.borderTopColor }
+    }), FONT_BAR)
+    assert.deepEqual(looks, [DARK, DARK])
+    assert.deepEqual(await readButton('#controls button[data-control="undo"]'), DARK)
   })
 
   it('a dialog\'s overlay leaves the black page black', async () => {

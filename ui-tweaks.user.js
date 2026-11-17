@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.26
+// @version      0.1.27
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Select button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.26'
+  const VERSION = '0.1.27'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -188,6 +188,8 @@
   }
 
   // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
+  // An edit is a field's `input` or `change`, a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
+  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
@@ -309,7 +311,9 @@
       event.stopPropagation()
       try {
         if (act === 'clear-error-log') {
-          const wasEmpty = readErrorLog(win.localStorage).length === 0
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
           win.localStorage.removeItem(ERROR_LOG_KEY)
           say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
           return
@@ -400,8 +404,8 @@
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      // An extra button, such as Restore defaults, edits the draft, so it clears an error first.
-      ...extraButtons.map((button) => ({ ...button, handler: () => { clearError(); button.handler() } }))
+      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
+      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
     ]
     framework.showDialog({
       centerOverBoard,
@@ -418,8 +422,9 @@
     if (!body) return null
     const dialog = body.closest('.dialog')
     setOffNote(dialog, off)
-    // A click as well as an input, since some scripts' controls are buttons (a swatch, a digit key).
-    for (const type of ['input', 'click']) body.addEventListener(type, clearError)
+    // A press on a button as well as a field's input or change, since some scripts' controls are buttons (a swatch, a digit key).
+    const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
+    for (const type of ['input', 'change', 'click']) body.addEventListener(type, clearOnEdit)
     wireErrorLog(dialog, win)
     wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
@@ -913,7 +918,7 @@
           })
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: () => restoreDefaults() }]
     })
     if (!body) return
     const restoreDefaults = () => OPTIONS.forEach((option) => {

@@ -445,7 +445,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       if (!await hoverRules(p)) return
       await p.mouse.wheel(0, dy)
     },
-    // A limit typed is a limit saved only on Save; Restore defaults clears this puzzle's sizing at once, so a Cancel after it still keeps the clearing.
+    // A limit typed is a limit saved only on Save; Restore defaults empties both boxes in the draft, so a Cancel after it undoes it.
     async rulesDialog ({ maxWidth, maxHeight, restore }, save) {
       await settingsScript('auto-rules-resizer.user.js').open(p)
       await p.locator(MAX_WIDTH_INPUT).fill(maxWidth)
