@@ -133,17 +133,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reload()
   })
 
-  it('with no page to turn to the line type button is gone, and the settings button takes its place beside the line mode button', async () => {
+  it('with no page to turn to the line type button is gone, and the settings button stays in its own column, after the line mode button', async () => {
     const setStyles = async (on) => {
       await openExtrasEditor(p)
       for (const key of ['dashed', 'arrows']) await editor().locator(`input[data-box="lineStyles.${key}"]`).setChecked(on)
       await dialogButton(p, 'Save').click()
     }
-    const pageBox = await p.locator('.pen-tool-extras-page').boundingBox()
+    const settingsBefore = await p.locator('.pen-tool-extras-settings').boundingBox()
     await setStyles(false)
     assert.equal(await p.locator('.pen-tool-extras-page').count(), 0)
     const [mode, settings] = await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-settings'].map((s) => p.locator(s).boundingBox()))
-    assert.equal(Math.abs(settings.x - pageBox.x) <= 1, true, JSON.stringify({ settings, pageBox }))
+    assert.deepEqual(settings, settingsBefore)
     assert.equal(mode.x + mode.width <= settings.x, true, JSON.stringify({ mode, settings }))
     await setStyles(true)
     assert.equal(await p.locator('.pen-tool-extras-page').count(), 1)
