@@ -6,6 +6,7 @@ import { openWith, useBrowser } from './session.mjs'
 
 // Every script's dialog ends in the same three buttons.
 const BUTTONS = ['Save', 'Cancel', 'Restore defaults']
+const EXTRA_BUTTONS = { 'auto-rules-resizer.user.js': ['Reset puzzle size'] }
 const SUDOKUPAD_PURPLE = 'rgb(106, 27, 154)'
 // The laptop size the polish hunt measured the row at.
 const LAPTOP = { width: 1366, height: 768 }
@@ -41,7 +42,7 @@ for (const { file, entry, editor, open } of SETTINGS_SCRIPTS) {
           return { text: b.textContent.trim(), x, right, middle: Math.round(y + height / 2), height: Math.round(height), background: window.getComputedStyle(b).backgroundColor, contentRight: content.right }
         })
       })
-      assert.deepEqual(row.map((b) => b.text), BUTTONS)
+      assert.deepEqual(row.map((b) => b.text), [...BUTTONS, ...(EXTRA_BUTTONS[file] ?? [])])
       assert.equal(row.every((b) => Math.abs(b.middle - row[0].middle) <= 3 && b.height === row[0].height), true, `one row of equal buttons: ${JSON.stringify(row)}`)
       assert.equal(row.every((b, i) => i === 0 || b.x > row[i - 1].x), true, 'left to right in order')
       assert.equal(Math.abs(row.at(-1).contentRight - row.at(-1).right) <= 1, true, `right-aligned on the content column: ${JSON.stringify(row)}`)
