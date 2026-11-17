@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.55
+// @version      0.25.56
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.55'
+  const VERSION = '0.25.56'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -45,9 +45,9 @@
 
   const PRELOADS = {
     'Low/5/High': [
-      { key: '1', digits: ['0', '1', '2', '3', '4'] },
+      { key: '6', digits: ['0', '1', '2', '3', '4'] },
       { key: '5', digits: ['5'] },
-      { key: '9', digits: ['6', '7', '8', '9'] }
+      { key: 'q', digits: ['6', '7', '8', '9'] }
     ],
     'Odd/Even': [
       { key: '1', digits: ['1', '3', '5', '7', '9'] },
@@ -403,6 +403,13 @@
     return state
   }
 
+  // Low/5/High as it shipped before its colors changed, so a pre-profile install saved with it still reads as that preload.
+  const LEGACY_LOW_5_HIGH = [
+    { key: '1', digits: ['0', '1', '2', '3', '4'] },
+    { key: '5', digits: ['5'] },
+    { key: '9', digits: ['6', '7', '8', '9'] }
+  ]
+
   const isSynced = (state) => state.digitActive === undefined
   const usesDigitColors = (state) => state.useDigitColors !== false
   // `changes` names the fields that change (profiles, active, digitActive, useDigitColors); the rest carry over, profiles as copies when `changes` has none.
@@ -424,7 +431,7 @@
     const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
     if (!legacy) return preloadedState()
-    const equal = preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
+    const equal = sameGroups(LEGACY_LOW_5_HIGH, legacy) ? 0 : preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
     if (equal >= 0) return { profiles: preloads, active: equal }
     return { profiles: [{ name: CUSTOM_NAME, groups: legacy }, ...preloads], active: 0 }
   }
