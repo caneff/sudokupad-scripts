@@ -1,11 +1,24 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { closeDialogWith, hideGetDataUntilWarn, openScriptDialog } from './settings.mjs'
+import { actButton, closeDialogWith, hideGetDataUntilWarn, openScriptDialog, paste, STATUS } from './settings.mjs'
 import { SETTINGS_SCRIPTS } from './scripts.mjs'
 import { openWith, useBrowser } from './session.mjs'
 
 // Every script's dialog ends in the same three buttons.
 const BUTTONS = ['Save', 'Cancel', 'Restore defaults']
+const SUDOKUPAD_PURPLE = 'rgb(106, 27, 154)'
+// The laptop size the polish hunt measured the row at.
+const LAPTOP = { width: 1366, height: 768 }
+
+// One real edit of the editor's first control, of whatever kind it is.
+async function editFirstControl (p, editor) {
+  const control = p.locator(`${editor} input:not([type=hidden]), ${editor} select`).first()
+  const { tag, type } = await control.evaluate((el) => ({ tag: el.tagName, type: el.type }))
+  if (tag === 'SELECT') await control.selectOption({ index: await control.evaluate((el) => (el.selectedIndex + 1) % el.options.length) })
+  else if (type === 'checkbox') await control.click()
+  else if (type === 'color') await control.fill('#123456')
+  else await control.fill(type === 'number' ? '500' : 'x')
+}
 
 const browser = useBrowser()
 
@@ -13,26 +26,58 @@ for (const { file, entry, editor, open } of SETTINGS_SCRIPTS) {
   describe(`${entry}'s dialog shell`, { concurrency: false }, () => {
     let context, p, errors
     before(async () => {
-      ({ context, p, errors } = await openWith(browser(), [file]))
+      ({ context, p, errors } = await openWith(browser(), [file], { contextOptions: { viewport: LAPTOP, permissions: ['clipboard-read', 'clipboard-write'] } }))
     })
     after(async () => { await context?.close() })
 
-    it('the buttons are one row at the dialog\'s right: Save filled purple left of Cancel, Cancel and any extra button plain', async () => {
+    it('the buttons are one row at the content column\'s right: Save filled purple left of Cancel, Cancel and any extra button plain', async () => {
       await open(p)
       // The pointer is still where the last click was, which may be over a button; a hovered button reads its hover color.
       await p.mouse.move(0, 0)
       const row = await p.evaluate(() => {
-        const dialog = document.querySelector('.dialog').getBoundingClientRect()
+        const content = document.querySelector('.dialog [class$="title-row"]').getBoundingClientRect()
         return [...document.querySelectorAll('.dialog-options button')].map((b) => {
           const { x, right, y, height } = b.getBoundingClientRect()
-          return { text: b.textContent.trim(), x, right, middle: Math.round(y + height / 2), height: Math.round(height), background: window.getComputedStyle(b).backgroundColor, dialogRight: dialog.right }
+          return { text: b.textContent.trim(), x, right, middle: Math.round(y + height / 2), height: Math.round(height), background: window.getComputedStyle(b).backgroundColor, contentRight: content.right }
         })
       })
       assert.deepEqual(row.map((b) => b.text), BUTTONS)
       assert.equal(row.every((b) => Math.abs(b.middle - row[0].middle) <= 3 && b.height === row[0].height), true, `one row of equal buttons: ${JSON.stringify(row)}`)
       assert.equal(row.every((b, i) => i === 0 || b.x > row[i - 1].x), true, 'left to right in order')
-      assert.equal(row.at(-1).dialogRight - row.at(-1).right <= 24, true, `right-aligned: ${JSON.stringify(row)}`)
+      assert.equal(Math.abs(row.at(-1).contentRight - row.at(-1).right) <= 1, true, `right-aligned on the content column: ${JSON.stringify(row)}`)
       assert.deepEqual(row.map((b) => b.background), ['rgb(107, 63, 160)', ...row.slice(1).map(() => 'rgb(241, 239, 245)')])
+      await closeDialogWith(p, 'Cancel', editor)
+    })
+
+    it('the button row\'s line starts and ends where the content column does at 1366x768', async () => {
+      await open(p)
+      const edges = await p.evaluate(() => {
+        const at = (selector) => { const { left, right } = document.querySelector(selector).getBoundingClientRect(); return [Math.round(left), Math.round(right)] }
+        return { content: at('.dialog [class$="title-row"]'), row: at('.dialog .dialog-options') }
+      })
+      assert.deepEqual(edges.row, edges.content)
+      await closeDialogWith(p, 'Cancel', editor)
+    })
+
+    it('the dialog and every checkbox and slider in it compute SudokuPad purple as the accent color', async () => {
+      await open(p)
+      const accents = await p.evaluate(() => [document.querySelector('.dialog'), ...document.querySelectorAll('.dialog input[type=checkbox], .dialog input[type=range]')]
+        .map((el) => window.getComputedStyle(el).accentColor))
+      assert.deepEqual(accents, accents.map(() => SUDOKUPAD_PURPLE))
+      await closeDialogWith(p, 'Cancel', editor)
+    })
+
+    it('an error in the status line looks unlike a success, and the next edit in the editor clears it', async () => {
+      await open(p)
+      const look = () => p.locator(STATUS).evaluate((el) => { const s = window.getComputedStyle(el); return { color: s.color, weight: s.fontWeight } })
+      await actButton(p, 'copy-settings').click()
+      await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
+      const success = await look()
+      assert.equal(await paste(p, 'not json'), 'Could not paste: the clipboard text is not JSON')
+      const error = await look()
+      assert.notEqual(error.color, success.color, `error ${JSON.stringify(error)}, success ${JSON.stringify(success)}`)
+      await editFirstControl(p, editor)
+      assert.equal(await p.locator(STATUS).textContent(), '')
       await closeDialogWith(p, 'Cancel', editor)
     })
 

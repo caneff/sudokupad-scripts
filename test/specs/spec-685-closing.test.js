@@ -32,14 +32,14 @@ const lib = loadLib(['sudokupad', 'write-style', 'settings-dialog', 'settings-tr
 // SudokuPad's dialog as the settings dialog sees it: `showDialog` keeps the buttons, and the dialog holds the status line and the
 // title row's click listener. `save()` presses Save, and `paste()` presses Paste settings.
 const fakeSudokuPad = () => {
-  const status = { textContent: '' }
+  const status = { textContent: '', dataset: {} }
   const clicks = []
   let options = []
   const dialog = {
     addEventListener: (type, fn) => { if (type === 'click') clicks.push(fn) },
     querySelector: (selector) => (selector === '[data-role="settings-status"]' ? status : selector === '[data-role="off-note"]' ? {} : selector === '[data-role="error-log"]' ? { addEventListener () {} } : null)
   }
-  const body = { closest: (selector) => (selector === '.dialog' ? dialog : null) }
+  const body = { closest: (selector) => (selector === '.dialog' ? dialog : null), addEventListener () {} }
   const doc = { head: { appendChild () {} }, createElement: () => ({}), getElementById: (id) => (id === 'demo-body' ? body : null) }
   const win = { addEventListener () {}, removeEventListener () {} }
   const dialogs = { showDialog: (config) => { options = config.parts.find((part) => part.tag === 'options').options }, closeDialog () {} }
