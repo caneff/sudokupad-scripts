@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.27
+// @version      0.46.28
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.27'
+  const VERSION = '0.46.28'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -253,7 +253,8 @@
   const CLASS_PREFIX = 'text-anywhere-'
   const COLORS_STYLE_ID = 'text-anywhere-colors'
   const PANEL_STYLE_ID = 'text-anywhere-style'
-  const CLEAR_QUESTION = 'Clear all notes?'
+  const DELETE_ALL_LABEL = 'Delete all'
+  const clearQuestion = (count) => `${count === 1 ? 'Delete the note' : `Delete all ${count} notes`}? This cannot be undone.`
   const OK_LABEL = 'OK'
   const NOTES_PREFIX = KEY_PREFIX + 'notes_'
   const OLD_NOTES_PREFIX = OLD_KEY_PREFIX + 'drawing_'
@@ -643,16 +644,16 @@
   function renderSamplePicks ({ outline, box, custom, frame, textColor }) {
     const pickButton = (role, value, label, pressed, sample) =>
       `<button type="button" class="${CLASS_PREFIX}pick" data-role="${role}" data-value="${value}" aria-label="${escapeHtml(label)}" aria-pressed="${pressed}">${sample}<span class="${CLASS_PREFIX}pick-label">${escapeHtml(label)}</span></button>`
-    const row = (title, note, buttons, after = '') => `<div class="${CLASS_PREFIX}section-title">${title}</div><div class="${CLASS_PREFIX}pick-note">${note}</div><div class="${CLASS_PREFIX}pick-row">${buttons.join('')}</div>${after}`
-    const halo = (name) => `<span class="${CLASS_PREFIX}sample" data-cell style="background:${HALO_CELL_COLOR};color:${escapeHtml(textColor)};font-size:26px;text-shadow:${escapeHtml(haloShadow(name, PAGE_COLOR))}">A</span>`
+    const row = (title, note, buttons, after = '') => `<div class="${CLASS_PREFIX}section-title">${title}<span class="${CLASS_PREFIX}pick-note">${note}</span></div><div class="${CLASS_PREFIX}pick-row">${buttons.join('')}</div>${after}`
+    const halo = (name) => `<span class="${CLASS_PREFIX}sample" data-cell style="background:${HALO_CELL_COLOR};color:${escapeHtml(textColor)};font-size:20px;text-shadow:${escapeHtml(haloShadow(name, PAGE_COLOR))}">A</span>`
     const boxed = (fill, framed) => `<span class="${CLASS_PREFIX}sample" style="color:${escapeHtml(textColor)};font-size:18px"><span style="${SAMPLE_BOX_STYLE};background:${escapeHtml(fill)};box-shadow:${frameShadow(framed)}">A=B</span></span>`
     const choice = boxChoice(box)
     const fillFor = (id) => id === BOX_CUSTOM ? custom : boxFill(id, textColor)
-    return row('Halo round the letters', 'For notes without a box, so they read over digits and grid lines.', OUTLINES.map((name) => pickButton('outline-pick', name, OUTLINE_LABELS[name], outline === name, halo(name)))) +
-      row('Box color', 'For notes made with the Background button on.',
+    return row('Halo round the letters', 'for notes without a box', OUTLINES.map((name) => pickButton('outline-pick', name, OUTLINE_LABELS[name], outline === name, halo(name)))) +
+      row('Box color', 'for notes with Background on',
         [...Object.keys(BOX_PRESETS), BOX_CUSTOM].map((id) => pickButton('box-pick', id, BOX_PRESETS[id] ?? BOX_CUSTOM_LABEL, choice === id, boxed(fillFor(id), frame))),
         choice === BOX_CUSTOM ? `<input type="color" class="${CLASS_PREFIX}swatch" data-role="box-custom" value="${escapeHtml(custom)}" aria-label="Own box color" title="Own box color">` : '') +
-      row('Box border', 'The line round a note with a box.',
+      row('Box border', 'the line round a note with a box',
         FRAME_CHOICES.map(([value, label]) => pickButton('frame-pick', value, label, frame === (value === 'on'), boxed(fillFor(choice), value === 'on'))))
   }
   // Board units, as a text's height.
@@ -2626,12 +2627,14 @@
   const DIALOG_ID = 'text-anywhere-dialog'
   const DIALOG_STYLE_ID = 'text-anywhere-dialog-style'
   const DIALOG_CSS = [
-    `#${DIALOG_ID} .${CLASS_PREFIX}section-title { font-weight: 600; margin: 6px 0 0; }`,
-    `#${DIALOG_ID} .${CLASS_PREFIX}pick-note { margin: 2px 0 0; font-size: 0.85em; opacity: 0.8; }`,
-    `#${DIALOG_ID} .${CLASS_PREFIX}pick-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}section-title { font-weight: 600; margin: 4px 0 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}pick-note { display: inline; margin: 0 0 0 8px; font-weight: 400; font-size: 0.85em; opacity: 0.8; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}font-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}font-row .${CLASS_PREFIX}section-title { margin: 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}pick-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}pick { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 4px; width: auto; height: auto; min-width: 0; margin: 0; padding: 4px 4px 6px; line-height: 1.2; border: 2px solid transparent; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}pick[aria-pressed="true"] { border-color: #000; }`,
-    `#${DIALOG_ID} .${CLASS_PREFIX}sample { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 64px; height: 44px; border-radius: 6px; font-weight: 600; line-height: 1; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}sample { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 64px; height: 22px; border-radius: 6px; font-weight: 600; line-height: 1; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}sample[data-cell] { border: 1px solid rgb(0 0 0 / .25); }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}pick-label { font-size: 0.85em; }`,
     `#${DIALOG_ID} input.${CLASS_PREFIX}swatch[data-role="box-custom"] { display: block; margin: 0 0 6px; }`,
@@ -2639,7 +2642,8 @@
     // The pulldowns are as wide as their longest option, not as the dialog's column (after colorBlockCss, whose rule they override).
     `#${DIALOG_ID} .${CLASS_PREFIX}color-choice { width: auto; min-width: 0; }`,
     // The block is as wide as its pulldown, so the swatch grid, which takes the block's width, ends where the pulldown does.
-    `#${DIALOG_ID} .${CLASS_PREFIX}color-block { justify-content: start; }`
+    `#${DIALOG_ID} .${CLASS_PREFIX}color-block { justify-content: start; gap: 4px; margin: 4px 0; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}font-row .${CLASS_PREFIX}color-block { margin: 0; }`
   ].join('\n')
 
   // A pasted value is saved and shown at once, whether or not Text Anywhere is current.
@@ -2714,7 +2718,7 @@
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft.colors[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
         (draft.missing.length ? `<div data-role="missing-note">${missingColorsText(draft.missing, draft.fromPreset)}</div>` : '') +
-        `<div class="${CLASS_PREFIX}section-title">Font</div>${renderFontChoice(draftLooks.noteFont)}` +
+        `<div class="${CLASS_PREFIX}font-row"><span class="${CLASS_PREFIX}section-title">Font</span>${renderFontChoice(draftLooks.noteFont)}</div>` +
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft.colors[color] })
     }
     draw()
@@ -2891,6 +2895,8 @@
   let puzzleNotes = []
   let keptEntries = []
   let selected = []
+  // The notes a selection rectangle being dragged touches, outlined as the selection is until the release decides.
+  let previewed = []
   // False while this puzzle's saved notes cannot be read: no save writes over them but an explicit wipe's.
   let savable = true
   const reported = new Set()
@@ -3095,7 +3101,7 @@
   }
 
   function showSelection (map, offset = [0, 0]) {
-    const outlines = textBox ? [{ box: textBox.box, color: itemColor(textBox.item.color) }] : selected.map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
+    const outlines = textBox ? [{ box: textBox.box, color: itemColor(textBox.item.color) }] : [...new Set([...selected, ...previewed])].map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
     const layer = notesLayer()
     const shown = [...layer.querySelectorAll(`.${SELECTION_CLASS}`)]
     for (const element of shown.slice(outlines.length)) element.remove()
@@ -3704,6 +3710,10 @@
     clearTimeout(d.settle)
     between()
     d.rectangle?.remove()
+    if (previewed.length) {
+      previewed = []
+      showSelection(boardMap())
+    }
   }
 
   function endDrag (click = () => {}) {
@@ -3755,6 +3765,8 @@
     return { left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) }
   }
 
+  const notesInRectangle = (d, map) => notesHidden ? [] : notesTouched(notesOnBoard(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]))
+
   function showRectangle (d) {
     if (!d.rectangle) {
       d.rectangle = document.createElement('div')
@@ -3763,11 +3775,14 @@
     }
     const box = rectangleBox(d)
     placeOver(d.rectangle, { left: box.left, top: box.top, right: box.left + box.width, bottom: box.top + box.height })
+    const map = boardMap()
+    previewed = notesInRectangle(d, map)
+    showSelection(map)
   }
 
   function selectInRectangle (d, click) {
     const map = boardMap()
-    const touched = notesHidden ? [] : notesTouched(notesOnBoard(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]))
+    const touched = notesInRectangle(d, map)
     if (touched.length === 0 && isSmallRectangle(d.points)) return click(d)
     select(d.shift ? [...selected, ...touched] : touched)
   }
@@ -4120,10 +4135,10 @@
   function confirmClear () {
     textTool.run(() => Framework.showDialog({
       parts: [
-        { tag: 'text', content: CLEAR_QUESTION },
-        { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }, { tag: 'button', content: CANCEL_LABEL }] }
+        { tag: 'text', content: clearQuestion(puzzleNotes.filter((item) => item.kind === TEXT_KIND).length) },
+        { tag: 'options', options: [{ tag: 'button', content: DELETE_ALL_LABEL }, { tag: 'button', content: CANCEL_LABEL }] }
       ],
-      onButton: under(textTool, (label) => { if (label === OK_LABEL) clearAll() }),
+      onButton: under(textTool, (label) => { if (label === DELETE_ALL_LABEL) clearAll() }),
       centerOverBoard: true
     }))
   }
