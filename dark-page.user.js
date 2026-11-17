@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.28
+// @version      0.7.29
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.28'
+  const VERSION = '0.7.29'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -31,6 +31,16 @@
   const BUTTON_ACCENT = '#d2a8f0'
   const BUTTON_BORDER = '#4a4a4a'
   const BUTTON_GROUPS = ['.controls-app', '.controls-tool', '.controls-aux']
+  // Pen Tool Extras' and Text Anywhere's trays, light purple boxes behind their panels' control buttons. Each panel's color buttons carry a `data-key`; every other button in it sits on the tray.
+  const TRAYS = ['.pen-tool-extras-tray', '.text-anywhere-tray']
+  const TRAY_PANELS = TRAYS.map((tray) => `.controls-input:has(${tray})`)
+  const TRAY_BUTTON = 'button:not([data-key])'
+  // A step above a black page and below BUTTON_BG, as the light tray sits between SudokuPad's white page and its white buttons.
+  const TRAY_BG = '#1d1a20'
+  // SudokuPad's own overlay is rgba(60, 60, 60, .7), which lightens any page darker than #3c3c3c.
+  const OVERLAY_BG = 'rgb(0 0 0 / 0.6)'
+  // The page color in force, on the body for a script that draws on the page: Text Anywhere's notes off the board take it.
+  const PAGE_COLOR_VAR = '--dark-page-color'
   // Material 3 state layers: BUTTON_ACCENT at 8% (hover) and 10% (press) over BUTTON_BG, worked out by hand; recompute both when either of those changes.
   const BUTTON_HOVER_BG = '#37343a'
   const BUTTON_PRESS_BG = '#3b373e'
@@ -239,7 +249,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
 
-  // No variable is declared: SudokuPad's theme variables sit on `:root` and color the grid too.
+  // No SudokuPad variable is declared: its theme variables sit on `:root` and color the grid too. PAGE_COLOR_VAR is Dark Page's own.
   // `!important` outranks SudokuPad's rules, `.setting-darkmode`'s included. The board's own box
   // (`#svgrenderer`) takes `--body-bg`, what SudokuPad gives `body`: the puzzle has no background and
   // shows `body` through it, and the svg's box clips everything the puzzle draws, so no drawn pixel
@@ -249,22 +259,31 @@
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     const pageRule = (selectors, ...declarations) => rule(selectors.map((selector) => `${PAGE} ${selector}`).join(', '), ...declarations)
     const textColor = textColorFor(pageColor, PAGE_LIGHT_TEXT, PAGE_DARK_TEXT)
-    const darkButtons = [
-      pageRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
+    const trayButtons = (state) => TRAY_PANELS.map((panel) => `${panel} ${TRAY_BUTTON}${state}`)
+    // A tray button that is on (`aria-pressed`) keeps the tray's fill under its outline, as it does on a light page.
+    const offTrayButton = ':not([aria-pressed="true"])'
+    const darkRules = [
+      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), ...trayButtons(offTrayButton)], `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
       pageRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]), `border-color: ${BUTTON_ACCENT}`),
-      pageRule(['.button-row button'], `border-color: ${BUTTON_BORDER}`),
+      // SudokuPad's keypad keeps its own fill under the softer border; the two script panels' white color buttons keep their own border.
+      pageRule(['.controls-main:not(.tool-pen):not(.tool-textanywhere) .button-row button'], `border-color: ${BUTTON_BORDER}`),
       // SudokuPad's own focus shadow cannot be seen on BUTTON_BG.
       pageRule(BUTTON_GROUPS.map((group) => `${group} button:focus-visible`), `outline: 2px solid ${BUTTON_ACCENT}`, 'outline-offset: 2px'),
-      pageRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), `background-color: ${BUTTON_HOVER_BG}`),
-      pageRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), `background-color: ${BUTTON_PRESS_BG}`)
+      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), ...trayButtons(`${offTrayButton}:hover`)], `background-color: ${BUTTON_HOVER_BG}`),
+      pageRule([...BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), ...trayButtons(`${offTrayButton}:active`)], `background-color: ${BUTTON_PRESS_BG}`),
+      pageRule(['true', 'mixed'].flatMap((state) => trayButtons(`[aria-pressed="${state}"]`)), `outline-color: ${BUTTON_ACCENT}`),
+      pageRule(TRAY_PANELS.map((panel) => `${panel} button[aria-pressed="true"]`), `background-color: ${TRAY_BG}`),
+      pageRule(TRAYS, `background-color: ${TRAY_BG}`),
+      pageRule(['.dialog-overlay'], `background-color: ${OVERLAY_BG}`),
+      pageRule(['.controls-input::after'], `border-color: ${BUTTON_BORDER}`)
     ]
     return [
-      rule(PAGE, `background-color: ${pageColor}`),
+      rule(PAGE, `background-color: ${pageColor}`, `${PAGE_COLOR_VAR}: ${pageColor}`),
       pageRule([`#${BOARD_ID}`], 'background-color: var(--body-bg)'),
       pageRule(['.controls-footer', '.controls-footer a'], `color: ${textColor}`),
       pageRule(['.controls-input::after'], `color: ${textColor}`),
       // The buttons go dark on the shared light-text test, not on Dark Page's own text pair.
-      ...(textColorFor(pageColor) === LIGHT_TEXT ? darkButtons : [])
+      ...(textColorFor(pageColor) === LIGHT_TEXT ? darkRules : [])
     ].join('\n')
   }
 
@@ -952,7 +971,7 @@
   const { savedPageColor, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, pageColorOf, earlyColor, LOCAL_DATA_KEY, buildCss, PAGE, BOARD_ID, STYLE_ID, lackingInternals, FEATURES }
+    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, pageColorOf, earlyColor, LOCAL_DATA_KEY, buildCss, PAGE, BOARD_ID, STYLE_ID, PAGE_COLOR_VAR, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -990,6 +1009,14 @@
 
   const CLASS_PREFIX = 'dark-page-'
   const DIALOG_ID = 'dark-page-dialog'
+  const INPUT_ID = 'dark-page-input'
+  const SWATCH_ID = 'dark-page-swatch'
+  // SudokuPad's overlay covers the page while the dialog is open, so the swatch shows the picked color: the page around a white square for the board.
+  const DIALOG_CSS = [
+    `.${CLASS_PREFIX}color-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }`,
+    `#${SWATCH_ID} { display: flex; align-items: center; justify-content: center; height: 64px; margin: 6px 0; border: 1px solid #cfc9db; border-radius: 8px; }`,
+    `#${SWATCH_ID}::after { content: ""; width: 32px; height: 32px; background: #fff; }`
+  ].join('\n')
   const dialogs = guard.dialogsFor(settingsEntry)
   // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
   const snapshotColor = () => snapshotStore(savedSettings, tableKeys(SETTING_ROWS))
@@ -1002,6 +1029,8 @@
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
+      styleId: `${DIALOG_ID}-style`,
+      css: DIALOG_CSS,
       changed: () => picked !== pageColor,
       snapshot: snapshotColor,
       feature: settingsEntry,
@@ -1013,16 +1042,24 @@
         apply: (values) => {
           if (!(DATA_KEY in values)) return
           saveColor(values[DATA_KEY])
-          picked = pageColor
-          input.value = picked
+          show(pageColor)
         }
       },
       extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: () => restoreDefaults() }]
     })
     if (!body) return
-    body.innerHTML = `<div style="margin:6px 0"><input type="color" id="dark-page-input" value="${picked}"></div>`
-    const input = document.getElementById('dark-page-input')
-    const preview = () => { style.textContent = buildCss(picked) }
+    body.innerHTML = `<label class="${CLASS_PREFIX}color-row">Page color <input type="color" id="${INPUT_ID}" value="${picked}"></label><div id="${SWATCH_ID}" style="background-color: ${picked}"></div>`
+    const input = document.getElementById(INPUT_ID)
+    const swatch = document.getElementById(SWATCH_ID)
+    const preview = () => {
+      swatch.style.backgroundColor = picked
+      style.textContent = buildCss(picked)
+    }
+    const show = (color) => {
+      picked = color
+      input.value = color
+      preview()
+    }
     // However the dialog closes (Save, Cancel, Escape), the page goes back to the saved color; a Save has already made it the saved one.
     const closed = new window.MutationObserver(() => {
       if (body.isConnected) return
@@ -1033,9 +1070,7 @@
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase(); preview() })
     function restoreDefaults () {
-      picked = DEFAULT_COLOR
-      input.value = DEFAULT_COLOR
-      preview()
+      show(DEFAULT_COLOR)
     }
   }
 
