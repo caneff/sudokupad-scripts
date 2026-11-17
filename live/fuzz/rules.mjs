@@ -87,10 +87,10 @@ const withoutPenColors = (page) => ({
 
 // A cell's serialized state holds SudokuPad's selection flag (`hl`) in its fifth field. SudokuPad saves no progress for a selection, only for the next step that is not one,
 // so a reload can drop the cells selected, as it does for a selection made straight after a Restart (#943). The selection is left out of what a reload must keep.
-const SELECTION_FIELD = 4
-const withoutSelection = (page) => ({
+const CELL_SELECTED_FIELD = 4
+const withoutCellSelection = (page) => ({
   ...page,
-  cells: page.cells.map((cell) => cell.split('/').map((field, i) => (i === SELECTION_FIELD ? '' : field)).join('/').replace(/\/+$/, ''))
+  cells: page.cells.map((cell) => cell.split('/').map((field, i) => (i === CELL_SELECTED_FIELD ? '' : field)).join('/').replace(/\/+$/, ''))
 })
 
 // What a reload must leave as it was. Color by Digit colors the entered cells every time the page opens in Cell or Both mode, as one undo step, so a coloring
@@ -99,7 +99,7 @@ const withoutSelection = (page) => ({
 // (the selected pen, the pen line mode and the pen colors; the note color, background and colors), as the page shows them, since a deleted save shows only after a reload (#935).
 const reloadView = (page, ignorePenColors) => {
   const { mode, groups, cells } = page.colorByDigit
-  const shown = withoutSelection(ignorePenColors ? withoutPenColors(page) : page)
+  const shown = withoutCellSelection(ignorePenColors ? withoutPenColors(page) : page)
   const base = { penState: sorted(shown.penState), penDrawn: sorted(shown.penDrawn), pageColor: page.pageColor, colorMode: mode, groups, digits: cells.map((cell) => cell.digit), penTool: page.penTool, penColors: page.penColors, noteLooks: page.noteLooks, noteColors: page.noteColors }
   return colorsCells(mode) ? base : { ...base, cells: shown.cells, colours: cells.map((cell) => cell.colours) }
 }

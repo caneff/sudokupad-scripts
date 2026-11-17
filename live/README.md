@@ -176,7 +176,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
   - `reload-changes-nothing`: a reload keeps the pen strokes (state and drawn, as a set), the page color, the pen colors and Text Anywhere's note colors (as the page computes them), Color by Digit's mode, groups and digits, the selected pen and line mode (while the pen tool is current, which a reload rarely leaves it) and Text Anywhere's note color and Background button (while its tool is current with no note selected or open; #935), and, in Digit
     and Off mode, the cells and their colors. Leaves out, in Cell and Both mode, every cell's colors and the serialized cells, which hold them with the pencil marks:
     Color by Digit colors the entered cells every time the page opens, so a coloring undone before the reload returns by design, and the colors and the marks
-    sit in one serialized string that the rule does not parse. Also leaves out the notes' position and look (`notes-survive-reload` counts their text), the undo
+    sit in one serialized string that the rule does not parse. Also leaves out the notes' position and look (`notes-survive-reload` counts their text), the cells selected (SudokuPad saves no progress for a selection, #943), the undo
     stack depth and the letter pad, which a reload does not promise to keep, and the rules pane. It found #681: SudokuPad alone brings a stroke back in color 1
     after a reload within about half a second of the stroke (`docs/research/pen-reload-color.md`), so the rule leaves the pen colors out when a stroke was drawn or erased since the last
     reload (a key press between the two does not matter, #743) and every stroke after it is color 1, and so does `undo-redo-restores` after reload, undo, redo.
