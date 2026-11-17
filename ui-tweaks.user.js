@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.30
+// @version      0.1.31
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Select button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.30'
+  const VERSION = '0.1.31'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -49,9 +49,10 @@
   /* eslint-disable no-unused-vars */
   // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
-  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
-  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
+  // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -60,7 +61,7 @@
 
   const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
 
-  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+  const readRow = (row, store) => (row.envelope ? row.envelope.load(store, row).value : row.read(store.getData(row.key))) ?? row.fallback
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
@@ -70,16 +71,13 @@
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
   const copiedTable = (rows, store) => readByField(rows, store, 'key')
 
-  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
-  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
-
-  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
-  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+  // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, values[row.key]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
   function saveRow (store, row, value) {
@@ -87,25 +85,25 @@
     else if (row.envelope) row.envelope.save(store, row.key, value)
     else store.setData(row.key, value)
   }
+
+  const saveTable = (store, rows, values) => rows.forEach((row) => saveRow(store, row, values[row.name]))
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
 
-  const OPTION_ROWS = OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: (data) => savedBoolean(data) ?? option.default, paste: savedBoolean }))
+  const OPTION_ROWS = OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: savedBoolean }))
   const DEFAULT_OPTIONS = tableDefaults(OPTION_ROWS)
 
   const savedOptions = (store) => readTable(OPTION_ROWS, store)
 
   // An option at its default leaves no key, so a default that changes later reaches everyone who never chose another.
-  function saveOptions (store, options) {
-    OPTION_ROWS.forEach((row) => saveRow(store, row, options[row.name]))
-  }
+  const saveOptions = (store, options) => saveTable(store, OPTION_ROWS, options)
 
   const READERS = pasteReaders(OPTION_ROWS)
 
   const copiedSettings = (store) => JSON.stringify(copiedTable(OPTION_ROWS, store))
 
   // What a paste leaves in force: the options now saved, with only the pasted ones changed, so a box ticked in the dialog and not saved is not saved by it.
-  const pastedOptions = (current, values) => withPasted(OPTION_ROWS, current, pastedByName(OPTION_ROWS, values), values)
+  const pastedOptions = (current, values) => withPasted(OPTION_ROWS, current, values)
 
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.

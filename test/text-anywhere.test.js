@@ -1739,10 +1739,9 @@ test('the dialog defaults are the default of every look the dialog sets, and no 
 })
 
 test('a paste changes only the pasted looks in the draft; the others keep their edits', () => {
-  const now = { ...readLooks(fakeStore({})), outline: 'thin', frame: true }
-  const draft = { ...now, outline: 'none', noteFont: 'fixed', frame: false }
-  assert.deepEqual(withPasted(LOOKS, draft, now, { [OUTLINE_KEY]: 'thin' }), { ...draft, outline: 'thin' })
-  assert.deepEqual(withPasted(LOOKS, draft, now, {}), draft, 'a paste of colors only leaves every look as drafted')
+  const draft = { ...readLooks(fakeStore({})), outline: 'none', noteFont: 'fixed', frame: false }
+  assert.deepEqual(withPasted(LOOKS, draft, { [OUTLINE_KEY]: 'thin' }), { ...draft, outline: 'thin' })
+  assert.deepEqual(withPasted(LOOKS, draft, {}), draft, 'a paste of colors only leaves every look as drafted')
 })
 
 test('a color set is one record: colors, preset, the pens a page preset missed, and the preset the dialog names them for', () => {

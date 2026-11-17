@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.34
+// @version      1.32.35
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.34'
+  const VERSION = '1.32.35'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -66,9 +66,10 @@
   /* eslint-disable no-unused-vars */
   // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
-  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
-  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
+  // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -77,7 +78,7 @@
 
   const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
 
-  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+  const readRow = (row, store) => (row.envelope ? row.envelope.load(store, row).value : row.read(store.getData(row.key))) ?? row.fallback
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
@@ -87,16 +88,13 @@
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
   const copiedTable = (rows, store) => readByField(rows, store, 'key')
 
-  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
-  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
-
-  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
-  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+  // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, values[row.key]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
   function saveRow (store, row, value) {
@@ -104,6 +102,8 @@
     else if (row.envelope) row.envelope.save(store, row.key, value)
     else store.setData(row.key, value)
   }
+
+  const saveTable = (store, rows, values) => rows.forEach((row) => saveRow(store, row, values[row.name]))
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
 
@@ -827,18 +827,22 @@
 
   const doNothing = () => {}
 
+  // The mark boxes saved under their old names.
+  const OLD_MARK_NAMES = { circle: 'dot', cornerCircle: 'cornerDot' }
+
   // `effect` runs once `inForce` holds the new value; the style is written after the effects, so an effect need not.
   function slider (key, range, effect, dialog) {
-    return { key, fallback: range.fallback, read: (data) => onSliderStep(range, data) ? data : range.fallback, paste: (data) => onSliderStep(range, data) ? data : undefined, effect, range, dialog }
+    return { key, fallback: range.fallback, read: (data) => onSliderStep(range, data) ? data : undefined, effect, range, dialog }
   }
 
   function flag (key, effect = doNothing, dialog) {
-    return { key, fallback: true, read: (data) => data !== false, paste: (data) => typeof data === 'boolean' ? data : undefined, effect, dialog }
+    return { key, fallback: true, read: (data) => typeof data === 'boolean' ? data : undefined, effect, dialog }
   }
 
-  function flags (key, names, effect, dialog, read = (data) => decodeFlags(names, data)) {
-    const accepts = (data) => isPlainObject(data) && Object.keys(data).length > 0 && Object.entries(data).every(([name, value]) => names.includes(name) && typeof value === 'boolean')
-    return { key, fallback: decodeFlags(names), read, paste: (data) => accepts(data) ? read(data) : undefined, effect, dialog }
+  // `normalize` reads an accepted value: a name saved under an old name, as `legacyNames` lists, is accepted too.
+  function flags (key, names, effect, dialog, normalize = (data) => decodeFlags(names, data), legacyNames = []) {
+    const accepts = (data) => isPlainObject(data) && Object.keys(data).length > 0 && Object.entries(data).every(([name, value]) => (names.includes(name) || legacyNames.includes(name)) && typeof value === 'boolean')
+    return { key, fallback: decodeFlags(names), read: (data) => accepts(data) ? normalize(data) : undefined, effect, dialog }
   }
 
   // The line mode is saved its own way. A row `under` a box is hidden while that box is unticked.
@@ -855,7 +859,7 @@
       { section: 'Line styles', labels: { dashed: 'Dashed lines', arrows: 'Directional arrow lines' } }),
     show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' }),
     // The marks table is built by hand in the dialog, so this row has no section.
-    marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot'], doNothing, {}, normalizeMarkSettings)
+    marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot'], doNothing, {}, normalizeMarkSettings, Object.values(OLD_MARK_NAMES))
   }
   const SETTING_NAMES = Object.keys(SETTING_TABLE)
   // The table's rows are in the lib's shape, each named by its place here, so `SETTINGS` is the one table.
@@ -878,7 +882,7 @@
   // A write that throws leaves `current` as it was, so a retry finds the same settings changed and their effects still run.
   function saveChangedSettings (store, draft, current) {
     const changed = changedSettings(draft, current)
-    changed.forEach((name) => saveRow(store, SETTINGS[name], draft[name]))
+    saveTable(store, changed.map((name) => SETTINGS[name]), draft)
     changed.forEach((name) => { current[name] = draft[name] })
     return changed
   }
@@ -2075,7 +2079,6 @@
     types: ['x', 'circle'],
     setting: { x: 'cornerX', circle: 'cornerCircle' }
   }
-  const OLD_MARK_NAMES = { circle: 'dot', cornerCircle: 'cornerDot' }
   // An edge's midpoint is 0.5 from its corners and a cell's middle 0.71, so neither comes near 0.2, which is a circle about 12 px across at a cell 60 px wide. It takes the corner end
   // of an edge click (SudokuPad's edge zone reaches 0.57 along the side from the midpoint).
   const CORNER_RADIUS = 0.2
@@ -3179,7 +3182,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
           // The draft takes the paste only once every write is done, so a paste the snapshot put back leaves the draft as the dialog shows it.
           const pastedSet = COLORS_KEY in values ? readPenColors(values[COLORS_KEY]) : null
           if (pastedSet) saveColors(pastedSet)
-          draft = withPasted(SETTING_ROWS, draft, next, values)
+          draft = withPasted(SETTING_ROWS, draft, values)
           if (pastedSet) {
             set = pastedSet
             pickedPreset = pastedSet.preset
