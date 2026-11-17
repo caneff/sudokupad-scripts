@@ -721,6 +721,12 @@ describe('with every script installed', { concurrency: false }, () => {
   const setScript = (on) => read(([selector, on]) => { document.querySelector(selector).media = on ? '' : 'not all' }, [STYLE, on])
   const borders = (selector) => read((selector) => [...document.querySelectorAll(selector)].map((b) => window.getComputedStyle(b).borderTopColor), selector)
   const DARK = { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER }
+  // A point, in cells, on the black page under the board's own white box, below the third column. Above the board is SudokuPad's title, which a click follows.
+  const marginBelow = () => read((board) => {
+    const box = document.getElementById(board).getBoundingClientRect()
+    const cell = Framework.app.puzzle.cells.find((c) => c.row === 0 && c.col === 0).elem.getBoundingClientRect()
+    return [(box.bottom - cell.top) / cell.height + 0.3, 2.5]
+  }, BOARD_ID)
 
   before(async () => {
     ;({ context, p, errors } = await openWithAllScripts(browser()))
@@ -764,12 +770,7 @@ describe('with every script installed', { concurrency: false }, () => {
   })
 
   it('a note off the board has a halo of the page color, and a note on the board keeps the board\'s white', async () => {
-    // A cell's width to the left of the board's own box, which is white.
-    const margin = await read((board) => {
-      const box = document.getElementById(board).getBoundingClientRect()
-      const cell = Framework.app.puzzle.cells.find((c) => c.row === 0 && c.col === 0).elem.getBoundingClientRect()
-      return [4.5, (box.left - cell.width - cell.left) / cell.width]
-    }, BOARD_ID)
+    const margin = await marginBelow()
     await placeNote(p, margin, 'off')
     await placeNote(p, [4.5, 4.5], 'on')
     const halo = (text) => read(([selector, text]) => window.getComputedStyle([...document.querySelectorAll(selector)].find((n) => n.textContent === text)).textShadow, ['#text-anywhere-layer .text-anywhere-text', text])
@@ -787,7 +788,11 @@ describe('with every script installed', { concurrency: false }, () => {
     await openSettings(p)
     try {
       assert.equal(await computed('.dialog-overlay', 'backgroundColor'), 'rgba(0, 0, 0, 0.6)')
-      const { data } = await decode(p, await settledShot(p, { x: 2, y: 2, width: 1, height: 1 }))
+      const [x, y] = await read((board) => {
+        const box = document.getElementById(board).getBoundingClientRect()
+        return [Math.round(box.left + box.width / 2), Math.round(box.top) - 10]
+      }, BOARD_ID)
+      const { data } = await decode(p, await settledShot(p, { x, y, width: 1, height: 1 }))
       assert.deepEqual([...data.subarray(0, 3)], [0, 0, 0])
     } finally {
       await p.keyboard.press('Escape')
