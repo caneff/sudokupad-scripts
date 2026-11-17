@@ -59,6 +59,39 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.equal(await savedSize('A'), stopped)
   })
 
+  it('holding + with nothing selected keeps stepping the next note\'s size, and the release stops it', async () => {
+    await p.keyboard.down('+')
+    await p.waitForFunction((id) => Number(document.getElementById(id).value) > 7, SIZE_SLIDER.slice(1))
+    await p.keyboard.up('+')
+    const stopped = await p.evaluate((k) => Framework.getData(k), WIDTH_KEY)
+    assert.equal(stopped > 7, true, `the next-note size kept growing: ${stopped}`)
+    // A "nothing happened in 400 ms" check: the release must leave the size where it stopped.
+    await p.waitForTimeout(400)
+    assert.equal(await p.evaluate((k) => Framework.getData(k), WIDTH_KEY), stopped)
+  })
+
+  it('a held + stops when Shift is let go before the key, which then comes up as =, and when the window loses focus', async () => {
+    const width = () => p.evaluate((k) => Framework.getData(k), WIDTH_KEY)
+    await p.keyboard.down('Shift')
+    await p.keyboard.down('Equal')
+    await p.waitForFunction((id) => Number(document.getElementById(id).value) > 7, SIZE_SLIDER.slice(1))
+    await p.keyboard.up('Shift')
+    await p.keyboard.up('Equal')
+    const released = await width()
+    // A "nothing happened in 400 ms" check.
+    await p.waitForTimeout(400)
+    assert.equal(await width(), released, 'the release of the key stopped the hold')
+    await p.keyboard.press('-')
+    await p.keyboard.down('-')
+    await p.waitForFunction(([id, from]) => Number(document.getElementById(id).value) < from - 1, [SIZE_SLIDER.slice(1), released])
+    await p.evaluate(() => window.dispatchEvent(new Event('blur')))
+    const blurred = await width()
+    // A "nothing happened in 400 ms" check.
+    await p.waitForTimeout(400)
+    await p.keyboard.up('-')
+    assert.equal(await width(), blurred, 'the blur stopped the hold')
+  })
+
   it('with Ctrl, Alt or Meta held the keys leave the size alone (Alt is what the script\'s own check stops)', async () => {
     await typeText(p, A, 'A')
     await clickAt(p, A)

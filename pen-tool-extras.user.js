@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.28
+// @version      1.32.29
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.28'
+  const VERSION = '1.32.29'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -2709,6 +2709,8 @@
   const SLIDERS_ROW = CONTROLS_ROW + 1
   const CONTROLS_GAP_REM = 0.75
   const TRAY_RADIUS_PX = 14
+  const SELECTED_RING_PX = 3
+  const PICKER_INSET_PX = 4
   // A pressed button shrinks to this scale over this long, so a click shows before it lets go; SudokuPad's own buttons have no pressed look.
   const PRESS_SCALE = 0.97
   const PRESS_MS = 120
@@ -2734,8 +2736,8 @@
       : `<div class="${sliderRow}" data-empty></div>`
   }
 
-  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders` and `sliderRow` are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
-  function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
+  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders`, `sliderRow` and `picker` (the hold-to-edit picker's) are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
+  function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, picker, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
     const pressable = [`${panel} ${colorButton}`, controlButtons, ...(pressButtons ? [pressButtons] : [])].join(', ')
     const pressed = `:is(${pressable}):active`
@@ -2745,6 +2747,10 @@
       `${panel} button[data-key="0"], ${panel} button[data-control="delete"] { display: none !important; }`,
       // Each color button keeps `position: relative`, since its color line is its `::after`.
       `${panel} ${colorButton} { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
+      // The selected color keeps a white face and takes a ring, since a dark color vanishes on SudokuPad's purple fill. An inset shadow takes no room, so no button moves.
+      `${panel} ${colorButton}.current { background-color: #fff; box-shadow: inset 0 0 0 ${SELECTED_RING_PX}px ${SUDOKUPAD_PURPLE}; }`,
+      // A picker sits inside its color button's frame, not over it.
+      `${panel} .${picker} input { width: calc(${PANEL_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); height: calc(${COLOR_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); }`,
       `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${SUDOKUPAD_PURPLE}; }`,
       `.${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
       // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
@@ -2802,18 +2808,12 @@
   // The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
   const CONTROL_BUTTONS = [LINE_MODE_BUTTON, PAGE_BUTTON, SETTINGS_BUTTON]
   const PEN_PANEL = '.tool-pen .controls-input'
-  const SELECTED_RING_PX = 3
-  const PICKER_INSET_PX = 4
   const controlButtons = CONTROL_BUTTONS.map((name) => `${PEN_PANEL} button.${name}`).join(', ')
   const PANEL_CSS = [
     `${LINE_MODE_PULLDOWN} { display: none; }`,
-    ...panelCss({ panel: PEN_PANEL, colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
+    ...panelCss({ panel: PEN_PANEL, colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, picker: `${CLASS_PREFIX}picker`, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
     // Each control has its own column, so the gear stays in the third when the page button is left out.
     ...CONTROL_BUTTONS.map((name, i) => `${PEN_PANEL} button.${name} { order: ${i + 1}; grid-column: ${i + 1}; }`),
-    // The selected color keeps a white face and takes a ring, since a dark pen's line vanishes on SudokuPad's purple fill. An inset shadow takes no room, so no button moves.
-    `${PEN_PANEL} button[data-key].current { background: #fff; box-shadow: inset 0 0 0 ${SELECTED_RING_PX}px ${SUDOKUPAD_PURPLE}; }`,
-    // A picker sits inside its button's frame, not over it; the lib's square picker is as wide as the button is tall.
-    `.${CLASS_PREFIX}editing .${CLASS_PREFIX}picker input { width: calc(${PANEL_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); height: calc(${COLOR_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); }`,
     `.${LINE_MODE_BUTTON} svg, .${PAGE_BUTTON} svg, .${SETTINGS_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
     `.${LINE_MODE_BUTTON} path, .${SETTINGS_BUTTON} path, .${SETTINGS_BUTTON} circle { fill: none !important; }`

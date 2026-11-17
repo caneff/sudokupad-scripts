@@ -4,7 +4,9 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
 
-const { CHECK_BOXES, TEXT_BOX, TEXTS } = textAnywhere
+const { CHECK_BOXES, KEYPAD, NINE, PICKER, TEXT_BOX, TEXTS } = textAnywhere
+// As Pen Tool Extras' pickers: each sits inside its color button's frame, at least this far in.
+const PICKER_INSET_PX = 3.5
 const SYMBOLS_AT = [1.5, 1.5]
 const TRAILING_AT = [3.5, 3.5]
 const MOVED_AT = [7.5, 6.5]
@@ -136,6 +138,21 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     assert.ok(Math.abs(await opacityOf() - 0.48) < 0.001, `during the drag: ${await opacityOf()}`)
     await p.mouse.up()
     assert.equal(await opacityOf(), 0.8)
+  })
+
+  it('the hold-to-edit pickers sit inside their button frames, at least 3.5 px in, as Pen Tool Extras\' do', async () => {
+    const button = (n) => `.tool-textanywhere ${KEYPAD} button[data-key="${n}"]`
+    await textAnywhere.holdForPickers(p, button(1), 'left', 'visible')
+    try {
+      const insets = await p.evaluate(([numbers, buttonOf, picker]) => numbers.map((n) => {
+        const b = document.querySelector(buttonOf.replace('$n', n)).getBoundingClientRect()
+        const q = document.querySelector(picker.replace('input', `input[data-key="${n}"]`)).getBoundingClientRect()
+        return [n, q.left - b.left, q.top - b.top, b.right - q.right, b.bottom - q.bottom]
+      }), [NINE, button('$n'), PICKER])
+      for (const [n, ...sides] of insets) assert.equal(sides.every((inset) => inset >= PICKER_INSET_PX), true, `picker ${n} insets ${sides}`)
+    } finally {
+      await textAnywhere.holdForPickers(p, `${PICKER}[data-key="4"]`, 'left', 'detached')
+    }
   })
 
   it('threw no page error', () => { assert.deepEqual(errors, []) })

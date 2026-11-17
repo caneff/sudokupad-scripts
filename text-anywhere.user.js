@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.28
+// @version      0.46.29
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.28'
+  const VERSION = '0.46.29'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -255,8 +255,12 @@
   const CLASS_PREFIX = 'text-anywhere-'
   const COLORS_STYLE_ID = 'text-anywhere-colors'
   const PANEL_STYLE_ID = 'text-anywhere-style'
-  const DELETE_ALL_LABEL = 'Delete all'
-  const clearQuestion = (count) => `${count === 1 ? 'Delete the note' : `Delete all ${count} notes`}? This cannot be undone.`
+  // Clear all with no notes asks nothing; with one it speaks of the one.
+  const clearAsk = (count) => count === 0
+    ? null
+    : count === 1
+      ? { question: 'Delete the note? This cannot be undone.', button: 'Delete' }
+      : { question: `Delete all ${count} notes? This cannot be undone.`, button: 'Delete all' }
   const OK_LABEL = 'OK'
   const NOTES_PREFIX = KEY_PREFIX + 'notes_'
   const OLD_NOTES_PREFIX = OLD_KEY_PREFIX + 'drawing_'
@@ -666,17 +670,20 @@
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
   const sizeStep = (width, direction) => steppedSlider(WIDTH_RANGE, width, direction)
-  // A note steps from its own size, not from the width the panel shows for the first selected note.
   // The 9x9's width is the slider's own; a bigger grid has smaller cells on screen, so a new note's width grows with the grid to keep its line about as tall on screen.
   const REFERENCE_GRID = 9
-  const newNoteWidth = (width, gridSize) => {
-    const size = textSizeFor(width) * (gridSize > 0 ? gridSize : REFERENCE_GRID) / REFERENCE_GRID
-    const stepped = Math.round(widthFor(size) / WIDTH_STEP) * WIDTH_STEP
+  const gridScaledWidth = (width, ratio) => {
+    const stepped = Math.round(widthFor(textSizeFor(width) * ratio) / WIDTH_STEP) * WIDTH_STEP
     return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, stepped))
   }
+  const gridRatio = (gridSize) => (gridSize > 0 ? gridSize : REFERENCE_GRID) / REFERENCE_GRID
+  const newNoteWidth = (width, gridSize) => gridScaledWidth(width, gridRatio(gridSize))
+  // The saved next-note size stays in 9x9 units, so a size taken from a note on this grid is scaled back.
+  const nextNoteWidth = (noteWidth, gridSize) => gridScaledWidth(noteWidth, 1 / gridRatio(gridSize))
   // A held + or - steps the size like a held arrow nudges: after the pause, one step a tick, ramping to this many.
   const SIZE_HOLD_MAX_STEPS = 4
-  const sizeHoldSteps = (heldMs) => heldMs < NUDGE_REPEAT_MS ? 0 : Math.round(1 + (SIZE_HOLD_MAX_STEPS - 1) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
+  const sizeHoldSteps = (heldMs) => heldRamp(heldMs, 1, SIZE_HOLD_MAX_STEPS)
+  // A note steps from its own size, not from the width the panel shows for the first selected note.
   const steppedNote = (item, direction) => ({ ...item, size: textSizeFor(sizeStep(widthFor(item.size), direction)) })
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
@@ -2147,13 +2154,14 @@
     const [x, y] = reachablePoint(middle, [box.right - box.left, box.bottom - box.top], room)
     return [x - middle[0], y - middle[1]]
   }
-  function nudgeStep (heldMs, shift) {
+  // A held key does nothing more until the pause, then `from` a tick, ramping to `to`.
+  function heldRamp (heldMs, from, to) {
     if (heldMs < NUDGE_REPEAT_MS) return 0
-    const [from, to] = shift ? [NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX] : [NUDGE_PX, NUDGE_MAX_PX]
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
+  const nudgeStep = (heldMs, shift) => shift ? heldRamp(heldMs, NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX) : heldRamp(heldMs, NUDGE_PX, NUDGE_MAX_PX)
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, REFERENCE_GRID, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet, noteBackdrop }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet, noteBackdrop }
   }
   if (typeof document === 'undefined') return
 
@@ -2383,6 +2391,8 @@
   const SLIDERS_ROW = CONTROLS_ROW + 1
   const CONTROLS_GAP_REM = 0.75
   const TRAY_RADIUS_PX = 14
+  const SELECTED_RING_PX = 3
+  const PICKER_INSET_PX = 4
   // A pressed button shrinks to this scale over this long, so a click shows before it lets go; SudokuPad's own buttons have no pressed look.
   const PRESS_SCALE = 0.97
   const PRESS_MS = 120
@@ -2408,8 +2418,8 @@
       : `<div class="${sliderRow}" data-empty></div>`
   }
 
-  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders` and `sliderRow` are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
-  function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
+  // `panel`, `colorButton`, `controlButtons` and `pressButtons` are selectors; `tray`, `sliders`, `sliderRow` and `picker` (the hold-to-edit picker's) are bare class names and `wedgeSlider` and `fadeSlider` bare ids.
+  function panelCss ({ panel, colorButton, controlButtons, pressButtons, tray, sliders, sliderRow, picker, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
     const pressable = [`${panel} ${colorButton}`, controlButtons, ...(pressButtons ? [pressButtons] : [])].join(', ')
     const pressed = `:is(${pressable}):active`
@@ -2419,6 +2429,10 @@
       `${panel} button[data-key="0"], ${panel} button[data-control="delete"] { display: none !important; }`,
       // Each color button keeps `position: relative`, since its color line is its `::after`.
       `${panel} ${colorButton} { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
+      // The selected color keeps a white face and takes a ring, since a dark color vanishes on SudokuPad's purple fill. An inset shadow takes no room, so no button moves.
+      `${panel} ${colorButton}.current { background-color: #fff; box-shadow: inset 0 0 0 ${SELECTED_RING_PX}px ${SUDOKUPAD_PURPLE}; }`,
+      // A picker sits inside its color button's frame, not over it.
+      `${panel} .${picker} input { width: calc(${PANEL_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); height: calc(${COLOR_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); }`,
       `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${SUDOKUPAD_PURPLE}; }`,
       `.${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
       // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
@@ -2476,10 +2490,9 @@
   const hoverLook = (outlinePercent, fillPercent) => `outline: 1px solid ${hoverShare(outlinePercent)}; outline-offset: 2px; background-image: linear-gradient(${hoverShare(fillPercent)}, ${hoverShare(fillPercent)});`
   const IDLE_NOTE = `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS})`
   const PANEL_CSS = [
-    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, pressButtons: HIDE_ALL, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
+    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, pressButtons: HIDE_ALL, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, picker: `${CLASS_PREFIX}picker`, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
-    `${PANEL} button.digit.current { background-color: #fff; box-shadow: inset 0 0 0 3px ${SUDOKUPAD_PURPLE}; }`,
     `${PANEL} button.digit::after { content: "Aa"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-indent: 0; font-size: ${COLOR_LABEL_REM}rem; font-weight: 600; line-height: 1; }`,
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { color: var(${colorVar(n)}); }`),
     ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
@@ -2801,21 +2814,21 @@
     [OPACITY_SLIDER]: { name: 'opacity', change: (value) => (item) => ({ ...item, opacity: value }) }
   }
 
+  // A width the panel shows for a note is that note's, scaled to this grid; the next note's is saved in 9x9 units.
+  const setNextLook = (name, value) => setLook(name, name === 'width' && targetNotes() ? lookRow(name).read(nextNoteWidth(value, gridSize())) : value)
+
   function slideLook (input) {
     const { name, change } = SLIDER_LOOKS[input.id]
     const value = lookRow(name).read(Number(input.value))
-    applyLook(change(value), () => setLook(name, value))
+    applyLook(change(value), () => setNextLook(name, value))
   }
 
   function stepSize (direction, steps = 1) {
-    for (let i = 1; i < steps; i++) stepSizeOnce(direction)
-    stepSizeOnce(direction)
-  }
-
-  function stepSizeOnce (direction) {
-    // The next note takes the first note's new size, as the panel shows it.
-    const next = sizeStep(panelValues().width, direction)
-    applyLook((item) => steppedNote(item, direction), () => setLook('width', lookRow('width').read(next)))
+    for (let i = 0; i < steps; i++) {
+      // The next note takes the first note's new size, as the panel shows it.
+      const next = sizeStep(panelValues().width, direction)
+      applyLook((item) => steppedNote(item, direction), () => setNextLook('width', lookRow('width').read(next)))
+    }
     showPanelValues()
   }
 
@@ -2903,8 +2916,8 @@
   let puzzleNotes = []
   let keptEntries = []
   let selected = []
-  // The notes a selection rectangle being dragged touches, outlined as the selection is until the release decides.
-  let previewed = []
+  // The selection a rectangle being dragged would leave at its release, outlined in place of the selection; null with no rectangle.
+  let previewed = null
   // False while this puzzle's saved notes cannot be read: no save writes over them but an explicit wipe's.
   let savable = true
   const reported = new Set()
@@ -3110,7 +3123,7 @@
   }
 
   function showSelection (map, offset = [0, 0]) {
-    const outlines = textBox ? [{ box: textBox.box, color: itemColor(textBox.item.color) }] : [...new Set([...selected, ...previewed])].map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
+    const outlines = textBox ? [{ box: textBox.box, color: itemColor(textBox.item.color) }] : (previewed ?? selected).map((index) => ({ box: noteScreenBox(puzzleNotes[index], map, look.outline) }))
     const layer = notesLayer()
     const shown = [...layer.querySelectorAll(`.${SELECTION_CLASS}`)]
     for (const element of shown.slice(outlines.length)) element.remove()
@@ -3719,8 +3732,8 @@
     clearTimeout(d.settle)
     between()
     d.rectangle?.remove()
-    if (previewed.length) {
-      previewed = []
+    if (previewed) {
+      previewed = null
       showSelection(boardMap())
     }
   }
@@ -3753,6 +3766,7 @@
   // A press that never moved opens no text box. A lost pointer (a blur, a tool switch, a move with the button up) cancels an erase, so nothing goes that the release never confirmed.
   function endGesture () {
     stopHold()
+    stopSizeHold()
     flushFrame()
     erasing = null
     if (drag) endDrag()
@@ -3785,15 +3799,17 @@
     const box = rectangleBox(d)
     placeOver(d.rectangle, { left: box.left, top: box.top, right: box.left + box.width, bottom: box.top + box.height })
     const map = boardMap()
-    previewed = notesInRectangle(d, map)
+    previewed = rectangleSelection(d, notesInRectangle(d, map))
     showSelection(map)
   }
+
+  const rectangleSelection = (d, touched) => d.shift ? [...new Set([...selected, ...touched])] : touched
 
   function selectInRectangle (d, click) {
     const map = boardMap()
     const touched = notesInRectangle(d, map)
     if (touched.length === 0 && isSmallRectangle(d.points)) return click(d)
-    select(d.shift ? [...selected, ...touched] : touched)
+    select(rectangleSelection(d, touched))
   }
 
   const dragDelta = (d, [px, py] = d.points[d.points.length - 1]) => [px - d.points[0][0], py - d.points[0][1]]
@@ -3982,18 +3998,21 @@
     sizeHold = null
   }
 
+  // With nothing selected a hold steps the next note's size.
   function repeatSize () {
-    if (selected.length === 0 || textBox || drag || resizing) return stopSizeHold()
+    if (textBox || drag || resizing) return stopSizeHold()
     const steps = sizeHoldSteps(Date.now() - sizeHold.start)
     if (steps > 0) stepSize(sizeHold.direction, steps)
   }
 
-  function pressSizeKey (key, direction) {
+  // The hold is the physical key's: releasing Shift before = turns a held + into =.
+  function pressSizeKey (code, direction) {
     stepSize(direction)
-    if (!sizeHold) sizeHold = { key, direction, start: Date.now(), timer: setInterval(repeatSize, NUDGE_TICK_MS) }
+    if (!sizeHold) sizeHold = { code, direction, start: Date.now(), timer: setInterval(repeatSize, NUDGE_TICK_MS) }
   }
 
   function releaseKey (event) {
+    if (sizeHold?.code === event.code) stopSizeHold()
     heldArrows.delete(event.key)
     if (heldArrows.size > 0) return
     stopHold()
@@ -4142,12 +4161,14 @@
   }
 
   function confirmClear () {
+    const ask = clearAsk(puzzleNotes.filter((item) => item.kind === TEXT_KIND).length)
+    if (!ask) return
     textTool.run(() => Framework.showDialog({
       parts: [
-        { tag: 'text', content: clearQuestion(puzzleNotes.filter((item) => item.kind === TEXT_KIND).length) },
-        { tag: 'options', options: [{ tag: 'button', content: DELETE_ALL_LABEL }, { tag: 'button', content: CANCEL_LABEL }] }
+        { tag: 'text', content: ask.question },
+        { tag: 'options', options: [{ tag: 'button', content: ask.button }, { tag: 'button', content: CANCEL_LABEL }] }
       ],
-      onButton: under(textTool, (label) => { if (label === DELETE_ALL_LABEL) clearAll() }),
+      onButton: under(textTool, (label) => { if (label === ask.button) clearAll() }),
       centerOverBoard: true
     }))
   }
@@ -4279,7 +4300,7 @@
       const sizeDirection = hasChord(event) ? undefined : SLIDER_STEP_KEYS[event.key]
       if (sizeDirection && !textBox) {
         // A gesture holds its notes as they were at the press, and its release would put the old size back.
-        if (!drag && !resizing) pressSizeKey(event.key, sizeDirection)
+        if (!drag && !resizing) pressSizeKey(event.code, sizeDirection)
         return true
       }
       if (selected.length === 0) return false
@@ -4295,7 +4316,6 @@
     // SudokuPad calls every tool's handleKeyup too. An arrow released with Shift still held would otherwise switch to Corner (its tempKey), which leaves this tool and ends the selection.
     handleKeyup (event) {
       holdShift = event.shiftKey
-      if (sizeHold?.key === event.key) stopSizeHold()
       if (event.key === 'Shift' && drag?.move) inFrame('drag', dragMoves)
       return Framework.app.tool === TOOL_NAME && selected.length > 0 && Boolean(ARROWS[event.key])
     }
@@ -4349,7 +4369,11 @@
       onWindow(textTool, 'keydown', switchOnT, { capture: true })
       onWindow(textTool, 'keyup', releaseKey, { capture: true })
       onWindow(textTool, 'pagehide', saveOpenNote)
-      document.addEventListener('visibilitychange', under(textTool, () => { if (document.visibilityState === 'hidden') saveOpenNote() }))
+      document.addEventListener('visibilitychange', under(textTool, () => {
+        if (document.visibilityState !== 'hidden') return
+        stopSizeHold()
+        saveOpenNote()
+      }))
     })
     addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: 'Text Anywhere', open: openDialog })
     boardNotes.run(() => {

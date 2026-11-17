@@ -11,7 +11,9 @@ import { drag, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../p
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
-const { HOLD_TO_EDIT_MS, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
+const require = createRequire(import.meta.url)
+const { HOLD_TO_EDIT_MS, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX } = require('../../pen-tool-extras.user.js')
+const { contrastRatio } = require('../../test/contrast.js')
 
 const MARKS_KEY = 'EdgeMarks_marks'
 const PICKERS = '.tool-pen .pen-tool-extras-picker'
@@ -179,12 +181,21 @@ describe('Pen Tool Extras: the hit floor on a grid with small cells', { concurre
   })
 })
 
-// #955: the selected pen, the gear's column and the pickers' inset. The line mode icon's grid stays as it was: see the PR.
+// #955: the selected pen, the gear's column and the pickers' inset. The line mode icon's grid stays as it was: docs/research/pen-tool-extras/line-icon-grid-scaling.md.
 const PURPLE = 'rgb(106, 27, 154)'
 const LINE_STYLES_KEY = 'PenColor_linestyles'
 const RING_PX = 3
 const PICKER_INSET_PX = 3.5
 const MIN_CONTRAST = 3
+
+// A computed color, `rgb()`, `rgba()` or `color(srgb ...)`, as [r, g, b] on 0-255 and its alpha.
+const channelsOf = (css) => {
+  const [r, g, b, alpha = 1] = css.match(/[\d.]+/g).map(Number)
+  const scale = css.startsWith('color(') ? 255 : 1
+  return { rgb: [r, g, b].map((c) => c * scale), alpha }
+}
+// A see-through color over an opaque one, so a transparent line reads as the face it lets through.
+const over = (top, face) => face.map((c, i) => top.alpha * top.rgb[i] + (1 - top.alpha) * c)
 
 const rectOf = (p, selector) => p.locator(selector).evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom } })
 
@@ -207,15 +218,11 @@ describe('Pen Tool Extras panel polish', { concurrency: false }, () => {
   it('each selected pen\'s line is at least 3:1 against its button face, for pens 1, 2, 3 and 9', async () => {
     for (const n of [1, 2, 3, 9]) {
       await p.locator(`.tool-pen button[data-key="${n}"]`).click()
-      const ratio = await p.locator(`.tool-pen button[data-key="${n}"]`).evaluate((el) => {
-        const light = (css) => {
-          const [r, g, b] = css.match(/[\d.]+/g).slice(0, 3).map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
-          return 0.2126 * r + 0.7152 * g + 0.0722 * b
-        }
-        const [a, b] = [light(getComputedStyle(el, '::after').backgroundColor), light(getComputedStyle(el).backgroundColor)].sort((x, y) => y - x)
-        return (a + 0.05) / (b + 0.05)
-      })
-      assert.equal(ratio >= MIN_CONTRAST, true, `pen ${n}: ${ratio}`)
+      const { line, face } = await p.locator(`.tool-pen button[data-key="${n}"]`).evaluate((el) => ({ line: getComputedStyle(el, '::after').backgroundColor, face: getComputedStyle(el).backgroundColor }))
+      const faceColor = channelsOf(face)
+      assert.equal(faceColor.alpha, 1, `pen ${n}'s face is opaque: ${face}`)
+      const ratio = contrastRatio(over(channelsOf(line), faceColor.rgb), faceColor.rgb)
+      assert.equal(ratio >= MIN_CONTRAST, true, `pen ${n}: ${ratio} for ${line} on ${face}`)
     }
   })
 

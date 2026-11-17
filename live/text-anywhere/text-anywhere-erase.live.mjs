@@ -356,6 +356,21 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
     assert.deepEqual(await texts(), [])
   })
 
+  it('with no notes Clear all asks nothing, and with one it asks "Delete the note?" and its button says Delete', async () => {
+    await pickTextAnywhere()
+    await p.click(CLEAR_BUTTON)
+    // A "nothing happened in 400 ms" check: no dialog opens.
+    await p.waitForTimeout(400)
+    assert.equal(await p.locator(DIALOG).count(), 0, 'no question with no notes')
+    await typeText(p, UPPER_AT, '15')
+    await openClear()
+    assert.match(await p.locator(DIALOG).textContent(), /Delete the note\? This cannot be undone\./)
+    assert.equal(await p.locator(`${DIALOG} button`).filter({ hasText: /^Delete all$/ }).count(), 0, 'no Delete all for one note')
+    await pressDragRelease(await buttonOverBoard('Delete'))
+    await p.locator(DIALOG).waitFor({ state: 'detached' })
+    assert.deepEqual(await settle(texts, []), [])
+  })
+
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
   })

@@ -103,6 +103,30 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     assert.equal(await p.locator(OUTLINES).count(), 0)
   })
 
+  it('a rectangle dragged without Shift outlines only what its release selects, not the selection before it; with Shift it outlines both', async () => {
+    await clickAt(p, NOTES.D)
+    assert.deepEqual(await selectedTexts(), ['D'])
+    await p.mouse.move(...await gridPoint(p, CORNER))
+    await p.mouse.down()
+    await p.mouse.move(...await gridPoint(p, FAR_CORNER), { steps: 8 })
+    assert.equal(await p.locator(OUTLINES).count(), 3, 'A, B and C are outlined, D is not')
+    await p.mouse.up()
+    assert.deepEqual(await selectedTexts(), ['A', 'B', 'C'])
+    await clickAt(p, NOTES.D)
+    await p.keyboard.down('Shift')
+    try {
+      await p.mouse.move(...await gridPoint(p, CORNER))
+      await p.mouse.down()
+      await p.mouse.move(...await gridPoint(p, FAR_CORNER), { steps: 8 })
+      assert.equal(await p.locator(OUTLINES).count(), 4, 'with Shift D stays outlined beside A, B and C')
+      await p.mouse.up()
+    } finally {
+      await p.keyboard.up('Shift')
+    }
+    assert.deepEqual(await selectedTexts(), ['A', 'B', 'C', 'D'])
+    await p.keyboard.press('Escape')
+  })
+
   it('a drag on empty space draws a rectangle and selects every note it touches, Shift+click removes one and adds it back, and Shift+drag adds more', async () => {
     await p.mouse.move(...await gridPoint(p, CORNER))
     await p.mouse.down()
