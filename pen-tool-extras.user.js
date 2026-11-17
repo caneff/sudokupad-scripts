@@ -2801,11 +2801,18 @@
   // The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
   const CONTROL_BUTTONS = [LINE_MODE_BUTTON, PAGE_BUTTON, SETTINGS_BUTTON]
   const PEN_PANEL = '.tool-pen .controls-input'
+  const SELECTED_RING_PX = 3
+  const PICKER_INSET_PX = 4
   const controlButtons = CONTROL_BUTTONS.map((name) => `${PEN_PANEL} button.${name}`).join(', ')
   const PANEL_CSS = [
     `${LINE_MODE_PULLDOWN} { display: none; }`,
     ...panelCss({ panel: PEN_PANEL, colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
-    ...CONTROL_BUTTONS.map((name, i) => `${PEN_PANEL} button.${name} { order: ${i + 1}; }`),
+    // Each control has its own column, so the gear stays in the third when the page button is left out.
+    ...CONTROL_BUTTONS.map((name, i) => `${PEN_PANEL} button.${name} { order: ${i + 1}; grid-column: ${i + 1}; }`),
+    // The selected color keeps a white face and takes a ring, since a dark pen's line vanishes on SudokuPad's purple fill. An inset shadow takes no room, so no button moves.
+    `${PEN_PANEL} button[data-key].current { background: #fff; box-shadow: inset 0 0 0 ${SELECTED_RING_PX}px ${SUDOKUPAD_PURPLE}; }`,
+    // A picker sits inside its button's frame, not over it; the lib's square picker is as wide as the button is tall.
+    `.${CLASS_PREFIX}editing .${CLASS_PREFIX}picker input { width: calc(${PANEL_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); height: calc(${COLOR_BUTTON_REM}rem - ${2 * PICKER_INSET_PX}px); }`,
     `.${LINE_MODE_BUTTON} svg, .${PAGE_BUTTON} svg, .${SETTINGS_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
     `.${LINE_MODE_BUTTON} path, .${SETTINGS_BUTTON} path, .${SETTINGS_BUTTON} circle { fill: none !important; }`

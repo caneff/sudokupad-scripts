@@ -45,9 +45,9 @@
 
   const PRELOADS = {
     'Low/5/High': [
-      { key: '1', digits: ['0', '1', '2', '3', '4'] },
+      { key: '6', digits: ['0', '1', '2', '3', '4'] },
       { key: '5', digits: ['5'] },
-      { key: '9', digits: ['6', '7', '8', '9'] }
+      { key: 'q', digits: ['6', '7', '8', '9'] }
     ],
     'Odd/Even': [
       { key: '1', digits: ['1', '3', '5', '7', '9'] },
@@ -403,6 +403,13 @@
     return state
   }
 
+  // Low/5/High as it shipped before its colors changed, so a pre-profile install saved with it still reads as that preload.
+  const LEGACY_LOW_5_HIGH = [
+    { key: '1', digits: ['0', '1', '2', '3', '4'] },
+    { key: '5', digits: ['5'] },
+    { key: '9', digits: ['6', '7', '8', '9'] }
+  ]
+
   const isSynced = (state) => state.digitActive === undefined
   const usesDigitColors = (state) => state.useDigitColors !== false
   // `changes` names the fields that change (profiles, active, digitActive, useDigitColors); the rest carry over, profiles as copies when `changes` has none.
@@ -424,7 +431,7 @@
     const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
     if (!legacy) return preloadedState()
-    const equal = preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
+    const equal = sameGroups(LEGACY_LOW_5_HIGH, legacy) ? 0 : preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
     if (equal >= 0) return { profiles: preloads, active: equal }
     return { profiles: [{ name: CUSTOM_NAME, groups: legacy }, ...preloads], active: 0 }
   }

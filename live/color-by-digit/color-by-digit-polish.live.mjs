@@ -2,9 +2,11 @@
 /* global document, window, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ARROW, BUTTON, EDITOR, center, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { createRequire } from 'node:module'
+import { ARROW, BUTTON, DEFAULT_FILL, EDITOR, allFillsOn, center, paletteColorOn, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { selectCell } from '../board.mjs'
 import { dialogButton } from '../settings.mjs'
-import { settle } from '../settle.mjs'
+import { readUntil, settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -244,4 +246,34 @@ describe('the mode button and its menu', { concurrency: false }, () => {
     await p.mouse.click(box.x + 3, box.y + 3)
     assert.equal(await settle(digitProfile, 1), 1)
   })
+})
+
+// The grid draws a cell color at 60% opacity (SudokuPad's own, `color-by-digit.user.js` § darkenColor).
+const CELL_OPACITY = 0.6
+const WHITE = [255, 255, 255]
+const rgbChannels = (css) => css.match(/\d+/g).slice(0, 3).map(Number)
+const onWhite = (channels) => channels.map((c) => CELL_OPACITY * c + (1 - CELL_OPACITY) * 255)
+const { contrastRatio } = createRequire(import.meta.url)('../../test/contrast.js')
+
+describe('a fresh install\'s Low/5/High contrast', { concurrency: false }, () => {
+  const withDigit = async (mode, digit, check) => {
+    const { context, p } = await openSession(browser(), script, { saved: { [MODE_STORAGE_KEY]: mode } })
+    try {
+      await selectCell(p, 0, 2)
+      await p.keyboard.press(digit)
+      await check(p)
+    } finally { await context.close() }
+  }
+
+  it('Digit: a low digit on white reads at 4.5:1 or more', () => withDigit('digit', '3', async (p) => {
+    const fills = await readUntil(allFillsOn(p, 'entered', '3'), (v) => v.length === 1 && v[0] !== DEFAULT_FILL)
+    const ratio = contrastRatio(rgbChannels(fills[0]), WHITE)
+    assert.equal(ratio >= 4.5, true, `${ratio}`)
+  }))
+
+  it('Cell: SudokuPad\'s blue entered digit on a High cell reads at 3.5:1 or more', () => withDigit('cell', '7', async (p) => {
+    const key = await readUntil(() => p.evaluate(() => Framework.app.puzzle.cells[2].colours?.[0]), (v) => v !== undefined)
+    const ratio = contrastRatio(rgbChannels(DEFAULT_FILL), onWhite(rgbChannels(await paletteColorOn(p, key))))
+    assert.equal(ratio >= 3.5, true, `key ${key}: ${ratio}`)
+  }))
 })

@@ -123,8 +123,8 @@ test('an empty list of groups plans nothing', () => {
 const allDigits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => ({ value: String(d) }))
 const byDigit = (g) => plan(allDigits, g).map((p) => p.key).join('')
 
-test('Low/5/High maps 0-4 to key 1, 5 to key 5, 6-9 to key 9', () => {
-  assert.equal(byDigit(PRELOADS['Low/5/High']), '1111159999')
+test('Low/5/High maps 0-4 to key 6 (orange), 5 to key 5, 6-9 to key q (light blue)', () => {
+  assert.equal(byDigit(PRELOADS['Low/5/High']), '666665qqqq')
 })
 
 test('Odd/Even maps odd to key 1, even and 0 to key 2', () => {
@@ -207,6 +207,20 @@ test('saved groups equal to a preload make that preload the active profile, besi
   assert.equal(state.active, 1)
   assert.deepEqual(activeGroups(fromStored(undefined, structuredClone(LOW))), LOW)
   assert.equal(fromStored(undefined, structuredClone(LOW)).active, 0)
+})
+
+const OLD_LOW = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
+
+test('saved groups equal to the old Low/5/High (keys 1, 5, 9) make the new Low/5/High active, with no Custom profile', () => {
+  const state = fromStored(null, structuredClone(OLD_LOW))
+  assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
+  assert.equal(state.active, 0)
+  assert.deepEqual(activeGroups(state), LOW)
+})
+
+test('an install with saved profiles keeps the old Low/5/High keys', () => {
+  const saved = { profiles: [{ name: 'Low/5/High', groups: OLD_LOW }], active: 0 }
+  assert.deepEqual(activeGroups(fromStored(structuredClone(saved), null)), OLD_LOW)
 })
 
 test('saved groups that equal no preload become the active profile named Custom, first, beside the five preloads, even when empty', () => {
@@ -1164,7 +1178,7 @@ test('sync: unsynced in Both, a Cells pick recolors the cells: a 6 goes from Odd
     assert.deepEqual(app.puzzle.cells[0].colours, ['2'])
     pickRow('cells', 1)
     assert.equal(app.stored.ColorByDigit_profiles.data.active, 1)
-    assert.deepEqual(app.puzzle.cells[0].colours, ['9'])
+    assert.deepEqual(app.puzzle.cells[0].colours, ['q'])
   }, UNSYNCED_BOTH)
 })
 
@@ -1786,7 +1800,7 @@ test('shownChips: Both with Low/5/High cells and Odd/Even digits shows 1 5 6, th
 
 test('shownChips: Both names each chip\'s cell group and digit group', () => {
   assert.deepEqual(shownChips('both', LOW, ODD), [
-    { digit: '1', cellKey: '1', digitKey: '1' }, { digit: '5', cellKey: '5', digitKey: '1' }, { digit: '6', cellKey: '9', digitKey: '2' }])
+    { digit: '1', cellKey: '6', digitKey: '1' }, { digit: '5', cellKey: '5', digitKey: '1' }, { digit: '6', cellKey: 'q', digitKey: '2' }])
 })
 
 test('shownChips: Both with a synced profile shows the Cell strip', () => {
