@@ -88,9 +88,9 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.deepEqual(await settle(texts, before), before)
   })
 
-  it('the notes are saved under the puzzle\'s key, as a list of text items in color 1 with opacity 100 and no background', async () => {
+  it('the notes are saved under the puzzle\'s key, as a list of text items in color 2 with opacity 100 and no background', async () => {
     const items = await saved()
-    assert.deepEqual(items.map(({ kind, color, size, opacity, bg }) => [kind, color, size, opacity, bg]), [['text', 1, 20, 100, undefined], ['text', 1, 20, 100, undefined]])
+    assert.deepEqual(items.map(({ kind, color, size, opacity, bg }) => [kind, color, size, opacity, bg]), [['text', 2, 20, 100, undefined], ['text', 2, 20, 100, undefined]])
     assert.deepEqual(await read((key) => Framework.getData(key), INDEX_KEY), [await puzzleKey()])
   })
 
