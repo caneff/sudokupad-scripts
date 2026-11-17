@@ -1996,8 +1996,9 @@
 
   const MENU_ROW = 'display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 6px;border-radius:6px'
   const MENU_DOT_COLUMN = 44
-  // The name column's width, which fits every preloaded name: a longer name is cut with an ellipsis, so no name changes the menu's width.
-  const MENU_NAME_EM = 7
+  // The name column's width: it fits every preloaded name and an ordinary name of about 17 characters (the site's 'Entropic, no blue'),
+  // and a longer name is cut with an ellipsis, so no name changes the menu's width.
+  const MENU_NAME_EM = 10
   const DOT_RING = '#cfc7da'
   const chipColumn = (groups, colorOf) =>
     `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(cellChips(groups), colorOf, { size: CHIP_PX })}</span>`
