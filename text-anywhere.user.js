@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.27
+// @version      0.46.28
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.27'
+  const VERSION = '0.46.28'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -161,8 +161,10 @@
   const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
   /* eslint-enable no-unused-vars */
   // </lib:palette>
-  // The page's own color, as SudokuPad's buttons use it behind their icons.
+  // The page's own color, as SudokuPad's buttons use it behind their icons. Dark Page leaves it on the board's box and paints the page around it its own color, which it puts in
+  // `--dark-page-color`: a note off the board takes that.
   const PAGE_COLOR = 'var(--body-bg, #fff)'
+  const MARGIN_COLOR = `var(--dark-page-color, ${PAGE_COLOR})`
   const PEN_PRESET = 'pen'
   const CUSTOM = 'custom'
   const PRESET_LABELS = {
@@ -555,6 +557,8 @@
     return { left, right, top, bottom }
   }
 
+  const noteBackdrop = (middle, board) => inBox(middle, board) ? PAGE_COLOR : MARGIN_COLOR
+
   function noteMiddle (item, map, outline) {
     const { left, right, top, bottom } = noteScreenBox(item, map, outline)
     return [(left + right) / 2, (top + bottom) / 2]
@@ -617,12 +621,13 @@
   const readBoxColor = (saved) => Object.hasOwn(BOX_PRESETS, saved) ? saved : savedHex(saved) ?? DEFAULT_BOX_COLOR
   const boxChoice = (setting) => Object.hasOwn(BOX_PRESETS, setting) ? setting : BOX_CUSTOM
   const BOX_FILLS = {
-    page: () => PAGE_COLOR,
+    page: (noteColor, backdrop) => backdrop,
     white: () => BOX_WHITE,
     yellow: () => BOX_YELLOW,
-    tint: (noteColor) => `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${PAGE_COLOR})`
+    tint: (noteColor, backdrop) => `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${backdrop})`
   }
-  const boxFill = (setting, noteColor) => BOX_FILLS[setting]?.(noteColor) ?? setting
+  // `backdrop` is the color behind the note (noteBackdrop).
+  const boxFill = (setting, noteColor, backdrop = PAGE_COLOR) => BOX_FILLS[setting]?.(noteColor, backdrop) ?? setting
   // The frame is one screen pixel: PIXEL_VAR is that in the units of a note's group, and a fixed note's group, in screen pixels, sets none.
   const FRAME_COLOR = '#c4c4c4'
   const readFrame = readFlag
@@ -2146,7 +2151,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, REFERENCE_GRID, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, REFERENCE_GRID, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet, noteBackdrop }
   }
   if (typeof document === 'undefined') return
 
@@ -2217,7 +2222,7 @@
   const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
 
   // `scale` is pixels of the note's box per board unit. A note with no background is padded by its halo's reach, since its box clips what overflows it.
-  function noteStyle (item, [x, y], scale) {
+  function noteStyle (item, [x, y], scale, backdrop) {
     const px = (units) => `${roundToTenth(units * scale)}px`
     const [width, height] = item.box ? item.box.map(px) : ['', '']
     const limit = item.box ? 'none' : ''
@@ -2236,9 +2241,9 @@
       opacity: String(noteOpacity(item)),
       [NOTE_OPACITY_VAR]: String(noteOpacity(item)),
       [NOTE_COLOR_VAR]: itemColor(item.color),
-      backgroundColor: item.bg ? boxFill(look.boxColor, itemColor(item.color)) : 'transparent',
+      backgroundColor: item.bg ? boxFill(look.boxColor, itemColor(item.color), backdrop) : 'transparent',
       boxShadow: item.bg ? frameShadow(look.frame) : 'none',
-      textShadow: item.bg ? 'none' : haloShadow(look.outline, PAGE_COLOR),
+      textShadow: item.bg ? 'none' : haloShadow(look.outline, backdrop),
       padding: `${padY} ${padX}`,
       borderRadius: item.bg ? px(BACKGROUND_RADIUS * item.size) : '0'
     }
@@ -2252,8 +2257,10 @@
     }
   }
 
+  const backdropOf = (item, map) => noteBackdrop(noteMiddle(item, map, look.outline), map.box)
+
   function styleNote (element, item, map) {
-    applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale))
+    applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale, backdropOf(item, map)))
     element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
   }
 
@@ -2966,7 +2973,8 @@
   function showNote (element, item, map) {
     const shown = shownNotes.get(element) ?? {}
     if (shown.text !== item.text) element.replaceChildren(...noteContent(item.text))
-    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale) : noteStyle(item, item.at, 1)
+    const backdrop = backdropOf(item, map)
+    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale, backdrop) : noteStyle(item, item.at, 1, backdrop)
     const look = JSON.stringify(style)
     if (look !== shown.look) {
       applyNoteStyle(element, style)
