@@ -18,6 +18,8 @@ const NOTE_OUTLINE = '#text-anywhere-layer .text-anywhere-selection'
 // The selection outline's line is 2 px wide, 2 px outside the note's box: its middle is 3 px out.
 const OUTLINE_MIDDLE_PX = 3
 const NEAR_PX = 0.6
+// The drop is this far past the line: more than NEAR_PX, so only the snap can bring the outline back, and less than the 16x16's note is short of its far line, so the near edge is the closest to snap.
+const DRAG_PAST_LINE_PX = 1
 // Color by Digit's groups hold the digits 0 to 9 only, the keys SudokuPad's keypad has even on a 16x16, so the givens 12 and 16 are in no group.
 // Odd digits take one Color by Digit color and even digits another (`seedOddEvenCells`).
 const ODD = 1
@@ -77,7 +79,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
     await p.mouse.move(px, py)
     await p.mouse.down()
-    await p.mouse.move(line + 2 - (note.x - OUTLINE_MIDDLE_PX) + px, py, { steps: 6 })
+    await p.mouse.move(line + DRAG_PAST_LINE_PX - (note.x - OUTLINE_MIDDLE_PX) + px, py, { steps: 6 })
     await p.locator(NOTE_GUIDE_X).waitFor()
     const outline = (await p.locator(NOTE_OUTLINE).boundingBox()).x - OUTLINE_MIDDLE_PX
     const guide = await p.locator(NOTE_GUIDE_X).boundingBox()
