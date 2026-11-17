@@ -633,3 +633,10 @@ for (const { heading, page: file } of SHOWS) {
     assert.equal(sizes.size, 1, `slide sizes: ${[...sizes].join(', ')}`)
   })
 }
+
+test('the homepage words UI Tweaks\' options as its settings dialog does', () => {
+  const { OPTIONS } = require('../ui-tweaks.user.js')
+  const home = plain(read(HOME))
+  for (const option of OPTIONS) assert.ok(home.includes(option.label), `the homepage names "${option.label}"`)
+  assert.ok(home.includes('no effect with Color by Digit installed'))
+})
