@@ -185,3 +185,10 @@ test('the header names the script, points updates at its own file and asks for n
   assert.match(source, /^\/\/ @grant\s+none$/m)
   assert.doesNotMatch(source, /GM_registerMenuCommand/)
 })
+
+test('the hints: the Select button is named as its tooltip names it, and Wrap buttons says Color by Digit makes it do nothing', () => {
+  const byId = Object.fromEntries(OPTIONS.map((o) => [o.id, o]))
+  assert.equal(byId.hideSelect.label, 'Hide the Select button')
+  assert.doesNotMatch(byId.hideSelect.label + byId.hideSelect.hint, /Toggle Selection/)
+  assert.match(byId.wrapButtons.hint, /no effect with Color by Digit installed/)
+})

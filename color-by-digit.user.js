@@ -1414,13 +1414,13 @@
   function modeWordHtml (mode) {
     const on = mode !== 'off'
     return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-6px;top:-3px;padding:1px 3px;border-radius:3px;background:' + WORD_BACKGROUND + ';' +
-      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? SUDOKUPAD_PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
+      `font:${on ? 700 : 400} 10px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? SUDOKUPAD_PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
   // WCAG 2.2 SC 2.5.8: a target is at least this many px each way.
   const MIN_TARGET_PX = 24
   const ARROW_BOX_PX = 14
-  const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
+  const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by Digit profiles" title="Profiles" ' +
     'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:' + ARROW_BOX_PX + 'px;height:' + ARROW_BOX_PX + 'px;' +
     `border:1.5px solid ${SUDOKUPAD_PURPLE};border-radius:3px;background:#fff;color:${SUDOKUPAD_PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
 
@@ -1440,7 +1440,7 @@
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" overflow="visible" xmlns="http://www.w3.org/2000/svg">' +
     iconRun(mode, chips, colorOf) + '</svg>' + modeWordHtml(mode) + ARROW_BOX_HTML + '</div>'
 
-  const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
+  const buttonLabel = (mode) => `Color by Digit: ${MODE_NAMES[mode]}`
 
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
@@ -1609,9 +1609,29 @@
     cell: (color) => ({ fill: color || UNREADABLE_FILL, ink: ENTERED_DIGIT_BLUE, line: '#000' }),
     digit: (color, digitGroupColor) => ({ fill: '#fff', ink: shadeOf(digitGroupColor), line: '#000' }),
     both: (color, digitGroupColor) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(digitGroupColor), line: '#000' }),
-    off: () => ({ fill: '#fff', ink: '#999', line: DIM_LINE })
+    off: () => ({ fill: '#fff', ink: '#888', line: DIM_LINE })
   }
   const RUN_CELL = 10
+  const CHIP_INK_CONTRAST = 3
+
+  // A chip's digit, darkened until it reads at 3:1 on the chip's color, which sits on white; on a chip too dark for that it is lightened instead.
+  // The board's own blue and shades fall just short on orange.
+  function chipInk (ink, fill, opacity) {
+    const under = parseColor(fill)
+    const rgb = parseColor(ink)
+    if (!under || !rgb) return ink
+    const shown = under.map((c) => opacity * c + (1 - opacity) * 255)
+    const ratio = (text) => { const a = wcagLuminance(shown) + 0.05; const b = wcagLuminance(text) + 0.05; return Math.max(a, b) / Math.min(a, b) }
+    const toward = (target) => {
+      let moved = rgb
+      while (ratio(moved) < CHIP_INK_CONTRAST && moved.some((c) => c !== target)) moved = moved.map((c) => Math.round(c + (target - c) * 0.05))
+      return moved
+    }
+    if (ratio(rgb) >= CHIP_INK_CONTRAST) return ink
+    const darker = toward(0)
+    const moved = ratio(darker) >= CHIP_INK_CONTRAST ? darker : toward(255)
+    return `rgb(${moved.join(', ')})`
+  }
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
 
   // The svg frame of a run of chips: `inner` is the cells and dividers, `outline` the stroke attributes of the one outline over them.
@@ -1642,9 +1662,13 @@
       const look = CHIP_LOOKS[style](cellKey === undefined ? '' : colorOf(cellKey), digitKey === undefined ? '' : colorOf(digitKey))
       // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
       const fill = cellKey === undefined ? '#fff' : look.fill
-      const tint = cellKey !== undefined && (style === 'cell' || style === 'both') ? ` fill-opacity="${CELL_COLOR_OPACITY}"` : ''
-      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"${tint}/>` +
-        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(look.ink)}">${escapeHtml(digit)}</text></g>`
+      const tinted = cellKey !== undefined && (style === 'cell' || style === 'both')
+      const tint = tinted ? ` fill-opacity="${CELL_COLOR_OPACITY}"` : ''
+      const ink = chipInk(look.ink, fill, tinted ? CELL_COLOR_OPACITY : 1)
+      // A tinted chip sits on white, so its digit reads against the same color on a dark button.
+      const base = tint ? `<rect data-role="chip-base" x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="#fff"/>` : ''
+      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}">${base}<rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"${tint}/>` +
+        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(ink)}">${escapeHtml(digit)}</text></g>`
     }).join('')
     const stroke = `stroke="${line}"`
     const dividers = chips.slice(1).map((_, i) => verticalLine(i + 1, stroke)).join('')

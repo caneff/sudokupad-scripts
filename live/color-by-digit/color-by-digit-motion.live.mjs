@@ -47,7 +47,7 @@ describe('chips, swatches and digit keys at 60%, an empty profile\'s blank cells
   after(async () => { await context.close() })
 
   it('a profile row\'s chip, every palette swatch and a painted digit key are drawn at 60%', async () => {
-    const opacity = await p.locator(`${ROWS} svg[data-role=chips] [data-role=chip] rect`).first().evaluate((rect) => window.getComputedStyle(rect).fillOpacity)
+    const opacity = await p.locator(`${ROWS} svg[data-role=chips] [data-role=chip] rect:not([data-role=chip-base])`).first().evaluate((rect) => window.getComputedStyle(rect).fillOpacity)
     assert.equal(opacity, '0.6')
     const swatches = await p.$$eval(`${EDITOR} button[data-role=swatch]`, (es) => es.map((e) => window.getComputedStyle(e).backgroundColor))
     assert.equal(swatches.length > 0, true)
