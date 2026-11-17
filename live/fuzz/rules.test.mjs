@@ -133,6 +133,17 @@ describe('the rules', () => {
     it('fails when a reload changes a cell, naming the field', () => {
       assert.deepEqual(check('reload-changes-nothing', { ...board, cells: ['', '', ''] }, { before: board, action: 'reload' }), ['cells was ["5///5","",""] and is now ["","",""]'])
     })
+    it('holds when only the cells selected differ: SudokuPad saves no progress for a selection, so a reload can drop it (#943)', () => {
+      const selected = { ...board, cells: ['5///5', '////1', '////1'] }
+      assert.deepEqual(check('reload-changes-nothing', board, { before: selected, action: 'reload' }), [])
+      assert.deepEqual(check('reload-changes-nothing', selected, { before: board, action: 'reload' }), [])
+      assert.deepEqual(check('reload-changes-nothing', { ...board, cells: ['5////1', '', ''] }, { before: { ...board, cells: ['5///5/', '', ''] }, action: 'reload' }), ['cells was ["5///5","",""] and is now ["5","",""]'])
+    })
+    it('fails when a reload drops a selected cell\'s value or color, though the selection itself is left out (#943)', () => {
+      const selected = { ...board, cells: ['5///5/1', '', ''] }
+      assert.equal(check('reload-changes-nothing', { ...board, cells: ['5////1', '', ''] }, { before: selected, action: 'reload' }).length, 1)
+      assert.equal(check('reload-changes-nothing', { ...board, cells: ['', '', ''] }, { before: { ...board, cells: ['5////1', '', ''] }, action: 'reload' }).length, 1)
+    })
     it('fails when a reload changes the pen strokes drawn, the page color or the Color by Digit mode', () => {
       assert.equal(check('reload-changes-nothing', { ...board, penDrawn: [] }, { before: board, action: 'reload' }).length, 1)
       assert.equal(check('reload-changes-nothing', { ...board, pageColor: 'rgb(0, 0, 0)' }, { before: board, action: 'reload' }).length, 1)
