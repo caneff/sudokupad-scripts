@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.33
+// @version      0.7.34
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.33'
+  const VERSION = '0.7.34'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -313,7 +313,7 @@
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
+  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -338,8 +338,8 @@
   }
 
   // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
-  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
-  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or Restore defaults.
+  // A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
@@ -452,22 +452,49 @@
     return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
-  function wireErrorLog (dialog, win) {
-    const say = (message, options) => setDialogStatus(dialog, message, options)
-    dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-error-log' && act !== 'clear-error-log') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'clear-error-log') {
-          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
-          let wasEmpty = false
-          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
-          win.localStorage.removeItem(ERROR_LOG_KEY)
-          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
-          return
-        }
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // One click handler for the four title-row buttons: Copy and Paste settings, and the error log's Copy and Clear. `copied`, `readers`, `upgrade`
+  // and `apply` are the script's `copyPaste`; a paste writes under `snapshot`, in a dialog action of `feature`.
+  const ACTS = ['copy-settings', 'paste-settings', 'copy-error-log', 'clear-error-log']
+
+  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win = window) {
+    const say = (message, options) => setDialogStatus(root, message, options)
+    const acts = {
+      'copy-settings': async () => {
+        await win.navigator.clipboard.writeText(copied())
+        say('Settings copied.')
+      },
+      'paste-settings': async () => {
+        const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
+        if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
+        say(pasteReport(Object.keys(values).length, skipped))
+      },
+      'copy-error-log': async () => {
         const log = readErrorLog(win.localStorage)
         if (log.length === 0) {
           say(formatErrorLog(log))
@@ -475,8 +502,25 @@
         }
         await win.navigator.clipboard.writeText(formatErrorLog(log))
         say('Error log copied.')
+      },
+      'clear-error-log': async () => {
+        // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+        let wasEmpty = false
+        try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
+        clearErrorLog(win.localStorage)
+        say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
+      }
+    }
+    const verbs = { 'copy-settings': 'copy', 'paste-settings': 'paste', 'copy-error-log': 'copy the error log', 'clear-error-log': 'clear the error log' }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (!ACTS.includes(act)) return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        await acts[act]()
       } catch (error) {
-        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`, { error: true })
+        say(`Could not ${verbs[act]}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -521,6 +565,7 @@
 
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
+  const RESTORE_LABEL = 'Restore defaults'
 
   const OFF_NOTE_ATTRIBUTE = 'data-role="off-note"'
 
@@ -531,7 +576,7 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, restore, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
     writeStyle(`settings-dialog-shell-${bodyId}`, dialogShellCss(bodyId), doc)
@@ -554,8 +599,9 @@
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
-      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
+      // Restore defaults edits the draft, so it clears an error first. An extra button edits no field (Reset puzzle size) and leaves it.
+      ...(restore ? [{ content: RESTORE_LABEL, role: 'restore', handler: () => { clearError(); restore() } }] : []),
+      ...extraButtons
     ]
     framework.showDialog({
       centerOverBoard,
@@ -575,8 +621,7 @@
     // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
     const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
     for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
-    wireErrorLog(dialog, win)
-    wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
+    wireActs(dialog, { ...copyPaste, snapshot, feature }, win)
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
     const row = dialog?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
@@ -584,59 +629,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
-  // <lib:settings-transfer>
-  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText, writeOrRestore */
-  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
-  function pastedSettings (text, readers, upgrade = (data) => data) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    data = upgrade(data)
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(readers)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
-    const say = (message, options) => setDialogStatus(root, message, options)
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copied())
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`, { error: true })
-      }
-    })
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:settings-transfer>
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -691,6 +683,11 @@
     const log = JSON.parse(saved)
     if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
     return log
+  }
+
+  // Throws when the storage is blocked, so a caller never reports a clear that did not happen.
+  function clearErrorLog (storage) {
+    storage.removeItem(ERROR_LOG_KEY)
   }
 
   // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
@@ -1059,7 +1056,7 @@
           show(pageColor)
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: () => show(DEFAULT_COLOR) }]
+      restore: () => show(DEFAULT_COLOR)
     })
     if (!body) return
     body.innerHTML = `<label class="${CLASS_PREFIX}color-row">Page color <input type="color" id="${INPUT_ID}" value="${picked}"></label><div id="${SWATCH_ID}" style="background-color: ${picked}"></div>`

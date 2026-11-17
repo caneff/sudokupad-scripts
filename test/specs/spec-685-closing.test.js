@@ -27,7 +27,7 @@ const framework = (saved, failOn) => ({
   removeData: (key) => { delete saved[key] }
 })
 const Framework = {}
-const lib = loadLib(['sudokupad', 'write-style', 'settings-dialog', 'settings-transfer'], ['createGuard', 'snapshotStore', 'showSettingsDialog', 'SUDOKUPAD_PURPLE'], { Framework })
+const lib = loadLib(['sudokupad', 'write-style', 'settings-dialog'], ['createGuard', 'snapshotStore', 'showSettingsDialog', 'SUDOKUPAD_PURPLE'], { Framework })
 
 // SudokuPad's dialog as the settings dialog sees it: `showDialog` keeps the buttons, and the dialog holds the status line and the
 // title row's click listener. `save()` presses Save, and `paste()` presses Paste settings.
@@ -41,7 +41,7 @@ const fakeSudokuPad = () => {
   }
   const body = { closest: (selector) => (selector === '.dialog' ? dialog : null), addEventListener () {} }
   const doc = { head: { appendChild () {} }, createElement: () => ({}), getElementById: (id) => (id === 'demo-body' ? body : null) }
-  const win = { addEventListener () {}, removeEventListener () {} }
+  const win = { addEventListener () {}, removeEventListener () {}, get navigator () { return globalThis.navigator } }
   const dialogs = { showDialog: (config) => { options = config.parts.find((part) => part.tag === 'options').options }, closeDialog () {} }
   const press = (act) => Promise.all(clicks.map((fn) => fn({ target: { closest: () => ({ dataset: { act } }) }, preventDefault () {}, stopPropagation () {} })))
   return { status, doc, win, dialogs, save: () => options[0].handler(), paste: () => press('paste-settings') }
