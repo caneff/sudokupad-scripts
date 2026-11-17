@@ -245,7 +245,7 @@ describe('a landscape window, long rules: what the pane\'s controls cover and ho
   it('no line of the rules ends in a split word', async () => {
     const split = await p.evaluate(() => {
       const rules = document.querySelector('.puzzle-rules')
-      const walker = document.createTreeWalker(rules, NodeFilter.SHOW_TEXT)
+      const walker = document.createTreeWalker(rules, 4) // 4 is NodeFilter.SHOW_TEXT
       const chars = []
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         for (let i = 0; i < node.length; i++) {
