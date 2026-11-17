@@ -1359,9 +1359,9 @@ test('the Own color input shows under the row only while Own is picked', () => {
 
 test('each of the three sample rows has its sub-line', () => {
   const html = samples()
-  contains(html, 'For notes without a box, so they read over digits and grid lines.')
-  contains(html, 'For notes made with the Background button on.')
-  contains(html, 'The line round a note with a box.')
+  contains(html, 'for notes without a box')
+  contains(html, 'for notes with Background on')
+  contains(html, 'the line round a note with a box')
 })
 
 // Ten column lines 64 px apart from 100: the board's span is 100..676, middles at 132, 196 ... 644.

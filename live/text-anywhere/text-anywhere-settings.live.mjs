@@ -37,6 +37,24 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
+  it('at 1280x720 the dialog has no inner scroll and its Save button is on the screen', async () => {
+    const original = p.viewportSize()
+    await p.setViewportSize({ width: 1280, height: 720 })
+    try {
+      await openScriptDialog(p, 'Text Anywhere', EDITOR)
+      const fit = await p.locator('.dialog').evaluate((dialog) => {
+        const scrolling = [dialog, ...dialog.querySelectorAll('*')].filter((el) => el.scrollHeight > el.clientHeight && ['auto', 'scroll'].includes(window.getComputedStyle(el).overflowY))
+        return { scrolling: scrolling.map((el) => el.className || el.tagName), dialogBottom: dialog.getBoundingClientRect().bottom, innerHeight: window.innerHeight }
+      })
+      const save = await dialogButton(p, 'Save').boundingBox()
+      assert.deepEqual(fit.scrolling, [])
+      assert.equal(save.y + save.height <= fit.innerHeight, true, `Save ends at ${save.y + save.height} of ${fit.innerHeight}`)
+    } finally {
+      if (await p.locator(EDITOR).count()) await closeDialogWith(p, 'Cancel', EDITOR)
+      await p.setViewportSize(original)
+    }
+  })
+
   it('the swatch grid is as wide as the preset pulldown above it, its nine swatches square and filling it', async () => {
     await openScriptDialog(p, 'Text Anywhere', EDITOR)
     const pulldown = await p.locator(PRESET).evaluate((el) => el.getBoundingClientRect().toJSON())

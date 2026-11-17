@@ -9,6 +9,7 @@ import { slideTo } from '../slider.mjs'
 const { BACKGROUND_BUTTON, CLEAR_BUTTON, COLOR_KEY, DIALOG, DIGIT_BUTTON, KEYPAD, TEXT_BOX, TEXTS, WIDTH_KEY } = textAnywhere
 const SELECTED = '#text-anywhere-layer .text-anywhere-selected'
 const RECTANGLE = '#text-anywhere-layer .text-anywhere-selection-rectangle'
+const OUTLINES = '#text-anywhere-layer .text-anywhere-selection'
 // In cells from the grid's top left: three notes the rectangle from CORNER to FAR_CORNER covers, a fourth outside it, and empty space.
 const NOTES = { A: [1.5, 1.5], B: [1.5, 3.5], C: [3.5, 2.5], D: [7.5, 7.5] }
 const CORNER = [0.6, 0.6]
@@ -87,6 +88,19 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     await finishNote(p)
     assert.deepEqual(await selectedTexts(), [])
     assert.deepEqual(await textAnywhere.texts(p), ['A', 'B', 'C', 'D'])
+  })
+
+  it('while a rectangle is dragged it outlines the notes it touches, and a rectangle that touches none is cancelled with none left', async () => {
+    await p.mouse.move(...await gridPoint(p, CORNER))
+    await p.mouse.down()
+    await p.mouse.move(...await gridPoint(p, FAR_CORNER), { steps: 8 })
+    assert.equal(await p.locator(OUTLINES).count(), 3, 'A, B and C are outlined before the release')
+    assert.deepEqual(await selectedTexts(), [], 'none is selected until the release')
+    await p.mouse.move(...await gridPoint(p, [0.2, 0.2]), { steps: 4 })
+    assert.equal(await p.locator(OUTLINES).count(), 0, 'shrinking the rectangle off the notes drops the outlines')
+    await p.mouse.up()
+    assert.deepEqual(await selectedTexts(), [])
+    assert.equal(await p.locator(OUTLINES).count(), 0)
   })
 
   it('a drag on empty space draws a rectangle and selects every note it touches, Shift+click removes one and adds it back, and Shift+drag adds more', async () => {
@@ -189,7 +203,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     assert.equal(await p.locator(CLEAR_BUTTON).getAttribute('aria-label'), 'Clear all')
     await p.click(CLEAR_BUTTON)
     await p.locator(DIALOG).waitFor({ state: 'visible' })
-    assert.match(await p.locator(DIALOG).textContent(), /Clear all notes\?/)
+    assert.match(await p.locator(DIALOG).textContent(), /Delete (all \d+ notes|the note)\? This cannot be undone\./)
     // SudokuPad's dialog ignores a close until showDialog has cleared window.dialogJustShown.
     await p.waitForFunction(() => !window.dialogJustShown)
     await p.click(`${DIALOG} button:text-is("Cancel")`)
