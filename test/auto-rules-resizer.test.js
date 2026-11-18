@@ -768,10 +768,14 @@ test('a Framework without getApp turns the fit and the refit off with one warnin
   assert.deepEqual(entries, ['rulesresizer'])
 })
 
-test('credit: the script names Nell Gwyn and SudokuPad-ResizeRules in a comment after the header, spelled "Gwyn"', () => {
+test('credit: // comment lines right after the header name Nell Gwyn and SudokuPad-ResizeRules, outside the header, spelled "Gwyn"', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')
   const end = source.indexOf('// ==/UserScript==')
-  const credit = source.slice(end + '// ==/UserScript=='.length).split('(function')[0]
+  const open = source.indexOf('(function')
+  assert.ok(end > 0 && open > end, 'header end and the script opener are both found, in that order')
+  const between = source.slice(end + '// ==/UserScript=='.length, open).trim().split('\n').filter(l => l.trim() !== '')
+  assert.ok(between.every(l => l.startsWith('//')), 'everything between the header and the opener is a // comment')
+  const credit = between.join('\n')
   assert.match(credit, /Nell Gwyn/)
   assert.match(credit, /SudokuPad-ResizeRules 0\.1\.5/)
   assert.doesNotMatch(source.slice(0, end), /Nell|ResizeRules/)
