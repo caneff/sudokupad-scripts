@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.35
+// @version      0.1.36
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Select button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.35'
+  const VERSION = '0.1.36'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -30,6 +30,11 @@
     { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after 5. It has no effect with Color by Digit installed, which already wraps it.', default: false }
   ]
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
+  // The digit pad's size as a percent of SudokuPad's own, saved under its own key.
+  const DIGIT_PAD_SIZES = [80, 90, 100, 110, 120, 130, 140, 150]
+  const DIGIT_PAD_DEFAULT = 100
+  const DIGIT_PAD_KEY = 'UiTweaks_digitPad'
+  const savedDigitPad = (data) => (DIGIT_PAD_SIZES.includes(data) ? data : undefined)
 
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
@@ -93,7 +98,10 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
 
-  const OPTION_ROWS = OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: savedBoolean }))
+  const OPTION_ROWS = [
+    ...OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: savedBoolean })),
+    { name: 'digitPad', key: DIGIT_PAD_KEY, fallback: DIGIT_PAD_DEFAULT, read: savedDigitPad }
+  ]
   const DEFAULT_OPTIONS = tableDefaults(OPTION_ROWS)
 
   const savedOptions = (store) => readTable(OPTION_ROWS, store)
@@ -139,11 +147,24 @@
   function isHeldTabToStop (event, { toolOn, dialogOpen }) {
     return event.key === TAB_KEY && event.repeat === true && toolOn && !dialogOpen
   }
+  // SudokuPad sizes every controls button 4rem square and the digit font 2rem (1.4rem in the corner and centre tools), and refits #controls to its box on each resize, so a size in rem is refitted with the rest of the column.
+  const DIGIT_BUTTON_REM = 4
+  const DIGIT_FONT_REM = 2
+  const DIGIT_FONT_SMALL_REM = 1.4
+  function digitPadCss (percent) {
+    if (percent === DIGIT_PAD_DEFAULT) return false
+    const scaled = (value) => rem(value * percent / 100)
+    const side = `${scaled(DIGIT_BUTTON_REM)}rem`
+    return [
+      `.controls-input button.digit { flex: 0 0 ${side} !important; width: ${side} !important; height: ${side} !important; font-size: ${scaled(DIGIT_FONT_REM)}rem !important; }`,
+      `.tool-corner .controls-input button.digit, .tool-centre .controls-input button.digit { font-size: ${scaled(DIGIT_FONT_SMALL_REM)}rem !important; }`
+    ].join('\n')
+  }
   const HIDE_SELECT_CSS = `${BOTTOM_ROW} [data-control="select"] { display: none !important; }`
 
   // Tab adds no rule: it works on the letter tool's key list.
   function buildCss (options) {
-    return [options.hideSelect && HIDE_SELECT_CSS, options.wrapButtons && BOTTOM_ROW_CSS].filter(Boolean).join('\n')
+    return [options.hideSelect && HIDE_SELECT_CSS, options.wrapButtons && BOTTOM_ROW_CSS, digitPadCss(options.digitPad)].filter(Boolean).join('\n')
   }
 
   // <lib:write-style>
@@ -857,7 +878,7 @@
   const { saved, tab, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, OPTIONS, DEFAULT_OPTIONS, savedOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
+    module.exports = { VERSION, OPTIONS, DIGIT_PAD_SIZES, DEFAULT_OPTIONS, savedOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -884,10 +905,15 @@
     })
   }
 
+  // SudokuPad fits #controls to its box only on a resize, so a size change is not seen until one.
+  const refitControls = () => window.dispatchEvent(new Event('resize'))
+
   function applyOptions (next) {
+    const padChanged = next.digitPad !== options.digitPad
     options = next
     writeStyle(STYLE_ID, buildCss(next))
     applyTab(next.tab)
+    if (padChanged) refitControls()
   }
 
   const CLASS_PREFIX = 'ui-tweaks-'
@@ -896,6 +922,7 @@
   const DIALOG_CSS = [
     `#${DIALOG_ID} .${CLASS_PREFIX}option { display: flex !important; align-items: flex-start; gap: 10px; margin: 10px 0; cursor: pointer; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}option input { position: static !important; margin: 3px 0 0 !important; flex: none; width: 18px !important; height: 18px !important; cursor: pointer; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}option select { position: static !important; margin: 0 !important; flex: none; width: auto !important; height: auto !important; cursor: pointer; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}option small { display: block; opacity: .65; }`
   ].join('\n')
   const dialogs = guard.dialogsFor(settingsEntry)
@@ -910,6 +937,10 @@
 
   const optionRow = (option) =>
     `<label class="${CLASS_PREFIX}option"><input type="checkbox" data-option="${option.id}"><span>${option.label}<small>${option.hint}</small></span></label>`
+
+  const PAD_SELECT = 'select[data-option="digitPad"]'
+  const digitPadRow = () =>
+    `<label class="${CLASS_PREFIX}option"><select data-option="digitPad">${DIGIT_PAD_SIZES.map((size) => `<option value="${size}">${size}%</option>`).join('')}</select><span>Digit pad size<small>Sizes the digit buttons against SudokuPad's own. SudokuPad fits the whole controls column to the window, so the other buttons give way as the digits grow.</small></span></label>`
 
   function openDialog () {
     const draft = { ...options }
@@ -937,19 +968,27 @@
           applyOptions(next)
           OPTION_ROWS.filter((row) => row.key in values).forEach((row) => {
             draft[row.name] = next[row.name]
-            box(row.name).checked = next[row.name]
+            if (row.name === 'digitPad') padSelect.value = String(next.digitPad)
+            else box(row.name).checked = next[row.name]
           })
         }
       },
       restore: () => restoreDefaults()
     })
     if (!body) return
-    const restoreDefaults = () => OPTIONS.forEach((option) => {
-      draft[option.id] = DEFAULT_OPTIONS[option.id]
-      box(option.id).checked = draft[option.id]
-    })
-    body.innerHTML = OPTIONS.map(optionRow).join('')
+    const restoreDefaults = () => {
+      OPTIONS.forEach((option) => {
+        draft[option.id] = DEFAULT_OPTIONS[option.id]
+        box(option.id).checked = draft[option.id]
+      })
+      draft.digitPad = DEFAULT_OPTIONS.digitPad
+      padSelect.value = String(draft.digitPad)
+    }
+    body.innerHTML = OPTIONS.map(optionRow).join('') + digitPadRow()
     const box = (id) => body.querySelector(`input[data-option="${id}"]`)
+    const padSelect = body.querySelector(PAD_SELECT)
+    padSelect.value = String(draft.digitPad)
+    padSelect.addEventListener('change', (event) => { draft.digitPad = Number(event.target.value) })
     OPTIONS.forEach((option) => {
       box(option.id).checked = draft[option.id]
       box(option.id).addEventListener('change', (event) => { draft[option.id] = event.target.checked })
