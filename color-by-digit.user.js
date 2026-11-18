@@ -441,7 +441,7 @@
 
   const stateFromStored = (store) => load(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
 
-    function stateFromLegacy (legacyGroups) {
+  function stateFromLegacy (legacyGroups) {
     const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
     if (!legacy) return preloadedState()
@@ -2738,7 +2738,7 @@
   let leavingMenu = null
   let menuTimer = null
 
-    const dropLeavingMenu = () => {
+  const dropLeavingMenu = () => {
     clearTimeout(menuTimer)
     menuTimer = null
     leavingMenu?.remove()
