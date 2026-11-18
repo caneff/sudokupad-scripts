@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.29
+// @version      0.1.35
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Select button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.29'
+  const VERSION = '0.1.35'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -42,6 +42,9 @@
 
   // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
   const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
+
+  // Text into HTML markup or an attribute value: the four characters that would end one or open another.
+  const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:settings-table>
@@ -49,9 +52,10 @@
   /* eslint-disable no-unused-vars */
   // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
-  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
-  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
+  // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -60,7 +64,7 @@
 
   const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
 
-  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+  const readRow = (row, store) => (row.envelope ? row.envelope.load(store, row).value : row.read(store.getData(row.key))) ?? row.fallback
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
@@ -70,16 +74,13 @@
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
   const copiedTable = (rows, store) => readByField(rows, store, 'key')
 
-  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
-  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
-
-  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
-  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+  // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, values[row.key]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
   function saveRow (store, row, value) {
@@ -87,25 +88,25 @@
     else if (row.envelope) row.envelope.save(store, row.key, value)
     else store.setData(row.key, value)
   }
+
+  const saveTable = (store, rows, values) => rows.forEach((row) => saveRow(store, row, values[row.name]))
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
 
-  const OPTION_ROWS = OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: (data) => savedBoolean(data) ?? option.default, paste: savedBoolean }))
+  const OPTION_ROWS = OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: savedBoolean }))
   const DEFAULT_OPTIONS = tableDefaults(OPTION_ROWS)
 
   const savedOptions = (store) => readTable(OPTION_ROWS, store)
 
   // An option at its default leaves no key, so a default that changes later reaches everyone who never chose another.
-  function saveOptions (store, options) {
-    OPTION_ROWS.forEach((row) => saveRow(store, row, options[row.name]))
-  }
+  const saveOptions = (store, options) => saveTable(store, OPTION_ROWS, options)
 
   const READERS = pasteReaders(OPTION_ROWS)
 
   const copiedSettings = (store) => JSON.stringify(copiedTable(OPTION_ROWS, store))
 
   // What a paste leaves in force: the options now saved, with only the pasted ones changed, so a box ticked in the dialog and not saved is not saved by it.
-  const pastedOptions = (current, values) => withPasted(OPTION_ROWS, current, pastedByName(OPTION_ROWS, values), values)
+  const pastedOptions = (current, values) => withPasted(OPTION_ROWS, current, values)
 
   // <lib:bottom-row>
   // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
@@ -163,7 +164,7 @@
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
+  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -188,8 +189,8 @@
   }
 
   // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
-  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
-  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or Restore defaults.
+  // A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
@@ -302,31 +303,84 @@
     return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
-  function wireErrorLog (dialog, win) {
-    const say = (message, options) => setDialogStatus(dialog, message, options)
-    dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-error-log' && act !== 'clear-error-log') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'clear-error-log') {
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // One click handler for the four title-row buttons: Copy and Paste settings, and the error log's Copy and Clear. `copied`, `readers`, `upgrade`
+  // and `apply` are the script's `copyPaste`; a paste writes under `snapshot`, in a dialog action of `feature`.
+  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win) {
+    const say = (message, options) => setDialogStatus(root, message, options)
+    const acts = {
+      'copy-settings': {
+        verb: 'copy',
+        run: async () => {
+          await win.navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        }
+      },
+      'paste-settings': {
+        verb: 'paste',
+        run: async () => {
+          const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      },
+      'copy-error-log': {
+        verb: 'copy the error log',
+        run: async () => {
+          const log = readErrorLog(win.localStorage)
+          if (log.length === 0) {
+            say(formatErrorLog(log))
+            return
+          }
+          await win.navigator.clipboard.writeText(formatErrorLog(log))
+          say('Error log copied.')
+        }
+      },
+      'clear-error-log': {
+        verb: 'clear the error log',
+        run: async () => {
           // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
           let wasEmpty = false
           try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
-          win.localStorage.removeItem(ERROR_LOG_KEY)
+          clearErrorLog(win.localStorage)
           say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
-          return
         }
-        const log = readErrorLog(win.localStorage)
-        if (log.length === 0) {
-          say(formatErrorLog(log))
-          return
-        }
-        await win.navigator.clipboard.writeText(formatErrorLog(log))
-        say('Error log copied.')
+      }
+    }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (!Object.hasOwn(acts, act)) return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        await acts[act].run()
       } catch (error) {
-        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`, { error: true })
+        say(`Could not ${acts[act].verb}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -371,6 +425,7 @@
 
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
+  const RESTORE_LABEL = 'Restore defaults'
 
   const OFF_NOTE_ATTRIBUTE = 'data-role="off-note"'
 
@@ -381,7 +436,7 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, restore, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
     writeStyle(`settings-dialog-shell-${bodyId}`, dialogShellCss(bodyId), doc)
@@ -404,8 +459,9 @@
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
-      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
+      // Restore defaults edits the draft, so it clears an error first. An extra button edits no field (Reset puzzle size) and leaves it.
+      ...(restore ? [{ content: RESTORE_LABEL, role: 'restore', handler: () => { clearError(); restore() } }] : []),
+      ...extraButtons
     ]
     framework.showDialog({
       centerOverBoard,
@@ -425,8 +481,7 @@
     // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
     const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
     for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
-    wireErrorLog(dialog, win)
-    wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
+    wireActs(dialog, { ...copyPaste, snapshot, feature }, win)
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
     const row = dialog?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
@@ -434,59 +489,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
-  // <lib:settings-transfer>
-  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText, writeOrRestore */
-  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
-  function pastedSettings (text, readers, upgrade = (data) => data) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    data = upgrade(data)
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(readers)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
-    const say = (message, options) => setDialogStatus(root, message, options)
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copied())
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`, { error: true })
-      }
-    })
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:settings-transfer>
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -541,6 +543,11 @@
     const log = JSON.parse(saved)
     if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
     return log
+  }
+
+  // Throws when the storage is blocked, so a caller never reports a clear that did not happen.
+  function clearErrorLog (storage) {
+    storage.removeItem(ERROR_LOG_KEY)
   }
 
   // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
@@ -724,6 +731,10 @@
             return fallback()
           }
         },
+        // The handler as a function that runs under `run`, for an event listener or a callback.
+        bind (handler, fallback) {
+          return (...args) => feature.run(() => handler(...args), fallback)
+        },
         // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
         // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
         runInDialog (fn) {
@@ -782,27 +793,37 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
+    // A write or read that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
     // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
     function storeFor (feature) {
+      const throwMarked = (error) => {
+        if (Object(error) === error) storeFailures.add(error)
+        throw error
+      }
       const write = (fn) => {
         if (feature.off) return
         try {
           fn()
         } catch (error) {
-          if (dialogActions > 0) {
-            if (Object(error) === error) storeFailures.add(error)
-            throw error
-          }
+          if (dialogActions > 0) throwMarked(error)
           if (!isRefusedWrite(error)) return feature.skip(error)
           console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
         }
       }
+      // In a dialog action a read that throws goes on to the caller, as a write does, so Copy says why it could not read.
+      const read = (key) => {
+        if (feature.off) return null
+        try {
+          return Framework.getData(key)
+        } catch (error) {
+          throwMarked(error)
+        }
+      }
       return {
-        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        getData: (key) => (dialogActions > 0 ? read(key) : feature.run(() => Framework.getData(key), () => null)),
         setData: (key, value) => write(() => Framework.setData(key, value)),
         removeData: (key) => write(() => Framework.removeData(key)),
         keep: (key, value) => feature.run(() => Framework.setData(key, value))
@@ -880,6 +901,8 @@
   const dialogs = guard.dialogsFor(settingsEntry)
   // The options are written only from the dialog, so a write that fails reaches its status line with the settings entry still on.
   const savedSettings = guard.storeFor(settingsEntry)
+  // Copy reads under the feature that reads the options at startup.
+  const savedOptionsStore = guard.storeFor(saved)
   const snapshotOptions = () => snapshotStore(savedSettings, tableKeys(OPTION_ROWS), () => {
     const was = options
     return () => applyOptions(was)
@@ -906,7 +929,7 @@
         applyOptions({ ...draft })
       },
       copyPaste: {
-        copied: () => saved.runInDialog(() => copiedSettings(Framework)),
+        copied: () => saved.runInDialog(() => copiedSettings(savedOptionsStore)),
         readers: READERS,
         apply: (values) => {
           const next = pastedOptions(options, values)
@@ -918,7 +941,7 @@
           })
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: () => restoreDefaults() }]
+      restore: () => restoreDefaults()
     })
     if (!body) return
     const restoreDefaults = () => OPTIONS.forEach((option) => {

@@ -17,7 +17,6 @@ const CARRIES = {
   palette: ['color-by-digit', 'pen-tool-extras', 'text-anywhere'],
   'color-picker': ['color-by-digit', 'pen-tool-extras', 'text-anywhere'],
   'settings-dialog': SETTINGS_SCRIPTS,
-  'settings-transfer': SETTINGS_SCRIPTS,
   panel: ['pen-tool-extras', 'text-anywhere']
 }
 // Names a module provides, which no script may define again outside its blocks.

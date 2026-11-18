@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.33
+// @version      0.46.41
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.33'
+  const VERSION = '0.46.41'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -166,12 +166,6 @@
   const PAGE_COLOR = 'var(--body-bg, #fff)'
   const MARGIN_COLOR = `var(--dark-page-color, ${PAGE_COLOR})`
   const PEN_PRESET = 'pen'
-  const CUSTOM = 'custom'
-  const PRESET_LABELS = {
-    [CUSTOM]: 'Custom',
-    [PEN_PRESET]: 'Pen colors',
-    ...PALETTE_PRESET_LABELS
-  }
   // The next note's size is saved as a width; a text size is 2 x the width + 8.
   const WIDTH_KEY = KEY_PREFIX + 'width'
   const OUTLINE_KEY = KEY_PREFIX + 'outline'
@@ -737,6 +731,9 @@
 
   // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
   const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
+
+  // Text into HTML markup or an attribute value: the four characters that would end one or open another.
+  const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   /* eslint-enable no-unused-vars */
   // </lib:plain>
 
@@ -775,11 +772,13 @@
 
   const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
 
+  const slotName = (key, n) => key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+
   // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
   function keptSlot (store, key, raw) {
     const same = JSON.stringify(raw)
     for (let n = 1; ; n++) {
-      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const slot = slotName(key, n)
       const held = store.getData(slot)
       if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
     }
@@ -805,13 +804,20 @@
       if (copied) {
         if (store.keep) store.keep(slot, raw)
         else store.setData(slot, raw)
+        // A guarded store's `keep` that throws turns its feature off and goes on, so a slot is named only once it holds the copy.
+        if (store.getData(slot) === null) return { value: undefined, unreadable }
         console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
       }
-      return { value: undefined, unreadable }
+      return { value: undefined, unreadable, slot }
     }
   }
 
-  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
+  // Slots fill in order, so the first empty one ends the list.
+  function unreadableSlots (store, key) {
+    const slots = []
+    while (store.getData(slotName(key, slots.length + 1)) !== null) slots.push(slotName(key, slots.length + 1))
+    return slots
+  }
 
   // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
@@ -829,9 +835,10 @@
   /* eslint-disable no-unused-vars */
   // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
-  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
-  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
+  // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -840,7 +847,7 @@
 
   const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
 
-  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+  const readRow = (row, store) => (row.envelope ? row.envelope.load(store, row).value : row.read(store.getData(row.key))) ?? row.fallback
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
@@ -850,16 +857,13 @@
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
   const copiedTable = (rows, store) => readByField(rows, store, 'key')
 
-  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
-  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
-
-  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
-  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+  // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, values[row.key]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
   function saveRow (store, row, value) {
@@ -867,6 +871,8 @@
     else if (row.envelope) row.envelope.save(store, row.key, value)
     else store.setData(row.key, value)
   }
+
+  const saveTable = (store, rows, values) => rows.forEach((row) => saveRow(store, row, values[row.name]))
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
 
@@ -999,7 +1005,7 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS */
+  /* global PEN_COLOR_NUMBERS, escapeHtml */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1019,8 +1025,6 @@
     const option = (id, disabled) => ({ value: id, label: labels[id], selected: id === preset, disabled })
     return [...(presets.includes(preset) ? [] : [option(preset, true)]), ...presets.map((id) => option(id, false))]
   }
-
-  const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
   const fillWithOpacity = (color, opacity) => opacity < 1 ? `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)` : color
 
@@ -1193,49 +1197,73 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-picker>
+  // <lib:color-set>
+  // Generated from lib/color-set.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  /* global parseColor, toHex, savedHex, isPlainObject, SUDOKUPAD_PEN_COLORS, PEN_COLOR_NUMBERS */ // eslint-disable-line no-redeclare
+  // A color set is `{ colors, preset, missing, fromPreset }`: the nine #rrggbb colors, the preset they came from, the pens a page preset left with SudokuPad's own,
+  // and the preset the dialog's note names them for. A hand edit keeps the last two, so the note still names the page. Every change makes a whole new record.
+  // `presets` is the list of preset ids a script saves beside its colors; any other is Custom.
+  const CUSTOM = 'custom'
 
-  // A color picker takes only #rrggbb, so every note color is kept as one. A transparent color has none to keep.
+  // A color picker takes only #rrggbb, so every color is kept as one. A transparent color has none to keep.
   const hexColor = (text) => {
     const rgb = parseColor(text)
     return rgb ? toHex(rgb) : undefined
   }
 
-  // null when nothing is saved, which means the first-use copy of the pen colors is still owed. A saved value that is not
-  // nine colors still counts as saved, so the copy never writes over it: each color it lacks shows SudokuPad's own.
-  function readNoteColors (saved) {
-    if (saved === null || saved === undefined) return null
-    const entries = isPlainObject(saved) ? saved : {}
-    return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, savedHex(entries[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
+  // null when no key 1 to 9 holds a #rrggbb color: nothing is saved, so the install save (Text Anywhere's first use's copy) is still owed and may replace
+  // what is there. A bad entry beside a usable one shows SudokuPad's own color.
+  function savedColorSet (data, presets) {
+    if (!isPlainObject(data) || !PEN_COLOR_NUMBERS.some((n) => savedHex(data[n]))) return null
+    const colors = Object.fromEntries(PEN_COLOR_NUMBERS.map((n) => [n, savedHex(data[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
+    return { colors, preset: presets.includes(data.preset) ? data.preset : CUSTOM, missing: [], fromPreset: null }
   }
 
-  // The colors stay under keys 1 to 9 with the preset's id beside them; a set with no `preset`, or one that is none of ours, is Custom (null).
+  // The colors stay under keys 1 to 9, where older versions read them, with the preset's id beside them.
+  const storedColorSet = ({ colors, preset }) => preset === CUSTOM ? { ...colors } : { ...colors, preset }
+
+  // The set is what gets saved, so an invalid pen or value throws rather than saving a wrong entry.
+  function editedColorSet (set, pen, value) {
+    if (!PEN_COLOR_NUMBERS.map(String).includes(String(pen))) throw new RangeError(`color-set: ${pen} is not a color number`)
+    const hex = hexColor(value)
+    if (!hex) throw new RangeError(`color-set: ${value} is not a color`)
+    return { colors: { ...set.colors, [pen]: hex }, preset: CUSTOM, missing: set.missing.filter((n) => String(n) !== String(pen)), fromPreset: set.fromPreset }
+  }
+
+  // A pasted table passes when it holds a usable color and every color it holds is one: the saved reader would show SudokuPad's own for a bad entry.
+  function pastedColorSet (data, presets) {
+    const set = savedColorSet(data, presets)
+    return set && PEN_COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? storedColorSet(set) : undefined
+  }
+
+  // The colors once saved; undefined while none are.
+  function copiedColorSet (data, presets) {
+    const set = savedColorSet(data, presets)
+    return set ? storedColorSet(set) : undefined
+  }
+
+  // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
+  const colorSetCss = (colors, varOf) => [':root:root {', ...PEN_COLOR_NUMBERS.map((n) => `  ${varOf(n)}: ${colors[n]};`), '}'].join('\n')
+  /* eslint-enable no-unused-vars */
+  // </lib:color-set>
+
+  const PRESET_LABELS = {
+    [CUSTOM]: 'Custom',
+    [PEN_PRESET]: 'Pen colors',
+    ...PALETTE_PRESET_LABELS
+  }
+
+  // The presets saved beside the colors; a set with none of them is Custom.
   const NOTE_PRESETS = [PEN_PRESET, ...PAGE_PRESETS, SUDOKUPAD_PRESET]
-  const readNotePreset = (saved) => isPlainObject(saved) && NOTE_PRESETS.includes(saved.preset) ? saved.preset : null
-  const storedNoteColors = (colors, preset) => preset ? { ...colors, preset } : { ...colors }
 
   const copiedPenColors = (readPenColor) => Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hexColor(readPenColor(n)) ?? SUDOKUPAD_PEN_COLORS[n]]))
 
-  function editedColor (colors, n, value) {
-    if (noteColorNumber(n) === undefined) throw new RangeError(`text-anywhere: ${n} is not a color number`)
-    const hex = hexColor(value)
-    if (!hex) throw new RangeError(`text-anywhere: ${value} is not a color`)
-    return { ...colors, [n]: hex }
-  }
-
-  // A color set is one record: the nine `colors`, their `preset` (null for Custom), the `missing` pens a page preset left with SudokuPad's own, and the
-  // preset `fromPreset` the dialog names them for until the page reloads; a Custom set keeps them. Every change makes a whole new record.
+  // The dialog names a set's missing pens until the page reloads: a saved set has none.
   const penColorSet = (readPen) => ({ colors: copiedPenColors(readPen), preset: PEN_PRESET, missing: [], fromPreset: null })
   const presetColorSet = (preset, pages, readCell, readPen) => ({ ...presetColors(preset, pages, readCell, readPen), preset, fromPreset: preset })
-  // null when nothing is saved, as for `readNoteColors`.
-  const savedColorSet = (saved) => {
-    const colors = readNoteColors(saved)
-    return colors && { colors, preset: readNotePreset(saved), missing: [], fromPreset: null }
-  }
-  const editedColorSet = (set, n, value) => ({ ...set, colors: editedColor(set.colors, n, value), preset: null, missing: set.missing.filter((m) => String(m) !== String(n)) })
-  const storedColorSet = (set) => storedNoteColors(set.colors, set.preset)
-
-  // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
-  const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  ${colorVar(n)}: ${colors[n]};`), '}'].join('\n')
+  // null when nothing usable is saved, which means the first-use copy of the pen colors is still owed.
+  const readNoteColorSet = (saved) => savedColorSet(saved, NOTE_PRESETS)
 
   const presetOptions = (pageCount) => [PEN_PRESET, ...paletteOptions(pageCount)]
 
@@ -1246,13 +1274,14 @@
     return { colors: { ...colors }, missing }
   }
 
-  // Each look setting is one row: its stored `key`, `read` (a saved value as the setting, default for anything invalid), and an optional `paste` (the reader a pasted value goes through, `read` when absent; it gives undefined for a value to skip).
+  // Each look setting is one row: its stored `key`, `read` (the one reader, saved or pasted; undefined refuses the value, and the row's fallback stands for a saved one).
+  // A reader that never refuses reads a bad paste as a value on purpose.
   // `dialog` marks the looks the settings dialog sets and the notes are drawn again in; the others are the panel's sliders.
   // An invalid pasted outline reads as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
   const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })
   const LOOKS = [
-    lookRowOf('width', WIDTH_KEY, readWidth, { paste: (data) => (isWidth(data) ? data : undefined) }),
-    lookRowOf('opacity', OPACITY_KEY, readOpacity, { paste: (data) => (isOpacity(data) ? data : undefined) }),
+    lookRowOf('width', WIDTH_KEY, (data) => (isWidth(data) ? data : undefined), { fallback: DEFAULT_WIDTH }),
+    lookRowOf('opacity', OPACITY_KEY, (data) => (isOpacity(data) ? data : undefined), { fallback: DEFAULT_OPACITY }),
     lookRowOf('outline', OUTLINE_KEY, readOutline, { dialog: true }),
     lookRowOf('boxColor', BOX_KEY, readBoxColor, { dialog: true }),
     lookRowOf('frame', FRAME_KEY, readFrame, { dialog: true }),
@@ -1265,14 +1294,13 @@
   const dialogDefaults = () => tableDefaults(dialogLooks(LOOKS))
 
   // Copy and Paste carry the colors, size, opacity, outline, box color, frame and font, and not the notes, the color picked or the background button.
-  const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? storedNoteColors(readNoteColors(data), readNotePreset(data)) : undefined
-  const READERS = { [COLORS_KEY]: readPastedColors, ...pasteReaders(LOOKS) }
+  const READERS = { [COLORS_KEY]: (data) => pastedColorSet(data, NOTE_PRESETS), ...pasteReaders(LOOKS) }
 
   // The looks in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store, looks = LOOKS) {
     const copied = copiedTable(looks, store)
-    const savedColors = readNoteColors(store.getData(COLORS_KEY))
-    if (savedColors) copied[COLORS_KEY] = storedNoteColors(savedColors, readNotePreset(store.getData(COLORS_KEY)))
+    const colors = copiedColorSet(store.getData(COLORS_KEY), NOTE_PRESETS)
+    if (colors) copied[COLORS_KEY] = colors
     return JSON.stringify(copied)
   }
 
@@ -1407,7 +1435,7 @@
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
+  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -1432,8 +1460,8 @@
   }
 
   // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
-  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
-  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or Restore defaults.
+  // A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
@@ -1546,31 +1574,84 @@
     return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
-  function wireErrorLog (dialog, win) {
-    const say = (message, options) => setDialogStatus(dialog, message, options)
-    dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-error-log' && act !== 'clear-error-log') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'clear-error-log') {
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // One click handler for the four title-row buttons: Copy and Paste settings, and the error log's Copy and Clear. `copied`, `readers`, `upgrade`
+  // and `apply` are the script's `copyPaste`; a paste writes under `snapshot`, in a dialog action of `feature`.
+  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win) {
+    const say = (message, options) => setDialogStatus(root, message, options)
+    const acts = {
+      'copy-settings': {
+        verb: 'copy',
+        run: async () => {
+          await win.navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        }
+      },
+      'paste-settings': {
+        verb: 'paste',
+        run: async () => {
+          const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      },
+      'copy-error-log': {
+        verb: 'copy the error log',
+        run: async () => {
+          const log = readErrorLog(win.localStorage)
+          if (log.length === 0) {
+            say(formatErrorLog(log))
+            return
+          }
+          await win.navigator.clipboard.writeText(formatErrorLog(log))
+          say('Error log copied.')
+        }
+      },
+      'clear-error-log': {
+        verb: 'clear the error log',
+        run: async () => {
           // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
           let wasEmpty = false
           try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
-          win.localStorage.removeItem(ERROR_LOG_KEY)
+          clearErrorLog(win.localStorage)
           say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
-          return
         }
-        const log = readErrorLog(win.localStorage)
-        if (log.length === 0) {
-          say(formatErrorLog(log))
-          return
-        }
-        await win.navigator.clipboard.writeText(formatErrorLog(log))
-        say('Error log copied.')
+      }
+    }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (!Object.hasOwn(acts, act)) return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        await acts[act].run()
       } catch (error) {
-        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`, { error: true })
+        say(`Could not ${acts[act].verb}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -1615,6 +1696,7 @@
 
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
+  const RESTORE_LABEL = 'Restore defaults'
 
   const OFF_NOTE_ATTRIBUTE = 'data-role="off-note"'
 
@@ -1625,7 +1707,7 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, restore, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
     writeStyle(`settings-dialog-shell-${bodyId}`, dialogShellCss(bodyId), doc)
@@ -1648,8 +1730,9 @@
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
-      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
+      // Restore defaults edits the draft, so it clears an error first. An extra button edits no field (Reset puzzle size) and leaves it.
+      ...(restore ? [{ content: RESTORE_LABEL, role: 'restore', handler: () => { clearError(); restore() } }] : []),
+      ...extraButtons
     ]
     framework.showDialog({
       centerOverBoard,
@@ -1669,8 +1752,7 @@
     // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
     const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
     for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
-    wireErrorLog(dialog, win)
-    wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
+    wireActs(dialog, { ...copyPaste, snapshot, feature }, win)
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
     const row = dialog?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
@@ -1678,59 +1760,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
-  // <lib:settings-transfer>
-  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText, writeOrRestore */
-  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
-  function pastedSettings (text, readers, upgrade = (data) => data) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    data = upgrade(data)
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(readers)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
-    const say = (message, options) => setDialogStatus(root, message, options)
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copied())
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`, { error: true })
-      }
-    })
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:settings-transfer>
   // <lib:sudokupad>
   // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -1785,6 +1814,11 @@
     const log = JSON.parse(saved)
     if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
     return log
+  }
+
+  // Throws when the storage is blocked, so a caller never reports a clear that did not happen.
+  function clearErrorLog (storage) {
+    storage.removeItem(ERROR_LOG_KEY)
   }
 
   // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
@@ -1968,6 +2002,10 @@
             return fallback()
           }
         },
+        // The handler as a function that runs under `run`, for an event listener or a callback.
+        bind (handler, fallback) {
+          return (...args) => feature.run(() => handler(...args), fallback)
+        },
         // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
         // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
         runInDialog (fn) {
@@ -2026,27 +2064,37 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
+    // A write or read that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
     // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
     function storeFor (feature) {
+      const throwMarked = (error) => {
+        if (Object(error) === error) storeFailures.add(error)
+        throw error
+      }
       const write = (fn) => {
         if (feature.off) return
         try {
           fn()
         } catch (error) {
-          if (dialogActions > 0) {
-            if (Object(error) === error) storeFailures.add(error)
-            throw error
-          }
+          if (dialogActions > 0) throwMarked(error)
           if (!isRefusedWrite(error)) return feature.skip(error)
           console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
         }
       }
+      // In a dialog action a read that throws goes on to the caller, as a write does, so Copy says why it could not read.
+      const read = (key) => {
+        if (feature.off) return null
+        try {
+          return Framework.getData(key)
+        } catch (error) {
+          throwMarked(error)
+        }
+      }
       return {
-        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        getData: (key) => (dialogActions > 0 ? read(key) : feature.run(() => Framework.getData(key), () => null)),
         setData: (key, value) => write(() => Framework.setData(key, value)),
         removeData: (key) => write(() => Framework.removeData(key)),
         keep: (key, value) => feature.run(() => Framework.setData(key, value))
@@ -2171,7 +2219,7 @@
   }
   const nudgeStep = (heldMs, shift) => shift ? heldRamp(heldMs, NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX) : heldRamp(heldMs, NUDGE_PX, NUDGE_MAX_PX)
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readNoteColors, readNotePreset, storedNoteColors, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, savedColorSet, editedColorSet, storedColorSet, noteBackdrop }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop }
   }
   if (typeof document === 'undefined') return
 
@@ -2183,8 +2231,6 @@
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const savedData = guard.storeFor(storage)
   const dialogs = guard.dialogsFor(settingsUi)
-  const under = (feature, handler) => (...args) => feature.run(() => handler(...args))
-  const onWindow = (feature, type, handler, options) => window.addEventListener(type, under(feature, handler), options)
 
   const boardSvg = () => Framework.app.svgRenderer.getElem()
 
@@ -2620,7 +2666,7 @@
   const pickColor = (next) => applyLook((item) => ({ ...item, color: next }), () => setColor(next))
 
   function showColors () {
-    writeStyle(COLORS_STYLE_ID, colorSet ? colorsCss(colorSet.colors) : '')
+    writeStyle(COLORS_STYLE_ID, colorSet ? colorSetCss(colorSet.colors, colorVar) : '')
   }
 
   // The colors and every look as stored and as shown, as a function that puts them all back after a Save or Paste that failed half-way.
@@ -2679,7 +2725,7 @@
 
   // A pasted value is saved and shown at once, whether or not Text Anywhere is current.
   function applyPasted (values) {
-    if (COLORS_KEY in values) saveColors(savedColorSet(values[COLORS_KEY]))
+    if (COLORS_KEY in values) saveColors(readNoteColorSet(values[COLORS_KEY]))
     for (const { name, key } of LOOKS) if (key in values) setLook(name, values[key])
     showPanelValues()
   }
@@ -2724,7 +2770,7 @@
         apply: (values) => {
           applyPasted(values)
           // The draft takes only what was pasted: an edit to anything else is still there for Save.
-          draftLooks = withPasted(LOOKS, draftLooks, look, values)
+          draftLooks = withPasted(LOOKS, draftLooks, values)
           if (BOX_KEY in values) draftCustom = savedHex(look.boxColor) ?? draftCustom
           if (COLORS_KEY in values) {
             draft = colorSet
@@ -2733,7 +2779,7 @@
           draw()
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: () => restoreDefaults() }]
+      restore: () => restoreDefaults()
     }), () => null)
     if (!box) return
     // Like Pen Tool Extras: the draft takes the defaults, and Save or Cancel decides.
@@ -2744,7 +2790,7 @@
       draw()
     }
     const draw = () => {
-      const options = presetChoices(draft.preset ?? CUSTOM, presetOptions(pages.length), PRESET_LABELS)
+      const options = presetChoices(draft.preset, presetOptions(pages.length), PRESET_LABELS)
       box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft.colors[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
@@ -2753,7 +2799,7 @@
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft.colors[color] })
     }
     draw()
-    box.addEventListener('change', under(settingsUi, (event) => {
+    box.addEventListener('change', settingsUi.bind((event) => {
       const target = event.target
       if (target.matches('[data-role="color-choice"]')) {
         draft = presetColorSet(target.value, pages, readCellColor, readPenColor)
@@ -2771,7 +2817,7 @@
         draw()
       }
     }))
-    box.addEventListener('click', under(settingsUi, (event) => {
+    box.addEventListener('click', settingsUi.bind((event) => {
       const button = event.target.closest('button[data-role$="-pick"]')
       if (!button) return
       const { role, value } = button.dataset
@@ -2819,17 +2865,18 @@
     return notes ? panelLooks(notes) : { color, width: look.width, opacity: look.opacity }
   }
 
+  // `read` puts a value off the slider's steps on the default, where the row's reader would refuse it: a slider always sets a look.
   const SLIDER_LOOKS = {
-    [SIZE_SLIDER]: { name: 'width', change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
-    [OPACITY_SLIDER]: { name: 'opacity', change: (value) => (item) => ({ ...item, opacity: value }) }
+    [SIZE_SLIDER]: { name: 'width', read: readWidth, change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
+    [OPACITY_SLIDER]: { name: 'opacity', read: readOpacity, change: (value) => (item) => ({ ...item, opacity: value }) }
   }
 
   // A width the panel shows for a note is that note's, scaled to this grid; the next note's is saved in 9x9 units.
-  const setNextLook = (name, value) => setLook(name, name === 'width' && targetNotes() ? lookRow(name).read(nextNoteWidth(value, gridSize())) : value)
+  const setNextLook = (name, value) => setLook(name, name === 'width' && targetNotes() ? readWidth(nextNoteWidth(value, gridSize())) : value)
 
   function slideLook (input) {
-    const { name, change } = SLIDER_LOOKS[input.id]
-    const value = lookRow(name).read(Number(input.value))
+    const { name, read, change } = SLIDER_LOOKS[input.id]
+    const value = read(Number(input.value))
     applyLook(change(value), () => setNextLook(name, value))
   }
 
@@ -2837,7 +2884,7 @@
     for (let i = 0; i < steps; i++) {
       // The next note takes the first note's new size, as the panel shows it.
       const next = sizeStep(panelValues().width, direction)
-      applyLook((item) => steppedNote(item, direction), () => setNextLook('width', lookRow('width').read(next)))
+      applyLook((item) => steppedNote(item, direction), () => setNextLook('width', readWidth(next)))
     }
     showPanelValues()
   }
@@ -2848,7 +2895,7 @@
     const clear = document.createElement('button')
     clear.className = CLEAR_CLASS
     clear.innerHTML = controlIcon(CLEAR_ICON)
-    clear.addEventListener('click', under(textTool, () => {
+    clear.addEventListener('click', textTool.bind(() => {
       setNotesHidden(false)
       if (selected.length) deleteSelected()
       else confirmClear()
@@ -2858,14 +2905,14 @@
     settings.title = SETTINGS_LABEL
     settings.setAttribute('aria-label', SETTINGS_LABEL)
     settings.innerHTML = controlIcon(SETTINGS_ICON, SETTINGS_ICON_VIEWBOX)
-    settings.addEventListener('click', under(settingsUi, openDialog))
+    settings.addEventListener('click', settingsUi.bind(openDialog))
     const backgroundButton = document.createElement('button')
     backgroundButton.className = BACKGROUND_CLASS
     backgroundButton.innerHTML = controlIcon(BACKGROUND_ICON)
-    backgroundButton.addEventListener('click', under(textTool, pressBackground))
+    backgroundButton.addEventListener('click', textTool.bind(pressBackground))
     const hideAll = document.createElement('button')
     hideAll.className = HIDE_ALL_CLASS
-    hideAll.addEventListener('click', under(textTool, () => setNotesHidden(!notesHidden)))
+    hideAll.addEventListener('click', textTool.bind(() => setNotesHidden(!notesHidden)))
     const sliderRows = document.createElement('div')
     sliderRows.className = SLIDER_ROWS_CLASS
     sliderRows.innerHTML = sliderRowMarkup(SLIDER_ROW_CLASS, true, { id: SIZE_SLIDER, label: SIZE_LABEL, range: WIDTH_RANGE, value: look.width }) +
@@ -2874,8 +2921,8 @@
     sliders.className = SLIDERS_CLASS
     sliders.append(sliderRows, hideAll)
     // Arrow keys on a slider end in a change.
-    sliders.addEventListener('change', under(textTool, returnFocusToNote))
-    sliders.addEventListener('input', under(textTool, (event) => slideLook(event.target)))
+    sliders.addEventListener('change', textTool.bind(returnFocusToNote))
+    sliders.addEventListener('input', textTool.bind((event) => slideLook(event.target)))
     panelParts = [tray, clear, backgroundButton, ...(settingsUi.off ? [] : [settings]), sliders]
     keypad().append(...panelParts)
     showHideAllLook()
@@ -3166,8 +3213,8 @@
         const element = document.createElement('div')
         element.className = `${HANDLE_CLASS} ${ENTERING_CLASS}`
         element.style.cursor = cornerCursor(corner)
-        element.addEventListener('mousedown', under(textTool, (event) => startResize(event, corner)))
-        element.addEventListener('dblclick', under(textTool, resetSize))
+        element.addEventListener('mousedown', textTool.bind((event) => startResize(event, corner)))
+        element.addEventListener('dblclick', textTool.bind(resetSize))
         element.addEventListener('touchstart', (event) => event.stopPropagation())
         notesLayer().append(element)
         return { element, corner }
@@ -3520,13 +3567,13 @@
     element.spellcheck = false
     // As SudokuPad's own buttons do: a press in the note is the note's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) element.addEventListener(type, (event) => event.stopPropagation())
-    element.addEventListener('blur', under(textTool, (event) => {
+    element.addEventListener('blur', textTool.bind((event) => {
       if (!textBox || textBox.element !== element) return
       if (isPanelControl(event.relatedTarget)) textBox.caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null
       else finishText()
     }))
     // Typing grows the box, which carries the handles and may start the text scrolling.
-    element.addEventListener('input', under(textTool, (event) => {
+    element.addEventListener('input', textTool.bind((event) => {
       if (!textBox || textBox.element !== element) return
       // Only a typed character completes a symbol: deleting, pasting and Undo leave the text as it is.
       if (event.inputType === 'insertText') {
@@ -3535,7 +3582,7 @@
       }
       showTextBox(boardMap())
       clearTimeout(openNoteSaveTimer)
-      openNoteSaveTimer = setTimeout(under(textTool, saveOpenNote), OPEN_NOTE_SAVE_MS)
+      openNoteSaveTimer = setTimeout(textTool.bind(saveOpenNote), OPEN_NOTE_SAVE_MS)
     }))
     textBox = { index, item, element }
     notesLayer().append(element)
@@ -4178,7 +4225,7 @@
         { tag: 'text', content: ask.question },
         { tag: 'options', options: [{ tag: 'button', content: ask.button }, { tag: 'button', content: CANCEL_LABEL }] }
       ],
-      onButton: under(textTool, (label) => { if (label === ask.button) clearAll() }),
+      onButton: textTool.bind((label) => { if (label === ask.button) clearAll() }),
       centerOverBoard: true
     }))
   }
@@ -4341,7 +4388,7 @@
     color = readColor(savedData.getData(COLOR_KEY))
     Object.assign(look, readLooks(savedData))
     background = readBackground(savedData.getData(BACKGROUND_KEY))
-    colorSet = savedColorSet(savedData.getData(COLORS_KEY))
+    colorSet = readNoteColorSet(savedData.getData(COLORS_KEY))
     showColors()
     // The features are independent: one that fails to install costs the others nothing.
     textTool.run(() => {
@@ -4351,35 +4398,35 @@
         button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
         tool
       })
-      onWindow(textTool, 'contextmenu', suppressMenu)
+      window.addEventListener('contextmenu', textTool.bind(suppressMenu))
       installColorPickers()
-      onWindow(textTool, 'blur', endGesture)
+      window.addEventListener('blur', textTool.bind(endGesture))
       installSliderGuards(`.${SLIDERS_CLASS}`)
-      onWindow(textTool, 'pointerdown', finishTextOnPress, { capture: true })
-      onWindow(textTool, 'mousedown', keepNoteFocus, { capture: true })
+      window.addEventListener('pointerdown', textTool.bind(finishTextOnPress), { capture: true })
+      window.addEventListener('mousedown', textTool.bind(keepNoteFocus), { capture: true })
       // After the slider guards' own release handler, which takes the focus off the slider.
-      onWindow(textTool, 'pointerup', returnFocusToNote, { capture: true })
-      onWindow(textTool, 'pointerup', () => { pressFinishedText = false; edgeNote = null }, { capture: true })
-      onWindow(textTool, 'wheel', scrollNote, { capture: true, passive: false })
-      onWindow(textTool, 'mousemove', resizeMove, { capture: true })
-      onWindow(textTool, 'mousemove', (event) => {
+      window.addEventListener('pointerup', textTool.bind(returnFocusToNote), { capture: true })
+      window.addEventListener('pointerup', textTool.bind(() => { pressFinishedText = false; edgeNote = null }), { capture: true })
+      window.addEventListener('wheel', textTool.bind(scrollNote), { capture: true, passive: false })
+      window.addEventListener('mousemove', textTool.bind(resizeMove), { capture: true })
+      window.addEventListener('mousemove', textTool.bind((event) => {
         showChrome()
         hoverPoint = overControl(event) ? null : eventPoint(event)
         showEdgeCursor(isHandle(event.target) ? null : hoverPoint)
         inFrame('hover', showHover)
-      }, { capture: true })
-      onWindow(textTool, 'mouseout', (event) => {
+      }), { capture: true })
+      window.addEventListener('mouseout', textTool.bind((event) => {
         if (event.relatedTarget) return
         hoverPoint = null
         inFrame('hover', showHover)
-      }, { capture: true })
-      onWindow(textTool, 'mouseup', endResize, { capture: true })
-      for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
-      onWindow(textTool, 'keydown', stopCellCopy, { capture: true })
-      onWindow(textTool, 'keydown', switchOnT, { capture: true })
-      onWindow(textTool, 'keyup', releaseKey, { capture: true })
-      onWindow(textTool, 'pagehide', saveOpenNote)
-      document.addEventListener('visibilitychange', under(textTool, () => {
+      }), { capture: true })
+      window.addEventListener('mouseup', textTool.bind(endResize), { capture: true })
+      for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, textTool.bind(keepBoxKeys), { capture: true })
+      window.addEventListener('keydown', textTool.bind(stopCellCopy), { capture: true })
+      window.addEventListener('keydown', textTool.bind(switchOnT), { capture: true })
+      window.addEventListener('keyup', textTool.bind(releaseKey), { capture: true })
+      window.addEventListener('pagehide', textTool.bind(saveOpenNote))
+      document.addEventListener('visibilitychange', textTool.bind(() => {
         if (document.visibilityState !== 'hidden') return
         stopSizeHold()
         saveOpenNote()
@@ -4387,16 +4434,16 @@
     })
     addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: 'Text Anywhere', open: openDialog })
     boardNotes.run(() => {
-      app.puzzle.on('loaded', under(boardNotes, showSavedNotes))
-      app.on('restarted', under(boardNotes, restartNotes))
+      app.puzzle.on('loaded', boardNotes.bind(showSavedNotes))
+      app.on('restarted', boardNotes.bind(restartNotes))
       if (app.puzzle.currentPuzzle) showSavedNotes()
     })
     undoRestart.run(() => {
-      app.puzzle.on('act', under(undoRestart, followUndo))
+      app.puzzle.on('act', undoRestart.bind(followUndo))
       // Another script may act after Restart in its own 'restarted' handler; the stack it leaves, read once all of them have run, is the empty one.
-      app.on('restarted', under(undoRestart, () => queueMicrotask(() => { emptyStackLength = Framework.app.puzzle.undoStack.length; undoWasEmpty = undoStackEmpty() })))
+      app.on('restarted', undoRestart.bind(() => queueMicrotask(() => { emptyStackLength = Framework.app.puzzle.undoStack.length; undoWasEmpty = undoStackEmpty() })))
       for (const event of ['reset', 'progressloaded']) {
-        app.puzzle.on(event, under(undoRestart, () => { emptyStackLength = 0; undoWasEmpty = undoStackEmpty() }))
+        app.puzzle.on(event, undoRestart.bind(() => { emptyStackLength = 0; undoWasEmpty = undoStackEmpty() }))
       }
     })
   }

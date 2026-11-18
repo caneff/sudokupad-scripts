@@ -10,10 +10,10 @@ const { pageStandIn } = require('./page-stand-in.js')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const {
-  buildCss, SUDOKUPAD_PEN_COLORS, editedColors,
-  readPenColors, storedPenColors, startupPenColors, PRESET_LABELS,
+  SUDOKUPAD_PEN_COLORS,
+  readPenColors, presetColorSet, startupPenColors, PRESET_LABELS,
   buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
+  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
   clickedMarks, marksAtPoint, holdsMark, DOT_FILL_CSS,
@@ -25,6 +25,8 @@ const {
   edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady
 } = require('../pen-tool-extras.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
+// What the settings table reads from a store holding `data` under the row's key: the row's reader, then its fallback for a refusal.
+const savedAs = (name, data) => readSettings(fakeStore({ [SETTINGS[name].key]: data }))[name]
 
 const nextType = (current, settings) => stepType(current, settings, EDGE_CYCLE)
 const planCornerClick = (kind, present, settings) => cornerMarks(kind, {}).plan(present, settings)
@@ -36,99 +38,32 @@ const TABLE = {
   1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000'
 }
 
-const colorsRead = (data) => readPenColors(data).colors
-
-test('a saved #rrggbb color is kept, lowercased', () => {
-  assert.deepEqual(colorsRead({ 4: '#FF0000' }), { ...TABLE, 4: '#ff0000' })
-})
-
-test('a saved entry that is not a #rrggbb color falls back to that pen color\'s default', () => {
-  const saved = { 1: '#00ff00', 2: 'red', 3: '#abc', 4: 7, 5: null, 6: undefined, 0: '#ff0000', 10: '#ff0000', x: '#ff0000', 9: '#ff0000;}body{display:none' }
-  assert.deepEqual(colorsRead(saved), { ...TABLE, 1: '#00ff00' })
-})
-
-test('a saved color with junk before it, or a non-string entry, falls back to that pen color\'s default', () => {
-  const saved = { 1: 'x;}body{display:none}#ff0000', 2: ['#ff0000'], 3: { toLowerCase: () => '#ff0000' }, 4: '#00ff00' }
-  assert.deepEqual(colorsRead(saved), { ...TABLE, 4: '#00ff00' })
-})
-
-test('the colors read have exactly nine keys, whatever was saved', () => {
-  assert.deepEqual(Object.keys(colorsRead({ 10: '#ff0000', 0: '#ff0000', 4: '#00ff00' })), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-})
-
-test('the colors read are a copy, never the saved object or the defaults', () => {
-  const saved = { 1: '#ff0000' }
-  assert.notEqual(colorsRead(saved), saved)
-  // Every saved color is SudokuPad's own, so only a copy tells the result from the defaults.
-  assert.notEqual(colorsRead({ ...SUDOKUPAD_PEN_COLORS }), SUDOKUPAD_PEN_COLORS)
-})
-
-test('buildCss writes the nine variables under :root:root, not plain :root', () => {
-  const css = buildCss({ ...TABLE, 4: '#112233' })
-  const lines = css.split('\n')
-  assert.equal(lines[0], ':root:root {')
-  assert.equal(lines[lines.length - 1], '}')
-  assert.equal(lines.length, 11)
-  assert.ok(lines.includes('  --puzzle-pencolor-4: #112233;'))
-  assert.ok(lines.includes('  --puzzle-pencolor-9: #000000;'))
-  assert.equal(css.includes('pencolor-erase'), false)
-})
 // A saved set of nine distinct colors, so a test can tell which entry went where.
 const NINE_SAVED = { 1: '#010101', 2: '#020202', 3: '#030303', 4: '#040404', 5: '#050505', 6: '#060606', 7: '#070707', 8: '#080808', 9: '#090909' }
 
-test('readPenColors is null when nothing usable is saved, so the install save is still owed', () => {
-  for (const none of [null, undefined, 'red', 7, true, [], ['#ff0000'], '{"1":"#ff0000"}', {}, { preset: 'page-1' }, { 4: 'url(x)' }, { 0: '#ff0000' }]) {
-    assert.equal(readPenColors(none), null, JSON.stringify(none))
-  }
+test('readPenColors reads Pen Tool Extras\' presets and no other', () => {
+  for (const preset of ['page-1', 'page-2', 'page-3', 'sudokupad']) assert.deepEqual(readPenColors({ ...NINE_SAVED, preset }), { colors: NINE_SAVED, preset, missing: [], fromPreset: null })
+  assert.equal(readPenColors({ ...NINE_SAVED, preset: 'pen' }).preset, 'custom', 'Text Anywhere\'s pen preset')
+  assert.equal(readPenColors({}), null)
 })
 
-test('readPenColors does not read an array by index', () => {
-  // Index 1 holds a usable color: only the array guard stops it counting as pen color 1.
-  assert.equal(readPenColors(['x', '#ff0000', '#00ff00']), null)
-})
-
-test('readPenColors reads colors saved with no preset name, as older versions save them, as Custom and unchanged', () => {
-  assert.deepEqual(readPenColors(NINE_SAVED), { colors: NINE_SAVED, preset: 'custom', missing: [] })
-})
-
-test('readPenColors keeps a saved preset name, and reads one it does not know as Custom', () => {
-  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'page-2' }), { colors: NINE_SAVED, preset: 'page-2', missing: [] })
-  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'sudokupad' }), { colors: NINE_SAVED, preset: 'sudokupad', missing: [] })
-  for (const odd of ['page-4', 'custom', 'unsaved', 'Darker page 1', 7, null]) {
-    assert.equal(readPenColors({ ...NINE_SAVED, preset: odd }).preset, 'custom', JSON.stringify(odd))
-  }
-})
-
-test('storedPenColors keeps the nine colors where older versions read them and adds the preset name beside them, but none for Custom', () => {
-  assert.deepEqual(storedPenColors({ colors: NINE_SAVED, preset: 'page-1', missing: [4] }), { ...NINE_SAVED, preset: 'page-1' })
-  assert.deepEqual(storedPenColors({ colors: NINE_SAVED, preset: 'custom', missing: [] }), NINE_SAVED)
-  assert.deepEqual(readPenColors(storedPenColors({ colors: NINE_SAVED, preset: 'page-3', missing: [] })), { colors: NINE_SAVED, preset: 'page-3', missing: [] })
+test('presetColorSet carries the page the set came from and its missing pens', () => {
+  const pages = [['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9'], ['b0']]
+  const set = presetColorSet('page-2', pages, () => 'rgb(255, 0, 0)')
+  assert.equal(set.fromPreset, 'page-2')
+  assert.deepEqual(set.missing, [1, 2, 3, 4, 5, 6, 7, 8, 9])
 })
 
 test('startupPenColors loads a saved set, waits for the color tool when nothing is saved, and saves SudokuPad\'s colors when there is no color tool', () => {
-  assert.deepEqual(startupPenColors({ ...NINE_SAVED, preset: 'page-2' }, true), { load: { colors: NINE_SAVED, preset: 'page-2', missing: [] } })
-  assert.deepEqual(startupPenColors(NINE_SAVED, false), { load: { colors: NINE_SAVED, preset: 'custom', missing: [] } })
+  assert.deepEqual(startupPenColors({ ...NINE_SAVED, preset: 'page-2' }, true), { load: { colors: NINE_SAVED, preset: 'page-2', missing: [], fromPreset: null } })
+  assert.deepEqual(startupPenColors(NINE_SAVED, false), { load: { colors: NINE_SAVED, preset: 'custom', missing: [], fromPreset: null } })
   assert.deepEqual(startupPenColors(null, true), { wait: true })
-  assert.deepEqual(startupPenColors(null, false), { save: { colors: TABLE, preset: 'sudokupad', missing: [] } })
+  assert.deepEqual(startupPenColors(null, false), { save: { colors: TABLE, preset: 'sudokupad', missing: [], fromPreset: 'sudokupad' } })
 })
 
 test('PRESET_LABELS names the palette presets and the two states a set can be in beside them', () => {
   assert.deepEqual(['page-1', 'page-2', 'page-3', 'sudokupad', 'custom', 'unsaved'].map((id) => PRESET_LABELS[id]),
     ['Darker page 1', 'Darker page 2', 'Darker page 3', 'SudokuPad colors', 'Custom', 'SudokuPad (unsaved)'])
-})
-
-test('editedColors gives the whole current set with one pen color changed, lowercased, leaving the input alone', () => {
-  const current = { ...TABLE }
-  const out = editedColors(current, '4', '#AABBCC')
-  assert.deepEqual(out, { ...TABLE, 4: '#aabbcc' })
-  assert.deepEqual(current, TABLE)
-})
-
-test('editedColors refuses a pen color or a value it cannot save, rather than saving a wrong set', () => {
-  assert.throws(() => editedColors(TABLE, '0', '#aabbcc'), RangeError)
-  assert.throws(() => editedColors(TABLE, '10', '#aabbcc'), RangeError)
-  assert.throws(() => editedColors(TABLE, '4', 'red'), RangeError)
-  assert.throws(() => editedColors(TABLE, '4', '#abc'), RangeError)
 })
 
 test('the thickness runs 1 to 16 in half steps from SudokuPad\'s own pen width of 5', () => {
@@ -137,8 +72,7 @@ test('the thickness runs 1 to 16 in half steps from SudokuPad\'s own pen width o
 
 test('the thickness setting keeps a saved whole or half number from 1 to 16 unchanged', () => {
   for (const ok of [1, 1.5, 2.5, 5, 8, 12.5, 15.5, 16]) {
-    assert.equal(SETTINGS.thickness.read(ok), ok)
-    assert.equal(SETTINGS.thickness.paste(ok), ok, String(ok))
+    assert.equal(savedAs('thickness', ok), ok)
   }
 })
 
@@ -150,7 +84,7 @@ test('a half-step thickness is saved as it is, not rounded', () => {
 
 test('the thickness setting falls back to 5 for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 0.5, 16.5, 17, -3, 2.25, 1.75, 2.4, NaN, Infinity, '7', [7], { a: 7 }, true]) {
-    assert.equal(SETTINGS.thickness.read(bad), 5, String(bad))
+    assert.equal(savedAs('thickness', bad), 5, String(bad))
   }
 })
 
@@ -235,12 +169,12 @@ test('the opacity runs 20 to 100 percent in steps of 5 from SudokuPad\'s own pen
 })
 
 test('the opacity setting keeps a saved whole number from 20 to 100 on the slider\'s steps', () => {
-  for (const ok of [20, 55, 80, 100]) assert.equal(SETTINGS.opacity.read(ok), ok)
+  for (const ok of [20, 55, 80, 100]) assert.equal(savedAs('opacity', ok), ok)
 })
 
 test('the opacity setting falls back to 80 for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 19, 105, -80, 82, 80.5, NaN, Infinity, '70', [70], { a: 70 }, true]) {
-    assert.equal(SETTINGS.opacity.read(bad), 80, String(bad))
+    assert.equal(savedAs('opacity', bad), 80, String(bad))
   }
 })
 
@@ -838,8 +772,8 @@ test('the dash length runs from 0 (dots) to 8 line widths in whole steps, and st
 })
 
 test('the dash setting keeps a saved whole number from 0 to 8, a saved 0 included, and anything else is 3', () => {
-  for (const ok of [0, 1, 4, 8]) assert.equal(SETTINGS.dash.read(ok), ok)
-  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(SETTINGS.dash.read(bad), 3, String(bad))
+  for (const ok of [0, 1, 4, 8]) assert.equal(savedAs('dash', ok), ok)
+  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(savedAs('dash', bad), 3, String(bad))
 })
 
 const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).filter((r) => r.body.startsWith('stroke-dasharray'))
@@ -889,13 +823,13 @@ test('a dash too long for a cell to hold a gap is shortened to leave one, and pa
 })
 
 test('both sliders show unless saved as hidden, and saved data without the setting shows both', () => {
-  assert.deepEqual(SETTINGS.show.read(undefined), { thickness: true, opacity: true })
-  assert.deepEqual(SETTINGS.show.read(null), { thickness: true, opacity: true })
-  assert.deepEqual(SETTINGS.show.read({}), { thickness: true, opacity: true })
-  assert.deepEqual(SETTINGS.show.read({ thickness: false }), { thickness: false, opacity: true })
-  assert.deepEqual(SETTINGS.show.read({ opacity: false, thickness: false }), { thickness: false, opacity: false })
-  assert.deepEqual(SETTINGS.show.read({ thickness: 0, opacity: 'no' }), { thickness: true, opacity: true })
-  assert.deepEqual(SETTINGS.show.read([false, false]), { thickness: true, opacity: true })
+  assert.deepEqual(savedAs('show', undefined), { thickness: true, opacity: true })
+  assert.deepEqual(savedAs('show', null), { thickness: true, opacity: true })
+  assert.deepEqual(savedAs('show', {}), { thickness: true, opacity: true })
+  assert.deepEqual(savedAs('show', { thickness: false }), { thickness: false, opacity: true })
+  assert.deepEqual(savedAs('show', { opacity: false, thickness: false }), { thickness: false, opacity: false })
+  assert.deepEqual(savedAs('show', { thickness: 0, opacity: 'no' }), { thickness: true, opacity: true })
+  assert.deepEqual(savedAs('show', [false, false]), { thickness: true, opacity: true })
 })
 
 test('a hidden slider has no input, and the other keeps its place beside an empty row of the same height', () => {
@@ -982,9 +916,9 @@ test('Custom is in the pulldown only while the set is custom, selected and not p
 })
 
 test('the missing-color note names the page the colors came from and the pens that keep SudokuPad\'s own', () => {
-  const text = renderEditor(editorState({ missing: [4, 5], preset: 'custom', pickedPreset: 'page-2' }))
+  const text = renderEditor(editorState({ missing: [4, 5], preset: 'custom', fromPreset: 'page-2' }))
   assert.match(text, /Cell color page 2 has no usable color at the matching button, so pen colors 4, 5 keep SudokuPad's own\./)
-  assert.match(renderEditor(editorState({ missing: [7], pickedPreset: 'page-1' })), /Cell color page 1 has no usable color at the matching button, so pen color 7 keeps SudokuPad's own\./)
+  assert.match(renderEditor(editorState({ missing: [7], fromPreset: 'page-1' })), /Cell color page 1 has no usable color at the matching button, so pen color 7 keeps SudokuPad's own\./)
   assert.doesNotMatch(renderEditor(editorState()), /no usable color/)
 })
 
@@ -1219,7 +1153,7 @@ test('the dialog is sized to its content, the paragraph around the editor loses 
 
 test('a missing-color note in the first column wraps within it and never sets its width', () => {
   assert.match(DIALOG_CSS, /\.pen-tool-extras-cell \.pen-tool-extras-note \{[^}]*width: 0;[^}]*min-width: 100%;/)
-  assert.match(renderEditor(editorState({ missing: [4], pickedPreset: 'page-1' })), /<div class="pen-tool-extras-cell"><div class="pen-tool-extras-section-title">Pen colors<\/div>[\s\S]*no usable color[\s\S]*<\/div><div class="pen-tool-extras-cell">/, 'the note is in the Pen colors cell')
+  assert.match(renderEditor(editorState({ missing: [4], fromPreset: 'page-1' })), /<div class="pen-tool-extras-cell"><div class="pen-tool-extras-section-title">Pen colors<\/div>[\s\S]*no usable color[\s\S]*<\/div><div class="pen-tool-extras-cell">/, 'the note is in the Pen colors cell')
 })
 
 test('the grid\'s lines are the mockup\'s #ddd: each cell has a top line and each right-hand cell a left line, and the divider a top line', () => {
@@ -1620,8 +1554,8 @@ test('an arrow line has at least one arrow on any segment at any thickness and a
 })
 
 test('the outline setting is off only for a saved false: nothing saved and anything untrusted is on', () => {
-  assert.equal(SETTINGS.outline.read(false), false)
-  for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(SETTINGS.outline.read(ok), true, JSON.stringify(ok))
+  assert.equal(savedAs('outline', false), false)
+  for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(savedAs('outline', ok), true, JSON.stringify(ok))
 })
 
 test('buildOutlineCss is empty when the outline is off and filters the pen layer and not the highlight, when on', () => {
@@ -1667,8 +1601,8 @@ test('the outline filter grows the layer\'s combined shape by the default width 
 
 test('the outline width setting keeps a saved whole number from 1 to 8 and reads anything else, nothing saved included, as 2', () => {
   assert.deepEqual(OUTLINE_WIDTH, { min: 1, max: 8, step: 1, fallback: 2 })
-  for (const ok of [1, 3, 8]) assert.equal(SETTINGS.outlineWidth.read(ok), ok)
-  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(SETTINGS.outlineWidth.read(bad), 2, JSON.stringify(bad))
+  for (const ok of [1, 3, 8]) assert.equal(savedAs('outlineWidth', ok), ok)
+  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(savedAs('outlineWidth', bad), 2, JSON.stringify(bad))
 })
 
 test('the outline filter grows and blurs more for a wider outline', () => {
@@ -1680,21 +1614,21 @@ test('the outline filter grows and blurs more for a wider outline', () => {
 
 test('arrow spacing runs 3 to 12 in whole steps and starts at 5, and the arrow spacing setting keeps a saved whole number in range', () => {
   assert.deepEqual(ARROW_SPACING, { min: 3, max: 12, step: 1, fallback: 5 })
-  for (const ok of [3, 5, 12]) assert.equal(SETTINGS.arrowSpacing.read(ok), ok)
-  for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(SETTINGS.arrowSpacing.read(bad), 5, JSON.stringify(bad))
+  for (const ok of [3, 5, 12]) assert.equal(savedAs('arrowSpacing', ok), ok)
+  for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(savedAs('arrowSpacing', bad), 5, JSON.stringify(bad))
 })
 
 test('right click erase is on unless saved as the boolean false', () => {
-  assert.equal(SETTINGS.eraseClicks.read(false), false)
-  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(SETTINGS.eraseClicks.read(ok), true, JSON.stringify(ok))
+  assert.equal(savedAs('eraseClicks', false), false)
+  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(savedAs('eraseClicks', ok), true, JSON.stringify(ok))
 })
 
 test('both line styles are enabled unless saved as the boolean false, each on its own; saved junk enables both', () => {
-  assert.deepEqual(SETTINGS.lineStyles.read(undefined), { dashed: true, arrows: true })
-  assert.deepEqual(SETTINGS.lineStyles.read({ dashed: false }), { dashed: false, arrows: true })
-  assert.deepEqual(SETTINGS.lineStyles.read({ arrows: false }), { dashed: true, arrows: false })
-  assert.deepEqual(SETTINGS.lineStyles.read({ dashed: false, arrows: false }), { dashed: false, arrows: false })
-  for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(SETTINGS.lineStyles.read(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
+  assert.deepEqual(savedAs('lineStyles', undefined), { dashed: true, arrows: true })
+  assert.deepEqual(savedAs('lineStyles', { dashed: false }), { dashed: false, arrows: true })
+  assert.deepEqual(savedAs('lineStyles', { arrows: false }), { dashed: true, arrows: false })
+  assert.deepEqual(savedAs('lineStyles', { dashed: false, arrows: false }), { dashed: false, arrows: false })
+  for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(savedAs('lineStyles', bad), { dashed: true, arrows: true }, JSON.stringify(bad))
 })
 
 test('a wider arrow spacing gives fewer arrows on the same segment', () => {
@@ -1875,11 +1809,6 @@ test('isPlainObject takes an object and no array, null or scalar', () => {
   for (const bad of [null, undefined, [], [1], 'x', 1, true]) assert.equal(isPlainObject(bad), false, JSON.stringify(bad))
 })
 
-test('isHexColor takes #rrggbb in either case and nothing else', () => {
-  for (const ok of ['#000000', '#a1B2c3']) assert.equal(isHexColor(ok), true, ok)
-  for (const bad of ['#fff', '#12345g', '123456', ' #123456', '#1234567', null, undefined, 123456, ['#123456']]) assert.equal(isHexColor(bad), false, JSON.stringify(bad))
-})
-
 test('the table holds each setting\'s saved key and default', () => {
   const rows = Object.fromEntries(Object.entries(SETTINGS).map(([name, row]) => [name, [row.key, row.fallback]]))
   assert.deepEqual(rows, {
@@ -1919,7 +1848,7 @@ test('saving one mark unticked writes the key, and saving every box ticked remov
 test('a slider row built from a range normalizes and saves by that range alone', () => {
   const row = slider('New_key', { min: 2, max: 10, step: 2, fallback: 4 }, () => {})
   assert.equal(row.read(6), 6)
-  for (const bad of [0, 12, 5, '6', null, {}]) assert.equal(row.read(bad), 4, JSON.stringify(bad))
+  for (const bad of [0, 12, 5, '6', null, {}]) assert.equal(row.read(bad), undefined, JSON.stringify(bad))
   const calls = []
   const store = { setData: (key, value) => calls.push(['set', key, value]), removeData: (key) => calls.push(['remove', key]) }
   saveRow(store, row, 6)
@@ -1964,12 +1893,19 @@ test('an effect two rows share runs once', () => {
   assert.deepEqual(effectsOf(['outline', 'outlineWidth', 'thickness']), [SETTINGS.outline.effect, SETTINGS.thickness.effect])
 })
 
-test('flags decode each name on its own: only a saved false is off, a non-object is all on, an unknown name is dropped', () => {
+test('the marks row reads a set saved under the old circle names, as a saved value and as a paste', () => {
+  const old = { x: true, directions: true, dot: false, cornerX: true, cornerDot: true }
+  assert.deepEqual(SETTINGS.marks.read(old), normalizeMarkSettings(old))
+  assert.equal(SETTINGS.marks.read({ ...old, extra: true }), undefined)
+  assert.deepEqual(readPaste(JSON.stringify({ EdgeMarks_marks: old })).values.EdgeMarks_marks, normalizeMarkSettings(old))
+})
+
+test('flags decode each name on its own: only a saved false is off, and a value that is not a set of known booleans is refused', () => {
   const row = flags('Flags_key', ['a', 'b'])
   assert.deepEqual(row.fallback, { a: true, b: true })
   assert.deepEqual(row.read({ a: false }), { a: false, b: true })
-  assert.deepEqual(row.read({ a: 0, b: false, c: false }), { a: true, b: false })
-  for (const bad of [null, undefined, 'x', 1, [false, false]]) assert.deepEqual(row.read(bad), { a: true, b: true }, JSON.stringify(bad))
+  assert.equal(row.read({ a: 0, b: false, c: false }), undefined, 'a value with a non-boolean or unknown name is refused')
+  for (const bad of [null, undefined, 'x', 1, [false, false], {}]) assert.equal(row.read(bad), undefined, JSON.stringify(bad))
 })
 
 test('readSettings normalizes what is saved under each key and falls back for the rest', () => {
@@ -2200,7 +2136,7 @@ test('copiedSettings: every setting at the value in force, the pen colors once s
   assert.equal(copied.PenColor_opacity, SETTINGS.opacity.fallback)
   assert.equal(copied.PenColor_outline, false)
   assert.deepEqual(copied.EdgeMarks_marks, normalizeMarkSettings({ x: false }))
-  assert.deepEqual(copied.PenColor_colors, storedPenColors(readPenColors(saved.PenColor_colors)))
+  assert.deepEqual(copied.PenColor_colors, { ...SUDOKUPAD_PEN_COLORS, 1: '#112233', preset: 'page-2' })
   assert.equal('PenColor_colors' in JSON.parse(copiedSettings({ getData: () => null })), false)
 })
 
@@ -2226,7 +2162,7 @@ test('pastedSettings: a setting that reads back is kept, one its reader would re
 
 test('pastedSettings: pen colors are kept in the saved form, a table with a bad or no color is skipped, other scripts\' keys and the selected pen are ignored', () => {
   assert.deepEqual(readPaste(JSON.stringify({ PenColor_colors: { 1: '#ABCDEF', preset: 'page-2' }, PenColor_pen: '3', ToolPen_linemode: 'edgeonly', DarkPage_color: '#ffffff' })),
-    { values: { PenColor_colors: storedPenColors(readPenColors({ 1: '#abcdef', preset: 'page-2' })) }, skipped: 0 })
+    { values: { PenColor_colors: { ...SUDOKUPAD_PEN_COLORS, 1: '#abcdef', preset: 'page-2' } }, skipped: 0 })
   for (const bad of [{ 1: 'nope' }, { 1: '#abcdef', 2: 'nope' }]) assert.deepEqual(readPaste(JSON.stringify({ PenColor_colors: bad })), { values: {}, skipped: 1 }, JSON.stringify(bad))
 })
 

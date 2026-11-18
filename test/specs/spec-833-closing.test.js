@@ -12,6 +12,8 @@ const ROOT = join(__dirname, '..', '..')
 const textAnywhere = require(join(ROOT, 'text-anywhere.user.js'))
 const penToolExtras = require(join(ROOT, 'pen-tool-extras.user.js'))
 const colorByDigit = require(join(ROOT, 'color-by-digit.user.js'))
+const { loadLib } = require('../load-lib.js')
+const { storedColorSet, editedColorSet } = loadLib(['color-math', 'plain', 'palette', 'color-set'], ['storedColorSet', 'editedColorSet'])
 
 test('#833: one rule builds the notes a closing note leaves: empty text removes it, a new note is appended, any other replaces the saved one', () => {
   const { notesAfterClose } = textAnywhere
@@ -31,14 +33,15 @@ test('#833: after notes go, the open text box and a resize follow their note, an
   assert.equal(followKept({ textBoxIndex: null, resizing: null, move: [{ index: 1 }] }, keep).dragCancelled, true)
 })
 
+// Custom is 'custom' in memory in both scripts (lib/color-set.js).
 test('#833: Text Anywhere\'s note colors are one record, so a pasted set replaces every part of it and an edit makes the set Custom', () => {
-  const { savedColorSet, storedColorSet, editedColorSet, READERS, COLORS_KEY } = textAnywhere
+  const { readNoteColorSet, READERS, COLORS_KEY } = textAnywhere
   const hexes = (hex) => Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, hex]))
-  const pasted = savedColorSet(READERS[COLORS_KEY]({ ...hexes('#112233'), preset: 'page-2' }))
+  const pasted = readNoteColorSet(READERS[COLORS_KEY]({ ...hexes('#112233'), preset: 'page-2' }))
   assert.deepEqual(pasted, { colors: hexes('#112233'), preset: 'page-2', missing: [], fromPreset: null })
   assert.deepEqual(storedColorSet(pasted), { ...hexes('#112233'), preset: 'page-2' })
   const edited = editedColorSet({ ...pasted, missing: [3, 4], fromPreset: 'page-2' }, 3, '#445566')
-  assert.equal(edited.preset, null)
+  assert.equal(edited.preset, 'custom')
   assert.deepEqual(edited.missing, [4])
   assert.equal(edited.colors[3], '#445566')
 })

@@ -764,6 +764,33 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await pickerCount(), 0)
     })
 
+    it('a hold-to-edit change takes only the edited pen off the dialog\'s missing-color note, as an edit in the dialog does', async () => {
+      await leaveEditMode()
+      await read(() => {
+        const palette = { colors: { w: 'transparent', x: 'rgb(200, 0, 0)', y: 'rgb(0, 0, 200)', z: 'rgb(0, 150, 0)' }, pages: [['w', 'x', 'y', 'z']] }
+        Framework.app.tools.colour.setPalette(palette)
+      })
+      try {
+        await openExtrasEditor(p)
+        await pickPreset('page-1')
+        assert.match(await editor().innerText(), /so pen colors 4, 5, 6, 7, 8, 9 keep SudokuPad's own/)
+        await closeExtrasEditorWith(p, 'Save')
+        await holdToOpen(5)
+        await read((hex) => {
+          const el = document.querySelector('.tool-pen .pen-tool-extras-picker input[data-key="5"]')
+          el.value = hex
+          el.dispatchEvent(new window.Event('input', { bubbles: true }))
+        }, FOUR.hex)
+        await leaveEditMode()
+        await openExtrasEditor(p)
+        assert.equal(await presetShown(), 'custom')
+        assert.match(await editor().innerText(), /Cell color page 1 has no usable color at the matching button, so pen colors 4, 6, 7, 8, 9 keep SudokuPad's own/)
+        await closeExtrasEditorWith(p, 'Cancel')
+      } finally {
+        await restorePalette()
+      }
+    })
+
     // Set PEN_COLOR_SHOT to a path to save the screenshot kept in docs/research/.
     it('edit mode, screenshot', { skip: !process.env.PEN_COLOR_SHOT }, async () => {
       await holdToOpen(4)

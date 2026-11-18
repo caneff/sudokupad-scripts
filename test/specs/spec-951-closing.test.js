@@ -13,7 +13,7 @@ const ROOT = join(__dirname, '..', '..')
 const colorByDigit = require(join(ROOT, 'color-by-digit.user.js'))
 const textAnywhere = require(join(ROOT, 'text-anywhere.user.js'))
 const rulesResizer = require(join(ROOT, 'auto-rules-resizer.user.js'))
-const { showSettingsDialog } = loadLib(['sudokupad', 'write-style', 'settings-dialog', 'settings-transfer'], ['showSettingsDialog'], { Framework: {} })
+const { showSettingsDialog } = loadLib(['sudokupad', 'write-style', 'settings-dialog'], ['showSettingsDialog'], { Framework: {} })
 
 const PROFILES_KEY = 'ColorByDigit_profiles'
 const LEGACY_KEY = 'ColorByDigit_groups'
@@ -94,7 +94,8 @@ function fakeDialog ({ save, restore }) {
     snapshot: () => () => {},
     feature: { runInDialog: (fn) => fn() },
     copyPaste: { copied: () => '{}', readers: {}, apply () {} },
-    extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: restore }, { content: 'Reset puzzle size', role: 'reset-size', handler () {} }]
+    restore,
+    extraButtons: [{ content: 'Reset puzzle size', role: 'reset-size', handler () {} }]
   }, { doc, win })
   const press = (label) => options.find((option) => option.content === label).handler()
   const input = () => listeners.filter((l) => l.type === 'input').forEach((l) => l.fn({ type: 'input', target: {} }))

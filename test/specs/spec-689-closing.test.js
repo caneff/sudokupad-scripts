@@ -60,7 +60,7 @@ test('#710: a board saved by 0.44.14 starts with its notes, settings and dismiss
   assert.deepEqual(ta.readLooks(store), NEW_LOOKS)
   assert.equal(ta.readColor(store.getData(ta.COLOR_KEY)), 4)
   assert.equal(ta.readBackground(store.getData(ta.BACKGROUND_KEY)), true)
-  assert.deepEqual(ta.readNoteColors(store.getData(ta.COLORS_KEY)), COLORS)
+  assert.deepEqual(ta.readNoteColorSet(store.getData(ta.COLORS_KEY)).colors, COLORS)
   assert.deepEqual(store.getData(ta.NOTICE_KEY), DISMISSAL)
   for (const [key, value] of Object.entries(OLD_BOARD)) assert.deepEqual(saved[key], value, `${key} stays`)
 

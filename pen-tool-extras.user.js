@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.33
+// @version      1.32.42
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.33'
+  const VERSION = '1.32.42'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -59,6 +59,9 @@
 
   // Ctrl, Alt and Cmd start the browser's and SudokuPad's own chords; Shift alone is a key's own case.
   const hasChord = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey)
+
+  // Text into HTML markup or an attribute value: the four characters that would end one or open another.
+  const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:settings-table>
@@ -66,9 +69,10 @@
   /* eslint-disable no-unused-vars */
   // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
-  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (a saved value as the setting, the fallback for anything invalid),
-  // `fallback`, and optionally `paste` (the reader a pasted value goes through, `read` when absent), `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`, undefined for a value it refuses).
+  // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
+  // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
+  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -77,7 +81,7 @@
 
   const tableDefaults = (rows) => Object.fromEntries(rows.map((row) => [row.name, row.fallback]))
 
-  const readRow = (row, store) => (row.envelope ? (row.envelope.load(store, row).value ?? row.fallback) : row.read(store.getData(row.key)))
+  const readRow = (row, store) => (row.envelope ? row.envelope.load(store, row).value : row.read(store.getData(row.key))) ?? row.fallback
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
@@ -87,16 +91,13 @@
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
   const copiedTable = (rows, store) => readByField(rows, store, 'key')
 
-  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read, paste = read }) => [key, paste]))
+  const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
   // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
-  // The pasted values by row name, each as its key holds it in `values`: what withPasted takes as `now` when nothing has been saved to read it from.
-  const pastedByName = (rows, values) => Object.fromEntries(rows.map((row) => [row.name, values[row.key]]))
-
-  // A paste puts the pasted rows' values (from `now`: read once saved, or pastedByName's) into the draft and leaves every other row as drafted.
-  const withPasted = (rows, draft, now, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, now[row.name]])) })
+  // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
+  const withPasted = (rows, draft, values) => ({ ...draft, ...Object.fromEntries(rows.filter((row) => row.key in values).map((row) => [row.name, values[row.key]])) })
 
   // A value at its fallback removes its key, so a fallback that changes later reaches everyone who never chose another.
   function saveRow (store, row, value) {
@@ -104,6 +105,8 @@
     else if (row.envelope) row.envelope.save(store, row.key, value)
     else store.setData(row.key, value)
   }
+
+  const saveTable = (store, rows, values) => rows.forEach((row) => saveRow(store, row, values[row.name]))
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
 
@@ -215,6 +218,11 @@
     const log = JSON.parse(saved)
     if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
     return log
+  }
+
+  // Throws when the storage is blocked, so a caller never reports a clear that did not happen.
+  function clearErrorLog (storage) {
+    storage.removeItem(ERROR_LOG_KEY)
   }
 
   // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
@@ -398,6 +406,10 @@
             return fallback()
           }
         },
+        // The handler as a function that runs under `run`, for an event listener or a callback.
+        bind (handler, fallback) {
+          return (...args) => feature.run(() => handler(...args), fallback)
+        },
         // An action the user asked for in a dialog: its throw goes on to the caller and leaves the feature on, so the caller can write the
         // earlier values back and say why; one with the feature off throws saying so. A store write that fails in it throws on too.
         runInDialog (fn) {
@@ -456,27 +468,37 @@
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
-    // A write that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
+    // A write or read that throws turns the feature off and its caller goes on, except in a dialog action, where it throws on (`runInDialog`). A
     // write the browser refuses (a full localStorage) is the browser's doing: it is told to the user and leaves the feature on, so it saves
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
     function storeFor (feature) {
+      const throwMarked = (error) => {
+        if (Object(error) === error) storeFailures.add(error)
+        throw error
+      }
       const write = (fn) => {
         if (feature.off) return
         try {
           fn()
         } catch (error) {
-          if (dialogActions > 0) {
-            if (Object(error) === error) storeFailures.add(error)
-            throw error
-          }
+          if (dialogActions > 0) throwMarked(error)
           if (!isRefusedWrite(error)) return feature.skip(error)
           console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
         }
       }
+      // In a dialog action a read that throws goes on to the caller, as a write does, so Copy says why it could not read.
+      const read = (key) => {
+        if (feature.off) return null
+        try {
+          return Framework.getData(key)
+        } catch (error) {
+          throwMarked(error)
+        }
+      }
       return {
-        getData: (key) => feature.run(() => Framework.getData(key), () => null),
+        getData: (key) => (dialogActions > 0 ? read(key) : feature.run(() => Framework.getData(key), () => null)),
         setData: (key, value) => write(() => Framework.setData(key, value)),
         removeData: (key) => write(() => Framework.removeData(key)),
         keep: (key, value) => feature.run(() => Framework.setData(key, value))
@@ -497,7 +519,7 @@
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, wireCopyPaste, writeStyle */ // eslint-disable-line no-redeclare
+  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -522,8 +544,8 @@
   }
 
   // The next edit takes an error down, so it never stands beside choices made after it; a plain message stays.
-  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or an extra button
-  // marked `edits` (Restore defaults). A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
+  // An edit is a field's `input` (not `change`, which a field fires as it loses focus to Save), a press on one of the script's own buttons in the body (a swatch, a digit key), or Restore defaults.
+  // A click elsewhere in the body, and an extra button that edits no field (Reset puzzle size), leave it up.
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
@@ -636,31 +658,84 @@
     return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
-  function wireErrorLog (dialog, win) {
-    const say = (message, options) => setDialogStatus(dialog, message, options)
-    dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-error-log' && act !== 'clear-error-log') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'clear-error-log') {
+  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // One click handler for the four title-row buttons: Copy and Paste settings, and the error log's Copy and Clear. `copied`, `readers`, `upgrade`
+  // and `apply` are the script's `copyPaste`; a paste writes under `snapshot`, in a dialog action of `feature`.
+  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win) {
+    const say = (message, options) => setDialogStatus(root, message, options)
+    const acts = {
+      'copy-settings': {
+        verb: 'copy',
+        run: async () => {
+          await win.navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        }
+      },
+      'paste-settings': {
+        verb: 'paste',
+        run: async () => {
+          const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      },
+      'copy-error-log': {
+        verb: 'copy the error log',
+        run: async () => {
+          const log = readErrorLog(win.localStorage)
+          if (log.length === 0) {
+            say(formatErrorLog(log))
+            return
+          }
+          await win.navigator.clipboard.writeText(formatErrorLog(log))
+          say('Error log copied.')
+        }
+      },
+      'clear-error-log': {
+        verb: 'clear the error log',
+        run: async () => {
           // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
           let wasEmpty = false
           try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
-          win.localStorage.removeItem(ERROR_LOG_KEY)
+          clearErrorLog(win.localStorage)
           say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
-          return
         }
-        const log = readErrorLog(win.localStorage)
-        if (log.length === 0) {
-          say(formatErrorLog(log))
-          return
-        }
-        await win.navigator.clipboard.writeText(formatErrorLog(log))
-        say('Error log copied.')
+      }
+    }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (!Object.hasOwn(acts, act)) return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        await acts[act].run()
       } catch (error) {
-        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`, { error: true })
+        say(`Could not ${acts[act].verb}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -705,6 +780,7 @@
 
   const SAVE_LABEL = 'Save'
   const CANCEL_LABEL = 'Cancel'
+  const RESTORE_LABEL = 'Restore defaults'
 
   const OFF_NOTE_ATTRIBUTE = 'data-role="off-note"'
 
@@ -715,7 +791,7 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, off, changed, save, snapshot, feature, copyPaste, restore, extraButtons = [] }, { doc = document, win = window } = {}) {
     if (typeof snapshot !== 'function') throw new Error(`${name}: a settings dialog needs a snapshot`)
     if (!Array.isArray(off)) throw new Error(`${name}: a settings dialog needs the guard's off list`)
     writeStyle(`settings-dialog-shell-${bodyId}`, dialogShellCss(bodyId), doc)
@@ -738,8 +814,9 @@
     const buttons = [
       { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      // An extra button marked `edits`, such as Restore defaults, edits the draft, so it clears an error first; one that edits no field leaves it.
-      ...extraButtons.map((button) => ({ ...button, handler: () => { if (button.edits) clearError(); button.handler() } }))
+      // Restore defaults edits the draft, so it clears an error first. An extra button edits no field (Reset puzzle size) and leaves it.
+      ...(restore ? [{ content: RESTORE_LABEL, role: 'restore', handler: () => { clearError(); restore() } }] : []),
+      ...extraButtons
     ]
     framework.showDialog({
       centerOverBoard,
@@ -759,8 +836,7 @@
     // A press on a button as well as a field's input, since some scripts' controls are buttons (a swatch, a digit key).
     const clearOnEdit = (event) => { if (event.type !== 'click' || event.target?.closest?.('button')) clearError() }
     for (const type of ['input', 'click']) body.addEventListener(type, clearOnEdit)
-    wireErrorLog(dialog, win)
-    wireCopyPaste(dialog, { ...copyPaste, snapshot, feature })
+    wireActs(dialog, { ...copyPaste, snapshot, feature }, win)
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
     const row = dialog?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
@@ -768,59 +844,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
-  // <lib:settings-transfer>
-  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  /* global setDialogStatus, errorText, writeOrRestore */
-  // A reader returns the value to save, or undefined to refuse it. `upgrade` rewrites the parsed object first, for text copied by an older version.
-  function pastedSettings (text, readers, upgrade = (data) => data) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    data = upgrade(data)
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(readers)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  function wireCopyPaste (root, { copied, readers, upgrade, apply, snapshot, feature }) {
-    const say = (message, options) => setDialogStatus(root, message, options)
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copied())
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
-          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`, { error: true })
-      }
-    })
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:settings-transfer>
 
   // Data saved before a name existed reads as true.
   function decodeFlags (names, data) {
@@ -830,18 +853,22 @@
 
   const doNothing = () => {}
 
+  // The mark boxes saved under their old names.
+  const OLD_MARK_NAMES = { circle: 'dot', cornerCircle: 'cornerDot' }
+
   // `effect` runs once `inForce` holds the new value; the style is written after the effects, so an effect need not.
   function slider (key, range, effect, dialog) {
-    return { key, fallback: range.fallback, read: (data) => onSliderStep(range, data) ? data : range.fallback, paste: (data) => onSliderStep(range, data) ? data : undefined, effect, range, dialog }
+    return { key, fallback: range.fallback, read: (data) => onSliderStep(range, data) ? data : undefined, effect, range, dialog }
   }
 
   function flag (key, effect = doNothing, dialog) {
-    return { key, fallback: true, read: (data) => data !== false, paste: (data) => typeof data === 'boolean' ? data : undefined, effect, dialog }
+    return { key, fallback: true, read: (data) => typeof data === 'boolean' ? data : undefined, effect, dialog }
   }
 
-  function flags (key, names, effect, dialog, read = (data) => decodeFlags(names, data)) {
-    const accepts = (data) => isPlainObject(data) && Object.keys(data).length > 0 && Object.entries(data).every(([name, value]) => names.includes(name) && typeof value === 'boolean')
-    return { key, fallback: decodeFlags(names), read, paste: (data) => accepts(data) ? read(data) : undefined, effect, dialog }
+  // `normalize` reads an accepted value: a name saved under an old name, as `legacyNames` lists, is accepted too.
+  function flags (key, names, effect, dialog, { normalize = (data) => decodeFlags(names, data), legacyNames = [] } = {}) {
+    const accepts = (data) => isPlainObject(data) && Object.keys(data).length > 0 && Object.entries(data).every(([name, value]) => (names.includes(name) || legacyNames.includes(name)) && typeof value === 'boolean')
+    return { key, fallback: decodeFlags(names), read: (data) => accepts(data) ? normalize(data) : undefined, effect, dialog }
   }
 
   // The line mode is saved its own way. A row `under` a box is hidden while that box is unticked.
@@ -858,7 +885,7 @@
       { section: 'Line styles', labels: { dashed: 'Dashed lines', arrows: 'Directional arrow lines' } }),
     show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' }),
     // The marks table is built by hand in the dialog, so this row has no section.
-    marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot'], doNothing, {}, normalizeMarkSettings)
+    marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot'], doNothing, {}, { normalize: normalizeMarkSettings, legacyNames: Object.values(OLD_MARK_NAMES) })
   }
   const SETTING_NAMES = Object.keys(SETTING_TABLE)
   // The table's rows are in the lib's shape, each named by its place here, so `SETTINGS` is the one table.
@@ -881,7 +908,7 @@
   // A write that throws leaves `current` as it was, so a retry finds the same settings changed and their effects still run.
   function saveChangedSettings (store, draft, current) {
     const changed = changedSettings(draft, current)
-    changed.forEach((name) => saveRow(store, SETTINGS[name], draft[name]))
+    saveTable(store, changed.map((name) => SETTINGS[name]), draft)
     changed.forEach((name) => { current[name] = draft[name] })
     return changed
   }
@@ -1003,7 +1030,7 @@
   // The panel rules are left out once SudokuPad's line mode pulldown, whose row they take, is not ours to hide.
   function applyStyle () {
     writeStyle(STYLE_ID, [
-      buildCss(active.colors),
+      colorSetCss(active.colors, penColorVar),
       buildThicknessCss(inForce.thickness),
       buildOpacityCss(inForce.opacity),
       buildOutlineCss(inForce.outline),
@@ -1182,42 +1209,25 @@
   const PEN_COLOR_KEYS = PEN_COLOR_NUMBERS.map(String)
   // A pen color preset's id is saved beside the colors under `preset`; a set with none, or one not in SAVED_PRESETS, is Custom. UNSAVED is SudokuPad's own colors before the install save, never saved.
   const SAVED_PRESETS = [...PAGE_PRESETS, SUDOKUPAD_PRESET]
-  const CUSTOM = 'custom'
   const UNSAVED = 'unsaved'
-  const PRESET_LABELS = {
-    ...PALETTE_PRESET_LABELS,
-    [CUSTOM]: 'Custom',
-    [UNSAVED]: 'SudokuPad (unsaved)'
-  }
-  const isHexColor = (value) => savedHex(value) !== undefined
+
+  // `fromPreset` is the page the set's missing pens came from, which the dialog's note names; the set carries it, so a hand edit (Custom) still names that page.
+  const presetColorSet = (preset, pages, readCell) => ({ ...paletteColors(preset, pages, readCell), fromPreset: preset })
+  // SudokuPad's own colors read no page, so their set needs no color tool.
+  const SUDOKUPAD_COLOR_SET = presetColorSet(SUDOKUPAD_PRESET, [], () => undefined)
 
   // null means the install save is still owed.
-  function readPenColors (data) {
-    if (!isPlainObject(data) || !PEN_COLOR_KEYS.some((n) => isHexColor(data[n]))) return null
-    const colors = Object.fromEntries(PEN_COLOR_KEYS.map((n) => [n, isHexColor(data[n]) ? data[n].toLowerCase() : SUDOKUPAD_PEN_COLORS[n]]))
-    return { colors, preset: SAVED_PRESETS.includes(data.preset) ? data.preset : CUSTOM, missing: [] }
-  }
-
-  // The colors stay under keys 1 to 9, where older versions read them.
-  function storedPenColors ({ colors, preset }) {
-    return preset === CUSTOM ? { ...colors } : { ...colors, preset }
-  }
-
-  // A table passes when it holds a usable color and every pen color it holds is one: `readPenColors` would keep SudokuPad's own color for a bad entry.
-  const readPastedColors = (data) => {
-    const set = readPenColors(data)
-    return set && PEN_COLOR_KEYS.every((n) => !(n in data) || isHexColor(data[n])) ? storedPenColors(set) : undefined
-  }
+  const readPenColors = (data) => savedColorSet(data, SAVED_PRESETS)
 
   const READERS = {
     ...pasteReaders(SETTING_ROWS),
-    [COLORS_KEY]: readPastedColors
+    [COLORS_KEY]: (data) => pastedColorSet(data, SAVED_PRESETS)
   }
   // Every setting at the value in force, defaults included, so a paste can put one back to its default; the pen colors only once they are saved.
   function copiedSettings (store) {
     const copied = copiedTable(SETTING_ROWS, store)
-    const colors = readPenColors(store.getData(COLORS_KEY))
-    if (colors) copied[COLORS_KEY] = storedPenColors(colors)
+    const colors = copiedColorSet(store.getData(COLORS_KEY), SAVED_PRESETS)
+    if (colors) copied[COLORS_KEY] = colors
     return JSON.stringify(copied)
   }
 
@@ -1225,14 +1235,7 @@
   function startupPenColors (data, hasColorTool) {
     const saved = readPenColors(data)
     if (saved) return { load: saved }
-    return hasColorTool ? { wait: true } : { save: SUDOKUPAD_SET }
-  }
-
-  // The set is what gets saved, so an invalid pen or value throws rather than saving a wrong entry.
-  function editedColors (colors, pen, value) {
-    if (!PEN_COLOR_KEYS.includes(pen)) throw new RangeError(`pen-tool-extras: ${pen} is not a pen color`)
-    if (!isHexColor(value)) throw new RangeError(`pen-tool-extras: ${value} is not a #rrggbb color`)
-    return { ...colors, [pen]: value.toLowerCase() }
+    return hasColorTool ? { wait: true } : { save: SUDOKUPAD_COLOR_SET }
   }
 
   // <lib:color-math>
@@ -1364,7 +1367,7 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS */
+  /* global PEN_COLOR_NUMBERS, escapeHtml */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1384,8 +1387,6 @@
     const option = (id, disabled) => ({ value: id, label: labels[id], selected: id === preset, disabled })
     return [...(presets.includes(preset) ? [] : [option(preset, true)]), ...presets.map((id) => option(id, false))]
   }
-
-  const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
   const fillWithOpacity = (color, opacity) => opacity < 1 ? `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)` : color
 
@@ -1558,53 +1559,101 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-picker>
+  // <lib:color-set>
+  // Generated from lib/color-set.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  /* global parseColor, toHex, savedHex, isPlainObject, SUDOKUPAD_PEN_COLORS, PEN_COLOR_NUMBERS */ // eslint-disable-line no-redeclare
+  // A color set is `{ colors, preset, missing, fromPreset }`: the nine #rrggbb colors, the preset they came from, the pens a page preset left with SudokuPad's own,
+  // and the preset the dialog's note names them for. A hand edit keeps the last two, so the note still names the page. Every change makes a whole new record.
+  // `presets` is the list of preset ids a script saves beside its colors; any other is Custom.
+  const CUSTOM = 'custom'
+
+  // A color picker takes only #rrggbb, so every color is kept as one. A transparent color has none to keep.
+  const hexColor = (text) => {
+    const rgb = parseColor(text)
+    return rgb ? toHex(rgb) : undefined
+  }
+
+  // null when no key 1 to 9 holds a #rrggbb color: nothing is saved, so the install save (Text Anywhere's first use's copy) is still owed and may replace
+  // what is there. A bad entry beside a usable one shows SudokuPad's own color.
+  function savedColorSet (data, presets) {
+    if (!isPlainObject(data) || !PEN_COLOR_NUMBERS.some((n) => savedHex(data[n]))) return null
+    const colors = Object.fromEntries(PEN_COLOR_NUMBERS.map((n) => [n, savedHex(data[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
+    return { colors, preset: presets.includes(data.preset) ? data.preset : CUSTOM, missing: [], fromPreset: null }
+  }
+
+  // The colors stay under keys 1 to 9, where older versions read them, with the preset's id beside them.
+  const storedColorSet = ({ colors, preset }) => preset === CUSTOM ? { ...colors } : { ...colors, preset }
+
+  // The set is what gets saved, so an invalid pen or value throws rather than saving a wrong entry.
+  function editedColorSet (set, pen, value) {
+    if (!PEN_COLOR_NUMBERS.map(String).includes(String(pen))) throw new RangeError(`color-set: ${pen} is not a color number`)
+    const hex = hexColor(value)
+    if (!hex) throw new RangeError(`color-set: ${value} is not a color`)
+    return { colors: { ...set.colors, [pen]: hex }, preset: CUSTOM, missing: set.missing.filter((n) => String(n) !== String(pen)), fromPreset: set.fromPreset }
+  }
+
+  // A pasted table passes when it holds a usable color and every color it holds is one: the saved reader would show SudokuPad's own for a bad entry.
+  function pastedColorSet (data, presets) {
+    const set = savedColorSet(data, presets)
+    return set && PEN_COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? storedColorSet(set) : undefined
+  }
+
+  // The colors once saved; undefined while none are.
+  function copiedColorSet (data, presets) {
+    const set = savedColorSet(data, presets)
+    return set ? storedColorSet(set) : undefined
+  }
+
+  // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
+  const colorSetCss = (colors, varOf) => [':root:root {', ...PEN_COLOR_NUMBERS.map((n) => `  ${varOf(n)}: ${colors[n]};`), '}'].join('\n')
+  /* eslint-enable no-unused-vars */
+  // </lib:color-set>
+
+  const PRESET_LABELS = {
+    ...PALETTE_PRESET_LABELS,
+    [CUSTOM]: 'Custom',
+    [UNSAVED]: 'SudokuPad (unsaved)'
+  }
 
   // Strokes (`.pencolor-N`) and the tool's button swatches both read these variables; the eraser has its own fixed color and no variable.
   // SudokuPad's `tool-pen.css` loads when the pen tool is enabled, so a plain `:root` rule would lose to it by coming first; `:root:root` outranks it whichever loads last.
-  function buildCss (colors) {
-    const lines = PEN_COLOR_KEYS.map((n) => `  --puzzle-pencolor-${n}: ${colors[n]};`)
-    return [':root:root {', ...lines, '}'].join('\n')
-  }
+  const penColorVar = (n) => `--puzzle-pencolor-${n}`
 
   const CLASS_PREFIX = 'pen-tool-extras-'
 
   // The set in force. Until the install save it is SudokuPad's own, which is what the page shows with no override.
-  let active = { ...SUDOKUPAD_SET, preset: UNSAVED }
-  // The page preset the set in force came from: a hand edit in the dialog makes the set Custom and keeps its missing pens, whose page the note still names.
-  let activePickedPreset = active.preset
+  let active = { ...SUDOKUPAD_SET, preset: UNSAVED, fromPreset: UNSAVED }
 
   const availablePresets = () => {
     const tool = steps.colors.off ? null : readyColorTool()
     return paletteOptions(tool ? tool.palette.pages.length : 0)
   }
 
-  function adoptColors (set, pickedPreset = set.preset) {
+  function adoptColors (set) {
     active = set
-    activePickedPreset = pickedPreset
     applyStyle()
     refreshPickers(CLASS_PREFIX, (n) => set.colors[n])
   }
 
-  function saveColors (set, pickedPreset) {
-    savedData.setData(COLORS_KEY, storedPenColors(set))
-    adoptColors(set, pickedPreset)
+  function saveColors (set) {
+    savedData.setData(COLORS_KEY, storedColorSet(set))
+    adoptColors(set)
   }
 
   const snapshotSave = () => snapshotStore(savedData, [COLORS_KEY, ...tableKeys(SETTING_ROWS)], () => {
     const wasActive = active
-    const wasPicked = activePickedPreset
     const wasSettings = { ...inForce }
     return () => {
       active = wasActive
-      activePickedPreset = wasPicked
       Object.assign(inForce, wasSettings)
       effectsOf(SETTING_NAMES).forEach((effect) => effect())
-      adoptColors(wasActive, wasPicked)
+      adoptColors(wasActive)
     }
   })
 
   function savePenColor (pen, value) {
-    saveColors({ colors: editedColors(active.colors, pen, value), preset: CUSTOM, missing: [] })
+    saveColors(editedColorSet(active, pen, value))
   }
 
   // A page change before the pickers are installed has no edit mode to end.
@@ -2052,8 +2101,6 @@
   // 6. Marks: edge marks, grid-corner marks, cell marks and the marks layer
   const overGridInPenTool = (app, event) => app.tool === 'pen' && Boolean(event.target.closest && event.target.closest(GRID_SELECTOR))
 
-  const guardedBy = (step, fallback) => (handler) => (event) => step.run(() => handler(event), fallback)
-
   // Every edge mark, grid-corner mark and cell circle, cross and dot is drawn here, last in the pen layer: SudokuPad adds a cell's strokes in cell order, so a later
   // cell's line would otherwise cover an earlier cell's mark. The pen layer's opacity then fades marks and lines as one picture.
   const MARKS_LAYER_ID = 'pen-tool-extras-marks'
@@ -2078,7 +2125,6 @@
     types: ['x', 'circle'],
     setting: { x: 'cornerX', circle: 'cornerCircle' }
   }
-  const OLD_MARK_NAMES = { circle: 'dot', cornerCircle: 'cornerDot' }
   // An edge's midpoint is 0.5 from its corners and a cell's middle 0.71, so neither comes near 0.2, which is a circle about 12 px across at a cell 60 px wide. It takes the corner end
   // of an edge click (SudokuPad's edge zone reaches 0.57 along the side from the midpoint).
   const CORNER_RADIUS = 0.2
@@ -2498,10 +2544,9 @@
     steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => isEraseButton(lastButton) ? undefined : stock(...args))
     const erasePress = (event) => isEraseButton(event.button) && overGridInPenTool(app, event)
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
-    const guarded = guardedBy(steps.lineErase, () => { erase = null; menuOwed = false })
-    window.addEventListener('pointerdown', guarded((event) => {
-      erase = null
-      menuOwed = false
+    const resetErase = () => { erase = null; menuOwed = false }
+    window.addEventListener('pointerdown', steps.lineErase.bind((event) => {
+      resetErase()
       if (!erasePress(event)) return
       // The point is read before the default is prevented, so a failure leaves the press to SudokuPad.
       const point = pointOf(event)
@@ -2512,30 +2557,30 @@
       crossPoint(marksAt, started, point)
       // A `pointerup` comes only once the last button is up, whichever it is, so a drag with a second button pressed ends at that release.
       trackPointer(window, {
-        move: guarded((moveEvent) => {
+        move: steps.lineErase.bind((moveEvent) => {
           if (erase === started && (moveEvent.buttons & RIGHT_BIT)) {
             crossTo(marksAt, started, pointOf(moveEvent))
           }
-        }),
-        end: guarded((endEvent) => {
+        }, resetErase),
+        end: steps.lineErase.bind((endEvent) => {
           if (erase !== started) return
           erase = null
           if (endEvent.type === 'pointercancel') return
           crossTo(marksAt, started, pointOf(endEvent))
           finishErase(tool, started)
-        })
+        }, resetErase)
       })
-    }), true)
+    }, resetErase), true)
     // The release then finds no erase and sends nothing; the menu is still owed its refusal.
-    window.addEventListener('keydown', guarded((event) => {
+    window.addEventListener('keydown', steps.lineErase.bind((event) => {
       if (event.key !== 'Escape' || erase === null) return
       erase = null
-    }), true)
-    document.addEventListener('contextmenu', guarded((event) => {
+    }, resetErase), true)
+    document.addEventListener('contextmenu', steps.lineErase.bind((event) => {
       const overGrid = inForce.eraseClicks && overGridInPenTool(app, event)
       if (overGrid || menuOwed) event.preventDefault()
       menuOwed = false
-    }), true)
+    }, resetErase), true)
   }
 
   // 8. Line look: thickness, opacity, white outline and the hint layer
@@ -2843,10 +2888,10 @@
     return values[wrapIndex(values.indexOf(normalizeLineMode(lineMode)), 1, values.length)]
   }
 
-  // The hover label is SudokuPad's own label for the current mode (the markup's `&amp;` reads as the label's `&`).
+  // The hover label is SudokuPad's own label for the current mode.
   function renderLineModeButton (lineMode) {
     const mode = normalizeLineMode(lineMode)
-    const label = LINE_MODES.find(([value]) => value === mode)[1].replace('&', '&amp;')
+    const label = escapeHtml(LINE_MODES.find(([value]) => value === mode)[1])
     return `<button class="${LINE_MODE_BUTTON}" data-control="penlinemode-step" data-mode="${mode}" title="${label}" aria-label="${label}">` +
       `<svg viewBox="${LINE_MODE_ICON_VIEWBOX[mode]}" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.55" stroke-width="1"/>` +
       `<g stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${LINE_MODE_ICON_SHOWS[mode].map((name) => LINE_MODE_ICON_LINES[name]).join('')}</g></svg></button>`
@@ -3022,7 +3067,7 @@
   const SLIDER_COLUMNS = 'pen-tool-extras-columns'
   const CELL = 'pen-tool-extras-cell'
 
-  const missingNote = (missing, pickedPreset) => missing.length ? `<div class="${NOTE}">${missingColorsText(missing, pickedPreset)}</div>` : ''
+  const missingNote = (missing, fromPreset) => missing.length ? `<div class="${NOTE}">${missingColorsText(missing, fromPreset)}</div>` : ''
 
   const sectionTitle = (text) => `<div class="${SECTION_TITLE}">${text}</div>`
 
@@ -3112,7 +3157,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       '</div>'
     const cell = (markup) => `<div class="${CELL}">${markup}</div>`
     return '<div class="pen-tool-extras-layout">' +
-      cell(sectionTitle('Pen colors') + colorBlock + missingNote(state.missing, state.pickedPreset)) +
+      cell(sectionTitle('Pen colors') + colorBlock + missingNote(state.missing, state.fromPreset)) +
       cell(section('Line settings') + DIVIDER + section('Line styles')) +
       cell(sectionTitle('Marks to cycle') + marksTable) +
       cell(section('Other')) + '</div>'
@@ -3130,21 +3175,19 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 
   function openDialog () {
     let set = active
-    let pickedPreset = activePickedPreset
     // Save writes the colors only once a preset is picked or a picker edited, so opening and saving never stands in for the install save.
     let colorsChosen = false
     let draft = { ...inForce }
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ ...set, pickedPreset, presets: availablePresets(), ...draft })
+      box.innerHTML = renderEditor({ ...set, presets: availablePresets(), ...draft })
       setOffNote(box.closest('.dialog'), guard.off)
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
-      const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_SET : steps.colors.run(() => paletteColors(id, readyColorTool().palette.pages, readCellColor), () => null)
+      const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_COLOR_SET : steps.colors.run(() => presetColorSet(id, readyColorTool().palette.pages, readCellColor), () => null)
       if (picked) {
         set = picked
-        pickedPreset = id
         colorsChosen = true
       }
       draw()
@@ -3168,12 +3211,12 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       snapshot: snapshotSave,
       feature: steps.settings,
       save: () => {
-        if (colorsChosen) saveColors(set, pickedPreset)
+        if (colorsChosen) saveColors(set)
         saveSettings(draft)
       },
       copyPaste: {
         // A copy with the saved settings off says so in the dialog's status line, rather than copy the defaults as if they were saved.
-        copied: () => steps.saved.runInDialog(() => copiedSettings(Framework)),
+        copied: () => steps.saved.runInDialog(() => copiedSettings(savedData)),
         readers: READERS,
         apply: (values) => {
           const pasted = SETTING_NAMES.filter((name) => SETTINGS[name].key in values)
@@ -3182,16 +3225,15 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
           // The draft takes the paste only once every write is done, so a paste the snapshot put back leaves the draft as the dialog shows it.
           const pastedSet = COLORS_KEY in values ? readPenColors(values[COLORS_KEY]) : null
           if (pastedSet) saveColors(pastedSet)
-          draft = withPasted(SETTING_ROWS, draft, next, values)
+          draft = withPasted(SETTING_ROWS, draft, values)
           if (pastedSet) {
             set = pastedSet
-            pickedPreset = pastedSet.preset
             colorsChosen = false
           }
           draw()
         }
       },
-      extraButtons: [{ content: 'Restore defaults', role: 'restore', edits: true, handler: restoreDefaults }]
+      restore: restoreDefaults
     })
     if (!box) return
     draw()
@@ -3218,8 +3260,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       const el = event.target.closest('input[data-role="swatch"]')
       if (!el) return
       // A pen picked by hand leaves the missing-color note; the others stay on it.
-      const pen = el.dataset.key
-      set = { colors: editedColors(set.colors, pen, el.value), preset: CUSTOM, missing: set.missing.filter((n) => String(n) !== pen) }
+      set = editedColorSet(set, el.dataset.key, el.value)
       colorsChosen = true
       draw()
     })
@@ -3233,7 +3274,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
+    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf, readPenColors, presetColorSet, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return
@@ -3278,7 +3319,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     // Tried even with the colors step off since startup (edit mode failing to install): only a failure to read page 1 itself leaves nothing saved, reported as the step's.
     let derived = null
     try {
-      derived = paletteColors(PAGE_PRESETS[0], tool.palette.pages, readCellColor)
+      derived = presetColorSet(PAGE_PRESETS[0], tool.palette.pages, readCellColor)
     } catch (error) {
       steps.colors.skip(error)
     }

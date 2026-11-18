@@ -219,8 +219,8 @@
   what Restart cleared, brings them back too; any other change to the notes, the next Restart, or loading the puzzle again drops them. Undo
   touches the notes in no other way. A stored item of kind `stroke` or `shape`, from before 0.17.0, and a stored note that fails its check (read against the stored format, not the slider ranges) are never drawn, and a save, Clear all and Restart leave them as they are; the solver is told once a puzzle at load that notes were set aside.
 - **note color** — one of Text Anywhere's nine colors, numbered 1 to 9, saved under `TextAnywhere_colors`. With none saved, it copies the
-  pen colors once, when it is first made current; after that they no longer follow the pen colors. A saved value it cannot
-  read is never copied over: each color it lacks shows SudokuPad's own pen color. A hold of a second on a
+  pen colors once, when it is first made current; after that they no longer follow the pen colors. A saved value with no `#rrggbb` color under keys 1 to 9 counts as none
+  saved, so the first use's copy replaces it; beside a usable color, each entry it cannot read shows SudokuPad's own pen color. A hold of a second on a
   color button puts a color picker over each button, and a picked color recolors every note already made in that number,
   since a note saves the number. The digit keys 1 to 9 pick one. A color button shows "Aa" in its color.
   The settings dialog's color pulldown (a **color block**) opens on the preset the colors came from, `pen` (Pen colors), `page-1` to `page-3` or `sudokupad`, saved as `preset` beside the colors as Pen Tool Extras' **pen color preset** is, and carried by Copy and Paste settings. The first use's copy of the pen colors is Pen colors. An edit, in the dialog or by hold, makes the set Custom with no `preset`, and so are colors an older version saved; Custom shows first and cannot be picked, as in Pen Tool Extras. Restore defaults, in the dialog's button row, fills the draft with the pen colors (Pen colors), Proportional, the default halo, box color and box border, for Save or Cancel to decide; the size and opacity, which the dialog does not set, stay.

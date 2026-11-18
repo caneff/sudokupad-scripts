@@ -1,4 +1,4 @@
-// Live attacks 73 to 75 (#628, from #590).
+// Live attacks 73 to 76 (#628, from #590).
 /* global Framework, Storage */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -7,7 +7,7 @@ import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllS
 import { captureConsoleErrors } from './page.mjs'
 import { mouseDrag, typeText } from './board.mjs'
 import { openPenTool, penEntries, setSlider } from './pen.mjs'
-import { closeDialogWith, ownedSettings, paste } from './settings.mjs'
+import { actButton, closeDialogWith, ownedSettings, paste, STATUS } from './settings.mjs'
 import { SETTINGS_SCRIPTS } from './scripts.mjs'
 import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
@@ -113,6 +113,29 @@ describe('attacks on storage', { concurrency: false }, () => {
       assert.deepEqual(await p.evaluate((key) => Framework.getData(key), script.key), script.enveloped ? { v: 0, data: script.saved } : script.saved, `${script.file}: the pasted key is saved`)
       assert.equal(await p.evaluate(() => Framework.getData('Foreign_key')), null, `${script.file}: the foreign key is not saved`)
 
+      await closeDialogWith(p, 'Cancel', script.editor)
+      await assertNoCrash(p, errors)
+      await context.close()
+    }
+  })
+
+  it('attack 76: Copy settings with a blocked storage says it could not copy, copies nothing and leaves the script on, in every script', async () => {
+    for (const script of SETTINGS_SCRIPTS) {
+      ;({ context, p, errors } = await openWith(browser(), [script.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
+      await script.open(p)
+      await p.evaluate(async () => {
+        await navigator.clipboard.writeText('untouched')
+        document.querySelector('.dialog [data-role="settings-status"]').textContent = ''
+        window.__getData = Framework.getData
+        Framework.getData = () => { throw new Error('storage blocked') }
+      })
+      await actButton(p, 'copy-settings').click()
+      const status = p.locator(STATUS).filter({ hasText: /\S/ })
+      await status.waitFor()
+      assert.equal(await status.textContent(), 'Could not copy: storage blocked', `${script.file}: Copy says why it could not read`)
+      assert.equal(await p.evaluate(() => navigator.clipboard.readText()), 'untouched', `${script.file}: nothing was copied`)
+      await p.evaluate(() => { Framework.getData = window.__getData })
+      assert.equal(await p.locator(NOTICE_BAR).count(), 0, `${script.file}: the script is still on`)
       await closeDialogWith(p, 'Cancel', script.editor)
       await assertNoCrash(p, errors)
       await context.close()
