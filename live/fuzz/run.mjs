@@ -10,6 +10,7 @@ import { numberOption } from './cli-number.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { createCoverage, neverRunReport } from './coverage.mjs'
 import { fuzz } from './fuzz.mjs'
+import { formatFuzzReport } from './fuzz-report.mjs'
 import { plantById } from './plants.mjs'
 import { SCRIPT_FILES } from '../session.mjs'
 
@@ -42,22 +43,7 @@ try {
     coverage
   })
   const seconds = Math.round((Date.now() - started) / 1000)
-  if (!r.failed) {
-    console.log(`fuzz passed: ${r.runs} action lists over ${Object.keys(r.puzzleRuns).length} puzzles in ${seconds} s (seed ${r.seed})`)
-    console.log(`lists per puzzle: ${Object.entries(r.puzzleRuns).map(([name, count]) => `${name} ${count}`).join(', ')}`)
-  } else {
-    console.log(`fuzz FAILED on the ${r.puzzle} puzzle (seed ${r.seed}) after ${seconds} s`)
-    console.log(`error: ${r.error}`)
-    console.log(`shrunk to ${r.sequence.length} ${r.sequence.length === 1 ? 'step' : 'steps'}:`)
-    r.sequence.forEach((step, i) => console.log(`  ${i + 1}. ${step}`))
-    console.log(`replay: ${r.replayCommand}`)
-    if (r.errorLog.length) {
-      console.log('shared error log, newest first:')
-      r.errorLog.forEach((line) => console.log(`  ${line}`))
-    } else {
-      console.log('shared error log: empty')
-    }
-  }
+  formatFuzzReport(r, seconds).forEach((line) => console.log(line))
   if (coverage) neverRunReport(coverage.neverRun()).forEach((line) => console.log(line))
   process.exitCode = r.failed ? 1 : 0
 } finally {
