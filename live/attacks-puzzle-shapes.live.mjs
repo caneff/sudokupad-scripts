@@ -6,7 +6,7 @@ import { openPage } from './page.mjs'
 import { TEXTS } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { cellCentre, clickCell, mouseDrag, pickTool, placeNote } from './board.mjs'
 import { openPenTool, penEntries } from './pen.mjs'
-import { boardOf, CLASSIC_GIVENS, installAll, NOTE_POINT, openPuzzleId, puzzleData, puzzleIdFor, useTool } from './puzzles.mjs'
+import { boardOf, CLASSIC_GIVENS, installAll, NOTE_POINT, openPuzzleId, puzzleData, puzzleIdFor } from './puzzles.mjs'
 import { seedOddEvenCells } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { readUntil, settle } from './settle.mjs'
 import { useBrowser } from './session.mjs'
@@ -101,7 +101,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       groups.push(colors[0])
     }
     assert.notEqual(groups[ODD - 1], groups[EVEN - 1], 'the two groups have two colors')
-    await useTool(p, '#control-normal')
+    await pickTool(p, 'normal')
     await clickCell(p, ...enter)
     await p.keyboard.press(digit)
     assert.equal(await settle(() => colorOf(enter), groups[ODD - 1]), groups[ODD - 1], 'an entered odd digit takes the odd color')
@@ -161,10 +161,10 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       assert.deepEqual(shownOutsideLight, [], 'only lit cells show their clues')
       await penMarks(9, 9)
       await placeNote(p, NOTE_POINT, '15')
-      await useTool(p, '#control-normal')
+      await pickTool(p, 'normal')
       await clickCell(p, 0, 2)
       await p.keyboard.press('4')
-      await useTool(p, '#control-colour')
+      await pickTool(p, 'colour')
       await clickCell(p, 4, 4)
       await p.keyboard.press('3')
       const board = await readUntil(() => boardOf(p), (b) => b.notes.length === 1 && b.entered.length === 1 && b.colours.some((c) => c.startsWith('4,4:')))
@@ -174,7 +174,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     it('attack 68: a fog-of-war puzzle: a clue the fog lifts from gets its color then', async () => {
       await openFog()
       const before = await fogged()
-      await useTool(p, '#control-normal')
+      await pickTool(p, 'normal')
       await clickCell(p, 0, 2)
       await p.keyboard.press('4')
       const lifted = await readUntil(fogged, (now) => now.some((g, i) => before[i].hidden && !g.hidden))
@@ -197,7 +197,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       assert.deepEqual(await readUntil(underBoard, (r) => r.count === 1), { count: 1, covers: true }, 'the image is under the board')
       await penMarks(9, 9)
       await placeNote(p, NOTE_POINT, '15')
-      await useTool(p, '#control-normal')
+      await pickTool(p, 'normal')
       await clickCell(p, 0, 2)
       await p.keyboard.press('4')
       const board = await readUntil(() => boardOf(p), (b) => b.notes.length === 1 && b.entered.length === 1)

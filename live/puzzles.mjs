@@ -2,7 +2,7 @@
 /* global Framework, loadFPuzzle, PuzzleLoader */
 import { LOAD_MS } from './cache.mjs'
 import { startPuzzle, START } from './page.mjs'
-import { pickTool, texts } from './board.mjs'
+import { texts } from './board.mjs'
 import { installAtIdle, SCRIPT_FILES, scriptSource } from './session.mjs'
 import { animationsDone } from './settings.mjs'
 
@@ -119,9 +119,6 @@ export async function closePauseDialog (p, button) {
   await dialogWith(p, PAUSED).locator('button', { hasText: button }).click()
   await p.locator('.dialog').waitFor({ state: 'detached' })
 }
-
-// Picks the tool whose button is `button` and returns once SudokuPad has it; a click in the first moments after a script is injected is dead.
-export const useTool = (p, button) => pickTool(p, button.replace('#control-', ''))
 
 export async function resumeAfterHistory (p) {
   const state = await p.waitForFunction(([source, flags]) => {

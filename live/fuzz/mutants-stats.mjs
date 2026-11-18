@@ -5,7 +5,7 @@
 // `{ mutant: { file, family }, verdict, runs }`, the verdict being one of `VERDICTS`.
 import { layout, medianSeconds, secondsText } from './plants-stats.mjs'
 
-export const VERDICTS = ['caught', 'missed', 'unreachable', 'load-error']
+const VERDICTS = ['caught', 'missed', 'unreachable', 'load-error']
 
 // `unreachable` is what the hunts showed, not a proof: no seed's hunt ran the mutated code, so the miss says nothing about the rules. `loadError`: the page crashed when it loaded, so no hunt ran.
 export function mutantVerdict (runs, { loadError = false } = {}) {

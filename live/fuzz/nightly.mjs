@@ -5,7 +5,7 @@
 // files one "did not run" issue (one, whatever the number of hunts) and ends the night: runs already going finish, and no hunt starts another. Filing is `fileIssue` of live/watch.mjs, not a second copy.
 // At the end it prints one never-run list merged over the hunts.
 import { pathToFileURL } from 'node:url'
-import { BLOCKED_BY, fileIssue, run } from '../watch.mjs'
+import { fileIssue, issueTrailer, run } from '../watch.mjs'
 import { neverRunReport, parseNeverRun } from './coverage.mjs'
 
 export const FUZZ_MINUTES = 30
@@ -63,7 +63,7 @@ function fuzzIssue (f, { runUrl } = {}) {
   return {
     title: failureTitle(f.error),
     once: true,
-    body: `${intro}\n\n${details}\nFiled by \`npm run fuzz:nightly\` (\`live/fuzz/nightly.mjs\`).\n\n${BLOCKED_BY}`,
+    body: `${intro}\n\n${details}\n${issueTrailer('npm run fuzz:nightly', 'live/fuzz/nightly.mjs')}`,
     comment: `The same failure again, seed ${f.seed} on the ${f.puzzle} puzzle.\n\n${details}`
   }
 }
@@ -77,9 +77,7 @@ export const didNotRunIssue = (why) => ({
     '',
     why,
     '',
-    'Filed by `npm run fuzz:nightly` (`live/fuzz/nightly.mjs`).',
-    '',
-    BLOCKED_BY
+    issueTrailer('npm run fuzz:nightly', 'live/fuzz/nightly.mjs')
   ].join('\n')
 })
 
