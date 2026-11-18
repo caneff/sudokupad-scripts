@@ -55,10 +55,18 @@ test('every picture the site loads is in a script folder of docs/research/ or in
   }
 })
 
+// The one script kept off the site: hidden until Chris hears from Nell whether it may be hosted (Chris, 2026-11-18).
+const HIDDEN = 'auto-rules-resizer.user.js'
+
 // A handover (draw-tool.user.js) is an old address kept so installed copies move on, and is never linked.
 test('every script in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
-  for (const s of scriptFiles()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const s of scriptFiles().filter(f => f !== HIDDEN)) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+})
+
+test('the hidden script is in the repo root and no site page links it', () => {
+  assert.ok(scriptFiles().includes(HIDDEN), `${HIDDEN} is no longer in the repo root`)
+  for (const name of PAGES) assert.ok(!scriptLinks(read(name)).includes(RAW + HIDDEN), `site/${name} links the hidden script ${HIDDEN}`)
 })
 
 for (const name of PAGES) {
@@ -260,7 +268,7 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
 
 // One row per script, in this order, each script's file named for its shown name; Details only where a details page exists.
 const ROWS = [
-  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined]
+  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['UI Tweaks', undefined]
 ]
 const rowsOf = html => html.split('<section class="row">').slice(1)
 

@@ -94,6 +94,4 @@ test('#701: a resized puzzle keeps its sizing, another puzzle starts at the defa
   assert.deepEqual(result, arr.noSizing(), 'the puzzle starts at the default')
   assert.deepEqual(broken.data['AutoRulesResizer_sizing_puzzle-c_unreadable'], bad, 'the unreadable value is kept aside')
   assert.equal(warnings.length, 1)
-
-  assert.match(readFileSync(join(__dirname, '..', '..', 'site', 'index.html'), 'utf8'), /kept per puzzle/, 'the site says sizing is kept per puzzle')
 })
