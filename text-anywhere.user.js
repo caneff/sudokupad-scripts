@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.44
+// @version      0.46.45
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.44'
+  const VERSION = '0.46.45'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -275,6 +275,8 @@
   const BACKGROUND_PAD_X = 0.35
   const BACKGROUND_PAD_Y = 0.15
   const BACKGROUND_RADIUS = 0.3
+  // The padding and corners of a note's background box, which the code block and the dialog's box sample share, so the three cannot drift apart.
+  const BOX_SHAPE_CSS = `padding: ${BACKGROUND_PAD_Y}em ${BACKGROUND_PAD_X}em; border-radius: ${BACKGROUND_RADIUS}em;`
   // An outline is the halo round a note's letters: how far it reaches past them, as a share of the text size. The settings dialog sets one for every note; a
   // note's own saved `outline` field is never read.
   const OUTLINE_EM = { none: 0, thin: 0.07, medium: 0.14 }
@@ -641,7 +643,7 @@
   const renderFontChoice = (font) =>
     `<div class="${CLASS_PREFIX}color-block"><select class="${CLASS_PREFIX}color-choice" data-role="font-choice" aria-label="Font">${Object.entries(FONTS).map(([value, label]) => `<option value="${value}"${value === font ? ' selected' : ''}>${label}</option>`).join('')}</select></div>`
   const HALO_CELL_COLOR = '#8fb8e8'
-  const SAMPLE_BOX_STYLE = 'display:inline-block;padding:0.15em 0.35em;border-radius:0.3em'
+  const SAMPLE_BOX_STYLE = `display:inline-block;${BOX_SHAPE_CSS}`
   const FRAME_CHOICES = [['off', 'None'], ['on', 'Thin grey']]
   function renderSamplePicks ({ outline, box, custom, frame, textColor }) {
     const pickButton = (role, value, label, pressed, sample) =>
@@ -2321,8 +2323,61 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   const nudgeStep = (heldMs, shift) => shift ? heldRamp(heldMs, NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX) : heldRamp(heldMs, NUDGE_PX, NUDGE_MAX_PX)
+  // Until Text Anywhere is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
+  const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
+
+  // `scale` is pixels of the note's box per board unit; `look` is the looks in force (its outline, box color and frame). A note with no background is padded by its halo's reach, since its box clips what overflows it.
+  function noteStyle (item, [x, y], scale, backdrop, look) {
+    const px = (units) => `${roundToTenth(units * scale)}px`
+    const [width, height] = item.box ? item.box.map(px) : ['', '']
+    const limit = item.box ? 'none' : ''
+    const pad = notePadding(item, look.outline)
+    const [padX, padY] = pad.map(px)
+    return {
+      left: `${roundToHundredth(x - pad[0] * scale)}px`,
+      top: `${roundToHundredth(y - pad[1] * scale)}px`,
+      caretColor: itemColor(item.color),
+      fontSize: px(item.size),
+      width,
+      height,
+      maxWidth: limit,
+      maxHeight: limit,
+      color: itemColor(item.color),
+      opacity: String(noteOpacity(item)),
+      [NOTE_OPACITY_VAR]: String(noteOpacity(item)),
+      [NOTE_COLOR_VAR]: itemColor(item.color),
+      backgroundColor: item.bg ? boxFill(look.boxColor, itemColor(item.color), backdrop) : 'transparent',
+      boxShadow: item.bg ? frameShadow(look.frame) : 'none',
+      textShadow: item.bg ? 'none' : haloShadow(look.outline, backdrop),
+      padding: `${padY} ${padX}`,
+      borderRadius: item.bg ? px(BACKGROUND_RADIUS * item.size) : '0'
+    }
+  }
+
+  // The inline style a run's flags give its span; strike and code are drawn by classes.
+  const flagStyle = (run) => ({ ...(run.bold && { fontWeight: 'bold' }), ...(run.italic && { fontStyle: 'italic' }), ...(run.underline && { textDecoration: 'underline' }) })
+
+  const isFence = (runs) => Boolean(runs[0]?.fence)
+
+  // Groups a note's parsed lines into pieces, with no element made: a fenced code block (its lines' text, none when the fence is empty), a bullet, a sized line, or a plain line.
+  // A block ends its own line; `empty` marks an empty plain line.
+  function pieceKinds (lines) {
+    const pieces = []
+    for (let i = 0; i < lines.length; i++) {
+      const runs = lines[i]
+      if (isFence(runs)) {
+        const body = []
+        for (i++; i < lines.length && !isFence(lines[i]); i++) body.push(lines[i][0].text)
+        if (body.length) pieces.push({ kind: 'code', block: true, empty: false, lines: body })
+      } else if (isBullet(runs)) pieces.push({ kind: 'bullet', block: true, empty: false, runs, index: i })
+      else if (isSizedLine(runs)) pieces.push({ kind: 'sized', block: true, empty: false, runs })
+      else pieces.push({ kind: 'plain', block: false, empty: runs.length === 0, runs })
+    }
+    return pieces
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds }
   }
   if (typeof document === 'undefined') return
 
@@ -2387,37 +2442,6 @@
     return { box: { left, top, right, bottom }, toBoard: through(ctm.inverse()), toScreen: through(ctm), scale: ctm.a, matrix: [ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f] }
   }
 
-  // Until Text Anywhere is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
-  const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
-
-  // `scale` is pixels of the note's box per board unit. A note with no background is padded by its halo's reach, since its box clips what overflows it.
-  function noteStyle (item, [x, y], scale, backdrop) {
-    const px = (units) => `${roundToTenth(units * scale)}px`
-    const [width, height] = item.box ? item.box.map(px) : ['', '']
-    const limit = item.box ? 'none' : ''
-    const pad = notePadding(item, look.outline)
-    const [padX, padY] = pad.map(px)
-    return {
-      left: `${roundToHundredth(x - pad[0] * scale)}px`,
-      top: `${roundToHundredth(y - pad[1] * scale)}px`,
-      caretColor: itemColor(item.color),
-      fontSize: px(item.size),
-      width,
-      height,
-      maxWidth: limit,
-      maxHeight: limit,
-      color: itemColor(item.color),
-      opacity: String(noteOpacity(item)),
-      [NOTE_OPACITY_VAR]: String(noteOpacity(item)),
-      [NOTE_COLOR_VAR]: itemColor(item.color),
-      backgroundColor: item.bg ? boxFill(look.boxColor, itemColor(item.color), backdrop) : 'transparent',
-      boxShadow: item.bg ? frameShadow(look.frame) : 'none',
-      textShadow: item.bg ? 'none' : haloShadow(look.outline, backdrop),
-      padding: `${padY} ${padX}`,
-      borderRadius: item.bg ? px(BACKGROUND_RADIUS * item.size) : '0'
-    }
-  }
-
   // Sets a noteStyle on an element: a custom property needs setProperty, which assigning to the style's own fields does not do.
   function applyNoteStyle (element, style) {
     for (const [name, value] of Object.entries(style)) {
@@ -2429,12 +2453,8 @@
   const backdropOf = (item, map) => noteBackdrop(noteMiddle(item, map, look.outline), map.box)
 
   function styleNote (element, item, map) {
-    applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale, backdropOf(item, map)))
+    applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale, backdropOf(item, map), look))
     element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
-  }
-
-  const FLAG_STYLES = (run) => {
-    return { ...(run.bold && { fontWeight: 'bold' }), ...(run.italic && { fontStyle: 'italic' }), ...(run.underline && { textDecoration: 'underline' }) }
   }
 
   // A struck run is drawn by its own line, not `text-decoration: line-through`: the browser paints a decoration's halo shadow over the letters, which hides their top half. Each word and each
@@ -2454,7 +2474,7 @@
     if (run.strike) element.append(...struckPieces(run.text))
     else element.textContent = run.text
     element.className = [run.code && CODE_CLASS, run.strike && STRIKE_CLASS].filter(Boolean).join(' ')
-    Object.assign(element.style, FLAG_STYLES(run))
+    Object.assign(element.style, flagStyle(run))
     return element
   }
 
@@ -2496,22 +2516,14 @@
     return block
   }
 
-  const isFence = (runs) => Boolean(runs[0]?.fence)
-
-  function notePieces (lines) {
-    const pieces = []
-    for (let i = 0; i < lines.length; i++) {
-      const runs = lines[i]
-      if (isFence(runs)) {
-        const body = []
-        for (i++; i < lines.length && !isFence(lines[i]); i++) body.push(lines[i][0].text)
-        if (body.length) pieces.push({ block: true, empty: false, content: [codeBlockElement(body)] })
-      } else if (isBullet(runs)) pieces.push({ block: true, empty: false, content: [bulletElement(runs, i)] })
-      else if (isSizedLine(runs)) pieces.push({ block: true, empty: false, content: [sizedLineElement(runs)] })
-      else pieces.push({ block: false, empty: runs.length === 0, content: runs.map(runElement) })
-    }
-    return pieces
+  const PIECE_BUILDERS = {
+    code: (piece) => codeBlockElement(piece.lines),
+    bullet: (piece) => bulletElement(piece.runs, piece.index),
+    sized: (piece) => sizedLineElement(piece.runs),
+    plain: (piece) => piece.runs.map(runElement)
   }
+
+  const notePieces = (lines) => pieceKinds(lines).map((piece) => ({ block: piece.block, empty: piece.empty, content: [PIECE_BUILDERS[piece.kind](piece)].flat() }))
 
   // A block ends its own line, so a line break goes only between two plain lines, and before a block that follows an empty line.
   const breaksBefore = (piece, previous) => piece.block ? previous.empty : !previous.block
@@ -2703,7 +2715,7 @@
     `.${STRIKE_CLASS} { isolation: isolate; }`,
     `.${STRIKE_PIECE_CLASS} { position: relative; }`,
     `.${STRIKE_PIECE_CLASS}::after { content: ''; position: absolute; left: 0; right: 0; top: 52%; height: 0.07em; background: currentColor; }`,
-    `.${CODE_BLOCK_CLASS} { display: block; padding: 0.15em 0.35em; border-radius: 0.3em; }`,
+    `.${CODE_BLOCK_CLASS} { display: block; ${BOX_SHAPE_CSS} }`,
     `.${CHECK_DONE_CLASS}::after { content: ''; position: absolute; left: 0.2em; top: -0.1em; width: 0.25em; height: 0.5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) .${CHECK_CLASS} { cursor: pointer; }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
@@ -3149,13 +3161,13 @@
     const shown = shownNotes.get(element) ?? {}
     if (shown.text !== item.text) element.replaceChildren(...noteContent(item.text))
     const backdrop = backdropOf(item, map)
-    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale, backdrop) : noteStyle(item, item.at, 1, backdrop)
-    const look = JSON.stringify(style)
-    if (look !== shown.look) {
+    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale, backdrop, look) : noteStyle(item, item.at, 1, backdrop, look)
+    const drawn = JSON.stringify(style)
+    if (drawn !== shown.look) {
       applyNoteStyle(element, style)
       element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
     }
-    shownNotes.set(element, { ...shown, item, text: item.text, look })
+    shownNotes.set(element, { ...shown, item, text: item.text, look: drawn })
   }
 
   // Puts each group's notes in the order of `puzzleNotes`, moving only the elements out of place. The elements it put back in the page.
