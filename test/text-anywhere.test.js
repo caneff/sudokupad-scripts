@@ -638,12 +638,27 @@ test('notes saved as JSON read back equal, item for item, with or without a back
   assert.deepEqual(readItems(JSON.parse(JSON.stringify(notes))), notes)
 })
 
-test('saved notes with the strokes and shapes of an earlier version read back whole, so a save writes them back untouched', () => {
-  const notes = [oldStroke, sum, oldShape]
-  assert.deepEqual(readItems(JSON.parse(JSON.stringify(notes))), notes)
-  const saved = {}
-  saveNotesTo(fakeStore(saved), 'p1', readItems(notes).concat(textItem([1, 1], 'x', 1, 20)))
-  assert.deepEqual(saved[NOTES_PREFIX + 'p1'].data.slice(0, 3), notes)
+test('the strokes and shapes of an earlier version are kept apart from the notes, so a walk over the notes sees notes only', () => {
+  assert.deepEqual(readNotes(JSON.parse(JSON.stringify([oldStroke, sum, oldShape]))), { items: [sum], kept: [oldStroke, oldShape] })
+})
+
+test('note session: the strokes and shapes of an earlier version round-trip unchanged after the notes, and are never reported as unreadable', () => {
+  const { session, saved, reports } = sessionOver({ [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: [oldStroke, sum, oldShape] })
+  assert.deepEqual(session.load('p1'), [sum])
+  const x = textItem([1, 1], 'x', 1, 20)
+  session.save([sum, x])
+  assert.deepEqual(saved[NOTES_PREFIX + 'p1'], { v: 0, data: [sum, x, oldStroke, oldShape] })
+  session.replaceUnreadable()
+  session.save([])
+  assert.deepEqual(saved[NOTES_PREFIX + 'p1'], { v: 0, data: [oldStroke, oldShape] }, 'Clear all leaves them as they were')
+  assert.deepEqual(reports, [])
+})
+
+test('note session: only the entries that fail their check are counted as unreadable, not an earlier version\'s strokes and shapes', () => {
+  const bad = { ...sum, text: 15 }
+  const { session, reports } = sessionOver({ [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: [oldStroke, bad, sum, oldShape] })
+  session.load('p1')
+  assert.match(reports[0][0], /^1 of this puzzle's saved notes could not be read/)
 })
 
 test('a note saved before opacity existed reads back as it was, and a saved opacity is kept', () => {
@@ -781,13 +796,13 @@ test('a note with a background answers to the box drawn behind it: a selection r
   assert.deepEqual(noteBox(plain), textRect(plain))
 })
 
-// Three notes near the top left, one far off, and a hidden stroke across them: sum's box is 88 to 112 across and 38.5 to 61.5 down.
-const rectNotes = [sum, textItem([30, 30], 'a', 1, 20), oldStroke, textItem([60, 90], 'b', 2, 20), textItem([400, 400], 'far', 3, 20)]
+// Three notes near the top left and one far off: sum's box is 88 to 112 across and 38.5 to 61.5 down.
+const rectNotes = [sum, textItem([30, 30], 'a', 1, 20), textItem([60, 90], 'b', 2, 20), textItem([400, 400], 'far', 3, 20)]
 
-test('a selection rectangle selects every note it touches, whichever way it was dragged, and never a hidden stroke', () => {
-  assert.deepEqual(notesTouched(rectNotes, [0, 0], [150, 100]), [0, 1, 3])
-  assert.deepEqual(notesTouched(rectNotes, [150, 100], [0, 0]), [0, 1, 3])
-  assert.deepEqual(notesTouched(rectNotes, [0, 100], [150, 0]), [0, 1, 3])
+test('a selection rectangle selects every note it touches, whichever way it was dragged', () => {
+  assert.deepEqual(notesTouched(rectNotes, [0, 0], [150, 100]), [0, 1, 2])
+  assert.deepEqual(notesTouched(rectNotes, [150, 100], [0, 0]), [0, 1, 2])
+  assert.deepEqual(notesTouched(rectNotes, [0, 100], [150, 0]), [0, 1, 2])
 })
 
 test('a selection rectangle that only touches the corner of a note\'s box selects it, and one that stops short does not', () => {

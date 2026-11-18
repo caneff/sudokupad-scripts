@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.43
+// @version      0.46.44
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.43'
+  const VERSION = '0.46.44'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -266,8 +266,8 @@
   const PRIMARY_BUTTON = 0
   const SECONDARY_BUTTON = 2
   const TEXT_KIND = 'text'
-  // Kinds an earlier version saved; they stay in storage and are never drawn.
-  const HIDDEN_KINDS = ['stroke', 'shape']
+  // Kinds an earlier version saved; they are kept with the entries no note check passes, stay in storage and are never drawn.
+  const OLD_KINDS = ['stroke', 'shape']
   const TEXT_GLYPH = '<path d="M8 16.5l4-8 4 8M9.5 14h5"/>'
   // The tool button is a sticky note; the Background button shows the letter.
   const STICKY_NOTE = '<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h5"/>'
@@ -515,7 +515,6 @@
   function notesTouched (notes, [ax, ay], [bx, by]) {
     const [left, right, top, bottom] = [Math.min(ax, bx), Math.max(ax, bx), Math.min(ay, by), Math.max(ay, by)]
     return notes.flatMap((item, i) => {
-      if (item.kind !== TEXT_KIND) return []
       const box = noteBox(item)
       return box.left <= right && box.right >= left && box.top <= bottom && box.bottom >= top ? [i] : []
     })
@@ -1314,15 +1313,15 @@
   const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && noteColorNumber(item.color) !== undefined && isStoredOpacity(item.opacity) &&
     (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isStoredSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
-  const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
+  const isOldEntry = (item) => isPlainObject(item) && OLD_KINDS.includes(item.kind)
 
   // A puzzle with nothing saved has no notes; saved data that is not a list throws rather than read as none. The list is read note by note:
-  // an entry that is not a note, stroke or shape is kept, never drawn, and saved back as it is.
+  // an entry that is not a note, an earlier version's stroke or shape included, is kept, never drawn, and saved back as it is, so `items` is notes only.
   function readNotes (saved) {
     if (saved === null || saved === undefined) return { items: [], kept: [] }
     if (!Array.isArray(saved)) throw new Error(`the saved notes are not a list: ${JSON.stringify(saved).slice(0, 200)}`)
     const read = { items: [], kept: [] }
-    for (const entry of saved) (isText(entry) || isHiddenItem(entry) ? read.items : read.kept).push(entry)
+    for (const entry of saved) (isText(entry) ? read.items : read.kept).push(entry)
     return read
   }
 
@@ -1392,7 +1391,8 @@
 
     // Once a puzzle, so a second puzzle with an unreadable note is told too.
     const reportKept = () => {
-      if (kept.length > 0) report(`${kept.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${key}`)
+      const unread = kept.filter((entry) => !isOldEntry(entry)).length
+      if (unread > 0) report(`${unread} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${key}`)
     }
 
     // SudokuPad keeps what its Undo brings back after a Restart in memory only, so a load ends it for the notes too.
@@ -3208,7 +3208,7 @@
     placeBoardGroup(map)
     const claimed = new Set()
     const notes = puzzleNotes.flatMap((item, index) => {
-      if (item.kind !== TEXT_KIND || (textBox && textBox.index === index)) return []
+      if (textBox && textBox.index === index) return []
       if (!item[NOTE_ELEMENT] || claimed.has(item[NOTE_ELEMENT])) item[NOTE_ELEMENT] = Object.assign(document.createElement('div'), { className: TEXT_CLASS })
       const element = item[NOTE_ELEMENT]
       claimed.add(element)
@@ -3477,7 +3477,7 @@
   function noteAt (point, margin) {
     if (notesHidden) return null
     const map = boardMap()
-    const drawn = puzzleNotes.filter((item) => item.kind === TEXT_KIND && item[NOTE_ELEMENT]?.isConnected)
+    const drawn = puzzleNotes.filter((item) => item[NOTE_ELEMENT]?.isConnected)
     const onTop = [...drawn.filter((item) => !item.fixed), ...drawn.filter((item) => item.fixed)]
     return onTop[noteAtPoint(onTop.map((item) => noteScreenBox(item, map, look.outline)), point, margin)]?.[NOTE_ELEMENT] ?? null
   }
@@ -3975,7 +3975,7 @@
     const reach = SELECTION_OFFSET_PX + SELECTION_OUTLINE_PX / 2
     const lines = (axis) => gridLines(Framework.app.grid[axis === 0 ? 'cols' : 'rows'], (k) => map.toScreen(axis === 0 ? [k * CELL_UNITS, 0] : [0, k * CELL_UNITS])[axis])
     const box = noteScreenBox(item, map, look.outline)
-    const others = puzzleNotes.filter((other, i) => other.kind === TEXT_KIND && !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, look.outline))
+    const others = puzzleNotes.filter((other, i) => !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, look.outline))
     const snaps = [['left', 'right'], ['top', 'bottom']].map(([near, far], axis) => snapAxis(box[near] + raw[axis], box[far] + raw[axis], {
       lines: lines(axis), reach, others: others.map((other) => ({ lo: other[near], hi: other[far] }))
     }))
@@ -4202,9 +4202,9 @@
     redraw()
   }
 
-  // The saved strokes and shapes of an earlier version, and the entries that failed their check, are left as they are.
+  // The saved strokes and shapes of an earlier version, and the entries that failed their check, are the session's kept entries and are left as they are.
   function clearNotes () {
-    puzzleNotes = puzzleNotes.filter((item) => item.kind !== TEXT_KIND)
+    puzzleNotes = []
     cancelInput()
     savedNotes.replaceUnreadable()
   }
@@ -4217,7 +4217,7 @@
 
   // Restart keeps the notes before it saves them cleared, so the Undo that brings back what SudokuPad's Restart cleared brings them back too.
   function restartNotes () {
-    if (!undoRestart.off) savedNotes.keepForRestart(puzzleNotes.filter((item) => item.kind === TEXT_KIND))
+    if (!undoRestart.off) savedNotes.keepForRestart(puzzleNotes)
     clearNotes()
     writeNotes()
     redraw()
@@ -4239,7 +4239,7 @@
   function touchAlong (from, to, map) {
     const [a, b] = [from, to].map(map.toScreen)
     for (const item of puzzleNotes) {
-      if (item.kind === TEXT_KIND && touchesBox(grownBox(noteScreenBox(item, map, look.outline), HIT_MARGIN_PX), a, b)) erasing.touched.add(item)
+      if (touchesBox(grownBox(noteScreenBox(item, map, look.outline), HIT_MARGIN_PX), a, b)) erasing.touched.add(item)
     }
   }
 
@@ -4261,7 +4261,7 @@
   }
 
   function confirmClear () {
-    const ask = clearAsk(puzzleNotes.filter((item) => item.kind === TEXT_KIND).length)
+    const ask = clearAsk(puzzleNotes.length)
     if (!ask) return
     textTool.run(() => Framework.showDialog({
       parts: [
