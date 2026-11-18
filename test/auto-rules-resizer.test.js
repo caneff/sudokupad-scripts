@@ -9,7 +9,7 @@ const { startScript } = require('./unit-start.js')
 const {
   MAX_WIDTH_KEY, MAX_HEIGHT_KEY, limitFromBox, LIMIT_FLOORS, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, offsetFontPx, fitRulesPane, clearFit,
-  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, loadSizing, saveSizing, noSizing, SIZING_KEY_PREFIX, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
+  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, loadSizing, saveSizing, stepSizing, noSizing, SIZING_KEY_PREFIX, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
 } = require('../auto-rules-resizer.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -577,6 +577,19 @@ function countingStore (saved) {
     removeData: (key) => { writes.push(['removeData', key]); store.removeData(key) }
   }
 }
+
+test('stepSizing: a fit that applies less keeps what it applied; a fit that bails keeps the user\'s step, not the old size', () => {
+  const sized = () => ({ wanted: { fontOffsetPx: 1, box: noRulesDrag() }, applied: { fontOffsetPx: 1, box: noRulesDrag() } })
+  const clipped = sized()
+  stepSizing(clipped, 'fontOffsetPx', (px) => px + 1, () => { clipped.applied = { ...clipped.applied, fontOffsetPx: 0.5 }; return true })
+  assert.equal(clipped.wanted.fontOffsetPx, 0.5)
+  const bailed = sized()
+  stepSizing(bailed, 'fontOffsetPx', (px) => px + 1, () => false)
+  assert.equal(bailed.wanted.fontOffsetPx, 2)
+  const dragged = sized()
+  stepSizing(dragged, 'box', (box) => ({ ...box, w: 30 }), () => false)
+  assert.equal(dragged.wanted.box.w, 30)
+})
 
 test('saveSizing and loadSizing: a puzzle never resized starts at the default, and another puzzle does not inherit a resized one', () => {
   const store = fakeStore()
