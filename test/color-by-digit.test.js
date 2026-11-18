@@ -8,7 +8,7 @@ const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { withScript, withoutPath } = require('./unit-start.js')
-const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, asideOf, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
+const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, asideOf, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, palettePages, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
 
 const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
@@ -1244,6 +1244,29 @@ test('layoutPages reads any number of pages, numbering them from 0 and marking t
   assert.deepEqual(out.map((p) => p.page), [0, 1, 2, 3])
   assert.deepEqual(out.map((p) => p.current), [false, false, true, false])
   assert.equal(out[3].rows[2][2].key, 'p3i')
+})
+
+test('palettePages reports a page that is not a list of color keys, and reads no pages when there is no palette', () => {
+  const was = global.Framework
+  try {
+    global.Framework = { app: { tools: { colour: {} } } }
+    assert.deepEqual(palettePages(), [])
+    global.Framework = { app: { tools: { colour: { palette: { pages: [['a', 'b'], 'oops'] } } } } }
+    assert.throws(() => palettePages(), /no pages of color keys/)
+    global.Framework = { app: { tools: { colour: { palette: { pages: [['a']] }, currentPage: 0 } } } }
+    assert.deepEqual(palettePages(), [['a']])
+  } finally {
+    global.Framework = was
+  }
+})
+
+test('PAGE_COLUMNS is the color picker\'s column count', () => {
+  assert.equal(PAGE_COLUMNS, 3)
+  assert.match(STYLE_CSS, new RegExp(`repeat\\(${PAGE_COLUMNS}, `))
+})
+
+test('the editor\'s pulldowns are in the lib\'s select font size', () => {
+  assert.match(STYLE_CSS, /\.cbd-pulldown select \{[^}]*font-size: 1rem;/)
 })
 
 test('layoutPages of no pages is empty', () => {
