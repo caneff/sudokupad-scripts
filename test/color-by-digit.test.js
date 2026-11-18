@@ -1012,7 +1012,7 @@ function mockApp (cellDefs, { single = false } = {}) {
     cell.propGet = () => [...(def.centre || [])]
     return cell
   })
-  const puzzle = { cells, selectedCells: [], undoStack: [], redoStack: [], inGroup: false, addEventListener: () => {} }
+  const puzzle = { cells, selectedCells: [], undoStack: [], redoStack: [], inGroup: false, addEventListener: () => {}, on: () => {} }
   const app = {
     puzzle,
     calls,
@@ -1924,7 +1924,7 @@ test('with cell coloring off, the icon and the digit shades are drawn once the p
   const icon = { outerHTML: 'old icon' }
   const appended = []
   // No `act`: SudokuPad has no cell coloring to wait for, so only the icon and the digit shades wait on the load.
-  const app = { puzzle: { cells, selectedCells: [], undoStack: [], redoStack: [], addEventListener: (type, fn) => listeners.push({ type, fn }) }, deselect: () => {}, select: () => {}, on: () => {}, refreshControls: () => {} }
+  const app = { puzzle: { cells, selectedCells: [], undoStack: [], redoStack: [], addEventListener: (type, fn) => listeners.push({ type, fn }), on: () => {} }, deselect: () => {}, select: () => {}, on: () => {}, refreshControls: () => {} }
   const document = pageDocument({
     querySelector: (selector) => (selector === '#control-colorbydigit .icon' ? icon : null),
     head: { appendChild: (el) => appended.push(el) }

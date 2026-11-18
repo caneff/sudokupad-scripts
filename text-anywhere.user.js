@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.42
+// @version      0.46.43
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.42'
+  const VERSION = '0.46.43'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -2183,6 +2183,35 @@
 
     return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
+
+  // The one rule for the Undo SudokuPad gives to a Restart, which Color by Digit and Text Anywhere share so they agree on it (#990).
+  // SudokuPad's Undo on an empty undo stack loads the board kept from before the last Restart, `app.preRestartSavedProgress`, which it keeps
+  // only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes). A script may act in its own 'restarted'
+  // handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds no more than that on it is the
+  // Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
+  function trackRestartUndo (app, wrap = (fn) => fn) {
+    let restartLength = 0
+    const atRestart = () => app.puzzle.undoStack.length <= restartLength
+    const loadsBoard = () => atRestart() && app.preRestartSavedProgress !== undefined
+    // SudokuPad triggers `act` after the action, so what the stack was before an Undo is read off the event before it.
+    let before = { atRestart: false, loadsBoard: false }
+    const read = () => { before = { atRestart: atRestart(), loadsBoard: loadsBoard() } }
+    const callbacks = []
+    app.on('restarted', wrap(() => queueMicrotask(() => { restartLength = app.puzzle.undoStack.length; read() })))
+    const restartCount = wrap(() => { restartLength = 0; read() })
+    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, restartCount)
+    app.puzzle.on('act', wrap((_, action) => {
+      const was = before
+      read()
+      if (action?.type === 'undo' && was.atRestart) callbacks.forEach((fn) => fn(was.loadsBoard))
+    }))
+    return {
+      atRestart,
+      loadsBoard,
+      // `fn(loaded)` runs after the Undo that found the stack where the Restart left it; `loaded` is whether it loaded the board from before it.
+      onRestartUndo: (fn) => { callbacks.push(fn) }
+    }
+  }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
   // Each feature with the SudokuPad internals it cannot work without. A path's first part is a root of `guard.probe`: `Framework`, or `app`, which is what
@@ -4194,17 +4223,6 @@
     redraw()
   }
 
-  // SudokuPad's Undo brings back what Restart cleared when the undo stack is empty: the first Undo after a Restart, past any selection made since. Its puzzle
-  // triggers `act` after each action, so whether the stack was empty before an Undo is read off the last action, a reset or a load.
-  let emptyStackLength = 0
-  const undoStackEmpty = () => Framework.app.puzzle.undoStack.length <= emptyStackLength
-  let undoWasEmpty = false
-
-  function followUndo (_, action) {
-    if (action?.type === 'undo' && undoWasEmpty) restoreRestarted()
-    undoWasEmpty = undoStackEmpty()
-  }
-
   function restoreRestarted () {
     const restored = savedNotes.restoreAfterRestart()
     if (restored.length === 0) return
@@ -4463,14 +4481,9 @@
       app.on('restarted', boardNotes.bind(restartNotes))
       if (app.puzzle.currentPuzzle) showSavedNotes()
     })
-    undoRestart.run(() => {
-      app.puzzle.on('act', undoRestart.bind(followUndo))
-      // Another script may act after Restart in its own 'restarted' handler; the stack it leaves, read once all of them have run, is the empty one.
-      app.on('restarted', undoRestart.bind(() => queueMicrotask(() => { emptyStackLength = Framework.app.puzzle.undoStack.length; undoWasEmpty = undoStackEmpty() })))
-      for (const event of ['reset', 'progressloaded']) {
-        app.puzzle.on(event, undoRestart.bind(() => { emptyStackLength = 0; undoWasEmpty = undoStackEmpty() }))
-      }
-    })
+    // The Undo that loads the board from before a Restart brings the notes back, as Color by Digit's mode, by the one rule both share (#990). With
+    // nothing entered SudokuPad keeps no board, but its first Undo after the Restart, past any selection made since, still brings the notes back.
+    undoRestart.run(() => trackRestartUndo(app, undoRestart.bind).onRestartUndo(restoreRestarted))
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
   else start(undefined)

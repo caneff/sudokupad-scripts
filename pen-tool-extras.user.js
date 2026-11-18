@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.42
+// @version      1.32.43
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.42'
+  const VERSION = '1.32.43'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -512,6 +512,35 @@
     })
 
     return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+  }
+
+  // The one rule for the Undo SudokuPad gives to a Restart, which Color by Digit and Text Anywhere share so they agree on it (#990).
+  // SudokuPad's Undo on an empty undo stack loads the board kept from before the last Restart, `app.preRestartSavedProgress`, which it keeps
+  // only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes). A script may act in its own 'restarted'
+  // handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds no more than that on it is the
+  // Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
+  function trackRestartUndo (app, wrap = (fn) => fn) {
+    let restartLength = 0
+    const atRestart = () => app.puzzle.undoStack.length <= restartLength
+    const loadsBoard = () => atRestart() && app.preRestartSavedProgress !== undefined
+    // SudokuPad triggers `act` after the action, so what the stack was before an Undo is read off the event before it.
+    let before = { atRestart: false, loadsBoard: false }
+    const read = () => { before = { atRestart: atRestart(), loadsBoard: loadsBoard() } }
+    const callbacks = []
+    app.on('restarted', wrap(() => queueMicrotask(() => { restartLength = app.puzzle.undoStack.length; read() })))
+    const restartCount = wrap(() => { restartLength = 0; read() })
+    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, restartCount)
+    app.puzzle.on('act', wrap((_, action) => {
+      const was = before
+      read()
+      if (action?.type === 'undo' && was.atRestart) callbacks.forEach((fn) => fn(was.loadsBoard))
+    }))
+    return {
+      atRestart,
+      loadsBoard,
+      // `fn(loaded)` runs after the Undo that found the stack where the Restart left it; `loaded` is whether it loaded the board from before it.
+      onRestartUndo: (fn) => { callbacks.push(fn) }
+    }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
