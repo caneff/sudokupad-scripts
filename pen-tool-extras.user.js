@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.42
+// @version      1.32.44
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.42'
+  const VERSION = '1.32.44'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1184,23 +1184,13 @@
   const COLOR_TOOL_TIMEOUT_MS = 10000
   // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
   // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
-  function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
-    return new Promise((resolve, reject) => {
-      const deadline = Date.now() + timeoutMs
-      const poll = () => {
-        let value
-        try {
-          value = check()
-        } catch (error) {
-          reject(error)
-          return
-        }
-        if (value !== null && value !== undefined && value !== false) resolve(value)
-        else if (Date.now() >= deadline) reject(new Error(`${what} not ready after ${timeoutMs} ms`))
-        else setTimeout(poll, pollMs)
-      }
-      poll()
-    })
+  async function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
+    const deadline = Date.now() + timeoutMs
+    for (let value = check(); ; value = check()) {
+      if (value !== null && value !== undefined && value !== false) return value
+      if (Date.now() >= deadline) throw new Error(`${what} not ready after ${timeoutMs} ms`)
+      await new Promise((resolve) => setTimeout(resolve, pollMs))
+    }
   }
 
   function waitForColorTool () {
@@ -2106,13 +2096,13 @@
   const MARKS_LAYER_ID = 'pen-tool-extras-marks'
   // Keyed by the pen value of SudokuPad's own edge X on a cell's right, bottom, left and top edge. An edge between two cells is stored on one of them, so a click on it is always
   // one of these four. `midpoint` is the edge's middle as a [row, col] offset from the cell's top left corner. `added` is the values this script adds, in ADDED_ORDER: SudokuPad's
-  // own pen values stop at `g`, so `h` onward are free; they stay lowercase letters because SudokuPad lowercases a pen value when it undoes or replays one. `arrows` is the
+  // own pen values stop at `g`, so `h` onward are free; they stay lowercase letters because SudokuPad lowercases a pen value when it undoes or replays one. `directions` is the
   // shapes dirA and dirB draw.
   const EDGES = {
-    3: { midpoint: [0.5, 1], added: ['h', 'i', 'j'], arrows: ['>', '<'] },
-    4: { midpoint: [1, 0.5], added: ['k', 'l', 'm'], arrows: ['^', 'v'] },
-    b: { midpoint: [0.5, 0], added: ['n', 'o', 'p'], arrows: ['>', '<'] },
-    c: { midpoint: [0, 0.5], added: ['q', 'r', 's'], arrows: ['^', 'v'] }
+    3: { midpoint: [0.5, 1], added: ['h', 'i', 'j'], directions: ['>', '<'] },
+    4: { midpoint: [1, 0.5], added: ['k', 'l', 'm'], directions: ['^', 'v'] },
+    b: { midpoint: [0.5, 0], added: ['n', 'o', 'p'], directions: ['>', '<'] },
+    c: { midpoint: [0, 0.5], added: ['q', 'r', 's'], directions: ['^', 'v'] }
   }
   const EDGE_X = Object.keys(EDGES)
   const ADDED_ORDER = ['dirA', 'dirB', 'circle']
@@ -2154,8 +2144,8 @@
   // A pen stroke has no fill, so the dot is filled in its pen's color by the color character it was stored with, on every page.
   const DOT_FILL_CSS = [...COLOR_CHARS].map(([c, { number }]) => `:root:root .cell-pen.pen-${CELL_CYCLE.values.dot}.pencolor-${c} { fill: var(--puzzle-pencolor-${number}); }`).join('\n')
   const ADDED_MARKS = new Map([
-    ...Object.entries(EDGES).flatMap(([edge, { added, arrows }]) =>
-      ADDED_ORDER.map((type, i) => [added[i], { edge, type, shape: type === 'circle' ? CIRCLE : arrows[i] }])),
+    ...Object.entries(EDGES).flatMap(([edge, { added, directions }]) =>
+      ADDED_ORDER.map((type, i) => [added[i], { edge, type, shape: type === 'circle' ? CIRCLE : directions[i] }])),
     ...Object.entries(CORNER_VALUES).flatMap(([kind, values]) =>
       CORNER_CYCLE.types.map((type, i) => [values[i], { kind, type, shape: type === 'x' ? 'x' : CIRCLE }])),
     [CELL_CYCLE.values.dot, { cell: true, type: 'dot', shape: DOT }]
@@ -2501,8 +2491,8 @@
     return { segments: lineSegmentsOf(Framework.app.puzzle.cells), lines: new Set(), marks: new Map(), at: firstPoint }
   }
 
-  function crossPoint (marksAt, erase, point) {
-    const hit = segmentNear([point.r, point.c], erase.segments, hitRadiusAt(LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX, cellPixels()))
+  function crossPoint (marksAt, erase, point, cellPx) {
+    const hit = segmentNear([point.r, point.c], erase.segments, hitRadiusAt(LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX, cellPx))
     if (hit !== null) {
       connectedLine(erase.segments, hit).forEach((segment) => erase.lines.add(segment))
       return
@@ -2514,12 +2504,12 @@
     erase.marks.set(found.cell, values)
   }
 
-  function crossTo (marksAt, erase, to) {
+  function crossTo (marksAt, erase, to, cellPx) {
     const length = Math.hypot(to.r - erase.at.r, to.c - erase.at.c)
     const samples = Math.max(1, Math.ceil(length / ERASE_SAMPLE_STEP))
     for (let i = 1; i <= samples; i++) {
       const t = i / samples
-      crossPoint(marksAt, erase, { r: erase.at.r + t * (to.r - erase.at.r), c: erase.at.c + t * (to.c - erase.at.c) })
+      crossPoint(marksAt, erase, { r: erase.at.r + t * (to.r - erase.at.r), c: erase.at.c + t * (to.c - erase.at.c) }, cellPx)
     }
     erase.at = to
   }
@@ -2554,19 +2544,19 @@
       const started = startErase(point)
       erase = started
       menuOwed = true
-      crossPoint(marksAt, started, point)
+      crossPoint(marksAt, started, point, cellPixels())
       // A `pointerup` comes only once the last button is up, whichever it is, so a drag with a second button pressed ends at that release.
       trackPointer(window, {
         move: steps.lineErase.bind((moveEvent) => {
           if (erase === started && (moveEvent.buttons & RIGHT_BIT)) {
-            crossTo(marksAt, started, pointOf(moveEvent))
+            crossTo(marksAt, started, pointOf(moveEvent), cellPixels())
           }
         }, resetErase),
         end: steps.lineErase.bind((endEvent) => {
           if (erase !== started) return
           erase = null
           if (endEvent.type === 'pointercancel') return
-          crossTo(marksAt, started, pointOf(endEvent))
+          crossTo(marksAt, started, pointOf(endEvent), cellPixels())
           finishErase(tool, started)
         }, resetErase)
       })
@@ -2685,7 +2675,7 @@
 
   function adoptOutline () {
     const holder = document.getElementById(OUTLINE_HOLDER_ID)
-    if (holder) holder.remove()
+    holder?.remove()
     if (inForce.outline) document.body.insertAdjacentHTML('beforeend', renderOutlineFilter(inForce.outlineWidth))
   }
 
@@ -2709,7 +2699,7 @@
   let hintArrows = null
 
   function removeHintArrows () {
-    if (hintArrows !== null) hintArrows.remove()
+    hintArrows?.remove()
     hintArrows = null
   }
 
@@ -2922,7 +2912,7 @@
     const lineMode = currentLineMode()
     const button = document.querySelector(`.${LINE_MODE_BUTTON}`)
     if (button && button.dataset.mode === lineMode) return
-    if (button) button.remove()
+    button?.remove()
     pulldown.insertAdjacentHTML('afterend', renderLineModeButton(lineMode))
   }
 
@@ -3274,7 +3264,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf, readPenColors, presetColorSet, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
+    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf, readPenColors, presetColorSet, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, crossPoint, crossTo, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return

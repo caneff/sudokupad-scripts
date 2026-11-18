@@ -329,7 +329,7 @@ describe('the dialog\'s layout, keyboard and messages', { concurrency: false }, 
     const tops = await p.evaluate((editor) => {
       const top = (el) => Math.round(el.getBoundingClientRect().top * 10) / 10
       const [profiles, digits] = [...document.querySelectorAll(`${editor} .cbd-heading`)]
-      return { headings: [top(profiles), top(digits)], heights: [profiles.offsetHeight, digits.offsetHeight], rows: [top(document.querySelector(`${editor} [data-role=profile-row]`)), top(document.querySelector(`${editor} .cbd-color-choice`))] }
+      return { headings: [top(profiles), top(digits)], heights: [profiles.offsetHeight, digits.offsetHeight], rows: [top(document.querySelector(`${editor} [data-role=profile-row]`)), top(document.querySelector(`${editor} [data-role=color-choice]`))] }
     }, EDITOR)
     assert.equal(tops.headings[0], tops.headings[1])
     assert.equal(tops.heights[0], tops.heights[1])
