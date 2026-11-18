@@ -99,7 +99,11 @@ Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run
   progress ends in the Restart's own clears, so that Undo shows no digit: the next Undo takes the clears back (checked live,
   2026-11-07: digit, Restart, Undo gives an empty cell and an undo stack of 6; a second Undo gives the digit). With only notes entered
   the replay is empty, nothing is kept, and SudokuPad's Undo does nothing. An Undo while errors are shown only clears them
-  (`App.act` returns before `Puzzle.act`), so no `act` is triggered.
+  (`App.act` returns before `Puzzle.act`), so no `act` is triggered. Color by Digit and Text Anywhere both read this Undo
+  through `trackRestartUndo` in `lib/sudokupad.js` (#990). Read in `script.js` v0.616.0: `execUndo` loads the kept progress on *any* Undo
+  that finds the stack empty while it is set, and a Restart with an empty replay leaves an older one in place.
+- **`PortableEvents` takes no listener options** (`portableevents.js` v0.616.0, #990): `addEventListener(type, handler)` ignores a third
+  argument, so `{ once: true }` leaves the handler on for every later event. A one-shot handler removes itself with `removeEventListener`.
 - **Loading a puzzle**: `Puzzle.createPuzzle` calls `svgRenderer.clearAllLayers()`, which removes every child of the
   board SVG that is not one of SudokuPad's layers, Draw Tool's layer included. `Puzzle.loadPuzzle` then triggers
   `loaded` on the puzzle, before the saved progress loads. Draw Tool redraws from storage on `puzzle.on('loaded', …)`,
