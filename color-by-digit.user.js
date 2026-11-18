@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.69
+// @version      0.25.70
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.69'
+  const VERSION = '0.25.70'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -935,6 +935,35 @@
     })
 
     return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+  }
+
+  // The one rule for the Undo SudokuPad gives to a Restart, which Color by Digit and Text Anywhere share so they agree on it (#990).
+  // SudokuPad's Undo on an empty undo stack loads the board kept from before the last Restart, `app.preRestartSavedProgress`, which it keeps
+  // only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes). A script may act in its own 'restarted'
+  // handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds no more than that on it is the
+  // Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
+  function trackRestartUndo (app, wrap = (fn) => fn) {
+    let restartLength = 0
+    const atRestart = () => app.puzzle.undoStack.length <= restartLength
+    const loadsBoard = () => atRestart() && app.preRestartSavedProgress !== undefined
+    // SudokuPad triggers `act` after the action, so what the stack was before an Undo is read off the event before it.
+    let before = { atRestart: false, loadsBoard: false }
+    const read = () => { before = { atRestart: atRestart(), loadsBoard: loadsBoard() } }
+    const callbacks = []
+    app.on('restarted', wrap(() => queueMicrotask(() => { restartLength = app.puzzle.undoStack.length; read() })))
+    const restartCount = wrap(() => { restartLength = 0; read() })
+    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, restartCount)
+    app.puzzle.on('act', wrap((_, action) => {
+      const was = before
+      read()
+      if (action?.type === 'undo' && was.atRestart) callbacks.forEach((fn) => fn(was.loadsBoard))
+    }))
+    return {
+      atRestart,
+      loadsBoard,
+      // `fn(loaded)` runs after the Undo that found the stack where the Restart left it; `loaded` is whether it loaded the board from before it.
+      onRestartUndo: (fn) => { callbacks.push(fn) }
+    }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
@@ -2471,12 +2500,29 @@
 
   let mode = 'off'
 
-  // Loading progress resets the board, so a pass before it would be wiped.
-  // With the wait off there is nothing to wait for, so `fn` runs at once.
-  function whenProgressLoaded (app, fn) {
-    if (loading.run(() => allCells(app).length > 0, () => true)) fn()
-    else loading.run(() => app.puzzle.addEventListener('progressloaded', fn, { once: true }), fn)
+  // SudokuPad's events take no options, so a `{ once: true }` there is ignored and the handler would run on every later load (#990).
+  // Returns what stops the wait.
+  function onNextLoad (app, fn) {
+    const once = () => {
+      app.puzzle.removeEventListener('progressloaded', once)
+      fn()
+    }
+    app.puzzle.addEventListener('progressloaded', once)
+    return () => app.puzzle.removeEventListener('progressloaded', once)
   }
+
+  // Loading progress resets the board, so a pass before it would be wiped.
+  // With the wait off there is nothing to wait for, so `fn` runs at once. Returns what stops a wait.
+  function whenProgressLoaded (app, fn) {
+    if (loading.run(() => allCells(app).length > 0, () => true)) {
+      fn()
+      return () => {}
+    }
+    return loading.run(() => onNextLoad(app, fn), () => { fn(); return () => {} })
+  }
+
+  // A puzzle opened with no saved progress triggers no 'progressloaded', so the startup coloring can wait past a Restart (#990).
+  let stopStartColoring = () => {}
 
   const DIGIT_STYLE_ID = 'color-by-digit-digits'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -2666,10 +2712,6 @@
     })
   }
 
-  // The undo stack's length once the last Restart's coloring was done: SudokuPad loads the board from before a Restart on an Undo that finds the stack empty,
-  // and the stack holds that coloring, so the Undo that finds only it is shown an empty stack. Null once that board has loaded.
-  let restartDepth = null
-
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
   // stack and leaves a dead undo step.
   function mayChange (action, cell) {
@@ -2683,6 +2725,8 @@
   // group; opening a second would end it early. Replays and loading progress bypass app.act; Undo and Redo go through it.
   function installCellColoring (app) {
     coloring.run(() => {
+      // Text Anywhere brings its notes back on the same Undo, by the same rule (#990).
+      const restartUndo = trackRestartUndo(app, coloring.bind)
       const coloredEntry = (stock, action) => {
         if (!colorsCells(mode) || !isEntryAction(action)) return stock(action)
         const touched = [...app.puzzle.selectedCells]
@@ -2703,13 +2747,11 @@
       }
       coloring.wrap(app, 'act', function (stock, action) {
         if (action?.type === 'undo' || action?.type === 'redo') {
-          // SudokuPad keeps the board from before a Restart in `preRestartSavedProgress`, and an Undo on the empty stack loads it.
-          const loadsBeforeRestart = action.type === 'undo' && app.preRestartSavedProgress !== undefined &&
-            (app.puzzle.undoStack.length === 0 || app.puzzle.undoStack.length === restartDepth)
+          // The stack the Restart left holds its coloring, so the Undo that finds only that is shown an empty stack, on which SudokuPad loads the board.
+          const loadsBeforeRestart = action.type === 'undo' && restartUndo.loadsBoard()
           if (loadsBeforeRestart) {
-            restartDepth = null
             // The board it loads ends in the Restart's clears, and arrives after `act` returns.
-            app.puzzle.addEventListener('progressloaded', () => colorLoadedBoard(app), { once: true })
+            onNextLoad(app, () => colorLoadedBoard(app))
             coloring.run(() => { app.puzzle.undoStack.length = 0 })
           }
           const result = stock(action)
@@ -2724,9 +2766,10 @@
         return result
       })
       app.on('restarted', () => {
+        // The board is there and colored now, so a startup coloring still waiting for a load would color the board an Undo loads a second time.
+        stopStartColoring()
         modeHistory.restart()
         colorAfterRestart(app)
-        restartDepth = app.puzzle.undoStack.length
       })
     })
   }
@@ -3146,7 +3189,7 @@
     modeButton.run(() => listenForButton(app, openEditor))
     digitColors.run(watchBoard)
     whenProgressLoaded(app, redraw)
-    if (colorsCells(mode)) whenProgressLoaded(app, () => colorEnteredCells(app))
+    if (colorsCells(mode)) stopStartColoring = whenProgressLoaded(app, () => colorEnteredCells(app))
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
   else start(undefined)

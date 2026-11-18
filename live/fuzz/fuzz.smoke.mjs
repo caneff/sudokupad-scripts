@@ -113,6 +113,12 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('recorded 9x9'), steps })
   })
 
+  it('a reload after a Restart and Undo back to the start changes nothing the player sees (#990)', async () => {
+    // Seed 951434741's shrink: Color by Digit's startup coloring, still waiting for a load, colored the board the first Undo loaded in a step of its own,
+    // which the replay kept after the Undos took it back, so four givens came back colored after the reload.
+    await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['restart', false], ['undo all', null], ['reload', null]] })
+  })
+
   async function snapshotAfter (puzzle, steps) {
     const target = await openTarget(browser(), puzzle, {})
     try {
