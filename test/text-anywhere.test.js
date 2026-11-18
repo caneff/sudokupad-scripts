@@ -8,7 +8,7 @@ const { headerField, headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop } = require('../text-anywhere.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -142,6 +142,107 @@ test('an index with no saved data is empty, and one that is not a list of keys t
   assert.deepEqual(readIndex(null), [])
   assert.deepEqual(readIndex(['a', 'b']), ['a', 'b'])
   for (const saved of ['oops', { a: 1 }, [1, 2]]) assert.throws(() => readIndex(saved), /saved index/, JSON.stringify(saved))
+})
+
+// The note session over a store, with every report it makes as [message, id].
+function sessionOver (saved = {}, overrides = {}) {
+  const store = { ...fakeStore(saved), ...overrides }
+  const reports = []
+  const session = noteSession({ store, report: (message, id = message) => reports.push([message, id]) })
+  return { session, saved, reports }
+}
+
+test('note session: notes loaded for a puzzle are saved back under that puzzle', () => {
+  const { session, saved, reports } = sessionOver({ [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: { v: 0, data: [sum] } })
+  assert.deepEqual(session.load('p1'), [sum])
+  session.save([sum, line])
+  assert.deepEqual(saved[NOTES_PREFIX + 'p1'], { v: 0, data: [sum, line] })
+  assert.deepEqual(reports, [])
+})
+
+test('note session: a save before any puzzle is loaded writes nothing', () => {
+  const { session, saved } = sessionOver()
+  session.save([line])
+  assert.deepEqual(saved, {})
+})
+
+test('note session: a remove that throws is reported and does not skip the save after it', () => {
+  const { session, saved, reports } = sessionOver({ [INDEX_KEY]: ['p1'] }, { removeData: () => { throw new Error('remove refused') } })
+  assert.deepEqual(session.load('p1'), [])
+  session.dropRestarted()
+  session.save([line])
+  assert.deepEqual(saved[NOTES_PREFIX + 'p1'], { v: 0, data: [line] })
+  assert.equal(reports.some(([message]) => /remove refused/.test(message)), true, JSON.stringify(reports))
+})
+
+test('note session: a save whose index cannot be read is reported and writes nothing', () => {
+  const { session, saved, reports } = sessionOver({ [INDEX_KEY]: 'oops' })
+  session.load('p1')
+  session.save([line])
+  assert.deepEqual(saved, { [INDEX_KEY]: 'oops' })
+  assert.match(reports[0][0], /could not save this puzzle's notes: .*saved index/)
+})
+
+test('note session: an entry that cannot be read is kept, saved after the notes, and reported under one id per puzzle', () => {
+  const bad = { ...sum, text: 15 }
+  const { session, saved, reports } = sessionOver({ [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: [sum, bad] })
+  assert.deepEqual(session.load('p1'), [sum])
+  session.save([sum, line])
+  assert.deepEqual(saved[NOTES_PREFIX + 'p1'], { v: 0, data: [sum, line, bad] })
+  assert.deepEqual(new Set(reports.map(([, id]) => id)), new Set(['kept p1']), 'the dialog shows once a puzzle')
+  assert.match(reports[0][0], /1 of this puzzle's saved notes could not be read/)
+})
+
+test('note session: notes that cannot be read are never saved over until replaceUnreadable, and the solver is told', () => {
+  const { session, saved, reports } = quietly(() => {
+    const over = sessionOver({ [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: 'not a list {' })
+    assert.deepEqual(over.session.load('p1'), [])
+    return over
+  }).result
+  session.save([line])
+  assert.equal(saved[NOTES_PREFIX + 'p1'], 'not a list {')
+  assert.deepEqual(new Set(reports.map(([, id]) => id)), new Set(['unsavable p1']))
+  session.replaceUnreadable()
+  session.save([line])
+  assert.deepEqual(saved[NOTES_PREFIX + 'p1'], { v: 0, data: [line] })
+})
+
+test('note session: Restart then Undo brings back the notes kept for Restart, and a drop ends that', () => {
+  const { session, reports } = sessionOver({ [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: [sum] })
+  session.load('p1')
+  session.keepForRestart([sum])
+  session.save([])
+  assert.deepEqual(session.restoreAfterRestart(), [sum])
+  session.dropRestarted()
+  assert.deepEqual(session.restoreAfterRestart(), [])
+  assert.deepEqual(reports, [])
+})
+
+test('note session: a load drops what an earlier Restart kept', () => {
+  const { session, saved } = sessionOver({ [INDEX_KEY]: ['p1'], [RESTARTED_PREFIX + 'p1']: [sum] })
+  session.load('p1')
+  assert.equal(saved[RESTARTED_PREFIX + 'p1'], undefined)
+  assert.deepEqual(session.restoreAfterRestart(), [])
+})
+
+test('note session: kept Restart notes that cannot be read bring nothing back, and the solver is told', () => {
+  const { session, saved, reports } = sessionOver({ [INDEX_KEY]: ['p1'] })
+  session.load('p1')
+  saved[RESTARTED_PREFIX + 'p1'] = 'not a list {'
+  assert.deepEqual(session.restoreAfterRestart(), [])
+  assert.match(reports[0][0], /cannot read the notes Restart cleared/)
+})
+
+test('note session: with storage off (every read null, every write dropped) nothing loads, nothing throws and nothing is reported', () => {
+  const off = { getData: () => null, setData: () => {}, removeData: () => {} }
+  const reports = []
+  const session = noteSession({ store: off, report: (message) => reports.push(message) })
+  assert.deepEqual(session.load('p1'), [])
+  session.keepForRestart([sum])
+  session.save([line])
+  session.dropRestarted()
+  assert.deepEqual(session.restoreAfterRestart(), [])
+  assert.deepEqual(reports, [])
 })
 
 const hexes = (value) => Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, value]))

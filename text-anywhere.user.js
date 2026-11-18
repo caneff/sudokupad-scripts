@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.41
+// @version      0.46.42
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.41'
+  const VERSION = '0.46.42'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -1378,6 +1378,80 @@
     else store.removeData(restartedKey(key))
   }
 
+  const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
+
+  // One puzzle's notes in the saved data. `store` is the script's guarded store (`guard.storeFor`), so a read or write that throws follows the guard's one
+  // failure policy; a throw that still reaches here is told through `report(message, id)` and never skips the next step. Saved data the script cannot read
+  // is the browser's and not SudokuPad's, so it is left as it is and never turns the saved data off.
+  function noteSession ({ store, report }) {
+    // The puzzle the notes were loaded for, so a save lands there even when the page's puzzle has changed since; null before the first load.
+    let key = null
+    let kept = []
+    // False while this puzzle's saved notes cannot be read: no save writes over them but an explicit wipe's.
+    let savable = true
+
+    // Once a puzzle, so a second puzzle with an unreadable note is told too.
+    const reportKept = () => {
+      if (kept.length > 0) report(`${kept.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${key}`)
+    }
+
+    // SudokuPad keeps what its Undo brings back after a Restart in memory only, so a load ends it for the notes too.
+    function dropRestarted () {
+      if (key === null) return
+      try {
+        store.removeData(restartedKey(key))
+      } catch (err) {
+        report(`Text Anywhere could not drop the notes Restart cleared: ${err.message}`)
+      }
+    }
+
+    return {
+      load (puzzle) {
+        key = puzzle
+        dropRestarted()
+        const loaded = loadNotes(store, key)
+        kept = loaded.kept
+        savable = loaded.unreadable === undefined
+        if (!savable) report(UNSAVABLE_MESSAGE, `unsavable ${key}`)
+        reportKept()
+        return loaded.items
+      },
+      save (items) {
+        if (key === null) return
+        reportKept()
+        if (!savable) {
+          report(UNSAVABLE_MESSAGE, `unsavable ${key}`)
+          return
+        }
+        try {
+          saveNotesTo(store, key, items, kept)
+        } catch (err) {
+          report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
+        }
+      },
+      // An explicit wipe (Clear all, Restart) may write over saved notes that could not be read.
+      replaceUnreadable () { savable = true },
+      keepForRestart (notes) {
+        if (key === null) return
+        try {
+          keepRestartedTo(store, key, notes)
+        } catch (err) {
+          report(`Text Anywhere could not keep this puzzle's notes for Undo: ${err.message}`)
+        }
+      },
+      restoreAfterRestart () {
+        if (key === null) return []
+        try {
+          return readNotes(store.getData(restartedKey(key))).items
+        } catch (err) {
+          report(`Text Anywhere cannot read the notes Restart cleared, so Undo does not bring them back: ${err.message}`)
+          return []
+        }
+      },
+      dropRestarted
+    }
+  }
+
   const oldKey = (key) => {
     if (key === NOTICE_KEY) return OLD_NOTICE_KEY
     if (key.startsWith(NOTES_PREFIX)) return OLD_NOTES_PREFIX + key.slice(NOTES_PREFIX.length)
@@ -2219,7 +2293,7 @@
   }
   const nudgeStep = (heldMs, shift) => shift ? heldRamp(heldMs, NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX) : heldRamp(heldMs, NUDGE_PX, NUDGE_MAX_PX)
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop }
   }
   if (typeof document === 'undefined') return
 
@@ -2971,12 +3045,9 @@
   let pressFinishedText = false
   let endedByEnter = false
   let puzzleNotes = []
-  let keptEntries = []
   let selected = []
   // The selection a rectangle being dragged would leave at its release, outlined in place of the selection; null with no rectangle.
   let previewed = null
-  // False while this puzzle's saved notes cannot be read: no save writes over them but an explicit wipe's.
-  let savable = true
   const reported = new Set()
   // Each drawn note's element is kept on its item under a symbol, which a spread copies and JSON leaves out, so a moved, recolored or retyped note keeps
   // its element and no save stores it. Its scroll position is kept the same way, for an element put back in the page, which starts unscrolled.
@@ -2987,8 +3058,6 @@
   let layerFont = ''
   let lastLayout = ''
 
-  // The key of the puzzle these notes were loaded for, so a save lands there even when the page's puzzle has changed since. Null before the first load, when there are no notes to save and a save does nothing.
-  let loadedKey = null
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
   const selectedNotes = () => selected.map((i) => puzzleNotes[i])
 
@@ -3440,38 +3509,18 @@
     for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
   }
 
-  // Once a puzzle, so a second puzzle with an unreadable note is told too.
-  function reportKept () {
-    if (keptEntries.length > 0) report(`${keptEntries.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${loadedKey}`)
-  }
-
-  const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
+  const savedNotes = noteSession({ store: savedData, report })
 
   function writeNotes (items = puzzleNotes) {
     forgetParsedTexts()
-    if (loadedKey === null) return
-    reportKept()
-    if (!savable) {
-      report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
-      return
-    }
-    // A write the browser refuses (a full localStorage) is reported, and is not a SudokuPad change that turns the saved data off.
-    if (!storage.off) {
-      try {
-        saveNotesTo(Framework, loadedKey, items, keptEntries)
-      } catch (err) {
-        report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
-      }
-    }
+    savedNotes.save(items)
   }
 
   // Any edit after a Restart ends what Undo can bring back.
   function saveNotes () {
-    forgetRestarted()
+    savedNotes.dropRestarted()
     writeNotes()
   }
-
-  const forgetRestarted = () => { if (loadedKey !== null && !storage.off) Framework.removeData(restartedKey(loadedKey)) }
 
   function changeSelected (change) {
     for (const i of selected) puzzleNotes[i] = change(puzzleNotes[i])
@@ -4115,23 +4164,11 @@
     if (textBox) closeTextBox()
   }
 
-  // Saved notes the script cannot read are the browser's data and not SudokuPad's, so they are left as they are and never turn the saved data off.
-  // SudokuPad keeps what its Undo brings back after a Restart in memory only, so a load ends it for the notes too.
   function showSavedNotes () {
     cancelInput()
     puzzleNotes = []
     setNotesHidden(false)
-    savable = true
-    loadedKey = currentPuzzleKey()
-    forgetRestarted()
-    if (!storage.off) {
-      const { items, kept, unreadable } = loadNotes(Framework, loadedKey)
-      puzzleNotes = items
-      keptEntries = kept
-      savable = unreadable === undefined
-      if (unreadable !== undefined) report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
-      reportKept()
-    }
+    puzzleNotes = savedNotes.load(currentPuzzleKey())
     forgetParsedTexts()
     redraw()
   }
@@ -4140,7 +4177,7 @@
   function clearNotes () {
     puzzleNotes = puzzleNotes.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()
-    savable = true
+    savedNotes.replaceUnreadable()
   }
 
   function clearAll () {
@@ -4151,11 +4188,7 @@
 
   // Restart keeps the notes before it saves them cleared, so the Undo that brings back what SudokuPad's Restart cleared brings them back too.
   function restartNotes () {
-    try {
-      if (loadedKey !== null && !storage.off && !undoRestart.off) keepRestartedTo(Framework, loadedKey, puzzleNotes.filter((item) => item.kind === TEXT_KIND))
-    } catch (err) {
-      report(`Text Anywhere could not keep this puzzle's notes for Undo: ${err.message}`)
-    }
+    if (!undoRestart.off) savedNotes.keepForRestart(puzzleNotes.filter((item) => item.kind === TEXT_KIND))
     clearNotes()
     writeNotes()
     redraw()
@@ -4173,23 +4206,15 @@
   }
 
   function restoreRestarted () {
-    if (loadedKey === null || storage.off) return
-    const key = restartedKey(loadedKey)
-    let notes
-    try {
-      notes = readNotes(Framework.getData(key)).items
-    } catch (err) {
-      report(`Text Anywhere cannot read the notes Restart cleared, so Undo does not bring them back: ${err.message}`)
-      return
-    }
-    if (notes.length === 0) return
+    const restored = savedNotes.restoreAfterRestart()
+    if (restored.length === 0) return
     setNotesHidden(false)
     cancelInput()
     const first = puzzleNotes.length
-    puzzleNotes = puzzleNotes.concat(notes)
+    puzzleNotes = puzzleNotes.concat(restored)
     saveNotes()
     // So the solver sees which notes came back.
-    if (Framework.app.tool === TOOL_NAME) select(notes.map((_, i) => first + i))
+    if (Framework.app.tool === TOOL_NAME) select(restored.map((_, i) => first + i))
     else redraw()
   }
 
