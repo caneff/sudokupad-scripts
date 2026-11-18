@@ -62,7 +62,7 @@ const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.j
 const { BOX_LINES, BOX_PRESETS, CORNERS, NUDGE_REPEAT_MS, SPEED_WINDOW_MS } = require('../../text-anywhere.user.js')
 const { scriptFiles } = require('../../sync-lib.js')
 
-export const scriptFile = (name) => `${name}.user.js`
+const scriptFile = (name) => `${name}.user.js`
 export const scriptName = (file) => file.replace(/\.user\.js$/, '')
 const AUTO_RULES_RESIZER = scriptFile('auto-rules-resizer')
 const COLOR_BY_DIGIT = scriptFile('color-by-digit')

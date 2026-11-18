@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { fileIssue, run } from '../watch.mjs'
+import { fileIssue, issueTrailer, run } from '../watch.mjs'
 import { FUZZ_MINUTES, FUZZ_TIMEOUT_MS, MINUTE_MS, NIGHTLY_CONFIG, NIGHTLY_HUNTS, didNotRunIssue, failureTitle, fuzzProcess, huntCount, mergeNeverRun, nightly, parseFuzzOutput } from './nightly.mjs'
 import { CONFIGS } from './configs.mjs'
 
@@ -49,7 +49,7 @@ const night = (gh, outputs, ok = false) => {
   })
   return Object.assign(outcome, { runs })
 }
-const BLOCKED = '\n\n## Blocked by\n\n- None — can start immediately.'
+const BLOCKED = '\n\n' + issueTrailer('npm run fuzz:nightly', 'live/fuzz/nightly.mjs')
 const verbs = (gh) => gh.calls.map((c) => c.verb).filter((v) => v !== 'issue list')
 
 describe('the fuzz did-not-run issue (#805)', () => {

@@ -16,7 +16,7 @@ const OWNED = {
   'page.mjs': ['openPage', 'startPuzzle', 'waitForFramework', 'gotoPuzzle', 'newPage', 'captureConsoleErrors'],
   'settings.mjs': ['openScriptDialog', 'closeDialogWith'],
   'settle.mjs': ['clickUntil', 'POLL_MS', 'SETTLE_MS'],
-  'pen.mjs': ['openPenTool', 'padValues', 'penEntries', 'penValuesNoColor', 'penValuesAt', 'penStrings', 'drag', 'draw', 'setSlider', 'plantSaved', 'plantUnchecked'],
+  'pen.mjs': ['openPenTool', 'padValues', 'penEntries', 'penValuesNoColor', 'penValuesAt', 'penStrings', 'drag', 'draw', 'setSlider', 'plantUnchecked'],
   'input.mjs': ['keydownDefaults', 'setInputValue'],
   'board.mjs': ['cellCentre', 'gridPoint', 'mouseDrag', 'restart', 'boxOpen', 'finishNote', 'typeText', 'placeNote'],
   'session.mjs': ['SCRIPT_FILES', 'scriptSource', 'useBrowser', 'addPage', 'openWith', 'reloadWith']

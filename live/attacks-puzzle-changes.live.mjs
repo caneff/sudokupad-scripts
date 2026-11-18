@@ -5,10 +5,10 @@ import assert from 'node:assert/strict'
 import { openPage } from './page.mjs'
 import { EDITOR as COLOR_BY_DIGIT_EDITOR } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { SETTINGS_EDITOR, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
-import { clickCell, mouseDrag, placeNote } from './board.mjs'
+import { clickCell, mouseDrag, pickTool, placeNote } from './board.mjs'
 import { draw, penEntries } from './pen.mjs'
 import { closeDialogWith, EXTRAS_EDITOR, openScriptDialog } from './settings.mjs'
-import { boardOf, CLASSIC_GIVENS, CLASSIC_SOLUTION, closePauseDialog, dialogAtRest, dialogWith, installAll, NOTE_POINT, openPuzzleId, OVERLAY_DRAG, PAUSED, pauseGame, puzzleData, puzzleIdFor, resumeAfterHistory, useTool } from './puzzles.mjs'
+import { boardOf, CLASSIC_GIVENS, CLASSIC_SOLUTION, closePauseDialog, dialogAtRest, dialogWith, installAll, NOTE_POINT, openPuzzleId, OVERLAY_DRAG, PAUSED, pauseGame, puzzleData, puzzleIdFor, resumeAfterHistory } from './puzzles.mjs'
 import { readUntil, settle } from './settle.mjs'
 import { useBrowser } from './session.mjs'
 
@@ -37,18 +37,18 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
   })
 
   const markA = async () => {
-    await useTool(p, '#control-normal')
+    await pickTool(p, 'normal')
     await clickCell(p, 0, 2)
     await p.keyboard.press('4')
-    await useTool(p, '#control-corner')
+    await pickTool(p, 'corner')
     await clickCell(p, 2, 0)
     await p.keyboard.press('1')
-    await useTool(p, '#control-colour')
+    await pickTool(p, 'colour')
     await clickCell(p, ...COLORED)
     await p.keyboard.press('3')
     await draw(p, 6)
     await placeNote(p, NOTE_POINT, '15')
-    await useTool(p, '#control-normal')
+    await pickTool(p, 'normal')
     return readUntil(() => boardOf(p), (b) => b.notes.length === 1 && b.pen.length > 0 && b.entered.length === 1 && b.corner.length === 1 && b.colours.some((c) => c.startsWith(`${COLORED}:`)))
   }
 
@@ -69,7 +69,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
   it('attack 63: browser Back and Forward between two puzzles: each shows its own marks every time', async () => {
     const a = await markA()
     await openPuzzleId(p, idB)
-    await useTool(p, '#control-normal')
+    await pickTool(p, 'normal')
     await clickCell(p, 4, 4)
     await p.keyboard.press('7')
     const b = await readUntil(() => boardOf(p), (x) => x.entered.length === 1)
@@ -91,7 +91,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     }
   }
   const solve = async () => {
-    await useTool(p, '#control-normal')
+    await pickTool(p, 'normal')
     for (let i = 0; i < 81; i++) {
       const [r, c] = [Math.floor(i / 9), i % 9]
       if (CLASSIC_GIVENS.some(([gr, gc]) => gr === r && gc === c)) continue
@@ -128,7 +128,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     const marked = await readUntil(() => boardOf(p), (x) => x.notes.length === 1 && x.pen.length > 0)
     assert.deepEqual(marked.entered, solved.entered, 'the digits are still the solution')
     // Taking one digit out and putting it back solves the puzzle again with the marks on the board.
-    await useTool(p, '#control-normal')
+    await pickTool(p, 'normal')
     await clickCell(p, 0, 2)
     await p.keyboard.press('Backspace')
     await p.keyboard.press('4')
@@ -151,7 +151,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     assert.equal(await running(), true)
     assert.equal(await gridBlurred(), false, 'the grid shows while the timer runs')
     // A cell is selected, so a digit key that got through would change it.
-    await useTool(p, '#control-normal')
+    await pickTool(p, 'normal')
     await clickCell(p, 4, 4)
     await pause()
     assert.equal(await gridBlurred(), true, 'the grid is hidden while paused')
