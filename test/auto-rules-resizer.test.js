@@ -767,3 +767,14 @@ test('a Framework without getApp turns the fit and the refit off with one warnin
   assert.match(page.bar, /^Auto Rules Resizer: rules fit, rules refit are off — SudokuPad changed\.Report/)
   assert.deepEqual(entries, ['rulesresizer'])
 })
+
+test('credit: the script names Nell Gwyn and SudokuPad-ResizeRules in a comment after the header, spelled "Gwyn"', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')
+  const end = source.indexOf('// ==/UserScript==')
+  const credit = source.slice(end + '// ==/UserScript=='.length).split('(function')[0]
+  assert.match(credit, /Nell Gwyn/)
+  assert.match(credit, /SudokuPad-ResizeRules 0\.1\.5/)
+  assert.doesNotMatch(source.slice(0, end), /Nell|ResizeRules/)
+  assert.match(source, /^\/\/ @author\s+ChinStrap$/m)
+  assert.doesNotMatch(source, /Gwyn{2}/)
+})
