@@ -9,7 +9,7 @@ const { startScript } = require('./unit-start.js')
 const {
   MAX_WIDTH_KEY, MAX_HEIGHT_KEY, limitFromBox, LIMIT_FLOORS, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, offsetFontPx, fitRulesPane, clearFit,
-  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, loadSizing, saveSizing, noSizing, SIZING_KEY_PREFIX, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
+  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, loadSizing, saveSizing, stepSizing, noSizing, SIZING_KEY_PREFIX, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
 } = require('../auto-rules-resizer.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -577,6 +577,26 @@ function countingStore (saved) {
     removeData: (key) => { writes.push(['removeData', key]); store.removeData(key) }
   }
 }
+
+test('stepSizing: a capped step saves what the fit applied; a fit that bails saves nothing and keeps the saved sizing', () => {
+  const saved = { fontOffsetPx: 1, box: noRulesDrag() }
+  const session = () => ({ puzzle: 'p', wanted: saved, applied: saved })
+  const store = countingStore()
+  const capped = session()
+  stepSizing(store, capped, 'fontOffsetPx', (px) => px + 1, () => {
+    capped.applied = { ...saved, fontOffsetPx: 0.5 }
+    return capped.applied
+  })
+  assert.equal(loadSizing(store, 'p').fontOffsetPx, 0.5)
+  assert.equal(capped.wanted.fontOffsetPx, 0.5)
+  const writes = store.writes.length
+  for (const [part, change] of [['fontOffsetPx', (px) => px + 1], ['box', (box) => ({ ...box, w: 30 })]]) {
+    const bailed = session()
+    stepSizing(store, bailed, part, change, () => null)
+    assert.equal(store.writes.length, writes, `a bailed ${part} step wrote nothing`)
+    assert.deepEqual(bailed.wanted, saved, `a bailed ${part} step leaves the sizing as it was`)
+  }
+})
 
 test('saveSizing and loadSizing: a puzzle never resized starts at the default, and another puzzle does not inherit a resized one', () => {
   const store = fakeStore()
