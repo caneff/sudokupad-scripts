@@ -49,6 +49,8 @@ describe('attacks on storage', { concurrency: false }, () => {
       // A refused note goes through the guarded store like every other write, so each script tells it in a bar and none opens a dialog.
       await pickTool(p, 'textanywhere')
       await typeText(p, [4.5, 4.5], '15')
+      // The note's save is Text Anywhere's first write, so its bar or a dialog, whichever shows first, is the answer to it.
+      await p.locator(`${NOTICE_BAR}[data-script="text-anywhere"], .dialog`).first().waitFor()
       assert.equal(await p.locator('.dialog').count(), 0, 'no dialog for a refused note')
       assert.deepEqual(await textAnywhere.texts(p), ['15'], 'Text Anywhere draws the note')
 
