@@ -74,7 +74,8 @@ test('#834: Pen Tool Extras\' suites never type the editor selector, they import
 
 // #984 (spec #967): the name checks above miss a copy under a new name, so these read the bodies too.
 const declarersOf = (name) => liveFiles.filter((file) => declares(read(file), name))
-const holding = (file) => /mouse\.down\([^)]*\)\s*\n\s*try \{\s*\n\s*await [^\n]*waitFor/.test(read(file))
+// A wait inside a try whose finally lets the mouse go: every hold-for-pickers copy had this shape, whatever pressed first.
+const holding = (file) => /try \{\s*\n\s*await [^\n]*waitFor\([^\n]*\n\s*\} finally \{\s*\n\s*await [^\n]*mouse\.up\(/.test(read(file))
 
 test('#984: board.mjs is the only home of the cell actions and the board reads, and attack-fixtures.mjs is folded into it', () => {
   assert.equal(liveFiles.includes('live/attack-fixtures.mjs'), false)
