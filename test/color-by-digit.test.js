@@ -5,16 +5,19 @@ const assert = require('node:assert/strict')
 const path = require('node:path')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
+const { save } = loadLib(['plain', 'store'], ['save'])
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { withScript, withoutPath } = require('./unit-start.js')
-const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, asideOf, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, palettePages, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
+const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, asideOf, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, palettePages, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
 
 const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
-const plan = (cells, g = groups) => planColoring(cells, g)
+// The planners take the one plan-cell shape `toPlanCell` builds; a test names only what it sets.
+const planCellOf = (cell = {}) => ({ fogged: false, given: '', value: '', colours: [], centre: [], ...cell })
+const plan = (cells, g = groups) => planColoring(cells.map(planCellOf), g)
 
 test('givens and entered digits both get their group key', () => {
   assert.deepEqual(plan([{ given: '1' }, { value: '3' }]), [
@@ -73,7 +76,7 @@ test('readCentreMarks gives the visible centre marks, and none for a cell whose 
 
 test('toPlanCell keeps the digit, colors and visible centre marks, and drops corner marks', () => {
   const cell = { given: null, value: '', colours: ['a'], pencilmarks: ['1', '2'], propVisible: () => true, propGet: () => ['3'] }
-  assert.deepEqual(toPlanCell(cell), { fogged: false, given: null, value: '', colours: ['a'], centre: ['3'] })
+  assert.deepEqual(toPlanCell(cell), { fogged: false, given: '', value: '', colours: ['a'], centre: ['3'] })
   assert.deepEqual(plan([toPlanCell({ ...cell, colours: [], propGet: () => [] })]), [])
 })
 
@@ -86,6 +89,12 @@ test('toPlanCell hides the digit of a given the fog covers, so it gets no color'
   const given = { given: '1', value: '', colours: [], hideclue: true, propVisible: () => true, propGet: () => [] }
   assert.deepEqual(plan([toPlanCell(given)]), [])
   assert.deepEqual(plan([toPlanCell({ ...given, hideclue: false })]), [{ index: 0, key: 'a' }])
+})
+
+test('toPlanCell always gives the one shape: a digit, a given, colors and centre marks, each present', () => {
+  const bare = toPlanCell({ propVisible: () => true, propGet: () => [] })
+  assert.deepEqual(bare, { fogged: false, given: '', value: '', colours: [], centre: [] })
+  assert.deepEqual(plan([bare]), [])
 })
 
 test('a fogged given is among the cells to recolor, so a color put on it before is taken off', () => {
@@ -182,7 +191,7 @@ test('garbage under the profiles key gives the preloads, and is still in _unread
   const store = fakeStore({ [PROFILES]: 'garbage from a newer version' })
   const { result: state } = quietly(() => stateFromStored(store))
   assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
-  saveProfiles(store, state)
+  save(store, PROFILES, state)
   assert.equal(store.data[`${PROFILES}_unreadable`], 'garbage from a newer version')
   assert.deepEqual(stateFromStored(store), state)
 })
@@ -647,7 +656,7 @@ test('renderChips labels a group of only 0 with 0 and a group with no digits wit
 
 const manyCells = [
   { given: '1' }, { value: '5', colours: ['a'] }, { value: '8', colours: ['b', 'z'] }, { centre: ['2'], colours: ['a'] }, { colours: ['a', 'b'] }, {}
-]
+].map(planCellOf)
 const oldProfile = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['5'] }]
 const newProfile = [{ key: 'c', digits: ['1', '8'] }, { key: 'a', digits: ['2'] }]
 
@@ -704,7 +713,7 @@ test('normalizeGroups keeps a digit in only its first group', () => {
   )
 })
 
-const cellPlan = (cells, indices = cells.map((_, i) => i), g = groups, managed) => planCellColors(cells, g, indices, managed)
+const cellPlan = (cells, indices = cells.map((_, i) => i), g = groups, managed) => planCellColors(cells.map(planCellOf), g, indices, managed)
 
 test('cell coloring: a pure cell gets its group color', () => {
   assert.deepEqual(cellPlan([{ value: '1' }, { centre: ['3'] }]), [
@@ -771,10 +780,10 @@ test('cell coloring: digits, centre marks and clears of them are edits; corner m
 })
 
 test('cell coloring: the edit signature moves with the digit and the centre marks, not their order, and ignores corner marks and colors', () => {
-  assert.equal(entrySignature({ centre: ['2', '1'] }), entrySignature({ centre: ['1', '2'] }))
-  assert.notEqual(entrySignature({ value: '1' }), entrySignature({ value: '2' }))
-  assert.notEqual(entrySignature({ centre: ['1'] }), entrySignature({ centre: ['1', '2'] }))
-  assert.equal(entrySignature({ value: '1', colours: ['a'], pencilmarks: ['5'] }), entrySignature({ value: '1' }))
+  assert.equal(entrySignature(planCellOf({ centre: ['2', '1'] })), entrySignature(planCellOf({ centre: ['1', '2'] })))
+  assert.notEqual(entrySignature(planCellOf({ value: '1' })), entrySignature(planCellOf({ value: '2' })))
+  assert.notEqual(entrySignature(planCellOf({ centre: ['1'] })), entrySignature(planCellOf({ centre: ['1', '2'] })))
+  assert.equal(entrySignature(planCellOf({ value: '1', colours: ['a'], pencilmarks: ['5'] })), entrySignature(planCellOf({ value: '1' })))
 })
 
 test('cell coloring: changedIndices lists the positions whose signature differs', () => {
@@ -804,14 +813,14 @@ test('mode: the starting mode is the saved mode, else Cell unless auto mode was 
 })
 
 test('mode: planClear takes every listed group color off every cell, digit or not, and leaves colors in no group', () => {
-  assert.deepEqual(planClear([{ value: '1', colours: ['a'] }, { colours: ['a', 'z'] }, { value: '3', colours: ['b'] }, { colours: ['z'] }, {}], groupKeys(groups)), [
+  assert.deepEqual(planClear([{ value: '1', colours: ['a'] }, { colours: ['a', 'z'] }, { value: '3', colours: ['b'] }, { colours: ['z'] }, {}].map(planCellOf), groupKeys(groups)), [
     { action: 'remove', key: 'a', indices: [0, 1] },
     { action: 'remove', key: 'b', indices: [2] }
   ])
 })
 
 test('colorSteps clears a cell that loses a color and puts back the colors it keeps, then adds; a cell that loses nothing is only added to', () => {
-  const cells = [{ colours: ['a', 'z'] }, { colours: ['a'] }, { colours: ['b', 'y', 'z'] }, { colours: [] }]
+  const cells = [{ colours: ['a', 'z'] }, { colours: ['a'] }, { colours: ['b', 'y', 'z'] }, { colours: [] }].map(planCellOf)
   const ops = [{ action: 'remove', key: 'a', indices: [0, 1] }, { action: 'remove', key: 'b', indices: [2] }, { action: 'add', key: 'c', indices: [1, 3] }]
   assert.deepEqual(colorSteps(cells, ops), [
     { type: 'clear', arg: 'colour', indices: [0, 1, 2] },
@@ -1705,7 +1714,7 @@ test('renderChips draws a group color at SudokuPad\'s 60% cell opacity, and a wh
   assert.deepEqual(opacities('digit'), [undefined])
   assert.deepEqual(opacities('off'), [undefined])
   // A digit in no cell group is a white chip, not a grey tinted one.
-  const uncovered = runCells(renderChips([{ digit: '8', cellKey: undefined, digitKey: undefined }], colorFor, { size: 16 }))
+  const uncovered = runCells(renderChips([{ digit: '8', cellKey: undefined, digitProfileKey: undefined }], colorFor, { size: 16 }))
   assert.deepEqual(uncovered.map((c) => [c.fill, c.opacity]), [['#fff', undefined]])
 })
 
@@ -1847,7 +1856,7 @@ test('shownChips: Both with Low/5/High cells and Odd/Even digits shows 1 5 6, th
 
 test('shownChips: Both names each chip\'s cell group and digit group', () => {
   assert.deepEqual(shownChips('both', LOW, ODD), [
-    { digit: '1', cellKey: '6', digitKey: '1' }, { digit: '5', cellKey: '5', digitKey: '1' }, { digit: '6', cellKey: 'q', digitKey: '2' }])
+    { digit: '1', cellKey: '6', digitProfileKey: '1' }, { digit: '5', cellKey: '5', digitProfileKey: '1' }, { digit: '6', cellKey: 'q', digitProfileKey: '2' }])
 })
 
 test('shownChips: Both with a synced profile shows the Cell strip', () => {

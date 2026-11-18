@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.70
+// @version      0.25.71
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.70'
+  const VERSION = '0.25.71'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -82,9 +82,12 @@
     return keyOfDigit
   }
 
+  // The digit a plan cell shows, or '' when it has none: a given beats an entered value.
+  const placedDigit = (cell) => cell.given || cell.value
+
   function pureKey (cell, keyOfDigit) {
-    const placed = String(cell.given || cell.value || '')
-    return placed === '' ? sharedKey(cell.centre || [], keyOfDigit) : keyOfDigit[placed]
+    const placed = placedDigit(cell)
+    return placed === '' ? sharedKey(cell.centre, keyOfDigit) : keyOfDigit[placed]
   }
 
   function planColoring (cells, groups) {
@@ -93,7 +96,7 @@
     cells.forEach((cell, index) => {
       const key = pureKey(cell, keyOfDigit)
       if (key === undefined) return
-      if ((cell.colours || []).includes(key)) return
+      if (cell.colours.includes(key)) return
       plan.push({ index, key })
     })
     return plan
@@ -102,7 +105,7 @@
   const everyIndex = (cells) => cells.map((_, i) => i)
 
   // A cell with no digit and no centre marks is left alone, so a group color painted on it by hand stays. A fogged given is not left alone: a color put on it before the fog was honored comes off.
-  const enteredIndices = (cells) => cells.flatMap((cell, index) => (!cell.fogged && String(cell.given || cell.value || '') === '' && cell.centre.length === 0 ? [] : [index]))
+  const enteredIndices = (cells) => cells.flatMap((cell, index) => (!cell.fogged && placedDigit(cell) === '' && cell.centre.length === 0 ? [] : [index]))
 
   const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
 
@@ -124,7 +127,7 @@
     return action.type === 'clear' && action.arg !== 'colour' && action.arg !== 'pen'
   }
 
-  const entrySignature = (cell) => JSON.stringify([String(cell.value || ''), [...(cell.centre || [])].sort()])
+  const entrySignature = (cell) => JSON.stringify([cell.value, [...cell.centre].sort()])
 
   const changedIndices = (before, after) => before.flatMap((sig, i) => (sig === after[i] ? [] : [i]))
 
@@ -137,7 +140,7 @@
     indices.forEach((index) => {
       const cell = cells[index]
       const want = pureKey(cell, keyOfDigit)
-      const held = cell.colours || []
+      const held = cell.colours
       managedKeys.filter((key) => key !== want && held.includes(key)).forEach((key) => push(removals, key, index))
     })
     planColoring(indices.map((index) => cells[index]), groups).forEach(({ index, key }) => push(additions, key, indices[index]))
@@ -158,7 +161,7 @@
     ops.filter((op) => op.action === 'remove').forEach(({ key, indices }) => indices.forEach((i) => removed.set(i, [...(removed.get(i) || []), key])))
     const cleared = [...removed.keys()]
     const putBack = new Map()
-    cleared.forEach((i) => (cells[i].colours || []).filter((key) => !removed.get(i).includes(key)).forEach((key) => putBack.set(key, [...(putBack.get(key) || []), i])))
+    cleared.forEach((i) => cells[i].colours.filter((key) => !removed.get(i).includes(key)).forEach((key) => putBack.set(key, [...(putBack.get(key) || []), i])))
     return [
       ...(cleared.length > 0 ? [{ type: 'clear', arg: 'colour', indices: cleared }] : []),
       ...[...putBack].map(([key, indices]) => ({ type: 'colour', arg: key, indices })),
@@ -175,7 +178,8 @@
 
   // A given the fog hides is not a digit the solver can see, so it has none here and takes no color.
   function toPlanCell (cell) {
-    return { fogged: isFogged(cell), given: isFogged(cell) ? '' : cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
+    const fogged = isFogged(cell)
+    return { fogged, given: fogged ? '' : String(cell.given || ''), value: String(cell.value || ''), colours: cell.colours || [], centre: readCentreMarks(cell) }
   }
 
   // Groups order 0 after 9, but a group's own digits list 0 first, as the preloads save them.
@@ -437,9 +441,7 @@
 
   const stateFromStored = (store) => load(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
 
-  const saveProfiles = (store, state) => save(store, PROFILES_KEY, state)
-
-  function stateFromLegacy (legacyGroups) {
+    function stateFromLegacy (legacyGroups) {
     const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
     if (!legacy) return preloadedState()
@@ -558,16 +560,16 @@
   // Both takes the set of digits that reaches the most groups of the two profiles; see GLOSSARY.md, Cell strip.
   function shownChips (mode, cellGroups, digitGroups) {
     const cellKeyOf = keyOfDigitMap(cellGroups)
-    const digitKeyOf = keyOfDigitMap(digitGroups)
-    const chipOf = (digit) => ({ digit, cellKey: cellKeyOf[digit], digitKey: digitKeyOf[digit] })
+    const digitProfileKeyOf = keyOfDigitMap(digitGroups)
+    const chipOf = (digit) => ({ digit, cellKey: cellKeyOf[digit], digitProfileKey: digitProfileKeyOf[digit] })
     const strip = shownGroups(cellGroups, CHIP_MAX_GROUPS).map((g) => g.digit)
     if (mode !== 'both') return shownGroups(mode === 'digit' ? digitGroups : cellGroups, CHIP_MAX_GROUPS).map((g) => chipOf(g.digit))
     const count = Math.min(Math.max(cellGroups.length, digitGroups.length), CHIP_MAX_GROUPS)
     const zeroAlone = [...cellGroups, ...digitGroups].some((g) => g.digits.length === 1 && g.digits[0] === '0')
-    const covered = DIGITS.filter((d) => (d in cellKeyOf || d in digitKeyOf) && (d !== '0' || zeroAlone))
+    const covered = DIGITS.filter((d) => (d in cellKeyOf || d in digitProfileKeyOf) && (d !== '0' || zeroAlone))
     const reached = (set, keyOf) => new Set(set.map((d) => keyOf[d]).filter((k) => k !== undefined)).size
     // One number: the groups reached outrank the digits shared with the Cell strip, which at most three digits share.
-    const rankOf = (set) => (reached(set, cellKeyOf) + reached(set, digitKeyOf)) * 10 + set.filter((d) => strip.includes(d)).length
+    const rankOf = (set) => (reached(set, cellKeyOf) + reached(set, digitProfileKeyOf)) * 10 + set.filter((d) => strip.includes(d)).length
     let best = null
     let bestRank = -1
     // Sets are visited in ascending order, so a set replaces the best only on a strictly higher rank and the lowest of a tie stays.
@@ -1691,9 +1693,9 @@
   function renderChips (chips, colorOf, { size, style = 'cell', x, y }) {
     if (chips.length === 0) return renderBlankChips(size, x, y)
     const { line } = CHIP_LOOKS[style]('')
-    const cells = chips.map(({ digit, cellKey, digitKey }, i) => {
-      const key = style === 'digit' ? digitKey : cellKey
-      const look = CHIP_LOOKS[style](cellKey === undefined ? '' : colorOf(cellKey), digitKey === undefined ? '' : colorOf(digitKey))
+    const cells = chips.map(({ digit, cellKey, digitProfileKey }, i) => {
+      const key = style === 'digit' ? digitProfileKey : cellKey
+      const look = CHIP_LOOKS[style](cellKey === undefined ? '' : colorOf(cellKey), digitProfileKey === undefined ? '' : colorOf(digitProfileKey))
       // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
       const fill = cellKey === undefined ? '#fff' : look.fill
       const tinted = cellKey !== undefined && (style === 'cell' || style === 'both')
@@ -2295,7 +2297,7 @@
       onSkip () {
         closeMenu()
         const button = document.querySelector(BUTTON)
-        if (button) button.remove()
+        button?.remove()
       }
     },
     editor: {
@@ -2311,9 +2313,9 @@
       needs: {},
       onSkip () {
         const style = document.getElementById(DIGIT_STYLE_ID)
-        if (style) style.remove()
+        style?.remove()
         const circles = document.getElementById(CIRCLES_ID)
-        if (circles) circles.remove()
+        circles?.remove()
         document.querySelectorAll(`[${DIGIT_ATTR}]`).forEach((el) => el.removeAttribute(DIGIT_ATTR))
       }
     },
@@ -2341,7 +2343,7 @@
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, asideOf, isVisibleColor, layoutPages, layoutColors, palettePages, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, asideOf, isVisibleColor, layoutPages, layoutColors, palettePages, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2355,7 +2357,7 @@
     return tool?.palette ? layoutPages(palettePages(), tool.currentPage, readColor) : []
   }
 
-  const saveState = (state) => saveProfiles(savedData, state)
+  const saveState = (state) => save(savedData, PROFILES_KEY, state)
   const loadState = () => stateFromStored(savedData)
 
   function addPreloadsOnce () {
@@ -2519,7 +2521,7 @@
     const anchor = document.getElementById('cell-pencilmarks')
     if (!anchor) return null
     if (!group || group.nextSibling !== anchor) {
-      if (group) group.remove()
+      group?.remove()
       group = document.createElementNS(SVG_NS, 'g')
       group.id = CIRCLES_ID
       anchor.parentNode.insertBefore(group, anchor)
@@ -2676,7 +2678,7 @@
     if (action.type === 'value') return cell.propVisible('normal')
     if (action.type === 'candidates') return cell.propVisible('centre')
     const plan = toPlanCell(cell)
-    return String(plan.value || '') !== '' || plan.centre.length > 0
+    return plan.value !== '' || plan.centre.length > 0
   }
 
   // A change SudokuPad already runs inside its own group (a paste) has its color changes added to that
@@ -2736,17 +2738,15 @@
   let leavingMenu = null
   let menuTimer = null
 
-  const addStyle = (id = STYLE_ID, css = STYLE_CSS) => writeStyle(id, css)
-
-  const dropLeavingMenu = () => {
+    const dropLeavingMenu = () => {
     clearTimeout(menuTimer)
     menuTimer = null
-    if (leavingMenu) leavingMenu.remove()
+    leavingMenu?.remove()
     leavingMenu = null
   }
   const closeMenu = () => {
     dropLeavingMenu()
-    if (menu) menu.remove()
+    menu?.remove()
     menu = null
   }
 
@@ -2769,7 +2769,7 @@
     redraw()
     const button = document.querySelector(BUTTON)
     if (!button) return
-    addStyle()
+    writeStyle(STYLE_ID, STYLE_CSS)
     menu = document.createElement('div')
     menu.id = MENU.slice(1)
     menu.setAttribute('role', 'menu')
@@ -3136,8 +3136,8 @@
     addPreloadsOnce()
     const state = loadState()
     mode = allowedMode(startingMode(savedData.getData(MODE_KEY), savedData.getData(AUTO_KEY)), usesDigitColors(state))
-    addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
-    addStyle(BUTTON_STYLE_ID, BUTTON_CSS)
+    writeStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
+    writeStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {
       installButton(Framework, app, mode, buttonChips(mode, state), readColor)
       labelButton()
