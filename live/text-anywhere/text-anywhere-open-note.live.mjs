@@ -4,6 +4,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, finishNote, gridPoint } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
+import { savedValue } from '../settings.mjs'
 
 const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, TEXT_BOX, WIDTH_KEY, valueOf } = textAnywhere
 const BLACK = 1
@@ -19,7 +20,7 @@ describe('Text Anywhere\'s panel while a note is open', { concurrency: false }, 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const key = (n) => `.controls-input button[data-key="${n}"]`
   const currentKeys = () => read(() => [...document.querySelectorAll('.controls-input button.digit.current')].map((b) => Number(b.dataset.key)))
-  const stored = (name) => read((k) => Framework.getData(k) ?? null, name)
+  const stored = (name) => savedValue(p, name)
   const size = () => valueOf(p, SIZE_SLIDER)
   const boxColor = () => p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e).color)
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
@@ -135,7 +136,7 @@ describe('Text Anywhere\'s panel while a brand-new note is open', { concurrency:
   const read = (fn, arg) => p.evaluate(fn, arg)
   const key = (n) => `.controls-input button[data-key="${n}"]`
   const currentKeys = () => read(() => [...document.querySelectorAll('.controls-input button.digit.current')].map((b) => Number(b.dataset.key)))
-  const stored = (name) => read((k) => Framework.getData(k) ?? null, name)
+  const stored = (name) => savedValue(p, name)
   const size = () => valueOf(p, SIZE_SLIDER)
   const openNew = async () => {
     await p.mouse.click(...await gridPoint(p, SPOT))

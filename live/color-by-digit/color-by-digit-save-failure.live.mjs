@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EDITOR, MODE_KEY, openSession, PROFILES_KEY, savedProfiles, SEED, openEditorOn } from './color-by-digit-fixtures.mjs'
-import { dialogButton } from '../settings.mjs'
+import { dialogButton, savedValue } from '../settings.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -17,7 +17,7 @@ describe('Color by Digit\'s Save is all-or-nothing', { concurrency: false }, () 
   })
   after(async () => { await context.close() })
 
-  const stored = (key) => p.evaluate((k) => Framework.getData(k) ?? null, key)
+  const stored = (key) => savedValue(p, key)
 
   it('a Save that throws after the profiles were stored leaves the stored profiles as they were, and says Not saved', async () => {
     const before = await stored(PROFILES_KEY)

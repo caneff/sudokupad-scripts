@@ -2,7 +2,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
-import { boxOpen, clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
+import { boxOpen, cellProps, clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
 
 const { SELECTED, TEXT_BOX } = textAnywhere
 const RECTANGLE = '#text-anywhere-layer .text-anywhere-selection-rectangle'
@@ -26,7 +26,6 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   const saved = () => textAnywhere.saved(p)
   const texts = () => textAnywhere.texts(p)
   const selectedTexts = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent).sort(), SELECTED)
-  const cellState = () => p.evaluate(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
   // A note starts at its click, so a press meant for the note at cell spot `at` lands in its middle.
   const noteAt = async (at) => textAnywhere.middleAt(p, await gridPoint(p, at))
   const clickNote = async (at) => p.mouse.click(...await noteAt(at))
@@ -284,7 +283,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   })
 
   it('Tab in an open note does nothing: the note stays open and nothing reaches the cells or the tool', async () => {
-    const cells = await cellState()
+    const cells = await cellProps(p)
     await textAnywhere.reopen(p, await gridPoint(p, A_AT))
     await p.keyboard.press('Tab')
     assert.equal(await boxOpen(p), true)
@@ -294,7 +293,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     assert.equal(await boxOpen(p), true)
     await p.keyboard.press('Escape')
     assert.deepEqual((await saved()).map((item) => item.text), ['Az' + 'k', 'X', 'S'])
-    assert.equal(await cellState(), cells)
+    assert.equal(await cellProps(p), cells)
     assert.equal(await textAnywhere.tool(p), 'textanywhere')
   })
 

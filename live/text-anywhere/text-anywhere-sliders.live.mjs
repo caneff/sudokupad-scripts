@@ -5,6 +5,7 @@ import { readUntil } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
+import { savedValue } from '../settings.mjs'
 
 const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, SLIDERS, TEXT_BOX, WIDTH_KEY, valueOf } = textAnywhere
 const A = [1.5, 1.5]
@@ -19,7 +20,7 @@ describe('Text Anywhere\'s Size and Opacity sliders', { concurrency: false }, ()
   let context, p, errors, savedNote
 
   const saved = () => textAnywhere.saved(p)
-  const stored = (name) => p.evaluate((k) => Framework.getData(k) ?? null, name)
+  const stored = (name) => savedValue(p, name)
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const focusedSlider = () => p.evaluate((s) => document.activeElement?.matches(`${s} input`) === true, SLIDERS)
 

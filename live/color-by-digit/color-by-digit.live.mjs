@@ -1,10 +1,11 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, reloadSession, savedState, SEED, watch, wrongColorCountOn, openEditorOn } from './color-by-digit-fixtures.mjs'
-import { selectCell } from '../board.mjs'
-import { closeDialogWith, headerVersion, openSettings } from '../settings.mjs'
+import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, pressTo, PROFILES_KEY, reloadSession, SEED, watch, wrongColorCountOn, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { colorCell, selectCell } from '../board.mjs'
+import { closeDialogWith, headerVersion, openSettings, savedState } from '../settings.mjs'
 import { settle, stable } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
+import { restingMiddle } from '../input.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
 
@@ -53,7 +54,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
-  const paint = (r, c, key) => paintOn(p, r, c, key)
+  const paint = (r, c, key) => colorCell(p, [r, c], key)
   const setMultiColor = (v) => read((v) => Framework.setSetting('multicolour', v), v)
 
   before(async () => {
@@ -200,13 +201,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const digitKey = (digit) => p.locator(`${EDITOR} button[data-act=digit][data-digit="${digit}"]`)
   const swatch = (key) => p.locator(`${EDITOR} button[data-role=swatch][data-key="${key}"]`)
   const keyOf = async (digit) => (await paintedKeys(p))[digit]
-  // Hovering first waits for the dialog to stop moving, so the box read is where the key is.
-  const centre = async (locator) => { await locator.hover(); const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
   const reopen = async () => { await closeDialogWith(p, 'Cancel', EDITOR); await openEditorOn(p) }
   const dragThrough = async (from, through) => {
-    await p.mouse.move(from.x, from.y)
+    await p.mouse.move(...from)
     await p.mouse.down()
-    for (const point of through) await p.mouse.move(point.x, point.y, { steps: 6 })
+    for (const point of through) await p.mouse.move(...point, { steps: 6 })
     await p.mouse.up()
   }
 
@@ -282,7 +281,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('a drag over digits paints each, and one that starts on a digit already in the brush color clears each', async () => {
     await reopen()
-    const [four, five, six] = await Promise.all(['4', '5', '6'].map((d) => centre(digitKey(d))))
+    const [four, five, six] = await Promise.all(['4', '5', '6'].map((d) => restingMiddle(digitKey(d))))
     await dragThrough(four, [five, six])
     assert.deepEqual([await keyOf('4'), await keyOf('5'), await keyOf('6')], ['1', '1', '1'])
     await dragThrough(four, [five, six])
@@ -292,12 +291,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('a press in a gap before a key paints from the first digit the drag reaches, leaving no text selected', async () => {
     await reopen()
     await swatch('5').click()
-    const [one, two, three] = await Promise.all(['1', '2', '3'].map((d) => centre(digitKey(d))))
+    const [one, two, three] = await Promise.all(['1', '2', '3'].map((d) => restingMiddle(digitKey(d))))
     // The press is in the gap between the swatch grid and key 1.
     // Then it runs on over the headings' text, which an unprotected press would select.
-    const headings = await Promise.all([2, 1].map((column) => centre(p.locator(`${EDITOR} .cbd-column:nth-child(${column}) .cbd-heading`).first())))
+    const headings = await Promise.all([2, 1].map((column) => restingMiddle(p.locator(`${EDITOR} .cbd-column:nth-child(${column}) .cbd-heading`).first())))
     const [grid, key] = await Promise.all([p.locator(`${EDITOR} .cbd-swatches`).boundingBox(), digitKey('1').boundingBox()])
-    await dragThrough({ x: (grid.x + grid.width + key.x) / 2, y: one.y }, [one, two, three, ...headings])
+    await dragThrough([(grid.x + grid.width + key.x) / 2, one[1]], [one, two, three, ...headings])
     assert.deepEqual([await keyOf('1'), await keyOf('2'), await keyOf('3')], ['5', '5', '5'])
     // SudokuPad's dialog already has user-select: none, so this holds without the script's own rule: it guards against that changing.
     assert.equal(await p.evaluate(() => window.getSelection().toString()), '')

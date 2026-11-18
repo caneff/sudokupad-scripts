@@ -1,7 +1,7 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { EXTRAS_EDITOR, openScriptDialog, openSettings } from './settings.mjs'
-import { placeNote } from './board.mjs'
+import { gridPoint, placeNote } from './board.mjs'
 import { openPenTool, PAGE_BUTTON, penEntries } from './pen.mjs'
 import { keydownDefaults } from './input.mjs'
 import { settle } from './settle.mjs'
@@ -125,12 +125,9 @@ export const SCRIPTS = [
     control: (p) => p.locator(PAGE_BUTTON).waitFor({ state: 'visible' }),
     // Two clicks on one cell edge: SudokuPad's own X, then this script's arrow 'm'.
     act: async (p) => {
-      const [x0, y0, size] = await p.evaluate(() => {
-        const box = Framework.app.puzzle.cells.find((c) => c.row === 0 && c.col === 0).elem.getBoundingClientRect()
-        return [box.x, box.y, box.width]
-      })
       // 2 px inside the top edge of cell (2, 2).
-      const [x, y] = [x0 + 2.5 * size, y0 + 2 * size + 2]
+      const [x, edgeY] = await gridPoint(p, [2, 2.5])
+      const y = edgeY + 2
       const edge = async () => (await penEntries(p)).map((v) => v.split(':')[1][0])
       await p.mouse.click(x, y)
       assert.deepEqual(await settle(edge, ['4']), ['4'], 'the first click made SudokuPad\'s X')

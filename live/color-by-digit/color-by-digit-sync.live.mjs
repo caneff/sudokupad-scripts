@@ -1,8 +1,8 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { allFillsOn, BUTTON, DEFAULT_FILL, EDITOR, group, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, ROW_CORNER, savedProfiles, shadeReaders, watch, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
-import { selectCell, undoDepth } from '../board.mjs'
+import { allFillsOn, BUTTON, DEFAULT_FILL, EDITOR, group, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, ROW_CORNER, savedProfiles, shadeReaders, watch, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { colorCell, selectCell, undoDepth } from '../board.mjs'
 import { closeDialogWith } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -122,8 +122,8 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     const handColors = () => t.read((list) => list.map(([r, c]) => [...(Framework.app.grid.getCell(r, c).colours || [])]), HAND)
     const redoSteps = () => t.read(() => Framework.app.puzzle.redoStack.length)
     const valueAt = (r, c) => t.read(([r, c]) => String(Framework.app.grid.getCell(r, c).value || ''), [r, c])
-    await paintOn(p, 4, 4, '4')
-    await paintOn(p, 0, 0, '4')
+    await colorCell(p, [4, 4], '4')
+    await colorCell(p, [0, 0], '4')
     assert.deepEqual(await settle(handColors, [['4'], []]), [['4'], []])
     await t.enter(2, 0, '7')
     assert.equal(await settle(() => valueAt(2, 0), '7'), '7')
@@ -139,8 +139,8 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     assert.equal(await settle(() => valueAt(2, 0), '7'), '7')
     // Back as the next test starts it: digits on Odd/Even, and the hand changes undone by hand.
     await t.pick('digits', 1)
-    await paintOn(p, 4, 4, '4')
-    await paintOn(p, 0, 0, '4')
+    await colorCell(p, [4, 4], '4')
+    await colorCell(p, [0, 0], '4')
     assert.deepEqual(await settle(t.cells, SPLIT_CELLS), SPLIT_CELLS)
   })
 

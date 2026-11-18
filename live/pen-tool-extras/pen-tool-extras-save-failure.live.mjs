@@ -1,9 +1,9 @@
-/* global Framework, Node */
+/* global Node */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
-import { closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR as EDITOR, openExtrasEditor, STATUS } from '../settings.mjs'
+import { closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR as EDITOR, openExtrasEditor, savedValue, STATUS } from '../settings.mjs'
 
 const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
@@ -18,7 +18,7 @@ describe('Pen Tool Extras\' Save is all-or-nothing', { concurrency: false }, () 
   })
   after(async () => { await context.close() })
 
-  const stored = (key) => p.evaluate((k) => Framework.getData(k) ?? null, key)
+  const stored = (key) => savedValue(p, key)
 
   it('a Save whose settings step throws leaves the stored pen colors and thickness as they were, and says Not saved', async () => {
     const colorsBefore = await stored(COLORS_KEY)

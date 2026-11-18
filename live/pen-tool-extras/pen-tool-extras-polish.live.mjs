@@ -7,6 +7,7 @@ import { createRequire } from 'node:module'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { assertPressState, restartPuzzle } from '../page.mjs'
 import { cellCentre, gridPoint, undoDepth } from '../board.mjs'
+import { holdUntil } from '../input.mjs'
 import { drag, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
@@ -240,14 +241,7 @@ describe('Pen Tool Extras panel polish', { concurrency: false }, () => {
   })
 
   it('the hold-to-edit pickers sit inside their button frames, at least 3.5 px in', async () => {
-    const box = await p.locator('.tool-pen button[data-key="1"]').boundingBox()
-    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-    await p.mouse.down()
-    try {
-      await p.locator(`${PICKERS} input[data-key="9"]`).waitFor({ state: 'attached', timeout: HOLD_TO_EDIT_MS + 5000 })
-    } finally {
-      await p.mouse.up()
-    }
+    await holdUntil(p, '.tool-pen button[data-key="1"]', `${PICKERS} input[data-key="9"]`, { timeout: HOLD_TO_EDIT_MS + 5000 })
     try {
       for (let n = 1; n <= 9; n++) {
         const button = await rectOf(p, `.tool-pen button[data-key="${n}"]`)

@@ -2,13 +2,13 @@
 /* global Framework */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { boardState, cellState, emptyCell, pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, openWithAllScripts } from './attacks.mjs'
-import { cellCentre, clickCell, finishNote, gridPoint, mouseDrag, typeText, undoDepth } from './board.mjs'
+import { boardState, cellCentre, cellState, clickCell, emptyCell, finishNote, gridPoint, mouseDrag, pickTool, typeText, undoDepth } from './board.mjs'
 import { penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
 import { useBrowser } from './session.mjs'
+import { middleOf } from './input.mjs'
 
 const browser = useBrowser()
 
@@ -122,12 +122,12 @@ describe('attacks on input', { concurrency: false }, () => {
     // Hold-to-edit buttons: fast clicks pick the color and open no picker (a hold of a second does).
     const colorOf = () => p.evaluate((key) => Framework.getData(key), textAnywhere.COLOR_KEY)
     const textButton = await p.locator(`${textAnywhere.KEYPAD} button[data-key="4"]`).boundingBox()
-    for (const clickCount of [2, 3]) await p.mouse.click(...textAnywhere.middleOf(textButton), { clickCount, delay: 0 })
+    for (const clickCount of [2, 3]) await p.mouse.click(...middleOf(textButton), { clickCount, delay: 0 })
     assert.equal(await settle(colorOf, 4), 4, 'fast clicks on Text Anywhere\'s color button pick it')
     assert.equal(await p.locator(textAnywhere.PICKER).count(), 0, 'no color picker opens on Text Anywhere\'s button')
     await pickTool(p, 'pen')
     const penButton = await p.locator('.tool-pen button[data-key="4"]').boundingBox()
-    for (const clickCount of [2, 3]) await p.mouse.click(...textAnywhere.middleOf(penButton), { clickCount, delay: 0 })
+    for (const clickCount of [2, 3]) await p.mouse.click(...middleOf(penButton), { clickCount, delay: 0 })
     assert.equal(await p.locator('.pen-tool-extras-picker').count(), 0, 'no color picker opens on the pen\'s button')
     await mouseDrag(p, [[7.5, 1.5], [7.5, 3.5]])
     assert.deepEqual([...new Set((await penEntries(p)).map((entry) => entry.split(':')[1][1]))], ['4'], 'the pen draws in the color the fast clicks picked')

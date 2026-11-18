@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
+import { middleOf } from '../input.mjs'
 
 const { DIALOG, TEXT_BOX, TEXTS } = textAnywhere
 const { BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT } = createRequire(import.meta.url)('../../text-anywhere.user.js')
@@ -228,7 +229,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     assert.ok(off.widthEm <= BOX_WIDTH_EM + 0.05, `${off.widthEm} em wide`)
     assert.ok(Math.abs(off.height - BOX_HEIGHT_EM * off.em) <= NEAR_PX, `${off.heightEm} em high`)
     // A box this tall runs past the window's bottom, so it is drawn higher up, inside the window.
-    await p.mouse.move(...textAnywhere.middleOf(await p.locator(TEXTS).filter({ hasText: 'side' }).boundingBox()))
+    await p.mouse.move(...middleOf(await p.locator(TEXTS).filter({ hasText: 'side' }).boundingBox()))
     await p.mouse.wheel(0, 40)
     assert.ok((await note('side')).scrollTop > 0)
     // A closed note shows the move cursor wherever it is, and a note beside the board does not take the board's own.

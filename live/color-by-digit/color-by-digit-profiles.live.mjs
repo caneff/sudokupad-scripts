@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, dragProfileRow, profileDragPoints, typeProfileName, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
@@ -446,41 +446,20 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
   })
   after(async () => { await context.close() })
 
-  // Real key presses into the name field: SudokuPad listens for keys on the page, and a digit or letter
-  // must reach the field.
   const NAME_FIELD = PROFILE_NAME_FIELD
   const typeName = async (text) => {
-    await p.locator(NAME_FIELD).press('Control+a')
-    await p.locator(NAME_FIELD).pressSequentially(text)
+    await typeProfileName(p, text)
     assert.equal(await p.inputValue(NAME_FIELD), text)
   }
-  const handle = (i) => p.locator(`${PROFILE_ROWS} [data-role=handle]`).nth(i)
   const count = () => p.locator(PROFILE_ROWS).count()
   const heading = () => p.locator(EDITOR).innerText()
-  // Where a drag of the handle of row `from` starts and ends: the end is just past the middle of row `to`,
-  // where the dragged row lands beyond it.
-  const dragPoints = async (from, to) => {
-    await p.locator(PROFILE_ROWS).first().scrollIntoViewIfNeeded()
-    const start = await center(handle(from))
-    const end = await center(p.locator(PROFILE_ROWS).nth(to))
-    end.y += to > from ? DROP_PAST_MIDDLE_PX : -DROP_PAST_MIDDLE_PX
-    return { start, end }
-  }
-  const dragWithMouse = async (from, to) => {
-    const { start, end } = await dragPoints(from, to)
-    await p.mouse.move(start.x, start.y)
-    await p.mouse.down()
-    await p.mouse.move(start.x, (start.y + end.y) / 2, { steps: 4 })
-    await p.mouse.move(start.x, end.y, { steps: 4 })
-    await p.mouse.up()
-  }
   const dragWithTouch = async (from, to) => {
-    const { start, end } = await dragPoints(from, to)
-    await touch(cdp, 'touchStart', start.x, start.y)
+    const { start: [x, y], end: [, endY] } = await profileDragPoints(p, from, to)
+    await touch(cdp, 'touchStart', x, y)
     for (let step = 1; step <= 6; step++) {
-      await touch(cdp, 'touchMove', start.x, start.y + ((end.y - start.y) * step) / 6)
+      await touch(cdp, 'touchMove', x, y + ((endY - y) * step) / 6)
     }
-    await touch(cdp, 'touchEnd', start.x, start.y)
+    await touch(cdp, 'touchEnd', x, y)
   }
 
   it('the dialog lists each profile with its colors and shown digits (three at most), a count and the selected radio, with no tag, and the pulldowns name the same profiles', async () => {
@@ -582,7 +561,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
   })
 
   it('a drag of the handle with the mouse reorders the draft, and Cancel drops it', async () => {
-    await dragWithMouse(0, 2)
+    await dragProfileRow(p, 0, 2)
     assert.deepEqual(await t.rowNames(), ['Low/5/High', 'Four', 'Odd/Even'])
     assert.equal(await t.selectedRow(), 0)
     await closeDialogWith(p, 'Cancel', EDITOR)

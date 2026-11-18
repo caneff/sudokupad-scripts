@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, finishNote, gridPoint } from '../board.mjs'
+import { middleOf } from '../input.mjs'
 
-const { HANDLES, TEXT_BOX, middleOf } = textAnywhere
+const { HANDLES, TEXT_BOX } = textAnywhere
 const SPOT = [4.5, 4.5]
 const OTHER = [1.5, 1.5]
 // A note opened and given blank lines after its text: they go when it closes, so its closed box is shorter than the open one the press lands on.
