@@ -4,9 +4,9 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { fakeStore } = require('./fake-store.js')
-const { OPTIONS, DIGIT_PAD_SIZES, DEFAULT_OPTIONS, savedOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES } = require('../ui-tweaks.user.js')
+const { OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, savedOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES } = require('../ui-tweaks.user.js')
 
-test('the defaults: Tab never switches to letters is on, the other two are off, the digit pad is at 100%', () => {
+test('the defaults: Tab never switches to letters is on, the other two are off, the digit pad is Normal', () => {
   assert.deepEqual(DEFAULT_OPTIONS, { tab: true, hideSelect: false, wrapButtons: false, digitPad: 100 })
   assert.deepEqual(OPTIONS.map((o) => o.id), ['tab', 'hideSelect', 'wrapButtons'])
 })
@@ -28,9 +28,9 @@ test('savedOptions: a saved value that is not a boolean reads as the default', (
 
 test('saveOptions keeps every option under its own key, and savedOptions reads them back', () => {
   const store = fakeStore()
-  const chosen = { tab: false, hideSelect: true, wrapButtons: true, digitPad: 130 }
+  const chosen = { tab: false, hideSelect: true, wrapButtons: true, digitPad: 125 }
   saveOptions(store, chosen)
-  assert.deepEqual(store.data, { UiTweaks_tab: false, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true, UiTweaks_digitPad: 130 })
+  assert.deepEqual(store.data, { UiTweaks_tab: false, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true, UiTweaks_digitPad: 125 })
   assert.deepEqual(savedOptions(store), chosen)
 })
 
@@ -193,30 +193,34 @@ test('the hints: the Select button is named as its tooltip names it, and Wrap bu
   assert.match(byId.wrapButtons.hint, /no effect with Color by Digit installed/)
 })
 
-test('the digit pad sizes are the eight percentages 80 to 150, and 100 is the default', () => {
-  assert.deepEqual(DIGIT_PAD_SIZES, [80, 90, 100, 110, 120, 130, 140, 150])
+test('the digit pad has four steps, Smaller, Normal, Larger and Largest, at 80, 100, 125 and 150, and Normal is the default', () => {
+  assert.deepEqual(DIGIT_PAD_STEPS, [{ label: 'Smaller', percent: 80 }, { label: 'Normal', percent: 100 }, { label: 'Larger', percent: 125 }, { label: 'Largest', percent: 150 }])
   assert.equal(DEFAULT_OPTIONS.digitPad, 100)
 })
 
-test('savedOptions: each of the eight saved sizes is read back', () => {
-  for (const size of DIGIT_PAD_SIZES) assert.equal(savedOptions(fakeStore({ UiTweaks_digitPad: size })).digitPad, size, String(size))
+test('savedOptions: each of the four saved steps is read back', () => {
+  for (const { percent } of DIGIT_PAD_STEPS) assert.equal(savedOptions(fakeStore({ UiTweaks_digitPad: percent })).digitPad, percent, String(percent))
 })
 
-test('savedOptions: a missing or unreadable digit pad size reads as 100', () => {
-  for (const bad of [undefined, null, 'big', '120', 95, 0, -100, 160, 100.5, NaN, true, {}, [120]]) {
+test('savedOptions: a percentage an earlier build offered reads as the nearest step, a tie going to the one nearer Normal', () => {
+  const read = (saved) => savedOptions(fakeStore({ UiTweaks_digitPad: saved })).digitPad
+  assert.deepEqual([80, 90, 100, 110, 120, 130, 140, 150].map(read), [80, 100, 100, 100, 125, 125, 150, 150])
+})
+
+test('savedOptions: a missing or unreadable digit pad size reads as Normal', () => {
+  for (const bad of [undefined, null, 'big', '120', 95, 0, -100, 160, 100.5, NaN, true, {}, [120], 'Larger']) {
     assert.equal(savedOptions(fakeStore({ UiTweaks_digitPad: bad })).digitPad, 100, String(bad))
   }
   assert.equal(savedOptions(fakeStore()).digitPad, 100)
 })
 
-test('a paste takes only the eight sizes for the digit pad', () => {
-  const ok = pastedSettings(JSON.stringify({ UiTweaks_digitPad: 150 }), READERS)
-  assert.deepEqual(ok, { values: { UiTweaks_digitPad: 150 }, skipped: 0 })
-  const bad = pastedSettings(JSON.stringify({ UiTweaks_digitPad: 155 }), READERS)
-  assert.deepEqual(bad, { values: {}, skipped: 1 })
+test('a paste takes the four steps and the old percentages (as the nearest step) for the digit pad, and skips the rest', () => {
+  assert.deepEqual(pastedSettings(JSON.stringify({ UiTweaks_digitPad: 150 }), READERS), { values: { UiTweaks_digitPad: 150 }, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ UiTweaks_digitPad: 130 }), READERS), { values: { UiTweaks_digitPad: 125 }, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ UiTweaks_digitPad: 155 }), READERS), { values: {}, skipped: 1 })
 })
 
-test('saveOptions keeps a chosen digit pad size under UiTweaks_digitPad, and 100 leaves no key', () => {
+test('saveOptions keeps a chosen digit pad step under UiTweaks_digitPad, and Normal leaves no key', () => {
   const store = fakeStore()
   saveOptions(store, { ...DEFAULT_OPTIONS, digitPad: 80 })
   assert.deepEqual(store.data, { UiTweaks_digitPad: 80 })
@@ -224,13 +228,14 @@ test('saveOptions keeps a chosen digit pad size under UiTweaks_digitPad, and 100
   assert.deepEqual(store.data, {})
 })
 
-test('buildCss: 100% adds no rule; any other size sizes the digit buttons in rem from SudokuPad\'s own 4rem', () => {
+test('buildCss: Normal adds no rule; any other step sizes the digit buttons in rem from SudokuPad\'s own 4rem', () => {
   assert.equal(buildCss({ ...DEFAULT_OPTIONS, digitPad: 100 }), '')
   const css = buildCss({ ...DEFAULT_OPTIONS, digitPad: 150 })
   assert.match(css, /width: 6rem !important/)
   assert.match(css, /height: 6rem !important/)
   assert.doesNotMatch(css, /px|scale/)
   assert.match(buildCss({ ...DEFAULT_OPTIONS, digitPad: 80 }), /width: 3\.2rem !important/)
+  assert.match(buildCss({ ...DEFAULT_OPTIONS, digitPad: 125 }), /width: 5rem !important/)
 })
 
 test('buildCss: the corner and centre tools get the digit font scaled from 1.4rem, and the pen line-mode box follows the digit rows', () => {

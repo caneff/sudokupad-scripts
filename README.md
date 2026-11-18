@@ -59,7 +59,7 @@ Its dialog has four options, each applied at once on Save and kept in the browse
 - **Tab never switches to letters** (on at first): SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a stray Tab left the number pad on letters after a refresh. During play, Tab does what it did before, minus the toggle, and a held Tab is stopped too. The letter button and `/` still toggle, and Tab still moves focus in dialogs. It works whenever you turn the letter tool on in settings.
 - **Hide the Select button** (off at first): hides SudokuPad's Select button in the bottom row, and the other buttons close up.
 - **Wrap buttons** (off at first): the bottom row of tool buttons wraps onto a second line after five. Color by Digit already caps that row at five on its own, so with it installed this option changes nothing.
-- **Digit pad size** (100% at first): makes the digit buttons smaller or larger, from 80% to 150% in steps of 10%. SudokuPad fits the whole controls column to the window, so the other buttons give way as the digits grow, and the digits end up about 20% larger at 150% in a 1366x768 window.
+- **Digit pad size** (Normal at first): Smaller, Normal, Larger or Largest digit buttons. SudokuPad fits the whole controls column to the window, so the digits grow most on a large screen, and on a laptop the other buttons shrink to make room.
 
 If a SudokuPad update changes what the Tab option, the saved options or the settings entry needs, that part logs a console warning and turns itself off, and a bar at the bottom of the page says so. Hide the Select button and Wrap buttons are style rules only, with nothing of SudokuPad's to break.
 

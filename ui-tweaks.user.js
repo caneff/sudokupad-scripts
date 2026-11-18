@@ -30,12 +30,19 @@
     { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after 5. It has no effect with Color by Digit installed, which already wraps it.', default: false }
   ]
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
-  // The digit pad's size as a percent of SudokuPad's own, saved under its own key.
+  // The digit pad's step, saved under its own key as the percent of SudokuPad's own size its rule uses.
   const DIGIT_PAD = 'digitPad'
-  const DIGIT_PAD_SIZES = [80, 90, 100, 110, 120, 130, 140, 150]
+  const DIGIT_PAD_STEPS = [{ label: 'Smaller', percent: 80 }, { label: 'Normal', percent: 100 }, { label: 'Larger', percent: 125 }, { label: 'Largest', percent: 150 }]
+  const DIGIT_PAD_SIZES = DIGIT_PAD_STEPS.map((step) => step.percent)
   const DIGIT_PAD_DEFAULT = 100
   const DIGIT_PAD_KEY = 'UiTweaks_digitPad'
-  const savedDigitPad = (data) => (DIGIT_PAD_SIZES.includes(data) ? data : undefined)
+  // The eight percentages an earlier build offered; a saved one reads as the nearest step, a tie going to the one nearer Normal.
+  const OLD_DIGIT_PAD_PERCENTS = [80, 90, 100, 110, 120, 130, 140, 150]
+  const nearestStep = (percent) => DIGIT_PAD_SIZES.reduce((best, size) => {
+    const [gap, bestGap] = [Math.abs(size - percent), Math.abs(best - percent)]
+    return gap < bestGap || (gap === bestGap && Math.abs(size - DIGIT_PAD_DEFAULT) < Math.abs(best - DIGIT_PAD_DEFAULT)) ? size : best
+  })
+  const savedDigitPad = (data) => (DIGIT_PAD_SIZES.includes(data) || OLD_DIGIT_PAD_PERCENTS.includes(data) ? nearestStep(data) : undefined)
 
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
@@ -881,7 +888,7 @@
   const { saved, tab, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, OPTIONS, DIGIT_PAD_SIZES, DEFAULT_OPTIONS, savedOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
+    module.exports = { VERSION, OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, savedOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -939,7 +946,7 @@
     `<label class="${CLASS_PREFIX}option"><input type="checkbox" data-option="${option.id}"><span>${option.label}<small>${option.hint}</small></span></label>`
 
   // SudokuPad fits #controls to its box only on a resize, so a size change is not seen until one.
-  const DIGIT_PAD_ROW = `<label class="${CLASS_PREFIX}option"><select data-option="${DIGIT_PAD}">${DIGIT_PAD_SIZES.map((size) => `<option value="${size}">${size}%</option>`).join('')}</select><span>Digit pad size<small>Sizes the digit buttons against SudokuPad's own. SudokuPad fits the whole controls column to the window, so the other buttons give way as the digits grow.</small></span></label>`
+  const DIGIT_PAD_ROW = `<label class="${CLASS_PREFIX}option"><select data-option="${DIGIT_PAD}">${DIGIT_PAD_STEPS.map((step) => `<option value="${step.percent}">${step.label}</option>`).join('')}</select><span>Digit pad size<small>Smaller or larger digit buttons. SudokuPad fits the whole controls column to the window, so the digits grow most on a large screen, and on a laptop the other buttons shrink to make room.</small></span></label>`
 
   function openDialog () {
     const draft = { ...options }

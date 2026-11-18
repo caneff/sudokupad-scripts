@@ -9,6 +9,8 @@ const SCRIPT_FILE = 'ui-tweaks.user.js'
 const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.'
 
 const DIALOG = '#ui-tweaks-dialog'
+// The four steps by the percent each is saved as.
+const STEPS = { 80: 'Smaller', 100: 'Normal', 125: 'Larger', 150: 'Largest' }
 const PAD = `${DIALOG} select[data-option="digitPad"]`
 const WINDOWS = [{ width: 1280, height: 720 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]
 // A button, a board or a pane may touch another's edge; "overlap" is more than this many px of both axes.
@@ -54,33 +56,33 @@ const overlap = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) 
 
 async function choose (p, percent, { wrap = false } = {}) {
   await openScriptDialog(p, 'UI Tweaks', DIALOG)
-  await p.locator(PAD).selectOption(String(percent))
+  await p.locator(PAD).selectOption({ label: STEPS[percent] })
   if (wrap) await p.locator(`${DIALOG} input[data-option="wrapButtons"]`).check()
   await closeDialogWith(p, 'Save', DIALOG)
 }
 
 for (const windowSize of WINDOWS) {
-  describe(`the Digit pad size setting with every script installed at ${windowSize.width}x${windowSize.height}`, { concurrency: false }, () => {
+  describe(`the Digit pad size steps with every script installed at ${windowSize.width}x${windowSize.height}`, { concurrency: false }, () => {
     let context, p, errors
     const sizes = {}
     before(async () => {
       ;({ context, p, errors } = await rulesPage(windowSize, SCRIPT_FILES))
       sizes[100] = await measureStable(p)
-      for (const percent of [80, 150]) {
+      for (const percent of [80, 125, 150]) {
         await choose(p, percent, { wrap: true })
         sizes[percent] = await measureStable(p)
       }
     })
     after(async () => { await context.close() })
 
-    it('a smaller pad makes the digit buttons smaller and a larger one makes them larger than at 100%, and they stay square', () => {
-      assert.equal(sizes[80].digit < sizes[100].digit, true, `80%: ${sizes[80].digit}px against ${sizes[100].digit}px at 100%`)
-      assert.equal(sizes[150].digit > sizes[100].digit, true, `150%: ${sizes[150].digit}px against ${sizes[100].digit}px at 100%`)
-      for (const percent of [80, 100, 150]) assert.equal(sizes[percent].digit, sizes[percent].digitHeight, `${percent}% is square`)
+    it('each step makes the digit buttons measurably larger than the one before (at least 3 px), and they stay square', () => {
+      const widths = Object.keys(STEPS).map((percent) => sizes[percent].digit)
+      widths.slice(1).forEach((width, i) => assert.equal(width - widths[i] >= 3, true, `${Object.values(STEPS)[i + 1]} is ${width}px after ${widths[i]}px: ${widths}`))
+      for (const percent of Object.keys(STEPS)) assert.equal(sizes[percent].digit, sizes[percent].digitHeight, `${STEPS[percent]} is square`)
     })
 
-    for (const percent of [80, 100, 150]) {
-      it(`at ${percent}% the board, the controls and the rules pane overlap nowhere (the pane sits in the column, above its buttons) and every control is inside the window`, () => {
+    for (const percent of Object.keys(STEPS)) {
+      it(`at ${STEPS[percent]} the board, the controls and the rules pane overlap nowhere (the pane sits in the column, above its buttons) and every control is inside the window`, () => {
         const s = sizes[percent]
         assert.equal(overlap(s.board, s.controls), false, `board ${JSON.stringify(s.board)} against controls ${JSON.stringify(s.controls)}`)
         assert.notEqual(s.rules, null, 'the rules pane is on the page, so the overlap checks below read it')
@@ -99,28 +101,28 @@ describe('Save, Cancel and Restore defaults for the Digit pad size', { concurren
   before(async () => { ;({ context, p } = await rulesPage(WINDOWS[1], SCRIPT_FILES)) })
   after(async () => { await context.close() })
 
-  it('Cancel puts back the size the dialog opened on, and Restore defaults sets the draft to 100% and Save keeps it', async () => {
+  it('Cancel puts back the size the dialog opened on, and Restore defaults sets the draft to Normal and Save keeps it', async () => {
     const at100 = (await measureStable(p)).digit
-    await choose(p, 130)
-    const at130 = (await measureStable(p)).digit
-    assert.equal(at130 > at100, true)
+    await choose(p, 125)
+    const atLarger = (await measureStable(p)).digit
+    assert.equal(atLarger > at100, true)
 
     await openScriptDialog(p, 'UI Tweaks', DIALOG)
-    await p.locator(PAD).selectOption('80')
+    await p.locator(PAD).selectOption({ label: 'Smaller' })
     await closeDialogWith(p, 'Cancel', DIALOG)
-    assert.equal((await measureStable(p)).digit, at130, 'Cancel leaves 130% in force')
+    assert.equal((await measureStable(p)).digit, atLarger, 'Cancel leaves Larger in force')
 
     await openScriptDialog(p, 'UI Tweaks', DIALOG)
-    assert.equal(await p.locator(PAD).inputValue(), '130', 'the dialog opens on the saved size')
+    assert.equal(await p.locator(PAD).inputValue(), '125', 'the dialog opens on the saved step')
     await p.locator('.dialog button', { hasText: 'Restore defaults' }).click()
-    assert.equal(await p.locator(PAD).inputValue(), '100', 'the draft is back at 100%')
-    assert.equal((await measureStable(p)).digit, at130, 'nothing changes before Save')
+    assert.equal(await p.locator(PAD).inputValue(), '100', 'the draft is back to Normal')
+    assert.equal((await measureStable(p)).digit, atLarger, 'nothing changes before Save')
     await closeDialogWith(p, 'Save', DIALOG)
     const without = await rulesPage(WINDOWS[1], SCRIPT_FILES.filter((file) => file !== SCRIPT_FILE))
     try {
       const { windowSize, ...bare } = await measureStable(without.p)
       const { windowSize: sameWindow, ...saved } = await measureStable(p)
-      assert.deepEqual(saved, bare, 'Save at 100% leaves the page as it is with UI Tweaks not installed')
+      assert.deepEqual(saved, bare, 'Save at Normal leaves the page as it is with UI Tweaks not installed')
       assert.deepEqual(sameWindow, windowSize)
     } finally {
       await without.context.close()
@@ -129,15 +131,15 @@ describe('Save, Cancel and Restore defaults for the Digit pad size', { concurren
   })
 
   it('a saved size comes back on reload', async () => {
-    await choose(p, 90)
-    const at90 = (await measureStable(p)).digit
+    await choose(p, 125)
+    const atSaved = (await measureStable(p)).digit
     await reloadWith(p, SCRIPT_FILES)
     await showRules(p)
-    assert.equal((await measureStable(p)).digit, at90)
+    assert.equal((await measureStable(p)).digit, atSaved)
   })
 })
 
-describe('SudokuPad\'s own pen tool at 150%, with UI Tweaks alone', { concurrency: false }, () => {
+describe('SudokuPad\'s own pen tool at Largest, with UI Tweaks alone', { concurrency: false }, () => {
   let context, p
   before(async () => {
     ;({ context, p } = await openWith(browser(), [SCRIPT_FILE], { contextOptions: { viewport: WINDOWS[1] } }))
