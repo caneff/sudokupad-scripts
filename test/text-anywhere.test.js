@@ -8,7 +8,7 @@ const { headerField, headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop } = require('../text-anywhere.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -1861,4 +1861,98 @@ test('Clear all asks nothing with no notes, speaks of the one note with one, and
   assert.equal(clearAsk(0), null)
   assert.deepEqual(clearAsk(1), { question: 'Delete the note? This cannot be undone.', button: 'Delete' })
   assert.deepEqual(clearAsk(2), { question: 'Delete all 2 notes? This cannot be undone.', button: 'Delete all' })
+})
+
+// noteStyle, flagStyle and pieceKinds: note geometry and markdown grouping, with no page.
+const LOOK = { outline: 'medium', boxColor: DEFAULT_BOX_COLOR, frame: false }
+const styled = (props, look = LOOK, at = [100, 50], scale = 2) => noteStyle({ ...textItem([0, 0], 'A', 1, 20), ...props }, at, scale, '#fff', look)
+
+test('noteStyle places a note with no box by its halo reach: left/top move out by the pad, scaled', () => {
+  const pad = OUTLINE_EM.medium * 20
+  const style = styled({})
+  assert.equal(style.left, `${100 - pad * 2}px`)
+  assert.equal(style.top, `${50 - pad * 2}px`)
+  assert.equal(style.padding, '5.6px 5.6px')
+  assert.equal(style.fontSize, '40px')
+  assert.equal(style.backgroundColor, 'transparent')
+  assert.equal(style.boxShadow, 'none')
+  assert.equal(style.borderRadius, '0')
+  assert.equal(style.width, '')
+  assert.equal(style.maxWidth, '')
+})
+
+test('noteStyle takes the halo from the outline it is given: none pads nothing, thin less than medium', () => {
+  assert.equal(styled({}, { ...LOOK, outline: 'none' }).padding, '0px 0px')
+  assert.equal(styled({}, { ...LOOK, outline: 'none' }).textShadow, haloShadow('none', '#fff'))
+  assert.equal(styled({}, { ...LOOK, outline: 'thin' }).textShadow, haloShadow('thin', '#fff'))
+  assert.equal(styled({}, { ...LOOK, outline: 'thin' }).left, `${100 - OUTLINE_EM.thin * 20 * 2}px`)
+})
+
+test('noteStyle for a note with a background: box pad, radius, fill and frame, and no halo whatever the outline', () => {
+  const style = styled({ bg: true }, { outline: 'medium', boxColor: BOX_YELLOW, frame: true })
+  assert.equal(style.padding, '6px 14px')
+  assert.equal(style.left, `${100 - 0.35 * 20 * 2}px`)
+  assert.equal(style.top, `${50 - 0.15 * 20 * 2}px`)
+  assert.equal(style.borderRadius, '12px')
+  assert.equal(style.textShadow, 'none')
+  assert.equal(style.boxShadow, frameShadow(true))
+  assert.equal(style.backgroundColor, boxFill(BOX_YELLOW, style.color, '#fff'))
+})
+
+test('noteStyle fixes a drawn box size, lifts the width and height limits, and scales both', () => {
+  const style = styled({ box: [10, 4] })
+  assert.deepEqual([style.width, style.height, style.maxWidth, style.maxHeight], ['20px', '8px', 'none', 'none'])
+})
+
+test('noteStyle gives the opacity and the color to the note and to the custom properties its children read', () => {
+  const style = styled({ color: 3, opacity: 50 })
+  assert.equal(style.opacity, '0.5')
+  assert.equal(style['--text-anywhere-note-opacity'], '0.5')
+  assert.match(style.color, /^var\(--text-anywhere-color-3, var\(--puzzle-pencolor-3\)\)$/)
+  assert.equal(style['--text-anywhere-note-color'], style.color)
+  assert.equal(style.caretColor, style.color)
+})
+
+test('flagStyle maps each run flag to its inline style, and code and strike to none', () => {
+  const cases = [
+    [{}, {}],
+    [{ bold: true }, { fontWeight: 'bold' }],
+    [{ italic: true }, { fontStyle: 'italic' }],
+    [{ underline: true }, { textDecoration: 'underline' }],
+    [{ bold: true, italic: true, underline: true }, { fontWeight: 'bold', fontStyle: 'italic', textDecoration: 'underline' }],
+    [{ strike: true }, {}],
+    [{ code: true }, {}],
+    [{ bold: false, italic: false }, {}]
+  ]
+  for (const [run, style] of cases) assert.deepEqual(flagStyle({ text: 'x', ...run }), style, JSON.stringify(run))
+})
+
+const kindsOf = (text) => pieceKinds(parseMarkdown(text)).map(({ kind, block, empty }) => [kind, block, empty])
+
+test('pieceKinds groups plain lines, with an empty line marked empty', () => {
+  assert.deepEqual(kindsOf('a\n\nb'), [['plain', false, false], ['plain', false, true], ['plain', false, false]])
+})
+
+test('pieceKinds makes a bullet, a header and a subtext line each a block', () => {
+  assert.deepEqual(kindsOf('- item'), [['bullet', true, false]])
+  assert.deepEqual(kindsOf('# Head'), [['sized', true, false]])
+  assert.deepEqual(kindsOf('-# small'), [['sized', true, false]])
+})
+
+test('pieceKinds takes the lines between two fences as one code block, and none for an empty fence', () => {
+  const pieces = pieceKinds(parseMarkdown('```\nx = 1\ny\n```\nafter'))
+  assert.deepEqual(pieces.map((p) => p.kind), ['code', 'plain'])
+  assert.deepEqual(pieces[0].lines, ['x = 1', 'y'])
+  assert.deepEqual(pieceKinds(parseMarkdown('```\n```')), [])
+})
+
+test('pieceKinds runs an unclosed fence to the end of the note, and gives a bullet its line index', () => {
+  assert.deepEqual(pieceKinds(parseMarkdown('```\na\nb')).map((p) => p.lines), [['a', 'b']])
+  assert.deepEqual(pieceKinds(parseMarkdown('x\n- a\n- b')).filter((p) => p.kind === 'bullet').map((p) => p.index), [1, 2])
+})
+
+test('the code block and the dialog sample take the background box padding and corners from the one constant', () => {
+  const sample = renderSamplePicks({ outline: 'medium', box: DEFAULT_BOX_COLOR, custom: '#ffffff', frame: false, textColor: '#000' })
+  assert.match(sample, /padding: 0\.15em 0\.35em; border-radius: 0\.3em;/)
+  assert.equal(styled({ bg: true }).padding, '6px 14px')
 })
