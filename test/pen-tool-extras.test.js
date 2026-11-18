@@ -22,7 +22,7 @@ const {
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX,
   lackingInternals, FEATURES, arrowHeads,
-  edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady
+  edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, crossPoint, crossTo
 } = require('../pen-tool-extras.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 // What the settings table reads from a store holding `data` under the row's key: the row's reader, then its fallback for a refusal.
@@ -2255,4 +2255,87 @@ test('arrowHeads puts `count` heads at the middles of equal shares of the way, e
   assert.equal(arrowHeads([0, 0], [64, 0], 1, 2), 'M14.56 2.13L17.44 0L14.56 -2.12ZM46.56 2.13L49.44 0L46.56 -2.12Z')
   assert.equal(arrowHeads([0, 0], [0, 64], 1, 1), 'M-2.12 30.56L0 33.44L2.13 30.56Z')
   assert.equal(arrowHeads([0, 0], [64, 0], 1, 0), '')
+})
+
+// The erase sweep: `crossPoint` tests one point, `crossTo` a drag sampled along its way. 100 px a cell keeps the hit radius at LINE_HIT_RADIUS.
+const SWEEP_PX = 100
+const freshErase = (segments, at = { r: 0, c: 0 }) => ({ segments, lines: new Set(), marks: new Map(), at })
+const markNear = (r, c, cell = 'cell', values = ['x']) => (point) => Math.hypot(point.r - r, point.c - c) <= 0.15 ? { cell, values } : null
+const noMarks = () => null
+
+test('crossPoint on a line takes the whole connected line of the same pen, and not a line of another pen', () => {
+  const first = seg('1', 0, 0)
+  const next = seg('1', 0, 1)
+  const other = seg('1', 0, 2, '2')
+  const erase = freshErase([first, next, other])
+  crossPoint(noMarks, erase, { r: 0.5, c: 1.0 }, SWEEP_PX)
+  assert.deepEqual([...erase.lines], [first, next])
+})
+
+test('crossPoint takes a mark only where no line is, and a line beats a mark at the same point', () => {
+  const line = seg('1', 0, 0)
+  const everywhere = () => ({ cell: 'cell', values: ['x'] })
+  const onLine = freshErase([line])
+  crossPoint(everywhere, onLine, { r: 0.5, c: 1.0 }, SWEEP_PX)
+  assert.equal(onLine.lines.size, 1)
+  assert.equal(onLine.marks.size, 0, 'the mark under the line is left')
+  const offLine = freshErase([line])
+  crossPoint(everywhere, offLine, { r: 3, c: 3 }, SWEEP_PX)
+  assert.equal(offLine.lines.size, 0)
+  assert.deepEqual([...offLine.marks.get('cell')], ['x'])
+})
+
+test('crossPoint adds the values of a cell found twice to one set, and leaves a point with neither alone', () => {
+  const erase = freshErase([])
+  crossPoint(() => ({ cell: 'cell', values: ['x', 'y'] }), erase, { r: 3, c: 3 }, SWEEP_PX)
+  crossPoint(() => ({ cell: 'cell', values: ['y', 'z'] }), erase, { r: 3, c: 3 }, SWEEP_PX)
+  assert.deepEqual([...erase.marks.get('cell')], ['x', 'y', 'z'])
+  const none = freshErase([])
+  crossPoint(noMarks, none, { r: 3, c: 3 }, SWEEP_PX)
+  assert.equal(none.lines.size + none.marks.size, 0)
+})
+
+test('crossPoint widens its line hit radius for a small cell: 0.22 off a line misses at 100 px a cell and hits at 20', () => {
+  const line = seg('1', 0, 0)
+  const point = { r: 0.5 + 0.22, c: 1.0 }
+  const big = freshErase([line])
+  crossPoint(noMarks, big, point, 100)
+  assert.equal(big.lines.size, 0)
+  const small = freshErase([line])
+  crossPoint(noMarks, small, point, 20)
+  assert.equal(small.lines.size, 1)
+})
+
+test('crossTo on a diagonal over a mark and a line erases both', () => {
+  const line = seg('1', 0, 0)
+  const erase = freshErase([line])
+  crossTo(markNear(1.5, 1.5), erase, { r: 2, c: 2 }, SWEEP_PX)
+  assert.deepEqual([...erase.lines], [line])
+  assert.deepEqual([...erase.marks.get('cell')], ['x'])
+})
+
+test('crossTo samples a long jump, so one move across a line cannot step over it', () => {
+  const line = seg('1', 0, 0)
+  const erase = freshErase([line], { r: 4, c: 1 })
+  crossTo(noMarks, erase, { r: -3, c: 1 }, SWEEP_PX)
+  assert.deepEqual([...erase.lines], [line])
+  const mark = freshErase([], { r: 4, c: 1 })
+  crossTo(markNear(0.5, 1), mark, { r: -3, c: 1 }, SWEEP_PX)
+  assert.deepEqual([...mark.marks.get('cell')], ['x'], 'a mark is not stepped over either')
+})
+
+test('crossTo takes a mark and a line at one point as the line alone, and moves the sweep to the point it reached', () => {
+  const line = seg('1', 0, 0)
+  const erase = freshErase([line])
+  crossTo(() => ({ cell: 'cell', values: ['x'] }), erase, { r: 0.5, c: 1.0 }, SWEEP_PX)
+  assert.equal(erase.lines.size, 1)
+  assert.deepEqual(erase.at, { r: 0.5, c: 1.0 })
+  assert.equal(erase.marks.size > 0, true, 'the samples before the line, off it, found the mark')
+})
+
+test('crossTo to the point it is already at tests that point once', () => {
+  const erase = freshErase([], { r: 3, c: 3 })
+  let calls = 0
+  crossTo(() => { calls++; return null }, erase, { r: 3, c: 3 }, SWEEP_PX)
+  assert.equal(calls, 1)
 })
