@@ -57,6 +57,7 @@ test('every picture the site loads is in a script folder of docs/research/ or in
 
 // The one script kept off the site: hidden until Chris hears from Nell whether it may be hosted (Chris, 2026-11-18).
 // When its row returns, restore the "kept per puzzle" check that spec-687-closing.test.js had on the homepage and the row's entry in ROWS and spec-359-closing.test.js.
+// When its README line returns, it must spell her name "Gwyn" and name her script, SudokuPad-ResizeRules (#1044).
 const HIDDEN = 'auto-rules-resizer.user.js'
 
 // A handover (draw-tool.user.js) is an old address kept so installed copies move on, and is never linked.

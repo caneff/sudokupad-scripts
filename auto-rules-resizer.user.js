@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.31
+// @version      0.7.32
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -14,11 +14,17 @@
 // @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js
 // ==/UserScript==
 
+// Credit: Auto Rules Resizer grew from Nell Gwyn's SudokuPad-ResizeRules 0.1.5. It takes from that script:
+//   - the two drag corners and the way each grows the pane (top-right grows it right and up, bottom-left left and down);
+//   - the cyan corner;
+//   - the font + and - buttons;
+//   - the smallest pane a drag allows, 15 x 7 rem.
+
 (function () {
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.31'
+  const VERSION = '0.7.32'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
