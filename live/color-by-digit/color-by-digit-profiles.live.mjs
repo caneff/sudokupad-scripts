@@ -192,8 +192,20 @@ describe('saved profiles that cannot be read, injected after Start Puzzle', { co
 
   it('the dialog shows the preloads under one line saying the saved profiles could not be read and are kept', async () => {
     await openEditorOn(p)
-    assert.match(await p.locator(`${EDITOR} [data-role=unreadable]`).textContent(), new RegExp(`could not be read; they are kept under ${PROFILES_KEY}_unreadable`))
+    assert.equal(await p.locator(`${EDITOR} [data-role=unreadable]`).textContent(), `Profiles saved earlier could not be read; they are kept under ${PROFILES_KEY}_unreadable.`)
     await closeDialogWith(p, 'Cancel', EDITOR)
+  })
+
+  it('with a second kept copy, the line names both slots', async () => {
+    const second = `${PROFILES_KEY}_unreadable2`
+    await p.evaluate((key) => Framework.setData(key, { profiles: 'another later version', active: 0 }), second)
+    try {
+      await openEditorOn(p)
+      assert.equal(await p.locator(`${EDITOR} [data-role=unreadable]`).textContent(), `Profiles saved earlier could not be read; they are kept under ${PROFILES_KEY}_unreadable and ${second}.`)
+      await closeDialogWith(p, 'Cancel', EDITOR)
+    } finally {
+      await p.evaluate((key) => Framework.removeData(key), second)
+    }
   })
 
   it('a save of another pick leaves the unreadable value under _unreadable, and the line stays while it is kept', async () => {

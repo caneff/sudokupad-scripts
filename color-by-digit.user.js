@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.68
+// @version      0.25.69
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.68'
+  const VERSION = '0.25.69'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -282,9 +282,9 @@
 
   const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
 
-  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
   const slotName = (key, n) => key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
 
+  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
   function keptSlot (store, key, raw) {
     const same = JSON.stringify(raw)
     for (let n = 1; ; n++) {
@@ -314,6 +314,8 @@
       if (copied) {
         if (store.keep) store.keep(slot, raw)
         else store.setData(slot, raw)
+        // A guarded store's `keep` that throws turns its feature off and goes on, so a slot is named only once it holds the copy.
+        if (store.getData(slot) === null) return { value: undefined, unreadable }
         console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
       }
       return { value: undefined, unreadable, slot }
@@ -894,15 +896,16 @@
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
     function storeFor (feature) {
+      const throwMarked = (error) => {
+        if (Object(error) === error) storeFailures.add(error)
+        throw error
+      }
       const write = (fn) => {
         if (feature.off) return
         try {
           fn()
         } catch (error) {
-          if (dialogActions > 0) {
-            if (Object(error) === error) storeFailures.add(error)
-            throw error
-          }
+          if (dialogActions > 0) throwMarked(error)
           if (!isRefusedWrite(error)) return feature.skip(error)
           console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
@@ -914,8 +917,7 @@
         try {
           return Framework.getData(key)
         } catch (error) {
-          if (Object(error) === error) storeFailures.add(error)
-          throw error
+          throwMarked(error)
         }
       }
       return {
@@ -1884,47 +1886,56 @@
 
   // One click handler for the four title-row buttons: Copy and Paste settings, and the error log's Copy and Clear. `copied`, `readers`, `upgrade`
   // and `apply` are the script's `copyPaste`; a paste writes under `snapshot`, in a dialog action of `feature`.
-  const ACTS = ['copy-settings', 'paste-settings', 'copy-error-log', 'clear-error-log']
-
-  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win = window) {
+  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win) {
     const say = (message, options) => setDialogStatus(root, message, options)
     const acts = {
-      'copy-settings': async () => {
-        await win.navigator.clipboard.writeText(copied())
-        say('Settings copied.')
-      },
-      'paste-settings': async () => {
-        const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
-        if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
-        say(pasteReport(Object.keys(values).length, skipped))
-      },
-      'copy-error-log': async () => {
-        const log = readErrorLog(win.localStorage)
-        if (log.length === 0) {
-          say(formatErrorLog(log))
-          return
+      'copy-settings': {
+        verb: 'copy',
+        run: async () => {
+          await win.navigator.clipboard.writeText(copied())
+          say('Settings copied.')
         }
-        await win.navigator.clipboard.writeText(formatErrorLog(log))
-        say('Error log copied.')
       },
-      'clear-error-log': async () => {
-        // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
-        let wasEmpty = false
-        try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
-        clearErrorLog(win.localStorage)
-        say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
+      'paste-settings': {
+        verb: 'paste',
+        run: async () => {
+          const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      },
+      'copy-error-log': {
+        verb: 'copy the error log',
+        run: async () => {
+          const log = readErrorLog(win.localStorage)
+          if (log.length === 0) {
+            say(formatErrorLog(log))
+            return
+          }
+          await win.navigator.clipboard.writeText(formatErrorLog(log))
+          say('Error log copied.')
+        }
+      },
+      'clear-error-log': {
+        verb: 'clear the error log',
+        run: async () => {
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
+          clearErrorLog(win.localStorage)
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
+        }
       }
     }
-    const verbs = { 'copy-settings': 'copy', 'paste-settings': 'paste', 'copy-error-log': 'copy the error log', 'clear-error-log': 'clear the error log' }
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
-      if (!ACTS.includes(act)) return
+      if (!Object.hasOwn(acts, act)) return
       event.preventDefault()
       event.stopPropagation()
       try {
-        await acts[act]()
+        await acts[act].run()
       } catch (error) {
-        say(`Could not ${verbs[act]}: ${errorText(error)}`, { error: true })
+        say(`Could not ${acts[act].verb}: ${errorText(error)}`, { error: true })
       }
     })
   }

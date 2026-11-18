@@ -4,7 +4,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { STATUS, actButton, closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
-const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, OPACITY_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SIZE_SLIDER, WIDTH_KEY, pickTextAnywhere, script, valueOf } = textAnywhere
+const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, KEYPAD, OPACITY_KEY, OUTLINE_KEY, PICKER, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SIZE_SLIDER, WIDTH_KEY, holdForPickers, pickTextAnywhere, script, valueOf } = textAnywhere
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const SUDOKUPAD_COLORS = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000' }
 
@@ -118,29 +118,45 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
-  it('a Darker page preset with an unusable cell color names the pens that keep SudokuPad\'s own, and another preset takes the note away', async () => {
-    const key = await read(p, () => {
-      const key = Framework.app.tools.colour.palette.pages[0][4]
-      document.documentElement.style.setProperty(`--cell-color-${key}`, 'transparent')
-      return key
+  it('a Darker page preset with unusable cell colors names the pens that keep SudokuPad\'s own; an edit, in the dialog or by hold, takes only its pen off the note', async () => {
+    const keys = await read(p, () => {
+      const keys = [4, 6].map((n) => Framework.app.tools.colour.palette.pages[0][n])
+      keys.forEach((key) => document.documentElement.style.setProperty(`--cell-color-${key}`, 'transparent'))
+      return keys
     })
+    const note = () => p.locator(`${EDITOR} [data-role="missing-note"]`)
     try {
       await p.click(SETTINGS_BUTTON)
-      assert.equal(await p.locator(`${EDITOR} [data-role="missing-note"]`).count(), 0)
+      assert.equal(await note().count(), 0)
       await p.locator(PRESET).selectOption('page-1')
-      assert.match(await p.locator(`${EDITOR} [data-role="missing-note"]`).textContent(), /^Cell color page 1 has no usable color at the matching button, so pen color 4 keeps SudokuPad's own\.$/)
-      // Saved, the note is there again when the dialog is reopened; fixing the pen by hand takes it off the note.
+      assert.match(await note().textContent(), /^Cell color page 1 has no usable color at the matching button, so pen colors 4, 6 keep SudokuPad's own\.$/)
+      // Saved, the note is there again when the dialog is reopened; fixing one pen in the dialog takes only that pen off the note.
       await closeDialogWith(p, 'Save', EDITOR)
       await p.click(SETTINGS_BUTTON)
-      assert.match(await p.locator(`${EDITOR} [data-role="missing-note"]`).textContent(), /pen color 4 keeps/)
+      assert.match(await note().textContent(), /pen colors 4, 6 keep/)
       await p.locator(`${EDITOR} input[data-role="swatch"][data-key="4"]`).fill('#123456')
-      assert.equal(await p.locator(`${EDITOR} [data-role="missing-note"]`).count(), 0)
+      assert.match(await note().textContent(), /so pen color 6 keeps SudokuPad's own\.$/)
+      await closeDialogWith(p, 'Save', EDITOR)
+      // A hold-to-edit change of the other pen takes the last one off.
+      await pickTextAnywhere(p)
+      await holdForPickers(p, `.tool-textanywhere ${KEYPAD} button[data-key="6"]`, 'left', 'visible')
+      await read(p, (picker) => {
+        const input = document.querySelector(`${picker}[data-key="6"]`)
+        input.value = '#654321'
+        input.dispatchEvent(new window.Event('input', { bubbles: true }))
+      }, PICKER)
+      await p.keyboard.press('Escape')
+      await p.locator(PICKER).first().waitFor({ state: 'detached' })
+      const colors = await savedColors(p)
+      assert.deepEqual([colors[4], colors[6]], ['#123456', '#654321'], 'both edits are saved')
+      await p.click(SETTINGS_BUTTON)
+      assert.equal(await note().count(), 0)
       await p.locator(PRESET).selectOption('page-1')
       await p.locator(PRESET).selectOption('sudokupad')
-      assert.equal(await p.locator(`${EDITOR} [data-role="missing-note"]`).count(), 0)
+      assert.equal(await note().count(), 0)
       await closeDialogWith(p, 'Cancel', EDITOR)
     } finally {
-      await read(p, (name) => document.documentElement.style.removeProperty(`--cell-color-${name}`), key)
+      await read(p, (names) => names.forEach((name) => document.documentElement.style.removeProperty(`--cell-color-${name}`)), keys)
     }
   })
 

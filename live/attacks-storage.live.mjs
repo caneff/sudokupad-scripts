@@ -123,8 +123,8 @@ describe('attacks on storage', { concurrency: false }, () => {
     for (const script of SETTINGS_SCRIPTS) {
       ;({ context, p, errors } = await openWith(browser(), [script.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await script.open(p)
-      await p.evaluate(() => {
-        navigator.clipboard.writeText('untouched')
+      await p.evaluate(async () => {
+        await navigator.clipboard.writeText('untouched')
         document.querySelector('.dialog [data-role="settings-status"]').textContent = ''
         window.__getData = Framework.getData
         Framework.getData = () => { throw new Error('storage blocked') }

@@ -33,7 +33,7 @@ test('#833: after notes go, the open text box and a resize follow their note, an
   assert.equal(followKept({ textBoxIndex: null, resizing: null, move: [{ index: 1 }] }, keep).dragCancelled, true)
 })
 
-// Custom is 'custom' in memory since spec #964 (lib/color-set.js, one form for both scripts); it was null in Text Anywhere when #833 closed.
+// Custom is 'custom' in memory in both scripts (lib/color-set.js).
 test('#833: Text Anywhere\'s note colors are one record, so a pasted set replaces every part of it and an edit makes the set Custom', () => {
   const { readNoteColorSet, READERS, COLORS_KEY } = textAnywhere
   const hexes = (hex) => Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, hex]))

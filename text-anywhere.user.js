@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.40
+// @version      0.46.41
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.40'
+  const VERSION = '0.46.41'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -772,9 +772,9 @@
 
   const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
 
-  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
   const slotName = (key, n) => key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
 
+  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
   function keptSlot (store, key, raw) {
     const same = JSON.stringify(raw)
     for (let n = 1; ; n++) {
@@ -804,6 +804,8 @@
       if (copied) {
         if (store.keep) store.keep(slot, raw)
         else store.setData(slot, raw)
+        // A guarded store's `keep` that throws turns its feature off and goes on, so a slot is named only once it holds the copy.
+        if (store.getData(slot) === null) return { value: undefined, unreadable }
         console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
       }
       return { value: undefined, unreadable, slot }
@@ -1210,8 +1212,8 @@
     return rgb ? toHex(rgb) : undefined
   }
 
-  // null when no key 1 to 9 holds a #rrggbb color, which means the first-use save is still owed and may replace what is there. A bad entry beside a usable one shows
-  // SudokuPad's own color.
+  // null when no key 1 to 9 holds a #rrggbb color: nothing is saved, so the install save (Text Anywhere's first use's copy) is still owed and may replace
+  // what is there. A bad entry beside a usable one shows SudokuPad's own color.
   function savedColorSet (data, presets) {
     if (!isPlainObject(data) || !PEN_COLOR_NUMBERS.some((n) => savedHex(data[n]))) return null
     const colors = Object.fromEntries(PEN_COLOR_NUMBERS.map((n) => [n, savedHex(data[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
@@ -1235,7 +1237,7 @@
     return set && PEN_COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? storedColorSet(set) : undefined
   }
 
-  // The colors once saved; undefined before the first-use save.
+  // The colors once saved; undefined while none are.
   function copiedColorSet (data, presets) {
     const set = savedColorSet(data, presets)
     return set ? storedColorSet(set) : undefined
@@ -1278,8 +1280,8 @@
   // An invalid pasted outline reads as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
   const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })
   const LOOKS = [
-    lookRowOf('width', WIDTH_KEY, (data) => (isWidth(data) ? data : undefined), { fallback: readWidth(undefined) }),
-    lookRowOf('opacity', OPACITY_KEY, (data) => (isOpacity(data) ? data : undefined), { fallback: readOpacity(undefined) }),
+    lookRowOf('width', WIDTH_KEY, (data) => (isWidth(data) ? data : undefined), { fallback: DEFAULT_WIDTH }),
+    lookRowOf('opacity', OPACITY_KEY, (data) => (isOpacity(data) ? data : undefined), { fallback: DEFAULT_OPACITY }),
     lookRowOf('outline', OUTLINE_KEY, readOutline, { dialog: true }),
     lookRowOf('boxColor', BOX_KEY, readBoxColor, { dialog: true }),
     lookRowOf('frame', FRAME_KEY, readFrame, { dialog: true }),
@@ -1600,47 +1602,56 @@
 
   // One click handler for the four title-row buttons: Copy and Paste settings, and the error log's Copy and Clear. `copied`, `readers`, `upgrade`
   // and `apply` are the script's `copyPaste`; a paste writes under `snapshot`, in a dialog action of `feature`.
-  const ACTS = ['copy-settings', 'paste-settings', 'copy-error-log', 'clear-error-log']
-
-  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win = window) {
+  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win) {
     const say = (message, options) => setDialogStatus(root, message, options)
     const acts = {
-      'copy-settings': async () => {
-        await win.navigator.clipboard.writeText(copied())
-        say('Settings copied.')
-      },
-      'paste-settings': async () => {
-        const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
-        if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
-        say(pasteReport(Object.keys(values).length, skipped))
-      },
-      'copy-error-log': async () => {
-        const log = readErrorLog(win.localStorage)
-        if (log.length === 0) {
-          say(formatErrorLog(log))
-          return
+      'copy-settings': {
+        verb: 'copy',
+        run: async () => {
+          await win.navigator.clipboard.writeText(copied())
+          say('Settings copied.')
         }
-        await win.navigator.clipboard.writeText(formatErrorLog(log))
-        say('Error log copied.')
       },
-      'clear-error-log': async () => {
-        // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
-        let wasEmpty = false
-        try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
-        clearErrorLog(win.localStorage)
-        say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
+      'paste-settings': {
+        verb: 'paste',
+        run: async () => {
+          const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      },
+      'copy-error-log': {
+        verb: 'copy the error log',
+        run: async () => {
+          const log = readErrorLog(win.localStorage)
+          if (log.length === 0) {
+            say(formatErrorLog(log))
+            return
+          }
+          await win.navigator.clipboard.writeText(formatErrorLog(log))
+          say('Error log copied.')
+        }
+      },
+      'clear-error-log': {
+        verb: 'clear the error log',
+        run: async () => {
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
+          clearErrorLog(win.localStorage)
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
+        }
       }
     }
-    const verbs = { 'copy-settings': 'copy', 'paste-settings': 'paste', 'copy-error-log': 'copy the error log', 'clear-error-log': 'clear the error log' }
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
-      if (!ACTS.includes(act)) return
+      if (!Object.hasOwn(acts, act)) return
       event.preventDefault()
       event.stopPropagation()
       try {
-        await acts[act]()
+        await acts[act].run()
       } catch (error) {
-        say(`Could not ${verbs[act]}: ${errorText(error)}`, { error: true })
+        say(`Could not ${acts[act].verb}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -2058,15 +2069,16 @@
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
     function storeFor (feature) {
+      const throwMarked = (error) => {
+        if (Object(error) === error) storeFailures.add(error)
+        throw error
+      }
       const write = (fn) => {
         if (feature.off) return
         try {
           fn()
         } catch (error) {
-          if (dialogActions > 0) {
-            if (Object(error) === error) storeFailures.add(error)
-            throw error
-          }
+          if (dialogActions > 0) throwMarked(error)
           if (!isRefusedWrite(error)) return feature.skip(error)
           console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
@@ -2078,8 +2090,7 @@
         try {
           return Framework.getData(key)
         } catch (error) {
-          if (Object(error) === error) storeFailures.add(error)
-          throw error
+          throwMarked(error)
         }
       }
       return {
@@ -2854,17 +2865,18 @@
     return notes ? panelLooks(notes) : { color, width: look.width, opacity: look.opacity }
   }
 
+  // `read` puts a value off the slider's steps on the default, where the row's reader would refuse it: a slider always sets a look.
   const SLIDER_LOOKS = {
-    [SIZE_SLIDER]: { name: 'width', change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
-    [OPACITY_SLIDER]: { name: 'opacity', change: (value) => (item) => ({ ...item, opacity: value }) }
+    [SIZE_SLIDER]: { name: 'width', read: readWidth, change: (value) => (item) => ({ ...item, size: textSizeFor(value) }) },
+    [OPACITY_SLIDER]: { name: 'opacity', read: readOpacity, change: (value) => (item) => ({ ...item, opacity: value }) }
   }
 
   // A width the panel shows for a note is that note's, scaled to this grid; the next note's is saved in 9x9 units.
-  const setNextLook = (name, value) => setLook(name, name === 'width' && targetNotes() ? lookRow(name).read(nextNoteWidth(value, gridSize())) : value)
+  const setNextLook = (name, value) => setLook(name, name === 'width' && targetNotes() ? readWidth(nextNoteWidth(value, gridSize())) : value)
 
   function slideLook (input) {
-    const { name, change } = SLIDER_LOOKS[input.id]
-    const value = lookRow(name).read(Number(input.value))
+    const { name, read, change } = SLIDER_LOOKS[input.id]
+    const value = read(Number(input.value))
     applyLook(change(value), () => setNextLook(name, value))
   }
 
@@ -2872,7 +2884,7 @@
     for (let i = 0; i < steps; i++) {
       // The next note takes the first note's new size, as the panel shows it.
       const next = sizeStep(panelValues().width, direction)
-      applyLook((item) => steppedNote(item, direction), () => setNextLook('width', lookRow('width').read(next)))
+      applyLook((item) => steppedNote(item, direction), () => setNextLook('width', readWidth(next)))
     }
     showPanelValues()
   }

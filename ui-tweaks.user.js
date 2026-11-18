@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.34
+// @version      0.1.35
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Select button, and wrap the bottom row of buttons after five.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.34'
+  const VERSION = '0.1.35'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -331,47 +331,56 @@
 
   // One click handler for the four title-row buttons: Copy and Paste settings, and the error log's Copy and Clear. `copied`, `readers`, `upgrade`
   // and `apply` are the script's `copyPaste`; a paste writes under `snapshot`, in a dialog action of `feature`.
-  const ACTS = ['copy-settings', 'paste-settings', 'copy-error-log', 'clear-error-log']
-
-  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win = window) {
+  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win) {
     const say = (message, options) => setDialogStatus(root, message, options)
     const acts = {
-      'copy-settings': async () => {
-        await win.navigator.clipboard.writeText(copied())
-        say('Settings copied.')
-      },
-      'paste-settings': async () => {
-        const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
-        if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
-        say(pasteReport(Object.keys(values).length, skipped))
-      },
-      'copy-error-log': async () => {
-        const log = readErrorLog(win.localStorage)
-        if (log.length === 0) {
-          say(formatErrorLog(log))
-          return
+      'copy-settings': {
+        verb: 'copy',
+        run: async () => {
+          await win.navigator.clipboard.writeText(copied())
+          say('Settings copied.')
         }
-        await win.navigator.clipboard.writeText(formatErrorLog(log))
-        say('Error log copied.')
       },
-      'clear-error-log': async () => {
-        // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
-        let wasEmpty = false
-        try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
-        clearErrorLog(win.localStorage)
-        say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
+      'paste-settings': {
+        verb: 'paste',
+        run: async () => {
+          const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      },
+      'copy-error-log': {
+        verb: 'copy the error log',
+        run: async () => {
+          const log = readErrorLog(win.localStorage)
+          if (log.length === 0) {
+            say(formatErrorLog(log))
+            return
+          }
+          await win.navigator.clipboard.writeText(formatErrorLog(log))
+          say('Error log copied.')
+        }
+      },
+      'clear-error-log': {
+        verb: 'clear the error log',
+        run: async () => {
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
+          clearErrorLog(win.localStorage)
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
+        }
       }
     }
-    const verbs = { 'copy-settings': 'copy', 'paste-settings': 'paste', 'copy-error-log': 'copy the error log', 'clear-error-log': 'clear the error log' }
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
-      if (!ACTS.includes(act)) return
+      if (!Object.hasOwn(acts, act)) return
       event.preventDefault()
       event.stopPropagation()
       try {
-        await acts[act]()
+        await acts[act].run()
       } catch (error) {
-        say(`Could not ${verbs[act]}: ${errorText(error)}`, { error: true })
+        say(`Could not ${acts[act].verb}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -789,15 +798,16 @@
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
     function storeFor (feature) {
+      const throwMarked = (error) => {
+        if (Object(error) === error) storeFailures.add(error)
+        throw error
+      }
       const write = (fn) => {
         if (feature.off) return
         try {
           fn()
         } catch (error) {
-          if (dialogActions > 0) {
-            if (Object(error) === error) storeFailures.add(error)
-            throw error
-          }
+          if (dialogActions > 0) throwMarked(error)
           if (!isRefusedWrite(error)) return feature.skip(error)
           console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
@@ -809,8 +819,7 @@
         try {
           return Framework.getData(key)
         } catch (error) {
-          if (Object(error) === error) storeFailures.add(error)
-          throw error
+          throwMarked(error)
         }
       }
       return {
@@ -892,6 +901,8 @@
   const dialogs = guard.dialogsFor(settingsEntry)
   // The options are written only from the dialog, so a write that fails reaches its status line with the settings entry still on.
   const savedSettings = guard.storeFor(settingsEntry)
+  // Copy reads under the feature that reads the options at startup.
+  const savedOptionsStore = guard.storeFor(saved)
   const snapshotOptions = () => snapshotStore(savedSettings, tableKeys(OPTION_ROWS), () => {
     const was = options
     return () => applyOptions(was)
@@ -918,7 +929,7 @@
         applyOptions({ ...draft })
       },
       copyPaste: {
-        copied: () => saved.runInDialog(() => copiedSettings(guard.storeFor(saved))),
+        copied: () => saved.runInDialog(() => copiedSettings(savedOptionsStore)),
         readers: READERS,
         apply: (values) => {
           const next = pastedOptions(options, values)

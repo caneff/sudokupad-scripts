@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.41
+// @version      1.32.42
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.41'
+  const VERSION = '1.32.42'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -473,15 +473,16 @@
     // again once space frees. `keep`, the copy of an unreadable value, turns the feature off on any throw, a refusal included, so nothing
     // can save over the original.
     function storeFor (feature) {
+      const throwMarked = (error) => {
+        if (Object(error) === error) storeFailures.add(error)
+        throw error
+      }
       const write = (fn) => {
         if (feature.off) return
         try {
           fn()
         } catch (error) {
-          if (dialogActions > 0) {
-            if (Object(error) === error) storeFailures.add(error)
-            throw error
-          }
+          if (dialogActions > 0) throwMarked(error)
           if (!isRefusedWrite(error)) return feature.skip(error)
           console.warn(`${script}: ${feature.label} could not save, the browser refused the write:`, error)
           tell(`${name}: the browser has no room left, so ${feature.label} could not be saved.`)
@@ -493,8 +494,7 @@
         try {
           return Framework.getData(key)
         } catch (error) {
-          if (Object(error) === error) storeFailures.add(error)
-          throw error
+          throwMarked(error)
         }
       }
       return {
@@ -686,47 +686,56 @@
 
   // One click handler for the four title-row buttons: Copy and Paste settings, and the error log's Copy and Clear. `copied`, `readers`, `upgrade`
   // and `apply` are the script's `copyPaste`; a paste writes under `snapshot`, in a dialog action of `feature`.
-  const ACTS = ['copy-settings', 'paste-settings', 'copy-error-log', 'clear-error-log']
-
-  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win = window) {
+  function wireActs (root, { copied, readers, upgrade, apply, snapshot, feature }, win) {
     const say = (message, options) => setDialogStatus(root, message, options)
     const acts = {
-      'copy-settings': async () => {
-        await win.navigator.clipboard.writeText(copied())
-        say('Settings copied.')
-      },
-      'paste-settings': async () => {
-        const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
-        if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
-        say(pasteReport(Object.keys(values).length, skipped))
-      },
-      'copy-error-log': async () => {
-        const log = readErrorLog(win.localStorage)
-        if (log.length === 0) {
-          say(formatErrorLog(log))
-          return
+      'copy-settings': {
+        verb: 'copy',
+        run: async () => {
+          await win.navigator.clipboard.writeText(copied())
+          say('Settings copied.')
         }
-        await win.navigator.clipboard.writeText(formatErrorLog(log))
-        say('Error log copied.')
       },
-      'clear-error-log': async () => {
-        // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
-        let wasEmpty = false
-        try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
-        clearErrorLog(win.localStorage)
-        say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
+      'paste-settings': {
+        verb: 'paste',
+        run: async () => {
+          const { values, skipped } = pastedSettings(await win.navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) feature.runInDialog(() => writeOrRestore(snapshot, () => apply(values)))
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      },
+      'copy-error-log': {
+        verb: 'copy the error log',
+        run: async () => {
+          const log = readErrorLog(win.localStorage)
+          if (log.length === 0) {
+            say(formatErrorLog(log))
+            return
+          }
+          await win.navigator.clipboard.writeText(formatErrorLog(log))
+          say('Error log copied.')
+        }
+      },
+      'clear-error-log': {
+        verb: 'clear the error log',
+        run: async () => {
+          // A log that cannot be read is the one Clear is there for, so it is cleared all the same, and said to be.
+          let wasEmpty = false
+          try { wasEmpty = readErrorLog(win.localStorage).length === 0 } catch {}
+          clearErrorLog(win.localStorage)
+          say(wasEmpty ? 'The error log was already empty.' : 'Error log cleared.')
+        }
       }
     }
-    const verbs = { 'copy-settings': 'copy', 'paste-settings': 'paste', 'copy-error-log': 'copy the error log', 'clear-error-log': 'clear the error log' }
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
-      if (!ACTS.includes(act)) return
+      if (!Object.hasOwn(acts, act)) return
       event.preventDefault()
       event.stopPropagation()
       try {
-        await acts[act]()
+        await acts[act].run()
       } catch (error) {
-        say(`Could not ${verbs[act]}: ${errorText(error)}`, { error: true })
+        say(`Could not ${acts[act].verb}: ${errorText(error)}`, { error: true })
       }
     })
   }
@@ -857,7 +866,7 @@
   }
 
   // `normalize` reads an accepted value: a name saved under an old name, as `legacyNames` lists, is accepted too.
-  function flags (key, names, effect, dialog, normalize = (data) => decodeFlags(names, data), legacyNames = []) {
+  function flags (key, names, effect, dialog, { normalize = (data) => decodeFlags(names, data), legacyNames = [] } = {}) {
     const accepts = (data) => isPlainObject(data) && Object.keys(data).length > 0 && Object.entries(data).every(([name, value]) => (names.includes(name) || legacyNames.includes(name)) && typeof value === 'boolean')
     return { key, fallback: decodeFlags(names), read: (data) => accepts(data) ? normalize(data) : undefined, effect, dialog }
   }
@@ -876,7 +885,7 @@
       { section: 'Line styles', labels: { dashed: 'Dashed lines', arrows: 'Directional arrow lines' } }),
     show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' }),
     // The marks table is built by hand in the dialog, so this row has no section.
-    marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot'], doNothing, {}, normalizeMarkSettings, Object.values(OLD_MARK_NAMES))
+    marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot'], doNothing, {}, { normalize: normalizeMarkSettings, legacyNames: Object.values(OLD_MARK_NAMES) })
   }
   const SETTING_NAMES = Object.keys(SETTING_TABLE)
   // The table's rows are in the lib's shape, each named by its place here, so `SETTINGS` is the one table.
@@ -1204,6 +1213,8 @@
 
   // `fromPreset` is the page the set's missing pens came from, which the dialog's note names; the set carries it, so a hand edit (Custom) still names that page.
   const presetColorSet = (preset, pages, readCell) => ({ ...paletteColors(preset, pages, readCell), fromPreset: preset })
+  // SudokuPad's own colors read no page, so their set needs no color tool.
+  const SUDOKUPAD_COLOR_SET = presetColorSet(SUDOKUPAD_PRESET, [], () => undefined)
 
   // null means the install save is still owed.
   const readPenColors = (data) => savedColorSet(data, SAVED_PRESETS)
@@ -1224,7 +1235,7 @@
   function startupPenColors (data, hasColorTool) {
     const saved = readPenColors(data)
     if (saved) return { load: saved }
-    return hasColorTool ? { wait: true } : { save: { ...SUDOKUPAD_SET, fromPreset: SUDOKUPAD_PRESET } }
+    return hasColorTool ? { wait: true } : { save: SUDOKUPAD_COLOR_SET }
   }
 
   // <lib:color-math>
@@ -1563,8 +1574,8 @@
     return rgb ? toHex(rgb) : undefined
   }
 
-  // null when no key 1 to 9 holds a #rrggbb color, which means the first-use save is still owed and may replace what is there. A bad entry beside a usable one shows
-  // SudokuPad's own color.
+  // null when no key 1 to 9 holds a #rrggbb color: nothing is saved, so the install save (Text Anywhere's first use's copy) is still owed and may replace
+  // what is there. A bad entry beside a usable one shows SudokuPad's own color.
   function savedColorSet (data, presets) {
     if (!isPlainObject(data) || !PEN_COLOR_NUMBERS.some((n) => savedHex(data[n]))) return null
     const colors = Object.fromEntries(PEN_COLOR_NUMBERS.map((n) => [n, savedHex(data[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
@@ -1588,7 +1599,7 @@
     return set && PEN_COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? storedColorSet(set) : undefined
   }
 
-  // The colors once saved; undefined before the first-use save.
+  // The colors once saved; undefined while none are.
   function copiedColorSet (data, presets) {
     const set = savedColorSet(data, presets)
     return set ? storedColorSet(set) : undefined
@@ -2535,8 +2546,7 @@
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
     const resetErase = () => { erase = null; menuOwed = false }
     window.addEventListener('pointerdown', steps.lineErase.bind((event) => {
-      erase = null
-      menuOwed = false
+      resetErase()
       if (!erasePress(event)) return
       // The point is read before the default is prevented, so a failure leaves the press to SudokuPad.
       const point = pointOf(event)
@@ -2878,10 +2888,10 @@
     return values[wrapIndex(values.indexOf(normalizeLineMode(lineMode)), 1, values.length)]
   }
 
-  // The hover label is SudokuPad's own label for the current mode (the markup's `&amp;` reads as the label's `&`).
+  // The hover label is SudokuPad's own label for the current mode.
   function renderLineModeButton (lineMode) {
     const mode = normalizeLineMode(lineMode)
-    const label = LINE_MODES.find(([value]) => value === mode)[1].replace('&', '&amp;')
+    const label = escapeHtml(LINE_MODES.find(([value]) => value === mode)[1])
     return `<button class="${LINE_MODE_BUTTON}" data-control="penlinemode-step" data-mode="${mode}" title="${label}" aria-label="${label}">` +
       `<svg viewBox="${LINE_MODE_ICON_VIEWBOX[mode]}" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.55" stroke-width="1"/>` +
       `<g stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${LINE_MODE_ICON_SHOWS[mode].map((name) => LINE_MODE_ICON_LINES[name]).join('')}</g></svg></button>`
@@ -3175,7 +3185,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
-      const picked = id === SUDOKUPAD_PRESET ? { ...SUDOKUPAD_SET, fromPreset: id } : steps.colors.run(() => presetColorSet(id, readyColorTool().palette.pages, readCellColor), () => null)
+      const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_COLOR_SET : steps.colors.run(() => presetColorSet(id, readyColorTool().palette.pages, readCellColor), () => null)
       if (picked) {
         set = picked
         colorsChosen = true
