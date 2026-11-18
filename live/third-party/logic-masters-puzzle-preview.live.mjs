@@ -103,7 +103,7 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
     const { context, page, hits } = await session(join(dir, 'near-profile'), 'ok')
     const near = await nearIds(page)
     assert.ok(near.length > 0 && near.length < LINK_COUNT, `${near.length} near links of ${LINK_COUNT}`)
-    await page.waitForFunction((count) => document.querySelectorAll('.puzzle-preview img').length >= count, near.length, { timeout: 60000 })
+    await page.waitForFunction((count) => [...document.querySelectorAll('.puzzle-preview img')].filter((i) => i.complete && i.naturalWidth > 0).length >= count, near.length, { timeout: 60000 })
     await quiet(QUIET_MS)
     assert.deepEqual([...hits.pages].sort(), [...near].sort())
     assert.equal(hits.images.length, near.length)
