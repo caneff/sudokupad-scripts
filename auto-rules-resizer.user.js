@@ -346,11 +346,18 @@
     } else save(store, key, data)
   }
 
-  // `fit()` returns whether it applied a size. When it did, `part` becomes what it applied, so a press the floor or cap cancelled, or a drag
-  // past the board, is not kept; when it bailed, `applied` is the last fit's, so the user's step stands.
-  function stepSizing (now, part, change, fit) {
-    now.wanted = { ...now.wanted, [part]: change(now.applied[part]) }
-    if (fit()) now.wanted = { ...now.wanted, [part]: now.applied[part] }
+  // `fit()` returns the sizing it applied, or null when it bailed. Only an applied sizing is saved, and `part` is saved as the fit applied it, so a
+  // press the floor or cap cancelled, or a drag past the board, is not kept. A bail saves nothing and puts the saved sizing back in `wanted`.
+  function stepSizing (store, now, part, change, fit) {
+    const before = now.wanted
+    now.wanted = { ...before, [part]: change(now.applied[part]) }
+    const applied = fit()
+    if (!applied) {
+      now.wanted = before
+      return
+    }
+    now.wanted = { ...now.wanted, [part]: applied[part] }
+    saveSizing(store, now.puzzle, now.wanted)
   }
 
   // SudokuPad's own rule in App.resize.
@@ -1369,8 +1376,7 @@
   // (`fontOffsetPx` or `box`), so a step starts from what is on the page.
   function changeSizing (part, change) {
     const now = currentSizing()
-    stepSizing(now, part, change, fitPage)
-    saveSizing(sizingStore, now.puzzle, now.wanted)
+    stepSizing(sizingStore, now, part, change, fitPage)
   }
 
   function restoreSizing () {
@@ -1499,7 +1505,7 @@
 
   // `given` is the reading place kept from before the fit came off: null is nothing to keep, and undefined reads the pane's current place.
   function fitPage (given) {
-    let fitted = false
+    let fitted = null
     rulesFit.run(() => {
       const rules = rulesPane()
       const controls = controlsColumn()
@@ -1531,7 +1537,7 @@
         readable: (fontPx) => readableWidth(rules, fontPx)
       })
       if (applied) now.applied = { fontOffsetPx: appliedOffset, box: applied }
-      fitted = Boolean(applied)
+      fitted = applied ? now.applied : null
       keepReadingPlace(rules, place)
       rulesRefit.run(() => watchText(rules))
       showControls(Boolean(applied))

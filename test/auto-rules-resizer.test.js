@@ -578,17 +578,24 @@ function countingStore (saved) {
   }
 }
 
-test('stepSizing: a fit that applies less keeps what it applied; a fit that bails keeps the user\'s step, not the old size', () => {
-  const sized = () => ({ wanted: { fontOffsetPx: 1, box: noRulesDrag() }, applied: { fontOffsetPx: 1, box: noRulesDrag() } })
-  const clipped = sized()
-  stepSizing(clipped, 'fontOffsetPx', (px) => px + 1, () => { clipped.applied = { ...clipped.applied, fontOffsetPx: 0.5 }; return true })
-  assert.equal(clipped.wanted.fontOffsetPx, 0.5)
-  const bailed = sized()
-  stepSizing(bailed, 'fontOffsetPx', (px) => px + 1, () => false)
-  assert.equal(bailed.wanted.fontOffsetPx, 2)
-  const dragged = sized()
-  stepSizing(dragged, 'box', (box) => ({ ...box, w: 30 }), () => false)
-  assert.equal(dragged.wanted.box.w, 30)
+test('stepSizing: a capped step saves what the fit applied; a fit that bails saves nothing and keeps the saved sizing', () => {
+  const saved = { fontOffsetPx: 1, box: noRulesDrag() }
+  const session = () => ({ puzzle: 'p', wanted: saved, applied: saved })
+  const store = countingStore()
+  const capped = session()
+  stepSizing(store, capped, 'fontOffsetPx', (px) => px + 1, () => {
+    capped.applied = { ...saved, fontOffsetPx: 0.5 }
+    return capped.applied
+  })
+  assert.equal(loadSizing(store, 'p').fontOffsetPx, 0.5)
+  assert.equal(capped.wanted.fontOffsetPx, 0.5)
+  const writes = store.writes.length
+  for (const [part, change] of [['fontOffsetPx', (px) => px + 1], ['box', (box) => ({ ...box, w: 30 })]]) {
+    const bailed = session()
+    stepSizing(store, bailed, part, change, () => null)
+    assert.equal(store.writes.length, writes, `a bailed ${part} step wrote nothing`)
+    assert.deepEqual(bailed.wanted, saved, `a bailed ${part} step leaves the sizing as it was`)
+  }
 })
 
 test('saveSizing and loadSizing: a puzzle never resized starts at the default, and another puzzle does not inherit a resized one', () => {
