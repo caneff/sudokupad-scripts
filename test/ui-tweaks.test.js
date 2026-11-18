@@ -26,7 +26,7 @@ test('savedOptions: a saved value that is not a boolean reads as the default', (
   assert.deepEqual(savedOptions(store), DEFAULT_OPTIONS)
 })
 
-test('saveOptions keeps every option as a boolean under its own key, and savedOptions reads them back', () => {
+test('saveOptions keeps every option under its own key, and savedOptions reads them back', () => {
   const store = fakeStore()
   const chosen = { tab: false, hideSelect: true, wrapButtons: true, digitPad: 130 }
   saveOptions(store, chosen)
@@ -231,4 +231,11 @@ test('buildCss: 100% adds no rule; any other size sizes the digit buttons in rem
   assert.match(css, /height: 6rem !important/)
   assert.doesNotMatch(css, /px|scale/)
   assert.match(buildCss({ ...DEFAULT_OPTIONS, digitPad: 80 }), /width: 3\.2rem !important/)
+})
+
+test('buildCss: the corner and centre tools get the digit font scaled from 1.4rem, and the pen line-mode box follows the digit rows', () => {
+  const css = buildCss({ ...DEFAULT_OPTIONS, digitPad: 150 })
+  assert.match(css, /\.tool-corner \.controls-input button\.digit, \.tool-centre \.controls-input button\.digit \{ font-size: 2\.1rem !important; \}/)
+  assert.match(css, /button\.digit \{[^}]*font-size: 3rem !important/)
+  assert.match(css, /\.penlinemode \{ top: 19rem !important; height: 6rem !important; \}/)
 })

@@ -3,7 +3,7 @@
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      0.1.36
 // @author       ChinStrap
-// @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Select button, and wrap the bottom row of buttons after five.
+// @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches the number pad to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -31,6 +31,7 @@
   ]
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
   // The digit pad's size as a percent of SudokuPad's own, saved under its own key.
+  const DIGIT_PAD = 'digitPad'
   const DIGIT_PAD_SIZES = [80, 90, 100, 110, 120, 130, 140, 150]
   const DIGIT_PAD_DEFAULT = 100
   const DIGIT_PAD_KEY = 'UiTweaks_digitPad'
@@ -100,7 +101,7 @@
 
   const OPTION_ROWS = [
     ...OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: savedBoolean })),
-    { name: 'digitPad', key: DIGIT_PAD_KEY, fallback: DIGIT_PAD_DEFAULT, read: savedDigitPad }
+    { name: DIGIT_PAD, key: DIGIT_PAD_KEY, fallback: DIGIT_PAD_DEFAULT, read: savedDigitPad }
   ]
   const DEFAULT_OPTIONS = tableDefaults(OPTION_ROWS)
 
@@ -156,6 +157,8 @@
     const scaled = (value) => rem(value * percent / 100)
     const side = `${scaled(DIGIT_BUTTON_REM)}rem`
     return [
+      // SudokuPad puts the pen line-mode box at 13rem, over the Delete row of 4rem rows: three rows and a 1rem gap.
+      `.penlinemode { top: ${rem(3 * scaled(DIGIT_BUTTON_REM) + 1)}rem !important; height: ${side} !important; }`,
       `.controls-input button.digit { flex: 0 0 ${side} !important; width: ${side} !important; height: ${side} !important; font-size: ${scaled(DIGIT_FONT_REM)}rem !important; }`,
       `.tool-corner .controls-input button.digit, .tool-centre .controls-input button.digit { font-size: ${scaled(DIGIT_FONT_SMALL_REM)}rem !important; }`
     ].join('\n')
@@ -164,7 +167,7 @@
 
   // Tab adds no rule: it works on the letter tool's key list.
   function buildCss (options) {
-    return [options.hideSelect && HIDE_SELECT_CSS, options.wrapButtons && BOTTOM_ROW_CSS, digitPadCss(options.digitPad)].filter(Boolean).join('\n')
+    return [options.hideSelect && HIDE_SELECT_CSS, options.wrapButtons && BOTTOM_ROW_CSS, digitPadCss(options[DIGIT_PAD])].filter(Boolean).join('\n')
   }
 
   // <lib:write-style>
@@ -905,15 +908,12 @@
     })
   }
 
-  // SudokuPad fits #controls to its box only on a resize, so a size change is not seen until one.
-  const refitControls = () => window.dispatchEvent(new Event('resize'))
-
   function applyOptions (next) {
-    const padChanged = next.digitPad !== options.digitPad
+    const padChanged = next[DIGIT_PAD] !== options[DIGIT_PAD]
     options = next
     writeStyle(STYLE_ID, buildCss(next))
     applyTab(next.tab)
-    if (padChanged) refitControls()
+    if (padChanged) window.dispatchEvent(new Event('resize'))
   }
 
   const CLASS_PREFIX = 'ui-tweaks-'
@@ -938,9 +938,8 @@
   const optionRow = (option) =>
     `<label class="${CLASS_PREFIX}option"><input type="checkbox" data-option="${option.id}"><span>${option.label}<small>${option.hint}</small></span></label>`
 
-  const PAD_SELECT = 'select[data-option="digitPad"]'
-  const digitPadRow = () =>
-    `<label class="${CLASS_PREFIX}option"><select data-option="digitPad">${DIGIT_PAD_SIZES.map((size) => `<option value="${size}">${size}%</option>`).join('')}</select><span>Digit pad size<small>Sizes the digit buttons against SudokuPad's own. SudokuPad fits the whole controls column to the window, so the other buttons give way as the digits grow.</small></span></label>`
+  // SudokuPad fits #controls to its box only on a resize, so a size change is not seen until one.
+  const DIGIT_PAD_ROW = `<label class="${CLASS_PREFIX}option"><select data-option="${DIGIT_PAD}">${DIGIT_PAD_SIZES.map((size) => `<option value="${size}">${size}%</option>`).join('')}</select><span>Digit pad size<small>Sizes the digit buttons against SudokuPad's own. SudokuPad fits the whole controls column to the window, so the other buttons give way as the digits grow.</small></span></label>`
 
   function openDialog () {
     const draft = { ...options }
@@ -968,30 +967,28 @@
           applyOptions(next)
           OPTION_ROWS.filter((row) => row.key in values).forEach((row) => {
             draft[row.name] = next[row.name]
-            if (row.name === 'digitPad') padSelect.value = String(next.digitPad)
-            else box(row.name).checked = next[row.name]
+            showDraft(row.name)
           })
         }
       },
       restore: () => restoreDefaults()
     })
     if (!body) return
-    const restoreDefaults = () => {
-      OPTIONS.forEach((option) => {
-        draft[option.id] = DEFAULT_OPTIONS[option.id]
-        box(option.id).checked = draft[option.id]
-      })
-      draft.digitPad = DEFAULT_OPTIONS.digitPad
-      padSelect.value = String(draft.digitPad)
+    const field = (name) => body.querySelector(`[data-option="${name}"]`)
+    const showDraft = (name) => {
+      if (name === DIGIT_PAD) field(name).value = String(draft[name])
+      else field(name).checked = draft[name]
     }
-    body.innerHTML = OPTIONS.map(optionRow).join('') + digitPadRow()
-    const box = (id) => body.querySelector(`input[data-option="${id}"]`)
-    const padSelect = body.querySelector(PAD_SELECT)
-    padSelect.value = String(draft.digitPad)
-    padSelect.addEventListener('change', (event) => { draft.digitPad = Number(event.target.value) })
-    OPTIONS.forEach((option) => {
-      box(option.id).checked = draft[option.id]
-      box(option.id).addEventListener('change', (event) => { draft[option.id] = event.target.checked })
+    const restoreDefaults = () => OPTION_ROWS.forEach((row) => {
+      draft[row.name] = DEFAULT_OPTIONS[row.name]
+      showDraft(row.name)
+    })
+    body.innerHTML = OPTIONS.map(optionRow).join('') + DIGIT_PAD_ROW
+    OPTION_ROWS.forEach((row) => {
+      showDraft(row.name)
+      field(row.name).addEventListener('change', (event) => {
+        draft[row.name] = row.name === DIGIT_PAD ? Number(event.target.value) : event.target.checked
+      })
     })
   }
 
