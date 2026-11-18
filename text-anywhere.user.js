@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.45
+// @version      0.46.46
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.45'
+  const VERSION = '0.46.46'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -275,7 +275,7 @@
   const BACKGROUND_PAD_X = 0.35
   const BACKGROUND_PAD_Y = 0.15
   const BACKGROUND_RADIUS = 0.3
-  // The padding and corners of a note's background box, which the code block and the dialog's box sample share, so the three cannot drift apart.
+  // The padding and corners of a note's background box, in ems of its text, for CSS drawn at the text's size.
   const BOX_SHAPE_CSS = `padding: ${BACKGROUND_PAD_Y}em ${BACKGROUND_PAD_X}em; border-radius: ${BACKGROUND_RADIUS}em;`
   // An outline is the halo round a note's letters: how far it reaches past them, as a share of the text size. The settings dialog sets one for every note; a
   // note's own saved `outline` field is never read.
@@ -500,10 +500,10 @@
     return item.bg ? backgroundPadding(item) : Array(2).fill(OUTLINE_EM[outline] * item.size)
   }
 
-  function noteBox (item) {
+  // The box a note is drawn in, in board units: its text, padded by its background box or by its halo's reach.
+  function noteBox (item, outline) {
     const box = textRect(item)
-    if (!item.bg) return box
-    const [padX, padY] = backgroundPadding(item)
+    const [padX, padY] = notePadding(item, outline)
     return { left: box.left - padX, right: box.right + padX, top: box.top - padY, bottom: box.bottom + padY }
   }
 
@@ -514,10 +514,10 @@
   // The last box is the topmost.
   const noteAtPoint = (boxes, point, margin) => boxes.findLastIndex((box) => inBox(point, grownBox(box, margin)))
 
-  function notesTouched (notes, [ax, ay], [bx, by]) {
+  function notesTouched (notes, [ax, ay], [bx, by], outline) {
     const [left, right, top, bottom] = [Math.min(ax, bx), Math.max(ax, bx), Math.min(ay, by), Math.max(ay, by)]
     return notes.flatMap((item, i) => {
-      const box = noteBox(item)
+      const box = noteBox(item, outline)
       return box.left <= right && box.right >= left && box.top <= bottom && box.bottom >= top ? [i] : []
     })
   }
@@ -550,10 +550,9 @@
   const screenPoint = (item, toScreen) => item.fixed ? drawnPoint(item) : toScreen(item.at)
 
   function noteScreenBox (item, map, outline) {
-    const box = textRect(boardView(item, map.toBoard))
-    const [padX, padY] = notePadding(item, outline)
-    const [left, top] = map.toScreen([box.left - padX, box.top - padY])
-    const [right, bottom] = map.toScreen([box.right + padX, box.bottom + padY])
+    const box = noteBox(boardView(item, map.toBoard), outline)
+    const [left, top] = map.toScreen([box.left, box.top])
+    const [right, bottom] = map.toScreen([box.right, box.bottom])
     return { left, right, top, bottom }
   }
 
@@ -1353,12 +1352,21 @@
     store.removeData(restartedKey(key))
   }
 
+  // Whether `key` holds `value`, saved in an envelope or not: the guarded store drops a write the browser refuses (a full localStorage) instead of throwing.
+  const landed = (store, key, value) => {
+    const saved = store.getData(key)
+    return saved !== null && JSON.stringify(readSaved(saved, (data) => data)) === JSON.stringify(value)
+  }
+
   // `store` has Framework's getData, setData and removeData. Writes `value` under `dataKey` and makes puzzle `key` the newest in `index`. The value is written
-  // before the index, and the dropped puzzles' data is removed last, so a write that throws (a full localStorage) loses nothing already saved.
+  // before the index, and the dropped puzzles' data is removed last, each step only once the one before it landed, so a write that throws or is
+  // dropped loses nothing already saved.
   function writeIndexed (store, index, key, dataKey, value, write = (k, v) => store.setData(k, v)) {
     const touched = touchIndex(index, key)
     write(dataKey, value)
+    if (!landed(store, dataKey, value)) return
     store.setData(INDEX_KEY, touched.index)
+    if (!landed(store, INDEX_KEY, touched.index)) return
     for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
   }
 
@@ -2186,31 +2194,28 @@
     return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
 
-  // The one rule for the Undo SudokuPad gives to a Restart, which Color by Digit and Text Anywhere share so they agree on it (#990).
-  // SudokuPad's Undo on an empty undo stack loads the board kept from before the last Restart, `app.preRestartSavedProgress`, which it keeps
-  // only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes). A script may act in its own 'restarted'
-  // handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds no more than that on it is the
-  // Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
-  function trackRestartUndo (app, wrap = (fn) => fn) {
+  // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
+  // `app.preRestartSavedProgress`, which it keeps only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes).
+  // A script may act in its own 'restarted' handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds
+  // no more than that on it is the Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
+  function trackRestartUndo (app, wrap) {
     let restartLength = 0
     const atRestart = () => app.puzzle.undoStack.length <= restartLength
-    const loadsBoard = () => atRestart() && app.preRestartSavedProgress !== undefined
     // SudokuPad triggers `act` after the action, so what the stack was before an Undo is read off the event before it.
-    let before = { atRestart: false, loadsBoard: false }
-    const read = () => { before = { atRestart: atRestart(), loadsBoard: loadsBoard() } }
+    let wasAtRestart = false
+    const read = () => { wasAtRestart = atRestart() }
     const callbacks = []
     app.on('restarted', wrap(() => queueMicrotask(() => { restartLength = app.puzzle.undoStack.length; read() })))
-    const restartCount = wrap(() => { restartLength = 0; read() })
-    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, restartCount)
+    const forgetRestart = wrap(() => { restartLength = 0; read() })
+    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, forgetRestart)
     app.puzzle.on('act', wrap((_, action) => {
-      const was = before
+      const was = wasAtRestart
       read()
-      if (action?.type === 'undo' && was.atRestart) callbacks.forEach((fn) => fn(was.loadsBoard))
+      if (action?.type === 'undo' && was) callbacks.forEach((fn) => fn())
     }))
     return {
-      atRestart,
-      loadsBoard,
-      // `fn(loaded)` runs after the Undo that found the stack where the Restart left it; `loaded` is whether it loaded the board from before it.
+      loadsBoard: () => atRestart() && app.preRestartSavedProgress !== undefined,
+      // `fn` runs after the Undo that found the stack where the Restart left it, whether or not that Undo loaded a board.
       onRestartUndo: (fn) => { callbacks.push(fn) }
     }
   }
@@ -2326,7 +2331,7 @@
   // Until Text Anywhere is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
   const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
 
-  // `scale` is pixels of the note's box per board unit; `look` is the looks in force (its outline, box color and frame). A note with no background is padded by its halo's reach, since its box clips what overflows it.
+  // `scale` is pixels of the note's box per board unit. A note with no background is padded by its halo's reach, since its box clips what overflows it.
   function noteStyle (item, [x, y], scale, backdrop, look) {
     const px = (units) => `${roundToTenth(units * scale)}px`
     const [width, height] = item.box ? item.box.map(px) : ['', '']
@@ -2359,8 +2364,7 @@
 
   const isFence = (runs) => Boolean(runs[0]?.fence)
 
-  // Groups a note's parsed lines into pieces, with no element made: a fenced code block (its lines' text, none when the fence is empty), a bullet, a sized line, or a plain line.
-  // A block ends its own line; `empty` marks an empty plain line.
+  // Groups a note's parsed lines into pieces, with no element made. A block ends its own line; `empty` marks an empty plain line.
   function pieceKinds (lines) {
     const pieces = []
     for (let i = 0; i < lines.length; i++) {
@@ -2516,14 +2520,15 @@
     return block
   }
 
+  // Each builder makes a piece's elements.
   const PIECE_BUILDERS = {
-    code: (piece) => codeBlockElement(piece.lines),
-    bullet: (piece) => bulletElement(piece.runs, piece.index),
-    sized: (piece) => sizedLineElement(piece.runs),
+    code: (piece) => [codeBlockElement(piece.lines)],
+    bullet: (piece) => [bulletElement(piece.runs, piece.index)],
+    sized: (piece) => [sizedLineElement(piece.runs)],
     plain: (piece) => piece.runs.map(runElement)
   }
 
-  const notePieces = (lines) => pieceKinds(lines).map((piece) => ({ block: piece.block, empty: piece.empty, content: [PIECE_BUILDERS[piece.kind](piece)].flat() }))
+  const notePieces = (lines) => pieceKinds(lines).map((piece) => ({ block: piece.block, empty: piece.empty, content: PIECE_BUILDERS[piece.kind](piece) }))
 
   // A block ends its own line, so a line break goes only between two plain lines, and before a block that follows an empty line.
   const breaksBefore = (piece, previous) => piece.block ? previous.empty : !previous.block
@@ -3163,11 +3168,11 @@
     const backdrop = backdropOf(item, map)
     const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale, backdrop, look) : noteStyle(item, item.at, 1, backdrop, look)
     const drawn = JSON.stringify(style)
-    if (drawn !== shown.look) {
+    if (drawn !== shown.drawn) {
       applyNoteStyle(element, style)
       element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
     }
-    shownNotes.set(element, { ...shown, item, text: item.text, look: drawn })
+    shownNotes.set(element, { ...shown, item, text: item.text, drawn })
   }
 
   // Puts each group's notes in the order of `puzzleNotes`, moving only the elements out of place. The elements it put back in the page.
@@ -3935,7 +3940,7 @@
     return { left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) }
   }
 
-  const notesInRectangle = (d, map) => notesHidden ? [] : notesTouched(notesOnBoard(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]))
+  const notesInRectangle = (d, map) => notesHidden ? [] : notesTouched(notesOnBoard(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]), look.outline)
 
   function showRectangle (d) {
     if (!d.rectangle) {
@@ -4493,8 +4498,8 @@
       app.on('restarted', boardNotes.bind(restartNotes))
       if (app.puzzle.currentPuzzle) showSavedNotes()
     })
-    // The Undo that loads the board from before a Restart brings the notes back, as Color by Digit's mode, by the one rule both share (#990). With
-    // nothing entered SudokuPad keeps no board, but its first Undo after the Restart, past any selection made since, still brings the notes back.
+    // The Undo that loads the board from before a Restart brings the notes back. With nothing entered SudokuPad keeps no board, but its first
+    // Undo after the Restart, past any selection made since, still brings the notes back.
     undoRestart.run(() => trackRestartUndo(app, undoRestart.bind).onRestartUndo(restoreRestarted))
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)

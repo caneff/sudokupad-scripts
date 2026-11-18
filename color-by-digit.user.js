@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.70
+// @version      0.25.71
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.70'
+  const VERSION = '0.25.71'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -937,31 +937,28 @@
     return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
 
-  // The one rule for the Undo SudokuPad gives to a Restart, which Color by Digit and Text Anywhere share so they agree on it (#990).
-  // SudokuPad's Undo on an empty undo stack loads the board kept from before the last Restart, `app.preRestartSavedProgress`, which it keeps
-  // only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes). A script may act in its own 'restarted'
-  // handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds no more than that on it is the
-  // Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
-  function trackRestartUndo (app, wrap = (fn) => fn) {
+  // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
+  // `app.preRestartSavedProgress`, which it keeps only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes).
+  // A script may act in its own 'restarted' handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds
+  // no more than that on it is the Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
+  function trackRestartUndo (app, wrap) {
     let restartLength = 0
     const atRestart = () => app.puzzle.undoStack.length <= restartLength
-    const loadsBoard = () => atRestart() && app.preRestartSavedProgress !== undefined
     // SudokuPad triggers `act` after the action, so what the stack was before an Undo is read off the event before it.
-    let before = { atRestart: false, loadsBoard: false }
-    const read = () => { before = { atRestart: atRestart(), loadsBoard: loadsBoard() } }
+    let wasAtRestart = false
+    const read = () => { wasAtRestart = atRestart() }
     const callbacks = []
     app.on('restarted', wrap(() => queueMicrotask(() => { restartLength = app.puzzle.undoStack.length; read() })))
-    const restartCount = wrap(() => { restartLength = 0; read() })
-    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, restartCount)
+    const forgetRestart = wrap(() => { restartLength = 0; read() })
+    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, forgetRestart)
     app.puzzle.on('act', wrap((_, action) => {
-      const was = before
+      const was = wasAtRestart
       read()
-      if (action?.type === 'undo' && was.atRestart) callbacks.forEach((fn) => fn(was.loadsBoard))
+      if (action?.type === 'undo' && was) callbacks.forEach((fn) => fn())
     }))
     return {
-      atRestart,
-      loadsBoard,
-      // `fn(loaded)` runs after the Undo that found the stack where the Restart left it; `loaded` is whether it loaded the board from before it.
+      loadsBoard: () => atRestart() && app.preRestartSavedProgress !== undefined,
+      // `fn` runs after the Undo that found the stack where the Restart left it, whether or not that Undo loaded a board.
       onRestartUndo: (fn) => { callbacks.push(fn) }
     }
   }
@@ -2708,7 +2705,6 @@
   // group; opening a second would end it early. Replays and loading progress bypass app.act; Undo and Redo go through it.
   function installCellColoring (app) {
     coloring.run(() => {
-      // Text Anywhere brings its notes back on the same Undo, by the same rule (#990).
       const restartUndo = trackRestartUndo(app, coloring.bind)
       const coloredEntry = (stock, action) => {
         if (!colorsCells(mode) || !isEntryAction(action)) return stock(action)

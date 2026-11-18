@@ -8,6 +8,7 @@ const { headerField, headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
+const { loadLib } = require('./load-lib.js')
 const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
@@ -166,13 +167,77 @@ test('note session: a save before any puzzle is loaded writes nothing', () => {
   assert.deepEqual(saved, {})
 })
 
-test('note session: a remove that throws is reported and does not skip the save after it', () => {
+test('note session: a remove that throws past the store is caught by the session, reported, and does not skip the save after it', () => {
   const { session, saved, reports } = sessionOver({ [INDEX_KEY]: ['p1'] }, { removeData: () => { throw new Error('remove refused') } })
   assert.deepEqual(session.load('p1'), [])
   session.dropRestarted()
   session.save([line])
   assert.deepEqual(saved[NOTES_PREFIX + 'p1'], { v: 0, data: [line] })
   assert.equal(reports.some(([message]) => /remove refused/.test(message)), true, JSON.stringify(reports))
+})
+
+const quotaError = () => Object.assign(new Error('The quota has been exceeded.'), { name: 'QuotaExceededError' })
+const Framework = {}
+const { createGuard } = loadLib(['sudokupad'], ['createGuard'], { Framework })
+
+// The note session over the script's guarded store, on a Framework holding `saved`: `fail(call, key)` returns the error a setData or removeData of `key` throws, or nothing.
+function guardedSessionOver (saved, fail) {
+  const thrown = (call, key) => { const error = fail(call, key); if (error) throw error }
+  Object.assign(Framework, {
+    getData: (key) => (key in saved ? saved[key] : null),
+    setData (key, value) { thrown('setData', key); saved[key] = value },
+    removeData (key) { thrown('removeData', key); delete saved[key] }
+  })
+  const guard = createGuard({ script: 'text-anywhere', name: 'Text Anywhere', version: '1.0.0', features: { saved: { label: 'saved notes and settings', needs: {} } } })
+  const reports = []
+  const session = noteSession({ store: guard.storeFor(guard.features.saved), report: (message) => reports.push(message) })
+  return { session, saved, reports, guard }
+}
+
+const fiftyPuzzles = () => {
+  const saved = { [INDEX_KEY]: puzzles(50) }
+  for (const key of puzzles(50)) {
+    saved[NOTES_PREFIX + key] = [line]
+    saved[RESTARTED_PREFIX + key] = [line]
+  }
+  return saved
+}
+
+test('note session: a write the browser refuses for a 51st puzzle leaves the index and every other puzzle\'s notes as they were, and saving stays on', () => {
+  const writes = { [NOTES_PREFIX + 'p51']: (session) => session.save([line]), [RESTARTED_PREFIX + 'p51']: (session) => session.keepForRestart([sum]) }
+  for (const [refused, write] of Object.entries(writes)) {
+    const before = fiftyPuzzles()
+    const { session, saved, reports, guard } = guardedSessionOver(structuredClone(before), (call, key) => (call === 'setData' && key === refused ? quotaError() : null))
+    quietly(() => {
+      session.load('p51')
+      write(session)
+    })
+    assert.deepEqual(saved, before, refused)
+    assert.deepEqual([guard.off, reports], [[], []], 'the guard tells a refusal in its bar, and saving stays on')
+  }
+})
+
+test('note session: an index write the browser refuses removes no other puzzle\'s notes', () => {
+  const before = fiftyPuzzles()
+  const { session, saved } = guardedSessionOver(structuredClone(before), (call, key) => (call === 'setData' && key === INDEX_KEY ? quotaError() : null))
+  quietly(() => {
+    session.load('p51')
+    session.save([line])
+  })
+  assert.deepEqual(saved[INDEX_KEY], puzzles(50))
+  assert.deepEqual(saved[NOTES_PREFIX + 'p1'], [line])
+  assert.deepEqual(saved[RESTARTED_PREFIX + 'p1'], [line])
+})
+
+test('note session over the guarded store: a remove that fails for another reason turns saving off, by the guard\'s one policy, and nothing throws', () => {
+  const { session, saved, reports, guard } = guardedSessionOver({ [INDEX_KEY]: ['p1'] }, (call) => (call === 'removeData' ? new Error('remove failed') : null))
+  quietly(() => {
+    assert.deepEqual(session.load('p1'), [])
+    session.save([line])
+  })
+  assert.deepEqual(guard.off, ['saved notes and settings'])
+  assert.deepEqual(saved, { [INDEX_KEY]: ['p1'] }, 'the save after it is dropped, as every write is once saving is off')
+  assert.deepEqual(reports, [])
 })
 
 test('note session: a save whose index cannot be read is reported and writes nothing', () => {
@@ -725,12 +790,12 @@ test('a text\'s box starts at its point, as tall as its line and wider with more
 
 test('a drag across a text touches it, and one that passes clear of it does not', () => {
   const box = textRect(sum)
-  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [110, 0], [110, 100]), true, 'across it')
-  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [0, 0], [200, 100]), true, 'on a slant through it')
-  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [110, 60], [110, 60]), true, 'a press on it')
-  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [box.right + HIT_MARGIN_PX - 0.1, 0], [box.right + HIT_MARGIN_PX - 0.1, 100]), true, 'within the margin')
-  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [box.right + HIT_MARGIN_PX + 0.1, 0], [box.right + HIT_MARGIN_PX + 0.1, 100]), false, 'just past it')
-  assert.equal(touchesBox(grownBox(noteBox(sum), HIT_MARGIN_PX), [0, 0], [200, 0]), false, 'above it')
+  assert.equal(touchesBox(grownBox(noteBox(sum, 'none'), HIT_MARGIN_PX), [110, 0], [110, 100]), true, 'across it')
+  assert.equal(touchesBox(grownBox(noteBox(sum, 'none'), HIT_MARGIN_PX), [0, 0], [200, 100]), true, 'on a slant through it')
+  assert.equal(touchesBox(grownBox(noteBox(sum, 'none'), HIT_MARGIN_PX), [110, 60], [110, 60]), true, 'a press on it')
+  assert.equal(touchesBox(grownBox(noteBox(sum, 'none'), HIT_MARGIN_PX), [box.right + HIT_MARGIN_PX - 0.1, 0], [box.right + HIT_MARGIN_PX - 0.1, 100]), true, 'within the margin')
+  assert.equal(touchesBox(grownBox(noteBox(sum, 'none'), HIT_MARGIN_PX), [box.right + HIT_MARGIN_PX + 0.1, 0], [box.right + HIT_MARGIN_PX + 0.1, 100]), false, 'just past it')
+  assert.equal(touchesBox(grownBox(noteBox(sum, 'none'), HIT_MARGIN_PX), [0, 0], [200, 0]), false, 'above it')
 })
 
 // A board drawn at twice its size with its corner at (100, 50) on the screen: board units from (0, 0) to (600, 600).
@@ -759,7 +824,7 @@ test('the board view of a note gives an off-board note its board point under the
   assert.deepEqual(boardView(on, toBoard), on)
   assert.deepEqual(boardView(off, toBoard).at, [-30, 325])
   const point = toBoard([40, 700])
-  assert.deepEqual(notesTouched([on, off].map((item) => boardView(item, toBoard)), point, point), [1])
+  assert.deepEqual(notesTouched([on, off].map((item) => boardView(item, toBoard)), point, point, 'none'), [1])
 })
 
 test('a note\'s screen point is its fixed point off the board, and its board point taken to the screen on it', () => {
@@ -788,35 +853,44 @@ test('a note with a background answers to the box drawn behind it: a selection r
   const plain = textItem([100, 50], '15', 3, 20)
   const boxed = textItem([100, 50], '15', 3, 20, true)
   const edge = [textRect(boxed).right + 3, 50]
-  assert.deepEqual(notesTouched([plain], edge, edge), [])
-  assert.deepEqual(notesTouched([boxed], edge, edge), [0])
+  assert.deepEqual(notesTouched([plain], edge, edge, 'none'), [])
+  assert.deepEqual(notesTouched([boxed], edge, edge, 'none'), [0])
   const past = textRect(boxed).right + 20 * 0.35 + 0.1
-  assert.deepEqual(notesTouched([boxed], [past, 50], [past, 50]), [], 'past the box')
-  assert.equal(touchesBox(grownBox(noteBox(boxed), HIT_MARGIN_PX), [past + HIT_MARGIN_PX - 0.2, 0], [past + HIT_MARGIN_PX - 0.2, 100]), true, 'an erase within the margin of the box')
-  assert.deepEqual(noteBox(plain), textRect(plain))
+  assert.deepEqual(notesTouched([boxed], [past, 50], [past, 50], 'none'), [], 'past the box')
+  assert.equal(touchesBox(grownBox(noteBox(boxed, 'none'), HIT_MARGIN_PX), [past + HIT_MARGIN_PX - 0.2, 0], [past + HIT_MARGIN_PX - 0.2, 100]), true, 'an erase within the margin of the box')
+  assert.deepEqual(noteBox(plain, 'none'), textRect(plain))
 })
 
 // Three notes near the top left and one far off: sum's box is 88 to 112 across and 38.5 to 61.5 down.
 const rectNotes = [sum, textItem([30, 30], 'a', 1, 20), textItem([60, 90], 'b', 2, 20), textItem([400, 400], 'far', 3, 20)]
 
 test('a selection rectangle selects every note it touches, whichever way it was dragged', () => {
-  assert.deepEqual(notesTouched(rectNotes, [0, 0], [150, 100]), [0, 1, 2])
-  assert.deepEqual(notesTouched(rectNotes, [150, 100], [0, 0]), [0, 1, 2])
-  assert.deepEqual(notesTouched(rectNotes, [0, 100], [150, 0]), [0, 1, 2])
+  assert.deepEqual(notesTouched(rectNotes, [0, 0], [150, 100], 'none'), [0, 1, 2])
+  assert.deepEqual(notesTouched(rectNotes, [150, 100], [0, 0], 'none'), [0, 1, 2])
+  assert.deepEqual(notesTouched(rectNotes, [0, 100], [150, 0], 'none'), [0, 1, 2])
 })
 
 test('a selection rectangle that only touches the corner of a note\'s box selects it, and one that stops short does not', () => {
-  const { right, bottom } = noteBox(sum)
-  assert.deepEqual(notesTouched([sum], [right, bottom], [130, 80]), [0], 'a rectangle whose corner is the box\'s corner')
-  assert.deepEqual(notesTouched([sum], [125, 0], [140, 80]), [])
-  assert.deepEqual(notesTouched([sum], [90, 74], [100, 80]), [])
+  const { right, bottom } = noteBox(sum, 'none')
+  assert.deepEqual(notesTouched([sum], [right, bottom], [130, 80], 'none'), [0], 'a rectangle whose corner is the box\'s corner')
+  assert.deepEqual(notesTouched([sum], [125, 0], [140, 80], 'none'), [])
+  assert.deepEqual(notesTouched([sum], [90, 74], [100, 80], 'none'), [])
+})
+
+test('a selection rectangle finds a note by the box a click finds it by: a note with no background reaches as far as its halo', () => {
+  const plain = textItem([100, 50], '15', 3, 20)
+  const inHalo = [textRect(plain).right + 2, 50]
+  assert.deepEqual(notesTouched([plain], inHalo, inHalo, 'medium'), [0])
+  assert.deepEqual(notesTouched([plain], inHalo, inHalo, 'thin'), [])
+  const same = { toBoard: (point) => point, toScreen: (point) => point }
+  for (const item of [plain, { ...plain, bg: true }]) assert.deepEqual(noteScreenBox(item, same, 'medium'), noteBox(item, 'medium'))
 })
 
 test('a selection rectangle touches a note\'s background box, which reaches past its text', () => {
   const boxed = textItem([100, 50], '15', 3, 20, true)
   const justPast = [textRect(boxed).right + 3, 50]
-  assert.deepEqual(notesTouched([sum], justPast, [justPast[0] + 10, 55]), [])
-  assert.deepEqual(notesTouched([boxed], justPast, [justPast[0] + 10, 55]), [0])
+  assert.deepEqual(notesTouched([sum], justPast, [justPast[0] + 10, 55], 'none'), [])
+  assert.deepEqual(notesTouched([boxed], justPast, [justPast[0] + 10, 55], 'none'), [0])
 })
 
 // Size 20 is the slider's 6, and 14 its 3.
@@ -1951,8 +2025,9 @@ test('pieceKinds runs an unclosed fence to the end of the note, and gives a bull
   assert.deepEqual(pieceKinds(parseMarkdown('x\n- a\n- b')).filter((p) => p.kind === 'bullet').map((p) => p.index), [1, 2])
 })
 
-test('the code block and the dialog sample take the background box padding and corners from the one constant', () => {
+test('the dialog\'s box sample has the padding and corners a note\'s background box is drawn with', () => {
   const sample = renderSamplePicks({ outline: 'medium', box: DEFAULT_BOX_COLOR, custom: '#ffffff', frame: false, textColor: '#000' })
   assert.match(sample, /padding: 0\.15em 0\.35em; border-radius: 0\.3em;/)
-  assert.equal(styled({ bg: true }).padding, '6px 14px')
+  const box = styled({ bg: true })
+  assert.deepEqual([box.padding, box.borderRadius], ['6px 14px', '12px'], 'the same shares of a size 20 note at scale 2')
 })
