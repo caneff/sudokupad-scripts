@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.30
+// @version      0.7.31
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.30'
+  const VERSION = '0.7.31'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -237,8 +237,6 @@
     return Math.min(ownPx * MAX_FONT_RATIO, Math.max(ownPx * MIN_FONT_RATIO, autoPx + fontOffsetPx))
   }
 
-  const offsetAutoFontPx = (fits, ownPx, fontOffsetPx) => offsetFontPx(autoFontPx(fits, ownPx), fontOffsetPx, ownPx)
-
   // The pane's max-height is the room or a drag's, so a size fits when the rules take no more than the room.
   const fitsRoom = (rules, room) => rules.scrollHeight <= Math.min(room, rules.clientHeight)
 
@@ -247,7 +245,7 @@
       rules.style.fontSize = `${n}px`
       return fitsRoom(rules, room)
     }
-    rules.style.fontSize = `${offsetAutoFontPx(fits, ownPx, fontOffsetPx)}px`
+    rules.style.fontSize = `${offsetFontPx(autoFontPx(fits, ownPx), fontOffsetPx, ownPx)}px`
   }
 
   // The pane has all the height already; `fits(width, font)` is true from some width up. The order is width first, at
@@ -348,6 +346,20 @@
     } else save(store, key, data)
   }
 
+  // `fit()` returns the sizing it applied, or null when it bailed. Only an applied sizing is saved, and `part` is saved as the fit applied it, so a
+  // press the floor or cap cancelled, or a drag past the board, is not kept. A bail saves nothing and puts the saved sizing back in `wanted`.
+  function stepSizing (store, now, part, change, fit) {
+    const before = now.wanted
+    now.wanted = { ...before, [part]: change(now.applied[part]) }
+    const applied = fit()
+    if (!applied) {
+      now.wanted = before
+      return
+    }
+    now.wanted = { ...now.wanted, [part]: applied[part] }
+    saveSizing(store, now.puzzle, now.wanted)
+  }
+
   // SudokuPad's own rule in App.resize.
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
@@ -446,8 +458,7 @@
     // A drag adds to the fitted pane's height: a drag that started from SudokuPad's own height would shrink a pane the fit had grown.
     const dragging = Boolean(applied.w || applied.h)
     const sideways = Boolean(applied.w && !applied.h)
-    let startRoom = autoRoom
-    if (dragging) startRoom = rules.offsetHeight
+    const startRoom = dragging ? rules.offsetHeight : autoRoom
     const sized = draggedPane({ width, room: startRoom, box: applied, scale })
     if (dragging) rules.style.maxHeight = `${sized.room}px`
     if (applied.x || applied.y || lift) controls.style.translate = `${applied.x}px ${applied.y - lift}px`
@@ -1277,6 +1288,7 @@
       draggedPane,
       loadSizing,
       saveSizing,
+      stepSizing,
       noSizing,
       SIZING_KEY_PREFIX,
       noRulesDrag,
@@ -1361,14 +1373,10 @@
   }
 
   // f+ and f-, a corner drag and Restore defaults are the only changes to a saved sizing. `change` takes the `part` the last fit applied
-  // (`fontOffsetPx` or `box`), so a step starts from what is on the page; what the fit then applies of it is saved, so a press the floor or
-  // cap cancelled, or a drag past the board, is not kept.
+  // (`fontOffsetPx` or `box`), so a step starts from what is on the page.
   function changeSizing (part, change) {
     const now = currentSizing()
-    now.wanted = { ...now.wanted, [part]: change(now.applied[part]) }
-    fitPage()
-    now.wanted = { ...now.wanted, [part]: now.applied[part] }
-    saveSizing(sizingStore, now.puzzle, now.wanted)
+    stepSizing(sizingStore, now, part, change, fitPage)
   }
 
   function restoreSizing () {
@@ -1497,6 +1505,7 @@
 
   // `given` is the reading place kept from before the fit came off: null is nothing to keep, and undefined reads the pane's current place.
   function fitPage (given) {
+    let fitted = null
     rulesFit.run(() => {
       const rules = rulesPane()
       const controls = controlsColumn()
@@ -1528,11 +1537,13 @@
         readable: (fontPx) => readableWidth(rules, fontPx)
       })
       if (applied) now.applied = { fontOffsetPx: appliedOffset, box: applied }
+      fitted = applied ? now.applied : null
       keepReadingPlace(rules, place)
       rulesRefit.run(() => watchText(rules))
       showControls(Boolean(applied))
       if (applied) placeControls(rules)
     })
+    return fitted
   }
 
   const CLASS_PREFIX = 'rules-resizer-'
