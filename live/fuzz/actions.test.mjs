@@ -574,6 +574,21 @@ describe('the action vocabulary', () => {
         await assert.rejects(a.run({ selected: true }, { env: target.env }), /handle is gone/)
       })
 
+      it('a handle reset whose drag took the handle past the window edge double-clicks nothing there, and still finishes an open note (#1002)', async () => {
+        const seen = new Set()
+        for (const a of kindOf('note handle reset')) {
+          const target = await fakeTargets().openTarget()
+          let handles = 0
+          target.env.noteHandle = async () => (++handles === 1 ? [300, 897] : [300, 900.5])
+          await a.run({ selected: true }, { env: target.env })
+          const ns = names(target.log)
+          assert.ok(calls(target.log, 'mouse.dblclick').every(([, , y]) => y < 900), 'no press below the 900 px window')
+          if (calls(target.log, 'mouse.dblclick').length > 0) assert.ok(ns.includes('finishNote'), 'the note it opened is finished')
+          seen.add(ns.includes('finishNote') ? 'open' : 'selected')
+        }
+        assert.deepEqual([...seen].sort(), ['open', 'selected'])
+      })
+
       it('the note edits run only when a note can be placed: with none it presses nothing', async () => {
         for (const kind of ['note erase', 'note restyle', 'note edit', 'note handle reset']) {
           const [a] = kindOf(kind)

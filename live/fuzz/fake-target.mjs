@@ -50,6 +50,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
         dblclick: rec('mouse.dblclick'),
         wheel: rec('mouse.wheel')
       },
+      viewportSize: () => ({ width: 1200, height: 900 }),
       keyboard: {
         type: rec('keyboard.type'),
         down: rec('keyboard.down'),

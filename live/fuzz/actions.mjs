@@ -938,7 +938,9 @@ function buildKinds () {
         // The note stays selected or open after its drag, so its handle is still there: a missing one is a failure, not a step to skip.
         const moved = await env.noteHandle(corner)
         if (!moved) throw new Error(`corner ${corner}'s handle is gone after its drag`)
-        await env.page.mouse.dblclick(...moved)
+        // A drag can take the handle past the window's edge, where no player can press: a press there misses the handle and opens the note under it (#1002).
+        const { width, height } = env.page.viewportSize()
+        if (moved[0] >= 0 && moved[0] < width && moved[1] >= 0 && moved[1] < height) await env.page.mouse.dblclick(...moved)
         if (open) await env.finishNote()
       }
     },
