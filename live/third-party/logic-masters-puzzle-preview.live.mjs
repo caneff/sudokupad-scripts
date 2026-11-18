@@ -1,6 +1,6 @@
 // Every request the browser makes is answered by this file's own routes, or aborted: nothing reaches logic-masters.de, whose pages
 // and pictures are other authors' work. The pages and the PNG are synthetic.
-import { after, before, describe, it } from 'node:test'
+import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,9 +23,13 @@ const portalHtml = () => `<!doctype html><meta charset="utf-8"><body style="marg
 }</body>`
 const puzzleHtml = (id) => `<!doctype html><meta charset="utf-8"><body><img src="bild.php?data=synthetic-${id}"></body>`
 
+// Every context a test opens, closed after it whether the test passed or not: an open Chromium keeps the process alive.
+const open = []
+
 // One browser session on `profile`, with the script injected at DOMContentLoaded as a userscript manager does. `mode` is what the puzzle pages answer.
 async function session (profile, mode) {
   const context = await chromium.launchPersistentContext(profile, { headless: true, viewport: VIEWPORT })
+  open.push(context)
   const hits = { pages: [], images: [], aborted: [] }
   await context.route('**/*', (route) => {
     const url = new URL(route.request().url())
@@ -62,7 +66,7 @@ async function scrollThrough (page) {
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   for (let y = 0; y < height; y += VIEWPORT.height / 2) {
     await page.evaluate((top) => window.scrollTo(0, top), y)
-    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await page.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
   }
   await page.waitForFunction((count) => [...document.querySelectorAll('.puzzle-preview img')].filter((i) => i.complete && i.naturalWidth > 0).length === count, LINK_COUNT, { timeout: 120000 })
 }
@@ -73,6 +77,7 @@ const quiet = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
   let dir
   before(() => { dir = mkdtempSync(join(tmpdir(), 'lm-preview-')) })
+  afterEach(async () => { await Promise.all(open.splice(0).map((context) => context.close())) })
   after(() => { rmSync(dir, { recursive: true, force: true }) })
 
   it('a second load in the same profile fetches no puzzle page and no image', async () => {
@@ -108,7 +113,7 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
   it('after a 503 on a puzzle page, the next load in the same profile fetches nothing', async () => {
     const profile = join(dir, 'busy-profile')
     const first = await session(profile, 'busy')
-    await first.page.waitForFunction(() => localStorage.getItem('lm-puzzle-preview-busy-until') !== null, null, { timeout: 60000 })
+    await first.page.waitForFunction(() => window.localStorage.getItem('lm-puzzle-preview-busy-until') !== null, null, { timeout: 60000 })
     await quiet(QUIET_MS)
     assert.equal(first.hits.pages.length, 1)
     assert.deepEqual(first.hits.images, [])
