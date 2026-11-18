@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { STATUS, actButton, closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '../settings.mjs'
+import { actButton, closeDialogWith, dialogButton, headerVersion, openScriptDialog, savedValue, STATUS } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
 const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, KEYPAD, OPACITY_KEY, OUTLINE_KEY, PICKER, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SIZE_SLIDER, WIDTH_KEY, holdForPickers, pickTextAnywhere, script, valueOf } = textAnywhere
@@ -16,7 +16,7 @@ const browser = useBrowser()
 const open = () => textAnywhere.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
 const read = (p, fn, arg) => p.evaluate(fn, arg)
 const savedKeys = (p, keys) => read(p, (names) => Object.fromEntries(names.map((key) => [key, Framework.getData(key)])), keys)
-const saved = (p) => read(p, (key) => Framework.getData(key) ?? null, COLORS_KEY)
+const saved = (p) => savedValue(p, COLORS_KEY)
 const savedColors = async (p) => { const { preset, ...colors } = await saved(p); return colors }
 const savedPreset = async (p) => (await saved(p)).preset ?? null
 const presetShown = (p) => p.locator(PRESET).evaluate((select) => ({ value: select.value, label: select.selectedOptions[0].textContent, disabled: [...select.options].filter((o) => o.disabled).map((o) => o.textContent) }))

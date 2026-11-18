@@ -1,5 +1,5 @@
 // Shared by the live checks: opening SudokuPad's settings dialog the way a user finds a script's
-// entry, the version in a script's header, and the Copy settings and Paste settings buttons of the scripts with a dialog. Not a check itself, so `live/**/*.live.mjs` skips it.
+// entry, the version in a script's header, the Copy settings and Paste settings buttons of the scripts with a dialog, and a value a script saved. Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import { createRequire } from 'node:module'
 
@@ -43,6 +43,12 @@ export async function closeDialogWith (p, text, editorSel) {
 export const EXTRAS_EDITOR = '#pen-tool-extras-editor'
 export const openExtrasEditor = (p) => openScriptDialog(p, 'Pen Tool Extras', EXTRAS_EDITOR)
 export const closeExtrasEditorWith = (p, text) => closeDialogWith(p, text, EXTRAS_EDITOR)
+
+// What a script saved under `key` through SudokuPad's own store, or null when nothing is.
+export const savedValue = (p, key) => p.evaluate((k) => Framework.getData(k) ?? null, key)
+
+// The state a script saved inside the `{ v, data }` envelope, or a value seeded in the shape saved before the envelope.
+export const savedState = (saved) => (saved !== null && Object.hasOwn(saved, 'data') ? saved.data : saved)
 
 export const STATUS = '.dialog [data-role="settings-status"]'
 // Every script's two buttons are icons, so each pair is found by its act, not its words.

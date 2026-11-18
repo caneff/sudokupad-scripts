@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { closeDialogWith } from '../settings.mjs'
+import { closeDialogWith, savedState } from '../settings.mjs'
 import { settle } from '../settle.mjs'
-import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, savedState, typeProfileName, wrongCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, typeProfileName, wrongCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { selectCell, undoDepth } from '../board.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 

@@ -4,7 +4,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { plantUnchecked } from '../pen.mjs'
 import { readUntil, settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
-import { boxOpen, clickAt, finishNote, gridPoint } from '../board.mjs'
+import { boxOpen, cellProps, clickAt, finishNote, gridPoint } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
 
 const { COLOR_KEY, DIALOG, TEXTS, STRIKE_PIECE, SIZE_SLIDER, WIDTH_KEY, valueOf } = textAnywhere
@@ -27,8 +27,6 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
   const pickTextAnywhere = () => textAnywhere.pickTextAnywhere(p)
   const reload = () => textAnywhere.reload(p)
   const texts = () => textAnywhere.texts(p)
-  // Every cell's digit, mark and colour, so a key that reached SudokuPad shows as a change.
-  const cellState = () => read(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
   const saved = () => textAnywhere.saved(p)
   const doubleClickAt = async (at) => textAnywhere.reopen(p, await gridPoint(p, at))
   const textStyle = async (content) => {
@@ -51,7 +49,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
 
   it('a click opens a text box; typing 15 and Escape leaves the text 15 there, with no digit in a cell and no tool switched', async () => {
     await pickTextAnywhere()
-    const cells = await cellState()
+    const cells = await cellProps(p)
     const replay = await read(() => Framework.app.getReplay())
     await clickAt(p, SUM_AT)
     assert.equal(await boxOpen(p), true, 'a text box is open')
@@ -59,7 +57,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
     await finishNote(p)
     assert.deepEqual(await texts(), ['15'])
     assert.equal(await boxOpen(p), false, 'the box is closed')
-    assert.equal(await cellState(), cells)
+    assert.equal(await cellProps(p), cells)
     assert.equal(await read(() => Framework.app.getReplay()), replay)
     assert.equal(await tool(), 'textanywhere')
     assert.deepEqual(await textInCells('15'), SUM_AT)
@@ -120,7 +118,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
   })
 
   it('in the box, arrow keys move the caret and Delete deletes, as in any input, and reach no cell', async () => {
-    const cells = await cellState()
+    const cells = await cellProps(p)
     await doubleClickAt(SECOND_AT)
     await p.keyboard.press('Home')
     await p.keyboard.press('Delete')
@@ -128,7 +126,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
     await p.keyboard.type('y')
     await finishNote(p)
     assert.deepEqual(await texts(), ['23', 'xy CZ'])
-    assert.equal(await cellState(), cells)
+    assert.equal(await cellProps(p), cells)
     assert.equal(await tool(), 'textanywhere')
   })
 

@@ -5,8 +5,9 @@ import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
 import { gridPoint, mouseDrag, undoAll, undoDepth } from '../board.mjs'
+import { holdUntil, middleOf } from '../input.mjs'
 import { openPenTool, penEntries } from '../pen.mjs'
-import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
+import { savedState } from '../settings.mjs'
 import { FLOOR_MS, settle, stable, STABLE_MS } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
@@ -229,19 +230,11 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
   describe('18: a hold on a pen color button', () => {
     const pickers = () => p.locator(PICKERS).count()
     const press = async () => {
-      const box = await p.locator(COLOR_BUTTON).boundingBox()
-      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await p.mouse.move(...middleOf(await p.locator(COLOR_BUTTON).boundingBox()))
       await p.mouse.down()
     }
-    // A full hold: the pickers show before the wait ends, and the button is let go whatever happens.
-    const holdForPickers = async () => {
-      await press()
-      try {
-        await p.locator(PICKERS).first().waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
-      } finally {
-        await p.mouse.up()
-      }
-    }
+    // A full hold: the pickers show before the wait ends.
+    const holdForPickers = () => holdUntil(p, COLOR_BUTTON, PICKERS, { timeout: HOLD_WAIT_MS })
 
     it('released at half the hold opens no pickers, and a full hold afterward still does', async () => {
       await press()

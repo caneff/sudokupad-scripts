@@ -5,11 +5,12 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { captureConsoleErrors } from '../page.mjs'
-import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, mouseDrag, typeText, undoDepth } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
+import { middleOf } from '../input.mjs'
+import { savedState } from '../settings.mjs'
 
 const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
@@ -155,7 +156,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await p.mouse.click(...await gridPoint(p, NOTE_AT))
     assert.equal(await handleCount(), 4, 'the note shows its four handles')
     const box = await p.locator(HANDLES).nth(3).boundingBox()
-    const [x, y] = textAnywhere.middleOf(box)
+    const [x, y] = middleOf(box)
     await p.mouse.move(x, y)
     await p.mouse.down()
     await p.mouse.move(x + 60, y + 40, { steps: 6 })
@@ -245,7 +246,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     const pickers = () => p.locator(PICKER).count()
     const press = async () => {
       const box = await p.locator(COLOR_BUTTON).boundingBox()
-      await p.mouse.move(...textAnywhere.middleOf(box))
+      await p.mouse.move(...middleOf(box))
       await p.mouse.down()
     }
 

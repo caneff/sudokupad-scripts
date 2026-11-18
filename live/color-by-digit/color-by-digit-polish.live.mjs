@@ -3,11 +3,12 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { ARROW, BUTTON, DEFAULT_FILL, EDITOR, allFillsOn, center, paletteColorOn, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState, openEditorOn, openMenuOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, BUTTON, DEFAULT_FILL, EDITOR, allFillsOn, paletteColorOn, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, openEditorOn, openMenuOn } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
-import { closeDialogWith, dialogButton } from '../settings.mjs'
+import { closeDialogWith, dialogButton, savedState } from '../settings.mjs'
 import { readUntil, settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
+import { middleOf } from '../input.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
 
@@ -115,7 +116,7 @@ describe('the dialog', { concurrency: false }, () => {
 
   it('C6: the grabbing cursor shows on the handle and everywhere else while a row is dragged, and is gone after', async () => {
     const handle = p.locator(`${ROWS}[aria-checked=true] [data-role=handle]`)
-    const { x, y } = await center(handle)
+    const [x, y] = middleOf(await handle.boundingBox())
     assert.equal((await styleOf(handle, ['cursor'])).cursor, 'grab')
     await p.mouse.move(x, y)
     await p.mouse.down()

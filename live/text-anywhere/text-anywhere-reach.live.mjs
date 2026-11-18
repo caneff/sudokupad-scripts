@@ -4,6 +4,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote } from '../board.mjs'
+import { middleOf } from '../input.mjs'
 
 const { TEXT_BOX, TEXTS } = textAnywhere
 const WIDE = { width: 1600, height: 900 }
@@ -58,7 +59,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     assert.equal(await settle(async () => overPanel(await boxes()), true), true, 'the panel covers the note')
     await stable(async () => (await boxes()).note.x)
     await atHome()
-    await p.mouse.dblclick(...textAnywhere.middleOf((await boxes()).note))
+    await p.mouse.dblclick(...middleOf((await boxes()).note))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click on the note over the panel opens it')
     await finishNote(p)
     await atHome()
@@ -80,7 +81,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     assert.equal(note.top < bar.bottom && note.bottom > bar.top, true, `the note ${JSON.stringify(note)} is under the top bar`)
     await stable(async () => (await boxes()).note.x)
     assert.deepEqual((await boxes()).point.map(Math.round), under, 'drawn at its own point')
-    await p.mouse.dblclick(...textAnywhere.middleOf((await boxes()).note))
+    await p.mouse.dblclick(...middleOf((await boxes()).note))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click on the note over the top bar opens it')
     await finishNote(p)
     assert.deepEqual((await saved())[0].fixed, under, 'stored at its own point')
@@ -102,7 +103,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     await resizeTo(NARROW)
     assert.equal(await settle(async () => insideWindow(await boxes()), true), true, 'wholly inside the window')
     await stable(async () => (await boxes()).note.x)
-    const middle = textAnywhere.middleOf((await boxes()).note)
+    const middle = middleOf((await boxes()).note)
     const [pointX, pointY] = (await boxes()).point
     const dropAt = [middle[0], middle[1] + 80]
     const expected = [pointX, pointY + 80]
@@ -121,7 +122,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     await resizeTo(HOME)
     await reload()
     assert.deepEqual((await saved())[0].fixed, dropped, 'the drop point, with the window restored')
-    const there = textAnywhere.middleOf((await boxes()).note)
+    const there = middleOf((await boxes()).note)
     await p.mouse.move(...there)
     await p.mouse.down({ button: 'right' })
     await p.mouse.move(there[0] + 2, there[1] + 2, { steps: 3 })

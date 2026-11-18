@@ -4,8 +4,9 @@ import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { gridPoint } from '../board.mjs'
+import { middleOf } from '../input.mjs'
 
-const { CLEAR_BUTTON, HANDLES: HANDLE, TEXTS, TEXT_BOX, middleOf, pickTextAnywhere } = textAnywhere
+const { CLEAR_BUTTON, HANDLES: HANDLE, TEXTS, TEXT_BOX, pickTextAnywhere } = textAnywhere
 const ITEMS = [
   { kind: 'text', color: 1, size: 20, opacity: 100, text: 'alpha', at: [160, 160] },
   { kind: 'text', color: 2, size: 20, opacity: 100, text: 'bravo', at: [352, 160] },

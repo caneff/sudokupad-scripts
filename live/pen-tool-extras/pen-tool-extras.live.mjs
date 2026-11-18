@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { EXTRAS_EDITOR, closeExtrasEditorWith, dialogButton, headerVersion, openExtrasEditor, openSettings } from '../settings.mjs'
 import { gridPoint, undoDepth } from '../board.mjs'
+import { middleOf } from '../input.mjs'
 import { openPenTool, penDrawnCount, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { addScripts, openWith, useBrowser } from '../session.mjs'
@@ -543,13 +544,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const pickerCount = () => pickers().count()
     const penPickerValues = () => pickers().evaluateAll((es) => es.map((e) => e.value))
     const button = (n) => p.locator(`.tool-pen button[data-value="${n}"]`)
-    const centre = async (locator) => {
-      const box = await locator.boundingBox()
-      return [box.x + box.width / 2, box.y + box.height / 2]
-    }
     const press = async (n, which) => {
       await openPenTool(p)
-      const [x, y] = await centre(button(n))
+      const [x, y] = middleOf(await button(n).boundingBox())
       await p.mouse.move(x, y)
       await p.mouse.down({ button: which })
     }
@@ -729,7 +726,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('a press on another color button in the panel keeps edit mode on', async () => {
       await holdToOpen(4)
-      const [x, y] = await centre(button(5))
+      const [x, y] = middleOf(await button(5).boundingBox())
       await p.mouse.move(x, y)
       await p.mouse.down()
       await p.mouse.up()

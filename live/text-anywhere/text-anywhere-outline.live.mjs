@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { STATUS, actButton, closeDialogWith, dialogButton } from '../settings.mjs'
+import { actButton, closeDialogWith, dialogButton, savedValue, STATUS } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 import { typeText } from '../board.mjs'
 
@@ -20,7 +20,6 @@ const browser = useBrowser()
 describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   let context, p, errors
 
-  const stored = (page, name) => page.evaluate((k) => Framework.getData(k) ?? null, name)
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const textShadowOf = (text) => p.evaluate(([selector, want]) => window.getComputedStyle([...document.querySelectorAll(selector)].find((e) => e.textContent === want)).textShadow, [textAnywhere.TEXTS, text])
   const fontSizeOf = (text) => p.evaluate(([selector, want]) => parseFloat(window.getComputedStyle([...document.querySelectorAll(selector)].find((e) => e.textContent === want)).fontSize), [textAnywhere.TEXTS, text])
@@ -61,7 +60,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
     assert.ok(await reach('old') > 0, 'the note\'s own "none" is ignored')
     await chooseOutline('None')
     assert.deepEqual([await reach('A'), await reach('B'), await reach('old')], [0, 0, 0])
-    assert.equal(await stored(p, OUTLINE_KEY), 'none')
+    assert.equal(await savedValue(p, OUTLINE_KEY), 'none')
     await typeText(p, [5.5, 5.5], 'C')
     assert.equal(await reach('C'), 0, 'a note made after it too')
     assert.equal((await textAnywhere.saved(p)).find((item) => item.text === 'C').outline, undefined, 'and no note gets an outline field of its own')
@@ -79,7 +78,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
     await pick(p, 'None').click()
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.ok(await reach('A') > 0)
-    assert.equal(await stored(p, OUTLINE_KEY), 'medium')
+    assert.equal(await savedValue(p, OUTLINE_KEY), 'medium')
     await chooseOutline('Thin')
     await reload()
     await p.click(SETTINGS_BUTTON)
@@ -113,7 +112,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
         await other.p.click(SETTINGS_BUTTON)
         await actButton(other.p, 'paste-settings').click()
         await other.p.locator(STATUS).filter({ hasText: /Pasted \d+ settings?\./ }).waitFor()
-        assert.equal(await stored(other.p, OUTLINE_KEY), outline)
+        assert.equal(await savedValue(other.p, OUTLINE_KEY), outline)
         assert.equal(await other.p.locator(`${PICKS}[aria-pressed="true"]`).getAttribute('data-value'), outline, 'the dialog shows it')
         assert.equal(await dialogButton(other.p, 'Save').count(), 1)
         await closeDialogWith(other.p, 'Cancel', EDITOR)

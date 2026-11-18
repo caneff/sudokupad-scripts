@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { STATUS, actButton, closeDialogWith } from '../settings.mjs'
+import { actButton, closeDialogWith, savedValue, STATUS } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
 
@@ -56,7 +56,7 @@ describe('Text Anywhere\'s Font setting', { concurrency: false }, () => {
 
   it('Cancel after choosing Fixed width saves nothing and leaves the notes alone', async () => {
     await choose('fixed', 'Cancel')
-    assert.equal(await p.evaluate((key) => Framework.getData(key) ?? null, FONT_KEY), null)
+    assert.equal(await savedValue(p, FONT_KEY), null)
     assert.deepEqual(await families(), [proportional, proportional])
   })
 

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { gridPoint, typeText } from '../board.mjs'
+import { middleOf } from '../input.mjs'
 
 const { TEXTS, TEXT_BOX } = textAnywhere
 // How long the outline and handles stay hidden after the last nudge: the script's CHROME_BACK_MS, which it does not export, named here once on purpose,
@@ -28,7 +29,6 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   let context, p, errors, savedNote, noteBox, selectedCount
 
   const visible = (selector) => p.evaluate((s) => [...document.querySelectorAll(s)].map((e) => window.getComputedStyle(e).visibility), selector)
-  const middle = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
   const onlySelected = async (text) => (await p.locator(`${TEXTS}.text-anywhere-selected`).allTextContents()).join() === text
   const boardPoint = (point) => p.evaluate(([x, y]) => {
     const m = Framework.app.svgRenderer.getElem().getScreenCTM().inverse()
@@ -53,7 +53,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
 
   describe('the outline and handles while arrow keys nudge', () => {
     it('hide on the first nudge, stay hidden while nudging, and come back CHROME_BACK_MS after the last', async () => {
-      await p.mouse.click(...middle(await noteBox('AA')))
+      await p.mouse.click(...middleOf(await noteBox('AA')))
       assert.deepEqual(await visible(SELECTION), ['visible'])
       assert.deepEqual(await visible(HANDLES), ['visible', 'visible', 'visible', 'visible'])
       await p.keyboard.press('ArrowRight')
@@ -77,7 +77,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
     })
 
     it('come back at once on a pointer move', async () => {
-      await p.mouse.click(...middle(await noteBox('AA')))
+      await p.mouse.click(...middleOf(await noteBox('AA')))
       await p.keyboard.press('ArrowDown')
       assert.deepEqual(await visible(SELECTION), ['hidden'])
       await p.mouse.move(600, 600)
@@ -125,7 +125,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   describe('Shift during a drag', () => {
     it('locks the move to the axis of greater movement, and releasing Shift frees it', async () => {
       const start = await noteBox('CC')
-      const [px, py] = middle(start)
+      const [px, py] = middleOf(start)
       await p.mouse.move(px, py)
       await p.mouse.down()
       await p.mouse.move(px + 10, py + 5, { steps: 3 })
@@ -147,7 +147,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
     it('holding Shift to the release drops the note on the locked axis, and saves it there', async () => {
       const start = await noteBox('CC')
       const before = (await savedNote('CC')).at
-      const [px, py] = middle(start)
+      const [px, py] = middleOf(start)
       await p.mouse.move(px, py)
       await p.mouse.down()
       await p.keyboard.down('Shift')
@@ -162,7 +162,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
 
   describe('a press on another note while one is open', () => {
     it('picks it from 3 px outside its box too', async () => {
-      await p.mouse.click(...middle(await noteBox('AA')), { clickCount: 2 })
+      await p.mouse.click(...middleOf(await noteBox('AA')), { clickCount: 2 })
       await p.locator(TEXT_BOX).waitFor()
       const box = await noteBox('BB')
       await p.mouse.click(box.x - INSIDE_MARGIN_PX, box.y + box.height / 2)
@@ -171,19 +171,19 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
     })
 
     it('does not erase it on a right press: that only closes the open note', async () => {
-      await p.mouse.click(...middle(await noteBox('AA')), { clickCount: 2 })
+      await p.mouse.click(...middleOf(await noteBox('AA')), { clickCount: 2 })
       await p.locator(TEXT_BOX).waitFor()
-      await p.mouse.click(...middle(await noteBox('BB')), { button: 'right' })
+      await p.mouse.click(...middleOf(await noteBox('BB')), { button: 'right' })
       await textAnywhere.frames(p)
       assert.equal(await p.locator(TEXT_BOX).count(), 0)
       assert.deepEqual(await textAnywhere.texts(p), ['AA', 'BB', 'CC'])
     })
 
     it('finishes the open note and selects the other in the one press', async () => {
-      await p.mouse.click(...middle(await noteBox('AA')), { clickCount: 2 })
+      await p.mouse.click(...middleOf(await noteBox('AA')), { clickCount: 2 })
       await p.locator(TEXT_BOX).waitFor()
       await p.keyboard.type('x')
-      await p.mouse.click(...middle(await noteBox('BB')))
+      await p.mouse.click(...middleOf(await noteBox('BB')))
       assert.equal(await p.locator(TEXT_BOX).count(), 0, 'the open note is closed')
       assert.equal((await textAnywhere.saved(p)).some((item) => item.text.includes('x')), true, 'and was saved with the typed x')
       assert.equal(await onlySelected('BB'), true, 'the other note is selected')
@@ -191,10 +191,10 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
     })
 
     it('lets the same press drag the other note', async () => {
-      await p.mouse.click(...middle(await noteBox('AA')), { clickCount: 2 })
+      await p.mouse.click(...middleOf(await noteBox('AA')), { clickCount: 2 })
       await p.locator(TEXT_BOX).waitFor()
       const start = await noteBox('BB')
-      const [px, py] = middle(start)
+      const [px, py] = middleOf(start)
       await p.mouse.move(px, py)
       await p.mouse.down()
       await p.mouse.move(px + 60, py + 40, { steps: 4 })
@@ -205,7 +205,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
     })
 
     it('still only closes the note when the press is on empty space', async () => {
-      await p.mouse.click(...middle(await noteBox('AA')), { clickCount: 2 })
+      await p.mouse.click(...middleOf(await noteBox('AA')), { clickCount: 2 })
       await p.locator(TEXT_BOX).waitFor()
       await p.mouse.click(...await gridPoint(p, [8.5, 8.5]))
       assert.equal(await p.locator(TEXT_BOX).count(), 0)

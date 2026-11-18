@@ -1,10 +1,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, ODD_EVEN, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, watch, wordOn, cellsStateOn, wrongColorCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, ODD_EVEN, openSession, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, shadeReaders, watch, wordOn, cellsStateOn, wrongColorCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { MODES } from '../page.mjs'
-import { restart, selectCell } from '../board.mjs'
-import { closeDialogWith } from '../settings.mjs'
+import { colorCell, restart, selectCell } from '../board.mjs'
+import { closeDialogWith, savedState } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -59,7 +59,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   const MODE_SELECT = `${EDITOR} select[data-role="mode-draft"]`
   const chooseMode = (mode) => p.selectOption(MODE_SELECT, mode)
   const modeIsChosen = async (mode) => (await p.locator(MODE_SELECT).inputValue()) === mode
-  const paint = (r, c, key) => paintOn(p, r, c, key)
+  const paint = (r, c, key) => colorCell(p, [r, c], key)
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
 

@@ -4,6 +4,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { gridPoint } from '../board.mjs'
+import { middleOf } from '../input.mjs'
 
 const { KEYPAD, PICKER, TEXTS, TEXT_BOX } = textAnywhere
 const EDITING = '.tool-textanywhere.text-anywhere-editing'
@@ -47,7 +48,7 @@ describe('leaving Text Anywhere\'s color edit mode', { concurrency: false }, () 
   it('a press on another color button in the panel keeps it', async () => {
     await enter()
     const box = await p.locator(`${KEYPAD} button[data-key="5"]`).boundingBox()
-    await p.mouse.click(...textAnywhere.middleOf(box))
+    await p.mouse.click(...middleOf(box))
     assert.equal(await editModeOn(), 1)
     assert.equal(await pickerCount(), 9)
     // The press landed on a native color input, whose popup takes the keyboard, so the way out is the window losing focus.
