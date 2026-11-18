@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { chromium } from 'playwright'
+import { launchPersistent } from '../session.mjs'
 
 const SCRIPT = readFileSync(new URL('../../third-party/logic-masters-puzzle-preview.user.js', import.meta.url), 'utf8')
 const HOST = 'logic-masters.de'
@@ -28,7 +28,7 @@ const open = []
 
 // One browser session on `profile`, with the script injected at DOMContentLoaded as a userscript manager does. `mode` is what the puzzle pages answer.
 async function session (profile, mode) {
-  const context = await chromium.launchPersistentContext(profile, { headless: true, viewport: VIEWPORT })
+  const context = await launchPersistent(profile, { headless: true, viewport: VIEWPORT })
   open.push(context)
   const hits = { pages: [], images: [], aborted: [] }
   await context.route('**/*', (route) => {

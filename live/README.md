@@ -14,6 +14,7 @@ The controller's merge check reruns the full suite, unless the worker's "PR up" 
 Then it reruns, with `npm run test:live:files`, the files this change touches against `origin/main`:
 
 - `live/<script name>/` for each script whose `*.user.js` or `live/<script name>/` folder changed;
+- `live/third-party/` when a file in `third-party/` or `live/third-party/` changed;
 - every `live/*.live.mjs` at the top of `live/`, since they load every script (`startup`, `settings*`, `attacks-*`, `script-clash-attacks`, `error-log`, `site-slideshow`).
 
 A change to a `live/*.mjs` helper, `package.json`, `site/` or `.github/` reruns the full suite (#717).
@@ -31,6 +32,11 @@ Undo back to the start, Restart, and a Text Anywhere note typed (`typeText`) or 
 The settings dialogs' buttons are `live/settings.mjs`'s (`STATUS`, `actButton`). Each script with a dialog has one record in `live/scripts.mjs`
 (`SETTINGS_SCRIPTS`: entry, editor, owned-key pattern, typed-out keys, `open`), which the settings-shell, copy-paste and storage suites loop over;
 `live/scripts.test.mjs` fails when a script that copies in `lib:settings-dialog` has none.
+
+`live/third-party/` holds the checks of `third-party/*.user.js`, which are not SudokuPad scripts. Each answers every request itself, from its own
+routes with synthetic pages, and aborts the rest, so nothing reaches the site the script runs on. They open their pages through `launchPersistent`
+(`live/session.mjs`), a context that keeps its profile in a directory the check owns, and never load SudokuPad, so they are the one folder the
+shared-harness check (`test/specs/spec-129-closing.test.mjs`) leaves out.
 
 ## Injection time
 
