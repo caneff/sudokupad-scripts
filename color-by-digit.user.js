@@ -2500,29 +2500,12 @@
 
   let mode = 'off'
 
-  // SudokuPad's events take no options, so a `{ once: true }` there is ignored and the handler would run on every later load (#990).
-  // Returns what stops the wait.
-  function onNextLoad (app, fn) {
-    const once = () => {
-      app.puzzle.removeEventListener('progressloaded', once)
-      fn()
-    }
-    app.puzzle.addEventListener('progressloaded', once)
-    return () => app.puzzle.removeEventListener('progressloaded', once)
-  }
-
   // Loading progress resets the board, so a pass before it would be wiped.
-  // With the wait off there is nothing to wait for, so `fn` runs at once. Returns what stops a wait.
+  // With the wait off there is nothing to wait for, so `fn` runs at once.
   function whenProgressLoaded (app, fn) {
-    if (loading.run(() => allCells(app).length > 0, () => true)) {
-      fn()
-      return () => {}
-    }
-    return loading.run(() => onNextLoad(app, fn), () => { fn(); return () => {} })
+    if (loading.run(() => allCells(app).length > 0, () => true)) fn()
+    else loading.run(() => app.puzzle.addEventListener('progressloaded', fn, { once: true }), fn)
   }
-
-  // A puzzle opened with no saved progress triggers no 'progressloaded', so the startup coloring can wait past a Restart (#990).
-  let stopStartColoring = () => {}
 
   const DIGIT_STYLE_ID = 'color-by-digit-digits'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -2751,7 +2734,7 @@
           const loadsBeforeRestart = action.type === 'undo' && restartUndo.loadsBoard()
           if (loadsBeforeRestart) {
             // The board it loads ends in the Restart's clears, and arrives after `act` returns.
-            onNextLoad(app, () => colorLoadedBoard(app))
+            app.puzzle.addEventListener('progressloaded', () => colorLoadedBoard(app), { once: true })
             coloring.run(() => { app.puzzle.undoStack.length = 0 })
           }
           const result = stock(action)
@@ -2766,8 +2749,6 @@
         return result
       })
       app.on('restarted', () => {
-        // The board is there and colored now, so a startup coloring still waiting for a load would color the board an Undo loads a second time.
-        stopStartColoring()
         modeHistory.restart()
         colorAfterRestart(app)
       })
@@ -3189,7 +3170,7 @@
     modeButton.run(() => listenForButton(app, openEditor))
     digitColors.run(watchBoard)
     whenProgressLoaded(app, redraw)
-    if (colorsCells(mode)) stopStartColoring = whenProgressLoaded(app, () => colorEnteredCells(app))
+    if (colorsCells(mode)) whenProgressLoaded(app, () => colorEnteredCells(app))
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
   else start(undefined)
