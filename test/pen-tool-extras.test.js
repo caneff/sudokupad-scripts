@@ -2324,13 +2324,15 @@ test('crossTo samples a long jump, so one move across a line cannot step over it
   assert.deepEqual([...mark.marks.get('cell')], ['x'], 'a mark is not stepped over either')
 })
 
-test('crossTo takes a mark and a line at one point as the line alone, and moves the sweep to the point it reached', () => {
+test('crossTo takes the line alone at a point on a line, where a mark is too, and moves the sweep to the point it reached', () => {
   const line = seg('1', 0, 0)
   const erase = freshErase([line])
-  crossTo(() => ({ cell: 'cell', values: ['x'] }), erase, { r: 0.5, c: 1.0 }, SWEEP_PX)
+  const asked = []
+  crossTo((point) => { asked.push(point); return { cell: 'cell', values: ['x'] } }, erase, { r: 0.5, c: 1.0 }, SWEEP_PX)
   assert.equal(erase.lines.size, 1)
   assert.deepEqual(erase.at, { r: 0.5, c: 1.0 })
-  assert.equal(erase.marks.size > 0, true, 'the samples before the line, off it, found the mark')
+  assert.equal(asked.some((point) => point.r === 0.5 && point.c === 1.0), false, 'the point on the line never asks for a mark')
+  assert.equal(asked.length > 0, true, 'the samples before the line, off it, ask for marks')
 })
 
 test('crossTo to the point it is already at tests that point once', () => {

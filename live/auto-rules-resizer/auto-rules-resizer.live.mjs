@@ -1257,6 +1257,24 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
     }
   })
 
+  // A hidden pane has no width, so the fit bails; the button's own click handler still runs (#980).
+  it('an f+ while the fit bails saves nothing', async () => {
+    const plain = await startedFont(null)
+    try {
+      await hoverPane(plain.p)
+      await plain.p.locator(FONT_BAR).waitFor({ state: 'visible' })
+      await plain.p.evaluate((bar) => {
+        const plus = [...document.querySelectorAll(`${bar} button`)].find((button) => button.textContent.includes('f+'))
+        document.querySelector('.puzzle-rules').style.display = 'none'
+        plus.click()
+      }, FONT_BAR)
+      assert.equal(await savedSizing(plain.p), null)
+      assert.deepEqual(plain.errors, [])
+    } finally {
+      await plain.context.close()
+    }
+  })
+
   it('a dragged pane is saved, and a page that starts with it saved shows the pane and the controls where the drag left them', async () => {
     const plain = await startedFont(null)
     try {

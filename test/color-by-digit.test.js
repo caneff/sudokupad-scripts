@@ -9,7 +9,7 @@ const { save } = loadLib(['plain', 'store'], ['save'])
 const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { withScript, withoutPath } = require('./unit-start.js')
-const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, asideOf, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, palettePages, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
+const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, asideOf, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, palettePages, readPalette, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
 
 const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
@@ -24,6 +24,10 @@ test('givens and entered digits both get their group key', () => {
     { index: 0, key: 'a' },
     { index: 1, key: 'b' }
   ])
+})
+
+test('a cell with both a given and an entered value is colored by the given', () => {
+  assert.deepEqual(plan([{ given: '1', value: '3' }]), [{ index: 0, key: 'a' }])
 })
 
 test('empty cells are never touched', () => {
@@ -499,7 +503,7 @@ test('renderEditor shows one line, first, saying saved profiles could not be rea
 // `synced` with a first name that needs escaping, and the same with the digits on that first profile.
 const hostile = renameProfile(synced, 0, 'Low <b>')
 const hostileApart = setDigitActive(setSync(hostile, false), 0)
-const selectOf = (html, role) => html.match(new RegExp(`<select data-role="${role}">(.*?)</select>`, 's'))[1]
+const selectOf = (html, role) => html.match(new RegExp(`<select class="cbd-color-choice" data-role="${role}">(.*?)</select>`, 's'))[1]
 const optionsOf = (html, role) => [...selectOf(html, role).matchAll(/<option value="([^"]*)"([^>]*)>([^<]*)<\/option>/g)].map((m) => `${m[1]}|${m[3]}${m[2].includes(' selected') ? '*' : ''}`)
 
 test('digitChoice reads the digit pulldown off the state: same as cell, a profile index, or none', () => {
@@ -524,7 +528,7 @@ test('chooseDigit: Same as cell makes the digits follow the cells, a name makes 
 
 test('the three pulldowns: Mode, Cell and Digit, in that order, with no checkbox and no mode button', () => {
   const html = renderPulldowns(hostile, 'both')
-  assert.deepEqual([...html.matchAll(/<select data-role="([\w-]+)"/g)].map((m) => m[1]), ['mode-draft', 'cell-profile', 'digit-profile'])
+  assert.deepEqual([...html.matchAll(/<select class="cbd-color-choice" data-role="([\w-]+)"/g)].map((m) => m[1]), ['mode-draft', 'cell-profile', 'digit-profile'])
   assert.deepEqual([...html.matchAll(/<label class="cbd-pulldown"><span>(\w+)<\/span>/g)].map((m) => m[1]), ['Mode', 'Cell', 'Digit'])
   assert.doesNotMatch(html, /type="checkbox"|<button|data-mode=/)
 })
@@ -1269,13 +1273,43 @@ test('palettePages reports a page that is not a list of color keys, and reads no
   }
 })
 
-test('PAGE_COLUMNS is the color picker\'s column count', () => {
-  assert.equal(PAGE_COLUMNS, 3)
-  assert.match(STYLE_CSS, new RegExp(`repeat\\(${PAGE_COLUMNS}, `))
+test('readPalette reports a bad palette page as a warning and no pages, so the dialog opens with no colors rather than turning off', () => {
+  const was = global.Framework
+  const warn = console.warn
+  const warnings = []
+  console.warn = (...args) => warnings.push(args.join(' '))
+  const red = () => 'rgb(255, 0, 0)'
+  try {
+    global.Framework = { app: { tools: { colour: { palette: { pages: [['a', 'b'], 'oops'] }, currentPage: 0 } } } }
+    assert.deepEqual(readPalette(red), [])
+    assert.deepEqual(warnings, ['color-by-digit: SudokuPad\'s color palette has no pages of color keys, so digits cannot be painted'])
+    warnings.length = 0
+    global.Framework = { app: { tools: { colour: { palette: { pages: [['a', 'b']] }, currentPage: 0 } } } }
+    const [page] = readPalette(red)
+    assert.deepEqual([page.current, page.zero, page.rows[0][0]], [true, { key: 'a', value: 'rgb(255, 0, 0)' }, { key: 'b', value: 'rgb(255, 0, 0)' }])
+    global.Framework = { app: { tools: { colour: {} } } }
+    assert.deepEqual(readPalette(red), [])
+    assert.deepEqual(warnings, [])
+  } finally {
+    global.Framework = was
+    console.warn = warn
+  }
 })
 
-test('the editor\'s pulldowns are in the lib\'s select font size', () => {
-  assert.match(STYLE_CSS, /\.cbd-pulldown select \{[^}]*font-size: 1rem;/)
+test('PAGE_COLUMNS is the column count of the lib\'s swatch grid, and the paint grid and the arrow keys walk that many', () => {
+  const libColumns = Number(STYLE_CSS.match(/\.cbd-swatches \{[^}]*grid-template-columns: repeat\((\d+), /)[1])
+  assert.equal(PAGE_COLUMNS, libColumns)
+  assert.match(STYLE_CSS, new RegExp(`\\[data-role="paint"\\] \\{[^}]*repeat\\(${libColumns}, `))
+  const open = Array(PAGE_COLUMNS * 2).fill(true)
+  assert.equal(gridTarget('ArrowDown', 0, open, PAGE_COLUMNS), PAGE_COLUMNS)
+})
+
+test('the editor\'s pulldowns take the lib\'s select rule, and the editor keeps no copy of it', () => {
+  const selects = [...renderPulldowns(hostile, 'both').matchAll(/<select [^>]*>/g)].map((m) => m[0])
+  assert.equal(selects.length, 3)
+  for (const select of selects) assert.match(select, /class="cbd-color-choice"/)
+  assert.match(STYLE_CSS, /#color-by-digit-editor \.cbd-color-choice \{[^}]*font-size: 1rem;/)
+  assert.doesNotMatch(STYLE_CSS, /\.cbd-pulldown select/)
 })
 
 test('layoutPages of no pages is empty', () => {

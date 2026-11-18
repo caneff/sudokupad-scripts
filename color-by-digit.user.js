@@ -82,7 +82,7 @@
     return keyOfDigit
   }
 
-  // The digit a plan cell shows, or '' when it has none: a given beats an entered value.
+  // '' when the cell shows no digit.
   const placedDigit = (cell) => cell.given || cell.value
 
   function pureKey (cell, keyOfDigit) {
@@ -1519,6 +1519,19 @@
     })
   }
 
+  // A palette of a shape the script does not know is a warning and no pages, so the dialog still opens and says no colors were found
+  // (Text Anywhere does the same); a throw here would turn the whole dialog off.
+  function readPalette (readColor) {
+    let pages
+    try {
+      pages = palettePages()
+    } catch {
+      console.warn('color-by-digit: SudokuPad\'s color palette has no pages of color keys, so digits cannot be painted')
+      return []
+    }
+    return layoutPages(pages, colorTool()?.currentPage, readColor)
+  }
+
   const pageSlots = (p) => [p.zero, ...p.rows.flat()]
 
   function layoutColors (pages) {
@@ -2127,7 +2140,7 @@
     const shownMode = allowedMode(mode, usesDigitColors(state))
     const digit = digitChoice(state)
     const named = (picked) => state.profiles.map((p, i) => optionHtml(i, p.name, picked === String(i), i)).join('')
-    const pulldown = (role, label, options) => `<label class="cbd-pulldown"><span>${label}</span><select data-role="${role}">${options}</select></label>`
+    const pulldown = (role, label, options) => `<label class="cbd-pulldown"><span>${label}</span><select class="${CLASS_PREFIX}color-choice" data-role="${role}">${options}</select></label>`
     return '<div class="cbd-pulldowns">' +
       pulldown('mode-draft', 'Mode', modesFor(usesDigitColors(state)).map((m) => optionHtml(m, MODE_NAMES[m], m === shownMode)).join('')) +
       pulldown('cell-profile', 'Cell', named(String(state.active))) +
@@ -2185,7 +2198,6 @@
     [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
     [`${EDITOR} .cbd-column`, 'min-width: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
-    [`${EDITOR} .cbd-pulldown select`, `font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
     [EDITOR, 'user-select: none; -webkit-user-select: none'],
     [`${EDITOR} [data-role="paint"]`, `display: grid; gap: ${SWATCH_GAP_PX}px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}); touch-action: none`],
     [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
@@ -2343,7 +2355,7 @@
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, asideOf, isVisibleColor, layoutPages, layoutColors, palettePages, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, asideOf, isVisibleColor, layoutPages, layoutColors, palettePages, readPalette, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2351,11 +2363,6 @@
   // The saved data is read and written only here: with no getData or setData nothing is read, so the preloads and the starting mode show, and nothing is kept.
   const savedData = guard.storeFor(storage)
   const dialogs = guard.dialogsFor(editor)
-
-  function readPages () {
-    const tool = colorTool()
-    return tool?.palette ? layoutPages(palettePages(), tool.currentPage, readColor) : []
-  }
 
   const saveState = (state) => save(savedData, PROFILES_KEY, state)
   const loadState = () => stateFromStored(savedData)
@@ -2902,7 +2909,7 @@
   function openDialog (app) {
     let savedState = loadState()
     const keptSlots = unreadableSlots(savedData, PROFILES_KEY)
-    let draft = openingDraft(savedState, mode, readPages())
+    let draft = openingDraft(savedState, mode, readPalette(readColor))
     const box = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Color by Digit',

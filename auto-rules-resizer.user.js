@@ -346,8 +346,8 @@
     } else save(store, key, data)
   }
 
-  // `fit()` returns the sizing it applied, or null when it bailed. Only an applied sizing is saved, and `part` is saved as the fit applied it, so a
-  // press the floor or cap cancelled, or a drag past the board, is not kept. A bail saves nothing and puts the saved sizing back in `wanted`.
+  // `part` is saved as the fit applied it, so a press the floor or cap cancelled, or a drag past the board, is not kept; a fit that bailed
+  // (null) leaves the saved sizing as it was.
   function stepSizing (store, now, part, change, fit) {
     const before = now.wanted
     now.wanted = { ...before, [part]: change(now.applied[part]) }
@@ -1536,8 +1536,10 @@
         limits,
         readable: (fontPx) => readableWidth(rules, fontPx)
       })
-      if (applied) now.applied = { fontOffsetPx: appliedOffset, box: applied }
-      fitted = applied ? now.applied : null
+      if (applied) {
+        now.applied = { fontOffsetPx: appliedOffset, box: applied }
+        fitted = now.applied
+      }
       keepReadingPlace(rules, place)
       rulesRefit.run(() => watchText(rules))
       showControls(Boolean(applied))
