@@ -71,7 +71,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 ## End-to-end seam
 
 - **Seam**: `npm test` (`node --test`), against each script's pure functions (`test/`), each shared module's (`lib/*.test.js`), the live harness's helper tests
-  (`live/**/*.test.mjs`) and every page in `site/` (`test/site.test.js`: every script but the one hidden (Auto Rules Resizer, until Chris hears from Nell) has an install link on the homepage, and no page links the hidden one)
+  (`live/**/*.test.mjs`) and every page in `site/` (`test/site.test.js`: every script has an install link on the homepage)
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run test:live` (every `live/**/*.live.mjs`)
   covers them on sudokupad.app in headless Chromium, with the script injected after Start Puzzle.
 - Before you write or debug a live test: read `live/README.md`.
