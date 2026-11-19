@@ -25,6 +25,7 @@
   .row-text p { margin-bottom: .75rem; }
   .actions { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sticker { display: inline-block; margin: calc(var(--ring-gap) + var(--card-ring-width)) 0 0 .5rem; padding: .5rem 1.1rem; background: var(--mint-fill); border: 6px solid var(--mint); border-radius: 18px; box-shadow: 0 0 0 var(--warn-ring-width) #fff, 0 4px 10px rgba(0,0,0,.12); transform: rotate(1.5deg); font-weight: 600; }
   footer { margin-top: calc(var(--ring-gap) + var(--card-ring-width)); font-size: .95rem; }
   @media (max-width: 44rem) { .row { grid-template-columns: 1fr; gap: .9rem; } }
 </style>
@@ -212,7 +213,8 @@
     </div>
   </section>
   </div>
-  <footer>Questions, bugs or suggestions? Message me on Discord: <a href="https://discord.com/users/184770560356646923">@ChinStrap</a>. <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
+  <p class="sticker">Questions, bugs or suggestions? Message me on Discord: <a href="https://discord.com/users/184770560356646923">@ChinStrap</a></p>
+  <footer><a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
   <script src="slides.js"></script>
 </body>
 </html>
