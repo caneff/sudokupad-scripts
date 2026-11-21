@@ -3028,8 +3028,8 @@
     // A hidden Thickness slider leaves the keys unused, since a step with nothing to show it on would look like a bug. SudokuPad does not ask a tool for keys while a dialog
     // is open, and a step behind this script's own dialog would be undone by its Save, which writes the settings it opened with.
     // The + of Shift+= arrives with Shift already held, which has switched the tool to Corner until Shift is released; `prevTool` is the pen tool then.
-    const penToolKeyed = (event) => Framework.app.tool === 'pen' || (event.shiftKey && Framework.app.tool === 'corner' && Framework.app.prevTool === 'pen')
-    const thicknessKeysLive = () => inForce.show.thickness && !document.querySelector('.dialog')
+    const penToolKeyed = (shifted) => Framework.app.tool === 'pen' || (shifted && Framework.app.tool === 'corner' && Framework.app.prevTool === 'pen')
+    const thicknessKeysLive = (shifted) => penToolKeyed(shifted) && inForce.show.thickness && !document.querySelector('.dialog')
     let thicknessHold = null
     const stopThicknessHold = () => {
       clearInterval(thicknessHold?.timer)
@@ -3037,19 +3037,22 @@
     }
     // The hold is the physical key's: releasing Shift before = turns a held + into =.
     const repeatThickness = () => steps.penPanel.run(() => {
-      if (!thicknessKeysLive()) return stopThicknessHold()
+      // The key of a + may still be held with Shift, which has switched the tool to Corner.
+      if (!thicknessKeysLive(true)) return stopThicknessHold()
       const next = heldThicknessStep(thicknessHold.direction, Date.now() - thicknessHold.start, inForce.thickness)
       if (next !== inForce.thickness) saveSettings({ ...inForce, thickness: next })
     })
     window.addEventListener('keydown', (event) => steps.penPanel.run(() => {
-      if (!penToolKeyed(event) || !thicknessKeysLive()) return
+      if (!thicknessKeysLive(event.shiftKey)) return
       const next = thicknessKeyStep(event, inForce.thickness)
       if (next === null) return
+      // A release the page never saw would hold on for ever, so every fresh press (a repeat gets no step above) takes the hold over.
+      stopThicknessHold()
       saveSettings({ ...inForce, thickness: next })
-      if (!thicknessHold) thicknessHold = { code: event.code, direction: SLIDER_STEP_KEYS[event.key], start: Date.now(), timer: setInterval(repeatThickness, HELD_TICK_MS) }
+      if (!thicknessHold) thicknessHold = { code: event.code, direction: thicknessKeyDirection(event), start: Date.now(), timer: setInterval(repeatThickness, HELD_TICK_MS) }
     }))
-    window.addEventListener('keyup', (event) => { if (thicknessHold?.code === event.code) stopThicknessHold() })
-    window.addEventListener('blur', stopThicknessHold)
+    window.addEventListener('keyup', (event) => steps.penPanel.run(() => { if (thicknessHold?.code === event.code) stopThicknessHold() }))
+    window.addEventListener('blur', () => steps.penPanel.run(stopThicknessHold))
     // SudokuPad cancels the touch events on its panel buttons, which keeps the browser from sending the click after a tap, so a tap acts at `touchstart`. The click a
     // browser may still send after that tap must not act a second time.
     let tappedAt = -Infinity

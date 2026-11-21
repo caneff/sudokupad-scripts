@@ -53,6 +53,33 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
     assert.equal(await slider(), stopped)
   })
 
+  // Each holds a key past the pause so a repeat is running, then ends the hold's conditions and expects the slider to stand still.
+  const heldThenStopped = async (end) => {
+    await setThickness(12)
+    await p.keyboard.down('Minus')
+    await readUntil(slider, (v) => v <= 12 - 2 * RANGE.step)
+    await end()
+    const stopped = await slider()
+    await p.waitForTimeout(300) // nothing happened: the hold stopped
+    assert.equal(await slider(), stopped)
+    assert.equal(await saved(), stopped)
+    await p.keyboard.up('Minus')
+  }
+
+  it('a hold stops when the pen tool is no longer the tool', async () => {
+    await heldThenStopped(() => p.evaluate(() => Framework.app.changeTool('normal')))
+    await p.evaluate(() => Framework.app.changeTool('pen'))
+  })
+
+  it('a hold stops when the window loses focus', async () => {
+    await heldThenStopped(() => p.evaluate(() => window.dispatchEvent(new Event('blur'))))
+  })
+
+  it('a hold stops when the Thickness slider is hidden or a dialog opens', async () => {
+    await heldThenStopped(() => p.evaluate(() => document.body.append(Object.assign(document.createElement('div'), { className: 'dialog', id: 'thickness-hold-dialog' }))))
+    await p.evaluate(() => document.getElementById('thickness-hold-dialog').remove())
+  })
+
   it('stops at the ends of the range, in the saved value as well as the slider', async () => {
     await setThickness(RANGE.max)
     await p.keyboard.press('Equal')
