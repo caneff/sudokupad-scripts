@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.41
+// @version      0.46.46
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.41'
+  const VERSION = '0.46.46'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -266,8 +266,8 @@
   const PRIMARY_BUTTON = 0
   const SECONDARY_BUTTON = 2
   const TEXT_KIND = 'text'
-  // Kinds an earlier version saved; they stay in storage and are never drawn.
-  const HIDDEN_KINDS = ['stroke', 'shape']
+  // Kinds an earlier version saved; they are kept with the entries no note check passes, stay in storage and are never drawn.
+  const OLD_KINDS = ['stroke', 'shape']
   const TEXT_GLYPH = '<path d="M8 16.5l4-8 4 8M9.5 14h5"/>'
   // The tool button is a sticky note; the Background button shows the letter.
   const STICKY_NOTE = '<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h5"/>'
@@ -275,6 +275,8 @@
   const BACKGROUND_PAD_X = 0.35
   const BACKGROUND_PAD_Y = 0.15
   const BACKGROUND_RADIUS = 0.3
+  // The padding and corners of a note's background box, in ems of its text, for CSS drawn at the text's size.
+  const BOX_SHAPE_CSS = `padding: ${BACKGROUND_PAD_Y}em ${BACKGROUND_PAD_X}em; border-radius: ${BACKGROUND_RADIUS}em;`
   // An outline is the halo round a note's letters: how far it reaches past them, as a share of the text size. The settings dialog sets one for every note; a
   // note's own saved `outline` field is never read.
   const OUTLINE_EM = { none: 0, thin: 0.07, medium: 0.14 }
@@ -498,10 +500,10 @@
     return item.bg ? backgroundPadding(item) : Array(2).fill(OUTLINE_EM[outline] * item.size)
   }
 
-  function noteBox (item) {
+  // The box a note is drawn in, in board units: its text, padded by its background box or by its halo's reach.
+  function noteBox (item, outline) {
     const box = textRect(item)
-    if (!item.bg) return box
-    const [padX, padY] = backgroundPadding(item)
+    const [padX, padY] = notePadding(item, outline)
     return { left: box.left - padX, right: box.right + padX, top: box.top - padY, bottom: box.bottom + padY }
   }
 
@@ -512,11 +514,10 @@
   // The last box is the topmost.
   const noteAtPoint = (boxes, point, margin) => boxes.findLastIndex((box) => inBox(point, grownBox(box, margin)))
 
-  function notesTouched (notes, [ax, ay], [bx, by]) {
+  function notesTouched (notes, [ax, ay], [bx, by], outline) {
     const [left, right, top, bottom] = [Math.min(ax, bx), Math.max(ax, bx), Math.min(ay, by), Math.max(ay, by)]
     return notes.flatMap((item, i) => {
-      if (item.kind !== TEXT_KIND) return []
-      const box = noteBox(item)
+      const box = noteBox(item, outline)
       return box.left <= right && box.right >= left && box.top <= bottom && box.bottom >= top ? [i] : []
     })
   }
@@ -549,10 +550,9 @@
   const screenPoint = (item, toScreen) => item.fixed ? drawnPoint(item) : toScreen(item.at)
 
   function noteScreenBox (item, map, outline) {
-    const box = textRect(boardView(item, map.toBoard))
-    const [padX, padY] = notePadding(item, outline)
-    const [left, top] = map.toScreen([box.left - padX, box.top - padY])
-    const [right, bottom] = map.toScreen([box.right + padX, box.bottom + padY])
+    const box = noteBox(boardView(item, map.toBoard), outline)
+    const [left, top] = map.toScreen([box.left, box.top])
+    const [right, bottom] = map.toScreen([box.right, box.bottom])
     return { left, right, top, bottom }
   }
 
@@ -642,7 +642,7 @@
   const renderFontChoice = (font) =>
     `<div class="${CLASS_PREFIX}color-block"><select class="${CLASS_PREFIX}color-choice" data-role="font-choice" aria-label="Font">${Object.entries(FONTS).map(([value, label]) => `<option value="${value}"${value === font ? ' selected' : ''}>${label}</option>`).join('')}</select></div>`
   const HALO_CELL_COLOR = '#8fb8e8'
-  const SAMPLE_BOX_STYLE = 'display:inline-block;padding:0.15em 0.35em;border-radius:0.3em'
+  const SAMPLE_BOX_STYLE = `display:inline-block;${BOX_SHAPE_CSS}`
   const FRAME_CHOICES = [['off', 'None'], ['on', 'Thin grey']]
   function renderSamplePicks ({ outline, box, custom, frame, textColor }) {
     const pickButton = (role, value, label, pressed, sample) =>
@@ -1314,15 +1314,15 @@
   const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && noteColorNumber(item.color) !== undefined && isStoredOpacity(item.opacity) &&
     (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isStoredSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
-  const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
+  const isOldEntry = (item) => isPlainObject(item) && OLD_KINDS.includes(item.kind)
 
   // A puzzle with nothing saved has no notes; saved data that is not a list throws rather than read as none. The list is read note by note:
-  // an entry that is not a note, stroke or shape is kept, never drawn, and saved back as it is.
+  // an entry that is not a note, an earlier version's stroke or shape included, is kept, never drawn, and saved back as it is, so `items` is notes only.
   function readNotes (saved) {
     if (saved === null || saved === undefined) return { items: [], kept: [] }
     if (!Array.isArray(saved)) throw new Error(`the saved notes are not a list: ${JSON.stringify(saved).slice(0, 200)}`)
     const read = { items: [], kept: [] }
-    for (const entry of saved) (isText(entry) || isHiddenItem(entry) ? read.items : read.kept).push(entry)
+    for (const entry of saved) (isText(entry) ? read.items : read.kept).push(entry)
     return read
   }
 
@@ -1352,12 +1352,21 @@
     store.removeData(restartedKey(key))
   }
 
+  // Whether `key` holds `value`, saved in an envelope or not: the guarded store drops a write the browser refuses (a full localStorage) instead of throwing.
+  const landed = (store, key, value) => {
+    const saved = store.getData(key)
+    return saved !== null && JSON.stringify(readSaved(saved, (data) => data)) === JSON.stringify(value)
+  }
+
   // `store` has Framework's getData, setData and removeData. Writes `value` under `dataKey` and makes puzzle `key` the newest in `index`. The value is written
-  // before the index, and the dropped puzzles' data is removed last, so a write that throws (a full localStorage) loses nothing already saved.
+  // before the index, and the dropped puzzles' data is removed last, each step only once the one before it landed, so a write that throws or is
+  // dropped loses nothing already saved.
   function writeIndexed (store, index, key, dataKey, value, write = (k, v) => store.setData(k, v)) {
     const touched = touchIndex(index, key)
     write(dataKey, value)
+    if (!landed(store, dataKey, value)) return
     store.setData(INDEX_KEY, touched.index)
+    if (!landed(store, INDEX_KEY, touched.index)) return
     for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
   }
 
@@ -1376,6 +1385,81 @@
   function keepRestartedTo (store, key, notes) {
     if (notes.length > 0) writeIndexed(store, readIndex(store.getData(INDEX_KEY)), key, restartedKey(key), notes)
     else store.removeData(restartedKey(key))
+  }
+
+  const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
+
+  // One puzzle's notes in the saved data. `store` is the script's guarded store (`guard.storeFor`), so a read or write that throws follows the guard's one
+  // failure policy; a throw that still reaches here is told through `report(message, id)` and never skips the next step. Saved data the script cannot read
+  // is the browser's and not SudokuPad's, so it is left as it is and never turns the saved data off.
+  function noteSession ({ store, report }) {
+    // The puzzle the notes were loaded for, so a save lands there even when the page's puzzle has changed since; null before the first load.
+    let key = null
+    let kept = []
+    // False while this puzzle's saved notes cannot be read: no save writes over them but an explicit wipe's.
+    let savable = true
+
+    // Once a puzzle, so a second puzzle with an unreadable note is told too.
+    const reportKept = () => {
+      const unread = kept.filter((entry) => !isOldEntry(entry)).length
+      if (unread > 0) report(`${unread} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${key}`)
+    }
+
+    // SudokuPad keeps what its Undo brings back after a Restart in memory only, so a load ends it for the notes too.
+    function dropRestarted () {
+      if (key === null) return
+      try {
+        store.removeData(restartedKey(key))
+      } catch (err) {
+        report(`Text Anywhere could not drop the notes Restart cleared: ${err.message}`)
+      }
+    }
+
+    return {
+      load (puzzle) {
+        key = puzzle
+        dropRestarted()
+        const loaded = loadNotes(store, key)
+        kept = loaded.kept
+        savable = loaded.unreadable === undefined
+        if (!savable) report(UNSAVABLE_MESSAGE, `unsavable ${key}`)
+        reportKept()
+        return loaded.items
+      },
+      save (items) {
+        if (key === null) return
+        reportKept()
+        if (!savable) {
+          report(UNSAVABLE_MESSAGE, `unsavable ${key}`)
+          return
+        }
+        try {
+          saveNotesTo(store, key, items, kept)
+        } catch (err) {
+          report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
+        }
+      },
+      // An explicit wipe (Clear all, Restart) may write over saved notes that could not be read.
+      replaceUnreadable () { savable = true },
+      keepForRestart (notes) {
+        if (key === null) return
+        try {
+          keepRestartedTo(store, key, notes)
+        } catch (err) {
+          report(`Text Anywhere could not keep this puzzle's notes for Undo: ${err.message}`)
+        }
+      },
+      restoreAfterRestart () {
+        if (key === null) return []
+        try {
+          return readNotes(store.getData(restartedKey(key))).items
+        } catch (err) {
+          report(`Text Anywhere cannot read the notes Restart cleared, so Undo does not bring them back: ${err.message}`)
+          return []
+        }
+      },
+      dropRestarted
+    }
   }
 
   const oldKey = (key) => {
@@ -2109,6 +2193,32 @@
 
     return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
+
+  // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
+  // `app.preRestartSavedProgress`, which it keeps only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes).
+  // A script may act in its own 'restarted' handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds
+  // no more than that on it is the Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
+  function trackRestartUndo (app, wrap) {
+    let restartLength = 0
+    const atRestart = () => app.puzzle.undoStack.length <= restartLength
+    // SudokuPad triggers `act` after the action, so what the stack was before an Undo is read off the event before it.
+    let wasAtRestart = false
+    const read = () => { wasAtRestart = atRestart() }
+    const callbacks = []
+    app.on('restarted', wrap(() => queueMicrotask(() => { restartLength = app.puzzle.undoStack.length; read() })))
+    const forgetRestart = wrap(() => { restartLength = 0; read() })
+    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, forgetRestart)
+    app.puzzle.on('act', wrap((_, action) => {
+      const was = wasAtRestart
+      read()
+      if (action?.type === 'undo' && was) callbacks.forEach((fn) => fn())
+    }))
+    return {
+      loadsBoard: () => atRestart() && app.preRestartSavedProgress !== undefined,
+      // `fn` runs after the Undo that found the stack where the Restart left it, whether or not that Undo loaded a board.
+      onRestartUndo: (fn) => { callbacks.push(fn) }
+    }
+  }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
   // Each feature with the SudokuPad internals it cannot work without. A path's first part is a root of `guard.probe`: `Framework`, or `app`, which is what
@@ -2218,8 +2328,60 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   const nudgeStep = (heldMs, shift) => shift ? heldRamp(heldMs, NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX) : heldRamp(heldMs, NUDGE_PX, NUDGE_MAX_PX)
+  // Until Text Anywhere is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
+  const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
+
+  // `scale` is pixels of the note's box per board unit. A note with no background is padded by its halo's reach, since its box clips what overflows it.
+  function noteStyle (item, [x, y], scale, backdrop, look) {
+    const px = (units) => `${roundToTenth(units * scale)}px`
+    const [width, height] = item.box ? item.box.map(px) : ['', '']
+    const limit = item.box ? 'none' : ''
+    const pad = notePadding(item, look.outline)
+    const [padX, padY] = pad.map(px)
+    return {
+      left: `${roundToHundredth(x - pad[0] * scale)}px`,
+      top: `${roundToHundredth(y - pad[1] * scale)}px`,
+      caretColor: itemColor(item.color),
+      fontSize: px(item.size),
+      width,
+      height,
+      maxWidth: limit,
+      maxHeight: limit,
+      color: itemColor(item.color),
+      opacity: String(noteOpacity(item)),
+      [NOTE_OPACITY_VAR]: String(noteOpacity(item)),
+      [NOTE_COLOR_VAR]: itemColor(item.color),
+      backgroundColor: item.bg ? boxFill(look.boxColor, itemColor(item.color), backdrop) : 'transparent',
+      boxShadow: item.bg ? frameShadow(look.frame) : 'none',
+      textShadow: item.bg ? 'none' : haloShadow(look.outline, backdrop),
+      padding: `${padY} ${padX}`,
+      borderRadius: item.bg ? px(BACKGROUND_RADIUS * item.size) : '0'
+    }
+  }
+
+  // The inline style a run's flags give its span; strike and code are drawn by classes.
+  const flagStyle = (run) => ({ ...(run.bold && { fontWeight: 'bold' }), ...(run.italic && { fontStyle: 'italic' }), ...(run.underline && { textDecoration: 'underline' }) })
+
+  const isFence = (runs) => Boolean(runs[0]?.fence)
+
+  // Groups a note's parsed lines into pieces, with no element made. A block ends its own line; `empty` marks an empty plain line.
+  function pieceKinds (lines) {
+    const pieces = []
+    for (let i = 0; i < lines.length; i++) {
+      const runs = lines[i]
+      if (isFence(runs)) {
+        const body = []
+        for (i++; i < lines.length && !isFence(lines[i]); i++) body.push(lines[i][0].text)
+        if (body.length) pieces.push({ kind: 'code', block: true, empty: false, lines: body })
+      } else if (isBullet(runs)) pieces.push({ kind: 'bullet', block: true, empty: false, runs, index: i })
+      else if (isSizedLine(runs)) pieces.push({ kind: 'sized', block: true, empty: false, runs })
+      else pieces.push({ kind: 'plain', block: false, empty: runs.length === 0, runs })
+    }
+    return pieces
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds }
   }
   if (typeof document === 'undefined') return
 
@@ -2284,37 +2446,6 @@
     return { box: { left, top, right, bottom }, toBoard: through(ctm.inverse()), toScreen: through(ctm), scale: ctm.a, matrix: [ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f] }
   }
 
-  // Until Text Anywhere is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
-  const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
-
-  // `scale` is pixels of the note's box per board unit. A note with no background is padded by its halo's reach, since its box clips what overflows it.
-  function noteStyle (item, [x, y], scale, backdrop) {
-    const px = (units) => `${roundToTenth(units * scale)}px`
-    const [width, height] = item.box ? item.box.map(px) : ['', '']
-    const limit = item.box ? 'none' : ''
-    const pad = notePadding(item, look.outline)
-    const [padX, padY] = pad.map(px)
-    return {
-      left: `${roundToHundredth(x - pad[0] * scale)}px`,
-      top: `${roundToHundredth(y - pad[1] * scale)}px`,
-      caretColor: itemColor(item.color),
-      fontSize: px(item.size),
-      width,
-      height,
-      maxWidth: limit,
-      maxHeight: limit,
-      color: itemColor(item.color),
-      opacity: String(noteOpacity(item)),
-      [NOTE_OPACITY_VAR]: String(noteOpacity(item)),
-      [NOTE_COLOR_VAR]: itemColor(item.color),
-      backgroundColor: item.bg ? boxFill(look.boxColor, itemColor(item.color), backdrop) : 'transparent',
-      boxShadow: item.bg ? frameShadow(look.frame) : 'none',
-      textShadow: item.bg ? 'none' : haloShadow(look.outline, backdrop),
-      padding: `${padY} ${padX}`,
-      borderRadius: item.bg ? px(BACKGROUND_RADIUS * item.size) : '0'
-    }
-  }
-
   // Sets a noteStyle on an element: a custom property needs setProperty, which assigning to the style's own fields does not do.
   function applyNoteStyle (element, style) {
     for (const [name, value] of Object.entries(style)) {
@@ -2326,12 +2457,8 @@
   const backdropOf = (item, map) => noteBackdrop(noteMiddle(item, map, look.outline), map.box)
 
   function styleNote (element, item, map) {
-    applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale, backdropOf(item, map)))
+    applyNoteStyle(element, noteStyle(item, screenPoint(item, map.toScreen), map.scale, backdropOf(item, map), look))
     element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
-  }
-
-  const FLAG_STYLES = (run) => {
-    return { ...(run.bold && { fontWeight: 'bold' }), ...(run.italic && { fontStyle: 'italic' }), ...(run.underline && { textDecoration: 'underline' }) }
   }
 
   // A struck run is drawn by its own line, not `text-decoration: line-through`: the browser paints a decoration's halo shadow over the letters, which hides their top half. Each word and each
@@ -2351,7 +2478,7 @@
     if (run.strike) element.append(...struckPieces(run.text))
     else element.textContent = run.text
     element.className = [run.code && CODE_CLASS, run.strike && STRIKE_CLASS].filter(Boolean).join(' ')
-    Object.assign(element.style, FLAG_STYLES(run))
+    Object.assign(element.style, flagStyle(run))
     return element
   }
 
@@ -2393,22 +2520,15 @@
     return block
   }
 
-  const isFence = (runs) => Boolean(runs[0]?.fence)
-
-  function notePieces (lines) {
-    const pieces = []
-    for (let i = 0; i < lines.length; i++) {
-      const runs = lines[i]
-      if (isFence(runs)) {
-        const body = []
-        for (i++; i < lines.length && !isFence(lines[i]); i++) body.push(lines[i][0].text)
-        if (body.length) pieces.push({ block: true, empty: false, content: [codeBlockElement(body)] })
-      } else if (isBullet(runs)) pieces.push({ block: true, empty: false, content: [bulletElement(runs, i)] })
-      else if (isSizedLine(runs)) pieces.push({ block: true, empty: false, content: [sizedLineElement(runs)] })
-      else pieces.push({ block: false, empty: runs.length === 0, content: runs.map(runElement) })
-    }
-    return pieces
+  // Each builder makes a piece's elements.
+  const PIECE_BUILDERS = {
+    code: (piece) => [codeBlockElement(piece.lines)],
+    bullet: (piece) => [bulletElement(piece.runs, piece.index)],
+    sized: (piece) => [sizedLineElement(piece.runs)],
+    plain: (piece) => piece.runs.map(runElement)
   }
+
+  const notePieces = (lines) => pieceKinds(lines).map((piece) => ({ block: piece.block, empty: piece.empty, content: PIECE_BUILDERS[piece.kind](piece) }))
 
   // A block ends its own line, so a line break goes only between two plain lines, and before a block that follows an empty line.
   const breaksBefore = (piece, previous) => piece.block ? previous.empty : !previous.block
@@ -2600,7 +2720,7 @@
     `.${STRIKE_CLASS} { isolation: isolate; }`,
     `.${STRIKE_PIECE_CLASS} { position: relative; }`,
     `.${STRIKE_PIECE_CLASS}::after { content: ''; position: absolute; left: 0; right: 0; top: 52%; height: 0.07em; background: currentColor; }`,
-    `.${CODE_BLOCK_CLASS} { display: block; padding: 0.15em 0.35em; border-radius: 0.3em; }`,
+    `.${CODE_BLOCK_CLASS} { display: block; ${BOX_SHAPE_CSS} }`,
     `.${CHECK_DONE_CLASS}::after { content: ''; position: absolute; left: 0.2em; top: -0.1em; width: 0.25em; height: 0.5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) .${CHECK_CLASS} { cursor: pointer; }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
@@ -2971,12 +3091,9 @@
   let pressFinishedText = false
   let endedByEnter = false
   let puzzleNotes = []
-  let keptEntries = []
   let selected = []
   // The selection a rectangle being dragged would leave at its release, outlined in place of the selection; null with no rectangle.
   let previewed = null
-  // False while this puzzle's saved notes cannot be read: no save writes over them but an explicit wipe's.
-  let savable = true
   const reported = new Set()
   // Each drawn note's element is kept on its item under a symbol, which a spread copies and JSON leaves out, so a moved, recolored or retyped note keeps
   // its element and no save stores it. Its scroll position is kept the same way, for an element put back in the page, which starts unscrolled.
@@ -2987,8 +3104,6 @@
   let layerFont = ''
   let lastLayout = ''
 
-  // The key of the puzzle these notes were loaded for, so a save lands there even when the page's puzzle has changed since. Null before the first load, when there are no notes to save and a save does nothing.
-  let loadedKey = null
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
   const selectedNotes = () => selected.map((i) => puzzleNotes[i])
 
@@ -3051,13 +3166,13 @@
     const shown = shownNotes.get(element) ?? {}
     if (shown.text !== item.text) element.replaceChildren(...noteContent(item.text))
     const backdrop = backdropOf(item, map)
-    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale, backdrop) : noteStyle(item, item.at, 1, backdrop)
-    const look = JSON.stringify(style)
-    if (look !== shown.look) {
+    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale, backdrop, look) : noteStyle(item, item.at, 1, backdrop, look)
+    const drawn = JSON.stringify(style)
+    if (drawn !== shown.drawn) {
       applyNoteStyle(element, style)
       element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
     }
-    shownNotes.set(element, { ...shown, item, text: item.text, look })
+    shownNotes.set(element, { ...shown, item, text: item.text, drawn })
   }
 
   // Puts each group's notes in the order of `puzzleNotes`, moving only the elements out of place. The elements it put back in the page.
@@ -3110,7 +3225,7 @@
     placeBoardGroup(map)
     const claimed = new Set()
     const notes = puzzleNotes.flatMap((item, index) => {
-      if (item.kind !== TEXT_KIND || (textBox && textBox.index === index)) return []
+      if (textBox && textBox.index === index) return []
       if (!item[NOTE_ELEMENT] || claimed.has(item[NOTE_ELEMENT])) item[NOTE_ELEMENT] = Object.assign(document.createElement('div'), { className: TEXT_CLASS })
       const element = item[NOTE_ELEMENT]
       claimed.add(element)
@@ -3379,7 +3494,7 @@
   function noteAt (point, margin) {
     if (notesHidden) return null
     const map = boardMap()
-    const drawn = puzzleNotes.filter((item) => item.kind === TEXT_KIND && item[NOTE_ELEMENT]?.isConnected)
+    const drawn = puzzleNotes.filter((item) => item[NOTE_ELEMENT]?.isConnected)
     const onTop = [...drawn.filter((item) => !item.fixed), ...drawn.filter((item) => item.fixed)]
     return onTop[noteAtPoint(onTop.map((item) => noteScreenBox(item, map, look.outline)), point, margin)]?.[NOTE_ELEMENT] ?? null
   }
@@ -3440,38 +3555,18 @@
     for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
   }
 
-  // Once a puzzle, so a second puzzle with an unreadable note is told too.
-  function reportKept () {
-    if (keptEntries.length > 0) report(`${keptEntries.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${loadedKey}`)
-  }
-
-  const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
+  const savedNotes = noteSession({ store: savedData, report })
 
   function writeNotes (items = puzzleNotes) {
     forgetParsedTexts()
-    if (loadedKey === null) return
-    reportKept()
-    if (!savable) {
-      report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
-      return
-    }
-    // A write the browser refuses (a full localStorage) is reported, and is not a SudokuPad change that turns the saved data off.
-    if (!storage.off) {
-      try {
-        saveNotesTo(Framework, loadedKey, items, keptEntries)
-      } catch (err) {
-        report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
-      }
-    }
+    savedNotes.save(items)
   }
 
   // Any edit after a Restart ends what Undo can bring back.
   function saveNotes () {
-    forgetRestarted()
+    savedNotes.dropRestarted()
     writeNotes()
   }
-
-  const forgetRestarted = () => { if (loadedKey !== null && !storage.off) Framework.removeData(restartedKey(loadedKey)) }
 
   function changeSelected (change) {
     for (const i of selected) puzzleNotes[i] = change(puzzleNotes[i])
@@ -3845,7 +3940,7 @@
     return { left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) }
   }
 
-  const notesInRectangle = (d, map) => notesHidden ? [] : notesTouched(notesOnBoard(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]))
+  const notesInRectangle = (d, map) => notesHidden ? [] : notesTouched(notesOnBoard(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]), look.outline)
 
   function showRectangle (d) {
     if (!d.rectangle) {
@@ -3897,7 +3992,7 @@
     const reach = SELECTION_OFFSET_PX + SELECTION_OUTLINE_PX / 2
     const lines = (axis) => gridLines(Framework.app.grid[axis === 0 ? 'cols' : 'rows'], (k) => map.toScreen(axis === 0 ? [k * CELL_UNITS, 0] : [0, k * CELL_UNITS])[axis])
     const box = noteScreenBox(item, map, look.outline)
-    const others = puzzleNotes.filter((other, i) => other.kind === TEXT_KIND && !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, look.outline))
+    const others = puzzleNotes.filter((other, i) => !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, look.outline))
     const snaps = [['left', 'right'], ['top', 'bottom']].map(([near, far], axis) => snapAxis(box[near] + raw[axis], box[far] + raw[axis], {
       lines: lines(axis), reach, others: others.map((other) => ({ lo: other[near], hi: other[far] }))
     }))
@@ -4115,32 +4210,20 @@
     if (textBox) closeTextBox()
   }
 
-  // Saved notes the script cannot read are the browser's data and not SudokuPad's, so they are left as they are and never turn the saved data off.
-  // SudokuPad keeps what its Undo brings back after a Restart in memory only, so a load ends it for the notes too.
   function showSavedNotes () {
     cancelInput()
     puzzleNotes = []
     setNotesHidden(false)
-    savable = true
-    loadedKey = currentPuzzleKey()
-    forgetRestarted()
-    if (!storage.off) {
-      const { items, kept, unreadable } = loadNotes(Framework, loadedKey)
-      puzzleNotes = items
-      keptEntries = kept
-      savable = unreadable === undefined
-      if (unreadable !== undefined) report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
-      reportKept()
-    }
+    puzzleNotes = savedNotes.load(currentPuzzleKey())
     forgetParsedTexts()
     redraw()
   }
 
-  // The saved strokes and shapes of an earlier version, and the entries that failed their check, are left as they are.
+  // The saved strokes and shapes of an earlier version, and the entries that failed their check, are the session's kept entries and are left as they are.
   function clearNotes () {
-    puzzleNotes = puzzleNotes.filter((item) => item.kind !== TEXT_KIND)
+    puzzleNotes = []
     cancelInput()
-    savable = true
+    savedNotes.replaceUnreadable()
   }
 
   function clearAll () {
@@ -4151,52 +4234,29 @@
 
   // Restart keeps the notes before it saves them cleared, so the Undo that brings back what SudokuPad's Restart cleared brings them back too.
   function restartNotes () {
-    try {
-      if (loadedKey !== null && !storage.off && !undoRestart.off) keepRestartedTo(Framework, loadedKey, puzzleNotes.filter((item) => item.kind === TEXT_KIND))
-    } catch (err) {
-      report(`Text Anywhere could not keep this puzzle's notes for Undo: ${err.message}`)
-    }
+    if (!undoRestart.off) savedNotes.keepForRestart(puzzleNotes)
     clearNotes()
     writeNotes()
     redraw()
   }
 
-  // SudokuPad's Undo brings back what Restart cleared when the undo stack is empty: the first Undo after a Restart, past any selection made since. Its puzzle
-  // triggers `act` after each action, so whether the stack was empty before an Undo is read off the last action, a reset or a load.
-  let emptyStackLength = 0
-  const undoStackEmpty = () => Framework.app.puzzle.undoStack.length <= emptyStackLength
-  let undoWasEmpty = false
-
-  function followUndo (_, action) {
-    if (action?.type === 'undo' && undoWasEmpty) restoreRestarted()
-    undoWasEmpty = undoStackEmpty()
-  }
-
   function restoreRestarted () {
-    if (loadedKey === null || storage.off) return
-    const key = restartedKey(loadedKey)
-    let notes
-    try {
-      notes = readNotes(Framework.getData(key)).items
-    } catch (err) {
-      report(`Text Anywhere cannot read the notes Restart cleared, so Undo does not bring them back: ${err.message}`)
-      return
-    }
-    if (notes.length === 0) return
+    const restored = savedNotes.restoreAfterRestart()
+    if (restored.length === 0) return
     setNotesHidden(false)
     cancelInput()
     const first = puzzleNotes.length
-    puzzleNotes = puzzleNotes.concat(notes)
+    puzzleNotes = puzzleNotes.concat(restored)
     saveNotes()
     // So the solver sees which notes came back.
-    if (Framework.app.tool === TOOL_NAME) select(notes.map((_, i) => first + i))
+    if (Framework.app.tool === TOOL_NAME) select(restored.map((_, i) => first + i))
     else redraw()
   }
 
   function touchAlong (from, to, map) {
     const [a, b] = [from, to].map(map.toScreen)
     for (const item of puzzleNotes) {
-      if (item.kind === TEXT_KIND && touchesBox(grownBox(noteScreenBox(item, map, look.outline), HIT_MARGIN_PX), a, b)) erasing.touched.add(item)
+      if (touchesBox(grownBox(noteScreenBox(item, map, look.outline), HIT_MARGIN_PX), a, b)) erasing.touched.add(item)
     }
   }
 
@@ -4218,7 +4278,7 @@
   }
 
   function confirmClear () {
-    const ask = clearAsk(puzzleNotes.filter((item) => item.kind === TEXT_KIND).length)
+    const ask = clearAsk(puzzleNotes.length)
     if (!ask) return
     textTool.run(() => Framework.showDialog({
       parts: [
@@ -4438,14 +4498,9 @@
       app.on('restarted', boardNotes.bind(restartNotes))
       if (app.puzzle.currentPuzzle) showSavedNotes()
     })
-    undoRestart.run(() => {
-      app.puzzle.on('act', undoRestart.bind(followUndo))
-      // Another script may act after Restart in its own 'restarted' handler; the stack it leaves, read once all of them have run, is the empty one.
-      app.on('restarted', undoRestart.bind(() => queueMicrotask(() => { emptyStackLength = Framework.app.puzzle.undoStack.length; undoWasEmpty = undoStackEmpty() })))
-      for (const event of ['reset', 'progressloaded']) {
-        app.puzzle.on(event, undoRestart.bind(() => { emptyStackLength = 0; undoWasEmpty = undoStackEmpty() }))
-      }
-    })
+    // The Undo that loads the board from before a Restart brings the notes back. With nothing entered SudokuPad keeps no board, but its first
+    // Undo after the Restart, past any selection made since, still brings the notes back.
+    undoRestart.run(() => trackRestartUndo(app, undoRestart.bind).onRestartUndo(restoreRestarted))
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
   else start(undefined)

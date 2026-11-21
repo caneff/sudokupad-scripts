@@ -32,6 +32,10 @@ The settings dialogs' buttons are `live/settings.mjs`'s (`STATUS`, `actButton`).
 (`SETTINGS_SCRIPTS`: entry, editor, owned-key pattern, typed-out keys, `open`), which the settings-shell, copy-paste and storage suites loop over;
 `live/scripts.test.mjs` fails when a script that copies in `lib:settings-dialog` has none.
 
+`live/logic-masters-puzzle-preview/` checks Logic Masters Puzzle Preview, which runs on another site than SudokuPad. It answers every request itself, from its own
+routes with synthetic pages, and aborts the rest, so nothing reaches logic-masters.de. It opens its pages through `launchPersistent` (`live/session.mjs`), a context that
+keeps its profile in a directory the check owns, and never loads SudokuPad, so it is the one folder the shared-harness check (`test/specs/spec-129-closing.test.mjs`) leaves out.
+
 ## Injection time
 
 `live/session.mjs` injects every script a suite runs on SudokuPad, at one of three times: at `DOMContentLoaded` (`document-idle`),
@@ -326,7 +330,7 @@ back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow
 
 ## The Tampermonkey test
 
-`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every `*.user.js` into a real
+`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every SudokuPad script (`scriptFiles()` of `sync-lib.js`, so not Logic Masters Puzzle Preview, which runs on another site) into a real
 Tampermonkey in Playwright's Chromium, the way a user does: open the script's URL, click Install. Each script's copy on
 main goes in first, from `raw.githubusercontent.com`, then the checkout's copy, served from `127.0.0.1`, over it.
 Tampermonkey must offer the second as an update and its dashboard must list each script once, at the checkout's

@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ChinStrap's SudokuPad scripts</title>
+<title>Puzzle Scripts</title>
+<link rel="preload" href="Fredoka.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="Nunito.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <style>
   /* The 14px under the banner is the mockup's, where with the tilt only the two white rings meet. */
@@ -20,6 +22,7 @@
   .row:nth-of-type(6n+5) { --card: var(--lavender); }
   .row:nth-of-type(6n+6) { --card: var(--peach); }
   .row-plain { grid-template-columns: 1fr; }
+  .rows > h2.group { margin: .6rem 0 0 .4rem; font-size: 1.6rem; }
   .row-text { max-width: 36rem; }
   .row h2 { font-size: 1.25rem; margin-bottom: .35rem; }
   .row-text p { margin-bottom: .75rem; }
@@ -32,11 +35,12 @@
 </head>
 <body>
   <header class="banner">
-    <h1>ChinStrap's SudokuPad scripts</h1>
-    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.</p>
+    <h1>Puzzle Scripts</h1>
+    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a> and for other puzzle sites. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.</p>
   </header>
   <p class="warning">These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.</p>
   <div class="rows">
+  <h2 class="group">SudokuPad</h2>
   <section class="row">
     <!-- slideshow:pen-tool-extras -->
     <div class="slideshow">
@@ -193,7 +197,7 @@
     </div>
     <div class="row-text">
       <h2>Auto Rules Resizer</h2>
-      <p>Fits the rules to your screen in landscape: the pane takes all the height the page has to spare, widens only as far as long rules need, and only then does the text shrink, to 70% of SudokuPad's size at the least. Short rules get larger text, up to 150%. A puzzle's text size and pane size, if you change them with f+, f- or the drag corners, are kept per puzzle: you get them back when you return to it, and every other puzzle starts at the fitted default. Reset puzzle size in the Auto Rules Resizer settings clears the current puzzle's. The settings' Max auto width and Max auto height cap the automatic fit, down to 240 px wide and 112 px high, and a value below that is refused with a message. Restore defaults there clears both limits when you press Save. Thanks to Nell Gwyn, whose SudokuPad-ResizeRules this grew from.</p>
+      <p>Fits the rules pane to your screen: it takes the spare height, widens for long rules, and grows or shrinks the text to fit. A size you set with f+, f- or the drag corners is kept per puzzle. Thanks to Nell Gwyn, whose SudokuPad-ResizeRules this grew from.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js">Install<span class="visually-hidden"> Auto Rules Resizer</span></a></p>
     </div>
   </section>
@@ -210,6 +214,19 @@
         <li><b>Wrap buttons</b> (off at first): the bottom row of tool buttons wraps onto a second line after five. It has no effect with Color by Digit installed, which already wraps it.</li>
       </ul>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js">Install<span class="visually-hidden"> UI Tweaks</span></a></p>
+    </div>
+  </section>
+  <h2 class="group">Other</h2>
+  <section class="row row-plain">
+    <div class="row-text">
+      <h2>Logic Masters Puzzle Preview</h2>
+      <p>Shows each puzzle's picture beside its link on the <a href="https://logic-masters.de/Raetselportal/">Logic Masters puzzle portal</a>, a different site from SudokuPad. The first version was written by Juggler, who gave permission to publish this one. This version adds:</p>
+      <ul>
+        <li><b>A saved copy of what it looked up</b>: your browser keeps each puzzle page's picture address (looked at again after 7 days, or after 1 day when the page had no picture) and the picture itself, up to 600 pictures, so a second visit asks the site for neither. A picture is kept by its address and not rechecked: if the site replaces a picture at the same address, you keep the old one until the saved copy drops it.</li>
+        <li><b>Only what is on screen</b>: it looks up only the links on or near the screen.</li>
+        <li><b>Gentle on the site</b>: one request at a time, 500 ms apart, and after a busy answer (503 or 429) nothing more is asked for 5 minutes, in every open tab.</li>
+      </ul>
+      <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js">Install<span class="visually-hidden"> Logic Masters Puzzle Preview</span></a></p>
     </div>
   </section>
   </div>
