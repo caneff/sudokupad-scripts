@@ -136,7 +136,7 @@ export const RICH_NOTES = ['- one\n- **two**', '- [ ] buy\n- [x] sold', '```\nsu
 const CHECK_BOX_NOTE = RICH_NOTES[1]
 const TALL_NOTE = RICH_NOTES.find((text) => text.split('\n').length > BOX_LINES)
 export const NOTE_SLIDERS = SLIDERS.filter((name) => name.startsWith('note '))
-// What a note edit types into a reopened note, and the size keys (`SLIDER_STEP_KEYS` of text-anywhere.user.js and pen-tool-extras.user.js, which do not export it).
+// What a note edit types into a reopened note, and the size keys (`SLIDER_STEP_KEYS` of lib/slider-keys.js).
 export const MORE_TEXT = 'ab'
 export const SIZE_KEYS = ['+', '=', '-']
 const MAX_SIZE_PRESSES = 3
