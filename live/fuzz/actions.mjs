@@ -26,6 +26,7 @@
 //   env.pickProfile(i)                       picks profile `i` (counted from 0, wrapped to the profiles there are) from the pad button's menu
 //   env.restartPuzzle()                      restarts the puzzle, as SudokuPad's own Restart does
 //   env.noteHandle(corner) -> [x, y] | null  the middle of the resize handle at `corner` (0 to 3) of the one note selected; null when the page shows no four handles
+//   env.visibleHandlePoint(corner) -> [x, y] | null  the middle of the part of the resize handle at `corner` that lies inside the browser window, where a player can press it; null when none does
 //   env.checkBoxPoint() -> [x, y] | null     the middle of the first check box drawn in a note
 //   env.clearNotes(ok)                       presses Text Anywhere's Clear all button, and answers the question it asks (when a note is selected it asks none) with OK or Cancel
 //   env.holdFor(ms)                          lets `ms` of the page's time pass while a key stays down
@@ -924,7 +925,7 @@ function buildKinds () {
       start: false,
       stroke: false,
       weight: 1,
-      // A note resized by its handle and then put back to its own size by a double-click on the handle; selected, a note with no box is not resized by it, so half the draws open the note.
+      // A note resized by its handle and then, when the handle is in the window, put back to its own size by a double-click on it; selected, a note with no box is not resized by it, so half the draws open the note.
       arg: (puzzle) => fc.tuple(note(puzzle), fc.nat(RESIZE_CORNERS - 1), fc.boolean(), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX }), fc.integer({ min: -RESIZE_REACH_PX, max: RESIZE_REACH_PX })),
       label: ([[t, a], corner, open, dx, dy], at) => `drag corner ${corner} of the first note ${open ? 'open' : 'selected'} ${ifNone(t, a, at)} by ${dx} x ${dy} then double-click it`,
       run: async (env, [[t, a], corner, open, dx, dy]) => {
@@ -936,9 +937,10 @@ function buildKinds () {
         await env.page.mouse.move(handle[0] + dx, handle[1] + dy, { steps: 6 })
         await env.page.mouse.up()
         // The note stays selected or open after its drag, so its handle is still there: a missing one is a failure, not a step to skip.
-        const moved = await env.noteHandle(corner)
-        if (!moved) throw new Error(`corner ${corner}'s handle is gone after its drag`)
-        await env.page.mouse.dblclick(...moved)
+        if (!await env.noteHandle(corner)) throw new Error(`corner ${corner}'s handle is gone after its drag`)
+        // A handle wholly past the window's edge cannot be double-clicked by a player, and the page's pointer events there reach the note under it and open it for typing.
+        const visible = await env.visibleHandlePoint(corner)
+        if (visible) await env.page.mouse.dblclick(...visible)
         if (open) await env.finishNote()
       }
     },

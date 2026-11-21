@@ -74,6 +74,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       clearControls: async () => {},
       useNotes: rec('useNotes'),
       noteHandle: rec('noteHandle', [300, 320]),
+      visibleHandlePoint: rec('visibleHandlePoint', [300, 320]),
       checkBoxPoint: rec('checkBoxPoint', [250, 260]),
       clearNotes: rec('clearNotes'),
       holdFor: rec('holdFor'),
