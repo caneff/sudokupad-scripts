@@ -574,19 +574,27 @@ describe('the action vocabulary', () => {
         await assert.rejects(a.run({ selected: true }, { env: target.env }), /handle is gone/)
       })
 
-      it('a handle reset whose handle lies outside the window after the drag does not double-click it, since no player can, and still finishes an open note', async () => {
+      it('a handle reset whose handle lies wholly outside the window after the drag double-clicks nothing, since no player can, and still finishes an open note', async () => {
         const seen = new Set()
         for (const a of kindOf('note handle reset')) {
           const target = await fakeTargets().openTarget()
-          let handles = 0
-          target.env.noteHandle = async () => (++handles === 1 ? [300, 320] : [300, 936])
-          target.env.onScreen = async ([, y]) => y < 900
+          target.env.visibleHandlePoint = async () => null
           await a.run({ selected: true }, { env: target.env })
-          assert.equal(calls(target.log, 'mouse.dblclick').filter((c) => c[2] === 936).length, 0, String(a))
+          const open = names(target.log).includes('finishNote')
+          assert.equal(calls(target.log, 'mouse.dblclick').length, open ? 1 : 0, `${String(a)}: only the double-click that opens the note`)
           assert.equal(calls(target.log, 'mouse.up').length, 1, 'the drag still ran')
-          seen.add(names(target.log).includes('finishNote') ? 'open' : 'selected')
+          seen.add(open ? 'open' : 'selected')
         }
         assert.deepEqual([...seen].sort(), ['open', 'selected'])
+      })
+
+      it('a handle reset double-clicks the part of a handle that is in the window, not its middle', async () => {
+        const a = kindOf('note handle reset').find((x) => !/ open /.test(String(x)))
+        const target = await fakeTargets().openTarget()
+        target.env.noteHandle = async () => [126, 900.5]
+        target.env.visibleHandlePoint = async () => [126, 897.5]
+        await a.run({ selected: true }, { env: target.env })
+        assert.deepEqual(calls(target.log, 'mouse.dblclick').map((c) => c.slice(1)), [[126, 897.5]])
       })
 
       it('the note edits run only when a note can be placed: with none it presses nothing', async () => {
