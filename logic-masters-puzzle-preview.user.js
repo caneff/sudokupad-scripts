@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Logic Masters Puzzle Preview
 // @namespace    http://tampermonkey.net/
-// @version      1.3.0
+// @version      1.3.1
 // @description  Show puzzle preview images inline on Logic Masters portal pages, cached between visits
 // @author       Juggler (first version); caching and request limits by ChinStrap
 // @match        https://logic-masters.de/Raetselportal/*
@@ -29,7 +29,8 @@
   const NEAR_SCREEN_PX = 400 // links this near the viewport are looked up before the rest
   const PRUNE_DELAY_MS = 5000 // the image cache is trimmed once the page has settled
   const REQUEST_GAP_MS = 200 // from the end of one network request to the start of the next
-  const LINKS = 'a[href*="zeigen.php"]'
+  const LINKS = 'a[href*="zeigen.php"]' // candidates: the portal's menu has more links that match, and isPuzzleLink sorts them out
+  const REQUEST_TIMEOUT_MS = 20 * 1000 // a request that never answers would hold the queue and leave its box at Loading...
 
   // ---- storage ----
   const dbReady = new Promise((resolve) => {
@@ -130,7 +131,7 @@
 
   // The first bild.php image on a puzzle page, read from the page text without building a document.
   async function fetchImageAddress (pageUrl, rank) {
-    const response = await politely(() => fetch(pageUrl), rank)
+    const response = await politely(() => fetch(pageUrl, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }), rank)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const html = await response.text()
     const match = html.match(/<img[^>]+src="([^"]*bild\.php[^"]*)"/i)
@@ -169,7 +170,7 @@
         dbPut('images', src, { blob: saved.blob, used: Date.now() })
         return URL.createObjectURL(saved.blob)
       }
-      const response = await politely(() => fetch(src), rank)
+      const response = await politely(() => fetch(src, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }), rank)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const blob = await response.blob()
       dbPut('images', src, { blob, used: Date.now() })
@@ -227,6 +228,12 @@
   const seen = new WeakSet()
   let linksSeen = 0
 
+  // A puzzle's page is /Raetsel/zeigen.php with an id; the menu's "Rätsel anzeigen" has none, and kommentarezeigen.php and loeserzeigen.php are other pages.
+  function isPuzzleLink (link) {
+    const url = new URL(link.href, location.href)
+    return url.pathname.endsWith('/Raetsel/zeigen.php') && Boolean(url.searchParams.get('id'))
+  }
+
   function isNearScreen (link) {
     const rect = link.getBoundingClientRect()
     return rect.bottom > -NEAR_SCREEN_PX && rect.top < window.innerHeight + NEAR_SCREEN_PX
@@ -237,6 +244,7 @@
     for (const link of links) {
       if (seen.has(link)) continue
       seen.add(link)
+      if (!isPuzzleLink(link)) continue
       const preview = insertPreview(link)
       if (preview) showPreview(link, preview, linksSeen++ + (isNearScreen(link) ? 0 : FAR_RANK))
     }
