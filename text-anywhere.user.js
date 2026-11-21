@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.49
+// @version      0.46.50
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.49'
+  const VERSION = '0.46.50'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -3664,7 +3664,7 @@
       if (!textBox || textBox.element !== element) return
       // Only a typed character completes a symbol: deleting, pasting and Undo leave the text as it is.
       if (event.inputType === 'insertText') {
-        replaceTypedSymbol()
+        textBox.swapCaret = replaceTypedSymbol()
         splitTypingUndo()
       }
       showTextBox(boardMap())
@@ -3684,14 +3684,14 @@
   function replaceTypedSymbol () {
     const selection = window.getSelection()
     const { anchorNode, anchorOffset } = selection
-    if (!selection.isCollapsed || anchorNode?.nodeType !== window.Node.TEXT_NODE || !textBox.element.contains(anchorNode)) return
+    if (!selection.isCollapsed || anchorNode?.nodeType !== window.Node.TEXT_NODE || !textBox.element.contains(anchorNode)) return null
     // A line break is a text node of its own, so the whole note is read, for whether the caret is in code, and the pair is then found in the caret's node.
     const toCaret = document.createRange()
     toCaret.setStart(textBox.element, 0)
     toCaret.setEnd(anchorNode, anchorOffset)
     const nodeStart = toCaret.toString().length - anchorOffset
     const found = symbolJustTyped(textBox.element.textContent, nodeStart + anchorOffset)
-    if (!found || found.start < nodeStart) return
+    if (!found || found.start < nodeStart) return null
     const range = document.createRange()
     range.setStart(anchorNode, found.start - nodeStart)
     range.setEnd(anchorNode, found.end - nodeStart)
@@ -3700,6 +3700,13 @@
     document.execCommand('insertText', false, found.symbol)
     // `sum` ends before the character typed after it, which the insertion carried the caret behind.
     if (found.end - nodeStart !== anchorOffset) selection.modify('move', 'forward', 'character')
+    return { node: selection.anchorNode, offset: selection.anchorOffset }
+  }
+
+  // Whether the caret is still where the swap left it.
+  function caretIsAt (spot) {
+    const { isCollapsed, anchorNode, anchorOffset } = window.getSelection()
+    return Boolean(spot) && isCollapsed && anchorNode === spot.node && anchorOffset === spot.offset
   }
 
   // Chromium undoes a run of typed characters as one step; putting the caret back where it is ends the run, so Ctrl+Z takes one character at a time.
@@ -3794,6 +3801,14 @@
     event.stopImmediatePropagation()
     if (event.type !== 'keydown' || event.isComposing) return
     if (event.key === 'Tab') event.preventDefault()
+    // The first plain Backspace right after a swap is the browser's Undo, as on other platforms' autocorrect; any other key clears the swap's caret.
+    if (event.key === 'Backspace' && caretIsAt(textBox.swapCaret)) {
+      event.preventDefault()
+      document.execCommand('undo')
+      // Undo leaves the text it gave back selected, and the next character typed would replace it.
+      window.getSelection().collapseToEnd()
+    }
+    textBox.swapCaret = null
     if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
       event.preventDefault()
       if (resizing && !resizing.cancelled) return cancelResize()

@@ -57,6 +57,61 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await finishNote(p)
   })
 
+  it('the first Backspace right after each symbol swap undoes it', async () => {
+    await openNote()
+    for (const [typed, swapped, undone] of [['->', '→', '->'], ['a<-', 'a←', 'a<-'], ['!=', '≠', '!='], ['<=', '≤', '<='], ['>=', '≥', '>='], ['sum ', 'Σ ', 'sum ']]) {
+      await p.keyboard.type(typed)
+      assert.equal(await boxText(), swapped)
+      await p.keyboard.press('Backspace')
+      assert.equal(await boxText(), undone, `Backspace after ${typed}`)
+      await p.keyboard.press('Control+a')
+      await p.keyboard.press('Delete')
+    }
+    await finishNote(p)
+  })
+
+  it('after the undo the caret is collapsed, so the next Backspace deletes one character and typing keeps the restored text', async () => {
+    await openNote()
+    await p.keyboard.type('ab->')
+    await p.keyboard.press('Backspace')
+    await p.keyboard.type('x')
+    assert.equal(await boxText(), 'ab->x')
+    await p.keyboard.press('Control+a')
+    await p.keyboard.press('Delete')
+    await p.keyboard.type('ab->')
+    await p.keyboard.press('Backspace')
+    await p.keyboard.press('Backspace')
+    assert.equal(await boxText(), 'ab-')
+    await finishNote(p)
+  })
+
+  it('a character typed after the swap, an arrow key or Ctrl+Backspace makes Backspace an ordinary delete', async () => {
+    await openNote()
+    const cases = [
+      ['a typed character', ['x', 'Backspace'], '→'],
+      ['an arrow key', ['ArrowLeft', 'ArrowRight', 'Backspace'], ''],
+      ['Ctrl+Backspace', ['Control+Backspace'], '']
+    ]
+    for (const [name, keys, expected] of cases) {
+      await p.keyboard.type('->')
+      for (const key of keys) await (key.length === 1 ? p.keyboard.type(key) : p.keyboard.press(key))
+      assert.equal(await boxText(), expected, name)
+      await p.keyboard.press('Control+a')
+      await p.keyboard.press('Delete')
+    }
+    await finishNote(p)
+  })
+
+  it('a click that moves the caret makes Backspace an ordinary delete', async () => {
+    await openNote()
+    await p.keyboard.type('->')
+    const box = await p.locator('#text-anywhere-layer .text-anywhere-textbox').boundingBox()
+    await p.mouse.click(box.x + 2, box.y + box.height / 2)
+    await p.keyboard.press('Backspace')
+    assert.equal(await boxText(), '→', 'Backspace at the start of the note deletes nothing, and does not undo')
+    await finishNote(p)
+  })
+
   it('a character typed right after a symbol is its own undo step', async () => {
     await openNote()
     await p.keyboard.type('->x')
