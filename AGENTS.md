@@ -82,13 +82,15 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 - While you iterate, run only the changed script's files (`live/<script name>/*.live.mjs`, and `live/startup.live.mjs` when
   its startup changed) with `npm run test:live:files -- <files>`; the worker runs the full suite once before "PR up", and its report says the sha.
   The controller's merge rerun takes the files in `live/README.md` § The merge rerun.
+- Extra run: a change to a `live/*.mjs` helper, `package.json`, `site/` or `.github/` also runs the full live suite,
+  `npm run test:live`, before "PR up" and again at the merge (#717). The merge skip rule never skips it.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
 - `npm run test:tampermonkey` installs every SudokuPad script (`scriptFiles()`) into a real Tampermonkey, and leaves out Logic Masters Puzzle Preview (its install and update from the root address stay owed to a person); `live/README.md` § The Tampermonkey test
   says what it covers and needs. It needs the network, so it stays out of `npm test`, `npm run test:live` and
   `land.testcmd`. Run it when a change touches any line of a `// ==UserScript==` header; the controller's merge check
   runs it then too.
-- A PR names as owed only what that section says the test does not cover. `crackingthecryptic.com` only redirects to
+- A PR names as owed only what `live/README.md` § The Tampermonkey test says the test does not cover. `crackingthecryptic.com` only redirects to
   SudokuPad now, so no PR, ticket or report names it as owed (Chris, 2026-11-07).
 
 `npm run lint` runs StandardJS over the repo, excluding `docs/research/`. `land.testcmd` runs it after the tests, so a land fails on a lint error.

@@ -22,7 +22,7 @@ const NOTE_GROUPS = '.text-anywhere-board, .text-anywhere-screen'
 // Anything in the notes' layer that is not a note, a resize handle, a selection outline or one of the groups, such as a stroke or shape an earlier version drew: none is drawn now.
 export const NOT_NOTES = `#text-anywhere-layer > :not(.text-anywhere-text, .text-anywhere-resize, .text-anywhere-selection, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.text-anywhere-text)`
 export const IN_LAYER = `#text-anywhere-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
-// The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
+// The notes with Background on, leaving out the one open for typing.
 export const TEXT_BGS = '#text-anywhere-layer .text-anywhere-text-bg:not(.text-anywhere-textbox)'
 // Every note the player sees: the finished ones and the one open for typing (a text box is a note too).
 export const SEEN_TEXTS = '#text-anywhere-layer .text-anywhere-text'

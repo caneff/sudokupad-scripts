@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.33
+// @version      0.7.35
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
@@ -24,7 +24,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.33'
+  const VERSION = '0.7.35'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -154,7 +154,7 @@
   // <lib:settings-table>
   // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  // A script that copies in store as well has a second `global` naming isPlainObject, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
@@ -172,7 +172,6 @@
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
-  // Every row as `store` holds it, by name.
   const readTable = (rows, store) => readByField(rows, store, 'name')
 
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
@@ -180,7 +179,6 @@
 
   const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
-  // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
   // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
@@ -568,10 +566,8 @@
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
-  // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
-  // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
-  // put back after them; the first throw then goes on. The stored values are held by reference, so a script's save must replace a value
-  // and never edit one in place.
+  // Every key is written back even when one throws, and only the first throw goes on; the rest are dropped. The stored values are
+  // held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
     const putMirrorBack = holdMirror()
@@ -590,7 +586,6 @@
     }
   }
 
-  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   function writeOrRestore (snapshot, write) {

@@ -937,8 +937,7 @@ test('installButton: adds an icon button titled "Color by Digit" in the bottom r
   assert.equal(typeof spec.onClick, 'function')
 })
 
-// The parts of a page the script reads to draw the button: the palette variables and a probe element
-// that resolves a color. Every palette key is the color #3e63dd. The bottom row holds SudokuPad's four buttons.
+// The parts of a page the script reads to draw the button: the bottom row, which holds SudokuPad's four buttons.
 // Its listeners are kept by event type, so a test can fire the button's own press.
 const pageDocument = (extra = {}) => ({
   listeners: {},

@@ -2077,12 +2077,10 @@ test('without a pen tool, every step that needs it is reported under the first i
   ]))
 })
 
-// The startup guard: a page with no Framework is not SudokuPad and stays silent; a Framework without getApp holds every install step off, which the probe reports.
 function loadWithFramework (framework) {
   return startScript('../pen-tool-extras.user.js', { Framework: framework }).warnings
 }
 
-// Runs `fn` on a page with a document and a window that take every call the startup makes and find none of SudokuPad's own elements.
 function withPage (fn) {
   const saved = { document: global.document, window: global.window }
   Object.assign(global, pageStandIn())
