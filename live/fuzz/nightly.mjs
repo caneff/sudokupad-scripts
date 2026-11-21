@@ -16,6 +16,7 @@ const TITLE_MAX = 110
 const MIN_RUN_MINUTES = 1
 // The whole night: the hunts, a shrink of up to 10 minutes, and the page starts; a fuzz still running after this has hung and is killed.
 export const FUZZ_TIMEOUT_MS = (FUZZ_MINUTES + 20) * MINUTE_MS
+const TRAILER = issueTrailer('npm run fuzz:nightly', 'live/fuzz/nightly.mjs')
 
 // A short, stable name for what failed, from the error line the fuzz prints (engine.mjs): the broken rules' names, or the first crash signal with its
 // numbers folded, so the same failure on another seed or step still has the same title.
@@ -51,7 +52,7 @@ function fuzzIssue (f, { runUrl } = {}) {
   return {
     title: failureTitle(f.error),
     once: true,
-    body: `${intro}\n\n${details}\n${issueTrailer('npm run fuzz:nightly', 'live/fuzz/nightly.mjs')}`,
+    body: `${intro}\n\n${details}\n${TRAILER}`,
     comment: `The same failure again, seed ${f.seed} on the ${f.puzzle} puzzle.\n\n${details}`
   }
 }
@@ -65,7 +66,7 @@ export const didNotRunIssue = (why) => ({
     '',
     why,
     '',
-    issueTrailer('npm run fuzz:nightly', 'live/fuzz/nightly.mjs')
+    TRAILER
   ].join('\n')
 })
 

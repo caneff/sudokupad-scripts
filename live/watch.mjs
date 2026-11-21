@@ -76,9 +76,10 @@ export function failedChecks (tap) {
   return { checks, unrun }
 }
 
-// The end of every issue body filed here, the watch's and the nightly fuzz's: who filed it, then the Blocked by section that drain and triage read
-// (a finding is never blocked by another ticket).
+// The end of an issue body a check files: the command and file that filed it, then the Blocked by section that drain and triage read
+// (a finding is never blocked by another ticket). One builder, so every filer's issues end alike.
 export const issueTrailer = (command, file) => `Filed by \`${command}\` (\`${file}\`).\n\n## Blocked by\n\n- None — can start immediately.`
+const TRAILER = issueTrailer('npm run watch:live', 'live/watch.mjs')
 
 // `once`: a weekly run on a version that is still red must not file the same bug again while one is open.
 export const issueFor = (version, { checks, unrun }, { weekly = false } = {}) => ({
@@ -90,7 +91,7 @@ export const issueFor = (version, { checks, unrun }, { weekly = false } = {}) =>
     ...checks.map((c) => `- ${c}`),
     ...(unrun.length ? ['', 'Did not run (a file that failed to load, or a failed `before` hook):', '', ...unrun.map((c) => `- ${c}`)] : []),
     '',
-    issueTrailer('npm run watch:live', 'live/watch.mjs')
+    TRAILER
   ].join('\n')
 })
 
@@ -103,7 +104,7 @@ export const didNotRunIssue = (version, why) => ({
     '',
     why,
     '',
-    issueTrailer('npm run watch:live', 'live/watch.mjs')
+    TRAILER
   ].join('\n')
 })
 

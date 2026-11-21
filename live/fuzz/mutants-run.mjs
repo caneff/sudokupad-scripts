@@ -56,7 +56,7 @@ try {
     const loadable = []
     for (const mutant of sample) {
       console.log(`${mutant.id}: ${mutant.description}`)
-      const problem = await mutantLoadProblem(() => openTarget(browser, FUZZ_PUZZLES[0], { plant: mutantPlant(mutant) }), () => openTarget(browser, FUZZ_PUZZLES[0], {}))
+      const problem = await mutantLoadProblem((options) => openTarget(browser, FUZZ_PUZZLES[0], options), mutantPlant(mutant))
       if (problem) {
         console.log(`${mutant.id}: load error: ${problem}`)
         outcomes.push({ mutant, verdict: mutantVerdict([], { loadError: true }), runs: [] })

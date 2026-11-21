@@ -1,5 +1,5 @@
-// The fuzz run's report: what `run.mjs` prints and what `nightly.mjs` reads back to file an issue. The format is written here and parsed here, so a
-// reword cannot break the nightly filing without `fuzz-report.test.mjs` (a round trip) failing.
+// The fuzz run's report: the lines a run prints for its verdict, and the verdict read back from them. The format is written here and parsed here, so a
+// reword cannot break a reader without `fuzz-report.test.mjs` (a round trip) failing.
 
 // The lines of a verdict, from `fuzz()`'s result and the seconds the run took.
 export function formatFuzzReport (r, seconds) {

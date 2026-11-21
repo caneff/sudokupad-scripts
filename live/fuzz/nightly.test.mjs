@@ -164,7 +164,6 @@ describe('a night with several failures', () => {
 })
 
 // Hunts that run at once: `outputs[k]` is what the k-th run started prints. Every run yields once before it returns, so the hunts are all in flight when the first one ends. The first run to end uses `usedMinutes` of the night (all of it by default).
-const PASS = (seed) => passedOutput(seed)
 const concurrent = (gh, hunts, outputs, { ok = false, print = () => {}, usedMinutes = FUZZ_MINUTES } = {}) => {
   const runs = []
   let clock = 0
@@ -189,7 +188,7 @@ const concurrent = (gh, hunts, outputs, { ok = false, print = () => {}, usedMinu
 
 describe('hunts at once', () => {
   it('starts every hunt at the same time, each on its own seed', async () => {
-    const n = concurrent(fakeGh(), 3, [PASS(1), PASS(2), PASS(3)], { ok: true })
+    const n = concurrent(fakeGh(), 3, [passedOutput(1), passedOutput(2), passedOutput(3)], { ok: true })
     assert.equal(await n, 'green')
     assert.deepEqual(n.runs.map((r) => r.seed), [1, 2, 3])
     assert.deepEqual(n.runs.map((r) => r.minutes), [FUZZ_MINUTES, FUZZ_MINUTES, FUZZ_MINUTES])
@@ -220,7 +219,7 @@ describe('hunts at once', () => {
     const gh = fakeGh()
     const runs = []
     let clock = 0
-    const outputs = { 1: failedOutput(1, RULE), 2: PASS(2), 3: PASS(3) }
+    const outputs = { 1: failedOutput(1, RULE), 2: passedOutput(2), 3: passedOutput(3) }
     const outcome = await nightly({
       hunts: 2,
       runFuzz: async (seed, limits) => { runs.push({ seed, ...limits }); await new Promise((resolve) => setImmediate(resolve)); clock += 10 * MINUTE_MS; return { ok: seed !== 1, output: outputs[seed] } },
@@ -259,7 +258,7 @@ describe('hunts at once', () => {
   it('prints one never-run list, of the functions no hunt ran, under a label', async () => {
     const list = (...names) => ['a.user.js: ' + names.length + ' of 9 functions never ran', ...names.map((n, i) => `  ${n} (line ${i + 1}, column 3)`)].join('\n') + '\n'
     const printed = []
-    await concurrent(fakeGh(), 2, [PASS(1) + list('f', 'g'), PASS(2) + list('f')], { ok: true, print: (line) => printed.push(line) })
+    await concurrent(fakeGh(), 2, [passedOutput(1) + list('f', 'g'), passedOutput(2) + list('f')], { ok: true, print: (line) => printed.push(line) })
     assert.deepEqual(printed, ["fuzz:nightly: functions no hunt ran (the lists above are each hunt's own):", 'a.user.js: 1 of 9 functions never ran', '  f (line 1, column 3)'])
   })
 })

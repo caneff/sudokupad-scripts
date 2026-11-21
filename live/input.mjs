@@ -23,7 +23,7 @@ export async function restingMiddle (locator) {
 }
 
 // Holds `button` down on the middle of what `selector` finds until what `until` finds reaches `state`, and lets go whatever happens:
-// the hold that opens the color pickers. A `selector` with no box on the page throws rather than hold nowhere.
+// the hold that opens the color pickers, or that keeps a picker held until the pickers close. A `selector` with no box on the page throws rather than hold nowhere.
 export async function holdUntil (page, selector, until, { button = 'left', state = 'attached', timeout, boxTimeout } = {}) {
   const box = await page.locator(selector).boundingBox({ timeout: boxTimeout })
   if (!box) throw new Error(`no ${selector} on the page to hold`)
