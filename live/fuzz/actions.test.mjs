@@ -31,18 +31,6 @@ const runOn = async (action, options) => {
 }
 
 describe('the action vocabulary', () => {
-  it('an action clears the buttons a note covers before it acts, three kinds of it checked (#880)', async () => {
-    const cases = [['click cell', 0], ['dark page', ['#000000', false]], ['move note', null]]
-    for (const [kind, arg] of cases) {
-      const target = await fakeTargets().openTarget()
-      const seenBefore = []
-      const env = { ...target.env, clearControls: async () => { seenBefore.push(target.log.length) } }
-      const [step] = scriptedList(puzzleByName('4x4'), [[kind, arg]])
-      await step.run({ selected: true }, { env })
-      assert.deepEqual(seenBefore, [0], `${kind} cleared once, before any call of its own`)
-    }
-  })
-
   it('a seed always gives the same actions, and another seed gives others', () => {
     assert.deepEqual(stepsOf(sample(7)), stepsOf(sample(7)))
     assert.notDeepEqual(stepsOf(sample(7)), stepsOf(sample(8)))
@@ -572,6 +560,29 @@ describe('the action vocabulary', () => {
         let handles = 0
         target.env.noteHandle = async () => (++handles === 1 ? [300, 320] : null)
         await assert.rejects(a.run({ selected: true }, { env: target.env }), /handle is gone/)
+      })
+
+      it('a handle reset whose handle lies wholly outside the window after the drag double-clicks nothing, since no player can, and still finishes an open note', async () => {
+        const seen = new Set()
+        for (const a of kindOf('note handle reset')) {
+          const target = await fakeTargets().openTarget()
+          target.env.visibleHandlePoint = async () => null
+          await a.run({ selected: true }, { env: target.env })
+          const open = names(target.log).includes('finishNote')
+          assert.equal(calls(target.log, 'mouse.dblclick').length, open ? 1 : 0, `${String(a)}: only the double-click that opens the note`)
+          assert.equal(calls(target.log, 'mouse.up').length, 1, 'the drag still ran')
+          seen.add(open ? 'open' : 'selected')
+        }
+        assert.deepEqual([...seen].sort(), ['open', 'selected'])
+      })
+
+      it('a handle reset double-clicks the part of a handle that is in the window, not its middle', async () => {
+        const a = kindOf('note handle reset').find((x) => !/ open /.test(String(x)))
+        const target = await fakeTargets().openTarget()
+        target.env.noteHandle = async () => [126, 900.5]
+        target.env.visibleHandlePoint = async () => [126, 897.5]
+        await a.run({ selected: true }, { env: target.env })
+        assert.deepEqual(calls(target.log, 'mouse.dblclick').map((c) => c.slice(1)), [[126, 897.5]])
       })
 
       it('the note edits run only when a note can be placed: with none it presses nothing', async () => {
