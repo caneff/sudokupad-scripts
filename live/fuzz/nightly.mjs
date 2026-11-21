@@ -5,6 +5,7 @@
 // files one "did not run" issue (one, whatever the number of hunts) and ends the night: runs already going finish, and no hunt starts another. Filing is `fileIssue` of live/watch.mjs, not a second copy.
 // At the end it prints one never-run list merged over the hunts.
 import { pathToFileURL } from 'node:url'
+import { stripVTControlCharacters } from 'node:util'
 import { fileIssue, issueTrailer, run } from '../watch.mjs'
 import { neverRunReport, parseNeverRun } from './coverage.mjs'
 import { parseFuzzOutput } from './fuzz-report.mjs'
@@ -18,16 +19,20 @@ const MIN_RUN_MINUTES = 1
 export const FUZZ_TIMEOUT_MS = (FUZZ_MINUTES + 20) * MINUTE_MS
 const TRAILER = issueTrailer('npm run fuzz:nightly', 'live/fuzz/nightly.mjs')
 
-// A short, stable name for what failed, from the error line the fuzz prints (engine.mjs): the broken rules' names, the locator a Playwright timeout waited for, or the first crash signal with its
-// numbers folded, so the same failure on another seed or step still has the same title.
+// A short, stable name for what failed, from the error the fuzz prints (engine.mjs): the broken rules' names, the locator in the call log of a Playwright timeout
+// (a plain `locator('#id')` is named by its selector, a chain by its whole expression), or the first crash signal or error line with its numbers folded, so the same failure on another seed or step has the same title.
 export function failureTitle (error) {
   const rules = /^rules? broken after (?:".*?"|the last action): (.*)$/s.exec(error)
   if (rules) {
     const names = [...new Set(rules[1].split('; ').map((v) => /^([\w-]+): /.exec(v)?.[1]).filter(Boolean))]
     if (names.length) return `Fuzz: rule broken: ${names.join(', ')}`
   }
-  const timeout = /^([\w.]+): Timeout \d+ms exceeded\.[\s\S]*?\n\s*- waiting for locator\((['"`])(.*?)\2\)/.exec(error)
-  if (timeout) return `Fuzz: error: ${timeout[1]} timed out: ${timeout[3]}`.slice(0, TITLE_MAX).trimEnd()
+  // Playwright dims the call log with colour codes when it thinks the terminal has colour.
+  const timeout = /^([\w.]+): Timeout \d+ms exceeded\.[\s\S]*?\n\s*- waiting for (locator\(.+?)(?: to (?:be|have)\b.*)?$/m.exec(stripVTControlCharacters(error))
+  if (timeout) {
+    const plain = /^locator\((['"`])((?:(?!\1).)*)\1\)$/.exec(timeout[2])
+    return `Fuzz: error: ${timeout[1]} timed out: ${plain ? plain[2] : timeout[2]}`.slice(0, TITLE_MAX).trimEnd()
+  }
   const signal = /^crash signals? after (?:".*?"|the last action): (.*)$/s.exec(error)
   const text = (signal ? signal[1].split('; ')[0] : error).split('\n')[0].replace(/\d+/g, 'N').trim()
   return `Fuzz: ${signal ? 'crash' : 'error'}: ${text}`.slice(0, TITLE_MAX).trimEnd()

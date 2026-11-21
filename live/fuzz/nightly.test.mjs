@@ -340,6 +340,16 @@ describe('failureTitle', () => {
     assert.equal(failureTitle(timeout(30000, '#color-by-digit-menu')), failureTitle(timeout(2000, '#color-by-digit-menu')))
     assert.notEqual(failureTitle(timeout(2000, '#pen-tool-extras-editor')), failureTitle(timeout(2000, '#color-by-digit-menu')))
   })
+  it('names a timeout the same when Playwright colours its call log', () => {
+    const plain = "locator.waitFor: Timeout 2000ms exceeded.\nCall log:\n  - waiting for locator('#color-by-digit-menu') to be visible\n"
+    const coloured = "locator.waitFor: Timeout 2000ms exceeded.\nCall log:\n\u001b[2m  - \u001b[22mwaiting for locator('#color-by-digit-menu') to be visible\u001b[22m\n"
+    assert.equal(failureTitle(coloured), failureTitle(plain))
+  })
+  it('names a chained locator by the whole chain, so two chains on one element differ', () => {
+    const chain = (tail) => `locator.waitFor: Timeout 2000ms exceeded.\nCall log:\n  - waiting for locator('#a')${tail} to be visible\n`
+    assert.equal(failureTitle(chain(".locator('.b')")), "Fuzz: error: locator.waitFor timed out: locator('#a').locator('.b')")
+    assert.notEqual(failureTitle(chain(".locator('.b')")), failureTitle(chain('.first()')))
+  })
   it('keeps the first-line title for a timeout with no waiting-for-locator line', () => {
     assert.equal(failureTitle('locator.waitFor: Timeout 2000ms exceeded.'), 'Fuzz: error: locator.waitFor: Timeout Nms exceeded.')
   })
