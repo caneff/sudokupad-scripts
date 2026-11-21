@@ -53,6 +53,26 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps })
   })
 
+  it('the clear says it dragged a note off a button, and says it did not when none covers one (#1006)', async () => {
+    const puzzle = puzzleByName('4x4')
+    const target = await openTarget(browser(), puzzle, {})
+    try {
+      const [placed] = scriptedList(puzzle, [['place note', [0, puzzle.cells.findIndex(([row, col]) => row === 1 && col === 1)]]])
+      await placed.run({ selected: true }, { env: target.env })
+      // As a player would, the note is dropped on the Undo button.
+      const [x, y] = await target.env.noteCentre()
+      const button = await target.env.page.locator('#control-undo').boundingBox()
+      await target.env.page.mouse.move(x, y)
+      await target.env.page.mouse.down()
+      await target.env.page.mouse.move(button.x + button.width / 2, button.y + button.height / 2, { steps: 6 })
+      await target.env.page.mouse.up()
+      assert.equal(await target.env.clearControls(), true)
+      assert.equal(await target.env.clearControls(), false)
+    } finally {
+      await target.close()
+    }
+  })
+
   it('a wide note over a button is the one dragged off it, not a narrow note within its width (#930)', async () => {
     // Seed 729's shrink after #930: the wide rich note covers a number pad button, and the small note 15 lay within the note's width of it.
     const puzzle = puzzleByName('6x6')
@@ -535,7 +555,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.deepEqual(await afterSteps(puzzle, [['pen show boxes', [true, false, true]]], sliders), [{ thickness: true, opacity: false }])
       assert.deepEqual(await afterSteps(puzzle, [['pen show boxes', [false, true, false]]], sliders), [null], 'Cancel saved none')
       // The list the correctness review found failing: a hidden slider is no lost control.
-      await fuzzScripted({ browser: browser(), puzzle, steps: [['pen show boxes', [false, false, true]], ['slider drag', [0, 5, 5]], ['slider drag', [1, 0, 10]], ['slider keys', [0, 1, 2]], ['slider keys', [1, 1, 2]]] })
+      await fuzzScripted({ browser: browser(), puzzle, steps: [['pen show boxes', [false, true]], ['slider drag', [0, 5, 5]], ['slider drag', [1, 0, 10]], ['slider keys', [0, 1, 2]], ['slider keys', [1, 1, 2]]] })
     })
 
     it('a swatch edit after a preset is saved for its pen on Save, and Cancel drops the preset and the swatch together', async () => {
