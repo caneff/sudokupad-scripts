@@ -4,7 +4,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, cellProps, clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
 
-const { SELECTED, TEXT_BOX } = textAnywhere
+const { SELECTED, TEXTS, TEXT_BOX } = textAnywhere
 const RECTANGLE = '#text-anywhere-layer .text-anywhere-selection-rectangle'
 const HANDLE = '#text-anywhere-layer .text-anywhere-resize'
 // In cells from the grid's top left: two notes, and empty space for new ones.
@@ -121,13 +121,18 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
 
   it('a press on a note that moves 4 px is still a click: it selects the note and moves nothing', async () => {
     const before = (await savedNote('B')).at
+    const drawnAt = () => p.evaluate((selector) => {
+      const r = [...document.querySelectorAll(selector)].find((e) => e.textContent === 'B').getBoundingClientRect()
+      return [r.left, r.top]
+    }, TEXTS)
     const [x, y] = await noteAt(B_AT)
+    const start = await drawnAt()
     await p.mouse.move(x, y)
     await p.mouse.down()
     await p.mouse.move(x + 4, y, { steps: 2 })
-    // A drag moves the note by a translation while the pointer is down; a click does not.
-    const translate = await p.evaluate(() => [...document.querySelectorAll('#text-anywhere-layer .text-anywhere-text')].find((e) => e.textContent === 'B').style.translate)
-    assert.equal(translate, '', 'the note follows no drag')
+    await textAnywhere.frames(p)
+    const held = await drawnAt()
+    assert.ok(Math.abs(held[0] - start[0]) <= 0.5 && Math.abs(held[1] - start[1]) <= 0.5, `with the button held the note is drawn at ${held}, not ${start}: it follows a drag`)
     await p.mouse.up()
     assert.deepEqual(await selectedTexts(), ['B'])
     assert.deepEqual((await savedNote('B')).at, before)
