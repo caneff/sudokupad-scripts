@@ -163,7 +163,7 @@
       {
         "picture": "text-anywhere-slide-6-long.png",
         "animation": "text-anywhere-slide-6-long.webp",
-        "alt": "A blue four-line note in the margin, open for typing, with a red ring on the handle at its bottom right corner, then the handle dragged down so the note shrinks to two lines, scrolled to the end to show 2B+5=11 and B=3, A=8, with its scroll bar beside the text",
+        "alt": "A blue four-line note in the margin, open for typing, with a red ring on the handle at its bottom right corner, then the handle dragged up and in so the note shrinks to two lines, scrolled to the end to show 2B+5=11 and B=3, A=8, with its scroll bar beside the text",
         "caption": "Long notes scroll; drag a corner to resize"
       },
       {
