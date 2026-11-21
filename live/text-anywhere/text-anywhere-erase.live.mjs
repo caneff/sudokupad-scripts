@@ -2,7 +2,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, NOT_NOTES, TEXT_BOX } from './text-anywhere-fixtures.mjs'
-import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
+import { clickUntil, settle, SETTLE_MS, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { gridPoint, mouseDrag, typeText } from '../board.mjs'
 
@@ -53,14 +53,15 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
   }
   // The middle of the dialog button labelled `label`, which must lie over the board for the check to mean anything.
   const buttonOverBoard = async (label) => {
-    const [x, y, inside] = await read((text) => {
+    // Read until the point holds: a press at a point read while the dialog still lays out misses the button on a loaded box, and the dialog then never closes.
+    const [x, y, inside] = await stable(() => read((text) => {
       const button = [...document.querySelectorAll('.dialog button')].find((b) => b.textContent === text)
       const b = button.getBoundingClientRect()
       const board = Framework.app.svgRenderer.getElem().getBoundingClientRect()
       const x = b.x + b.width / 2
       const y = b.y + b.height / 2
       return [x, y, x > board.left && x < board.right && y > board.top && y < board.bottom]
-    }, label)
+    }, label))
     assert.equal(inside, true, `the ${label} button is over the board`)
     return [x, y]
   }
