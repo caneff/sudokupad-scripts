@@ -56,11 +56,12 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
 
 ### UI Tweaks
 
-Its dialog has three options, each applied at once on Save and kept in the browser. Restore defaults sets the boxes back to how they start, as a draft that Cancel drops:
+Its dialog has four options, each applied at once on Save and kept in the browser. Restore defaults sets the boxes back to how they start, as a draft that Cancel drops:
 
 - **Tab never switches to letters** (on at first): SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a stray Tab left the number pad on letters after a refresh. During play, Tab does what it did before, minus the toggle, and a held Tab is stopped too. The letter button and `/` still toggle, and Tab still moves focus in dialogs. It works whenever you turn the letter tool on in settings.
 - **Hide the Select button** (off at first): hides SudokuPad's Select button in the bottom row, and the other buttons close up.
 - **Wrap buttons** (off at first): the bottom row of tool buttons wraps onto a second line after five. Color by Digit already caps that row at five on its own, so with it installed this option changes nothing.
+- **Digit pad size** (Normal at first): Smaller, Normal, Larger or Largest digit buttons. SudokuPad fits the whole controls column to the window, so the digits grow most on a large screen, and on a laptop the other buttons shrink to make room.
 
 If a SudokuPad update changes what the Tab option, the saved options or the settings entry needs, that part logs a console warning and turns itself off, and a bar at the bottom of the page says so. Hide the Select button and Wrap buttons are style rules only, with nothing of SudokuPad's to break.
 
