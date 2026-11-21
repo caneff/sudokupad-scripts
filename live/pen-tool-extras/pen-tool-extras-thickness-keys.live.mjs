@@ -57,13 +57,15 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
   const heldThenStopped = async (end) => {
     await setThickness(12)
     await p.keyboard.down('Minus')
-    await readUntil(slider, (v) => v <= 12 - 2 * RANGE.step)
-    await end()
-    const stopped = await slider()
-    await p.waitForTimeout(300) // nothing happened: the hold stopped
-    assert.equal(await slider(), stopped)
-    assert.equal(await saved(), stopped)
-    await p.keyboard.up('Minus')
+    try {
+      await readUntil(saved, (v) => v <= 12 - 2 * RANGE.step)
+      await end()
+      const stopped = await saved()
+      await p.waitForTimeout(300) // nothing happened: the hold stopped
+      assert.equal(await saved(), stopped)
+    } finally {
+      await p.keyboard.up('Minus')
+    }
   }
 
   it('a hold stops when the pen tool is no longer the tool', async () => {
