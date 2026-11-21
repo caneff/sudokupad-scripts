@@ -4,13 +4,15 @@ import assert from 'node:assert/strict'
 import { timingGated } from './timing.mjs'
 
 describe('timingGated', () => {
-  it('is off in a merge check, where the env names no timing run', () => {
+  it('is off when LIVE_TIMING is unset, empty or 0', () => {
     assert.equal(timingGated({}), false)
     assert.equal(timingGated({ LIVE_TIMING: '' }), false)
     assert.equal(timingGated({ LIVE_TIMING: '0' }), false)
   })
 
-  it('is on only when LIVE_TIMING is 1', () => {
+  it('is on only when LIVE_TIMING is exactly 1', () => {
     assert.equal(timingGated({ LIVE_TIMING: '1' }), true)
+    assert.equal(timingGated({ LIVE_TIMING: 'true' }), false)
+    assert.equal(timingGated({ LIVE_TIMING: '2' }), false)
   })
 })

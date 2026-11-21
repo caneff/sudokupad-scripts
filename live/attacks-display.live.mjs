@@ -112,7 +112,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
     await assertNoCrash(p, errors)
   })
 
-  it('attack 78: 200 notes and a grid full of pen lines: a line drawn, a note moved and an undo each show their result, and stay inside the time budget in the nightly watch', async (t) => {
+  it('attack 78: 200 notes and a grid full of pen lines: a line drawn, a note moved and an undo each show their result, and stay inside the time budget when the watch runs', async (t) => {
     await textAnywhere.plantNotes(p, Array.from({ length: NOTE_COUNT }, (_, i) => ({ kind: 'text', color: 1 + (i % 9), size: 14, opacity: 100, text: `n${i}`, at: [10 + (i % 20) * 27, 10 + Math.floor(i / 20) * 54] })))
     await reloadWithScripts(p)
     await pickTool(p, 'textanywhere')

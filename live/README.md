@@ -10,10 +10,12 @@ The suite is run locally and never in `npm test` or the CI workflow; only the da
 
 ## Time budgets (#1031)
 
-A wall-clock budget is not a correctness check on a shared box: attack 78's 3 s budget failed 3 of 3 merge checks at load 12-50 on code that was fine. A test's time budget therefore
-decides the test only when the run sets `LIVE_TIMING=1` (`timingGated` in `live/timing.mjs`). The daily watch sets it (`suiteRunEnv` in `live/watch.mjs`), so a regression in the time is a red
-check there and files the watch's bug; a merge check and a bare `npm run test:live` measure the time, print it as a diagnostic, and fail only when the result is wrong (the action's
-result still has to show within a loose wait). A new time budget follows the same rule. There is no retry and no quarantine: nothing is skipped or rerun, so there is no list of either.
+A wall-clock budget is not a correctness check on a shared box: attack 78's 3 s budget failed 3 of 3 merge checks at load 12-50 on code that was fine. Attack 78's time budget
+therefore decides the test only when the run sets `LIVE_TIMING=1` (`timingGated` in `live/timing.mjs`; exactly `1`, anything else is off). The watch sets it (`suiteRunEnv` in `live/watch.mjs`), so a
+regression in the time is a red check there and files the watch's bug. The watch runs the suite on a new SudokuPad version and once a week (`FULL_RUN_MS`), not every night. A merge check and a
+bare `npm run test:live` measure the time, print it as a diagnostic, and fail only when the result is wrong (the action's result still has to show within 30 s). Attack 78 is the one budget gated this way;
+attack 74's paste budget (`attacks-storage.live.mjs`) and Text Anywhere's frame budget (`text-anywhere-render.live.mjs`) still decide their tests everywhere. There is no retry and no quarantine: nothing is
+skipped or rerun, so there is no list of either.
 
 ## The merge rerun
 
