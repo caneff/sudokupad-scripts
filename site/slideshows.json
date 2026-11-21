@@ -157,12 +157,13 @@
       {
         "picture": "text-anywhere-slide-5-select.png",
         "animation": "text-anywhere-slide-5-select.webp",
-        "alt": "Three orange notes in the margin, A=B+5 and X+Y=2Z above the grid and r1: 4,6 in c7-9 beside row 1, each with a solid purple outline, selected by a solid purple drag box, then recolored blue together",
+        "alt": "Three orange notes in the margin, A=B+5 and X+Y=2Z above the grid and r1: 4,6 in c7-9 beside row 1, then a purple drag box growing from an empty corner across them, each note outlined in purple as the box reaches it, then all three recolored blue together",
         "caption": "Drag a box to select notes"
       },
       {
         "picture": "text-anywhere-slide-6-long.png",
-        "alt": "A blue note in the margin, open for typing and made two lines tall with the handle on its bottom right corner, scrolled to the end to show 2B+5=11 and B=3, A=8, with its scroll bar beside the text",
+        "animation": "text-anywhere-slide-6-long.webp",
+        "alt": "A blue four-line note in the margin, open for typing, with a red ring on the handle at its bottom right corner, then the handle dragged down so the note shrinks to two lines, scrolled to the end to show 2B+5=11 and B=3, A=8, with its scroll bar beside the text",
         "caption": "Long notes scroll; drag a corner to resize"
       },
       {

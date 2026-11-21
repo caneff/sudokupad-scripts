@@ -11,10 +11,11 @@
 //   text-anywhere-slide-7-hide.png        the board with every note hidden, beside the panel with a ring on the pressed eye button
 //   text-anywhere-slide-8-erase.png       the pointer on a note with a red ring round it, where a right click erases it, then the board after the click (which must erase the note)
 //   text-anywhere-slide-9-settings.png    notes drawn with Fixed width, a Thick halo and a Yellow box, beside the settings dialog that set them
-// Four slides show a before and an after, and are also an animated WebP (docs/research/site/slide-animation.py): the before, a crossfade, the after, a crossfade back.
-// The PNG is the after, the still a visitor who prefers reduced motion sees:
+// Five slides are also an animated WebP (docs/research/site/slide-animation.py): a before and an after, or the steps of one action, each held, with a crossfade to the next and from the last back to the first.
+// The PNG is the last picture, the still a visitor who prefers reduced motion sees:
 //   text-anywhere-slide-2-format.webp   the note as typed, raw, still open, then the finished formatted note
-//   text-anywhere-slide-5-select.webp   the three notes selected in orange, then recolored blue
+//   text-anywhere-slide-5-select.webp   the steps of the drag: three orange notes and no box, the box growing from its corner over none, one, two, then all three notes (each outlined as the box reaches it), then the notes recolored blue
+//   text-anywhere-slide-6-long.webp     the steps of the resize: the four-line note with a ring on its corner handle, the handle dragged partway down, then the two-line note scrolled to its end
 //   text-anywhere-slide-7-hide.webp     the notes shown with the eye up, then hidden with the eye pressed
 //   text-anywhere-slide-8-erase.webp    the ring on the note, then the note gone
 // Every note is typed with real clicks and keys. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
@@ -34,12 +35,20 @@ import { slideTo } from '../../../live/slider.mjs'
 const out = (name, extension = 'png') => new URL(`./text-anywhere-slide-${name}.${extension}`, import.meta.url).pathname
 // The before pictures of the animated slides wait here until their after is taken.
 const kept = mkdtempSync(join(tmpdir(), 'ta-before-'))
-const keptPath = (name) => join(kept, `${name}.png`)
+// A slide's kept pictures, in the order they were taken: the before of a before and after, or the steps of one action.
+const keptSteps = new Map()
+const keepPath = (name) => {
+  const steps = keptSteps.get(name) ?? []
+  keptSteps.set(name, steps)
+  steps.push(join(kept, `${name}-${steps.length}.png`))
+  return steps.at(-1)
+}
 // The slides with an animation: each keeps a before picture, and a slide missing it fails the run instead of leaving the old WebP in place.
-const ANIMATED = new Set(['2-format', '5-select', '7-hide', '8-erase'])
+const ANIMATED = new Set(['2-format', '5-select', '6-long', '7-hide', '8-erase'])
 const animate = (name) => {
-  if (!existsSync(keptPath(name))) throw new Error(`slide ${name} is animated but kept no before picture`)
-  writeAnimation(keptPath(name), out(name), out(name, 'webp'))
+  const steps = keptSteps.get(name) ?? []
+  if (!steps.length || !steps.every(existsSync)) throw new Error(`slide ${name} is animated but kept no before picture`)
+  writeAnimation(...steps, out(name), out(name, 'webp'))
 }
 
 const DRAG_STEPS = 10
@@ -81,13 +90,6 @@ const addRing = (p, [x, y], size = 34) => p.evaluate(([px, py, d, marker]) => {
   ring.style.cssText = `position:fixed;left:${px}px;top:${py}px;width:${d}px;height:${d}px;margin:${-d / 2}px 0 0 ${-d / 2}px;box-sizing:border-box;border-radius:50%;border:3px solid #d32f2f;pointer-events:none;z-index:99998`
   document.body.appendChild(ring)
 }, [x, y, size, MARKER])
-
-// A solid purple box with a faint fill over the page box `{ x, y, width, height }`: where a drag went, as the script draws it.
-const addSelectionRectangle = (p, box) => p.evaluate(({ x, y, width, height }) => {
-  const el = document.createElement('div')
-  el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${width}px;height:${height}px;box-sizing:border-box;border:1px solid #6a1b9a;background:rgb(106 27 154 / .06);pointer-events:none;z-index:99998`
-  document.body.appendChild(el)
-}, box)
 
 // Headless Chromium hides every scroll bar unless told not to, and slide 9 shows one.
 const browser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] })
@@ -160,7 +162,7 @@ async function scene (origin, cols = BOARD[0]) {
   }
   const shoot = async (name, { before = false } = {}) => {
     await checkNotes()
-    const file = before ? keptPath(name) : out(name)
+    const file = before ? keepPath(name) : out(name)
     const hidden = await p.addStyleTag({ content: '#controls { visibility: hidden !important }' })
     const picture = await p.screenshot({ path: file, clip: clipRect() })
     await hidden.evaluate((el) => el.remove())
@@ -173,7 +175,7 @@ async function scene (origin, cols = BOARD[0]) {
   // Writes a joined slide: the board crop, then beside it the control `shootControl(path)` writes, taken after the board with the panel shown again (a ring the page draws over it shows).
   const join2 = async (name, shootControl, { before = false } = {}) => {
     await checkNotes()
-    const file = before ? keptPath(name) : out(name)
+    const file = before ? keepPath(name) : out(name)
     const frames = mkdtempSync(join(tmpdir(), 'ta-slides-'))
     const hidden = await p.addStyleTag({ content: '#controls { visibility: hidden !important }' })
     await p.screenshot({ path: join(frames, 'board.png'), clip: clipRect() })
@@ -266,16 +268,22 @@ const SETTINGS_DIALOG = '#text-anywhere-dialog'
   await s.note(ABOVE_COL_8, 'X+Y=2Z')
   await s.note([0.1, 10.3], 'r1: 4,6 in c7-9')
   const FROM = [-0.9, 3.1]
-  const TO = [1.7, 12.9]
+  // The drag's steps, each a corner the box has grown to and the notes it has reached: it starts over none, then reaches the notes in turn, left to right, and ends over all three.
+  const STEPS = [[[-0.5, 3.4], 0], [[-0.1, 5.6], 1], [[-0.1, 8.5], 2], [[1.7, 12.9], 3]]
   await s.p.mouse.move(...s.at(FROM))
   await s.p.mouse.down()
-  await s.p.mouse.move(...s.at(TO), { steps: DRAG_STEPS })
+  // The first picture is the press before it has moved: no box, no outline.
+  if ((await s.p.locator('#text-anywhere-layer .text-anywhere-selection-rectangle').count()) !== 0) throw new Error('a box is drawn before the drag moves')
+  await s.shoot('5-select', { before: true })
+  for (const [to, outlined] of STEPS) {
+    await s.p.mouse.move(...s.at(to), { steps: DRAG_STEPS })
+    const drawn = await s.p.locator('#text-anywhere-layer .text-anywhere-selection').count()
+    if (drawn !== outlined) throw new Error(`the box at ${to} outlines ${drawn} notes, not ${outlined}`)
+    if ((await s.p.locator('#text-anywhere-layer .text-anywhere-selection-rectangle').count()) !== 1) throw new Error(`the box at ${to} is not on the page`)
+    await s.shoot('5-select', { before: true })
+  }
   await s.p.mouse.up()
   if ((await s.p.locator('#text-anywhere-layer .text-anywhere-selected').count()) !== 3) throw new Error('the drag did not select the three notes')
-  const [[x1, y1], [x2, y2]] = [s.at(FROM), s.at(TO)]
-  await addSelectionRectangle(s.p, { x: x1, y: y1, width: x2 - x1, height: y2 - y1 })
-  await s.p.mouse.move(0, 0)
-  await s.shoot('5-select', { before: true })
   await s.p.click(`.controls-input button[data-key="${BLUE}"]`)
   const stored = await saved(s.p)
   if (!stored.every((item) => item.color === BLUE)) throw new Error(`the notes were not recolored: ${JSON.stringify(stored)}`)
@@ -291,6 +299,11 @@ const SETTINGS_DIALOG = '#text-anywhere-dialog'
   await s.p.mouse.click(...s.at([0.35, 10.9]))
   await s.typeLines(['A=B+5', 'A+B=11', '2B+5=11', 'B=3, A=8'])
   const handle = s.p.locator('#text-anywhere-layer .text-anywhere-resize').last()
+  const ringHandle = async () => {
+    await s.p.evaluate((marker) => document.querySelectorAll(`.${marker}`).forEach((el) => el.remove()), MARKER)
+    const at = await handle.boundingBox()
+    await addRing(s.p, [at.x + at.width / 2, at.y + at.height / 2], 30)
+  }
   const open = s.p.locator('#text-anywhere-layer .text-anywhere-textbox')
   // Make the box exactly two lines tall, so the scrolled text ends on a whole line and not in the middle of one.
   const { lineHeight, padding, clientHeight } = await open.evaluate((el) => {
@@ -301,8 +314,14 @@ const SETTINGS_DIALOG = '#text-anywhere-dialog'
   const WIDEN = 40
   const grow = 2 * lineHeight + padding - clientHeight
   const grip = await handle.boundingBox()
+  // The first picture is the note at its full height, the handle ringed; the second is the handle dragged partway; the third, below, is the note at two lines, scrolled.
+  await ringHandle()
+  await s.shoot('6-long', { before: true })
   await s.p.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
   await s.p.mouse.down()
+  await s.p.mouse.move(grip.x + grip.width / 2 + WIDEN / 2, grip.y + grip.height / 2 + grow / 2, { steps: DRAG_STEPS })
+  await ringHandle()
+  await s.shoot('6-long', { before: true })
   await s.p.mouse.move(grip.x + grip.width / 2 + WIDEN, grip.y + grip.height / 2 + grow, { steps: DRAG_STEPS })
   await s.p.mouse.up()
   const scrolls = await open.evaluate((el) => el.classList.contains('text-anywhere-scrolls'))
@@ -311,8 +330,7 @@ const SETTINGS_DIALOG = '#text-anywhere-dialog'
   await s.p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   // Scroll to the end, so the text has moved, the scroll bar's thumb is off the top and no part of a further line shows under the box.
   await s.p.mouse.wheel(0, 10 * lineHeight)
-  const end = await handle.boundingBox()
-  await addRing(s.p, [end.x + end.width / 2, end.y + end.height / 2], 30)
+  await ringHandle()
   await s.shoot('6-long')
 }
 
