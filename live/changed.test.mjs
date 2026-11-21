@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { changedPaths, liveFilesIn, plan, referencesOf, selectLiveFiles } from './changed.mjs'
+import { changedPaths, liveFilesIn, plan, reachOf, referencesOf, selectLiveFiles } from './changed.mjs'
 
 describe('referencesOf', () => {
   it('reads every relative path written as a string: import, require, createRequire and new URL alike', () => {
@@ -16,6 +16,34 @@ describe('referencesOf', () => {
       "const bare = 'node:fs'"
     ].join('\n')
     assert.deepEqual(referencesOf(source), ['./a.mjs', '../../b.user.js', './puzzle-url.txt'])
+  })
+})
+
+describe('reachOf', () => {
+  const files = {
+    'live/a.live.mjs': "import { x } from './lib/x.mjs'\nconst s = require('../b.user.js')\nnew URL('./data.txt', import.meta.url)",
+    'live/lib/x.mjs': "import { y } from '../../deep/y.js'",
+    'deep/y.js': "import './z.mjs'",
+    'deep/z.mjs': '',
+    'b.user.js': "const not = './a-string-in-the-script.mjs'",
+    'live/data.txt': "'./not-read.mjs'",
+    'live/loop.live.mjs': "import './loop.live.mjs'"
+  }
+  const read = (path) => files[path] ?? null
+  const reach = reachOf(['live/a.live.mjs', 'live/loop.live.mjs'], read)
+
+  it('follows a reference through every file it reaches, however deep', () => {
+    assert.deepEqual([...reach.get('live/a.live.mjs')].sort(), ['b.user.js', 'deep/y.js', 'deep/z.mjs', 'live/a.live.mjs', 'live/data.txt', 'live/lib/x.mjs'])
+  })
+
+  it('reads no further into a script or a data file, and ends on a loop', () => {
+    assert.ok(![...reach.get('live/a.live.mjs')].includes('live/a-string-in-the-script.mjs'))
+    assert.ok(![...reach.get('live/a.live.mjs')].includes('live/not-read.mjs'))
+    assert.deepEqual([...reach.get('live/loop.live.mjs')], ['live/loop.live.mjs'])
+  })
+
+  it('leaves out a reference to a file that is not there', () => {
+    assert.ok(!reachOf(['live/q.live.mjs'], (path) => path === 'live/q.live.mjs' ? "import './gone.mjs'" : null).get('live/q.live.mjs').has('live/gone.mjs'))
   })
 })
 
