@@ -122,7 +122,12 @@ const libNamesOnDisk = () => fs.readdirSync(LIB_DIR).filter((f) => f.endsWith('.
 // docs/research/tampermonkey-in-playwright.md § Driving an update check has what is known of how).
 // It is no script of its own: scriptFiles() leaves it out, so this file never syncs it.
 const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
-const scriptFiles = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js') && !(f in HANDOVERS)).sort()
+// Scripts for another site than SudokuPad: published like the others (install link on the homepage, @version raised on a change) but
+// with no Framework, guard, lib blocks or settings dialog, so every loop over SudokuPad's scripts (scriptFiles) leaves them out.
+const OTHER_SITE_SCRIPTS = ['logic-masters-puzzle-preview.user.js']
+const rootScripts = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js') && !(f in HANDOVERS)).sort()
+const scriptFiles = () => rootScripts().filter((f) => !OTHER_SITE_SCRIPTS.includes(f))
+const publishedScriptFiles = () => rootScripts()
 
 // The names of the lib blocks a script carries, in order.
 const libBlockNames = (source) => [...source.matchAll(BLOCK)].map((match) => match[1])
@@ -148,4 +153,4 @@ if (require.main === module) {
   if (failed) process.exit(1)
 }
 
-module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, HANDOVERS, guardId, generatedLine, RUN, libBlockNames, withoutLibBlocks }
+module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, publishedScriptFiles, OTHER_SITE_SCRIPTS, HANDOVERS, guardId, generatedLine, RUN, libBlockNames, withoutLibBlocks }

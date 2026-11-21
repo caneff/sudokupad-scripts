@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { syncText, readLib, scriptFiles, generatedLine, libNamesOnDisk, HANDOVERS, guardId, libBlockNames, withoutLibBlocks } = require('../sync-lib.js')
+const { syncText, readLib, scriptFiles, publishedScriptFiles, OTHER_SITE_SCRIPTS, generatedLine, libNamesOnDisk, HANDOVERS, guardId, libBlockNames, withoutLibBlocks } = require('../sync-lib.js')
 
 const syncPlain = (source, readModule) => syncText(source, readModule, [])
 const modules = { plain: 'const a = 1\n\nconst b = 2\n' }
@@ -149,10 +149,12 @@ test('node sync-lib.js exits 1 on a marker problem, names it, and still rewrites
   assert.deepEqual(run.files, { 'a.user.js': script(current, '1.2.4'), 'b.user.js': broken })
 })
 
-test('scriptFiles lists every *.user.js at the root but a handover, and each handover names a script', () => {
+test('scriptFiles lists every *.user.js at the root but a handover and a script of another site, and each handover names a script', () => {
   const root = fs.readdirSync(path.join(__dirname, '..')).filter((f) => f.endsWith('.user.js')).sort()
   for (const old of Object.keys(HANDOVERS)) assert.ok(root.includes(old), `${old} is a handover and is missing`)
-  assert.deepEqual(scriptFiles(), root.filter((f) => !(f in HANDOVERS)))
+  for (const other of OTHER_SITE_SCRIPTS) assert.ok(root.includes(other), `${other} is a script of another site and is missing`)
+  assert.deepEqual(publishedScriptFiles(), root.filter((f) => !(f in HANDOVERS)))
+  assert.deepEqual(scriptFiles(), publishedScriptFiles().filter((f) => !OTHER_SITE_SCRIPTS.includes(f)))
   assert.ok(Object.values(HANDOVERS).every((file) => scriptFiles().includes(file)), 'every handover names a script')
 })
 

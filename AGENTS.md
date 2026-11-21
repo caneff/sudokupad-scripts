@@ -17,6 +17,9 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   it is Text Anywhere's handover, frozen at 0.45.1 (`GLOSSARY.md`), and a change to Text Anywhere never touches it; `test/text-anywhere.test.js` fails when its bytes change (Chris, 2026-11-10).
 - **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live` every night at 06:17 UTC on GitHub Actions (and by hand through
   `workflow_dispatch`); `live/README.md` § The daily watch has the rule.
+- **Logic Masters Puzzle Preview** (`logic-masters-puzzle-preview.user.js`): runs on logic-masters.de, not SudokuPad. Its first version is Juggler's, published here with their permission
+  (Chris, 2026-11-21). `OTHER_SITE_SCRIPTS` in `sync-lib.js` keeps it out of every loop over SudokuPad's scripts (`scriptFiles()`), while the homepage and version checks still
+  cover it (`publishedScriptFiles()`). No test, check or screenshot requests logic-masters.de, which answered a few requests with a 503: `live/logic-masters-puzzle-preview/` serves synthetic pages.
 - **`GLOSSARY.md`**: the vocabulary.
 - **A change to what a script shows** (its panel, buttons, dialog or what it draws) updates that script's text in `site/` and retakes the site pictures that
   show it, with their scripts (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).

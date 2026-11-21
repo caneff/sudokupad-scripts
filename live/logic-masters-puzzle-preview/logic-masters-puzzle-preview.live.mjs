@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { launchPersistent } from '../session.mjs'
 
-const SCRIPT = readFileSync(new URL('../../third-party/logic-masters-puzzle-preview.user.js', import.meta.url), 'utf8')
+const SCRIPT = readFileSync(new URL('../../logic-masters-puzzle-preview.user.js', import.meta.url), 'utf8')
 const HOST = 'logic-masters.de'
 const PORTAL = `https://${HOST}/Raetselportal/`
 const LINK_COUNT = 40

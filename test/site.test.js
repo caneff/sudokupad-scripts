@@ -6,7 +6,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const { RAW, pictureTags, tagOf } = require('../tag-pictures.js')
-const { scriptFiles } = require('../sync-lib.js')
+const { scriptFiles, publishedScriptFiles } = require('../sync-lib.js')
 const { headerField } = require('./header-version.js')
 const SCRIPT_SUFFIX = '.user.js'
 const ROOT = path.join(__dirname, '..')
@@ -58,7 +58,7 @@ test('every picture the site loads is in a script folder of docs/research/ or in
 // A handover (draw-tool.user.js) is an old address kept so installed copies move on, and is never linked.
 test('every script in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
-  for (const s of scriptFiles()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const s of publishedScriptFiles()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
 })
 
 for (const name of PAGES) {
@@ -260,9 +260,9 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
 
 // One row per script, in this order, each script's file named for its shown name; Details only where a details page exists.
 const ROWS = [
-  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined]
+  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined], ['Logic Masters Puzzle Preview', undefined]
 ]
-const rowsOf = html => html.split('<section class="row">').slice(1)
+const rowsOf = html => html.split(/<section class="row(?: row-plain)?">/).slice(1)
 
 test(`${HOME} has one row per script in order, each with an Install button beside its Details link where there is one`, () => {
   const rows = rowsOf(read(HOME))
@@ -286,10 +286,19 @@ test('the Install button is styled once, in style.css, and shared by every page'
 })
 
 test(`${HOME}'s other rows show one picture and no pager`, () => {
-  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Anywhere</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>'))) {
+  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Anywhere</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>') && !r.includes('<h2>Logic Masters Puzzle Preview</h2>'))) {
     assert.equal(imgs(row).length, 1)
     assert.doesNotMatch(row, /slide-caption|slideshow/)
   }
+})
+
+test(`${HOME}'s Logic Masters Puzzle Preview row credits Juggler, lists what this version adds and takes no picture`, () => {
+  const row = rowsOf(read(HOME)).find(r => r.includes('<h2>Logic Masters Puzzle Preview</h2>'))
+  assert.ok(row, `site/${HOME} has no Logic Masters Puzzle Preview row`)
+  const text = plain(row)
+  assert.match(text, /first version was written by Juggler/)
+  for (const added of [/up to 600 pictures/, /on or near the screen/, /one request at a time, 500 ms apart/, /503 or 429\) nothing more is asked for 5 minutes/]) assert.match(text, added)
+  assert.equal(imgs(row).length, 0)
 })
 
 // Each slideshow's pictures, alt text and captions live once, in site/slideshows.json; `node sync-slides.js` writes them into the pages.

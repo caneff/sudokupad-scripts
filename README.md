@@ -20,6 +20,7 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 | Dark Page | Makes the page black around the puzzle, or a color you pick. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |
 | Auto Rules Resizer | Fits the rules pane to the screen in landscape: the largest text that fits, widening the pane only when the rules need it. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js) |
 | UI Tweaks | Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches to letters, hide the Select button, and wrap the bottom row after five buttons. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js) |
+| Logic Masters Puzzle Preview | Shows each puzzle's picture beside its link on the Logic Masters puzzle portal, with the pictures and puzzle pages it looked up kept in your browser. The first version is by Juggler. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js) |
 
 ## Settings
 
