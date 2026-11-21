@@ -4,6 +4,7 @@
 // A run is `{ caught, seconds, reached? }` as in `plants-stats.mjs`, `reached` whether the mutated code ran in a hunt that caught nothing. An outcome is
 // `{ mutant: { file, family }, verdict, runs }`, the verdict being one of `VERDICTS`.
 import { layout, medianSeconds, secondsText } from './plants-stats.mjs'
+import { crashSignals } from './signals.mjs'
 
 const VERDICTS = ['caught', 'missed', 'unreachable', 'load-error']
 
@@ -30,4 +31,24 @@ export function mutantTables (outcomes, { files, families, budget }) {
     const rows = [...families.filter((f) => own.some((o) => o.mutant.family === f)).map((f) => row(f, own.filter((o) => o.mutant.family === f), budget)), row('total', own, budget)]
     return [file, ...layout(['family', 'mutants', ...VERDICTS, 'seeds caught', 'median'], rows), '']
   })
+}
+
+// Why a mutant's page does not load, or null when it does: the first crash signal of its page, or the message of the error that stopped it opening. `open` opens the page with the mutant in
+// place, `openUnmutated` the same page without it. A failure the unmutated scripts share is the harness's own, so it throws and the table never counts it as a mutant caught at load.
+export async function mutantLoadProblem (open, openUnmutated) {
+  let target
+  try {
+    target = await open()
+    const signals = crashSignals(await target.snapshot())
+    return signals.length ? signals[0] : null
+  } catch (error) {
+    try {
+      await (await openUnmutated()).close()
+    } catch (control) {
+      throw new Error(`harness failure: the unmutated scripts do not load either (${control.message}); the mutant's own error was: ${error.message}`, { cause: error })
+    }
+    return error.message
+  } finally {
+    await target?.close()
+  }
 }

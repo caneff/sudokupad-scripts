@@ -16,7 +16,7 @@ import { settingsScript } from '../scripts.mjs'
 import { COLOR_PICKERS, fuzz, fuzzScripted, openTarget } from './fuzz.mjs'
 import { readPageState } from './page-state.mjs'
 import { plantById } from './plants.mjs'
-import { FUZZ_PUZZLES, puzzleByName } from './puzzle-set.mjs'
+import { FUZZ_PUZZLES, puzzleByName, targetAt } from './puzzle-set.mjs'
 import { PICKER_BOX, SELECTED, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 
 const run = promisify(execFile)
@@ -56,7 +56,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
   it('a wide note over a button is the one dragged off it, not a narrow note within its width (#930)', async () => {
     // Seed 729's shrink after #930: the wide rich note covers a number pad button, and the small note 15 lay within the note's width of it.
     const puzzle = puzzleByName('6x6')
-    const cell = (row, col) => puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+    const cell = (row, col) => targetAt(puzzle, row, col)
     const steps = [['size key', [[0, cell(1, 2)], false, 0, 1]], ['rich note', [4, cell(4, 4)]], ['pen line', [cell(1, 2), cell(1, 2), 1]]]
     await fuzzScripted({ browser: browser(), puzzle, steps })
   })
@@ -103,7 +103,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
   it('a note open for typing at a reload is kept (#668): the recorded failing list passes', async () => {
     // note "15" at r1c3, click r1c4, type 1, reload: the note typed in is open when the page reloads, and save-as-you-type brings it back.
     const puzzle = puzzleByName('recorded 9x9')
-    const at = (row, col) => puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+    const at = (row, col) => targetAt(puzzle, row, col)
     await fuzzScripted({ browser: browser(), puzzle, steps: [['place note', [0, at(0, 2)]], ['click cell', at(0, 3)], ['type digit', '1'], ['reload', null]] })
   })
 
@@ -155,11 +155,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
   describe("Text Anywhere's resize, selection, nudge, clear and rich notes (#815)", () => {
     const puzzle = puzzleByName('recorded 9x9')
-    const at = (row, col) => {
-      const i = puzzle.cells.findIndex(([r, c]) => r === row && c === col)
-      assert.notEqual(i, -1, `r${row + 1}c${col + 1} is no cell of the ${puzzle.name} puzzle`)
-      return i
-    }
+    const at = (row, col) => targetAt(puzzle, row, col)
     const NOTE_AT = at(4, 4)
     const NOTE = ['place note', [0, NOTE_AT]]
     const savedTexts = (page) => (page.notesSaved ?? []).filter((item) => item.kind === 'text').map((item) => item.text)
@@ -317,7 +313,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
   describe("Pen Tool Extras' line modes, marks, color editing and presets (#816)", () => {
     const puzzle = puzzleByName('recorded 9x9')
-    const at = (row, col) => puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+    const at = (row, col) => targetAt(puzzle, row, col)
     const saved = (key) => (p) => p.evaluate((k) => Framework.getData(k), key)
     const penStrokes = (p) => p.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen).length)
 
