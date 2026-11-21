@@ -11,6 +11,7 @@ import { EXTRAS_EDITOR } from '../settings.mjs'
 export const SCRIPT_FILE = 'pen-tool-extras.user.js'
 export const script = scriptSource(SCRIPT_FILE)
 export const STYLE = 'style#pen-tool-extras-style'
+export const MARKS_DATA_KEY = 'EdgeMarks_marks'
 
 export const scriptExports = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
 export const { HOLD_TO_EDIT_MS } = scriptExports
