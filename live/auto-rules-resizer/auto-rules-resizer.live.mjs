@@ -1003,7 +1003,7 @@ describe('a portrait window', { concurrency: false }, () => {
     assert.equal((await pane(p)).inlineFont, '')
     await hoverPane(p)
     // Never reaches true: a value that never changes is read for FLOOR_MS, so a bar or corner that shows a moment late is seen.
-    assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), false, 'no font buttons with the pointer on the pane')
+    assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), false, 'no font buttons')
     for (const corner of ['ur', 'dl']) assert.equal(await p.locator(CORNER(corner)).isVisible(), false, `no ${corner} corner`)
   })
 
@@ -1016,7 +1016,7 @@ describe('a portrait window', { concurrency: false }, () => {
     assert.equal(await settle(async () => (await pane(p)).inlineFont, ''), '', 'the fit taken off in portrait')
     assert.equal(await fontPx(p), SUDOKUPAD_FONT_PX)
     await hoverPane(p)
-    assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), false, 'no font buttons in portrait, with the pointer on the pane')
+    assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), false, 'no font buttons in portrait')
   })
 
   it('the page raised no error', () => {

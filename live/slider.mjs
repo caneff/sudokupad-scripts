@@ -25,7 +25,6 @@ export async function slideTo (p, slider, value) {
 // Attack 17, for any script's panel slider.
 // Drags `slider` across its track, presses a tool hotkey mid-drag and releases elsewhere. The drag ends: the new tool stays current, the saved value
 // under `key` is the one the slider shows, and once `returnToTool()` brings the script's tool back the slider answers a click and keeps no focus.
-// `tool()` reads the current tool, `errors` is the page's console errors, `sliders` the selector of the container holding every slider.
 export async function assertSliderDragEndsOnHotkey (p, { slider, key, tool, returnToTool, errors, sliders }) {
   const valueOf = () => p.evaluate((s) => Number(document.querySelector(s).value), slider)
   const before = await valueOf()
