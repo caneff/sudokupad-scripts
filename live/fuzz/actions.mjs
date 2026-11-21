@@ -60,7 +60,7 @@ import { SETTINGS_SCRIPTS } from '../scripts.mjs'
 
 const require = createRequire(import.meta.url)
 const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.js')
-const { BOX_LINES, BOX_PRESETS, CORNERS, NUDGE_REPEAT_MS, SPEED_WINDOW_MS } = require('../../text-anywhere.user.js')
+const { BOX_LINES, BOX_PRESETS, CORNERS, HELD_REPEAT_MS, SPEED_WINDOW_MS } = require('../../text-anywhere.user.js')
 const { scriptFiles } = require('../../sync-lib.js')
 
 const scriptFile = (name) => `${name}.user.js`
@@ -145,7 +145,7 @@ const RESIZE_CORNERS = Object.keys(CORNERS).length
 const RESIZE_REACH_PX = 80
 const WHEEL_DELTAS = [-400, -120, 120, 400, 1200]
 const MAX_NUDGE_TAPS = 4
-// A held arrow key repeats once it has been down NUDGE_REPEAT_MS; this much longer is a few repeats.
+// A held arrow key repeats once it has been down HELD_REPEAT_MS; this much longer is a few repeats.
 const NUDGE_HOLD_EXTRA_MS = 200
 const jsonWords = (text) => JSON.stringify(text).replace(/,/g, ';')
 
@@ -673,7 +673,7 @@ function buildKinds () {
           for (let i = 0; i < taps; i++) await env.page.keyboard.press(ARROW_KEYS[k])
         } else {
           await env.page.keyboard.down(ARROW_KEYS[k])
-          await env.holdFor(NUDGE_REPEAT_MS + NUDGE_HOLD_EXTRA_MS)
+          await env.holdFor(HELD_REPEAT_MS + NUDGE_HOLD_EXTRA_MS)
           await env.page.keyboard.up(ARROW_KEYS[k])
         }
         if (shift) await env.page.keyboard.up('Shift')

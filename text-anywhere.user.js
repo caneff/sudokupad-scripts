@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.48
+// @version      0.46.49
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.48'
+  const VERSION = '0.46.49'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -673,9 +673,6 @@
   const newNoteWidth = (width, gridSize) => gridScaledWidth(width, gridRatio(gridSize))
   // The saved next-note size stays in 9x9 units, so a size taken from a note on this grid is scaled back.
   const nextNoteWidth = (noteWidth, gridSize) => gridScaledWidth(noteWidth, 1 / gridRatio(gridSize))
-  // A held + or - steps the size like a held arrow nudges: after the pause, one step a tick, ramping to this many.
-  const SIZE_HOLD_MAX_STEPS = 4
-  const sizeHoldSteps = (heldMs) => heldRamp(heldMs, 1, SIZE_HOLD_MAX_STEPS)
   // A note steps from its own size, not from the width the panel shows for the first selected note.
   const steppedNote = (item, direction) => ({ ...item, size: textSizeFor(sizeStep(widthFor(item.size), direction)) })
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
@@ -743,6 +740,17 @@
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
   // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
   const onSliderStep = ({ min, max, step }, value) => typeof value === 'number' && value >= min && value <= max && Number.isInteger((value - min) / step)
+  // SudokuPad drops every keydown with `event.repeat` before a tool sees it, so a script times a held key itself: nothing until the pause, then a tick of steps that ramps up.
+  const HELD_REPEAT_MS = 300
+  const HELD_RAMP_MS = 1500
+  const HELD_TICK_MS = 50
+  const HELD_SLIDER_MAX_STEPS = 4
+  // A held key does nothing more until the pause, then `from` a tick, ramping to `to`.
+  function heldRamp (heldMs, from, to) {
+    if (heldMs < HELD_REPEAT_MS) return 0
+    return Math.round(from + (to - from) * Math.min(1, (heldMs - HELD_REPEAT_MS) / HELD_RAMP_MS))
+  }
+  const heldSliderSteps = (heldMs) => heldRamp(heldMs, 1, HELD_SLIDER_MAX_STEPS)
   /* eslint-enable no-unused-vars */
   // </lib:slider-keys>
 
@@ -2250,14 +2258,10 @@
     // The Darker page presets of the settings dialog read SudokuPad's color palette.
     presets: { label: 'color presets', needs: { 'Framework.app.tools.colour': 'object' } }
   }
-  // The script times the repeat itself: SudokuPad's App.handleKeydown drops every keydown with `event.repeat` before any tool sees it.
   const NUDGE_PX = 1
   const NUDGE_SHIFT_PX = 10
   const NUDGE_MAX_PX = 8
   const NUDGE_SHIFT_MAX_PX = 40
-  const NUDGE_REPEAT_MS = 300
-  const NUDGE_RAMP_MS = 1500
-  const NUDGE_TICK_MS = 50
   // Dragging a note pulls it onto the grid and the other notes. On one axis the dragged note's box spans `lo`..`hi` in screen pixels and its selection outline's line
   // lies `reach` past it. The nearest target within SNAP_PX gives the `shift` and the `guide`, where the outline then lies: the grid's `lines` for the outline's line
   // (or a cell's middle for the box's middle), or one of `others`' `{ lo, hi }` boxes for the same edge or middle. A tie goes to the first target found, a cell's.
@@ -2315,11 +2319,6 @@
     const [x, y] = reachablePoint(middle, [box.right - box.left, box.bottom - box.top], room)
     return [x - middle[0], y - middle[1]]
   }
-  // A held key does nothing more until the pause, then `from` a tick, ramping to `to`.
-  function heldRamp (heldMs, from, to) {
-    if (heldMs < NUDGE_REPEAT_MS) return 0
-    return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
-  }
   const nudgeStep = (heldMs, shift) => shift ? heldRamp(heldMs, NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX) : heldRamp(heldMs, NUDGE_PX, NUDGE_MAX_PX)
   // Until Text Anywhere is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
   const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
@@ -2374,7 +2373,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds }
   }
   if (typeof document === 'undefined') return
 
@@ -4131,7 +4130,7 @@
     nudgeSelected(ARROWS[key], shift ? NUDGE_SHIFT_PX : NUDGE_PX)
     if (heldArrows.size === 0) {
       holdStart = Date.now()
-      holdTimer = setInterval(repeatNudge, NUDGE_TICK_MS)
+      holdTimer = setInterval(repeatNudge, HELD_TICK_MS)
     }
     heldArrows.add(key)
   }
@@ -4146,14 +4145,14 @@
   // With nothing selected a hold steps the next note's size.
   function repeatSize () {
     if (textBox || drag || resizing) return stopSizeHold()
-    const steps = sizeHoldSteps(Date.now() - sizeHold.start)
+    const steps = heldSliderSteps(Date.now() - sizeHold.start)
     if (steps > 0) stepSize(sizeHold.direction, steps)
   }
 
   // The hold is the physical key's: releasing Shift before = turns a held + into =.
   function pressSizeKey (code, direction) {
     stepSize(direction)
-    if (!sizeHold) sizeHold = { code, direction, start: Date.now(), timer: setInterval(repeatSize, NUDGE_TICK_MS) }
+    if (!sizeHold) sizeHold = { code, direction, start: Date.now(), timer: setInterval(repeatSize, HELD_TICK_MS) }
   }
 
   function releaseKey (event) {

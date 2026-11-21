@@ -40,9 +40,9 @@ test('every picture of a repo file on every page carries a ?v= tag matching its 
 })
 
 // #342: docs/research/ has one folder per script, and site/ for pictures of a whole page.
-// A script's folder is named for the script, from its @name less the SudokuPad prefix.
-const folderOf = file => fs.readFileSync(path.join(ROOT, file), 'utf8').match(/^\/\/ @name\s+SudokuPad (.+)$/m)[1].toLowerCase().replace(/ /g, '-')
-const RESEARCH_FOLDERS = [...scriptFiles().map(folderOf), 'site']
+// A script's folder is named for the script, from its @name less any SudokuPad prefix (Logic Masters Puzzle Preview has none).
+const folderOf = file => fs.readFileSync(path.join(ROOT, file), 'utf8').match(/^\/\/ @name\s+(?:SudokuPad )?(.+)$/m)[1].toLowerCase().replace(/ /g, '-')
+const RESEARCH_FOLDERS = [...publishedScriptFiles().map(folderOf), 'site']
 
 test('every picture the site loads is in a script folder of docs/research/ or in docs/research/site/, and one named for a script is in its folder', () => {
   for (const name of PAGES) {
@@ -266,19 +266,18 @@ test('the Install button is styled once, in style.css, and shared by every page'
 })
 
 test(`${HOME}'s other rows show one picture and no pager`, () => {
-  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Anywhere</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>') && !r.includes('<h2>Logic Masters Puzzle Preview</h2>'))) {
+  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Anywhere</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>'))) {
     assert.equal(imgs(row).length, 1)
     assert.doesNotMatch(row, /slide-caption|slideshow/)
   }
 })
 
-test(`${HOME}'s Logic Masters Puzzle Preview row credits Juggler, lists what this version adds and takes no picture`, () => {
+test(`${HOME}'s Logic Masters Puzzle Preview row credits Juggler and says it is gentle on the site`, () => {
   const row = rowsOf(read(HOME)).find(r => r.includes('<h2>Logic Masters Puzzle Preview</h2>'))
   assert.ok(row, `site/${HOME} has no Logic Masters Puzzle Preview row`)
   const text = plain(row)
   assert.match(text, /first version was written by Juggler/)
-  for (const added of [/up to 600 pictures/, /on or near the screen/, /one request at a time, 500 ms apart/, /503 or 429\) nothing more is asked for 5 minutes/]) assert.match(text, added)
-  assert.equal(imgs(row).length, 0)
+  assert.match(text, /gentle on the server/)
 })
 
 test(`${HOME} splits its rows into a SudokuPad group (the six SudokuPad scripts) and an Other group (Logic Masters Puzzle Preview)`, () => {
@@ -368,7 +367,7 @@ const DETAIL_CONTENT = [
       'Customizable pen colors Hold a pen color button, or pick a preset in the settings.',
       'Dashed and arrow lines Two more pages of pens.',
       'Digit keys pick the pen Press 1 to 9 to pick that pen color, on whichever page of pens is showing.',
-      'Plus and minus keys set the thickness Press + or - to make lines and marks one step thicker or thinner, as the Thickness slider does.',
+      'Plus and minus keys set the thickness Press + or - to make lines and marks one step thicker or thinner, as the Thickness slider does. Holding one keeps going, faster the longer you hold.',
       'Marks on cell edges Click an edge for an X, a circle or an arrow.',
       'Marks on grid corners Click near a corner for an X or a circle.',
       'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
