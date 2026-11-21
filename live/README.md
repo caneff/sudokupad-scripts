@@ -61,6 +61,30 @@ Three checks load a script another way, each because no time `live/session.mjs` 
 - Its `a page with no puzzle` case adds it to a blank page that never loads SudokuPad.
 - `npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) lets a real Tampermonkey inject each script.
 
+## Looking at SudokuPad
+
+`npm run look -- <flags>` (`live/look.mjs`) is for a one-off look that would otherwise be a scratch Playwright script: it opens the
+recorded SudokuPad as a suite does (`openWith`: the scripts are injected after Start Puzzle), runs each chosen script's `ready` from
+`live/scripts.mjs` (the page a suite tests: Pen Tool Extras turns the pen tool on, UI Tweaks the letter tool, Auto Rules Resizer gives the puzzle
+sample rules by "Tester"), selects a tool, then runs a snippet and/or takes a screenshot. It is not a check: `npm test` and `land.testcmd` never run it.
+
+| Flag | Meaning |
+| --- | --- |
+| `--scripts a,b` | scripts to install, by file name with or without `.user.js`; default all |
+| `--setting KEY=VALUE` | a saved setting planted before the page loads (repeatable); `KEY` is the script's own key (`PenColor_thickness`), `VALUE` the text it is saved as |
+| `--tool NAME` | the tool to select first, by its button (`#control-NAME`); default `normal` |
+| `--eval FILE` | a file holding a function body, run in the page; `return` the result, which prints as JSON (`null` when nothing is returned) |
+| `--screenshot PATH` | a picture of the page; with `--selector CSS`, of the first element it matches |
+
+At least one of `--eval` and `--screenshot` is required. Every skip line a script logs and every uncaught page error prints on stderr, one
+per line, as `skip or page error: ...`, also when the run fails. `--tool pen` needs `pen-tool-extras`. Relative paths are read from the directory you run it in. It replays the recording (`## The recording`) and never touches the network, even past the
+recording's day of age; with no recording it stops and says to run `npm run test:live:files -- live/startup.live.mjs`, which records one.
+
+```
+npm run look -- --scripts pen-tool-extras,text-anywhere --tool pen --screenshot out/pen.png
+npm run look -- --scripts dark-page --eval probe.js
+```
+
 ## Errors and skip lines
 
 `openWith`, `addPage` and `newPage` (`live/page.mjs`) collect into the returned `errors` every uncaught page error and every skip line a script logs

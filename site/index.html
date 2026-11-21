@@ -25,6 +25,7 @@
   .row-text p { margin-bottom: .75rem; }
   .actions { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sticker { display: inline-block; margin: calc(var(--ring-gap) + var(--card-ring-width)) 0 0 .5rem; padding: .5rem 1.1rem; background: #fff; border: 6px solid var(--mint); border-radius: 18px; box-shadow: 0 0 0 var(--warn-ring-width) #fff, 0 4px 10px rgba(0,0,0,.12); transform: rotate(1.5deg); font-weight: 600; }
   footer { margin-top: calc(var(--ring-gap) + var(--card-ring-width)); font-size: .95rem; }
   @media (max-width: 44rem) { .row { grid-template-columns: 1fr; gap: .9rem; } }
 </style>
@@ -192,7 +193,7 @@
     </div>
     <div class="row-text">
       <h2>Auto Rules Resizer</h2>
-      <p>Fits the rules to your screen in landscape: the pane takes all the height the page has to spare, widens only as far as long rules need, and only then does the text shrink, to 70% of SudokuPad's size at the least. Short rules get larger text, up to 150%. A puzzle's text size and pane size, if you change them with f+, f- or the drag corners, are kept per puzzle: you get them back when you return to it, and every other puzzle starts at the fitted default. Reset puzzle size in the Auto Rules Resizer settings clears the current puzzle's. The settings' Max auto width and Max auto height cap the automatic fit, down to 240 px wide and 112 px high, and a value below that is refused with a message. Restore defaults there clears both limits when you press Save. Thanks to Nell Gwynn, whose resizing scripts this grew from.</p>
+      <p>Fits the rules to your screen in landscape: the pane takes all the height the page has to spare, widens only as far as long rules need, and only then does the text shrink, to 70% of SudokuPad's size at the least. Short rules get larger text, up to 150%. A puzzle's text size and pane size, if you change them with f+, f- or the drag corners, are kept per puzzle: you get them back when you return to it, and every other puzzle starts at the fitted default. Reset puzzle size in the Auto Rules Resizer settings clears the current puzzle's. The settings' Max auto width and Max auto height cap the automatic fit, down to 240 px wide and 112 px high, and a value below that is refused with a message. Restore defaults there clears both limits when you press Save. Thanks to Nell Gwyn, whose SudokuPad-ResizeRules this grew from.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js">Install<span class="visually-hidden"> Auto Rules Resizer</span></a></p>
     </div>
   </section>
@@ -224,6 +225,7 @@
     </div>
   </section>
   </div>
+  <p class="sticker">Questions, bugs or suggestions? Message me on Discord: <a href="https://discord.com/users/184770560356646923">@ChinStrap</a></p>
   <footer><a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
   <script src="slides.js"></script>
 </body>

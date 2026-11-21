@@ -66,7 +66,7 @@ If a SudokuPad update changes what the Tab option, the saved options or the sett
 
 ### Auto Rules Resizer
 
-Ported from the rules-pane fit of twitch-rules-scroller's stream script, which grew from Nell Gwynn's resizing scripts.
+Ported from the rules-pane fit of twitch-rules-scroller's stream script, which grew from Nell Gwyn's SudokuPad-ResizeRules.
 
 - In landscape, the rules pane takes all the height the page has to spare (the controls column is lifted so it stays on the page, and keeps SudokuPad's scale) and keeps SudokuPad's width. Only when the rules would still scroll at SudokuPad's own font size does it widen, as far as it takes to stop the scroll at that size and no further than the window's right edge, less 8 px. Only when they would still scroll at the widest does the font shrink, to 70% of SudokuPad's size at the least; below that the rules scroll. Rules that fit take the largest font at which they still do, up to 150% of SudokuPad's size. It refits on a window resize and on each SudokuPad layout.
 - In portrait it leaves SudokuPad as it is.

@@ -1283,6 +1283,27 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
 
   // Saved in a larger window: the drag runs past the board here, and the automatic font of short rules is at the 150% cap, so neither
   // the drag nor the font offset applies in full.
+  // Saved as in the test below, so the fit applies less than was saved; a hidden pane has no width, so the next fit bails, and the button's
+  // own click handler still runs. Before #980 the step saved the last fit's smaller sizing over the saved one.
+  it('an f+ while the fit bails saves nothing over the saved sizing', async () => {
+    const saved = { v: 0, data: { nudgePx: 2, box: { w: 900, h: 0, x: -900, y: 0 } } }
+    const opened = await startedFont(seedSizing(saved), RULES)
+    try {
+      await stable(() => pane(opened.p))
+      await hoverPane(opened.p)
+      await opened.p.locator(FONT_BAR).waitFor({ state: 'visible' })
+      await opened.p.evaluate((bar) => {
+        const plus = [...document.querySelectorAll(`${bar} button`)].find((button) => button.textContent.includes('f+'))
+        document.querySelector('.puzzle-rules').style.display = 'none'
+        plus.click()
+      }, FONT_BAR)
+      assert.deepEqual(await savedSizing(opened.p), saved)
+      assert.deepEqual(opened.errors, [])
+    } finally {
+      await opened.context.close()
+    }
+  })
+
   it('a fit that applies less of a saved sizing than was saved leaves the saved sizing as it was', async () => {
     const saved = { v: 0, data: { nudgePx: 2, box: { w: 900, h: 0, x: -900, y: 0 } } }
     const opened = await startedFont(seedSizing(saved), RULES)

@@ -29,7 +29,7 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   const { renderEditor, renderProfiles, renderMenu, setSync, setActive, setDigitActive, copyProfile, renameProfile, setUseDigitColors } = byDigit
 
   // Top row: the Mode pulldown offers four modes, or Cell and Off without digit colors.
-  const modes = (html) => [...html.match(/<select data-role="mode-draft">(.*?)<\/select>/s)[1].matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1])
+  const modes = (html) => [...html.match(/<select class="cbd-color-choice" data-role="mode-draft">(.*?)<\/select>/s)[1].matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1])
   assert.deepEqual(modes(byDigit.renderPulldowns(STATE, 'both')), ['cell', 'digit', 'both', 'off'])
   assert.deepEqual(modes(byDigit.renderPulldowns(setUseDigitColors(STATE, false), 'cell')), ['cell', 'off'])
   const css = byDigit.STYLE_CSS.replace(/\s+/g, ' ')
