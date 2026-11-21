@@ -735,13 +735,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await leaveEditMode()
     })
 
-    it('left Alt held with the pen current is edit mode, and releasing it ends it', async () => {
+    // docs/research/sudokupad-pen-tool.md § Holding a modifier leaves the pen tool: with the letter tool off, Alt switches to `corner`.
+    it('left Alt held with the pen current opens no color pickers and leaves the tool to SudokuPad, which switches it and back on release', async () => {
       await openPenTool(p)
       await p.keyboard.down('Alt')
-      assert.equal(await settle(pickerCount, 9), 9)
-      await p.keyboard.up('Alt')
-      assert.equal(await settle(pickerCount, 0), 0)
+      assert.equal(await settle(() => p.evaluate(() => Framework.app.tool), 'corner'), 'corner')
+      assert.equal(await pickerCount(), 0)
       assert.equal(await editModeOn(), 0)
+      await p.keyboard.up('Alt')
+      assert.equal(await settle(() => p.evaluate(() => Framework.app.tool), 'pen'), 'pen')
+      assert.equal(await pickerCount(), 0)
     })
 
     it('turning the pen page ends edit mode', async () => {
