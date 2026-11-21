@@ -269,9 +269,17 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
   })
 
   it('a note dragged to 2 px from an older version\'s stroke and shape edges is not pulled to them: they are no targets', async () => {
-    const DX = 40
-    const { x } = await noteBox('15')
+    const { x, width } = await noteBox('15')
     const [x0, , size] = await cellCentre(p, 0, 0)
+    // A drag of about 40 px after which none of the outline's left, middle and right lines is within 6 px of a cell line or a cell's middle, so those cannot pull the note
+    // and a guide could only come from the older items.
+    const [left, middle, right] = [x - OUTLINE_MIDDLE_PX, x + width / 2, x + width + OUTLINE_MIDDLE_PX]
+    const clearOfCells = (dx) => [left, middle, right].every((line) => {
+      const into = (line + dx - (x0 - size / 2)) % (size / 2)
+      return Math.min(into, size / 2 - into) > 6
+    })
+    const DX = [40, 41, 39, 42, 38, 43, 37, 44, 36, 45, 35, 46, 34, 47, 33, 48, 32, 49, 31, 50, 30].find(clearOfCells)
+    assert.notEqual(DX, undefined, 'a drag of 30 to 50 px clear of every cell line exists')
     // Where the note's left edge would land with no pull, in board units (64 to a cell); each older item's left edge lies 2 px past it, on the rows the note crosses.
     const edge = (x + DX + 2 - (x0 - size / 2)) * 64 / size
     const stroke = { ...OLD_STROKE, points: [[edge, 100], [edge + 200, 200], [edge + 400, 100]] }
