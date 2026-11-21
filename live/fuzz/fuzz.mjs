@@ -107,13 +107,17 @@ async function clickIn (p, selector) {
 // What a player does when a Text Anywhere note (or its handle) covers a button: drags the note off, onto the board's middle or, for a note that would still cover the button there, to the nearest place that clears it (`note-drop.mjs`).
 const CLEAR_TRIES = 4
 const LAYER = '#text-anywhere-layer'
-const COVERED_BUTTON_NOTE = ([layer, notes]) => {
+// Fractions of a button's box: its centre, and where `buttonPoint` presses (the Color by Digit hold, clear of the arrow).
+const PRESS_POINTS = [[0.5, 0.5], [0.3, 0.6]]
+const COVERED_BUTTON_NOTE = ([layer, notes, pressPoints]) => {
   for (const button of document.querySelectorAll('button, [id^="control-"]')) {
     const box = button.getBoundingClientRect()
     if (box.width === 0 || box.height === 0) continue
-    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2]
-    const top = document.elementFromPoint(x, y)
-    if (!top || top === button || button.contains(top) || !top.closest(layer)) continue
+    // The points an action presses on a button: its centre, and the Color by Digit hold's (`buttonPoint`), which a note over it only takes (#1015).
+    const [x, y, top] = pressPoints.map(([fx, fy]) => [box.x + box.width * fx, box.y + box.height * fy])
+      .map(([px, py]) => [px, py, document.elementFromPoint(px, py)])
+      .find(([, , hit]) => hit && hit !== button && !button.contains(hit) && hit.closest(layer)) ?? []
+    if (!top) continue
     // A handle sits on its note's corner, so the note is the one whose box, grown by the handle's own size, holds the point.
     const reach = top.closest(notes) ? 0 : top.getBoundingClientRect().width
     // A note's own element is that note: the grown box below would match any note within its width of the button, a wide one's included.
@@ -217,7 +221,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
   const windowSize = () => p.evaluate(() => [window.innerWidth, window.innerHeight])
   const clearControls = async () => {
     for (let i = 0; i <= CLEAR_TRIES; i++) {
-      const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS])
+      const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS, PRESS_POINTS])
       if (!covered) return i > 0
       if (!covered.point) throw new Error(`${covered.button} is covered by a Text Anywhere element that belongs to no note`)
       if (i === CLEAR_TRIES) throw new Error(`${covered.button} is still covered by a note after ${CLEAR_TRIES} drags off it`)
