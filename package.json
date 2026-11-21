@@ -2,9 +2,9 @@
   "name": "sudokupad-scripts",
   "private": true,
   "scripts": {
-    "test": "node --test \"test/**/*.test.*\" \"lib/**/*.test.js\" \"live/**/*.test.mjs\"",
+    "test": "node node-test.js \"test/**/*.test.*\" \"lib/**/*.test.js\" \"live/**/*.test.mjs\"",
     "test:live": "npm run test:live:files -- \"live/**/*.live.mjs\"",
-    "test:live:files": "node --test --test-concurrency=4 --test-timeout=1200000",
+    "test:live:files": "node node-test.js --test-timeout=1200000",
     "test:fuzz": "node live/fuzz/run.mjs",
     "fuzz:plants": "node live/fuzz/plants-run.mjs",
     "fuzz:mutants": "node live/fuzz/mutants-run.mjs",

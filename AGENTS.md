@@ -76,6 +76,8 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run test:live` (every `live/**/*.live.mjs`)
   covers them on sudokupad.app in headless Chromium, with the script injected after Start Puzzle.
 - Before you write or debug a live test: read `live/README.md`.
+- **Concurrency**: `npm test` and `npm run test:live:files` (so `npm run test:live` too) run at most 4 test files at once (`node-test.js`, #1090), not one per core.
+  `TESTS_JOBS=<k>` sets the width instead; a worker sets it only after recording the parallel job (`implement/SKILL.md` § Control). A value that is not a whole number of 1 or more stops the run with exit 2.
 - `npm run test:live` needs a Playwright Chromium (`npx playwright install chromium`), so it stays out of `npm test` and
   `land.testcmd`.
 - Run it when a change touches a `Framework` call, rendering or undo.
