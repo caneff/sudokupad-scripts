@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.46
+// @version      1.32.48
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.46'
+  const VERSION = '1.32.48'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -67,7 +67,7 @@
   // <lib:settings-table>
   // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  // A script that copies in store as well has a second `global` naming isPlainObject, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
@@ -85,7 +85,6 @@
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
-  // Every row as `store` holds it, by name.
   const readTable = (rows, store) => readByField(rows, store, 'name')
 
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
@@ -93,7 +92,6 @@
 
   const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
-  // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
   // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
@@ -586,10 +584,8 @@
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
-  // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
-  // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
-  // put back after them; the first throw then goes on. The stored values are held by reference, so a script's save must replace a value
-  // and never edit one in place.
+  // Every key is written back even when one throws, and only the first throw goes on; the rest are dropped. The stored values are
+  // held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
     const putMirrorBack = holdMirror()
@@ -608,7 +604,6 @@
     }
   }
 
-  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   function writeOrRestore (snapshot, write) {
@@ -925,7 +920,6 @@
     marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot'], doNothing, {}, { normalize: normalizeMarkSettings, legacyNames: Object.values(OLD_MARK_NAMES) })
   }
   const SETTING_NAMES = Object.keys(SETTING_TABLE)
-  // The table's rows are in the lib's shape, each named by its place here, so `SETTINGS` is the one table.
   const SETTINGS = Object.fromEntries(SETTING_NAMES.map((name) => [name, { name, ...SETTING_TABLE[name] }]))
   const SETTING_ROWS = Object.values(SETTINGS)
 
@@ -1100,7 +1094,7 @@
   }
 
   // 2. Pen colors: the saved set, derived colors and edit mode
-  // Keys saved by the scripts this one replaced, kept so their saved data still reads.
+  // The saved pen colors' key, from a script this one replaced, kept so its saved data still reads.
   const COLORS_KEY = 'PenColor_colors'
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
@@ -1219,8 +1213,6 @@
   // </lib:palette>
 
   const COLOR_TOOL_TIMEOUT_MS = 10000
-  // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
-  // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
   async function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
     const deadline = Date.now() + timeoutMs
     for (let value = check(); ; value = check()) {
@@ -1282,7 +1274,6 @@
 
   const SAVED_HEX = /^#[0-9a-f]{6}$/i
 
-  // A color read back from storage: `#` and six hex digits in any case, lowercased; anything else is undefined, and the caller picks its own fallback.
   const savedHex = (value) => typeof value === 'string' && SAVED_HEX.test(value) ? value.toLowerCase() : undefined
 
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
@@ -2817,7 +2808,7 @@
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${SUDOKUPAD_PURPLE};`
 
-  // A slider row of `panelCss`'s `sliderRow` class: the range input, or an empty placeholder when hidden. Neither input takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
+  // The slider is kept out of the tab order (`tabindex="-1"`): a drag hands the focus back to the page.
   function sliderRowMarkup (sliderRow, shown, { id, label, range, value }) {
     return shown
       ? `<div class="${sliderRow}" title="${label}"><input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
@@ -3242,9 +3233,8 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       draw()
       return Boolean(picked)
     }
-    // SudokuPad's own colors when page 1 cannot be read.
     const restoreDefaults = () => {
-      // The sliders and boxes are drafts like the colors: Cancel leaves what is in force. The mark boxes keep their draft: Restore defaults has never reset the edge and corner cycles.
+      // The sliders and boxes are drafts like the colors: Cancel leaves what is in force. Restore defaults leaves the mark boxes (the edge, corner and cell cycles) as they are, and a live test holds it there.
       draft = { ...settingDefaults(), marks: draft.marks }
       if (!pickPreset(availablePresets()[0])) pickPreset(SUDOKUPAD_PRESET)
     }
@@ -3355,7 +3345,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     // The install save, once. Off (no Framework.setData) there is nothing to save with.
     if (steps.colorSave.off) return
     if (colorsAtStart.save) return saveColors(colorsAtStart.save)
-    // Page 1 darkened, once the color tool holds a palette.
     let tool
     try {
       tool = await waitForColorTool()

@@ -1,4 +1,4 @@
-// #597, attacks 19-33 of #590. Attack 34 waits on #584.
+// #597, attacks 19-33 of #590. Attack 34 (#584) is checked in text-anywhere-open-drag.live.mjs.
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'

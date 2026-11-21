@@ -13,7 +13,7 @@ const {
   SUDOKUPAD_PEN_COLORS,
   readPenColors, presetColorSet, startupPenColors, PRESET_LABELS,
   buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
+  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
   clickedMarks, marksAtPoint, holdsMark, DOT_FILL_CSS,
@@ -2088,12 +2088,10 @@ test('without a pen tool, every step that needs it is reported under the first i
   ]))
 })
 
-// The startup guard: a page with no Framework is not SudokuPad and stays silent; a Framework without getApp holds every install step off, which the probe reports.
 function loadWithFramework (framework) {
   return startScript('../pen-tool-extras.user.js', { Framework: framework }).warnings
 }
 
-// Runs `fn` on a page with a document and a window that take every call the startup makes and find none of SudokuPad's own elements.
 function withPage (fn) {
   const saved = { document: global.document, window: global.window }
   Object.assign(global, pageStandIn())

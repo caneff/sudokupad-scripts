@@ -1,8 +1,7 @@
 // Live check of pen-tool-extras.user.js's second page of pens (color characters a to i, drawn dashed)
 // on sudokupad.app in headless Chromium.
 //
-// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
-// injection time and crackingthecryptic.com stay untested, and so does a touch screen. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// The script is injected into the page, not installed through Tampermonkey, so a touch screen stays untested. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
 // Every press, wheel turn and line is real input. A last group runs with UI Tweaks installed too.
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'

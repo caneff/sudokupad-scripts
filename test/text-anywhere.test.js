@@ -964,7 +964,7 @@ test('a note\'s padding is its outline\'s reach, none for none', () => {
   assert.equal(Math.round((box('medium').right - box('none').right) * 1000) / 1000, 2.8)
 })
 
-// A note's text as styled runs, one list of runs per line; a flag is set only on the runs it applies to.
+// The first line of a note's text as styled runs; a flag is set only on the runs it applies to.
 const runs = (text) => parseMarkdown(text)[0]
 
 test('markdown reads bold, italic (both marks) and strikethrough, with the markers left out of the runs', () => {

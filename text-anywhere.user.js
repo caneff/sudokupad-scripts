@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.47
+// @version      0.46.49
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.47'
+  const VERSION = '0.46.49'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -224,7 +224,6 @@
   const HANDLE_CLASS = 'text-anywhere-resize'
   const SELECTION_CLASS = 'text-anywhere-selection'
   const NUDGING_CLASS = 'text-anywhere-nudging'
-  // On a note within the hit margin of the pointer but not under it.
   const HOVERED_CLASS = 'text-anywhere-hovered'
   const GUIDE_CLASS = 'text-anywhere-snap-guide'
   const GUIDE_PX = 1
@@ -841,7 +840,7 @@
   // <lib:settings-table>
   // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  // A script that copies in store as well has a second `global` naming isPlainObject, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
@@ -859,7 +858,6 @@
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
-  // Every row as `store` holds it, by name.
   const readTable = (rows, store) => readByField(rows, store, 'name')
 
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
@@ -867,7 +865,6 @@
 
   const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
-  // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
   // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
@@ -901,7 +898,6 @@
 
   const SAVED_HEX = /^#[0-9a-f]{6}$/i
 
-  // A color read back from storage: `#` and six hex digits in any case, lowercased; anything else is undefined, and the caller picks its own fallback.
   const savedHex = (value) => typeof value === 'string' && SAVED_HEX.test(value) ? value.toLowerCase() : undefined
 
   const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
@@ -1557,10 +1553,8 @@
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
-  // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
-  // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
-  // put back after them; the first throw then goes on. The stored values are held by reference, so a script's save must replace a value
-  // and never edit one in place.
+  // Every key is written back even when one throws, and only the first throw goes on; the rest are dropped. The stored values are
+  // held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
     const putMirrorBack = holdMirror()
@@ -1579,7 +1573,6 @@
     }
   }
 
-  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   function writeOrRestore (snapshot, write) {
@@ -2445,7 +2438,7 @@
     return { box: { left, top, right, bottom }, toBoard: through(ctm.inverse()), toScreen: through(ctm), scale: ctm.a, matrix: [ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f] }
   }
 
-  // Sets a noteStyle on an element: a custom property needs setProperty, which assigning to the style's own fields does not do.
+  // A custom property needs setProperty: assigning to the style's own fields does not set it.
   function applyNoteStyle (element, style) {
     for (const [name, value] of Object.entries(style)) {
       if (name.startsWith('--')) element.style.setProperty(name, value)
@@ -2586,7 +2579,7 @@
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${SUDOKUPAD_PURPLE};`
 
-  // A slider row of `panelCss`'s `sliderRow` class: the range input, or an empty placeholder when hidden. Neither input takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
+  // The slider is kept out of the tab order (`tabindex="-1"`): a drag hands the focus back to the page.
   function sliderRowMarkup (sliderRow, shown, { id, label, range, value }) {
     return shown
       ? `<div class="${sliderRow}" title="${label}"><input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
@@ -3767,7 +3760,7 @@
     return open
   }
 
-  // Closes the open note. The index of the note it leaves, or -1 when there is none (it was empty).
+  // The index of the note it leaves, or -1 when it was empty.
   function finishText () {
     const open = closeTextBox()
     const { index, item, saved } = open

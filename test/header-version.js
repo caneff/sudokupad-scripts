@@ -1,6 +1,5 @@
 'use strict'
 
-// The value of a script's `// @<field>` header line, read from the source text. Throws when there is no such header.
 function headerField (source, field) {
   const header = new RegExp(`^// @${field}\\s+(.+?)\\s*$`, 'm').exec(source)
   if (header === null) throw new Error(`the script has no @${field} header`)
