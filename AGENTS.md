@@ -87,7 +87,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   says what it covers and needs. It needs the network, so it stays out of `npm test`, `npm run test:live` and
   `land.testcmd`. Run it when a change touches any line of a `// ==UserScript==` header; the controller's merge check
   runs it then too.
-- A PR names as owed only what that section says the test does not cover. `crackingthecryptic.com` only redirects to
+- A PR names as owed only what `live/README.md` § The Tampermonkey test says the test does not cover. `crackingthecryptic.com` only redirects to
   SudokuPad now, so no PR, ticket or report names it as owed (Chris, 2026-11-07).
 
 `npm run lint` runs StandardJS over the repo, excluding `docs/research/`. `land.testcmd` runs it after the tests, so a land fails on a lint error.
