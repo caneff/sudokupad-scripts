@@ -1,5 +1,7 @@
 name: Watch SudokuPad
 
+# The full live suite, every night (#1026): the backstop for a merge that ran only the live files its change touched (live/README.md § The daily watch).
+
 on:
   schedule:
     - cron: '17 6 * * *'
@@ -8,8 +10,10 @@ on:
 permissions:
   contents: read
   issues: write
+  # live/watch.mjs reads the run before this one, to see that a night was skipped.
+  actions: read
 
-# Two overlapping runs on a new version would each file the bug.
+# Two overlapping runs would each file the bug.
 concurrency:
   group: watch-sudokupad
   cancel-in-progress: false
@@ -17,9 +21,7 @@ concurrency:
 jobs:
   watch:
     runs-on: ubuntu-latest
-    env:
-      CACHE_PATH: ~/.cache/sudokupad-scripts/live
-      CACHE_KEY: sudokupad-live-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -28,34 +30,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      # The recording is SudokuPad's own code: the Actions cache only, never the repo or an artifact. A cache entry
-      # cannot be overwritten, so each run attempt saves under its own key and restores the newest by prefix.
-      - uses: actions/cache/restore@v6
-        with:
-          path: ${{ env.CACHE_PATH }}
-          key: ${{ env.CACHE_KEY }}
-          restore-keys: sudokupad-live-
+      # The recording is SudokuPad's own code: it is made again for every run and kept nowhere (not the repo, an artifact or the Actions cache).
       - id: watch
         run: npm run watch:live
         env:
           GH_TOKEN: ${{ github.token }}
-      # A red run files its bug and remembers the version, so the save runs after a failed step too: otherwise the
-      # next night checks the same version again and files a second bug.
-      - uses: actions/cache/save@v6
-        if: ${{ !cancelled() }}
-        with:
-          path: ${{ env.CACHE_PATH }}
-          key: ${{ env.CACHE_KEY }}
-      # A step before the watch (npm ci, the Chromium install, the cache restore) failed, so live/watch.mjs never ran and
+      # A step before the watch (npm ci, the Chromium install) failed, so live/watch.mjs never ran and
       # filed nothing. Same title as watch.mjs's own "did not run" issue, and filed only when none is open.
       - name: File the did-not-run issue
         if: ${{ failure() && steps.watch.outcome == 'skipped' }}
         uses: ./.github/actions/file-issue-once
         with:
           title: 'Watch did not run: the live suite could not be checked'
-          body: "A step before `npm run watch:live` failed (npm ci, the Chromium install or the cache restore), so the live suite was not checked. Nothing was remembered. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
-      # After the save, so Tampermonkey is never in the cache and each night fetches the current one: a new Tampermonkey
-      # shows up within a day. It runs after a red watch too, but not when the watch never ran, which the did-not-run
+          body: "A step before `npm run watch:live` failed (npm ci or the Chromium install), so the live suite was not checked. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+      # Each night fetches the current Tampermonkey, so a new one shows up within a day. It runs after a red watch too, but not when the watch never ran, which the did-not-run
       # issue already covers (live/README.md § The Tampermonkey test).
       - id: tampermonkey
         run: npm run test:tampermonkey

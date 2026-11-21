@@ -17,7 +17,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   `live/<script name>/`. Every `*.user.js` stays at the root: every installed copy checks that address for updates. Never edit `draw-tool.user.js`:
   it is Text Anywhere's handover, frozen at 0.45.1 (`GLOSSARY.md`), and a change to Text Anywhere never touches it; `test/text-anywhere.test.js` fails when its bytes change (Chris, 2026-11-10).
 - **The PR fuzz** (`.github/workflows/fuzz-pr.yml`) is advisory, not a required check: read a red one, do not wait on it to merge; it comments the seed on the PR (`live/README.md` § The pull-request fuzz).
-- **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live` every night at 06:17 UTC on GitHub Actions (and by hand through
+- **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live`, the full live suite, every night at 06:17 UTC on GitHub Actions (and by hand through
   `workflow_dispatch`); `live/README.md` § The daily watch has the rule.
 - **Logic Masters Puzzle Preview** (`logic-masters-puzzle-preview.user.js`): runs on logic-masters.de, not SudokuPad. Its first version is Juggler's, published here with their permission
   (Chris, 2026-11-21). `OTHER_SITE_SCRIPTS` in `sync-lib.js` keeps it out of every loop over SudokuPad's scripts (`scriptFiles()`), while the homepage and version checks still
@@ -81,12 +81,8 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   `TESTS_JOBS=<k>` sets the width instead; a worker sets it only after recording the parallel job (`implement/SKILL.md` § Control). A value that is not a whole number of 1 or more stops the run with exit 2.
 - `npm run test:live` needs a Playwright Chromium (`npx playwright install chromium`), so it stays out of `npm test` and
   `land.testcmd`.
-- Run it when a change touches a `Framework` call, rendering or undo.
-- While you iterate, run only the changed script's files (`live/<script name>/*.live.mjs`, and `live/startup.live.mjs` when
-  its startup changed) with `npm run test:live:files -- <files>`; the worker runs the full suite once before "PR up", and its report says the sha.
-  The controller's merge rerun takes the files in `live/README.md` § The merge rerun.
-- Extra run: a change to a `live/*.mjs` helper, `package.json`, `site/` or `.github/` also runs the full live suite,
-  `npm run test:live`, before "PR up" and again at the merge (#717). The merge skip rule never skips it.
+- **The full live suite is no gate** (Chris, 2026-11-18, #1026): the nightly watch runs all of it on GitHub and files a bug when it is red. Extra run: every change also runs `npm run test:live:changed`, the live files its diff touches
+  (a path it cannot place widens it, and its last line says so; nothing touched runs nothing): before "PR up" and again at the merge. The merge skip rule never skips it. `live/README.md` § The live gate has what it selects.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
 - `npm run test:tampermonkey` installs every SudokuPad script (`scriptFiles()`) into a real Tampermonkey, and leaves out Logic Masters Puzzle Preview (its install and update from the root address stay owed to a person); `live/README.md` § The Tampermonkey test

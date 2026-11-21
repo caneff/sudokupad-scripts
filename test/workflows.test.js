@@ -124,6 +124,28 @@ describe('fuzz-pr.yml (#724)', () => {
   })
 })
 
+describe('watch.yml (#1026)', () => {
+  const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'watch.yml'), 'utf8')
+
+  it('runs the full live suite every night through watch:live, which files the issue and exits 1 when the night is not green', () => {
+    assert.match(yml, /schedule:\n {4}- cron: '\d+ \d+ \* \* \*'/)
+    assert.match(yml, /- id: watch\n {8}run: npm run watch:live\n/)
+    assert.match(yml, /issues: write/)
+  })
+
+  it('may read the workflow\'s earlier runs, which is how it sees a skipped night', () => {
+    assert.match(yml, /^ {2}actions: read$/m)
+  })
+
+  it('keeps nothing between nights: the recording is made again each run, so no Actions cache holds a version or a run time', () => {
+    assert.doesNotMatch(yml, /actions\/cache/)
+  })
+
+  it('has a time limit under the 6 hours GitHub gives a job, so a hung suite fails the night', () => {
+    assert.match(yml, /timeout-minutes: \d+/)
+  })
+})
+
 describe('Node version', () => {
   const dir = path.join(ROOT, '.github', 'workflows')
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.yml'))

@@ -4,6 +4,7 @@
   "scripts": {
     "test": "node node-test.js \"test/**/*.test.*\" \"lib/**/*.test.js\" \"live/**/*.test.mjs\"",
     "test:live": "npm run test:live:files -- \"live/**/*.live.mjs\"",
+    "test:live:changed": "node live/changed.mjs",
     "test:live:files": "node node-test.js --test-timeout=1200000",
     "test:fuzz": "node live/fuzz/run.mjs",
     "fuzz:plants": "node live/fuzz/plants-run.mjs",
