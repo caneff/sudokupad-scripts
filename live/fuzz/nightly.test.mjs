@@ -334,6 +334,25 @@ describe('failureTitle', () => {
     // The space lands at index 109, the last character the title keeps.
     assert.equal(failureTitle(`crash signal after "s": ${'a'.repeat(96)} ${'b'.repeat(40)}`), `Fuzz: crash: ${'a'.repeat(96)}`)
   })
+  it('names the locator a Playwright timeout waited for, whatever its timeout length', () => {
+    const timeout = (ms, locator) => `locator.waitFor: Timeout ${ms}ms exceeded.\nCall log:\n  - waiting for locator('${locator}') to be visible\n`
+    assert.equal(failureTitle(timeout(2000, '#color-by-digit-menu')), 'Fuzz: error: locator.waitFor timed out: #color-by-digit-menu')
+    assert.equal(failureTitle(timeout(30000, '#color-by-digit-menu')), failureTitle(timeout(2000, '#color-by-digit-menu')))
+    assert.notEqual(failureTitle(timeout(2000, '#pen-tool-extras-editor')), failureTitle(timeout(2000, '#color-by-digit-menu')))
+  })
+  it('names a timeout the same when Playwright colours its call log', () => {
+    const plain = "locator.waitFor: Timeout 2000ms exceeded.\nCall log:\n  - waiting for locator('#color-by-digit-menu') to be visible\n"
+    const coloured = "locator.waitFor: Timeout 2000ms exceeded.\nCall log:\n\u001b[2m  - \u001b[22mwaiting for locator('#color-by-digit-menu') to be visible\u001b[22m\n"
+    assert.equal(failureTitle(coloured), failureTitle(plain))
+  })
+  it('names a chained locator by the whole chain, so two chains on one element differ', () => {
+    const chain = (tail) => `locator.waitFor: Timeout 2000ms exceeded.\nCall log:\n  - waiting for locator('#a')${tail} to be visible\n`
+    assert.equal(failureTitle(chain(".locator('.b')")), "Fuzz: error: locator.waitFor timed out: locator('#a').locator('.b')")
+    assert.notEqual(failureTitle(chain(".locator('.b')")), failureTitle(chain('.first()')))
+  })
+  it('keeps the first-line title for a timeout with no waiting-for-locator line', () => {
+    assert.equal(failureTitle('locator.waitFor: Timeout 2000ms exceeded.'), 'Fuzz: error: locator.waitFor: Timeout Nms exceeded.')
+  })
   it('folds numbers in a crash signal, so another seed has the same title', () => {
     assert.equal(failureTitle('crash signal after "s": page error or console error: boom 12'), failureTitle('crash signal after "t": page error or console error: boom 99'))
   })
