@@ -1,6 +1,6 @@
 /* The ChinStrap theme: the look of Chris's Twitch stream (docs/research/site/chinstrap-theme/). Light only: Chris ruled dark mode out. */
-@font-face { font-family: Fredoka; src: url("Fredoka.ttf"); font-weight: 300 700; font-display: swap; }
-@font-face { font-family: Nunito; src: url("Nunito.ttf"); font-weight: 200 1000; font-display: swap; }
+@font-face { font-family: Fredoka; src: url("Fredoka.woff2") format("woff2"); font-weight: 300 700; font-display: block; }
+@font-face { font-family: Nunito; src: url("Nunito.woff2") format("woff2"); font-weight: 200 1000; font-display: block; }
 :root {
   color-scheme: light;
   /* The stream's banner purple. */
