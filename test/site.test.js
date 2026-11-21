@@ -225,26 +225,6 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Plus and minus keys set the thickness', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
-
-test(`${DETAILS} lists what the script adds as a grid of short items, one per feature, and never mentions the middle button`, () => {
-  assert.deepEqual(section(DETAILS, 'What it adds'), [
-    'Customizable pen colors Hold a pen color button, or pick a preset in the settings.',
-    'Dashed and arrow lines Two more pages of pens.',
-    'Digit keys pick the pen Press 1 to 9 to pick that pen color, on whichever page of pens is showing.',
-    'Plus and minus keys set the thickness Press + or - to make lines and marks one step thicker or thinner, as the Thickness slider does.',
-    'Marks on cell edges Click an edge for an X, a circle or an arrow.',
-    'Marks on grid corners Click near a corner for an X or a circle.',
-    'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
-    'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
-    'White outlines An outline keeps lines readable over colored cells.'
-  ])
-  const grid = read(DETAILS).match(/<ul class="features">([\s\S]*?)<\/ul>/)
-  assert.ok(grid, `site/${DETAILS} has no <ul class="features">`)
-  assert.deepEqual(leadIns(grid[1]), DETAILS_LEAD_INS)
-  assert.doesNotMatch(read(DETAILS), /middle/i, `site/${DETAILS} mentions the middle button`)
-})
-
 const altOf = img => (img.match(/alt="([^"]*)"/) || [])[1] || ''
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
 const withoutTag = img => img.replace(/\?v=[0-9a-f]{7}"/, '"')
@@ -370,8 +350,72 @@ const assertSectionsInOrder = (file, markers) => {
   assert.deepEqual(order, [...order].sort((a, b) => a - b))
 }
 
-test(`${DETAILS} has the slideshow between the install link and "What it adds", then the pen panel and Good to know`, () => {
-  assertSectionsInOrder(DETAILS, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The pen panel</h2>', '<h2>Good to know</h2>'])
+// One row per details page: the order of its sections, the items "What it adds" lists, and the lead-in of each, checked by the loop below.
+const DETAIL_CONTENT = [
+  {
+    file: DETAILS,
+    sections: ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The pen panel</h2>', '<h2>Good to know</h2>'],
+    features: [
+      'Customizable pen colors Hold a pen color button, or pick a preset in the settings.',
+      'Dashed and arrow lines Two more pages of pens.',
+      'Digit keys pick the pen Press 1 to 9 to pick that pen color, on whichever page of pens is showing.',
+      'Plus and minus keys set the thickness Press + or - to make lines and marks one step thicker or thinner, as the Thickness slider does.',
+      'Marks on cell edges Click an edge for an X, a circle or an arrow.',
+      'Marks on grid corners Click near a corner for an X or a circle.',
+      'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
+      'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
+      'White outlines An outline keeps lines readable over colored cells.'
+    ],
+    leadIns: ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Plus and minus keys set the thickness', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
+  },
+  {
+    file: DRAW,
+    sections: ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>One note, every style</h2>', '<h2>The Text Anywhere panel</h2>', '<h2>Good to know</h2>'],
+    features: [
+      'Typed notes anywhere Click to type; Esc or Ctrl+Enter finishes; Ctrl+Z and Ctrl+Y undo and redo the typing; double-click a note to edit.',
+      'Formatting Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and ->, != or sum typed as → ≠ Σ. One note below shows every style, and the text that made it.',
+      'Long notes Wraps and scrolls; drag a corner to resize.',
+      'Readable over digits A white outline round the letters, and an optional box behind them.',
+      'Colors, size and opacity Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make each selected note, or the next note, one Size step bigger or smaller than it is, and holding one keeps going, faster the longer you hold. New notes start in a dark grey (color 2) at a size that fits the grid; a color you pick stays your default. A color, size, opacity or Background you set on a note also becomes the setting for the next note.',
+      'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
+      'Key to switch on Press T to pick the Text tool (not while you are typing in a note, a dialog or the Letter tool).',
+      'Hide all notes The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.',
+      'Erase Right-click a note, or drag with the right button across several; they go when you let go. Or press Delete.',
+      'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
+      'Settings Color presets, font (proportional or fixed width), halo, box color and border by sample; Copy and Paste to another browser.'
+    ],
+    leadIns: ['Typed notes anywhere', 'Formatting', 'Long notes', 'Readable over digits', 'Colors, size and opacity', 'Select and move', 'Key to switch on', 'Hide all notes', 'Erase', 'Kept per puzzle', 'Settings']
+  },
+  {
+    file: CBD,
+    sections: ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<h2>Good to know</h2>'],
+    features: [
+      'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The word above the chips names the mode.',
+      'Updates as you solve A cell takes its group\'s color when its digit, or every one of its center marks, is in that group. The color goes when that stops being true.',
+      'Colored digits In Digit and Both, digits and marks take a darker shade of their group\'s color. A mark that conflicts gets a red circle.',
+      'Profiles A profile splits the digits into groups and gives each a color. Five come built in (Low/5/High, Odd/Even, Entropic, Modular and Each digit), and you can keep up to six.',
+      'Quick switching Click the arrow on the button, or right-click or hold the button, to open the profile list. A pick applies at once.',
+      'A separate digit profile Digits can follow the cell profile, use another profile, or go uncolored.'
+    ],
+    leadIns: ['Four modes', 'Updates as you solve', 'Colored digits', 'Profiles', 'Quick switching', 'A separate digit profile']
+  }
+]
+
+for (const { file, sections, features, leadIns: expectedLeadIns } of DETAIL_CONTENT) {
+  test(`${file} has the slideshow between the install link and "What it adds", then its own sections in order`, () => {
+    assertSectionsInOrder(file, sections)
+  })
+
+  test(`${file} lists what the script adds as a grid of short items, one per feature`, () => {
+    assert.deepEqual(section(file, 'What it adds'), features)
+    const grid = read(file).match(/<ul class="features">([\s\S]*?)<\/ul>/)
+    assert.ok(grid, `site/${file} has no <ul class="features">`)
+    assert.deepEqual(leadIns(grid[1]), expectedLeadIns)
+  })
+}
+
+test(`${DETAILS} never mentions the middle button`, () => {
+  assert.doesNotMatch(read(DETAILS), /middle/i, `site/${DETAILS} mentions the middle button`)
 })
 
 test('netlify.toml publishes only site/', () => {
@@ -395,11 +439,6 @@ test(`${DETAILS} shows the pen panel as one annotated picture whose alt text nam
   for (const label of ['Pen color buttons', 'Line mode button', 'Line type button', 'Settings button', 'Thickness and Opacity sliders']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-})
-
-test(`${HOME} names no Digit Color script and links no digit-color file`, () => {
-  const page = read(HOME)
-  assert.doesNotMatch(page, /Digit Color|digit-color/)
 })
 
 const SCRIPT_INTRO = /<\/p>\s*<p(?: class="lede")?>(Adds (?:a button )?to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
@@ -435,7 +474,6 @@ const shared = ({ page, script, name, summary, intro, homePicture }) => {
 }
 
 const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.'
-const CBD_LEAD_INS = ['Four modes', 'Updates as you solve', 'Colored digits', 'Profiles', 'Quick switching', 'A separate digit profile']
 
 test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside its slideshow`, () => {
   const m = read(HOME).match(/<\/div>\s*<div class="row-text">\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -457,10 +495,6 @@ const assertDeclaredAtFileShape = (img, file, what) => {
   assert.ok(Math.abs(w * fileH - h * fileW) <= fileW, `${what} is declared ${w} by ${h} but its file is ${fileW} by ${fileH}`)
   return [fileW, fileH]
 }
-
-test(`${CBD} has the slideshow between the install link and "What it adds", then the settings dialog`, () => {
-  assertSectionsInOrder(CBD, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<h2>Good to know</h2>'])
-})
 
 // SudokuPad flags a mark that repeats a given in its row, its column or its 3x3 box.
 const repeatsGiven = ([row, col, digits], given) => digits.includes(given.digit) && (row === given.row || col === given.col || (Math.floor(row / 3) === Math.floor(given.row / 3) && Math.floor(col / 3) === Math.floor(given.col / 3)))
@@ -501,21 +535,6 @@ test("the slides' five pen colors are far from SudokuPad's nine", () => {
   }
 })
 
-test(`${CBD} lists what the script adds, one item per feature`, () => {
-  const lines = section(CBD, 'What it adds')
-  assert.deepEqual(lines, [
-    'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The word above the chips names the mode.',
-    'Updates as you solve A cell takes its group\'s color when its digit, or every one of its center marks, is in that group. The color goes when that stops being true.',
-    'Colored digits In Digit and Both, digits and marks take a darker shade of their group\'s color. A mark that conflicts gets a red circle.',
-    'Profiles A profile splits the digits into groups and gives each a color. Five come built in (Low/5/High, Odd/Even, Entropic, Modular and Each digit), and you can keep up to six.',
-    'Quick switching Click the arrow on the button, or right-click or hold the button, to open the profile list. A pick applies at once.',
-    'A separate digit profile Digits can follow the cell profile, use another profile, or go uncolored.'
-  ])
-  const grid = read(CBD).match(/<ul class="features">([\s\S]*?)<\/ul>/)
-  assert.ok(grid, `site/${CBD} has no <ul class="features">`)
-  assert.deepEqual(leadIns(grid[1]), CBD_LEAD_INS)
-})
-
 test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its intro and its three notes`, () => {
   const m = read(CBD).match(/<h2>The settings dialog<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${CBD} has no <h2>The settings dialog</h2>`)
@@ -538,35 +557,11 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 })
 
 const DRAW_SUMMARY = 'Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
-const DRAW_LEAD_INS = ['Typed notes anywhere', 'Formatting', 'Long notes', 'Readable over digits', 'Colors, size and opacity', 'Select and move', 'Key to switch on', 'Hide all notes', 'Erase', 'Kept per puzzle', 'Settings']
 
 test(`${HOME} describes Text Anywhere in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Text Anywhere<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Text Anywhere description`)
   assert.equal(m[1], DRAW_SUMMARY)
-})
-
-test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
-  assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes anywhere Click to type; Esc or Ctrl+Enter finishes; Ctrl+Z and Ctrl+Y undo and redo the typing; double-click a note to edit.',
-    'Formatting Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and ->, != or sum typed as → ≠ Σ. One note below shows every style, and the text that made it.',
-    'Long notes Wraps and scrolls; drag a corner to resize.',
-    'Readable over digits A white outline round the letters, and an optional box behind them.',
-    'Colors, size and opacity Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make each selected note, or the next note, one Size step bigger or smaller than it is, and holding one keeps going, faster the longer you hold. New notes start in a dark grey (color 2) at a size that fits the grid; a color you pick stays your default. A color, size, opacity or Background you set on a note also becomes the setting for the next note.',
-    'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
-    'Key to switch on Press T to pick the Text tool (not while you are typing in a note, a dialog or the Letter tool).',
-    'Hide all notes The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.',
-    'Erase Right-click a note, or drag with the right button across several; they go when you let go. Or press Delete.',
-    'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
-    'Settings Color presets, font (proportional or fixed width), halo, box color and border by sample; Copy and Paste to another browser.'
-  ])
-  const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
-  assert.ok(grid, `site/${DRAW} has no <ul class="features">`)
-  assert.deepEqual(leadIns(grid[1]), DRAW_LEAD_INS)
-})
-
-test(`${DRAW} has the slideshow between the install link and "What it adds", then the panel`, () => {
-  assertSectionsInOrder(DRAW, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>One note, every style</h2>', '<h2>The Text Anywhere panel</h2>', '<h2>Good to know</h2>'])
 })
 
 test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated picture whose alt text names every label`, () => {

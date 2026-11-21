@@ -479,6 +479,7 @@ test('fitRulesPane: the lift is measured with the width and font the fit chose, 
       fit({ pageTop: 0, fontOffsetPx })
       const bottom = controls.getBoundingClientRect().bottom
       const grown = rules.offsetHeight > 224 + 1
+      assert.equal(grown, !(chars === 230 && fontOffsetPx === -3), `${chars} chars, offset ${fontOffsetPx}: only the smallest text at the smallest font fits without growing`)
       assert.equal(bottom <= VIEWPORT.height, true, `${chars} chars, offset ${fontOffsetPx}: column bottom ${bottom} runs off the window`)
       if (grown) assert.equal(bottom >= VIEWPORT.height - 1, true, `${chars} chars, offset ${fontOffsetPx}: column bottom ${bottom} short of the window's bottom, pane ${rules.offsetHeight}`)
     }
