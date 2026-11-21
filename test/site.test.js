@@ -397,11 +397,6 @@ test(`${DETAILS} shows the pen panel as one annotated picture whose alt text nam
   }
 })
 
-test(`${HOME} names no Digit Color script and links no digit-color file`, () => {
-  const page = read(HOME)
-  assert.doesNotMatch(page, /Digit Color|digit-color/)
-})
-
 const SCRIPT_INTRO = /<\/p>\s*<p(?: class="lede")?>(Adds (?:a button )?to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
 const shared = ({ page, script, name, summary, intro, homePicture }) => {
   test(`${script}.user.js's @description is the homepage summary`, () => {

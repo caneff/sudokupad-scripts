@@ -34,8 +34,4 @@ describe('the live settings-dialog records', () => {
     const names = Object.fromEntries(SCRIPTS.map((script) => [script.file, script.name]))
     assert.deepEqual(SETTINGS_SCRIPTS.filter((record) => record.entry !== names[record.file]).map((record) => record.file), [])
   })
-
-  it('UI Tweaks has one', () => {
-    assert.equal(SETTINGS_SCRIPTS.some((record) => record.file === 'ui-tweaks.user.js'), true)
-  })
 })

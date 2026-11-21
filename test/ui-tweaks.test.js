@@ -40,7 +40,7 @@ test('saveOptions leaves no key for an option at its default, and removes one sa
   assert.deepEqual(store.data, { UiTweaks_hideSelect: true })
 })
 
-test('saveOptions leaves a key already saved at its default until the next Save', () => {
+test('savedOptions reads a key saved at its default without removing it', () => {
   const store = fakeStore({ UiTweaks_tab: true })
   assert.deepEqual(savedOptions(store), DEFAULT_OPTIONS)
   assert.deepEqual(store.data, { UiTweaks_tab: true })
@@ -146,13 +146,6 @@ test('isHeldTabToStop stops only a repeated Tab, while the letter tool is on and
   assert.equal(isHeldTabToStop({ key: '/', repeat: true }, play), false, 'another key')
   assert.equal(isHeldTabToStop({ key: 'Tab', repeat: true }, { ...play, dialogOpen: true }), false, 'dialog open')
   assert.equal(isHeldTabToStop({ key: 'Tab', repeat: true }, { ...play, toolOn: false }), false, 'letter tool off')
-})
-
-test('lackingInternals names the internal a feature lacks', () => {
-  const roots = { Framework: { getApp: () => {}, app: { tools: {} } }, ToolLetter: { tool: { keyHandlers: [] } } }
-  assert.equal(lackingInternals(FEATURES, roots).size > 0, true, 'the other features need Framework.getData and more')
-  assert.deepEqual([...lackingInternals({ tab: FEATURES.tab }, roots)], [])
-  assert.deepEqual([...lackingInternals({ tab: FEATURES.tab }, { ...roots, ToolLetter: { tool: {} } })], [['ToolLetter.tool.keyHandlers', ['tab']]])
 })
 
 const completeSudokuPad = () => ({

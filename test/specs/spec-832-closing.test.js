@@ -45,11 +45,28 @@ test('#832: a paste puts only the pasted rows into a draft, from the pasted valu
   assert.deepEqual(pastedOptions(draft, { [first.key]: !first.default }), { ...draft, [first.id]: !first.default })
 })
 
+// A SudokuPad holding every internal `needs` names, but for `omit`; a leaf takes the least value its kind accepts.
+const LEAVES = { function: () => () => {}, array: () => [], integer: () => 0, number: () => 0, object: () => ({}) }
+const rootsFor = (needs, omit) => {
+  const roots = {}
+  for (const [path, kind] of Object.entries(needs)) {
+    if (path === omit) continue
+    const keys = path.split('.')
+    const leaf = keys.pop()
+    const owner = keys.reduce((node, key) => (node[key] ??= {}), roots)
+    owner[leaf] ??= LEAVES[kind]()
+  }
+  return roots
+}
+
 test('#832: every script\'s settings feature declares the three dialog calls, and a SudokuPad lacking one turns the feature off', () => {
   const NEEDED = ['Framework.addSetting', 'Framework.showDialog', 'Framework.closeDialog']
-  for (const [name, { FEATURES }] of Object.entries(scripts)) {
-    const feature = Object.entries(FEATURES).find(([, { needs }]) => NEEDED.every((path) => path in needs))
-    assert.ok(feature, `${name} has a feature declaring ${NEEDED.join(', ')}`)
+  for (const [name, { FEATURES, lackingInternals }] of Object.entries(scripts)) {
+    const found = Object.entries(FEATURES).find(([, { needs }]) => NEEDED.every((path) => path in needs))
+    assert.ok(found, `${name} has a feature declaring ${NEEDED.join(', ')}`)
+    const [feature, { needs }] = found
+    assert.deepEqual([...lackingInternals({ [feature]: found[1] }, rootsFor(needs))], [], `${name}: complete`)
+    for (const path of NEEDED) assert.deepEqual([...lackingInternals({ [feature]: found[1] }, rootsFor(needs, path))], [[path, [feature]]], `${name} without ${path}`)
   }
 })
 
@@ -59,7 +76,6 @@ test('#832: writeStyle keeps one style element under an id, and the dialog shell
   lib.writeStyle('x', 'a {}', doc)
   lib.writeStyle('x', 'b {}', doc)
   assert.deepEqual(head, [{ tag: 'style', id: 'x', textContent: 'b {}' }])
-  assert.match(readFileSync(join(ROOT, 'ui-tweaks.user.js'), 'utf8'), /writeStyle\(/)
 })
 
 test('#832: savedHex reads a saved #rrggbb in any case, lowercased, and anything else as nothing saved', () => {

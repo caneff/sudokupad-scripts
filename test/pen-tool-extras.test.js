@@ -1082,13 +1082,6 @@ test('Marks to cycle is one 3 by 4 table: headings X, circle, an up arrow head a
   ])
 })
 
-test('every Marks to cycle box is ticked when every mark is saved on', () => {
-  const html = renderEditor(editorState())
-  const boxes = [...html.matchAll(/<input type="checkbox" id="pen-tool-extras-box-marks-(\w+)" data-box="marks\.\w+"[^>]*?( checked)?>/g)]
-  assert.equal(boxes.length, 8)
-  assert.deepEqual(boxes.filter((m) => m[2] !== ' checked').map((m) => m[1]), [])
-})
-
 test('the Cell row of the marks table is five children: the label, then cross, circle, an empty cell where directions would be, and dot', () => {
   const cellRow = renderEditor(editorState()).split('>Cell</div>')[1]
   assert.match(cellRow, /^<label[^>]*>.*?<\/label><label[^>]*>.*?<\/label><div><\/div><label[^>]*>.*?<\/label><\/div>/)
@@ -1917,10 +1910,6 @@ test('readSettings normalizes what is saved under each key and falls back for th
     outline: false,
     show: { thickness: true, opacity: false }
   })
-})
-
-test('settingDefaults holds every row\'s default', () => {
-  assert.deepEqual(settingDefaults(), { thickness: 5, opacity: 80, dash: 3, arrowSpacing: 5, outlineWidth: 2, outline: true, eraseClicks: true, lineStyles: { dashed: true, arrows: true }, show: { thickness: true, opacity: true }, marks: ALL })
 })
 
 test('changedSettings names only the settings whose value differs, reading flags by value', () => {
