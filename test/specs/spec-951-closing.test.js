@@ -40,7 +40,7 @@ test('#951: Text Anywhere\'s note color is 2 with nothing saved and a saved 1 st
 })
 
 test('#951: a new note\'s size follows the cell size against a 9x9, and holding + or - repeats faster as it is held, up to a cap', () => {
-  const { newNoteWidth, textSizeFor, DEFAULT_WIDTH, REFERENCE_GRID, sizeHoldSteps, SIZE_HOLD_MAX_STEPS, NUDGE_REPEAT_MS, NUDGE_RAMP_MS } = textAnywhere
+  const { newNoteWidth, textSizeFor, DEFAULT_WIDTH, REFERENCE_GRID, heldSliderSteps, HELD_SLIDER_MAX_STEPS, HELD_REPEAT_MS, HELD_RAMP_MS } = textAnywhere
   assert.equal(REFERENCE_GRID, 9)
   assert.equal(newNoteWidth(DEFAULT_WIDTH, 9), DEFAULT_WIDTH)
   // Measured in cells, the drawn size on a 4x4 and a 16x16 is within a fifth of a 9x9's.
@@ -49,12 +49,12 @@ test('#951: a new note\'s size follows the cell size against a 9x9, and holding 
   // Not the 9x9's size unchanged, which against the cell would be 2.25 times as big on a 4x4 and little over half on a 16x16.
   assert.ok(newNoteWidth(DEFAULT_WIDTH, 4) < DEFAULT_WIDTH && newNoteWidth(DEFAULT_WIDTH, 16) > DEFAULT_WIDTH)
   // Steps a tick, by how long the key has been held: none before the pause, then one, ramping to the cap.
-  assert.equal(sizeHoldSteps(NUDGE_REPEAT_MS - 1), 0, 'a short press is one step, taken on the press')
-  assert.equal(sizeHoldSteps(NUDGE_REPEAT_MS), 1)
-  const ticks = [NUDGE_REPEAT_MS, NUDGE_RAMP_MS / 2, NUDGE_RAMP_MS, NUDGE_RAMP_MS * 2].map(sizeHoldSteps)
+  assert.equal(heldSliderSteps(HELD_REPEAT_MS - 1), 0, 'a short press is one step, taken on the press')
+  assert.equal(heldSliderSteps(HELD_REPEAT_MS), 1)
+  const ticks = [HELD_REPEAT_MS, HELD_RAMP_MS / 2, HELD_RAMP_MS, HELD_RAMP_MS * 2].map(heldSliderSteps)
   assert.ok(ticks.every((steps, i) => i === 0 || steps >= ticks[i - 1]) && ticks.at(-1) > ticks[0], `${ticks}`)
-  assert.equal(SIZE_HOLD_MAX_STEPS > 1, true)
-  assert.equal(sizeHoldSteps(NUDGE_RAMP_MS * 10), SIZE_HOLD_MAX_STEPS)
+  assert.equal(HELD_SLIDER_MAX_STEPS > 1, true)
+  assert.equal(heldSliderSteps(HELD_RAMP_MS * 10), HELD_SLIDER_MAX_STEPS)
 })
 
 test('#951: Auto Rules Resizer refuses a limit under its floor or not whole pixels, and reads a saved one under the floor as the floor', () => {

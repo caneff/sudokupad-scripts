@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.47
+// @version      1.32.48
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.47'
+  const VERSION = '1.32.48'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -115,6 +115,17 @@
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
   // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
   const onSliderStep = ({ min, max, step }, value) => typeof value === 'number' && value >= min && value <= max && Number.isInteger((value - min) / step)
+  // SudokuPad drops every keydown with `event.repeat` before a tool sees it, so a script times a held key itself: nothing until the pause, then a tick of steps that ramps up.
+  const HELD_REPEAT_MS = 300
+  const HELD_RAMP_MS = 1500
+  const HELD_TICK_MS = 50
+  const HELD_SLIDER_MAX_STEPS = 4
+  // A held key does nothing more until the pause, then `from` a tick, ramping to `to`.
+  function heldRamp (heldMs, from, to) {
+    if (heldMs < HELD_REPEAT_MS) return 0
+    return Math.round(from + (to - from) * Math.min(1, (heldMs - HELD_REPEAT_MS) / HELD_RAMP_MS))
+  }
+  const heldSliderSteps = (heldMs) => heldRamp(heldMs, 1, HELD_SLIDER_MAX_STEPS)
   /* eslint-enable no-unused-vars */
   // </lib:slider-keys>
 
@@ -882,7 +893,7 @@
     return { key, fallback: range.fallback, read: (data) => onSliderStep(range, data) ? data : undefined, effect, range, dialog }
   }
 
-  function flag (key, effect = doNothing, dialog) {
+  function flag (key, effect, dialog) {
     return { key, fallback: true, read: (data) => typeof data === 'boolean' ? data : undefined, effect, dialog }
   }
 
@@ -1719,13 +1730,19 @@
     return PEN_COLOR_KEYS.includes(event.key) ? penCharOn(page, event.key) : null
   }
 
-  // SudokuPad's own pen tool does nothing with these keys (docs/research/sudokupad-pen-tool.md § + and -). A repeat is ignored, so a held key steps once, as it does
-  // in Text Anywhere, where SudokuPad drops the repeat before any tool sees it.
-  function thicknessKeyStep (event, thickness) {
+  // SudokuPad's own pen tool does nothing with these keys (docs/research/sudokupad-pen-tool.md § + and -). A held key repeats on Text Anywhere's ramp, timed by the
+  // script (see HELD_REPEAT_MS), so a keydown with `event.repeat` is ignored.
+  function thicknessKeyDirection (event) {
     const direction = SLIDER_STEP_KEYS[event.key]
-    if (!direction || event.repeat || hasChord(event) || typedIntoField(event)) return null
-    return steppedSlider(THICKNESS, thickness, direction)
+    return !direction || event.repeat || hasChord(event) || typedIntoField(event) ? null : direction
   }
+
+  function thicknessKeyStep (event, thickness) {
+    const direction = thicknessKeyDirection(event)
+    return direction === null ? null : steppedSlider(THICKNESS, thickness, direction)
+  }
+
+  const heldThicknessStep = (direction, heldMs, thickness) => steppedSlider(THICKNESS, thickness, direction * heldSliderSteps(heldMs))
 
   // SudokuPad's `getData` parses what it reads, so a saved '3' comes back as the number 3.
   function normalizePen (data) {
@@ -3011,12 +3028,31 @@
     // A hidden Thickness slider leaves the keys unused, since a step with nothing to show it on would look like a bug. SudokuPad does not ask a tool for keys while a dialog
     // is open, and a step behind this script's own dialog would be undone by its Save, which writes the settings it opened with.
     // The + of Shift+= arrives with Shift already held, which has switched the tool to Corner until Shift is released; `prevTool` is the pen tool then.
-    const penToolKeyed = (event) => Framework.app.tool === 'pen' || (event.shiftKey && Framework.app.tool === 'corner' && Framework.app.prevTool === 'pen')
+    const penToolKeyed = (shifted) => Framework.app.tool === 'pen' || (shifted && Framework.app.tool === 'corner' && Framework.app.prevTool === 'pen')
+    const thicknessKeysLive = (shifted) => penToolKeyed(shifted) && inForce.show.thickness && !document.querySelector('.dialog')
+    let thicknessHold = null
+    const stopThicknessHold = () => {
+      clearInterval(thicknessHold?.timer)
+      thicknessHold = null
+    }
+    // The hold is the physical key's: releasing Shift before = turns a held + into =.
+    const repeatThickness = () => steps.penPanel.run(() => {
+      // The key of a + may still be held with Shift, which has switched the tool to Corner.
+      if (!thicknessKeysLive(true)) return stopThicknessHold()
+      const next = heldThicknessStep(thicknessHold.direction, Date.now() - thicknessHold.start, inForce.thickness)
+      if (next !== inForce.thickness) saveSettings({ ...inForce, thickness: next })
+    })
     window.addEventListener('keydown', (event) => steps.penPanel.run(() => {
-      if (!penToolKeyed(event) || !inForce.show.thickness || document.querySelector('.dialog')) return
+      if (!thicknessKeysLive(event.shiftKey)) return
       const next = thicknessKeyStep(event, inForce.thickness)
-      if (next !== null) saveSettings({ ...inForce, thickness: next })
+      if (next === null) return
+      // A release the page never saw would hold on for ever, so every fresh press (a repeat gets no step above) takes the hold over.
+      stopThicknessHold()
+      saveSettings({ ...inForce, thickness: next })
+      if (!thicknessHold) thicknessHold = { code: event.code, direction: thicknessKeyDirection(event), start: Date.now(), timer: setInterval(repeatThickness, HELD_TICK_MS) }
     }))
+    window.addEventListener('keyup', (event) => steps.penPanel.run(() => { if (thicknessHold?.code === event.code) stopThicknessHold() }))
+    window.addEventListener('blur', () => steps.penPanel.run(stopThicknessHold))
     // SudokuPad cancels the touch events on its panel buttons, which keeps the browser from sending the click after a tap, so a tap acts at `touchstart`. The click a
     // browser may still send after that tap must not act a second time.
     let tappedAt = -Infinity
@@ -3280,7 +3316,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf, readPenColors, presetColorSet, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, crossPoint, crossTo, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
+    module.exports = { clickedMarks, cornerMarks, marksAtPoint, holdsMark, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf, readPenColors, presetColorSet, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, heldThicknessStep, HELD_REPEAT_MS, HELD_RAMP_MS, HELD_SLIDER_MAX_STEPS, normalizePen, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, whenReady, crossPoint, crossTo, planClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, HOLD_TO_EDIT_MS, arrowHeads }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return

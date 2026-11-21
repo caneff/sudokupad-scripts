@@ -223,7 +223,7 @@ test(`${DETAILS} lists what the script adds as a grid of short items, one per fe
     'Customizable pen colors Hold a pen color button, or pick a preset in the settings.',
     'Dashed and arrow lines Two more pages of pens.',
     'Digit keys pick the pen Press 1 to 9 to pick that pen color, on whichever page of pens is showing.',
-    'Plus and minus keys set the thickness Press + or - to make lines and marks one step thicker or thinner, as the Thickness slider does.',
+    'Plus and minus keys set the thickness Press + or - to make lines and marks one step thicker or thinner, as the Thickness slider does. Holding one keeps going, faster the longer you hold.',
     'Marks on cell edges Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners Click near a corner for an X or a circle.',
     'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
