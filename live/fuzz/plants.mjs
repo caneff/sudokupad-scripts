@@ -46,8 +46,8 @@ export const PLANTS = [
     file: 'text-anywhere.user.js',
     kind: 'rule',
     bug: 'Text Anywhere drops the first saved note when it loads them',
-    find: 'puzzleNotes = items\n      keptEntries = kept',
-    replace: 'puzzleNotes = items.slice(1)\n      keptEntries = kept',
+    find: 'puzzleNotes = savedNotes.load(currentPuzzleKey())',
+    replace: 'puzzleNotes = savedNotes.load(currentPuzzleKey()).slice(1)',
     expect: /notes-survive-reload|notes-saved-match-drawn/
   },
   {
@@ -55,8 +55,8 @@ export const PLANTS = [
     file: 'text-anywhere.user.js',
     kind: 'crash',
     bug: 'Text Anywhere logs a console.error every time it loads the saved notes',
-    find: '    forgetRestarted()\n    if (!storage.off) {',
-    replace: '    forgetRestarted()\n    console.error(\'text-anywhere: restart cache not cleared\')\n    if (!storage.off) {',
+    find: '    setNotesHidden(false)\n    puzzleNotes = savedNotes.load(',
+    replace: '    setNotesHidden(false)\n    console.error(\'text-anywhere: restart cache not cleared\')\n    puzzleNotes = savedNotes.load(',
     expect: /restart cache not cleared/
   },
   {

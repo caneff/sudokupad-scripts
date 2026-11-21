@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ChinStrap's SudokuPad scripts</title>
+<link rel="preload" href="Fredoka.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="Nunito.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <style>
   /* The 14px under the banner is the mockup's, where with the tilt only the two white rings meet. */
@@ -193,7 +195,7 @@
     </div>
     <div class="row-text">
       <h2>Auto Rules Resizer</h2>
-      <p>Fits the rules to your screen in landscape: the pane takes all the height the page has to spare, widens only as far as long rules need, and only then does the text shrink, to 70% of SudokuPad's size at the least. Short rules get larger text, up to 150%. A puzzle's text size and pane size, if you change them with f+, f- or the drag corners, are kept per puzzle: you get them back when you return to it, and every other puzzle starts at the fitted default. Reset puzzle size in the Auto Rules Resizer settings clears the current puzzle's. The settings' Max auto width and Max auto height cap the automatic fit, down to 240 px wide and 112 px high, and a value below that is refused with a message. Restore defaults there clears both limits when you press Save. Thanks to Nell Gwyn, whose SudokuPad-ResizeRules this grew from.</p>
+      <p>Fits the rules pane to your screen: it takes the spare height, widens for long rules, and grows or shrinks the text to fit. A size you set with f+, f- or the drag corners is kept for that puzzle. Thanks to Nell Gwyn, whose SudokuPad-ResizeRules this grew from.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js">Install<span class="visually-hidden"> Auto Rules Resizer</span></a></p>
     </div>
   </section>

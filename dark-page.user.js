@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.40
+// @version      0.7.42
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.40'
+  const VERSION = '0.7.42'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -978,6 +978,32 @@
     })
 
     return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+  }
+
+  // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
+  // `app.preRestartSavedProgress`, which it keeps only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes).
+  // A script may act in its own 'restarted' handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds
+  // no more than that on it is the Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
+  function trackRestartUndo (app, wrap) {
+    let restartLength = 0
+    const atRestart = () => app.puzzle.undoStack.length <= restartLength
+    // SudokuPad triggers `act` after the action, so what the stack was before an Undo is read off the event before it.
+    let wasAtRestart = false
+    const read = () => { wasAtRestart = atRestart() }
+    const callbacks = []
+    app.on('restarted', wrap(() => queueMicrotask(() => { restartLength = app.puzzle.undoStack.length; read() })))
+    const forgetRestart = wrap(() => { restartLength = 0; read() })
+    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, forgetRestart)
+    app.puzzle.on('act', wrap((_, action) => {
+      const was = wasAtRestart
+      read()
+      if (action?.type === 'undo' && was) callbacks.forEach((fn) => fn())
+    }))
+    return {
+      loadsBoard: () => atRestart() && app.preRestartSavedProgress !== undefined,
+      // `fn` runs after the Undo that found the stack where the Restart left it, whether or not that Undo loaded a board.
+      onRestartUndo: (fn) => { callbacks.push(fn) }
+    }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>

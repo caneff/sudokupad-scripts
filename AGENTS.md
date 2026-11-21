@@ -8,7 +8,8 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
 - **Netlify**: serves `site/` from the `release` branch (`netlify.toml`). `git push origin main:release` publishes it and
   spends 15 of the plan's 300 credits a month (`docs/research/netlify-credits.md`). It is pushed very rarely, so it lags
-  `main` by design: Chris kept Netlify on 2026-11-05.
+  `main` by design: Chris kept Netlify on 2026-11-05. It will not be pushed for a long time, so no report, PR or ticket mentions
+  Netlify or what it lacks (Chris, 2026-11-21).
 - **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
   Each script's notes and pictures are in its own folder (`docs/research/<script name>/`), pictures of a whole site page in `docs/research/site/`,
   and notes about SudokuPad itself at the top.
