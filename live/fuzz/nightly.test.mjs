@@ -351,7 +351,7 @@ describe('the fuzz process', () => {
   it('is started with the run\'s seed and minutes, and killed at the timeout it is given', async () => {
     const calls = []
     await fuzzProcess(7, { minutes: 12.5, timeoutMs: 99 }, async (...a) => { calls.push(a); return { ok: true, output: '' } })
-    assert.deepEqual(calls, [['node', ['live/fuzz/run.mjs', '--seed', '7', '--minutes', '12.5', '--config', 'busy-start', '--coverage'], { mergeStderr: true, timeout: 99 }]])
+    assert.deepEqual(calls, [['node', ['live/fuzz/run.mjs', '--seed', '7', '--minutes', '12.5', '--config', NIGHTLY_CONFIG, '--coverage'], { mergeStderr: true, timeout: 99 }]])
   })
 })
 

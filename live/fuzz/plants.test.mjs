@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { applyPlant, PLANTS, plantById, plantPatch } from './plants.mjs'
 import { scriptSource } from '../session.mjs'
 import { mutantsOf } from './mutants.mjs'
+import { scriptFiles } from '../../sync-lib.js'
 
 const occurrences = (text, find) => text.split(find).length - 1
 
@@ -46,7 +47,7 @@ describe('applyPlant', () => {
 describe('the plants against the shipped scripts', () => {
   it('there are about ten, spread over all six scripts and both kinds of failure', () => {
     assert.ok(PLANTS.length >= 10 && PLANTS.length <= 14, `got ${PLANTS.length}`)
-    assert.equal(new Set(PLANTS.map((p) => p.file)).size, 6)
+    assert.deepEqual([...new Set(PLANTS.map((p) => p.file))].sort(), scriptFiles())
     assert.deepEqual([...new Set(PLANTS.map((p) => p.kind))].sort(), ['crash', 'rule'])
     assert.equal(new Set(PLANTS.map((p) => p.id)).size, PLANTS.length)
   })

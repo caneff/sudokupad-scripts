@@ -13,7 +13,7 @@ const {
   SUDOKUPAD_PEN_COLORS,
   readPenColors, presetColorSet, startupPenColors, PRESET_LABELS,
   buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
+  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flags, isPlainObject, settingDefaults, readSettings, changedSettings, saveRow, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
   clickedMarks, marksAtPoint, holdsMark, DOT_FILL_CSS,
@@ -1849,9 +1849,8 @@ test('a slider row built from a range normalizes and saves by that range alone',
   assert.deepEqual(calls, [['set', 'New_key', 6], ['remove', 'New_key']])
 })
 
-test('a row built with no effect has one that does nothing', () => {
-  assert.equal(flag('Flag_key').effect(), undefined)
-  assert.equal(SETTINGS.eraseClicks.effect(), undefined)
+test('every setting row has an effect the save loop can run', () => {
+  for (const [name, row] of Object.entries(SETTINGS)) assert.equal(typeof row.effect, 'function', name)
 })
 
 test('saving what changed updates the values in force and names what changed', () => {

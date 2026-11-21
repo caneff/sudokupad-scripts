@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test'
+import { before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { actionList, MAX_START_STEPS } from './actions.mjs'
@@ -175,9 +175,12 @@ describe('the fuzz engine on a fake page', () => {
   describe('a page error planted on Escape during a drag', () => {
     let found
 
-    it('is caught, with the step that caused it and the page\'s error log', async () => {
+    before(async () => {
       const { openTarget } = fakeTargets({ plantEscapeError: true })
       found = await runFuzz({ openTarget, puzzles: PUZZLES, kinds: KINDS, seed: SEED, runs: 200, ...FIXED_WAIT })
+    })
+
+    it('is caught, with the step that caused it and the page\'s error log', () => {
       assert.equal(found.failed, true)
       assert.match(found.error, /crash signal after ".*Escape.*": page error or console error: Error: planted page error/)
       assert.deepEqual(found.errorLog, ['dark-page@1.0.0: saved color: TypeError: planted'])
@@ -291,9 +294,12 @@ describe('the fuzz engine on a fake page', () => {
     describe('with the wait drawn per list', () => {
       let found
 
-      it('catches it, and reports the 0 ms wait that exposed it', async () => {
+      before(async () => {
         const { openTarget } = fakeTargets({ raceOnFastTabs: true })
         found = await runFuzz({ openTarget, puzzles: PUZZLES, kinds: KINDS, seed: RACE_SEED, runs: 600, ...VARIED })
+      })
+
+      it('catches it, and reports the 0 ms wait that exposed it', () => {
         assert.equal(found.failed, true)
         assert.equal(found.waitMs, 0)
       })
@@ -403,10 +409,14 @@ describe('the fuzz engine on a fake page', () => {
 
     describe('a failure that needs the busy board', () => {
       let found
-      it('is caught, with the start steps it needs among the shrunk steps', async () => {
+
+      before(async () => {
         // 16 clicks do not come from the 20 actions of one list alone (none was found in 1500 lists without a start).
         const { openTarget } = fakeTargets({ errorAtClicks: 16 })
         found = await runFuzz({ openTarget, puzzles: PUZZLES, kinds: KINDS, seed: BUSY_SEED, runs: 1500, ...BUSY })
+      })
+
+      it('is caught, with the start steps it needs among the shrunk steps', () => {
         assert.equal(found.failed, true)
         assert.ok(found.sequence.some((s) => s.startsWith('(start) ')), found.sequence.join(' | '))
       })

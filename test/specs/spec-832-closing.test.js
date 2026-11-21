@@ -76,6 +76,7 @@ test('#832: writeStyle keeps one style element under an id, and the dialog shell
   lib.writeStyle('x', 'a {}', doc)
   lib.writeStyle('x', 'b {}', doc)
   assert.deepEqual(head, [{ tag: 'style', id: 'x', textContent: 'b {}' }])
+  assert.match(readFileSync(join(ROOT, 'lib', 'settings-dialog.js'), 'utf8'), /writeStyle\(`settings-dialog-shell-/, 'the dialog shell writes its style through it')
 })
 
 test('#832: savedHex reads a saved #rrggbb in any case, lowercased, and anything else as nothing saved', () => {

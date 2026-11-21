@@ -29,7 +29,6 @@ test('#860: the workflows test and the five closing tests read the script list, 
     'test/specs/spec-685-closing.test.js': SYNC_LIB,
     'test/specs/spec-449-closing.test.js': SYNC_LIB,
     'test/specs/spec-334-closing.test.js': SYNC_LIB,
-    'test/specs/spec-204-closing.test.js': HEADER_VERSION,
     'test/specs/spec-130-closing.test.js': HEADER_VERSION
   }
   for (const [file, owner] of Object.entries(readers)) {

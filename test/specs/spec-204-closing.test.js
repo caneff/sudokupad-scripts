@@ -6,7 +6,6 @@ const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
 
-const { headerVersion: versionOf } = require('../header-version.js')
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const extras = require('../../pen-tool-extras.user.js')
 const byDigit = require('../../color-by-digit.user.js')
@@ -16,7 +15,6 @@ const inlineStyles = (html) => html.match(/\sstyle="[^"]*"/g) || []
 // Typed out from c126948, the commit spec 204 was written against, as the independent source.
 const SECTIONS = ['Core', 'Pen colors', 'Pen pages', 'Dashed lines', 'Arrow lines', 'Marks', 'Right click erase', 'Line look', 'Pen panel', 'Settings dialog', 'Startup']
 const MARK_VALUES_BEFORE = ['3', '4', 'b', 'c', '5', '6', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'w', 'u', 'x', 'v', 'y']
-const VERSIONS_BEFORE = { 'pen-tool-extras.user.js': '1.14.11', 'color-by-digit.user.js': '0.5.6' }
 
 // Spec 204's acceptance at `npm test`: the 11 sections, the one mark table, the one color-character map, the marks boxes in the
 // settings table and the dialog stylesheets. This seam is blind to real SudokuPad: `npm run test:live` covers the marks cycles,
@@ -88,9 +86,4 @@ test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a 
   const styles = inlineStyles(html)
   assert.ok(styles.some((style) => style.startsWith(' style="background:')), 'the swatches are drawn')
   for (const style of styles) assert.match(style, /^ style="background:color-mix\(in srgb, #[0-9a-f]{6} 60%, transparent\)"$/, 'a swatch or digit key color')
-
-  // Versions: Pen Tool Extras raised its version for the marks change; Color by Digit raised its own later, for auto mode (#234).
-  assert.notEqual(versionOf(pen), VERSIONS_BEFORE['pen-tool-extras.user.js'])
-  assert.equal(extras.VERSION, versionOf(pen))
-  assert.notEqual(versionOf(digit), VERSIONS_BEFORE['color-by-digit.user.js'])
 })

@@ -105,6 +105,7 @@ export const runScript = ({ openTarget, puzzle, actions }) => runList(() => open
 // each puzzle ran, by name) or the failure: `error`, `puzzle` (its name), `sequence` (readable steps, `huntedSteps` of them before the shrink), `seed`, `path`,
 // `replayPath`, `waitMs` (the list's own wait, under `waits`), `errorLog` (lines) and `huntMs` (the hunt alone, shrink not counted).
 export async function runFuzz ({ openTarget, puzzles, kinds, seed, runs, minutes = DEFAULT_MINUTES, shrinkMinutes = DEFAULT_SHRINK_MINUTES, path, replayPath, focus, landMs = ERRORS_LAND_MS, settleMs = ACTION_SETTLE_MS, waits, busyStart, maxCommands, nonEmpty, reloadAfterSettings }) {
+  if (!kinds) throw new Error('runFuzz needs kinds')
   // The puzzle of every list started, in order: the hunt's lists are the first `hunt.numRuns` (a list the time limit cut off, and the shrink's, come after).
   const started = []
   const property = fc.asyncProperty(actionList(puzzles, { kinds, replayPath, focus, waits, busyStart, maxCommands, nonEmpty, reloadAfterSettings }), ({ puzzle, start, commands, waitMs }) => {

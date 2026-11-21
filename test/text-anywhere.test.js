@@ -1225,7 +1225,7 @@ const completeRoots = () => {
   return { Framework, app }
 }
 
-test('Text Anywhere declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+test('a SudokuPad holding every internal FEATURES names lacks none of them', () => {
   assert.deepEqual(lackingInternals(FEATURES, completeRoots()), new Map())
 })
 
