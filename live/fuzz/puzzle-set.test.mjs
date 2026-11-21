@@ -1,7 +1,7 @@
 // Unit tests of the fuzz's puzzle set (#679): what each puzzle is, with no browser.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { FUZZ_PUZZLES, insideGrid, puzzleByName as byName, RULES_TEXT, rulesTextFor } from './puzzle-set.mjs'
+import { FUZZ_PUZZLES, insideGrid, puzzleByName as byName, RULES_TEXT, rulesTextFor, targetAt } from './puzzle-set.mjs'
 
 describe('the fuzz puzzle set', () => {
   it('holds the two puzzles the fuzz began with and about ten more, with distinct names and distinct ids', () => {
@@ -68,5 +68,18 @@ describe('the fuzz puzzle set', () => {
     assert.equal(rulesTextFor(byName('4x4')), null)
     const short = rulesTextFor(FUZZ_PUZZLES.find((p) => p.rules === 'short'))
     assert.ok(short.length > 0 && short.length < RULES_TEXT.length / 4)
+  })
+})
+
+describe('targetAt', () => {
+  const puzzle = byName('outside clues 9x9')
+
+  it('gives the index of the target at a 0-based row and column, margin cells included', () => {
+    for (const [row, col] of [[0, 0], [-1, 3], [9, 4]]) assert.deepEqual(puzzle.cells[targetAt(puzzle, row, col)], [row, col])
+  })
+
+  it('throws at once, naming the cell and the puzzle, for a cell that is no target (a typo, a given, off the grid)', () => {
+    assert.throws(() => targetAt(puzzle, 40, 40), /r41c41 is no target of the outside clues 9x9 puzzle/)
+    assert.throws(() => targetAt(byName('6x6'), -1, 0), /r0c1 is no target of the 6x6 puzzle/)
   })
 })
