@@ -14,7 +14,6 @@ const filesUnder = (dir) => readdirSync(join(ROOT, dir), { recursive: true }).fi
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const live = filesUnder('live').filter((file) => !file.includes('node_modules'))
 const liveSuites = live.filter((file) => file.endsWith('.live.mjs'))
-// A line naming `pattern` in `file`, as `file:line`.
 const hits = (files, pattern) => files.flatMap((file) => read(file).split('\n').flatMap((text, index) => (pattern.test(text) ? [`${file}:${index + 1}`] : [])))
 // Where `name` is defined at the top level of a live file, which is how the shared modules declare it: a suite's indented wrapper that fixes its page is not a second definition.
 const definedIn = (name) => live.filter((file) => new RegExp(`^(export )?(async )?(function|const) ${name}\\b`, 'm').test(read(file)))

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.38
+// @version      0.1.39
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches the number pad to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.38'
+  const VERSION = '0.1.39'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -63,7 +63,7 @@
   // <lib:settings-table>
   // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads isPlainObject from plain. A script that copies in store as well has a second `global` naming it, which the linter calls a redeclaration.
+  // A script that copies in store as well has a second `global` naming isPlainObject, which the linter calls a redeclaration.
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
@@ -81,7 +81,6 @@
 
   const readByField = (rows, store, by) => Object.fromEntries(rows.map((row) => [row[by], readRow(row, store)]))
 
-  // Every row as `store` holds it, by name.
   const readTable = (rows, store) => readByField(rows, store, 'name')
 
   // The same values by stored key, defaults included, so a paste can put a setting back to its default.
@@ -89,7 +88,6 @@
 
   const pasteReaders = (rows) => Object.fromEntries(rows.map(({ key, read }) => [key, read]))
 
-  // The rows whose draft differs from the value in force.
   const changedRows = (rows, draft, now) => rows.filter((row) => !sameValue(draft[row.name], now[row.name]))
 
   // A paste puts the pasted rows' values (`values`, by stored key, as the readers gave them) into the draft and leaves every other row as drafted.
@@ -229,10 +227,8 @@
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
-  // What `keys` hold now, and the script's in-memory copy of them, as a function that puts both back; a key that held nothing is removed
-  // again. `holdMirror()` runs now and returns what puts the copy back. Every key is written back even when one throws, and the copy is
-  // put back after them; the first throw then goes on. The stored values are held by reference, so a script's save must replace a value
-  // and never edit one in place.
+  // Every key is written back even when one throws, and only the first throw goes on; the rest are dropped. The stored values are
+  // held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
     const putMirrorBack = holdMirror()
@@ -251,7 +247,6 @@
     }
   }
 
-  // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
   function writeOrRestore (snapshot, write) {
@@ -1029,7 +1024,6 @@
     })
   }
 
-  // The letter tool's own list holds whenever the tool is on, so a swapped list is not undone by the setting.
   function listenForHeldTab () {
     document.addEventListener('keydown', (event) => {
       tab.run(() => {
