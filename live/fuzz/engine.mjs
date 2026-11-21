@@ -59,6 +59,8 @@ async function runList (openTarget, actions, landMs, settleMs, settledStep = -1)
       check: (model) => action.check(model),
       toString: () => action.toString(),
       async run (model, real) {
+        // A note dragged off a button is the player's own move before the action, so the snapshot the rules compare against is read after it (#1006).
+        if (await target.env.clearControls()) before = await target.snapshot()
         await action.run(model, real)
         const waitMs = step === settledStep ? Math.max(settleMs, ACTION_SETTLE_MS) : settleMs
         await target.wait(waitMs)
