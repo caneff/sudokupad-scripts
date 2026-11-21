@@ -563,6 +563,15 @@ test('fitRulesPane: a shrink the pane\'s height floor holds back gives back the 
   assert.equal(controls.getBoundingClientRect().bottom <= VIEWPORT.height, true, 'the column ends inside the window')
 })
 
+test('fitRulesPane: a bottom-corner shrink the floor holds back gives back height only, and moves the column nowhere (#1015)', () => {
+  const { fit, height } = fakePane(800)
+  fit()
+  const fitted = height()
+  const applied = fit({ box: { w: 0, h: -(fitted + 100), x: 0, y: 0 } })
+  assert.equal(applied.y, 0, 'a column that never moved is not moved back')
+  assert.equal(Math.round(applied.h), Math.round(MIN_PANE.height - fitted))
+})
+
 test('dragRulesBox: a corner the pane does not have is refused', () => {
   assert.throws(() => dragRulesBox(NO_BOX, 'ul', 1, 1, PANE, MIN_PANE), /no corner "ul"/)
 })

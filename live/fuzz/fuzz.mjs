@@ -107,13 +107,17 @@ async function clickIn (p, selector) {
 // What a player does when a Text Anywhere note (or its handle) covers a button: drags the note off, onto the board's middle or, for a note that would still cover the button there, to the nearest place that clears it (`note-drop.mjs`).
 const CLEAR_TRIES = 4
 const LAYER = '#text-anywhere-layer'
-const COVERED_BUTTON_NOTE = ([layer, notes]) => {
+// Fractions of a button's box: its centre, and where `buttonPoint` presses (the Color by Digit hold, clear of the arrow).
+const PRESS_POINTS = [[0.5, 0.5], [0.3, 0.6]]
+const COVERED_BUTTON_NOTE = ([layer, notes, pressPoints]) => {
   for (const button of document.querySelectorAll('button, [id^="control-"]')) {
     const box = button.getBoundingClientRect()
     if (box.width === 0 || box.height === 0) continue
-    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2]
-    const top = document.elementFromPoint(x, y)
-    if (!top || top === button || button.contains(top) || !top.closest(layer)) continue
+    // The points an action presses on a button: its centre, and the Color by Digit hold's (`buttonPoint`), which a note over it only takes (#1015).
+    const [x, y, top] = pressPoints.map(([fx, fy]) => [box.x + box.width * fx, box.y + box.height * fy])
+      .map(([px, py]) => [px, py, document.elementFromPoint(px, py)])
+      .find(([, , hit]) => hit && hit !== button && !button.contains(hit) && hit.closest(layer)) ?? []
+    if (!top) continue
     // A handle sits on its note's corner, so the note is the one whose box, grown by the handle's own size, holds the point.
     const reach = top.closest(notes) ? 0 : top.getBoundingClientRect().width
     // A note's own element is that note: the grown box below would match any note within its width of the button, a wide one's included.
@@ -209,20 +213,6 @@ async function pickProfileFromMenu (p, i) {
   await p.locator(PROFILE_MENU).waitFor({ state: 'detached' })
 }
 
-// Where a press on the Color by Digit button lands on it: `buttonPoint`, or the nearest point of a 5 x 5 grid over the button when a note dragged over it covers that one. null when
-// the button is covered everywhere, as no press then reaches it.
-async function uncoveredButtonPoint (p) {
-  const first = await buttonPoint(p)
-  const spots = await p.evaluate(([button, x, y]) => {
-    const box = document.querySelector(button).getBoundingClientRect()
-    const onButton = ([px, py]) => document.elementFromPoint(px, py)?.closest(button) != null
-    const grid = []
-    for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) grid.push([box.x + box.width * (i + 0.5) / 5, box.y + box.height * (j + 0.5) / 5])
-    return [[x, y], ...grid.sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y))].filter(onButton)
-  }, [COLOR_BUTTON, first.x, first.y])
-  return spots.length > 0 ? { x: spots[0][0], y: spots[0][1] } : null
-}
-
 function envFor (p, puzzle, { beforeReload, reads }) {
   const openPen = async () => {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
@@ -231,7 +221,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
   const windowSize = () => p.evaluate(() => [window.innerWidth, window.innerHeight])
   const clearControls = async () => {
     for (let i = 0; i <= CLEAR_TRIES; i++) {
-      const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS])
+      const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS, PRESS_POINTS])
       if (!covered) return i > 0
       if (!covered.point) throw new Error(`${covered.button} is covered by a Text Anywhere element that belongs to no note`)
       if (i === CLEAR_TRIES) throw new Error(`${covered.button} is still covered by a note after ${CLEAR_TRIES} drags off it`)
@@ -304,9 +294,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     undoAll: () => undoAll(p),
     clickColorMode: () => clickIn(p, COLOR_BUTTON),
     holdColorMode: async (drift) => {
-      const point = await uncoveredButtonPoint(p)
-      if (point === null) return // a note left over the whole button takes every press there, and a user's too (#1015)
-      const { x, y } = point
+      const { x, y } = await buttonPoint(p)
       await p.mouse.move(x, y)
       await p.mouse.down()
       try {
