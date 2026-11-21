@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { changedPaths, liveFilesIn, plan, reachOf, referencesOf, selectLiveFiles } from './changed.mjs'
+import { changedPaths, isAbsent, liveFilesIn, plan, reachOf, referencesOf, selectLiveFiles } from './changed.mjs'
 
 describe('referencesOf', () => {
   it('reads every relative path written as a string: import, require, createRequire and new URL alike', () => {
@@ -13,37 +13,54 @@ describe('referencesOf', () => {
       "const { b } = createRequire(import.meta.url)('../../b.user.js')",
       "readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8')",
       'const t = `./not-${x}.mjs`', // eslint-disable-line no-template-curly-in-string
-      "const bare = 'node:fs'"
+      "const bare = 'node:fs'",
+      "scriptSource('dark-page.user.js')"
     ].join('\n')
-    assert.deepEqual(referencesOf(source), ['./a.mjs', '../../b.user.js', './puzzle-url.txt'])
+    assert.deepEqual(referencesOf(source), ['./a.mjs', '../../b.user.js', './puzzle-url.txt', 'dark-page.user.js'])
+  })
+})
+
+describe('isAbsent', () => {
+  it('is true for the errors that mean the file is not there, and false for any other, which must not read as absent', () => {
+    for (const code of ['ENOENT', 'ENOTDIR', 'EISDIR']) assert.equal(isAbsent({ code }), true, code)
+    for (const code of ['EACCES', 'EMFILE', 'EIO', undefined]) assert.equal(isAbsent({ code }), false, String(code))
   })
 })
 
 describe('reachOf', () => {
   const files = {
-    'live/a.live.mjs': "import { x } from './lib/x.mjs'\nconst s = require('../b.user.js')\nnew URL('./data.txt', import.meta.url)",
-    'live/lib/x.mjs': "import { y } from '../../deep/y.js'",
+    'live/a.live.mjs': "import { x } from './lib/x.mjs'\nimport './table.mjs'\nconst s = require('../b.user.js')\nnew URL('./data.txt', import.meta.url)",
+    'live/table.mjs': "scriptSource('t.user.js')",
+    't.user.js': '',
+    'live/lib/x.mjs': "import { y } from '../../deep/y.js'\nscriptSource('c.user.js')",
     'deep/y.js': "import './z.mjs'",
     'deep/z.mjs': '',
-    'b.user.js': "const not = './a-string-in-the-script.mjs'",
-    'live/data.txt': "'./not-read.mjs'",
+    'b.user.js': "import './only-from-the-script.mjs'",
+    'c.user.js': '',
+    'only-from-the-script.mjs': '',
+    'live/data.txt': "import './only-from-the-data.mjs'",
+    'live/only-from-the-data.mjs': '',
     'live/loop.live.mjs': "import './loop.live.mjs'"
   }
   const read = (path) => files[path] ?? null
   const reach = reachOf(['live/a.live.mjs', 'live/loop.live.mjs'], read)
 
-  it('follows a reference through every file it reaches, however deep', () => {
-    assert.deepEqual([...reach.get('live/a.live.mjs')].sort(), ['b.user.js', 'deep/y.js', 'deep/z.mjs', 'live/a.live.mjs', 'live/data.txt', 'live/lib/x.mjs'])
+  it('follows a reference through every file it reaches, however deep, and a bare script name in a script\'s folder to the repo root, but not one in a table directly under live/', () => {
+    assert.deepEqual([...reach.get('live/a.live.mjs')].sort(), ['b.user.js', 'c.user.js', 'deep/y.js', 'deep/z.mjs', 'live/a.live.mjs', 'live/data.txt', 'live/lib/x.mjs', 'live/table.mjs'])
   })
 
-  it('reads no further into a script or a data file, and ends on a loop', () => {
-    assert.ok(![...reach.get('live/a.live.mjs')].includes('live/a-string-in-the-script.mjs'))
-    assert.ok(![...reach.get('live/a.live.mjs')].includes('live/not-read.mjs'))
+  it('reads no further into a script or a data file, though each names a file that exists, and ends on a loop', () => {
+    assert.ok(!reach.get('live/a.live.mjs').has('only-from-the-script.mjs'))
+    assert.ok(!reach.get('live/a.live.mjs').has('live/only-from-the-data.mjs'))
     assert.deepEqual([...reach.get('live/loop.live.mjs')], ['live/loop.live.mjs'])
   })
 
   it('leaves out a reference to a file that is not there', () => {
     assert.ok(!reachOf(['live/q.live.mjs'], (path) => path === 'live/q.live.mjs' ? "import './gone.mjs'" : null).get('live/q.live.mjs').has('live/gone.mjs'))
+  })
+
+  it('lets a read error other than not-found out, rather than dropping the reference', () => {
+    assert.throws(() => reachOf(['live/q.live.mjs'], () => { throw Object.assign(new Error('denied'), { code: 'EACCES' }) }), /denied/)
   })
 })
 
@@ -79,8 +96,13 @@ describe('selectLiveFiles', () => {
     assert.deepEqual(select('site/index.html'), { files: ['live/site-slideshow.live.mjs'], widenedBy: null })
   })
 
-  it('places a path no live test reads as touching none: docs, tests, workflows, package.json, a helper no live file loads, lib/', () => {
-    for (const p of ['docs/a/b.png', 'README.md', 'test/x.test.js', '.github/workflows/ci.yml', 'package.json', 'live/watch.mjs', 'live/fuzz/run.mjs', 'live/changed.test.mjs', 'lib/settings.js', 'lib/settings.test.js', 'node-test.js']) {
+  it('selects the startup check for a change to the runner, package.json or node-test.js, so one live file runs through it', () => {
+    assert.deepEqual(select('package.json'), { files: ['live/startup.live.mjs'], widenedBy: null })
+    assert.deepEqual(select('node-test.js').files, ['live/startup.live.mjs'])
+  })
+
+  it('places a path no live test reads as touching none: docs, tests, workflows, a helper no live file loads, lib/', () => {
+    for (const p of ['docs/a/b.png', 'README.md', 'test/x.test.js', '.github/workflows/ci.yml', 'live/watch.mjs', 'live/fuzz/run.mjs', 'live/changed.test.mjs', 'lib/settings.js', 'lib/settings.test.js', 'sync-slides.js']) {
       assert.deepEqual(select(p), { files: [], widenedBy: null }, p)
     }
   })

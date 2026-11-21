@@ -19,8 +19,8 @@ skipped or rerun, so there is no list of either.
 
 ## The live gate (#1026)
 
-The full suite is no merge gate (Chris, 2026-11-18): it took a median 5.4 min and up to 13.4 min on the shared box, 7 of 11 full runs had a failing test, and 19 of 59 runs of some files failed, mostly on load timeouts that had nothing to do with the change.
-The nightly watch runs all of it (§ The daily watch). Before "PR up" the worker runs, and at the merge the controller reruns, the live files the change touches:
+The full suite is no merge gate: on the shared box it is slow and fails on load timeouts that have nothing to do with the change. The nightly watch runs all of it (§ The daily watch).
+Before "PR up" the worker runs, and at the merge the controller reruns, the live files the change touches:
 
 ```
 npm run test:live:changed -- [--changed <ref>] [--list]
@@ -31,11 +31,14 @@ npm run test:live:changed -- [--changed <ref>] [--list]
 - a `*.live.mjs`: itself;
 - a root `*.user.js`: `live/<script name>/*.live.mjs`, and for a SudokuPad script every top-level `live/*.live.mjs`, since most of them load every script;
 - `site/`: `live/site-slideshow.live.mjs`;
-- a helper or any file a live file names by a relative path in a string (`./x.mjs`, `../sync-lib.js`, `createRequire(...)('../../x.user.js')`, `new URL('./y.txt', import.meta.url)`): every live file that reaches it, through the files it loads in turn. A change to `live/session.mjs` or `lib/sudokupad.js` therefore selects nearly everything, and one to `live/board.mjs` most of it.
+- `package.json` or `node-test.js`, which every live run goes through: `live/startup.live.mjs`, so one live file runs through the changed runner;
+- a file a live file names by a relative path in a string (`./x.mjs`, `../sync-lib.js`, `createRequire(...)('../../x.user.js')`, `new URL('./y.txt', import.meta.url)`) or, from a file in a script's own folder, by a bare script name (`'dark-page.user.js'`: Pen Tool Extras' panel suite loads Dark Page):
+  every live file that reaches it, through the files it loads in turn. A change to `live/session.mjs` or `lib/sudokupad.js` therefore selects nearly everything, and one to `live/board.mjs` most of it.
+  A bare name in a file directly under `live/` (`scripts.mjs`, `attacks.mjs`) is not followed: those tables name every script and nearly every suite loads them.
 
-Docs, `test/`, `.github/`, `package.json`, `lib/` (the scripts that embed a `lib/` file change in the same diff) and a `live/` file no live file loads (`watch.mjs`, `look.mjs`, `fuzz/`) touch no live file: their own tests run in `npm test`.
+Docs, `test/`, `.github/`, `lib/` (the scripts that embed a `lib/` file change in the same diff) and a `live/` file no live file loads (`watch.mjs`, `look.mjs`, `fuzz/`) touch no live file: their own tests run in `npm test`.
 A path it cannot place widens the run to every live file, and says which path: `package-lock.json` (a new Playwright is a new Chromium), `.nvmrc`, a new top-level directory. Its last line says `(narrowed: <k> of <n> live files)` or `(widened: <path> ...)`, and an empty selection prints
-`no live file touched`, never nothing. `--list` prints the files one per line and runs none. The run goes through `npm run test:live:files`, so it has the time limit and the width cap.
+`no live file touched`, never nothing. A file it cannot read (anything but "no such file") stops it with the error. `--list` prints the files one per line and runs none. The run goes through `npm run test:live:files`, so it has the time limit and the width cap.
 A new `*.live.mjs` needs no edit anywhere: it is found by its name.
 
 ## Opening SudokuPad

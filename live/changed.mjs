@@ -1,20 +1,9 @@
-// `npm run test:live:changed`: the live files a change touches (#1026). The full live suite is no merge gate; the nightly watch runs it on GitHub
-// (`live/watch.mjs`). A worker and the controller run these files instead.
+// `npm run test:live:changed` (#1026): runs the live files a change touches, not the whole suite, which the nightly watch (`live/watch.mjs`) runs on GitHub.
 //   node live/changed.mjs [--changed <ref>] [--list]
 // `--changed <ref>` (default origin/main) is the base: the paths the branch committed since it, plus what is edited or untracked. `--list` prints the
 // selected files, one per line, and runs nothing. Otherwise it runs them with `npm run test:live:files`, so they get the time limit and the width cap.
-//
-// Which live files a path touches:
-//   - a `*.live.mjs`: itself;
-//   - a root `*.user.js`: `live/<its name>/*.live.mjs`, and for a SudokuPad script every top-level `live/*.live.mjs` too, since most of them load every
-//     script (the files the old merge rerun always took);
-//   - `site/`: `live/site-slideshow.live.mjs`, which serves the page from the checkout;
-//   - anything a live file reaches by a relative path written as a string, through the files it loads in turn (the closure: `./x.mjs`, `../sync-lib.js`,
-//     `createRequire(...)('../../x.user.js')`, `new URL('./y.txt', import.meta.url)`), so a helper selects every file that loads it.
-// A path nothing above places is `NO_LIVE_EFFECT` (docs, tests, workflows, `package.json`, a `live/` file no live file loads, `lib/`: the scripts that embed a
-// `lib/` file change in the same diff) or it widens the run to every live file: `package-lock.json` (a new Playwright is a new Chromium), `.nvmrc`, a new top-level
-// directory. The line after the list says `(narrowed: ...)` or `(widened: <path>)` (on stderr under `--list`).
-// An empty selection is said, not silent: "no live file touched".
+// What a path selects, and which paths widen the run to every live file: `live/README.md` § The live gate. The last line says `(narrowed: ...)` or
+// `(widened: <path> ...)` (on stderr under `--list`); an empty selection says "no live file touched".
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { posix } from 'node:path'
@@ -24,16 +13,27 @@ import { createRequire } from 'node:module'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SITE_CHECK = 'live/site-slideshow.live.mjs'
-const NO_LIVE_EFFECT = [/^(docs|test|\.github|lib)\//, /\.md$/, /^live\//, /^(LICENSE|netlify\.toml|\.gitignore|package\.json|node-test\.js|sync-slides\.js|tag-pictures\.js)$/]
+// What runs every live file, so a change to it runs one live file through it.
+const RUNNER_FILES = ['package.json', 'node-test.js']
+const RUNNER_CHECK = 'live/startup.live.mjs'
+const NO_LIVE_EFFECT = [/^(docs|test|\.github|lib)\//, /\.md$/, /^live\//, /^(LICENSE|netlify\.toml|\.gitignore|sync-slides\.js|tag-pictures\.js)$/]
 const sorted = (files) => [...new Set(files)].sort()
 
-// Every relative path written as a string. A template with `${` is not one: its path is not known.
-export const referencesOf = (source) => [...source.matchAll(/['"`](\.{1,2}\/[^'"`\s$]+)['"`]/g)].map((m) => m[1])
+// Every relative path written as a string, and every bare `*.user.js` name (a suite that injects another script loads it from the repo root by that name).
+// A template with `${` is not one: its path is not known.
+export const referencesOf = (source) => [...source.matchAll(/['"`](\.{1,2}\/[^'"`\s$]+|[\w-]+\.user\.js)['"`]/g)].map((m) => m[1])
 
 // A new `*.live.mjs` is found by being here, so a new suite needs no edit.
-export const liveFilesIn = (dir = ROOT) => sorted(readdirSync(`${dir}live`, { recursive: true }).filter((f) => f.endsWith('.live.mjs')).map((f) => `live/${f}`))
+export const liveFilesIn = () => sorted(readdirSync(`${ROOT}live`, { recursive: true }).filter((f) => f.endsWith('.live.mjs')).map((f) => `live/${f}`))
 
-const readOrNull = (path, dir = ROOT) => { try { return readFileSync(`${dir}${path}`, 'utf8') } catch { return null } }
+// Only "no such file" is absent. A read that fails any other way (no permission, too many open files) throws: a reference dropped for it would narrow the selection with nothing said.
+export const isAbsent = (e) => ['ENOENT', 'ENOTDIR', 'EISDIR'].includes(e.code)
+const readOrNull = (path) => {
+  try { return readFileSync(`${ROOT}${path}`, 'utf8') } catch (e) {
+    if (isAbsent(e)) return null
+    throw e
+  }
+}
 
 // What each live file reaches: itself, the repo files it names by a relative path, and what those files name in turn. Only `.js` and `.mjs` files are read
 // further: a `*.user.js` is a leaf (its strings are the script's, not the test's), and so is any other file.
@@ -46,7 +46,11 @@ export function reachOf (liveFiles, read = readOrNull) {
       const file = queue.pop()
       const source = /\.m?js$/.test(file) && !file.endsWith('.user.js') ? read(file) : null
       for (const ref of source === null ? [] : referencesOf(source)) {
-        const target = posix.normalize(posix.join(posix.dirname(file), ref))
+        const bare = !ref.includes('/')
+        // A bare script name in a file directly under live/ (scripts.mjs, session.mjs, attacks.mjs) is a table of every script, reached by nearly every suite: it would select
+        // them all for any script. The top-level suites are already selected by every SudokuPad script's own change, so only a file in a script's folder counts.
+        if (bare && posix.dirname(file) === 'live') continue
+        const target = bare ? ref : posix.normalize(posix.join(posix.dirname(file), ref))
         if (seen.has(target) || target.startsWith('..') || read(target) === null) continue
         seen.add(target)
         queue.push(target)
@@ -62,18 +66,27 @@ export function selectLiveFiles ({ changed, liveFiles, reach, scripts }) {
   const picked = new Set()
   let widenedBy = null
   for (const path of changed) {
-    const before = picked.size
-    let placed = false
-    if (liveFiles.includes(path)) { picked.add(path); placed = true }
-    if (path.endsWith('.live.mjs')) placed = true // a deleted suite selects nothing
+    let placed = NO_LIVE_EFFECT.some((rule) => rule.test(path))
+    if (liveFiles.includes(path)) picked.add(path)
+    if (RUNNER_FILES.includes(path)) {
+      if (liveFiles.includes(RUNNER_CHECK)) picked.add(RUNNER_CHECK)
+      placed = true
+    }
     if (/^[^/]+\.user\.js$/.test(path)) {
       const folder = `live/${path.replace(/\.user\.js$/, '')}/`
       for (const file of liveFiles) if (file.startsWith(folder) || (scripts.includes(path) && posix.dirname(file) === 'live')) picked.add(file)
       placed = true
     }
-    if (path.startsWith('site/')) { if (liveFiles.includes(SITE_CHECK)) picked.add(SITE_CHECK); placed = true }
-    for (const [file, reached] of reach) if (reached.has(path)) picked.add(file)
-    if (picked.size > before || NO_LIVE_EFFECT.some((rule) => rule.test(path)) || [...reach.values()].some((reached) => reached.has(path))) placed = true
+    if (path.startsWith('site/')) {
+      if (liveFiles.includes(SITE_CHECK)) picked.add(SITE_CHECK)
+      placed = true
+    }
+    for (const [file, reached] of reach) {
+      if (reached.has(path)) {
+        picked.add(file)
+        placed = true
+      }
+    }
     if (!placed && widenedBy === null) widenedBy = path
   }
   return { files: widenedBy === null ? sorted(picked) : sorted(liveFiles), widenedBy }
