@@ -50,7 +50,8 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     await restart(p)
     await p.click('#control-undo')
     assert.equal(await settle(() => noteCount(p), 1), 1, 'the Undo landed: it brought the note back')
-    assert.equal(await settle(() => labelOn(p), 'Cell'), 'Cell', 'Color by Digit was switched by the Undo')
+    // The label already reads Cell, so a `settle` would return at once; `stable` reads until it has held, and sees a late switch.
+    assert.equal(await stable(() => labelOn(p)), 'Cell', 'Color by Digit was left in its mode by the Undo')
   }))
 
   it('50 Undo past the start 100 times, then redo 100 times', () => attack(browser(), async (p) => {

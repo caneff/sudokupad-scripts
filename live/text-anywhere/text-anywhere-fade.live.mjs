@@ -64,16 +64,19 @@ describe('Text Anywhere\'s Opacity fades the whole note', { concurrency: false }
   })
 
   it('the outline of a faded note follows it through a drag and stays solid', async () => {
+    const boxes = () => p.evaluate(([notes, selection]) => {
+      const at = (e) => { const r = e.getBoundingClientRect(); return [r.left, r.top] }
+      return { note: at([...document.querySelectorAll(notes)].find((e) => e.textContent === 'boxed')), outline: at(document.querySelector(selection)) }
+    }, [TEXTS, SELECTION])
     const [x, y] = await gridPoint(p, [1.5, 1.5])
+    const start = (await boxes()).note
     await p.mouse.move(x, y)
     await p.mouse.down()
     await p.mouse.move(x + 20, y + 10, { steps: 4 })
     await textAnywhere.frames(p)
-    const { note, outline } = await p.evaluate(([notes, selection]) => {
-      const at = (e) => { const r = e.getBoundingClientRect(); return [r.left, r.top] }
-      return { note: at([...document.querySelectorAll(notes)].find((e) => e.textContent === 'boxed')), outline: at(document.querySelector(selection)) }
-    }, [TEXTS, SELECTION])
+    const { note, outline } = await boxes()
     await p.mouse.up()
+    assert.ok(Math.abs(note[0] - start[0] - 20) <= 2 && Math.abs(note[1] - start[1] - 10) <= 2, `mid-drag the note moved from ${start} to ${note}, not by 20,10`)
     assert.ok(Math.abs(note[0] - outline[0]) <= 1 && Math.abs(note[1] - outline[1]) <= 1, `the outline is at ${outline}, the note at ${note}`)
     assert.equal(await drawnOpacity(SELECTION), 1)
   })

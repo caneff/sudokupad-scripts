@@ -50,7 +50,7 @@ describe(`the dialog at ${DESKTOP.width} px`, { concurrency: false }, () => {
     assert.equal(overflow.doc <= overflow.win, true, JSON.stringify(overflow))
   })
 
-  it('puts Copy settings and Paste settings as two icons at the right end of the title row, and only Save and Cancel in the bottom row', async () => {
+  it('puts Copy settings and Paste settings as two icons at the right end of the title row, and Save, Cancel and Restore defaults in the bottom row', async () => {
     const icons = await p.locator('.cbd-title-row [data-act$="-settings"]').evaluateAll((es) => es.map((e) => ({ act: e.dataset.act, label: e.getAttribute('aria-label'), title: e.title, text: e.textContent.trim(), ...(({ x, y, right, width, height }) => ({ x, y, right, width, height }))(e.getBoundingClientRect()) })))
     assert.deepEqual(icons.map((i) => [i.act, i.label, i.title, i.text]), [['copy-settings', 'Copy settings', 'Copy settings', ''], ['paste-settings', 'Paste settings', 'Paste settings', '']])
     const row = await rect('.cbd-title-row')

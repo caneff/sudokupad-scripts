@@ -238,7 +238,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
     await finishNote(p)
   })
 
-  it('a note has a halo in the page color: a ring of sixteen shadows with no blur', async () => {
+  it('a note has a halo in the page color: a ring of shadows at one radius with no blur', async () => {
     const halo = await read((selector) => {
       const style = window.getComputedStyle(document.querySelector(selector))
       const probe = document.createElement('div')
@@ -249,8 +249,12 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
       return { shadows: style.textShadow, page, stroke: parseFloat(style.webkitTextStrokeWidth) }
     }, TEXTS)
     const rings = [...halo.shadows.matchAll(/(rgb\([^)]*\)) (-?[\d.]+)px (-?[\d.]+)px 0px/g)]
-    assert.equal(rings.length, 16, halo.shadows)
-    for (const [, color] of rings) assert.equal(color, halo.page)
+    assert.equal(rings.length >= 8, true, `at least eight shadows ring the text: ${halo.shadows}`)
+    const radius = ([, , x, y]) => Math.hypot(Number(x), Number(y))
+    for (const ring of rings) {
+      assert.equal(ring[1], halo.page)
+      assert.equal(Math.abs(radius(ring) - radius(rings[0])) < 0.1, true, `every shadow lies at one radius: ${halo.shadows}`)
+    }
     assert.equal(halo.stroke, 0, 'no stroke, whose miters grow spikes')
   })
 

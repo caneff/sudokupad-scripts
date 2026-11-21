@@ -335,6 +335,9 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     await p.mouse.click(x, y, { button: 'right' })
     await t.menu().waitFor({ state: 'visible' })
     await t.pick('Four')
+    // Four is the third profile, and its icon shows its first three groups.
+    assert.equal(await settle(async () => (await t.getState()).active, 2), 2, 'the right-click pick made Four the active profile')
+    assert.deepEqual(await settle(t.iconShownDigits, ['1', '3', '5']), ['1', '3', '5'])
     await selectCell(p, 8, 0)
     await p.keyboard.press('4')
     assert.equal(await settle(() => t.valueAt(8, 0), '4'), '4')

@@ -10,6 +10,12 @@ const browser = useBrowser()
 const lastButton = async (p) => (await buttonIds(p)).at(-1)
 const penOn = (p) => p.evaluate(() => Framework.setSetting('toolpen', true))
 const PEN_BUTTON = '#control-pen'
+// Only the pen's place matters: SudokuPad may add, drop or reorder its own buttons.
+const penBeforeTextAnywhere = async (p) => {
+  const ids = await buttonIds(p)
+  assert.notEqual(ids.indexOf('control-pen'), -1, ids.join())
+  assert.equal(ids.indexOf('control-pen') < ids.indexOf('control-textanywhere'), true, ids.join())
+}
 
 // Opens the puzzle with no script, leaves the pen tool saved on, then reloads with the script injected at DOMContentLoaded: Text Anywhere's
 // button and tool are added before SudokuPad restores the pen tool, so the pen's button comes after Text Anywhere's in the page.
@@ -33,7 +39,7 @@ describe('Text Anywhere: its button is the last tool button', { concurrency: fal
 
   it('with the pen tool on at startup, Text Anywhere comes after the pen button', async () => {
     assert.equal(await settle(() => lastButton(p), 'control-textanywhere'), 'control-textanywhere')
-    assert.deepEqual(await buttonIds(p), ['control-normal', 'control-corner', 'control-centre', 'control-colour', 'control-pen', 'control-textanywhere'])
+    await penBeforeTextAnywhere(p)
   })
 
   it('the pen tool turned off and on again leaves Text Anywhere last', async () => {
@@ -42,7 +48,7 @@ describe('Text Anywhere: its button is the last tool button', { concurrency: fal
     await penOn(p)
     await p.locator(PEN_BUTTON).waitFor({ state: 'visible' })
     assert.equal(await settle(() => lastButton(p), 'control-textanywhere'), 'control-textanywhere')
-    assert.deepEqual(await buttonIds(p), ['control-normal', 'control-corner', 'control-centre', 'control-colour', 'control-pen', 'control-textanywhere'])
+    await penBeforeTextAnywhere(p)
   })
 
   it('a tool added later by Framework.addTool, and a button added later by Framework.addToolButton, are drawn before Text Anywhere', async () => {

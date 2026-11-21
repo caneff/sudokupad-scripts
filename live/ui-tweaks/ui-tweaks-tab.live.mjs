@@ -213,8 +213,9 @@ describe('SudokuPad has no Framework.getData', { concurrency: false }, () => {
     await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: /^\s*UI Tweaks\s*$/ }).first().waitFor({ state: 'visible' })
   })
 
-  it('the page raised no error', () => {
+  it('the page raised no error, and the one warning stayed one', () => {
     assert.deepEqual(errors, [])
+    assert.equal(warned.length, 1, warned.join('\n'))
   })
 })
 
