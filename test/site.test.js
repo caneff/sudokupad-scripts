@@ -164,12 +164,12 @@ for (const [name, text] of Object.entries(WARNINGS)) {
   })
 }
 
-test(`${HOME} opens with the title sticker: the title, which reads ChinStrap's, then the intro as its subtitle`, () => {
+test(`${HOME} opens with the title sticker: the title, Puzzle Scripts, then the intro as its subtitle`, () => {
   const m = read(HOME).match(/<body>\s*<header class="banner">\s*<h1>([^<]*)<\/h1>\s*<p class="lede">([\s\S]*?)<\/p>\s*<\/header>/)
   assert.ok(m, `site/${HOME} does not open with a <header class="banner"> holding the <h1> and then the lede`)
-  assert.equal(m[1], "ChinStrap's SudokuPad scripts")
-  assert.equal(plain(m[2]), "Small userscripts for SudokuPad. Install Tampermonkey, click a script's Install button, and Tampermonkey asks if you want it.")
-  assert.match(read(HOME), /<title>ChinStrap's SudokuPad scripts<\/title>/)
+  assert.equal(m[1], 'Puzzle Scripts')
+  assert.equal(plain(m[2]), "Small userscripts for SudokuPad and for other puzzle sites. Install Tampermonkey, click a script's Install button, and Tampermonkey asks if you want it.")
+  assert.match(read(HOME), /<title>Puzzle Scripts<\/title>/)
 })
 
 // Chris ruled dark mode out of the site (#808): it is light only, whatever the browser asks for.
@@ -299,6 +299,15 @@ test(`${HOME}'s Logic Masters Puzzle Preview row credits Juggler, lists what thi
   assert.match(text, /first version was written by Juggler/)
   for (const added of [/up to 600 pictures/, /on or near the screen/, /one request at a time, 500 ms apart/, /503 or 429\) nothing more is asked for 5 minutes/]) assert.match(text, added)
   assert.equal(imgs(row).length, 0)
+})
+
+test(`${HOME} splits its rows into a SudokuPad group (the six SudokuPad scripts) and an Other group (Logic Masters Puzzle Preview)`, () => {
+  const html = read(HOME)
+  const groups = [...html.matchAll(/<h2 class="group">([^<]*)<\/h2>([\s\S]*?)(?=<h2 class="group">|<footer>)/g)].map(m => [m[1], rowsOf(m[2]).map(r => r.match(/<h2>([^<]*)<\/h2>/)[1])])
+  assert.deepEqual(groups, [
+    ['SudokuPad', ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer', 'UI Tweaks']],
+    ['Other', ['Logic Masters Puzzle Preview']]
+  ])
 })
 
 // Each slideshow's pictures, alt text and captions live once, in site/slideshows.json; `node sync-slides.js` writes them into the pages.

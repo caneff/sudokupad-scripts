@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ChinStrap's SudokuPad scripts</title>
+<title>Puzzle Scripts</title>
 <link rel="stylesheet" href="style.css">
 <style>
   /* The 14px under the banner is the mockup's, where with the tilt only the two white rings meet. */
@@ -20,6 +20,7 @@
   .row:nth-of-type(6n+5) { --card: var(--lavender); }
   .row:nth-of-type(6n+6) { --card: var(--peach); }
   .row-plain { grid-template-columns: 1fr; }
+  .rows > h2.group { margin: .6rem 0 0 .4rem; font-size: 1.6rem; }
   .row-text { max-width: 36rem; }
   .row h2 { font-size: 1.25rem; margin-bottom: .35rem; }
   .row-text p { margin-bottom: .75rem; }
@@ -32,11 +33,12 @@
 </head>
 <body>
   <header class="banner">
-    <h1>ChinStrap's SudokuPad scripts</h1>
-    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.</p>
+    <h1>Puzzle Scripts</h1>
+    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a> and for other puzzle sites. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.</p>
   </header>
   <p class="warning">These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.</p>
   <div class="rows">
+  <h2 class="group">SudokuPad</h2>
   <section class="row">
     <!-- slideshow:pen-tool-extras -->
     <div class="slideshow">
@@ -212,6 +214,7 @@
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js">Install<span class="visually-hidden"> UI Tweaks</span></a></p>
     </div>
   </section>
+  <h2 class="group">Other</h2>
   <section class="row row-plain">
     <div class="row-text">
       <h2>Logic Masters Puzzle Preview</h2>
