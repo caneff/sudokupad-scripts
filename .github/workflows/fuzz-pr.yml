@@ -43,8 +43,8 @@ jobs:
           changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- '*.user.js')
           focus=()
           for file in $changed; do
-            # draw-tool.user.js is a frozen handover that no fuzz page installs.
-            [ "$file" = draw-tool.user.js ] || focus+=(--focus "${file%.user.js}")
+            # draw-tool.user.js is a frozen handover and logic-masters-puzzle-preview.user.js runs on another site: no fuzz page installs either.
+            case "$file" in draw-tool.user.js|logic-masters-puzzle-preview.user.js) ;; *) focus+=(--focus "${file%.user.js}") ;; esac
           done
           echo "focus: ${focus[*]:-none (a change to lib/ or the fuzz only)}"
           npm run test:fuzz -- --minutes 5 --shrink-minutes 3 "${focus[@]}" 2>&1 | tee "$RUNNER_TEMP/fuzz.out"

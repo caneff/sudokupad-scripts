@@ -1,6 +1,6 @@
 # sudokupad-scripts
 
-Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
+Standalone Tampermonkey userscripts for SudokuPad, written to be shared, and one for the Logic Masters puzzle portal. Each
 script is one `*.user.js` file with no build step for users. Shared code lives in `lib/<name>.js` and `node sync-lib.js` copies it into each
 script between `// <lib:name>` and `// </lib:name>` markers, so an installed script is still one file.
 
@@ -18,6 +18,9 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   it is Text Anywhere's handover, frozen at 0.45.1 (`GLOSSARY.md`), and a change to Text Anywhere never touches it; `test/text-anywhere.test.js` fails when its bytes change (Chris, 2026-11-10).
 - **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live` every night at 06:17 UTC on GitHub Actions (and by hand through
   `workflow_dispatch`); `live/README.md` § The daily watch has the rule.
+- **Logic Masters Puzzle Preview** (`logic-masters-puzzle-preview.user.js`): runs on logic-masters.de, not SudokuPad. Its first version is Juggler's, published here with their permission
+  (Chris, 2026-11-21). `OTHER_SITE_SCRIPTS` in `sync-lib.js` keeps it out of every loop over SudokuPad's scripts (`scriptFiles()`), while the homepage and version checks still
+  cover it (`publishedScriptFiles()`). No test, check or screenshot requests logic-masters.de, which answered a few requests with a 503: `live/logic-masters-puzzle-preview/` serves synthetic pages.
 - **`GLOSSARY.md`**: the vocabulary.
 - **A change to what a script shows** (its panel, buttons, dialog or what it draws) updates that script's text in `site/` and retakes the site pictures that
   show it, with their scripts (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
@@ -81,7 +84,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   The controller's merge rerun takes the files in `live/README.md` § The merge rerun.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
-- `npm run test:tampermonkey` installs every script into a real Tampermonkey; `live/README.md` § The Tampermonkey test
+- `npm run test:tampermonkey` installs every SudokuPad script (`scriptFiles()`) into a real Tampermonkey, and leaves out Logic Masters Puzzle Preview (its install and update from the root address stay owed to a person); `live/README.md` § The Tampermonkey test
   says what it covers and needs. It needs the network, so it stays out of `npm test`, `npm run test:live` and
   `land.testcmd`. Run it when a change touches any line of a `// ==UserScript==` header; the controller's merge check
   runs it then too.

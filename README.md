@@ -3,7 +3,7 @@
 > [!WARNING]
 > **These scripts can break at any time, and there are no guarantees.** They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.
 
-Tampermonkey userscripts for [SudokuPad](https://sudokupad.app).
+Tampermonkey userscripts for [SudokuPad](https://sudokupad.app) and for other puzzle sites: the [Logic Masters](https://logic-masters.de/Raetselportal/) puzzle portal so far.
 
 Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 
@@ -20,6 +20,7 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 | Dark Page | Makes the page black around the puzzle, or a color you pick. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |
 | Auto Rules Resizer | Fits the rules pane to the screen in landscape: the largest text that fits, widening the pane only when the rules need it. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js) |
 | UI Tweaks | Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches to letters, hide the Select button, and wrap the bottom row after five buttons. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js) |
+| Logic Masters Puzzle Preview | Shows each puzzle's picture beside its link on the Logic Masters puzzle portal, with the pictures and puzzle pages it looked up kept in your browser. The first version is by Juggler. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js) |
 
 ## Settings
 
@@ -55,11 +56,12 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
 
 ### UI Tweaks
 
-Its dialog has three options, each applied at once on Save and kept in the browser. Restore defaults sets the boxes back to how they start, as a draft that Cancel drops:
+Its dialog has four options, each applied at once on Save and kept in the browser. Restore defaults sets the boxes back to how they start, as a draft that Cancel drops:
 
 - **Tab never switches to letters** (on at first): SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a stray Tab left the number pad on letters after a refresh. During play, Tab does what it did before, minus the toggle, and a held Tab is stopped too. The letter button and `/` still toggle, and Tab still moves focus in dialogs. It works whenever you turn the letter tool on in settings.
 - **Hide the Select button** (off at first): hides SudokuPad's Select button in the bottom row, and the other buttons close up.
 - **Wrap buttons** (off at first): the bottom row of tool buttons wraps onto a second line after five. Color by Digit already caps that row at five on its own, so with it installed this option changes nothing.
+- **Digit pad size** (Normal at first): Smaller, Normal, Larger or Largest digit buttons. SudokuPad fits the whole controls column to the window, so the digits grow most on a large screen, and on a laptop the other buttons shrink to make room.
 
 If a SudokuPad update changes what the Tab option, the saved options or the settings entry needs, that part logs a console warning and turns itself off, and a bar at the bottom of the page says so. Hide the Select button and Wrap buttons are style rules only, with nothing of SudokuPad's to break.
 
