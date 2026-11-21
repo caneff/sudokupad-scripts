@@ -535,3 +535,9 @@ describe('longer lists reach the engine (#730)', () => {
     assert.equal(logs.filter((log) => log.length === 0).length, 0)
   })
 })
+
+describe('runFuzz', () => {
+  it('requires its kinds', async () => {
+    await assert.rejects(runFuzz({ openTarget: async () => { throw new Error('opened') }, puzzles: [{ name: 'p' }], seed: 1, runs: 1 }), /needs kinds/)
+  })
+})

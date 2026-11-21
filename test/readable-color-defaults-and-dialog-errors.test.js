@@ -1,15 +1,15 @@
 'use strict'
-// Spec #951's closing test: readable color defaults that never override a saved choice, Text Anywhere's new-note size and size-step repeat,
-// Auto Rules Resizer's refused limits and floors, Restore defaults as a draft, and the shared dialog's error status, driven at the `npm test` seam.
+// Readable color defaults that never override a saved choice, Text Anywhere's new-note size and size-step repeat, Auto Rules Resizer's refused limits and
+// floors, Restore defaults as a draft, and the shared dialog's error status, at the `npm test` seam.
 // Blind to real SudokuPad: rendering (the measured contrast, the selected-color ring, the dialog fitting at 1280x720, Dark Page's trays and
 // overlay), the Framework calls and undo. `npm run test:live` covers them on sudokupad.app.
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { join } = require('node:path')
-const { loadLib } = require('../load-lib.js')
-const { fakeStore, quietly } = require('../fake-store.js')
+const { loadLib } = require('./load-lib.js')
+const { fakeStore, quietly } = require('./fake-store.js')
 
-const ROOT = join(__dirname, '..', '..')
+const ROOT = join(__dirname, '..')
 const colorByDigit = require(join(ROOT, 'color-by-digit.user.js'))
 const textAnywhere = require(join(ROOT, 'text-anywhere.user.js'))
 const rulesResizer = require(join(ROOT, 'auto-rules-resizer.user.js'))
@@ -20,7 +20,7 @@ const LEGACY_KEY = 'ColorByDigit_groups'
 const lowFiveHigh = (low, high) => [{ key: low, digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: high, digits: ['6', '7', '8', '9'] }]
 const loaded = (stored) => quietly(() => colorByDigit.stateFromStored(fakeStore(stored))).result
 
-test('#951: Color by Digit\'s Low/5/High preloads keys 6, 5 and q; the old 1, 5, 9 groups convert to it with no Custom profile; saved profiles are kept', () => {
+test('Color by Digit\'s Low/5/High preloads keys 6, 5 and q; the old 1, 5, 9 groups convert to it with no Custom profile; saved profiles are kept', () => {
   const { PRELOADS, activeGroups } = colorByDigit
   assert.deepEqual(PRELOADS['Low/5/High'], lowFiveHigh('6', 'q'))
   const fresh = loaded({})
@@ -32,14 +32,14 @@ test('#951: Color by Digit\'s Low/5/High preloads keys 6, 5 and q; the old 1, 5,
   assert.deepEqual(activeGroups(loaded({ [PROFILES_KEY]: structuredClone(saved) })), lowFiveHigh('1', '9'))
 })
 
-test('#951: Text Anywhere\'s note color is 2 with nothing saved and a saved 1 stays 1', () => {
+test('Text Anywhere\'s note color is 2 with nothing saved and a saved 1 stays 1', () => {
   const { readColor } = textAnywhere
   assert.equal(readColor(undefined), 2)
   assert.equal(readColor(null), 2)
   assert.equal(readColor(1), 1)
 })
 
-test('#951: a new note\'s size follows the cell size against a 9x9, and holding + or - repeats faster as it is held, up to a cap', () => {
+test('a new note\'s size follows the cell size against a 9x9, and holding + or - repeats faster as it is held, up to a cap', () => {
   const { newNoteWidth, textSizeFor, DEFAULT_WIDTH, REFERENCE_GRID, heldSliderSteps, HELD_SLIDER_MAX_STEPS, HELD_REPEAT_MS, HELD_RAMP_MS } = textAnywhere
   assert.equal(REFERENCE_GRID, 9)
   assert.equal(newNoteWidth(DEFAULT_WIDTH, 9), DEFAULT_WIDTH)
@@ -57,7 +57,7 @@ test('#951: a new note\'s size follows the cell size against a 9x9, and holding 
   assert.equal(heldSliderSteps(HELD_RAMP_MS * 10), HELD_SLIDER_MAX_STEPS)
 })
 
-test('#951: Auto Rules Resizer refuses a limit under its floor or not whole pixels, and reads a saved one under the floor as the floor', () => {
+test('Auto Rules Resizer refuses a limit under its floor or not whole pixels, and reads a saved one under the floor as the floor', () => {
   const { limitFromBox, readLimits, LIMIT_FLOORS, MAX_HEIGHT_KEY, MAX_WIDTH_KEY } = rulesResizer
   assert.deepEqual(LIMIT_FLOORS, { maxWidth: 240, maxHeight: 112 })
   assert.equal(limitFromBox('', 'maxHeight'), null)
@@ -102,7 +102,7 @@ function fakeDialog ({ save, restore }) {
   return { status, press, input, closed: () => closed }
 }
 
-test('#951: Restore defaults changes only the draft, so Cancel undoes it and Save applies it', () => {
+test('Restore defaults changes only the draft, so Cancel undoes it and Save applies it', () => {
   const { openingDraft, reduceDraft, layoutPages } = colorByDigit
   const saved = { profiles: [{ name: 'Mine', groups: [{ key: '1', digits: ['1'] }] }], active: 0 }
   const kept = structuredClone(saved)
@@ -120,7 +120,7 @@ test('#951: Restore defaults changes only the draft, so Cancel undoes it and Sav
   assert.deepEqual([writes, savedDialog.closed()], [['draft', 'save'], 1])
 })
 
-test('#951: a refused Save keeps the dialog open with an error in the status line, which the next edit clears and Reset puzzle size does not', () => {
+test('a refused Save keeps the dialog open with an error in the status line, which the next edit clears and Reset puzzle size does not', () => {
   const save = () => rulesResizer.limitFromBox('50', 'maxHeight')
   const dialog = fakeDialog({ save, restore () {} })
   dialog.press('Save')

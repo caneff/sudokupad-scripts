@@ -254,3 +254,12 @@ test('without one internal, only the feature that needs it is lacking', () => {
     assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[`Framework.${internal}`, [feature]]]), internal)
   }
 })
+
+test('Dark Page\'s page text is white up to #757575 and black from #767676, on every grey', () => {
+  const { buildCss } = require('../dark-page.user.js')
+  const footer = (color) => /\.controls-footer a \{ color: (#\w+) !important \}/.exec(buildCss(color))[1]
+  for (let level = 0; level < 256; level++) {
+    const grey = `#${level.toString(16).padStart(2, '0').repeat(3)}`
+    assert.equal(footer(grey), level <= 0x75 ? '#ffffff' : '#000000', grey)
+  }
+})

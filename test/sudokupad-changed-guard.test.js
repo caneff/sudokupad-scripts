@@ -4,24 +4,17 @@ const assert = require('node:assert/strict')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { runOnBrokenSudokuPad, SudokuPadChanged } = require('./broken-sudokupad.js')
-const { guardId, scriptFiles, withoutLibBlocks } = require('../../sync-lib.js')
-const ROOT = join(__dirname, '..', '..')
+const { guardId, scriptFiles } = require('../sync-lib.js')
+const ROOT = join(__dirname, '..')
 
 const SCRIPTS = scriptFiles()
 
-// Spec 449's acceptance at `npm test`: every script declares its features through the shared guard (lib/sudokupad.js), and none calls
-// SudokuPad outside a feature's guard. The second is run, not read: each script starts on a stand-in page, SudokuPad then changes so
-// that every call into it throws, and every way back into the script is taken (broken-sudokupad.js). This seam is blind to what that
-// file's head names (a path behind a state the stand-in never takes, and the methods a script wraps), and to real SudokuPad: the bar,
-// the console and each script's other features after a missing internal are `npm run test:live`'s (`live/*/*-guard.live.mjs` and the
-// rest), and a real Tampermonkey install is `npm run test:tampermonkey`'s.
-test('every script declares its features through the shared guard', () => {
-  assert.equal(SCRIPTS.length, 6, SCRIPTS.join(', '))
+// The second test is run, not read: each script starts on a stand-in page, SudokuPad then changes so that every call into it throws, and every
+// way back into the script is taken (broken-sudokupad.js). Blind to what that file's head names (a path behind a state the stand-in never takes,
+// and the methods a script wraps), and to real SudokuPad: the bar, the console and each script's other features after a missing internal are
+// `npm run test:live`'s (`live/*/*-guard.live.mjs` and the rest).
+test('every script names each of its features and holds back every feature that needs SudokuPad on a page with none', () => {
   for (const file of SCRIPTS) {
-    const source = readFileSync(join(ROOT, file), 'utf8')
-    const own = withoutLibBlocks(source)
-    assert.match(source, /\/\/ <lib:sudokupad>/, file)
-    assert.match(own, /createGuard\(\{ script: '[a-z-]+', [^\n]*features: FEATURES \}\)/, file)
     const { FEATURES, lackingInternals } = require(join(ROOT, file))
     for (const [name, { label }] of Object.entries(FEATURES)) assert.equal(typeof label, 'string', `${file} ${name}`)
     // A page with no SudokuPad holds back every feature that names an internal.

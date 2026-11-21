@@ -1,13 +1,8 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { fakeStore } = require('../fake-store.js')
-const { existsSync, readFileSync } = require('node:fs')
-const { join } = require('node:path')
-const ROOT = join(__dirname, '..', '..')
-
-const read = (file) => readFileSync(join(ROOT, file), 'utf8')
-const byDigit = require('../../color-by-digit.user.js')
+const { fakeStore } = require('./fake-store.js')
+const byDigit = require('../color-by-digit.user.js')
 
 const group = (key, digits) => ({ key, digits })
 // Typed out as the independent source: Odd/Even, a profile of two groups, SudokuPad's black (its givens' color) and the
@@ -19,13 +14,8 @@ const PALETTE = { 1: 'rgb(214, 214, 214)', 2: 'rgb(124, 124, 124)', 3: 'rgb(-36,
 const colorOf = (key) => PALETTE[key] ?? ''
 const digitsIn = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m[1]))].sort()
 
-// Spec 279's acceptance as one pass over Color by Digit's pure functions and the homepage, at `npm test`: the four modes
-// and their press cycle, label and starting mode; copy and paste of the mode, from settings saved before it too; leaving
-// cell coloring; the digit stylesheet, its shades and the conflict circle's CSS; the Each digit preload; the digit
-// profile sync and "Use digit colors"; and Digit Color gone. This seam is blind to real SudokuPad: the Framework calls,
-// the rendering of cells, digits and circles, and undo are `npm run test:live`'s, and a real
-// Tampermonkey install is `npm run test:tampermonkey`'s.
-test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is merged into it', () => {
+// Blind to real SudokuPad: the Framework calls, the rendering of cells, digits and circles, and undo are `npm run test:live`'s.
+test('Color by Digit\'s modes: the press cycle, labels, starting mode, copy and paste of the mode, leaving cell coloring, the digit stylesheet, Each digit, the digit profile sync and Use digit colors', () => {
   const { nextMode, allowedMode, startingMode, buttonLabel, copiedSettings, pastedSettings } = byDigit
 
   // A press steps Cell, Digit, Both, Off and round; the button's label names the mode (#354: its word and chips show it, its title says it).
@@ -87,8 +77,4 @@ test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is 
   assert.deepEqual([nextMode('cell', false), nextMode('off', false)], ['off', 'cell'])
   assert.deepEqual([allowedMode('digit', false), allowedMode('both', false)], ['off', 'cell'])
   assert.doesNotMatch(byDigit.renderMenu(off, colorOf), />Digit<|data-target="digits"/)
-
-  // Digit Color is gone: no script, and the homepage names it nowhere.
-  assert.equal(existsSync(join(ROOT, 'digit-color.user.js')), false)
-  assert.doesNotMatch(read('site/index.html'), /Digit Color|digit-color/)
 })

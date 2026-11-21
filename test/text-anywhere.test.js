@@ -7,7 +7,7 @@ const path = require('node:path')
 const { headerField, headerVersion } = require('./header-version.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
-const { failEachListener } = require('./specs/broken-sudokupad.js')
+const { failEachListener } = require('./broken-sudokupad.js')
 const { loadLib } = require('./load-lib.js')
 const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
@@ -1858,8 +1858,8 @@ const isResearchNote = (file) => file.startsWith('docs/research/') && !/\.m?js$/
 
 test('nothing but the old stored keys, the old install address and site page, and docs/research\'s notes still says draw tool, and no Text Anywhere file says drawing', () => {
   const root = path.join(__dirname, '..')
-  // This file and the spec's closing test name the old names to check them.
-  const checkers = [path.relative(root, __filename), 'test/specs/spec-689-closing.test.js']
+  // This file and the old-keys test name the old names to check them.
+  const checkers = [path.relative(root, __filename), 'test/text-anywhere-old-keys.test.js']
   const files = require('node:child_process').execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8' }).split('\n')
     .filter((file) => file && !checkers.includes(file) && file !== 'package-lock.json' && !BINARY.test(file) && !isResearchNote(file) && fs.existsSync(path.join(root, file)))
   assert.ok(files.filter(isTextAnywhereFile).length > 10, 'Text Anywhere\'s own files are read')
