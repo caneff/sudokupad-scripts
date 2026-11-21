@@ -4,6 +4,7 @@
 // and `npm test` and `land.testcmd` never run it. live/README.md § Looking at SudokuPad has the flags.
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
+import { pathToFileURL } from 'node:url'
 import { chromium } from 'playwright'
 import { harPath } from './cache.mjs'
 import { pickTool } from './attack-fixtures.mjs'
@@ -18,6 +19,7 @@ export const USAGE = `usage: npm run look -- [--scripts a,b] [--setting KEY=VALU
   --screenshot  write a picture of the page to PATH; with --selector, of the first element CSS matches
 at least one of --eval and --screenshot is required`
 
+const PEN_SCRIPT = 'pen-tool-extras.user.js'
 const FLAGS = ['--scripts', '--setting', '--tool', '--eval', '--screenshot', '--selector']
 
 const fail = (why) => { throw new Error(`${why}\n${USAGE}`) }
@@ -38,59 +40,74 @@ export function parseArgs (argv, scriptFiles) {
       given[flag.slice(2)] = value
     }
   }
-  const named = (given.scripts ?? '').split(',').filter(Boolean).map((name) => {
+  const names = given.scripts === undefined ? undefined : given.scripts.split(',')
+  const wanted = names?.map((name) => {
     const file = name.endsWith('.user.js') ? name : `${name}.user.js`
-    if (!scriptFiles.includes(file)) fail(`no script ${name}; the scripts are ${scriptFiles.join(', ')}`)
+    if (!scriptFiles.includes(file)) fail(`no script ${JSON.stringify(name)}; the scripts are ${scriptFiles.join(', ')}`)
     return file
-  })
-  const wanted = given.scripts === undefined ? scriptFiles : named
+  }) ?? scriptFiles
   if (given.eval === undefined && given.screenshot === undefined) fail('nothing to do')
   if (given.selector !== undefined && given.screenshot === undefined) fail('--selector crops a --screenshot')
+  const tool = given.tool ?? 'normal'
+  if (tool === 'pen' && !wanted.includes(PEN_SCRIPT)) fail(`--tool pen needs ${PEN_SCRIPT}, which turns the pen tool on`)
   return {
     scripts: scriptFiles.filter((file) => wanted.includes(file)),
     settings: given.settings,
     eval: given.eval,
     screenshot: given.screenshot,
     selector: given.selector,
-    tool: given.tool ?? 'normal'
+    tool
   }
 }
 
-// Plants each setting under the key SudokuPad's own storage gives it, before the page's scripts run.
-const plantSettings = (settings) => (p) => p.addInitScript((entries) => {
-  for (const [key, value] of entries) window.localStorage.setItem('svencodes_' + key, value)
-}, settings)
+// Plants each setting under the key SudokuPad's own storage gives it, before the page's scripts run, and hands back the page's
+// `errors` (the skip lines and uncaught page errors `openWith` collects) the moment it exists, so a run that fails still prints them.
+const seedWith = (settings, onErrors) => async (p, errors) => {
+  onErrors(errors)
+  await p.addInitScript((entries) => {
+    for (const [key, value] of entries) window.localStorage.setItem('svencodes_' + key, value)
+  }, settings)
+}
 
-async function look (options) {
+async function look (options, onErrors) {
   if (!existsSync(harPath(process.env, homedir()))) {
     throw new Error('there is no recording of SudokuPad to replay: record it once with `npm run test:live:files -- live/startup.live.mjs`')
   }
+  // Read before the browser opens, so a wrong path fails at once and not after the page has loaded.
+  const snippet = options.eval === undefined ? undefined : readFileSync(options.eval, 'utf8')
   // Replaying never touches the network: a recording past a day old is used as it is, not checked.
   process.env.LIVE_OFFLINE = '1'
   const browser = await chromium.launch()
   try {
-    const { p, errors } = await openWith(browser, options.scripts, { seed: plantSettings(options.settings) })
+    const { p } = await openWith(browser, options.scripts, { seed: seedWith(options.settings, onErrors) })
     for (const script of SCRIPTS.filter((s) => options.scripts.includes(s.file))) await script.ready(p)
-    await pickTool(p, options.tool)
-    if (options.eval !== undefined) {
-      const result = await p.evaluate(`(async () => {\n${readFileSync(options.eval, 'utf8')}\n})()`)
+    try {
+      await pickTool(p, options.tool)
+    } catch (e) {
+      throw new Error(`could not select the ${options.tool} tool (#control-${options.tool}): ${e.message}`)
+    }
+    if (snippet !== undefined) {
+      const result = await p.evaluate(`(async () => {\n${snippet}\n})()`)
       console.log(JSON.stringify(result ?? null, null, 2))
     }
     if (options.screenshot !== undefined) {
       await (options.selector === undefined ? p : p.locator(options.selector).first()).screenshot({ path: options.screenshot })
       console.log(`screenshot: ${options.screenshot}`)
     }
-    for (const line of errors) console.error(`skip or page error: ${line}`)
   } finally {
     await browser.close()
   }
 }
 
-if (import.meta.url === new URL(process.argv[1], 'file:').href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  let collected = []
+  let failed = false
   try {
-    await look(parseArgs(process.argv.slice(2), SCRIPT_FILES))
+    await look(parseArgs(process.argv.slice(2), SCRIPT_FILES), (errors) => { collected = errors })
   } catch (e) {
     console.error(e.message)
-    process.exit(1)
+    failed = true
   }
+  for (const line of collected) console.error(`skip or page error: ${line}`)
+  if (failed) process.exit(1)
 }

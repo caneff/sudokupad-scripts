@@ -17,7 +17,7 @@ describe('parseArgs', () => {
   })
 
   it('refuses a script it does not know, listing the ones it does', () => {
-    assert.throws(() => parseArgs(['--scripts', 'nope', '--eval', 's.js'], FILES), /no script nope.*color-by-digit/)
+    assert.throws(() => parseArgs(['--scripts', 'nope', '--eval', 's.js'], FILES), /no script "nope".*color-by-digit/)
   })
 
   it('splits a setting at its first =, so the value may hold one', () => {
@@ -34,9 +34,21 @@ describe('parseArgs', () => {
     assert.deepEqual([got.tool, got.eval, got.screenshot, got.selector], ['pen', 's.js', 'a.png', '.board'])
   })
 
-  it('refuses a run that does nothing, a selector with no screenshot and an unknown flag, each with the usage', () => {
-    for (const argv of [[], ['--selector', '.board', '--eval', 's.js'], ['--bogus', '--eval', 's.js'], ['--eval']]) {
-      assert.throws(() => parseArgs(argv, FILES), (e) => e.message.includes(USAGE), argv.join(' '))
-    }
+  for (const [why, argv, message] of [
+    ['a run that does nothing', [], /nothing to do/],
+    ['a selector with no screenshot', ['--selector', '.board', '--eval', 's.js'], /--selector crops a --screenshot/],
+    ['an unknown flag', ['--bogus', '--eval', 's.js'], /unknown flag --bogus/],
+    ['a flag with no value', ['--eval'], /--eval needs a value/],
+    ['a setting with no key', ['--setting', '=9', '--eval', 's.js'], /KEY=VALUE/],
+    ['an empty script list', ['--scripts', '', '--eval', 's.js'], /no script ""/],
+    ['the pen tool without Pen Tool Extras', ['--scripts', 'text-anywhere', '--tool', 'pen', '--eval', 's.js'], /--tool pen needs pen-tool-extras\.user\.js/]
+  ]) {
+    it(`refuses ${why}, ending with the usage`, () => {
+      assert.throws(() => parseArgs(argv, FILES), (e) => message.test(e.message) && e.message.endsWith(USAGE))
+    })
+  }
+
+  it('lets the pen tool through when Pen Tool Extras is among the scripts', () => {
+    assert.equal(parseArgs(['--tool', 'pen', '--eval', 's.js'], FILES).tool, 'pen')
   })
 })
