@@ -73,8 +73,8 @@ describe('ci.yml (#1027)', () => {
     assert.match(yml, /^on:\n {2}push:\n {4}branches: \[main\]\n {2}pull_request:\n/m)
   })
 
-  it('cancels a superseded pull-request run and never a run on main', () => {
-    assert.match(yml, /^concurrency:\n {2}group: ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}\n {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}\n/m)
+  it('cancels a superseded pull-request run and never a run on main, whose every push has a group of its own so none waits behind another to be dropped', () => {
+    assert.match(yml, /^concurrency:\n {2}group: ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}\n {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}\n/m)
   })
 
   it('keeps the job named test, so the check a pull request shows is the same one', () => {
