@@ -93,14 +93,25 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.equal(await width(), blurred, 'the blur stopped the hold')
   })
 
-  it('with Ctrl, Alt or Meta held the keys leave the size alone (only the Alt ones witness the script\'s own check)', async () => {
+  it('with Alt, Ctrl or Meta held the keys leave the size alone, since each switches the tool away', async () => {
     await typeText(p, A, 'A')
     await clickAt(p, A)
     await p.keyboard.press('+')
-    // Ctrl (and Cmd, which SudokuPad treats alike) switches the tool while held, so the Control and Meta cases pass for that reason; Alt goes first because a chord after a Ctrl one would never reach this script.
+    // Each modifier switches the tool while held, so these pass because Text Anywhere is not current; the script's own chord check is the next test's.
     for (const chord of ['Alt+=', 'Alt+-', 'Meta+=', 'Control+-']) {
       await p.keyboard.press(chord)
       assert.equal(await savedSize('A'), 21, `${chord} left the size as the plain + made it`)
+    }
+  })
+
+  it('a + or - keydown that carries Alt, Ctrl or Meta leaves the size alone with the tool current', async () => {
+    await typeText(p, A, 'A')
+    await clickAt(p, A)
+    await p.keyboard.press('+')
+    // A synthetic event keeps the tool current, which a held modifier does not, so only the script's own check can refuse it.
+    for (const modifier of ['altKey', 'ctrlKey', 'metaKey']) {
+      await p.evaluate((m) => window.dispatchEvent(new window.KeyboardEvent('keydown', { key: '=', code: 'Equal', [m]: true, bubbles: true, cancelable: true })), modifier)
+      assert.equal(await savedSize('A'), 21, `${modifier} left the size as the plain + made it`)
     }
   })
 

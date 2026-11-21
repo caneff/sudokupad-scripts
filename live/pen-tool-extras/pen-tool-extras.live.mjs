@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { EXTRAS_EDITOR, closeExtrasEditorWith, dialogButton, headerVersion, openExtrasEditor, openSettings } from '../settings.mjs'
-import { gridPoint, undoDepth } from '../board.mjs'
+import { currentTool, gridPoint, undoDepth } from '../board.mjs'
 import { middleOf } from '../input.mjs'
 import { openPenTool, penDrawnCount, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
@@ -739,11 +739,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('left Alt held with the pen current opens no color pickers and leaves the tool to SudokuPad, which switches it and back on release', async () => {
       await openPenTool(p)
       await p.keyboard.down('Alt')
-      assert.equal(await settle(() => p.evaluate(() => Framework.app.tool), 'corner'), 'corner')
+      assert.equal(await settle(() => currentTool(p), 'corner'), 'corner')
       assert.equal(await pickerCount(), 0)
       assert.equal(await editModeOn(), 0)
       await p.keyboard.up('Alt')
-      assert.equal(await settle(() => p.evaluate(() => Framework.app.tool), 'pen'), 'pen')
+      assert.equal(await settle(() => currentTool(p), 'pen'), 'pen')
       assert.equal(await pickerCount(), 0)
     })
 

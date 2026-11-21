@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
-import { gridPoint } from '../board.mjs'
+import { currentTool, gridPoint } from '../board.mjs'
 import { middleOf } from '../input.mjs'
 
 const { KEYPAD, PICKER, TEXTS, TEXT_BOX } = textAnywhere
@@ -59,10 +59,10 @@ describe('leaving Text Anywhere\'s color edit mode', { concurrency: false }, () 
   it('left Alt held with Text Anywhere current opens no color pickers', async () => {
     await p.keyboard.down('Alt')
     // Alt switches the tool away, so the panel is not Text Anywhere's while it is held: nothing of the script's own opens either way.
-    assert.equal(await settle(() => p.evaluate(() => Framework.app.tool), 'corner'), 'corner')
+    assert.equal(await settle(() => currentTool(p), 'corner'), 'corner')
     assert.equal(await pickerCount(), 0)
     await p.keyboard.up('Alt')
-    assert.equal(await settle(() => p.evaluate(() => Framework.app.tool), 'textanywhere'), 'textanywhere')
+    assert.equal(await settle(() => currentTool(p), 'textanywhere'), 'textanywhere')
     assert.equal(await pickerCount(), 0)
     assert.equal(await editModeOn(), 0)
   })
