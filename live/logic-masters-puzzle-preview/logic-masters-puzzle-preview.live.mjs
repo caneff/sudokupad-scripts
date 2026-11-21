@@ -14,12 +14,12 @@ const LINK_COUNT = 40
 const ROW_HEIGHT = 150
 const VIEWPORT = { width: 1200, height: 768 }
 const NEAR_MARGIN = 400 // the script's NEAR_SCREEN_PX
-const BUSY_DELAY_MS = 100 // each answer is held this long, so a request is still in flight when the next one is due
+const LOADING_DELAY_MS = 100 // each answer is held this long, so the Loading... labels are still up when the test looks
 const ANSWER_MS = 300 // long enough that two requests in flight would overlap
 const QUIET_MS = 2000 // "nothing more is fetched" window
 const REQUEST_GAP_MS = 200 // the script's REQUEST_GAP_MS: from the end of one request to the start of the next
 const BUSY_PAUSE_MS = 1500 // stands in for the script's 30 s pause so a run takes seconds; the script's own value is asserted below
-const CLOCK_SLACK_MS = 30 // the page's resource-timing clock and the server's Date.now() can differ by a few ms
+const CLOCK_SLACK_MS = 30 // a response takes a few ms to reach the page, which the gap is measured from on the script's side
 const BUSY_TEXT = 'Busy, try later'
 // A 1x1 PNG.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
@@ -27,6 +27,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 // The script with its 30 s pause shortened, so a run that waits out a busy answer takes seconds.
 const PAUSE_LINE = 'const BUSY_PAUSE_MS = 30 * 1000'
 const SCRIPT = SOURCE.replace(PAUSE_LINE, `const BUSY_PAUSE_MS = ${BUSY_PAUSE_MS}`)
+assert.notEqual(SCRIPT, SOURCE, `${PAUSE_LINE} is not in the script, so the pause is not shortened`)
 
 const portalHtml = () => `<!doctype html><meta charset="utf-8"><body style="margin:0">${
   Array.from({ length: LINK_COUNT }, (_, i) => `<div style="height:${ROW_HEIGHT}px"><a href="Raetsel/zeigen.php?id=${i + 1}">Puzzle ${i + 1}</a></div>`).join('')
@@ -37,14 +38,13 @@ const puzzleHtml = (id) => `<!doctype html><meta charset="utf-8"><body><img src=
 const open = []
 
 // One browser session on `profile`, with the script injected at DOMContentLoaded as a userscript manager does.
-// `busyPages` and `busyImages` are the ids whose puzzle page or image the site answers 503 (the string 'all' for every one);
+// `busyPages` and `busyImages` are the ids whose puzzle page or image the site answers 503;
 // `delay` holds each answer that long; `scrollTo` scrolls the page before the script runs.
 async function session (profile, { busyPages = [], busyImages = [], delay = 0, scrollTo = 0 } = {}) {
   const context = await launchPersistent(profile, { headless: true, viewport: VIEWPORT })
   open.push(context)
   // `log` holds each puzzle page and image request in the order the site saw them, with its start and end on this process's clock.
   const hits = { pages: [], images: [], aborted: [], log: [], inFlight: 0, maxInFlight: 0 }
-  const isBusy = (ids, id) => ids === 'all' || ids.includes(id)
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url())
     if (url.hostname !== HOST) { hits.aborted.push(url.href); return route.abort() }
@@ -60,13 +60,13 @@ async function session (profile, { busyPages = [], busyImages = [], delay = 0, s
     if (entry.kind === 'page') {
       const id = url.searchParams.get('id')
       hits.pages.push(id)
-      if (isBusy(busyPages, id)) return route.fulfill({ status: 503, body: 'busy' })
+      if (busyPages.includes(id)) return route.fulfill({ status: 503, body: 'busy' })
       return route.fulfill({ contentType: 'text/html; charset=utf-8', body: puzzleHtml(id) })
     }
     if (url.pathname.endsWith('/bild.php')) {
       const id = url.searchParams.get('data').replace('synthetic-', '')
       hits.images.push(id)
-      if (isBusy(busyImages, id)) return route.fulfill({ status: 503, body: 'busy' })
+      if (busyImages.includes(id)) return route.fulfill({ status: 503, body: 'busy' })
       return route.fulfill({ contentType: 'image/png', body: PNG, headers: { pragma: 'no-cache', 'cache-control': 'no-cache', expires: '0' } })
     }
     return route.fulfill({ status: 404, body: '' })
@@ -103,7 +103,7 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
   afterEach(async () => { await Promise.all(open.splice(0).map((context) => context.close())) })
   after(() => { rmSync(dir, { recursive: true, force: true }) })
 
-  it('the script pauses 30 s after a busy answer and 200 ms between requests', () => {
+  it('the script names a 30 s pause after a busy answer and a 200 ms gap between requests', () => {
     assert.ok(SOURCE.includes(PAUSE_LINE), `${PAUSE_LINE} is not in the script`)
     assert.ok(SOURCE.includes(`const REQUEST_GAP_MS = ${REQUEST_GAP_MS}`), 'REQUEST_GAP_MS is not 200 in the script')
   })
@@ -127,8 +127,8 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
     assert.deepEqual(second.errors, [])
   })
 
-  it('every link has a box saying Loading... at once, and every puzzle is fetched with no scroll', async () => {
-    const { page, hits, errors } = await session(join(dir, 'all-profile'), { delay: BUSY_DELAY_MS })
+  it('every link has a box at once, some still saying Loading..., and every puzzle is fetched with no scroll', async () => {
+    const { page, hits, errors } = await session(join(dir, 'all-profile'), { delay: LOADING_DELAY_MS })
     await page.waitForFunction((n) => document.querySelectorAll('.puzzle-preview').length === n, LINK_COUNT, { timeout: 5000 })
     assert.ok(await page.$$eval('.puzzle-preview div', (labels) => labels.some((d) => d.textContent === 'Loading...')))
     await waitForShown(page, LINK_COUNT, 120000)
@@ -173,6 +173,19 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
     assert.deepEqual(hits.pages, ['1', '2', '3'])
     assert.deepEqual(hits.images, [])
     assert.equal(await page.evaluate(() => window.localStorage.length), 0)
+  })
+
+  it('a link added after the run stopped asks for nothing and says "Busy, try later"', async () => {
+    const { page, hits } = await session(join(dir, 'late-profile'), { busyPages: ['1', '2', '3'] })
+    await waitForLabels(page, BUSY_TEXT, LINK_COUNT, 60000)
+    await page.evaluate(() => {
+      const row = document.createElement('div')
+      row.innerHTML = '<a href="Raetsel/zeigen.php?id=99">Puzzle 99</a>'
+      document.body.append(row)
+    })
+    await waitForLabels(page, BUSY_TEXT, LINK_COUNT + 1, 5000)
+    await quiet(QUIET_MS) // nothing more is fetched in this time
+    assert.deepEqual(hits.pages, ['1', '2', '3'])
   })
 
   it('requests go one at a time, each starting at least 200 ms after the one before ended', async () => {

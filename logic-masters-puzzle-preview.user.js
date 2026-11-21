@@ -98,7 +98,7 @@
 
   async function runQueue () {
     running = true
-    await sleep(REQUEST_GAP_MS) // the first lookups reach the queue as their cache reads finish: wait for the rest, so the nearest go first
+    await sleep(REQUEST_GAP_MS) // cache reads of a page's links finish within this, so the nearest links are queued before the first request
     while (waiting.length > 0) {
       const { job, resolve, reject } = takeNext()
       let busy = false
