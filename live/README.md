@@ -57,7 +57,7 @@ The settings dialogs' buttons are `live/settings.mjs`'s (`STATUS`, `actButton`).
 
 `live/logic-masters-puzzle-preview/` checks Logic Masters Puzzle Preview, which runs on another site than SudokuPad. It answers every request itself, from its own
 routes with synthetic pages, and aborts the rest, so nothing reaches logic-masters.de. It opens its pages through `launchPersistent` (`live/session.mjs`), a context that
-keeps its profile in a directory the check owns, and never loads SudokuPad, so it is the one folder the shared-harness check (`test/specs/spec-129-closing.test.mjs`) leaves out.
+keeps its profile in a directory the check owns, and never loads SudokuPad.
 
 ## Injection time
 

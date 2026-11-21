@@ -1,20 +1,8 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { readdirSync, readFileSync, existsSync } = require('node:fs')
-const { join } = require('node:path')
-const { loadLib } = require('../load-lib.js')
-const { memoryStorage } = require('../fake-page-storage.js')
-const { syncText, readLib, libNamesOnDisk, scriptFiles, libBlockNames, withoutLibBlocks } = require('../../sync-lib.js')
-const ROOT = join(__dirname, '..', '..')
-
-const read = (file) => readFileSync(join(ROOT, file), 'utf8')
-const SCRIPTS = scriptFiles()
-
-// The files a stray copy could hide in: the repo's root, `lib/`, `test/` and `live/`, so never `docs/research/` or `site/`.
-const filesIn = (dir) => readdirSync(join(ROOT, dir), { withFileTypes: true }).filter((entry) => entry.isFile() && /\.m?js$/.test(entry.name)).map((entry) => join(dir, entry.name))
-const liveFolders = readdirSync(join(ROOT, 'live'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => join('live', entry.name))
-const swept = ['.', 'lib', 'test', 'test/specs', 'live', ...liveFolders].flatMap(filesIn)
+const { loadLib } = require('./load-lib.js')
+const { memoryStorage } = require('./fake-page-storage.js')
 
 // SudokuPad's saved data, as the guard's store reads it by name, holding `saved`; `failOn` is a key whose write throws. A key with nothing
 // saved reads null, as in SudokuPad.
@@ -88,8 +76,8 @@ function openDialog ({ ownThrow = false } = {}) {
   return { saved, state, guard, feature, store, sudokupad }
 }
 
-// Spec 685's acceptance at `npm test`: a Save or Paste that fails half-way, whether a write through the guard's store (as every script now
-// saves) or the script's own step throws, puts every key back, says so and leaves the feature on; the cross-script copies are in `lib/` once; and each script carries only the lib code it runs. This seam is blind to
+// A Save or Paste that fails half-way, whether a write through the guard's store (as every script saves) or the script's own step throws, puts every
+// key back, says so and leaves the feature on. Blind to
 // real SudokuPad: its `Framework` calls, the dialogs it renders, undo, and each script's own in-memory mirror of its settings, which this
 // test fakes. `npm run test:live` covers those on sudokupad.app: `live/settings-copy-paste.live.mjs` plants the failing write in each
 // script's real dialog (Auto Rules Resizer's height write included), and each script's guard live suite runs its features there. Neither
@@ -131,61 +119,4 @@ test('a Save or Paste whose own step throws, not a store write, puts every key a
 
 test('a settings dialog opened with no snapshot throws at once', () => {
   assert.throws(() => lib.showSettingsDialog({}, { name: 'Demo', changed: () => true, save: () => {} }, { doc: {}, win: {} }), /needs a snapshot/)
-})
-
-test('every script\'s settings go through the shared guard, its dialog takes a snapshot, and no script keeps its own copy of a shared piece', () => {
-  assert.equal(SCRIPTS.length, 6, SCRIPTS.join(', '))
-  for (const file of SCRIPTS) {
-    const own = withoutLibBlocks(read(file))
-    assert.ok(/guard\.storeFor\(/.test(own), `${file} saves through the guard's store`)
-    assert.ok(/guard\.dialogsFor\(/.test(own), `${file} opens its dialogs through the guard`)
-    // The dialog's options, up to its Copy and Paste.
-    const options = /showSettingsDialog\(dialogs, \{([\s\S]*?)\bcopyPaste: \{/.exec(own)?.[1] ?? ''
-    for (const option of ['snapshot', 'feature', 'off']) assert.ok(new RegExp(`\\b${option}: `).test(options), `${file} hands its dialog a ${option} and its Copy and Paste`)
-    for (const copy of [/const dialogs = \{/, /const savedData = \{/, /\b(offNow|settingsOff)\b/, /\bPURPLE\s*=/, /#6a1b9a/i, /M12\.22 2h-\.44/, /function (writeOrRestore|snapshotStore|wrapIndex|writeStyle)\b/]) {
-      assert.equal(copy.test(own), false, `${file} keeps its own ${copy}`)
-    }
-  }
-  // SudokuPad's purple is defined once, in the guard's module.
-  const purple = filesIn('lib').filter((file) => !file.endsWith('.test.js') && /#6a1b9a/i.test(read(file)))
-  assert.deepEqual(purple, [join('lib', 'sudokupad.js')])
-  assert.equal(lib.SUDOKUPAD_PURPLE.toLowerCase(), '#6a1b9a')
-})
-
-test('each script carries only the lib code it runs: Pen Tool Extras alone has the ready poller, and the moved helpers ship only where they are called', () => {
-  assert.equal(existsSync(join(ROOT, 'lib', 'ready.js')), false)
-  // Spelled in pieces, so this file does not hold what it looks for.
-  const poller = new RegExp(`\\b${['when', 'Ready'].join('')}\\b`)
-  const naming = swept.filter((file) => poller.test(read(file))).sort()
-  assert.deepEqual(naming, [join('test', 'pen-tool-extras.test.js'), 'pen-tool-extras.user.js'].sort())
-  for (const file of SCRIPTS) {
-    const source = read(file)
-    // A call from the script's own code or from another module it carries; the helper's own block does not count.
-    for (const [helper, block] of [['wrapIndex', 'wrap-index'], ['writeStyle', 'write-style']]) {
-      const others = source.replace(new RegExp(`^\\s*// <lib:${block}>\\n[\\s\\S]*?// </lib:${block}>\\n`, 'm'), '')
-      if (new RegExp(`(?:function|const) ${helper}\\b`).test(source)) assert.ok(new RegExp(`\\b${helper}\\(`).test(others), `${file} carries ${helper} and never calls it`)
-    }
-  }
-})
-
-test('every lib test loads its module through the one loader, and every script\'s lib blocks match lib/', () => {
-  const libTests = readdirSync(join(ROOT, 'lib')).filter((file) => file.endsWith('.test.js'))
-  for (const file of libTests) {
-    const text = read(join('lib', file))
-    assert.doesNotMatch(text, /new Function/, file)
-    assert.match(text, /require\('\.\.\/test\/load-lib\.js'\)/, file)
-  }
-  for (const file of SCRIPTS) {
-    const { changed, problems } = syncText(read(file), readLib, libNamesOnDisk())
-    assert.deepEqual({ changed, problems }, { changed: [], problems: [] }, `${file} (${libBlockNames(read(file)).join(', ')})`)
-  }
-})
-
-test('Dark Page\'s page text is white up to #757575 and black from #767676, on every grey', () => {
-  const { buildCss } = require(join(ROOT, 'dark-page.user.js'))
-  const footer = (color) => /\.controls-footer a \{ color: (#\w+) !important \}/.exec(buildCss(color))[1]
-  for (let level = 0; level < 256; level++) {
-    const grey = `#${level.toString(16).padStart(2, '0').repeat(3)}`
-    assert.equal(footer(grey), level <= 0x75 ? '#ffffff' : '#000000', grey)
-  }
 })

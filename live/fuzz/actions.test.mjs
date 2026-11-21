@@ -1424,3 +1424,14 @@ describe('a reload drawn after the settings actions (#936)', () => {
     assert.ok(others.filter((l) => [...l.commands][0].cmd.kind === 'reload').length / others.length < 0.15)
   })
 })
+
+describe('every real kind', () => {
+  it('declares its scripts, whether it draws a stroke and whether it may start a list', () => {
+    assert.ok(KINDS.length > 0)
+    for (const k of KINDS) {
+      assert.ok(Array.isArray(k.scripts), `${k.kind}: scripts`)
+      assert.equal(typeof k.stroke, 'boolean', `${k.kind}: stroke`)
+      assert.equal(typeof k.start, 'boolean', `${k.kind}: start`)
+    }
+  })
+})

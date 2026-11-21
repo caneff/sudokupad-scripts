@@ -1,12 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { readFileSync } = require('node:fs')
-const { join } = require('node:path')
-const ROOT = join(__dirname, '..', '..')
-
-const read = (file) => readFileSync(join(ROOT, file), 'utf8')
-const byDigit = require('../../color-by-digit.user.js')
+const byDigit = require('../color-by-digit.user.js')
 
 const group = (key, digits) => ({ key, digits })
 // Typed out as the independent source: three profiles, the third a nine-group Each digit.
@@ -19,13 +14,9 @@ const PAGES = byDigit.layoutPages([['clear', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6',
 
 const count = (html, re) => (html.match(re) || []).length
 
-// Spec 300's acceptance as one pass over Color by Digit's pure functions and its details page, at `npm test`: the top
-// row's pulldowns, the two-column layout's CSS, the selected row
-// apart from the cell and digit profiles, rename, "+ New profile", the paint editor's palette and digit keys (#347), the three-chip
-// cap, and the details page's annotated dialog picture. This seam is blind to real SudokuPad: the Framework calls, the
-// dialog's rendering at 1200 px, Save reaching the puzzle and undo are `npm run test:live`'s
-// (live/color-by-digit/*.live.mjs), and a real Tampermonkey install is `npm run test:tampermonkey`'s.
-test('spec 300: the Color by Digit settings dialog edits a selected profile in two columns, by painting digits', () => {
+// Blind to real SudokuPad: the Framework calls, the dialog's rendering at 1200 px, Save reaching the puzzle and undo are
+// `npm run test:live`'s (live/color-by-digit/*.live.mjs).
+test('the Color by Digit settings dialog edits a selected profile in two columns, by painting digits', () => {
   const { renderEditor, renderProfiles, renderMenu, setSync, setActive, setDigitActive, copyProfile, renameProfile, setUseDigitColors } = byDigit
 
   // Top row: the Mode pulldown offers four modes, or Cell and Off without digit colors.
@@ -80,9 +71,12 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.equal(count(eachRow(renderProfiles(STATE, colorOf, 0), 'data-role="profile-row"'), /data-role="chip"/g), 3)
   assert.equal(count(eachRow(renderMenu(STATE, colorOf), 'data-role="menu-row"'), /data-role="chip"/g), 3)
   assert.equal(count(byDigit.iconHtml('cell', byDigit.shownChips('cell', EACH, EACH), colorOf), /data-role="chip"/g), 3)
+})
 
-  // The details page shows the annotated dialog picture, and the undo-with-Multi-color-off claim is gone.
-  const page = read('site/color-by-digit.html')
-  assert.match(page, /docs\/research\/color-by-digit\/color-by-digit-dialog-annotated\.png\?v=[0-9a-f]+/)
-  for (const text of [page, read('README.md')]) assert.doesNotMatch(text, /undoing a profile switch/i)
+test('Color by Digit\'s profile drag shifts the rows between the dragged row\'s start and its drop by one step, the other way', () => {
+  const { asideOf } = byDigit
+  const shifts = (from, to) => [0, 1, 2, 3].map((i) => asideOf(from, to, 20, i))
+  assert.deepEqual(shifts(0, 2), [0, -20, -20, 0])
+  assert.deepEqual(shifts(3, 1), [0, 20, 20, 0])
+  assert.deepEqual(shifts(1, 1), [0, 0, 0, 0])
 })

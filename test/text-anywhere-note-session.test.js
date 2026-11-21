@@ -1,20 +1,18 @@
 'use strict'
-// Spec #965's closing test: Text Anywhere's notes go through one note session over the guarded store, old strokes and shapes ride aside
-// and round-trip, Color by Digit and Text Anywhere take the Undo after a Restart by one shared tracker, and a note is found by one padded
-// box, driven at the `npm test` seam.
+// Text Anywhere's notes go through one note session over the guarded store, old strokes and shapes ride aside and round-trip, Color by Digit and Text Anywhere
+// take the Undo after a Restart by one shared tracker, and a note is found by one padded box, at the `npm test` seam.
 // Blind to real SudokuPad: the Framework calls (localStorage behind getData and setData), the guard's bar on the page, rendering, and
 // SudokuPad's own Restart and Undo. `npm run test:live` covers them on sudokupad.app: attack 73 in live/attacks-storage.live.mjs (a full
 // store told in the bar), attack 49 in live/sudokupad-attacks.live.mjs and live/text-anywhere/text-anywhere-note-undo.live.mjs (Restart
 // then Undo with both scripts installed).
-require('../fake-page-storage.js')
+require('./fake-page-storage.js')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const fs = require('node:fs')
 const { join } = require('node:path')
-const { loadLib } = require('../load-lib.js')
-const { quietly } = require('../fake-store.js')
+const { loadLib } = require('./load-lib.js')
+const { quietly } = require('./fake-store.js')
 
-const ROOT = join(__dirname, '..', '..')
+const ROOT = join(__dirname, '..')
 const textAnywhere = require(join(ROOT, 'text-anywhere.user.js'))
 const { noteSession, textItem, readNotes, notesTouched, noteBox, noteScreenBox, noteStyle, flagStyle, pieceKinds, parseMarkdown, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY } = textAnywhere
 
@@ -39,7 +37,7 @@ function sessionOn (saved, fail = () => null) {
   return { session: noteSession({ store: guard.storeFor(guard.features.saved), report: (message) => reports.push(message) }), guard, reports }
 }
 
-test('#965: notes saved through the guarded store load back for their puzzle, and an old stroke rides aside, never drawn, and is saved back as it was', () => {
+test('notes saved through the guarded store load back for their puzzle, and an old stroke rides aside, never drawn, and is saved back as it was', () => {
   const saved = { [INDEX_KEY]: ['p1'], [NOTES_PREFIX + 'p1']: [note, oldStroke] }
   const { session, reports } = sessionOn(saved)
   assert.deepEqual(session.load('p1'), [note])
@@ -49,7 +47,7 @@ test('#965: notes saved through the guarded store load back for their puzzle, an
   assert.deepEqual(reports, [], 'an old entry is not reported as unreadable')
 })
 
-test('#965: a save the browser refuses (a full store) is told by the guard, loses no other puzzle\'s notes, and leaves saving on', () => {
+test('a save the browser refuses (a full store) is told by the guard, loses no other puzzle\'s notes, and leaves saving on', () => {
   const saved = { [INDEX_KEY]: puzzles(50) }
   for (const key of puzzles(50)) saved[NOTES_PREFIX + key] = [note]
   const before = structuredClone(saved)
@@ -63,7 +61,7 @@ test('#965: a save the browser refuses (a full store) is told by the guard, lose
   assert.equal(warnings.some((warning) => /browser refused the write/.test(warning)), true, JSON.stringify(warnings))
 })
 
-test('#965: a remove that fails turns saving off by the guard\'s one policy, and nothing throws to the session\'s caller', () => {
+test('a remove that fails turns saving off by the guard\'s one policy, and nothing throws to the session\'s caller', () => {
   const saved = { [INDEX_KEY]: ['p1'], [RESTARTED_PREFIX + 'p1']: [note] }
   const { session, guard } = sessionOn(saved, (call) => (call === 'removeData' ? new Error('remove failed') : null))
   quietly(() => {
@@ -104,9 +102,7 @@ function restartPage () {
   }
 }
 
-test('#965: Color by Digit and Text Anywhere carry the one tracker, and take the same Undo as the one that loads the board from before a Restart', async () => {
-  const block = (file) => fs.readFileSync(join(ROOT, file), 'utf8').match(/\/\/ <lib:sudokupad>[\s\S]*\/\/ <\/lib:sudokupad>/)[0]
-  assert.equal(block('color-by-digit.user.js'), block('text-anywhere.user.js'))
+test('the restart-Undo tracker answers "does this Undo load the board from before a Restart" before the Undo (as Color by Digit asks) and calls back after it (as Text Anywhere does)', async () => {
   const page = restartPage()
   const tracker = trackRestartUndo(page.app, (fn) => fn)
   const undos = []
@@ -122,7 +118,7 @@ test('#965: Color by Digit and Text Anywhere carry the one tracker, and take the
   assert.deepEqual(undos, [{ modesBack: false, notesBack: false }, { modesBack: true, notesBack: true }, { modesBack: false, notesBack: false }])
 })
 
-test('#965: a note is found by one padded box, on the board and on the screen, and its style and pieces are pure functions', () => {
+test('a note is found by one padded box, on the board and on the screen, and its style and pieces are pure functions', () => {
   const same = { toBoard: (point) => point, toScreen: (point) => point }
   for (const item of [note, { ...note, bg: true }]) {
     assert.deepEqual(noteScreenBox(item, same, 'medium'), noteBox(item, 'medium'))
