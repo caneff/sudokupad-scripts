@@ -21,6 +21,7 @@ import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
 import { noteDrop } from './note-drop.mjs'
+import { visiblePoint } from './visible-point.mjs'
 import { replayCommand } from './replay-command.mjs'
 import { FUZZ_PUZZLES, insideGrid, rulesTextFor } from './puzzle-set.mjs'
 import { newestErrorRecords } from './signals.mjs'
@@ -213,14 +214,15 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
   }
   const pickPenColor = (color) => clickIn(p, `.tool-pen button[data-key="${color}"]`)
+  const windowSize = () => p.evaluate(() => [window.innerWidth, window.innerHeight])
   const clearControls = async () => {
     for (let i = 0; i <= CLEAR_TRIES; i++) {
       const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS])
-      if (!covered) return
+      if (!covered) return i > 0
       if (!covered.point) throw new Error(`${covered.button} is covered by a Text Anywhere element that belongs to no note`)
       if (i === CLEAR_TRIES) throw new Error(`${covered.button} is still covered by a note after ${CLEAR_TRIES} drags off it`)
       const middle = (await cellCentre(p, Math.floor(puzzle.rows / 2), Math.floor(puzzle.cols / 2))).slice(0, 2)
-      const to = noteDrop(middle, covered, await p.evaluate(() => [window.innerWidth, window.innerHeight]))
+      const to = noteDrop(middle, covered, await windowSize())
       await p.mouse.move(...covered.point)
       await p.mouse.down()
       await p.mouse.move(...to, { steps: 6 })
@@ -385,6 +387,10 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     async noteHandle (corner) {
       const handles = p.locator(HANDLES)
       return await handles.count() === 0 ? null : middleOf(await handles.nth(corner).boundingBox({ timeout: BOX_TIMEOUT_MS }))
+    },
+    async visibleHandlePoint (corner) {
+      const handles = p.locator(HANDLES)
+      return await handles.count() === 0 ? null : visiblePoint(await handles.nth(corner).boundingBox({ timeout: BOX_TIMEOUT_MS }), await windowSize())
     },
     async checkBoxPoint () {
       const boxes = p.locator(CHECK_BOXES)
