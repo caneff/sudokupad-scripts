@@ -62,7 +62,7 @@ await context.route('**/*', (route) => {
 await context.addInitScript({ content: `document.addEventListener('DOMContentLoaded', () => { ${SCRIPT} })` })
 const page = await context.newPage()
 await page.goto(PORTAL, { waitUntil: 'domcontentloaded' })
-// The script asks for one thing at a time, 500 ms apart: two requests per puzzle.
+// The script asks for two things at a time, at least 250 ms apart: two requests per puzzle.
 await page.waitForFunction((n) => [...document.querySelectorAll('.puzzle-preview img')].filter((i) => i.complete && i.naturalWidth > 0).length === n, PUZZLES.length, { timeout: 30000 })
 await page.screenshot({ path: out, clip: { x: 0, y: 0, width: 760, height: await page.evaluate(() => Math.ceil(document.querySelectorAll('tr')[2].getBoundingClientRect().bottom) + 2) } })
 await browser.close()

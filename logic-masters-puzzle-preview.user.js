@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Logic Masters Puzzle Preview
 // @namespace    http://tampermonkey.net/
-// @version      1.1.0
+// @version      1.2.0
 // @description  Show puzzle preview images inline on Logic Masters portal pages, cached between visits
 // @author       Juggler (first version); caching and request limits by ChinStrap
 // @match        https://logic-masters.de/Raetselportal/*
@@ -28,7 +28,8 @@
   const MAX_IMAGES = 600 // about 25 MB at the usual 40-50 KB a picture; the oldest go first
   const NEAR_SCREEN_PX = 400 // links this far below the viewport are looked up too
   const PRUNE_DELAY_MS = 5000 // the image cache is trimmed once the page has settled
-  const GAP_MS = 500 // pause between two network requests, to be gentle on the server
+  const MAX_IN_FLIGHT = 2 // network requests at once, to be gentle on the server
+  const START_GAP_MS = 250 // least time between the starts of two network requests
   const LINKS = 'a[href*="zeigen.php"]'
 
   // ---- storage ----
@@ -77,22 +78,51 @@
     }
   }
 
-  // ---- network: one request at a time, a gap between them, and a long pause when the server is busy ----
+  // ---- network: two requests at a time, a gap between their starts, and a long pause when the server is busy ----
   // LMD answers 503 when it is loaded or throttling. Then nothing more is asked of it for BUSY_PAUSE_MS,
   // and the failed lookup is not saved, so a later visit tries again.
   const BUSY_PAUSE_MS = 5 * 60 * 1000
   const BUSY_KEY = 'lm-puzzle-preview-busy-until' // kept in localStorage so every open page and the next visit wait too
   const busyUntil = () => Number(localStorage.getItem(BUSY_KEY)) || 0
-  let queue = Promise.resolve()
-  function politely (job) {
-    const run = queue.then(async () => {
-      if (Date.now() < busyUntil()) throw new Error('server busy, waiting')
-      const response = await job()
+  const waiting = []
+  let inFlight = 0
+  let lastStart = 0
+  let startTimer = null
+  function startNext () {
+    if (startTimer !== null || inFlight >= MAX_IN_FLIGHT || waiting.length === 0) return
+    const wait = lastStart + START_GAP_MS - Date.now()
+    if (wait > 0) {
+      startTimer = setTimeout(() => { startTimer = null; startNext() }, wait)
+      return
+    }
+    const { job, resolve, reject } = waiting.shift()
+    let busy
+    try {
+      busy = Date.now() < busyUntil()
+    } catch (error) {
+      reject(error) // an unreadable busy mark fails this lookup, as it did before two slots
+      startNext()
+      return
+    }
+    // A 503 that lands while a request waits for its gap stops it here, as it stops every later one.
+    if (busy) {
+      reject(new Error('server busy, waiting'))
+      startNext()
+      return
+    }
+    lastStart = Date.now()
+    inFlight++
+    job().then((response) => {
       if (response.status === 503 || response.status === 429) localStorage.setItem(BUSY_KEY, String(Date.now() + BUSY_PAUSE_MS))
       return response
+    }).then(resolve, reject).finally(() => { inFlight--; startNext() })
+    startNext()
+  }
+  function politely (job) {
+    return new Promise((resolve, reject) => {
+      waiting.push({ job, resolve, reject })
+      startNext()
     })
-    queue = run.catch(() => {}).then(() => new Promise((resolve) => setTimeout(resolve, GAP_MS)))
-    return run
   }
 
   // The first bild.php image on a puzzle page, read from the page text without building a document.
