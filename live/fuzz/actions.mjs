@@ -26,6 +26,7 @@
 //   env.pickProfile(i)                       picks profile `i` (counted from 0, wrapped to the profiles there are) from the pad button's menu
 //   env.restartPuzzle()                      restarts the puzzle, as SudokuPad's own Restart does
 //   env.noteHandle(corner) -> [x, y] | null  the middle of the resize handle at `corner` (0 to 3) of the one note selected; null when the page shows no four handles
+//   env.onScreen([x, y]) -> boolean          whether the point lies inside the browser window, where a player can press it
 //   env.checkBoxPoint() -> [x, y] | null     the middle of the first check box drawn in a note
 //   env.clearNotes(ok)                       presses Text Anywhere's Clear all button, and answers the question it asks (when a note is selected it asks none) with OK or Cancel
 //   env.holdFor(ms)                          lets `ms` of the page's time pass while a key stays down
@@ -938,7 +939,8 @@ function buildKinds () {
         // The note stays selected or open after its drag, so its handle is still there: a missing one is a failure, not a step to skip.
         const moved = await env.noteHandle(corner)
         if (!moved) throw new Error(`corner ${corner}'s handle is gone after its drag`)
-        await env.page.mouse.dblclick(...moved)
+        // A handle drawn past the window's edge cannot be double-clicked by a player, and the page's pointer events there reach the note under it and open it for typing.
+        if (await env.onScreen(moved)) await env.page.mouse.dblclick(...moved)
         if (open) await env.finishNote()
       }
     },

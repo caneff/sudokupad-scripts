@@ -574,6 +574,21 @@ describe('the action vocabulary', () => {
         await assert.rejects(a.run({ selected: true }, { env: target.env }), /handle is gone/)
       })
 
+      it('a handle reset whose handle lies outside the window after the drag does not double-click it, since no player can, and still finishes an open note', async () => {
+        const seen = new Set()
+        for (const a of kindOf('note handle reset')) {
+          const target = await fakeTargets().openTarget()
+          let handles = 0
+          target.env.noteHandle = async () => (++handles === 1 ? [300, 320] : [300, 936])
+          target.env.onScreen = async ([, y]) => y < 900
+          await a.run({ selected: true }, { env: target.env })
+          assert.equal(calls(target.log, 'mouse.dblclick').filter((c) => c[2] === 936).length, 0, String(a))
+          assert.equal(calls(target.log, 'mouse.up').length, 1, 'the drag still ran')
+          seen.add(names(target.log).includes('finishNote') ? 'open' : 'selected')
+        }
+        assert.deepEqual([...seen].sort(), ['open', 'selected'])
+      })
+
       it('the note edits run only when a note can be placed: with none it presses nothing', async () => {
         for (const kind of ['note erase', 'note restyle', 'note edit', 'note handle reset']) {
           const [a] = kindOf(kind)

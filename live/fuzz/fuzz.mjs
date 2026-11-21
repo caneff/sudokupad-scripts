@@ -386,6 +386,10 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       const handles = p.locator(HANDLES)
       return await handles.count() === 0 ? null : middleOf(await handles.nth(corner).boundingBox({ timeout: BOX_TIMEOUT_MS }))
     },
+    async onScreen ([x, y]) {
+      const [width, height] = await p.evaluate(() => [window.innerWidth, window.innerHeight])
+      return x >= 0 && y >= 0 && x < width && y < height
+    },
     async checkBoxPoint () {
       const boxes = p.locator(CHECK_BOXES)
       return await boxes.count() === 0 ? null : middleOf(await boxes.first().boundingBox({ timeout: BOX_TIMEOUT_MS }))
