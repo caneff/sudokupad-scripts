@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.42
+// @version      0.7.43
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.42'
+  const VERSION = '0.7.43'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -339,7 +339,8 @@
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
-  // The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  // Every key is written back even when one throws, and only the first throw goes on; the rest are dropped. The stored values are
+  // held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
     const putMirrorBack = holdMirror()

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.73
+// @version      0.25.74
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.73'
+  const VERSION = '0.25.74'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1592,7 +1592,7 @@
   // digit, null for a stroke that clears).
   const openingDraft = (state, mode, pages) => showingProfile({ mode, pages, paintKey: undefined }, state, state.active)
 
-  // Each dialog edit as one event; some edits that change nothing (clear, paint, restore, press, new-profile, delete, move) return the same draft; others return a new object.
+  // Each dialog edit as one event. An edit that changes nothing may still return a new object, so edit()'s changed answer is exact only for the events whose callers read it.
   function reduceDraft (draft, event) {
     const { state, selected, brush } = draft
     const groups = state.profiles[selected].groups
@@ -1787,7 +1787,8 @@
   function clearDialogError (dialog) {
     if (dialog.querySelector(STATUS_SELECTOR).dataset.tone === 'error') setDialogStatus(dialog, '')
   }
-  // The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  // Every key is written back even when one throws, and only the first throw goes on; the rest are dropped. The stored values are
+  // held by reference, so a script's save must replace a value and never edit one in place.
   function snapshotStore (store, keys, holdMirror = () => () => {}) {
     const before = keys.map((key) => [key, store.getData(key)])
     const putMirrorBack = holdMirror()
@@ -2816,7 +2817,7 @@
     redraw()
   }
 
-  // The hold opens a menu, which should open fast, so it is shorter than HOLD_TO_EDIT_MS (SudokuPad's 1000 ms hold, defined above); only the left button holds.
+  // The hold opens a menu, which should open fast, so it is shorter than HOLD_TO_EDIT_MS; only the left button holds.
   const HOLD_MS = 500
   const HOLD_SLOP = 10
 
