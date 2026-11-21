@@ -7,9 +7,9 @@ import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
 import { gridPoint, mouseDrag, undoAll, undoDepth } from '../board.mjs'
 import { holdUntil, middleOf } from '../input.mjs'
 import { openPenTool, penEntries } from '../pen.mjs'
-import { savedState } from '../settings.mjs'
-import { FLOOR_MS, settle, stable, STABLE_MS } from '../settle.mjs'
+import { FLOOR_MS, settle, STABLE_MS } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
+import { assertSliderDragEndsOnHotkey } from '../slider.mjs'
 
 const { HOLD_TO_EDIT_MS, HOLD_WAIT_MS } = extras
 
@@ -198,33 +198,8 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
   })
 
   for (const [name, slider, key] of [['Thickness', THICKNESS, THICKNESS_KEY], ['Opacity', OPACITY, OPACITY_KEY]]) {
-    it(`17: a ${name} slider drag with a tool hotkey mid-drag ends the drag: the saved value is the one shown, and the slider answers a click when the pen is back`, async () => {
-      const valueOf = () => read((s) => Number(document.querySelector(s).value), slider)
-      const before = await valueOf()
-      const box = await p.locator(slider).boundingBox()
-      await p.mouse.move(box.x + box.width * 0.1, box.y + box.height / 2)
-      await p.mouse.down()
-      await p.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2, { steps: 12 })
-      const during = await stable(valueOf)
-      assert.notEqual(during, before, 'the drag moved the slider')
-      await p.keyboard.press(OTHER_TOOL_KEY)
-      assert.equal(await tool(), OTHER_TOOL)
-      await p.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2, { steps: 4 })
-      await p.mouse.up()
-      assert.equal(await tool(), OTHER_TOOL, 'the release kept the new tool')
-      await toTool()
-      const saved = await read((k) => Framework.getData(k), key)
-      assert.notEqual(saved, null, `${key} is saved`)
-      assert.equal(Number(savedState(saved)), await valueOf(), 'the saved value is the one the slider shows')
-      const resting = await valueOf()
-      // A click at the end of the track farther from the resting value, so it cannot land on the value the drag left.
-      const { min, max } = await read((selector) => ({ min: Number(document.querySelector(selector).min), max: Number(document.querySelector(selector).max) }), slider)
-      const track = await p.locator(slider).boundingBox()
-      await p.mouse.click(track.x + track.width * ((resting - min) / (max - min) < 0.5 ? 0.95 : 0.05), track.y + track.height / 2)
-      assert.notEqual(await stable(valueOf), resting, 'the slider answers a click again')
-      assert.deepEqual(errors, [], 'the page shows no error')
-      assert.equal(await p.evaluate(() => document.activeElement?.matches('.pen-tool-extras-sliders input') === true), false, 'no slider keeps the focus')
-    })
+    it(`17: a ${name} slider drag with a tool hotkey mid-drag ends the drag: the saved value is the one shown, and the slider answers a click when the pen is back`, () =>
+      assertSliderDragEndsOnHotkey(p, { slider, key, tool, returnToTool: toTool, errors, sliders: '.pen-tool-extras-sliders' }))
   }
 
   describe('18: a hold on a pen color button', () => {
@@ -241,8 +216,8 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
       // Half the hold, not near its end: the release may land a long way late on a loaded box and still be before the timer.
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.5)
       await p.mouse.up()
-      // A "nothing happened" wait: the pickers, if the early release wrongly opened them, would show well within it.
-      await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.4)
+      // A "nothing happened" wait that runs past the hold's end (the press's own timer fires at 1.0 x the hold), where the pickers would show if the release had not cancelled it.
+      await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.7)
       assert.equal(await pickers(), 0, 'no pickers after an early release')
       await holdForPickers()
       assert.equal(await pickers(), 9, 'a full hold opens the nine pickers')

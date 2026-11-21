@@ -55,6 +55,7 @@ export const FRAME_KEY = 'TextAnywhere_frame'
 export const FONT_KEY = 'TextAnywhere_font'
 
 // The pickers appear only when the hold timer fires.
+export { HOLD_TO_EDIT_MS }
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 export const NEAR_PX = 0.5
 // How far a release may move a note to put its left and top on whole device pixels: half a pixel on each axis, and the two together.

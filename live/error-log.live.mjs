@@ -43,6 +43,8 @@ describe('the error log', { concurrency: false }, () => {
   })
 
   it('Clear empties the log, and Copy error log then says so', async () => {
+    await reloadWith(p, [SCRIPT_FILE])
+    await openScriptDialog(p, 'Dark Page', EDITOR)
     await actButton(p, 'clear-error-log').click()
     await p.locator(STATUS).filter({ hasText: 'Error log cleared.' }).waitFor()
     assert.equal(await p.evaluate((key) => window.localStorage.getItem(key), LOG_KEY), null)
@@ -51,6 +53,8 @@ describe('the error log', { concurrency: false }, () => {
   })
 
   it('Clear on a log that is already empty says so', async () => {
+    await reloadWith(p, [SCRIPT_FILE])
+    await openScriptDialog(p, 'Dark Page', EDITOR)
     await actButton(p, 'clear-error-log').click()
     await p.locator(STATUS).filter({ hasText: 'The error log was already empty.' }).waitFor()
   })

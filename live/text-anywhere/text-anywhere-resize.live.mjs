@@ -16,10 +16,10 @@ const NOTE_TEXT = 'word '.repeat(12).trim()
 // A real mouse lands on whole page pixels.
 const NEAR_PX = 1.5
 // The smallest box, in em of the note's text size.
-const { MIN_BOX_EM: MIN_EM, CORNERS: CORNER_TABLE } = createRequire(import.meta.url)('../../text-anywhere.user.js')
-// The handles in the order of the layer: the sign on x and y of the side of the box each sits on.
-const CORNERS = Object.values(CORNER_TABLE)
-const BOTTOM_RIGHT = Object.keys(CORNER_TABLE).indexOf('bottomRight')
+const { MIN_BOX_EM: MIN_EM } = createRequire(import.meta.url)('../../text-anywhere.user.js')
+// The handles in the order of the layer, typed out here and not read from the script: the sign on x and y of the side of the box each sits on (top left, top right, bottom left, bottom right).
+const CORNERS = [[-1, -1], [1, -1], [-1, 1], [1, 1]]
+const BOTTOM_RIGHT = 3
 
 const browser = useBrowser()
 

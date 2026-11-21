@@ -397,6 +397,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       ['edge', 1, '#cell-pen .cell-pen.pen-3'], ['edge', 2, '#cell-pen .cell-pen.pen-j'], ['edge', 3, '#cell-pen .cell-pen.pen-h'], ['edge', 4, '#cell-pen .cell-pen.pen-i'],
       ['corner', 1, '#cell-pen .cell-pen.pen-u'], ['corner', 2, '#cell-pen .cell-pen.pen-x'], ['cell', 3, '#cell-pen .cell-pen.pen-z']
     ]
+    // The sizes the test's name states, typed out here and not computed from the script's growth formula.
+    const WANT_SCALE = { 10: 1.2727, 16: 1.6 }
     const clickOf = { edge: () => clickEdge(3, 3, 'right'), corner: () => clickCorner(3, 3), cell: () => clickCellCentre(3, 3) }
     for (const [kind, clicks, selector] of marks) {
       const at = {}
@@ -409,7 +411,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         at[thickness] = await boxOf(selector)
       }
       for (const thickness of [10, 16]) {
-        const scale = 1 + 0.6 * (thickness - 5) / 11
+        const scale = WANT_SCALE[thickness]
         assert.equal(Math.abs(at[thickness].w / at[5].w - scale) < 0.01, true, `${selector} at ${thickness}: width ${at[thickness].w} against ${at[5].w}, wanted ${scale} times`)
         assert.equal(Math.abs(at[thickness].h / at[5].h - scale) < 0.01, true, `${selector} at ${thickness}: height`)
         assert.equal(Math.abs(at[thickness].x - at[5].x) < 0.6 && Math.abs(at[thickness].y - at[5].y) < 0.6, true, `${selector} at ${thickness} moved its centre from ${at[5].x},${at[5].y} to ${at[thickness].x},${at[thickness].y}`)

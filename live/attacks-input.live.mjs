@@ -124,10 +124,14 @@ describe('attacks on input', { concurrency: false }, () => {
     const textButton = await p.locator(`${textAnywhere.KEYPAD} button[data-key="4"]`).boundingBox()
     for (const clickCount of [2, 3]) await p.mouse.click(...middleOf(textButton), { clickCount, delay: 0 })
     assert.equal(await settle(colorOf, 4), 4, 'fast clicks on Text Anywhere\'s color button pick it')
+    const holdQuietMs = textAnywhere.HOLD_TO_EDIT_MS + 500
+    // A "nothing happened" wait that runs past the hold's end, where a picker would open if the fast clicks had started a hold that did not end.
+    await p.waitForTimeout(holdQuietMs)
     assert.equal(await p.locator(textAnywhere.PICKER).count(), 0, 'no color picker opens on Text Anywhere\'s button')
     await pickTool(p, 'pen')
     const penButton = await p.locator('.tool-pen button[data-key="4"]').boundingBox()
     for (const clickCount of [2, 3]) await p.mouse.click(...middleOf(penButton), { clickCount, delay: 0 })
+    await p.waitForTimeout(holdQuietMs)
     assert.equal(await p.locator('.pen-tool-extras-picker').count(), 0, 'no color picker opens on the pen\'s button')
     await mouseDrag(p, [[7.5, 1.5], [7.5, 3.5]])
     assert.deepEqual([...new Set((await penEntries(p)).map((entry) => entry.split(':')[1][1]))], ['4'], 'the pen draws in the color the fast clicks picked')

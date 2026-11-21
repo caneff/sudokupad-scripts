@@ -53,11 +53,10 @@ describe('Text Anywhere\'s T key', { concurrency: false }, () => {
     await p.evaluate(() => document.getElementById('live-t-page-field').remove())
   })
 
-  it('Ctrl+T and Alt+T leave the tool alone', async () => {
-    for (const chord of ['Control+t', 'Alt+t']) {
-      await p.keyboard.press(chord)
-      assert.equal(await tool(p), 'normal', chord)
-    }
+  // Not Ctrl+T: the page never takes it as a tool key whatever the script does, so a pass would not show the script ignores it.
+  it('Alt+T leaves the tool alone', async () => {
+    await p.keyboard.press('Alt+t')
+    assert.equal(await tool(p), 'normal')
   })
 
   it('with the Letter tool current and a cell selected, T enters the letter and Letter mode stays on', async () => {

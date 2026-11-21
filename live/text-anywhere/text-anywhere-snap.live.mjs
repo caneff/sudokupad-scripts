@@ -268,12 +268,20 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     await assertOnGuide(left, guideBox)
   })
 
-  it('a note still drags beside an older version\'s stroke and shape, which are no targets', async () => {
-    await textAnywhere.plantNotes(p, [OLD_STROKE, NOTE, OLD_SHAPE])
+  it('a note dragged to 2 px from an older version\'s stroke and shape edges is not pulled to them: they are no targets', async () => {
+    const DX = 40
+    const { x } = await noteBox('15')
+    const [x0, , size] = await cellCentre(p, 0, 0)
+    // Where the note's left edge would land with no pull, in board units (64 to a cell); each older item's left edge lies 2 px past it, on the rows the note crosses.
+    const edge = (x + DX + 2 - (x0 - size / 2)) * 64 / size
+    const stroke = { ...OLD_STROKE, points: [[edge, 100], [edge + 200, 200], [edge + 400, 100]] }
+    const shape = { ...OLD_SHAPE, box: [edge, 128, edge + 192, 224] }
+    await textAnywhere.plantNotes(p, [stroke, NOTE, shape])
     await textAnywhere.reloadOnTextAnywhere(p)
     const before = (await noteBox('15')).x
-    await dragBy(40)
-    assert.equal(Math.abs((await noteBox('15')).x - (before + 40)) < 4 + NEAR_PX, true, 'the note moved with the pointer, to within the pull')
+    const { guides } = await dragBy(DX, 0, false, true)
+    assert.equal(guides, 0, 'no guide shows for the stroke or the shape')
+    assert.equal(Math.abs((await noteBox('15')).x - (before + DX)) < NEAR_PX, true, 'the note is where the pointer put it, with no pull toward either edge')
   })
 
   it('the page raised no error', () => assert.deepEqual(errors, []))
