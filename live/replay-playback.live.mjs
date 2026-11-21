@@ -3,10 +3,10 @@
 // Replay under a real Tampermonkey install and on crackingthecryptic.com stays untested.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { buttonIds, DIGIT_BUTTON, pickTextAnywhere, TOOL_KEYS, texts as noteTexts, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
+import { buttonIds, pickTextAnywhere, TOOL_KEYS, texts as noteTexts, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { seedOddEvenCells } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { openWith, SCRIPT_FILES, useBrowser } from './session.mjs'
-import { cellCentre, clickCell, mouseDrag, placeNote } from './board.mjs'
+import { cellCentre, clickCell, mouseDrag, pickTool, placeNote } from './board.mjs'
 import { goToPenPage, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
@@ -37,10 +37,6 @@ for (const [order, files] of INSTALL_ORDERS) {
     let context, p, errors, solved
     const read = (fn, arg) => p.evaluate(fn, arg)
 
-    const useTool = async (id) => {
-      await p.click(id)
-      await settle(() => tool(p), id.replace('#control-', ''))
-    }
     const goToPage = (values) => goToPenPage(p, values)
     const dragLine = async (points) => {
       const count = (await penStrings(p)).length
@@ -61,18 +57,18 @@ for (const [order, files] of INSTALL_ORDERS) {
 
     it('setup: a short solve of digits, marks, colors, pen lines and a Text Anywhere note', async () => {
     // digits, which Color by Digit colors in Cell mode
-      await useTool('#control-normal')
+      await pickTool(p, 'normal')
       for (const [r, c, d] of [[0, 2, '4'], [0, 3, '6'], [1, 1, '7']]) {
         await clickCell(p, r, c)
         await p.keyboard.press(d)
       }
-      await useTool('#control-corner')
+      await pickTool(p, 'corner')
       await clickCell(p, 2, 0)
       await p.keyboard.press('1'); await p.keyboard.press('2')
-      await useTool('#control-centre')
+      await pickTool(p, 'centre')
       await clickCell(p, 2, 3)
       await p.keyboard.press('3'); await p.keyboard.press('5')
-      await useTool('#control-colour')
+      await pickTool(p, 'colour')
       await clickCell(p, 4, 4)
       await p.keyboard.press('3')
       // pen: a solid line, a dashed one (page 2), an arrow line (page 3) and an edge mark
@@ -91,7 +87,7 @@ for (const [order, files] of INSTALL_ORDERS) {
       assert.equal(await settle(async () => (await penStrings(p)).length > count, true), true, 'an edge mark appeared')
       await placeNote(p, [6.2, 6.25], '15')
       assert.deepEqual(await noteTexts(p), ['15'])
-      await useTool(DIGIT_BUTTON)
+      await pickTool(p, 'normal')
       solved = await board()
     })
 
@@ -143,8 +139,7 @@ for (const [order, files] of INSTALL_ORDERS) {
 describe('the replay tool\'s button and key with Text Anywhere installed', { concurrency: false }, () => {
   let withTextAnywhere, without
   const keyTool = async (p, key) => {
-    await p.click(DIGIT_BUTTON)
-    await settle(() => tool(p), 'normal')
+    await pickTool(p, 'normal')
     await p.keyboard.press(key)
     // A "nothing happened in this long" window: settle would return on its first read of 'normal', so a late switch to Text Anywhere would go unseen.
     await p.waitForTimeout(KEY_SWITCHES_MS)
@@ -175,7 +170,7 @@ describe('the replay tool\'s button and key with Text Anywhere installed', { con
 
   it('the replay button selects the tool with Text Anywhere installed, and Text Anywhere\'s button still selects Text Anywhere', async () => {
     const { p } = withTextAnywhere
-    await p.click(DIGIT_BUTTON)
+    await pickTool(p, 'normal')
     assert.equal(await clickUntil(() => p.click(REPLAY_BUTTON), () => tool(p), 'replay', SETTLE_MS), 'replay')
     assert.equal(await pickTextAnywhere(p), 'textanywhere')
   })

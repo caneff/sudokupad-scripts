@@ -3,9 +3,10 @@
 import assert from 'node:assert/strict'
 import { savedState, savedValue } from './settings.mjs'
 import { stable } from './settle.mjs'
+import { OTHER_TOOL, OTHER_TOOL_KEY } from './attacks.mjs'
 
 // The slider thumb's width in rem, as lib/panel.js's SLIDER_THUMB_REM draws it.
-export const SLIDER_THUMB_REM = 1.1
+const SLIDER_THUMB_REM = 1.1
 
 // Presses on `slider`'s track where `value` lies and releases, with real mouse input. The thumb's centre runs from half a thumb in from each end of the track.
 // A press on the thumb drags it by the offset it was pressed at and does not jump, so when the thumb is under the target the track is first pressed at its other end.
@@ -21,10 +22,7 @@ export async function slideTo (p, slider, value) {
   await p.mouse.click(xOf(value), y)
 }
 
-// Attack 17, for any script's panel slider. The hotkey and the tool it switches to are the same for every script.
-const OTHER_TOOL_KEY = 'x'
-const OTHER_TOOL = 'corner'
-
+// Attack 17, for any script's panel slider.
 // Drags `slider` across its track, presses a tool hotkey mid-drag and releases elsewhere. The drag ends: the new tool stays current, the saved value
 // under `key` is the one the slider shows, and once `returnToTool()` brings the script's tool back the slider answers a click and keeps no focus.
 // `tool()` reads the current tool, `errors` is the page's console errors, `sliders` the selector of the container holding every slider.

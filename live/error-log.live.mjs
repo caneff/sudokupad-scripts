@@ -53,6 +53,7 @@ describe('the error log', { concurrency: false }, () => {
   })
 
   it('Clear on a log that is already empty says so', async () => {
+    await p.evaluate((key) => window.localStorage.removeItem(key), LOG_KEY)
     await reloadWith(p, [SCRIPT_FILE])
     await openScriptDialog(p, 'Dark Page', EDITOR)
     await actButton(p, 'clear-error-log').click()

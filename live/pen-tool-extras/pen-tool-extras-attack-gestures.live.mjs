@@ -10,6 +10,7 @@ import { openPenTool, penEntries } from '../pen.mjs'
 import { FLOOR_MS, settle, STABLE_MS } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { assertSliderDragEndsOnHotkey } from '../slider.mjs'
+import { OTHER_TOOL, OTHER_TOOL_KEY } from '../attacks.mjs'
 
 const { HOLD_TO_EDIT_MS, HOLD_WAIT_MS } = extras
 
@@ -21,8 +22,6 @@ const OPACITY = '#pen-tool-extras-opacity'
 const OPACITY_KEY = 'PenColor_opacity'
 // The drawn drag highlight: SudokuPad's own `.penhint`, which the script moves into its hint layer.
 const HINTS = '.penhint, #pen-tool-extras-hint *'
-const OTHER_TOOL_KEY = 'x'
-const OTHER_TOOL = 'corner'
 // Where the line goes, as [row, column] in cells from the grid's top left: along row 2.5 from column 1.5 to 4.5.
 const LINE = [[2.5, 1.5], [2.5, 4.5]]
 // A second line on another row and a point for a plain click, to show an ordinary gesture works afterward.

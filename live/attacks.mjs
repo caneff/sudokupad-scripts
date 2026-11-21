@@ -7,6 +7,9 @@ import { addScripts, openWith, reloadWith } from './session.mjs'
 
 export const NOTICE_BAR = '#sudokupad-scripts-notices [data-script]'
 export const NOTES = '#text-anywhere-layer .text-anywhere-text'
+// The tool hotkey the attacks press mid-gesture, and the tool it switches to: the same for every script.
+export const OTHER_TOOL_KEY = 'x'
+export const OTHER_TOOL = 'corner'
 
 const FILES = SCRIPTS.map((script) => script.file)
 

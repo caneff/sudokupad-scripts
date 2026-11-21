@@ -9,14 +9,13 @@ import { settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, mouseDrag, typeText, undoDepth } from '../board.mjs'
 import { assertSliderDragEndsOnHotkey } from '../slider.mjs'
+import { OTHER_TOOL, OTHER_TOOL_KEY } from '../attacks.mjs'
 import { middleOf } from '../input.mjs'
 
 const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const COLOR_BUTTON = `${KEYPAD} button[data-key="4"]`
 const RECTANGLE = '#text-anywhere-layer .text-anywhere-selection-rectangle'
-const OTHER_TOOL_KEY = 'x'
-const OTHER_TOOL = 'corner'
 // In cells from the grid's top left: the note's start, a drag's end (a move by BY) and a cell clear of both.
 const NOTE_AT = [4.5, 4.5]
 const BY = [1, 2]
