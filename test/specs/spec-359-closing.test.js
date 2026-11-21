@@ -51,7 +51,7 @@ const runSlides = (count) => {
 // same slides, and the theme rules in style.css. This seam is blind to a real browser: clicking a real Next button, what the browser draws and the
 // hover and focus looks are `npm run test:live`'s (live/site-slideshow.live.mjs), and the Pages site after the merge is checked by hand.
 test('spec 359: the homepage is rows of slideshows, the details pages carry the same slides, and the slideshow steps and wraps', () => {
-  // Homepage: one row per script in order; UI Tweaks has one picture, and Logic Masters Puzzle Preview, last, is a text-only row (`row-plain`).
+  // Homepage: one row per script in order; UI Tweaks and Logic Masters Puzzle Preview, last, have one picture each.
   const home = read('index.html')
   const rows = rowsOf(home)
   assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer', 'UI Tweaks', 'Logic Masters Puzzle Preview'])
