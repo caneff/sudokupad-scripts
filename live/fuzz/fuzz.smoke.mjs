@@ -112,7 +112,8 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
   it('a bug planted in a script is injected in its place: caught, shrunk to the Tab and printed with the plant to replay', async () => {
     const plant = plantById('tab-turns-pad-to-letters')
-    const result = await fuzz({ browser: browser(), seed: TAB_PLANT_SEED, runs: 150, plant, shrinkMinutes: 5 })
+    // `minutes` is the fuzz's own time limit (2 by default), which on a loaded box ends the run at list 18 of 150 with a pass before Tab comes up (#1007).
+    const result = await fuzz({ browser: browser(), seed: TAB_PLANT_SEED, runs: 150, minutes: 15, plant, shrinkMinutes: 5 })
     assert.equal(result.failed, true, 'the planted bug failed the run')
     assert.match(result.error, plant.expect)
     assert.deepEqual(result.sequence, ['press Tab'])
