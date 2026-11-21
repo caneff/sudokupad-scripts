@@ -110,9 +110,11 @@ describe('the buttons a note covers', () => {
 })
 
 describe('a note moved off a button the step presses (#1006)', () => {
-  // A finished note covers the Undo button: the page drags it off before the step presses the button, as a player would, and the note stays where it was dropped.
-  const coveredPage = () => {
+  // A finished note covers a button: the page drags it off before the step presses the button, as a player would, and the note stays where it was dropped.
+  // `dragAt` is the clear that finds it covered (1 is the undo's, 2 the redo's).
+  const coveredPage = (dragAt) => {
     let at = [1, 1]
+    let clears = 0
     const openTarget = async (puzzle) => {
       const target = await fakeTargets().openTarget(puzzle)
       const plain = target.snapshot
@@ -121,20 +123,22 @@ describe('a note moved off a button the step presses (#1006)', () => {
         return { ...read, page: { ...read.page, notesSeen: ['z'], notesDrawn: ['z'], notesSaved: [{ kind: 'text', text: 'z', at }] } }
       }
       target.env.clearControls = async () => {
-        if (String(at) === '1,1') {
-          at = [2, 2]
-          return true
-        }
-        return false
+        if (++clears !== dragAt) return false
+        at = [2, 2]
+        return true
       }
       return target
     }
     return openTarget
   }
+  const puzzle = FUZZ_PUZZLES[0]
+  const undoThenRedo = () => scriptedList(puzzle, [['undo', null], ['redo', null]])
 
   it('is not an undo and redo that moved it: the page before the undo is read after the drag', async () => {
-    const puzzle = FUZZ_PUZZLES[0]
-    await runScript({ openTarget: coveredPage(), puzzle, actions: scriptedList(puzzle, [['undo', null], ['redo', null]]) })
+    await runScript({ openTarget: coveredPage(1), puzzle, actions: undoThenRedo() })
+  })
+  it('is not a redo that moved it either: a redo after a drag does not follow the undo straight', async () => {
+    await runScript({ openTarget: coveredPage(2), puzzle, actions: undoThenRedo() })
   })
 })
 

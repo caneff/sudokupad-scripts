@@ -7,7 +7,7 @@
 //   env.page.mouse {move, down, up, click, dblclick, wheel}   env.page.keyboard {press, type, down, up}      Playwright's, used as they are
 //   env.cellPoint(i) -> [x, y]               the page point at the centre of target `i` of the puzzle (a free cell, or a cell just outside the grid)
 //   env.usePen(color)                        opens the pen tool and picks its pen color 1 to 9
-//   env.clearControls()                      run by the engine before every action: drags a Text Anywhere note off any button it covers, as a player does, and says whether it dragged one; throws when one stays covered
+//   env.clearControls()                      no Text Anywhere note covers a button when an action starts: it drags one off any button it covers, as a player does, and says whether it dragged one; throws when one stays covered
 //   env.useNotes()                           picks Text Anywhere's tool
 //   env.turnPenPage()  env.undo()  env.redo()  env.clickColorMode()
 //   env.undoAll()                            presses Undo until the undo stack is empty

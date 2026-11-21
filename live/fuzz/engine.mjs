@@ -35,6 +35,9 @@ function assertRules (now, before, action, when, earlier, step) {
   if (broken.length) throw Object.assign(new Error(`${broken.length === 1 ? 'rule broken' : 'rules broken'} ${when}: ${broken.join('; ')}`), { step })
 }
 
+// What a step reads as when a note was dragged off a button just before the next one: no rule that pairs two steps (a redo after an undo) pairs them.
+const DRAGGED_NOTE = 'drag a note off a button'
+
 // Whether a stroke was drawn or erased since the last reload, once `action` (a kind's `kind` and `stroke`) has run after `earlier`. The reload bug of #681 needs a reload soon after a stroke, and
 // the engine has no clock for actions, so any such action since the last reload counts; the settings, the page turn and the notes draw no stroke.
 export const strokeSinceReload = ({ kind, stroke }, earlier) => kind !== 'reload' && (earlier?.strokeSinceReload || stroke)
@@ -59,8 +62,11 @@ async function runList (openTarget, actions, landMs, settleMs, settledStep = -1)
       check: (model) => action.check(model),
       toString: () => action.toString(),
       async run (model, real) {
-        // A note dragged off a button is the player's own move before the action, so the snapshot the rules compare against is read after it (#1006).
-        if (await target.env.clearControls()) before = await target.snapshot()
+        // A note dragged off a button is the player's own move before the action (#1006): the snapshot is read after it, and a redo after it no longer follows its undo straight.
+        if (await target.env.clearControls()) {
+          before = await target.snapshot()
+          if (earlier) earlier = { ...earlier, action: DRAGGED_NOTE }
+        }
         await action.run(model, real)
         const waitMs = step === settledStep ? Math.max(settleMs, ACTION_SETTLE_MS) : settleMs
         await target.wait(waitMs)

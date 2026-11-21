@@ -215,7 +215,6 @@ function envFor (p, puzzle, { beforeReload, reads }) {
   }
   const pickPenColor = (color) => clickIn(p, `.tool-pen button[data-key="${color}"]`)
   const windowSize = () => p.evaluate(() => [window.innerWidth, window.innerHeight])
-  // Whether it dragged a note.
   const clearControls = async () => {
     for (let i = 0; i <= CLEAR_TRIES; i++) {
       const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS])
