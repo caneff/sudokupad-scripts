@@ -14,7 +14,7 @@ The controller's merge check reruns the full suite, unless the worker's "PR up" 
 Then it reruns, with `npm run test:live:files`, the files this change touches against `origin/main`:
 
 - `live/<script name>/` for each script whose `*.user.js` or `live/<script name>/` folder changed;
-- every `live/*.live.mjs` at the top of `live/`, since they load every script (`startup`, `settings*`, `attacks-*`, `script-clash-attacks`, `error-log`, `site-slideshow`).
+- every top-level `live/*.live.mjs`, since they load every script.
 
 A change to a `live/*.mjs` helper, `package.json`, `site/` or `.github/` reruns the full suite (#717).
 
