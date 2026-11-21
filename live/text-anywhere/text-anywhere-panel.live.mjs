@@ -6,6 +6,7 @@ import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 import { addScripts, useBrowser } from '../session.mjs'
 import { gridPoint, typeText } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
+import { savedValue } from '../settings.mjs'
 
 const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, OPACITY_SLIDER, SLIDERS, TEXTS, WIDTH_KEY, valueOf } = textAnywhere
 // r1c3 of the recorded puzzle, empty.
@@ -105,7 +106,7 @@ describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
   const currentKey = async () => (await keypad()).filter((b) => b.current).map((b) => b.key)
   // The text size the Size slider's width gives.
   const sizeShown = async () => 2 * await valueOf(p, SIZE_SLIDER) + 8
-  const savedColors = () => read((key) => Framework.getData(key) ?? null, COLORS_KEY)
+  const savedColors = () => savedValue(p, COLORS_KEY)
   const look = ({ color, size }) => ({ color, size })
   const lastNote = async () => look((await textAnywhere.noteLooks(p)).pop())
   const firstNote = async () => look((await textAnywhere.noteLooks(p))[0])

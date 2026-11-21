@@ -1,22 +1,21 @@
 // #596, from #590.
-/* global Framework, window */
+/* global window */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { captureConsoleErrors } from '../page.mjs'
-import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, mouseDrag, typeText, undoDepth } from '../board.mjs'
-import { slideTo } from '../slider.mjs'
+import { assertSliderDragEndsOnHotkey } from '../slider.mjs'
+import { OTHER_TOOL, OTHER_TOOL_KEY } from '../attacks.mjs'
+import { middleOf } from '../input.mjs'
 
 const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const COLOR_BUTTON = `${KEYPAD} button[data-key="4"]`
 const RECTANGLE = '#text-anywhere-layer .text-anywhere-selection-rectangle'
-const OTHER_TOOL_KEY = 'x'
-const OTHER_TOOL = 'corner'
 // In cells from the grid's top left: the note's start, a drag's end (a move by BY) and a cell clear of both.
 const NOTE_AT = [4.5, 4.5]
 const BY = [1, 2]
@@ -155,7 +154,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await p.mouse.click(...await gridPoint(p, NOTE_AT))
     assert.equal(await handleCount(), 4, 'the note shows its four handles')
     const box = await p.locator(HANDLES).nth(3).boundingBox()
-    const [x, y] = textAnywhere.middleOf(box)
+    const [x, y] = middleOf(box)
     await p.mouse.move(x, y)
     await p.mouse.down()
     await p.mouse.move(x + 60, y + 40, { steps: 6 })
@@ -215,37 +214,15 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
   })
 
   for (const [name, slider, key] of [['Size', SIZE_SLIDER, WIDTH_KEY], ['Opacity', OPACITY_SLIDER, OPACITY_KEY]]) {
-    it(`17: a ${name} slider drag with a tool hotkey mid-drag ends the drag: the saved value is the one shown, and the slider answers a click when Text Anywhere is back`, async () => {
-      const valueOf = () => textAnywhere.valueOf(p, slider)
-      const before = await valueOf()
-      const box = await p.locator(slider).boundingBox()
-      await p.mouse.move(box.x + box.width * 0.1, box.y + box.height / 2)
-      await p.mouse.down()
-      await p.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2, { steps: 12 })
-      assert.notEqual(await stable(valueOf), before, 'the drag moved the slider')
-      await p.keyboard.press(OTHER_TOOL_KEY)
-      assert.equal(await tool(), OTHER_TOOL, 'the hotkey switched the tool')
-      await p.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2, { steps: 4 })
-      await p.mouse.up()
-      assert.equal(await tool(), OTHER_TOOL, 'the release kept the new tool')
-      await pickText()
-      const stored = await read((k) => Framework.getData(k), key)
-      assert.notEqual(stored, null, `${key} is saved`)
-      assert.equal(Number(savedState(stored)), await valueOf(), 'the saved value is the one the slider shows')
-      const resting = await valueOf()
-      const { min, max } = await read((selector) => ({ min: Number(document.querySelector(selector).min), max: Number(document.querySelector(selector).max) }), slider)
-      await slideTo(p, slider, resting - min > max - resting ? min : max)
-      assert.notEqual(await stable(valueOf), resting, 'the slider answers a click again')
-      assert.equal(await read((selector) => document.activeElement?.matches(`${selector} input`) === true, textAnywhere.SLIDERS), false, 'no slider keeps the focus')
-      assert.deepEqual(errors, [], 'the page shows no error')
-    })
+    it(`17: a ${name} slider drag with a tool hotkey mid-drag ends the drag: the saved value is the one shown, and the slider answers a click when Text Anywhere is back`, () =>
+      assertSliderDragEndsOnHotkey(p, { slider, key, tool, returnToTool: pickText, errors, sliders: textAnywhere.SLIDERS }))
   }
 
   describe('18: a hold on a text color button', () => {
     const pickers = () => p.locator(PICKER).count()
     const press = async () => {
       const box = await p.locator(COLOR_BUTTON).boundingBox()
-      await p.mouse.move(...textAnywhere.middleOf(box))
+      await p.mouse.move(...middleOf(box))
       await p.mouse.down()
     }
 

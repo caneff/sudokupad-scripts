@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { closeDialogWith } from '../settings.mjs'
+import { closeDialogWith, savedState } from '../settings.mjs'
 import { settle } from '../settle.mjs'
-import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, savedState, typeProfileName, wrongCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, typeProfileName, wrongCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { selectCell, undoDepth } from '../board.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -13,7 +13,6 @@ const script = scriptSource('color-by-digit.user.js')
 const NEW_PROFILE = `${EDITOR} button[data-act=new-profile]`
 const MAX_PROFILES = 6
 const MAX_NAME_LENGTH = 24
-const MODE_CYCLE = ['Cell', 'Digit', 'Both', 'Off']
 // The board's row with the most empty cells: row 9 of the puzzle (0-based 8), 0 for empty.
 const ROW = 8
 const EMPTY_COLS = [0, 1, 2, 3, 5, 6]
@@ -64,13 +63,11 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
   it('attack 42: cycle the mode button through Cell, Digit, Both and Off, ten clicks with no pause', async () => {
     await enter(ROW, 0, '3')
     await enter(ROW, 1, '4')
-    const start = MODE_CYCLE.indexOf(await label())
+    assert.equal(await label(), 'Cell', 'the cycle starts at Cell')
     const { x, y } = await buttonPoint(p)
     for (let i = 0; i < 10; i++) await p.mouse.click(x, y)
-    const want = MODE_CYCLE[(start + 10) % MODE_CYCLE.length]
-    assert.equal(await settle(label, want), want, `ten presses from ${MODE_CYCLE[start]} land on ${want}`)
-    if (want === 'Cell' || want === 'Both') assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'every digit has its group color')
-    else assert.equal(await settle(coloredCount, 0), 0, 'no cell colored')
+    assert.equal(await settle(label, 'Both'), 'Both', 'ten presses from Cell land on Both')
+    assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'every digit has its group color')
   })
 
   it('attack 43: enter digits, change the mode, then undo across the mode change', async () => {

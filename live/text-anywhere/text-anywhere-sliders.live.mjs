@@ -5,6 +5,7 @@ import { readUntil } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
 import { slideTo } from '../slider.mjs'
+import { savedValue } from '../settings.mjs'
 
 const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, SLIDERS, TEXT_BOX, WIDTH_KEY, valueOf } = textAnywhere
 const A = [1.5, 1.5]
@@ -19,7 +20,7 @@ describe('Text Anywhere\'s Size and Opacity sliders', { concurrency: false }, ()
   let context, p, errors, savedNote
 
   const saved = () => textAnywhere.saved(p)
-  const stored = (name) => p.evaluate((k) => Framework.getData(k) ?? null, name)
+  const stored = (name) => savedValue(p, name)
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const focusedSlider = () => p.evaluate((s) => document.activeElement?.matches(`${s} input`) === true, SLIDERS)
 
@@ -116,7 +117,9 @@ describe('Text Anywhere\'s Size and Opacity sliders', { concurrency: false }, ()
     await clickAt(p, OFF)
     assert.equal(await valueOf(p, SIZE_SLIDER), 7, 'the panel still shows the dragged size after clicking off')
     await typeText(p, [3.5, 5.5], 'new')
-    assert.equal((await savedNote('new')).size, (await savedNote('Ax')).size, 'a new note has the dragged size')
+    // Width 7 is text size 22: the same line the other literals here (3 -> 20 ... 9.5 -> 27) lie on.
+    assert.equal((await savedNote('new')).size, 22, 'a new note has the dragged size')
+    assert.equal((await savedNote('Ax')).size, 22, 'the selected note has it too')
   })
 
   it('selecting a note and clicking off leaves the next-note size as it was', async () => {

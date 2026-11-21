@@ -5,6 +5,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { readUntil, settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint } from '../board.mjs'
+import { middleOf } from '../input.mjs'
 
 const { TEXTS, TEXT_BOX } = textAnywhere
 // SudokuPad's board draws a cell 64 units wide from (0, 0).
@@ -246,7 +247,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     await p.mouse.click(...await gridPoint(p, [8.5, 6.5]))
     await p.keyboard.type('resize me')
     const handle = await p.locator('#text-anywhere-layer .text-anywhere-resize').last().boundingBox()
-    const from = textAnywhere.middleOf(handle)
+    const from = middleOf(handle)
     await p.mouse.move(...from)
     await p.mouse.down()
     const target = [1, 2, 3].map((k) => [from[0] + 10 * k, from[1] + 5 * k])

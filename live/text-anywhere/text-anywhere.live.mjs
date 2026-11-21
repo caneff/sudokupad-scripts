@@ -163,10 +163,14 @@ describe('Text Anywhere with SudokuPad\'s Test Markup turned on', { concurrency:
   it('an M typed in a text box goes into the text and starts no Test Markup', async () => {
     await p.mouse.click(...await gridPoint(p, [7.5, 7.5]))
     await p.keyboard.down('m')
-    assert.equal(await markupDrawMode(), false)
+    // Never reaches true: a value that never changes is read for FLOOR_MS, so a Test Markup that starts a moment late is seen.
+    assert.equal(await settle(markupDrawMode, true), false, 'no Test Markup starts while M is held')
+    // A drag across the board while M is still held: Test Markup, had it started, would draw a stroke with it.
+    await mouseDrag(p, [[1.5, 1.5], [2, 3], [1.5, 4.5]])
     await p.keyboard.up('m')
     await finishNote(p)
     assert.deepEqual(await texts(p), ['m'])
+    assert.equal(await markupStrokes(), 1, 'no stroke was added to the one drawn before')
   })
 
   it('the page raised no error', () => {

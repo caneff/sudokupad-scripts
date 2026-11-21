@@ -10,7 +10,7 @@ import { useBrowser } from '../session.mjs'
 import { cellCentre, finishNote, gridPoint } from '../board.mjs'
 
 const { TEXT_BOX } = textAnywhere
-const { SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
+const { SNAP_PX, SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const SELECTION = '#text-anywhere-layer .text-anywhere-selection'
 const GUIDE_X = '#text-anywhere-layer .text-anywhere-snap-guide[data-axis="x"]'
 // The selection outline's line is 2 px wide, 2 px outside the note's box: its middle is 3 px out.
@@ -20,6 +20,8 @@ const OTHER_AT = [2.5, 2.5]
 const COLUMN_LINE = 5
 const RIGHT_LINE = 9
 const NEAR_PX = 0.6
+// A gap the pull never closes: SNAP_PX and 2 px to spare.
+const CLEAR_PX = SNAP_PX + 2
 const OUTLINE_ON_GUIDE_PX = 0.25
 // The wait past SPEED_WINDOW_MS before the script draws a still pointer's move again (SETTLE_SLACK_MS in text-anywhere.user.js).
 const SETTLE_SLACK_MS = Number(/const SETTLE_SLACK_MS = (\d+)/.exec(readFileSync(new URL('../../text-anywhere.user.js', import.meta.url), 'utf8'))[1])
@@ -194,11 +196,11 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(left - line) < NEAR_PX, true, `the outline's line ${left} is on the line ${line}`)
   })
 
-  it('a note dragged 6 px off the line stays where the pointer put it and shows no x guide', async () => {
+  it(`a note dragged ${CLEAR_PX} px off the line stays where the pointer put it and shows no x guide`, async () => {
     const line = await lineX(COLUMN_LINE)
-    const { left, guides } = await dragToGap(6, false, true)
+    const { left, guides } = await dragToGap(CLEAR_PX, false, true)
     assert.equal(guides, 0, 'no guide, though the pointer rested')
-    assert.equal(Math.abs(left - (line + 6)) < NEAR_PX, true, `the outline's line ${left} is 6 px past ${line}`)
+    assert.equal(Math.abs(left - (line + CLEAR_PX)) < NEAR_PX, true, `the outline's line ${left} is ${CLEAR_PX} px past ${line}`)
   })
 
   // A press moves nothing until it passes the 4 px click slop, so the drag goes 8 px out and 5 back: the note ends 3 px from where it began, inside SNAP_PX, so its
@@ -268,12 +270,32 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     await assertOnGuide(left, guideBox)
   })
 
-  it('a note still drags beside an older version\'s stroke and shape, which are no targets', async () => {
-    await textAnywhere.plantNotes(p, [OLD_STROKE, NOTE, OLD_SHAPE])
+  it('a note dragged to 2 px from an older version\'s stroke and shape edges is not pulled to them: they are no targets', async () => {
+    // The note is planted alone first and measured where it is drawn, so the older items' edges are placed against the note this test drags.
+    await textAnywhere.plantNotes(p, [NOTE])
+    await textAnywhere.reloadOnTextAnywhere(p)
+    const { x, width } = await noteBox('15')
+    const [x0, , size] = await cellCentre(p, 0, 0)
+    // A drag of about 40 px after which none of the outline's left, middle and right lines is within CLEAR_PX of a cell line or a cell's middle, so those cannot pull the note
+    // and a guide could only come from the older items.
+    const [left, middle, right] = [x - OUTLINE_MIDDLE_PX, x + width / 2, x + width + OUTLINE_MIDDLE_PX]
+    const clearOfCells = (dx) => [left, middle, right].every((line) => {
+      const into = (line + dx - (x0 - size / 2)) % (size / 2)
+      return Math.min(into, size / 2 - into) > CLEAR_PX
+    })
+    // 40, 41, 39, 42, 38, ... out to 50 and 30.
+    const DX = Array.from({ length: 21 }, (_, i) => 40 + (i % 2 ? (i + 1) / 2 : -i / 2)).find(clearOfCells)
+    assert.notEqual(DX, undefined, 'a drag of 30 to 50 px clear of every cell line exists')
+    // Where the note's left edge would land with no pull, in board units (64 to a cell); each older item's left edge lies 2 px past it, on the rows the note crosses.
+    const edge = (x + DX + 2 - (x0 - size / 2)) * 64 / size
+    const stroke = { ...OLD_STROKE, points: [[edge, 100], [edge + 200, 200], [edge + 400, 100]] }
+    const shape = { ...OLD_SHAPE, box: [edge, 128, edge + 192, 224] }
+    await textAnywhere.plantNotes(p, [stroke, NOTE, shape])
     await textAnywhere.reloadOnTextAnywhere(p)
     const before = (await noteBox('15')).x
-    await dragBy(40)
-    assert.equal(Math.abs((await noteBox('15')).x - (before + 40)) < 4 + NEAR_PX, true, 'the note moved with the pointer, to within the pull')
+    const { guides } = await dragBy(DX, 0, false, true)
+    assert.equal(guides, 0, 'no guide shows for the stroke or the shape')
+    assert.equal(Math.abs((await noteBox('15')).x - (before + DX)) < NEAR_PX, true, 'the note is where the pointer put it, with no pull toward either edge')
   })
 
   it('the page raised no error', () => assert.deepEqual(errors, []))

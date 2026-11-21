@@ -2,10 +2,9 @@
 /* global Framework, Storage */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { pickTool } from './attack-fixtures.mjs'
 import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllScripts } from './attacks.mjs'
 import { captureConsoleErrors } from './page.mjs'
-import { mouseDrag, typeText } from './board.mjs'
+import { mouseDrag, pickTool, typeText } from './board.mjs'
 import { openPenTool, penEntries, setSlider } from './pen.mjs'
 import { actButton, closeDialogWith, ownedSettings, paste, STATUS } from './settings.mjs'
 import { SETTINGS_SCRIPTS } from './scripts.mjs'

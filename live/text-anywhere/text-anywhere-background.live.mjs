@@ -4,6 +4,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen, clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
+import { savedValue } from '../settings.mjs'
 
 const { BACKGROUND_BUTTON, BACKGROUND_KEY, HANDLES, TEXT_BGS, TEXT_BOX } = textAnywhere
 // Pixels a measured edge may differ from its note's: the browser rounds both to device pixels.
@@ -21,7 +22,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
   const reload = () => textAnywhere.reloadOnTextAnywhere(p)
   const bgCount = () => p.locator(TEXT_BGS).count()
   const pressed = () => p.locator(BACKGROUND_BUTTON).getAttribute('aria-pressed')
-  const storedSetting = () => read((key) => Framework.getData(key) ?? null, BACKGROUND_KEY)
+  const storedSetting = () => savedValue(p, BACKGROUND_KEY)
   const savedBgs = async () => Object.fromEntries((await saved()).map((item) => [item.text, item.bg ?? false]))
   const openAt = async (at) => textAnywhere.reopen(p, await gridPoint(p, at))
   const boxFilled = () => p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)')

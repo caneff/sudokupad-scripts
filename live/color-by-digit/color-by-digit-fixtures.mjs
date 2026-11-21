@@ -7,6 +7,8 @@ import { reloadWith, openWith } from '../session.mjs'
 import { CLASSIC_GRID } from '../puzzles.mjs'
 import { COLOR_BY_DIGIT_DIALOG, group, labelOn, modeLabel, ODD_EVEN } from '../scripts.mjs'
 import { POLL_MS, settle } from '../settle.mjs'
+import { middleOf } from '../input.mjs'
+import { savedState } from '../settings.mjs'
 
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by puzzle-url.txt; the
 // 'the board holds the givens' test in color-by-digit.live.mjs checks it.
@@ -32,9 +34,6 @@ export const ADDED_PRELOADS_STORAGE_KEY = storedAt('ColorByDigit_addedPreloads')
 const ADDED_EACH_DIGIT_STORAGE_KEY = storedAt('ColorByDigit_addedEachDigit')
 // Saved profiles with the one-time adds (Entropic and Modular, then Each digit) already done, so a test sees exactly the profiles it seeded.
 export const savedProfiles = (state) => ({ [PROFILES_STORAGE_KEY]: state, [ADDED_PRELOADS_STORAGE_KEY]: true, [ADDED_EACH_DIGIT_STORAGE_KEY]: true })
-// The profiles as the script reads them back: the state inside the `{ v, data }` envelope it saves, or one seeded in the shape saved
-// before the envelope.
-export const savedState = (saved) => (saved !== null && Object.hasOwn(saved, 'data') ? saved.data : saved)
 export const MODE_KEY = 'ColorByDigit_mode'
 export const MODE_STORAGE_KEY = storedAt(MODE_KEY)
 // Auto mode's on/off from before the mode existed, read for the starting mode when no mode is saved.
@@ -121,8 +120,6 @@ export const buttonBoxesOn = (p) => p.locator(BUTTON).evaluate((button) => {
   return { word: box('[data-role="mode"]'), chips: box('svg[data-role="chips"]'), arrow: box('[data-role="menu"]') }
 })
 
-export const center = async (locator) => { const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
-
 // A profile row's top-left corner in the dialog, clear of its drag handle.
 export const ROW_CORNER = { position: { x: 2, y: 2 } }
 
@@ -145,12 +142,6 @@ export async function pressTo (p, want) {
 
 export const coloredCountOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).length).length)
 export const givensColoredOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
-
-// Toggles palette key `key` on the cell at row r, column c, as a solver's color tool does: one SudokuPad action.
-export const paintOn = (p, r, c, key) => p.evaluate(([r, c, key]) => {
-  const a = Framework.app
-  a.deselect(); a.select(a.grid.getCell(r, c)); a.act({ type: 'colour', arg: key }); a.deselect()
-}, [r, c, key])
 
 // SudokuPad's own color for an entered digit or a mark, read off the page with no script installed.
 export const DEFAULT_FILL = 'rgb(29, 106, 229)'
@@ -191,7 +182,7 @@ export const allFillsOn = (p, place, digit, conflict) => async () => [...new Set
 export const PROFILE_ROWS = `${EDITOR} [data-role=profile-row]`
 export const PROFILE_NAME_FIELD = `${EDITOR} [data-role=profile-name]`
 // How far past a row's middle a drag ends to land beyond it.
-export const DROP_PAST_MIDDLE_PX = 8
+const DROP_PAST_MIDDLE_PX = 8
 
 // A row's × shows only while its row is hovered or selected, so the pointer goes onto the row first.
 export const deleteProfileRow = async (p, n) => {
@@ -213,15 +204,20 @@ export const wrongCountOn = (p, groups) => wrongColorCountOn(p, (x) => {
   return digit === '' ? [] : [keyOf(groups, digit)]
 })
 
-export async function dragProfileRow (p, from, to) {
+// Where a drag of the handle of row `from` starts and ends, each as [x, y]: the end is just past the middle of row `to`, where the dragged row lands beyond it.
+export async function profileDragPoints (p, from, to) {
   await p.locator(PROFILE_ROWS).first().scrollIntoViewIfNeeded()
-  const start = await center(p.locator(`${PROFILE_ROWS} [data-role=handle]`).nth(from))
-  const end = await center(p.locator(PROFILE_ROWS).nth(to))
-  end.y += to > from ? DROP_PAST_MIDDLE_PX : -DROP_PAST_MIDDLE_PX
-  await p.mouse.move(start.x, start.y)
+  const start = middleOf(await p.locator(`${PROFILE_ROWS} [data-role=handle]`).nth(from).boundingBox())
+  const [x, y] = middleOf(await p.locator(PROFILE_ROWS).nth(to).boundingBox())
+  return { start, end: [x, y + (to > from ? DROP_PAST_MIDDLE_PX : -DROP_PAST_MIDDLE_PX)] }
+}
+
+export async function dragProfileRow (p, from, to) {
+  const { start: [x, y], end: [, endY] } = await profileDragPoints(p, from, to)
+  await p.mouse.move(x, y)
   await p.mouse.down()
-  await p.mouse.move(start.x, (start.y + end.y) / 2, { steps: 4 })
-  await p.mouse.move(start.x, end.y, { steps: 4 })
+  await p.mouse.move(x, (y + endY) / 2, { steps: 4 })
+  await p.mouse.move(x, endY, { steps: 4 })
   await p.mouse.up()
 }
 

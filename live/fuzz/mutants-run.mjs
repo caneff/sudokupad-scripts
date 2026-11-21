@@ -11,10 +11,9 @@ import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
 import { createCoverage, neverRunReport } from './coverage.mjs'
 import { fuzz, openTarget } from './fuzz.mjs'
 import { FAMILIES, mutantPlant, mutantReached, mutantsOf, sampleMutants } from './mutants.mjs'
-import { mutantTables, mutantVerdict } from './mutants-stats.mjs'
+import { mutantLoadProblem, mutantTables, mutantVerdict } from './mutants-stats.mjs'
 import { FUZZ_PUZZLES } from './puzzle-set.mjs'
 import { seedList, sweep } from './plants-sweep.mjs'
-import { crashSignals } from './signals.mjs'
 
 const DEFAULT_PER_SCRIPT = 30
 const DEFAULT_SEEDS = 2
@@ -57,7 +56,7 @@ try {
     const loadable = []
     for (const mutant of sample) {
       console.log(`${mutant.id}: ${mutant.description}`)
-      const problem = await loadProblem(mutant)
+      const problem = await mutantLoadProblem((options) => openTarget(browser, FUZZ_PUZZLES[0], options), mutantPlant(mutant))
       if (problem) {
         console.log(`${mutant.id}: load error: ${problem}`)
         outcomes.push({ mutant, verdict: mutantVerdict([], { loadError: true }), runs: [] })
@@ -90,17 +89,4 @@ try {
   console.log(`${caughtRuns.filter((r) => r.replayed === false).length} of ${caughtRuns.length} catches did not replay from their path`)
 } finally {
   await browser.close()
-}
-
-async function loadProblem (mutant) {
-  let target
-  try {
-    target = await openTarget(browser, FUZZ_PUZZLES[0], { plant: mutantPlant(mutant) })
-    const signals = crashSignals(await target.snapshot())
-    return signals.length ? signals[0] : null
-  } catch (error) {
-    return error.message
-  } finally {
-    await target?.close()
-  }
 }

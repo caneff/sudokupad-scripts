@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
 import { clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
+import { savedValue } from '../settings.mjs'
 
 const { SIZE_SLIDER, TEXT_BOX, WIDTH_KEY, valueOf } = textAnywhere
 const A = [1.5, 1.5]
@@ -172,7 +173,7 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     })
     await p.keyboard.press('-')
     assert.deepEqual(await p.evaluate(() => window.seenMinus), [false])
-    assert.equal(await p.evaluate((k) => Framework.getData(k) ?? null, WIDTH_KEY), null)
+    assert.equal(await savedValue(p, WIDTH_KEY), null)
   })
 
   it('raised no page error', () => assert.deepEqual(errors, []))

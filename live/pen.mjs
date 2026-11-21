@@ -62,16 +62,7 @@ export async function setSlider (page, selector, value) {
   await setInputValue(page.locator(selector), value)
 }
 
-// Stores `raw` (a string, possibly corrupt) as the saved value of the script's data key `key`, for a reload to read.
-// Throws, naming the key, when nothing is saved there yet: a renamed storage key would otherwise take the planted value
-// to a dead key, the script would read nothing and fall back to its defaults, and the test would pass unproven.
-export const plantSaved = (page, key, raw) => page.evaluate(([k, value]) => {
-  const stored = Framework.makeDataKey(k)
-  if (window.localStorage.getItem(stored) === null) throw new Error('no stored value at ' + k)
-  window.localStorage.setItem(stored, value)
-}, [key, raw])
-
-// Like `plantSaved`, for a setting that may not be saved yet (a default untouched since the page opened): it plants either way.
+// Stores `raw` (a string, possibly corrupt) as the saved value of the script's data key `key`, for a reload to read; it plants whether or not the setting is saved yet.
 export const plantUnchecked = (page, key, raw) => page.evaluate(([k, value]) => { window.localStorage.setItem(Framework.makeDataKey(k), value) }, [key, raw])
 
 export async function goToPenPage (page, values) {

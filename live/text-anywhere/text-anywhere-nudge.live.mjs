@@ -4,6 +4,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, restart } from '../board.mjs'
+import { middleOf } from '../input.mjs'
 
 const { TEXTS } = textAnywhere
 // In cells from the grid's top left: the note nudged, and a note of bullets.
@@ -123,7 +124,7 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
   // How long a check waits to see that nothing more happens.
   const QUIET_MS = 400
   // The note was nudged away from where it was typed, so the click goes to where it is now.
-  const selectNote = async (text) => p.mouse.click(...textAnywhere.middleOf(await noteBox(text)))
+  const selectNote = async (text) => p.mouse.click(...middleOf(await noteBox(text)))
 
   it('a held ArrowRight keeps nudging the note past a single nudge, and saves once after the release', async () => {
     await selectNote('N')

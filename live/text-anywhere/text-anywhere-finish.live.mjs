@@ -2,9 +2,9 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
-import { boxOpen, clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
+import { boxOpen, cellProps, clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
 
-const { SELECTED, TEXT_BOX } = textAnywhere
+const { SELECTED, TEXTS, TEXT_BOX } = textAnywhere
 const RECTANGLE = '#text-anywhere-layer .text-anywhere-selection-rectangle'
 const HANDLE = '#text-anywhere-layer .text-anywhere-resize'
 // In cells from the grid's top left: two notes, and empty space for new ones.
@@ -26,7 +26,6 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   const saved = () => textAnywhere.saved(p)
   const texts = () => textAnywhere.texts(p)
   const selectedTexts = () => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent).sort(), SELECTED)
-  const cellState = () => p.evaluate(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
   // A note starts at its click, so a press meant for the note at cell spot `at` lands in its middle.
   const noteAt = async (at) => textAnywhere.middleAt(p, await gridPoint(p, at))
   const clickNote = async (at) => p.mouse.click(...await noteAt(at))
@@ -122,13 +121,18 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
 
   it('a press on a note that moves 4 px is still a click: it selects the note and moves nothing', async () => {
     const before = (await savedNote('B')).at
+    const drawnAt = () => p.evaluate((selector) => {
+      const r = [...document.querySelectorAll(selector)].find((e) => e.textContent === 'B').getBoundingClientRect()
+      return [r.left, r.top]
+    }, TEXTS)
     const [x, y] = await noteAt(B_AT)
+    const start = await drawnAt()
     await p.mouse.move(x, y)
     await p.mouse.down()
     await p.mouse.move(x + 4, y, { steps: 2 })
-    // A drag moves the note by a translation while the pointer is down; a click does not.
-    const translate = await p.evaluate(() => [...document.querySelectorAll('#text-anywhere-layer .text-anywhere-text')].find((e) => e.textContent === 'B').style.translate)
-    assert.equal(translate, '', 'the note follows no drag')
+    await textAnywhere.frames(p)
+    const held = await drawnAt()
+    assert.ok(Math.abs(held[0] - start[0]) <= 0.5 && Math.abs(held[1] - start[1]) <= 0.5, `with the button held the note is drawn at ${held}, not ${start}: it follows a drag`)
     await p.mouse.up()
     assert.deepEqual(await selectedTexts(), ['B'])
     assert.deepEqual((await savedNote('B')).at, before)
@@ -284,7 +288,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   })
 
   it('Tab in an open note does nothing: the note stays open and nothing reaches the cells or the tool', async () => {
-    const cells = await cellState()
+    const cells = await cellProps(p)
     await textAnywhere.reopen(p, await gridPoint(p, A_AT))
     await p.keyboard.press('Tab')
     assert.equal(await boxOpen(p), true)
@@ -294,7 +298,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     assert.equal(await boxOpen(p), true)
     await p.keyboard.press('Escape')
     assert.deepEqual((await saved()).map((item) => item.text), ['Az' + 'k', 'X', 'S'])
-    assert.equal(await cellState(), cells)
+    assert.equal(await cellProps(p), cells)
     assert.equal(await textAnywhere.tool(p), 'textanywhere')
   })
 

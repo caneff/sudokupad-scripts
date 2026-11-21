@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { openWith, reloadWith, scriptSource } from '../session.mjs'
 import { TEXT_ANYWHERE_BUTTON as TOOL_BUTTON, TEXT_ANYWHERE_EDITOR as SETTINGS_EDITOR } from '../scripts.mjs'
 import { currentTool, pickTool, SELECTED, TEXT_BOX, TEXTS, texts } from '../board.mjs'
+import { holdUntil } from '../input.mjs'
 
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
@@ -54,6 +55,7 @@ export const FRAME_KEY = 'TextAnywhere_frame'
 export const FONT_KEY = 'TextAnywhere_font'
 
 // The pickers appear only when the hold timer fires.
+export { HOLD_TO_EDIT_MS }
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 export const NEAR_PX = 0.5
 // How far a release may move a note to put its left and top on whole device pixels: half a pixel on each axis, and the two together.
@@ -69,18 +71,8 @@ export const BOX_PICKS = `${SETTINGS_EDITOR} button[data-role="box-pick"]`
 export const BOX_CUSTOM_INPUT = `${SETTINGS_EDITOR} input[data-role="box-custom"]`
 export const PICKER_BOX = '.text-anywhere-picker'
 
-export async function holdForPickers (p, selector, button, state) {
-  const box = await p.locator(selector).boundingBox()
-  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await p.mouse.down({ button })
-  try {
-    await p.locator(PICKER).first().waitFor({ state, timeout: HOLD_WAIT_MS })
-  } finally {
-    await p.mouse.up({ button })
-  }
-}
-
-export const middleOf = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
+// Holds `button` on what `selector` finds until Text Anywhere's pickers reach `state`.
+export const holdForPickers = (p, selector, button, state) => holdUntil(p, selector, PICKER, { button, state, timeout: HOLD_WAIT_MS })
 
 export const valueOf = (p, slider) => p.evaluate((selector) => Number(document.querySelector(selector).value), slider)
 

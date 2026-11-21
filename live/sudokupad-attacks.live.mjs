@@ -1,11 +1,11 @@
 // Live attacks on SudokuPad itself with all the scripts loaded (#590, attacks 49-56).
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { assertNoCrash, attack, cellsState, emptyCells, flushSave, loadScripts, noteCount, NOTES, NOTICE_BAR, openWithAllScripts, reloadWithScripts, rowCol, rulesScroll, rulesWidth, setLongRules, typeDigits } from './attacks.mjs'
+import { assertNoCrash, attack, cellsState, emptyCells, flushSave, loadScripts, noteCount, NOTES, NOTICE_BAR, openWithAllScripts, reloadWithScripts, rowCol, rulesScroll, rulesWidth, setLongRules } from './attacks.mjs'
 import { BUTTON as CBD_BUTTON, labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { captureConsoleErrors } from './page.mjs'
 import { BLACK } from './scripts.mjs'
-import { colorCell, gridPoint, placeNote, restart, undoDepth } from './board.mjs'
+import { colorCell, gridPoint, placeNote, restart, selectCell, undoDepth } from './board.mjs'
 import { draw, openPenTool, penEntries } from './pen.mjs'
 import { setInputValue } from './input.mjs'
 import { settle, stable } from './settle.mjs'
@@ -15,7 +15,8 @@ import { addPage, useBrowser } from './session.mjs'
 const browser = useBrowser()
 
 async function fillBoard (p, start) {
-  await typeDigits(p, rowCol(emptyCells(start)[0]), '5')
+  await selectCell(p, ...rowCol(emptyCells(start)[0]))
+  await p.keyboard.type('5')
   await draw(p, 6)
   await colorCell(p, [2, 0], 3)
   await placeNote(p, [2.5, 2.5], '15')
@@ -50,7 +51,8 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
     await restart(p)
     await p.click('#control-undo')
     assert.equal(await settle(() => noteCount(p), 1), 1, 'the Undo landed: it brought the note back')
-    assert.equal(await settle(() => labelOn(p), 'Cell'), 'Cell', 'Color by Digit was switched by the Undo')
+    // The label already reads Cell, so a `settle` would return at once; `stable` reads until it has held, and sees a late switch.
+    assert.equal(await stable(() => labelOn(p)), 'Cell', 'Color by Digit was left in its mode by the Undo')
   }))
 
   it('50 Undo past the start 100 times, then redo 100 times', () => attack(browser(), async (p) => {

@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { STATUS, actButton, closeDialogWith } from '../settings.mjs'
+import { actButton, closeDialogWith, savedValue, STATUS } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
 const { BOX_CUSTOM_INPUT: CUSTOM, BOX_KEY, BOX_PICKS: PICKS, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, pickTextAnywhere } = textAnywhere
@@ -18,7 +18,6 @@ const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 const browser = useBrowser()
 
 const open = () => textAnywhere.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
-const stored = (p, key) => p.evaluate((k) => Framework.getData(k) ?? null, key)
 const looks = (p) => p.evaluate((selector) => Object.fromEntries([...document.querySelectorAll(selector)].map((e) => {
   const style = window.getComputedStyle(e)
   return [e.textContent, { fill: style.backgroundColor, shadow: style.boxShadow }]
@@ -73,7 +72,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       assert.equal((await looks(p)).one.fill, 'rgb(255, 255, 255)')
       await dialog(p, () => choose(p, 'page'))
       assert.equal((await looks(p)).six.fill, 'rgb(221, 238, 255)')
-      assert.equal(await stored(p, BOX_KEY), 'page')
+      assert.equal(await savedValue(p, BOX_KEY), 'page')
     } finally {
       await p.evaluate(() => document.body.style.removeProperty('--body-bg'))
     }
@@ -82,7 +81,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
   it('White and Yellow recolor every boxed note at Save and survive a reload', async () => {
     for (const [preset, fill] of [['white', 'rgb(255, 255, 255)'], ['yellow', 'rgb(255, 244, 176)']]) {
       await dialog(p, () => choose(p, preset))
-      assert.equal(await stored(p, BOX_KEY), preset)
+      assert.equal(await savedValue(p, BOX_KEY), preset)
       assert.deepEqual(await looks(p), { one: { fill, shadow: 'none' }, six: { fill, shadow: 'none' }, bare: { fill: TRANSPARENT, shadow: 'none' } }, preset)
     }
     await textAnywhere.reload(p)
@@ -111,7 +110,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       assert.match(await p.locator(`${PICKS}[data-value="custom"] span[style*="background"]`).last().getAttribute('style'), /background:#ffc0cb/)
       assert.match(await p.locator(`${FRAME_ON} span[style*="background"]`).last().getAttribute('style'), /background:#ffc0cb/)
     })
-    assert.equal(await stored(p, BOX_KEY), '#ffc0cb')
+    assert.equal(await savedValue(p, BOX_KEY), '#ffc0cb')
     const fill = 'rgb(255, 192, 203)'
     assert.deepEqual(await looks(p), { one: { fill, shadow: 'none' }, six: { fill, shadow: 'none' }, bare: { fill: TRANSPARENT, shadow: 'none' } })
     await textAnywhere.reload(p)
@@ -130,13 +129,13 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       await p.locator(FRAME_ON).click()
     }, 'Cancel')
     assert.deepEqual(await looks(p), before)
-    assert.equal(await stored(p, BOX_KEY), '#ffc0cb')
-    assert.equal(await stored(p, FRAME_KEY), null)
+    assert.equal(await savedValue(p, BOX_KEY), '#ffc0cb')
+    assert.equal(await savedValue(p, FRAME_KEY), null)
   })
 
   it('Frame on frames every boxed note with a thin light gray ring and no other, off removes it, and both survive a reload', async () => {
     await dialog(p, () => p.locator(FRAME_ON).click())
-    assert.equal(await stored(p, FRAME_KEY), true)
+    assert.equal(await savedValue(p, FRAME_KEY), true)
     // The ring is one screen pixel, which on the board is 1 / scale of a board unit.
     const ring = (shadow) => assert.match(shadow, /^rgb\(196, 196, 196\) 0px 0px 0px [\d.]+px$/)
     let { one, six, bare } = await looks(p)
@@ -171,9 +170,9 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       // The picked button keeps the keyboard focus through the redraw.
       assert.equal(await p.evaluate(() => document.activeElement?.dataset.value), 'off')
     })
-    assert.equal(await stored(p, OUTLINE_KEY), 'thin')
-    assert.equal(await stored(p, BOX_KEY), 'tint')
-    assert.equal(await stored(p, FRAME_KEY), false)
+    assert.equal(await savedValue(p, OUTLINE_KEY), 'thin')
+    assert.equal(await savedValue(p, BOX_KEY), 'tint')
+    assert.equal(await savedValue(p, FRAME_KEY), false)
     const { one, bare } = await looks(p)
     assert.match(one.fill, /^color\(srgb /)
     assert.equal(one.shadow, 'none')
@@ -209,8 +208,8 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
         await other.p.click(SETTINGS_BUTTON)
         await actButton(other.p, 'paste-settings').click()
         await other.p.locator(STATUS).filter({ hasText: /^Pasted \d settings?\.$/ }).waitFor()
-        assert.equal(await stored(other.p, BOX_KEY), box)
-        assert.equal(await stored(other.p, FRAME_KEY), frame)
+        assert.equal(await savedValue(other.p, BOX_KEY), box)
+        assert.equal(await savedValue(other.p, FRAME_KEY), frame)
         assert.equal(await pickedBox(other.p), box)
         assert.equal(await other.p.locator(FRAME_ON).getAttribute('aria-pressed'), String(frame))
         assert.equal((await looks(other.p)).one.shadow === 'none', !frame, `the shadow is ${(await looks(other.p)).one.shadow}`)

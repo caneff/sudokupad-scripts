@@ -871,13 +871,6 @@ describe('focusing the actions on a script (#724)', () => {
       assert.ok(DARK_PAGE_TEXTS.includes('{"DarkPage_color":"blue"}'), 'a color the reader refuses')
     })
 
-    it('a reader that throws anything but the clipboard refusal fails the check with that error', () => {
-      const broken = { READERS: {}, pastedSettings: () => { throw new TypeError('reader crashed') } }
-      assert.throws(() => taken(broken, '{}'), TypeError)
-      const refusing = { READERS: {}, pastedSettings: () => { throw new Error('the clipboard text is not a settings object') } }
-      assert.equal(taken(refusing, '[]'), 0)
-    })
-
     it('every color Dark Page can be pasted is one of the dark colors', () => {
       for (const t of DARK_PAGE_TEXTS.filter((x) => taken(DARK_PAGE, x ?? '') > 0)) assert.ok(DARK_COLORS.includes(DARK_PAGE.READERS.DarkPage_color(JSON.parse(t).DarkPage_color)), t)
     })

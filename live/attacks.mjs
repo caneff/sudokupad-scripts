@@ -7,6 +7,9 @@ import { addScripts, openWith, reloadWith } from './session.mjs'
 
 export const NOTICE_BAR = '#sudokupad-scripts-notices [data-script]'
 export const NOTES = '#text-anywhere-layer .text-anywhere-text'
+// The tool hotkey the attacks press mid-gesture, and the tool it switches to: the same for every script.
+export const OTHER_TOOL_KEY = 'x'
+export const OTHER_TOOL = 'corner'
 
 const FILES = SCRIPTS.map((script) => script.file)
 
@@ -56,11 +59,6 @@ export async function assertNoCrash (p, errors) {
 export const cellsState = (p) => p.evaluate(() => Framework.app.puzzle.createState().cells)
 
 export const noteCount = (p) => p.locator(NOTES).count()
-
-export async function typeDigits (p, [row, col], digits) {
-  await p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [row, col])
-  await p.keyboard.type(digits)
-}
 
 export async function attack (browser, body) {
   const { context, p, errors } = await openWithAllScripts(browser)

@@ -4,6 +4,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
+import { holdUntil } from '../input.mjs'
 import { openPenTool } from '../pen.mjs'
 import { dialogButton, EXTRAS_EDITOR, openExtrasEditor } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
@@ -201,12 +202,6 @@ describe('the pen panel layout', { concurrency: false }, () => {
   // The pickers must leave the grid alone and follow their buttons (#275). A hold on a picker ends edit mode.
   it('in edit mode every color button keeps its box, and each picker sits over its own button, also with Keypad Flipped on', async () => {
     const boxes = () => Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9].map(key))
-    const pickers = (n) => p.locator(`.pen-tool-extras-picker input[data-key="${n}"]`)
-    const hold = async (selector) => {
-      const box = await p.locator(selector).boundingBox()
-      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-      await p.mouse.down()
-    }
     const overOwnButton = async (buttons, what) => {
       for (let n = 1; n <= 9; n++) {
         const picker = await rect(`.pen-tool-extras-picker input[data-key="${n}"]`)
@@ -219,12 +214,7 @@ describe('the pen panel layout', { concurrency: false }, () => {
     }
     const before = await boxes()
     const panelBefore = await rect('.tool-pen .controls-input')
-    await hold('.tool-pen button[data-key="1"]')
-    try {
-      await pickers(9).waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
-    } finally {
-      await p.mouse.up()
-    }
+    await holdUntil(p, '.tool-pen button[data-key="1"]', '.pen-tool-extras-picker input[data-key="9"]', { timeout: HOLD_WAIT_MS })
     try {
       assert.deepEqual(await boxes(), before, 'the color buttons')
       assert.deepEqual(await rect('.tool-pen .controls-input'), panelBefore, 'the panel')
@@ -237,9 +227,7 @@ describe('the pen panel layout', { concurrency: false }, () => {
         await p.evaluate(() => Framework.setSetting('flipkeypad', false))
       }
     } finally {
-      await hold('.pen-tool-extras-picker input[data-key="4"]')
-      await p.locator('.pen-tool-extras-picker').first().waitFor({ state: 'detached', timeout: HOLD_WAIT_MS })
-      await p.mouse.up()
+      await holdUntil(p, '.pen-tool-extras-picker input[data-key="4"]', '.pen-tool-extras-picker', { state: 'detached', timeout: HOLD_WAIT_MS })
     }
   })
 })

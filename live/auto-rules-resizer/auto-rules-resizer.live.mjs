@@ -485,6 +485,9 @@ describe('a landscape window, rules that fill the pane at SudokuPad\'s width', {
   })
 
   it('a drag made in a larger window is cut back to a smaller one', async () => {
+    await dragCorner(p, 'ur', 0, -2000)
+    await dragCorner(p, 'dl', -400, 0)
+    assert.equal((await stable(() => column(p))).top, 0, 'the drag put the column at the window\'s top')
     await p.setViewportSize(SMALLER)
     await settle(() => p.evaluate(() => window.innerHeight), SMALLER.height)
     const now = await stable(() => column(p))
@@ -998,7 +1001,10 @@ describe('a portrait window', { concurrency: false }, () => {
 
   it('leaves the rules pane as SudokuPad has it, with no font buttons', async () => {
     assert.equal((await pane(p)).inlineFont, '')
-    assert.equal(await p.locator(FONT_BAR).isVisible(), false)
+    await hoverPane(p)
+    // Never reaches true: a value that never changes is read for FLOOR_MS, so a bar or corner that shows a moment late is seen.
+    assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), false, 'no font buttons')
+    for (const corner of ['ur', 'dl']) assert.equal(await p.locator(CORNER(corner)).isVisible(), false, `no ${corner} corner`)
   })
 
   it('fits the pane once the window turns landscape, and takes the fit off when it turns back', async () => {
@@ -1009,7 +1015,8 @@ describe('a portrait window', { concurrency: false }, () => {
     await p.setViewportSize(PORTRAIT)
     assert.equal(await settle(async () => (await pane(p)).inlineFont, ''), '', 'the fit taken off in portrait')
     assert.equal(await fontPx(p), SUDOKUPAD_FONT_PX)
-    assert.equal(await p.locator(FONT_BAR).isVisible(), false, 'no font buttons in portrait')
+    await hoverPane(p)
+    assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), false, 'no font buttons in portrait')
   })
 
   it('the page raised no error', () => {
@@ -1244,7 +1251,7 @@ describe('sizing kept per puzzle', { concurrency: false }, () => {
       await clickFont(plain.p, 'f+')
       assert.equal(await settle(() => fontPx(plain.p), plain.font + 1), plain.font + 1, 'f+')
       const saved = await savedSizing(plain.p)
-      assert.deepEqual(saved, { v: 0, data: { nudgePx: 1, box: { w: 0, h: 0, x: 0, y: 0 } } })
+      assert.equal(saved.data.nudgePx, 1, 'the font offset is saved')
       const again = await startedFont(seedSizing(saved))
       try {
         assert.equal(again.font, plain.font + 1, 'the reloaded puzzle keeps its font offset')

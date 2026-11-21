@@ -6,12 +6,12 @@ import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzz
 import { NOTICE_BAR } from '../attacks.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE } from '../pen.mjs'
-import { setInputValue } from '../input.mjs'
+import { holdUntil, middleOf, setInputValue } from '../input.mjs'
 import { actButton, animationsDone, closeDialogWith, closeExtrasEditorWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, paste, STATUS } from '../settings.mjs'
 import { COLOR_BY_DIGIT_DIALOG, SETTINGS_SCRIPTS, settingsScript } from '../scripts.mjs'
 import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, RULES_PANE } from '../auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 import { HOLD_WAIT_MS } from '../pen-tool-extras/pen-tool-extras-fixtures.mjs'
-import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, HIDE_BUTTON, KEYPAD, middleOf, PICKER_BOX, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
+import { BACKGROUND_BUTTON, BOX_CUSTOM_INPUT, BOX_PICKS, CHECK_BOXES, CLEAR_BUTTON, DIALOG, HANDLES, HIDE_BUTTON, KEYPAD, PICKER_BOX, OPACITY_SLIDER as NOTE_OPACITY_SLIDER, SELECTED, SETTINGS_BUTTON, SETTINGS_EDITOR, SIZE_SLIDER as NOTE_SIZE_SLIDER, pickTextAnywhere, TEXT_BOX, TEXTS, tool as noteTool } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { ARROW, BUTTON as COLOR_BUTTON, buttonPoint, deleteProfileRow, dragProfileRow, EDITOR as PROFILE_EDITOR, MENU as PROFILE_MENU, PROFILE_ROWS, ROW_CORNER, typeProfileName } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { installAll, puzzleIdFor, openPuzzleId, resumeAfterHistory, startWithTools } from '../puzzles.mjs'
 import { configOptions, DEFAULT_CONFIG } from './configs.mjs'
@@ -230,17 +230,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     }
   }
   // Holds the left button on a color button until the nine color pickers show, then lets go; a hold that shows none is a failure: the player's hold opens them.
-  const holdColor = async (button, pickers, name) => {
-    const box = await p.locator(button).boundingBox({ timeout: BOX_TIMEOUT_MS })
-    if (!box) throw new Error(`${name}'s button is not on the page`)
-    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-    await p.mouse.down()
-    try {
-      await p.locator(pickers).first().waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
-    } finally {
-      await p.mouse.up()
-    }
-  }
+  const holdColor = (button, pickers) => holdUntil(p, button, pickers, { timeout: HOLD_WAIT_MS, boxTimeout: BOX_TIMEOUT_MS })
   const pickNotes = async () => {
     if (await pickTextAnywhere(p) !== 'textanywhere') throw new Error('Text Anywhere\'s tool could not be picked')
     // A note blocks clicks only while its tool is current, so a button it covers shows only now.
@@ -354,10 +344,10 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       const at = [[row + EDGE_INSET, col + 0.5], [row + 0.5, col + 1 - EDGE_INSET], [row + 1 - EDGE_INSET, col + 0.5], [row + 0.5, col + EDGE_INSET], [row, col], [row, col + 1], [row + 1, col], [row + 1, col + 1]]
       return gridPoint(p, at[side])
     },
-    holdPenColor: (color) => holdColor(`.tool-pen button[data-key="${color}"]`, COLOR_PICKERS, `pen color ${color}`),
+    holdPenColor: (color) => holdColor(`.tool-pen button[data-key="${color}"]`, COLOR_PICKERS),
     async holdNoteColor (color) {
       await pickNotes()
-      await holdColor(`${KEYPAD} button[data-key="${color}"]`, PICKER_BOX, `text color ${color}`)
+      await holdColor(`${KEYPAD} button[data-key="${color}"]`, PICKER_BOX)
     },
     setNotePicker: (color, hex) => p.locator(`${PICKER_BOX} input[data-key="${color}"]`).fill(hex),
     setPenPicker: (color, hex) => p.locator(`${COLOR_PICKERS} input[data-key="${color}"]`).fill(hex),

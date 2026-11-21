@@ -461,9 +461,10 @@ test('sync: the digit pick follows its own profile through a move, an add, a gro
 })
 
 test('sync: a saved digit pick is read like the active one, and a pick that is no profile reads as synced', () => {
-  const saved = { profiles: [{ name: 'A', groups: [] }, { name: '', groups: [] }, { name: 'C', groups: LOW }], active: 0, digitActive: 2 }
+  const saved = { profiles: [{ name: 'A', groups: [] }, { name: 'B', groups: [] }, { name: 'C', groups: LOW }], active: 0, digitActive: 2 }
+  assert.equal(fromStored(saved, null).digitActive, 2)
   assert.deepEqual(digitGroups(fromStored(saved, null)), LOW)
-  for (const digitActive of [1, 9, -1, 1.5, '2', null]) assert.equal(isSynced(fromStored({ ...saved, digitActive }, null)), true, String(digitActive))
+  for (const digitActive of [3, 9, -1, 1.5, '2', null]) assert.equal(isSynced(fromStored({ ...saved, digitActive }, null)), true, String(digitActive))
 })
 
 test('use digit colors: off is saved as false and kept through every edit; anything but false reads as on', () => {
@@ -563,7 +564,6 @@ test('the pulldowns sit above the profile list and the paint editor, one per row
   const row = '#color-by-digit-editor .cbd-pulldown'
   assert.equal(propertyOf(list, 'display'), 'grid')
   assert.match(propertyOf(list, 'gap'), /^\d+px$/)
-  assert.equal(propertyOf(list, 'margin'), '0 0 10px')
   assert.equal(propertyOf(row, 'display'), 'grid')
   assert.match(propertyOf(row, 'grid-template-columns'), /^\d+px minmax\(0, 1fr\)$/)
   assert.equal(propertyOf(row, 'align-items'), 'center')

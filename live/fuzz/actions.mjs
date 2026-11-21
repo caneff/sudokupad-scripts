@@ -63,7 +63,7 @@ const { THICKNESS, DASH, ARROW_SPACING } = require('../../pen-tool-extras.user.j
 const { BOX_LINES, BOX_PRESETS, CORNERS, HELD_REPEAT_MS, SPEED_WINDOW_MS } = require('../../text-anywhere.user.js')
 const { scriptFiles } = require('../../sync-lib.js')
 
-export const scriptFile = (name) => `${name}.user.js`
+const scriptFile = (name) => `${name}.user.js`
 export const scriptName = (file) => file.replace(/\.user\.js$/, '')
 const AUTO_RULES_RESIZER = scriptFile('auto-rules-resizer')
 const COLOR_BY_DIGIT = scriptFile('color-by-digit')
@@ -265,6 +265,12 @@ function buildKinds () {
   async function firstNote (env, text, a) {
     return await env.noteCentre() ?? (await env.placeNote(text, a), await env.noteCentre())
   }
+  // Presses the resize handle at `handle` and drags it by `dx` x `dy`, the button still down.
+  async function handleDragStart (env, handle, dx, dy) {
+    await env.page.mouse.move(...handle)
+    await env.page.mouse.down()
+    await env.page.mouse.move(handle[0] + dx, handle[1] + dy, { steps: 6 })
+  }
   async function noteDragStart (env, [t, a]) {
     await dragNote(env, await firstNote(env, NOTE_TEXTS[t], a))
   }
@@ -301,10 +307,10 @@ function buildKinds () {
     }
   })
   const press = (key) => (env) => env.page.keyboard.press(key)
-  // Copy settings or one text pasted into the dialog of `script` (#928), then Save or Cancel, as UI Tweaks' and Dark Page's kinds do.
-  const settingsTextKind = (script, file, texts) => ({
+  // Copy settings or one text pasted into the dialog of `script` (#928), then Save or Cancel. `group` is 'page' for the scripts that change the page itself.
+  const settingsTextKind = (script, file, texts, group = 'ordinary') => ({
     kind: `${script} settings text`,
-    group: 'ordinary',
+    group,
     scripts: [file],
     start: true,
     stroke: false,
@@ -611,9 +617,7 @@ function buildKinds () {
         // With no note, or a click that selected no one note, there are no handles to press.
         const handle = await selectFirstNote(env, NOTE_TEXTS[t], a) && await env.noteHandle(corner)
         if (!handle) return
-        await env.page.mouse.move(...handle)
-        await env.page.mouse.down()
-        await env.page.mouse.move(handle[0] + dx, handle[1] + dy, { steps: 6 })
+        await handleDragStart(env, handle, dx, dy)
         await env.page.mouse.up()
       }
     },
@@ -911,9 +915,7 @@ function buildKinds () {
       run: async (env, [[t, a], corner, dx, dy]) => {
         const handle = await selectFirstNote(env, NOTE_TEXTS[t], a) && await env.noteHandle(corner)
         if (!handle) return
-        await env.page.mouse.move(...handle)
-        await env.page.mouse.down()
-        await env.page.mouse.move(handle[0] + dx, handle[1] + dy, { steps: 6 })
+        await handleDragStart(env, handle, dx, dy)
         await env.page.keyboard.press('Escape')
         await env.page.mouse.up()
       }
@@ -932,9 +934,7 @@ function buildKinds () {
         const chosen = open ? await openFirstNote(env, NOTE_TEXTS[t], a) : await selectFirstNote(env, NOTE_TEXTS[t], a)
         const handle = chosen && await env.noteHandle(corner)
         if (!handle) return
-        await env.page.mouse.move(...handle)
-        await env.page.mouse.down()
-        await env.page.mouse.move(handle[0] + dx, handle[1] + dy, { steps: 6 })
+        await handleDragStart(env, handle, dx, dy)
         await env.page.mouse.up()
         // The note stays selected or open after its drag, so its handle is still there: a missing one is a failure, not a step to skip.
         if (!await env.noteHandle(corner)) throw new Error(`corner ${corner}'s handle is gone after its drag`)
@@ -1128,17 +1128,7 @@ function buildKinds () {
       label: ([color, save]) => `Dark Page dialog: ${color} then Restore defaults ${save ? 'Save' : 'Cancel'}`,
       run: (env, [color, save]) => env.darkPage(color, save, true)
     },
-    {
-      kind: 'dark page settings text',
-      group: 'page',
-      scripts: [DARK_PAGE],
-      start: true,
-      stroke: false,
-      weight: 1,
-      arg: () => fc.tuple(textOrCopy(DARK_PAGE_TEXTS), fc.boolean()),
-      label: ([text, save]) => settingsTextLabel('Dark Page', text, save),
-      run: (env, [text, save]) => env.settingsText('dark page', text, save)
-    },
+    settingsTextKind('dark page', DARK_PAGE, DARK_PAGE_TEXTS, 'page'),
     settingsTextKind('color by digit', COLOR_BY_DIGIT, COLOR_BY_DIGIT_TEXTS),
     settingsTextKind('text anywhere', TEXT_ANYWHERE, TEXT_ANYWHERE_TEXTS),
     settingsTextKind('pen tool extras', PEN_TOOL_EXTRAS, PEN_TOOL_EXTRAS_TEXTS),
@@ -1244,17 +1234,7 @@ function buildKinds () {
       label: ([hideSelect, wrapButtons, toggleTab, restore, save]) => `UI Tweaks dialog: select ${hideSelect ? 'hidden' : 'shown'} buttons ${wrapButtons ? 'wrapped' : 'in one row'}${toggleTab ? ' Tab option off and on' : ''}${restore ? ' Restore defaults' : ''} ${save ? 'Save' : 'Cancel'}`,
       run: (env, [hideSelect, wrapButtons, toggleTab, restore, save]) => env.uiTweaks({ hideSelect, wrapButtons, toggleTab, restore }, save)
     },
-    {
-      kind: 'ui tweaks settings text',
-      group: 'page',
-      scripts: [UI_TWEAKS],
-      start: true,
-      stroke: false,
-      weight: 1,
-      arg: () => fc.tuple(textOrCopy(UI_TWEAKS_TEXTS), fc.boolean()),
-      label: ([text, save]) => settingsTextLabel('UI Tweaks', text, save),
-      run: (env, [text, save]) => env.settingsText('ui tweaks', text, save)
-    }
+    settingsTextKind('ui tweaks', UI_TWEAKS, UI_TWEAKS_TEXTS, 'page')
   ]
 }
 

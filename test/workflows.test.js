@@ -91,3 +91,28 @@ describe('fuzz-pr.yml (#724)', () => {
     assert.match(yml, /if: \$\{\{ failure\(\) && steps\.fuzz\.outcome == 'failure' \}\}/)
   })
 })
+
+describe('Node version', () => {
+  const dir = path.join(ROOT, '.github', 'workflows')
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.yml'))
+
+  it('lives in .nvmrc alone, as a bare major version', () => {
+    assert.match(fs.readFileSync(path.join(ROOT, '.nvmrc'), 'utf8'), /^\d+\s*$/)
+  })
+
+  for (const name of ['ci.yml', 'fuzz-pr.yml', 'fuzz.yml', 'watch.yml']) {
+    it(`${name} reads it through node-version-file and pins none of its own`, () => {
+      assert.ok(files.includes(name))
+      const yml = fs.readFileSync(path.join(dir, name), 'utf8')
+      assert.match(yml, /uses: actions\/setup-node@v6\n\s+with:\n\s+node-version-file: \.nvmrc\n/)
+      assert.doesNotMatch(yml, /^\s+node-version: /m)
+    })
+  }
+
+  it('is set up in every workflow that sets up Node', () => {
+    for (const f of files) {
+      const yml = fs.readFileSync(path.join(dir, f), 'utf8')
+      if (/setup-node/.test(yml)) assert.match(yml, /node-version-file: \.nvmrc/, f)
+    }
+  })
+})

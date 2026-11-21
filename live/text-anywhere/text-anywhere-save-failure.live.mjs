@@ -3,7 +3,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { STATUS, closeDialogWith, dialogButton } from '../settings.mjs'
+import { closeDialogWith, dialogButton, savedValue, STATUS } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
 
 const { COLORS_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR } = textAnywhere
@@ -21,7 +21,7 @@ describe('Text Anywhere\'s Save is all-or-nothing', { concurrency: false }, () =
   })
   after(async () => { await context.close() })
 
-  const stored = (key) => p.evaluate((k) => Framework.getData(k) ?? null, key)
+  const stored = (key) => savedValue(p, key)
 
   it('a Save whose showing of the new colors throws leaves the colors stored, and shown, as they were', async () => {
     await p.click(SETTINGS_BUTTON)

@@ -5,8 +5,9 @@
 // files one "did not run" issue (one, whatever the number of hunts) and ends the night: runs already going finish, and no hunt starts another. Filing is `fileIssue` of live/watch.mjs, not a second copy.
 // At the end it prints one never-run list merged over the hunts.
 import { pathToFileURL } from 'node:url'
-import { BLOCKED_BY, fileIssue, run } from '../watch.mjs'
+import { fileIssue, issueTrailer, run } from '../watch.mjs'
 import { neverRunReport, parseNeverRun } from './coverage.mjs'
+import { parseFuzzOutput } from './fuzz-report.mjs'
 
 export const FUZZ_MINUTES = 30
 export const MINUTE_MS = 60000
@@ -15,6 +16,7 @@ const TITLE_MAX = 110
 const MIN_RUN_MINUTES = 1
 // The whole night: the hunts, a shrink of up to 10 minutes, and the page starts; a fuzz still running after this has hung and is killed.
 export const FUZZ_TIMEOUT_MS = (FUZZ_MINUTES + 20) * MINUTE_MS
+const TRAILER = issueTrailer('npm run fuzz:nightly', 'live/fuzz/nightly.mjs')
 
 // A short, stable name for what failed, from the error line the fuzz prints (engine.mjs): the broken rules' names, or the first crash signal with its
 // numbers folded, so the same failure on another seed or step still has the same title.
@@ -27,19 +29,6 @@ export function failureTitle (error) {
   const signal = /^crash signals? after (?:".*?"|the last action): (.*)$/s.exec(error)
   const text = (signal ? signal[1].split('; ')[0] : error).split('\n')[0].replace(/\d+/g, 'N').trim()
   return `Fuzz: ${signal ? 'crash' : 'error'}: ${text}`.slice(0, TITLE_MAX).trimEnd()
-}
-
-// A pass that ran no action list (the time limit fired before the first) is no verdict.
-export function parseFuzzOutput (output) {
-  const passed = /^fuzz passed: (\d+) action lists/m.exec(output)
-  if (passed) return Number(passed[1]) > 0 ? { passed: true } : null
-  const head = /^fuzz FAILED on the (.+) puzzle \(seed (\d+)\)/m.exec(output)
-  const error = /^error: (.*(?:\n(?!shrunk to ).*)*)$/m.exec(output)?.[1]
-  const replay = /^replay: (.*)$/m.exec(output)?.[1]
-  if (!head || error == null || !replay) return null
-  const steps = /^shrunk to \d+ steps?:\n((?: {2}\d+\. .*\n?)*)/m.exec(output)?.[1].trimEnd().split('\n').map((l) => l.replace(/^ {2}\d+\. /, '')) ?? []
-  const log = /^shared error log.*\n?((?: {2}.*\n?)*)/m.exec(output)?.[1].trimEnd().split('\n').map((l) => l.trim()).filter(Boolean) ?? []
-  return { failed: true, puzzle: head[1], seed: Number(head[2]), error: error.trim(), steps, replay, log }
 }
 
 function fuzzIssue (f, { runUrl } = {}) {
@@ -63,7 +52,7 @@ function fuzzIssue (f, { runUrl } = {}) {
   return {
     title: failureTitle(f.error),
     once: true,
-    body: `${intro}\n\n${details}\nFiled by \`npm run fuzz:nightly\` (\`live/fuzz/nightly.mjs\`).\n\n${BLOCKED_BY}`,
+    body: `${intro}\n\n${details}\n${TRAILER}`,
     comment: `The same failure again, seed ${f.seed} on the ${f.puzzle} puzzle.\n\n${details}`
   }
 }
@@ -77,9 +66,7 @@ export const didNotRunIssue = (why) => ({
     '',
     why,
     '',
-    'Filed by `npm run fuzz:nightly` (`live/fuzz/nightly.mjs`).',
-    '',
-    BLOCKED_BY
+    TRAILER
   ].join('\n')
 })
 

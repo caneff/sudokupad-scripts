@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { didNotRunIssue, failedChecks, FULL_RUN_MS, fileIssue, fullRunDue, fullRunPath, issueFor, readLastFullRun, readState, statePath, suiteEnv, suiteRunEnv, watch, writeState } from './watch.mjs'
+import { didNotRunIssue, failedChecks, FULL_RUN_MS, fileIssue, fullRunDue, fullRunPath, issueFor, issueTrailer, readLastFullRun, readState, statePath, suiteEnv, suiteRunEnv, watch, writeState } from './watch.mjs'
 
 describe('statePath', () => {
   it('sits beside the recording', () => {
@@ -289,6 +289,12 @@ describe('every issue body the watch files ends with its Blocked by section (#80
     assert.equal(tail(issueFor('0.612.0', { checks: ['one'], unrun: ['a'] }).body), end)
     assert.equal(tail(issueFor('0.612.0', { checks: ['one'], unrun: [] }, { weekly: true }).body), end)
     assert.equal(tail(didNotRunIssue('0.612.0', 'no Chromium').body), end)
+  })
+})
+
+describe('issueTrailer', () => {
+  it('names the command and its file, then ends with the Blocked by section', () => {
+    assert.equal(issueTrailer('npm run x', 'live/x.mjs'), 'Filed by `npm run x` (`live/x.mjs`).\n\n## Blocked by\n\n- None — can start immediately.')
   })
 })
 

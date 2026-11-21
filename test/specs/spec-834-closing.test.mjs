@@ -48,7 +48,7 @@ test('#834: the fuzz has no swarm option left', () => {
 
 test('#834: the engine\'s unit tests do not import the real kind list, and runFuzz requires its kinds', async () => {
   assert.doesNotMatch(read('live/fuzz/engine.test.mjs'), /import\s*\{[^}]*\b(?:KINDS|KIND_NAMES|KIND_GROUPS)\b[^}]*\}\s*from\s*'\.\/actions\.mjs'/)
-  await assert.rejects(runFuzz({ openTarget: async () => { throw new Error('opened') }, puzzles: [{ name: 'p' }], seed: 1, runs: 1 }))
+  await assert.rejects(runFuzz({ openTarget: async () => { throw new Error('opened') }, puzzles: [{ name: 'p' }], seed: 1, runs: 1 }), /needs kinds/)
 })
 
 test('#834: every real kind declares its scripts, whether it draws a stroke and whether it may start a list', () => {
