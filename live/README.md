@@ -300,13 +300,14 @@ npm run fuzz:mutants -- [--per-script <n>] [--seeds <k>] [--budget <seconds per 
 
 ## The pull-request fuzz
 
-`.github/workflows/fuzz-pr.yml` (#724) fuzzes a pull request for 5 minutes (`npm run test:fuzz -- --minutes 5 --shrink-minutes 3`), so a bug a change adds fails its check and
-not the nightly the morning after. It runs on a `pull_request` whose paths are one of the six `*.user.js` (not `draw-tool.user.js`), `lib/` or `live/fuzz/`.
+`.github/workflows/fuzz-pr.yml` (#724) fuzzes a pull request for 5 minutes (`npm run test:fuzz -- --minutes 5 --shrink-minutes 3`), so a bug a change adds shows on the pull request and not in the nightly the morning after.
+It runs on a `pull_request` whose paths are one of the six `*.user.js` (not `draw-tool.user.js`) or `lib/`. A change to `live/fuzz/` alone does not start it (#1030): its own tests run in `npm test`, and no script it fuzzes changed.
 
-- **`--focus` is set from the diff**: each script the pull request changes against its base is a `--focus`, read from the diff, so a new script needs no edit there beyond `paths:`. A change to `lib/` or to the fuzz alone has none, so the actions are as
+- **It is advisory** (#1030). Main has no branch protection, so it is no required check: a red run is read, not waited on, and a merge does not wait for the 5 minutes. Three of the pull requests merged before this ruling were merged red.
+- **`--focus` is set from the diff**: each script the pull request changes against its base is a `--focus`, read from the diff, so a new script needs no edit there beyond `paths:`. A change to `lib/` alone has none, so the actions are as
   they are in the nightly.
-- **A failure fails the check** and prints the seed, the shrunk steps and the replay command into the job summary (the fuzz's own output, the same as `npm run test:fuzz` prints). It files no issue:
-  the pull request is where it is seen. Replay it on your machine with the command in the summary, which carries the `--focus`.
+- **A red run leaves one comment on the pull request** with the seed, the failure, the shrunk steps and the replay command (`pr-verdict.mjs`, tested in `npm test`). A later red push edits that comment, found by its first line, `<!-- fuzz-pr -->`, so there is never a second. The job summary has the full output too. It files no issue.
+- **A run with no verdict is red** (#1030): a fuzz that crashed before fuzzing, or ran zero action lists (which exits 0 on its own), fails the `verdict` step and leaves the same comment, saying it reached no verdict, with the end of its output.
 - **It runs neither the Tampermonkey test nor the live suite.** A push to the pull request cancels the run on the old head.
 - **A failure may not be the pull request's.** The fuzz is random, and a bug already on `main` can fail the check; check whether the nightly has filed the same failure, or replay it on `main` (the replay command with `git checkout main` first).
 

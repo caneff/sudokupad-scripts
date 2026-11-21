@@ -86,12 +86,12 @@ describe('ci.yml (#1027)', () => {
 describe('fuzz-pr.yml (#724)', () => {
   const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'fuzz-pr.yml'), 'utf8')
 
-  it('runs on pull requests that change a script, lib/ or the fuzz, and on nothing else', () => {
+  it('runs on pull requests that change a script or lib/, and on nothing else: not on a change to the fuzz harness alone (#1030)', () => {
     assert.match(yml, /^on:\n {2}pull_request:\n {4}paths:\n/m)
     assert.doesNotMatch(yml, /^ {2}(push|schedule|workflow_dispatch):/m)
     const paths = yml.split('paths:\n')[1].split(/\n(?! {6}- )/)[0].split('\n').map((l) => l.replace(/^ {6}- /, ''))
     const scripts = scriptFiles()
-    assert.deepEqual(paths.sort(), [...scripts, 'lib/**', 'live/fuzz/**'].sort())
+    assert.deepEqual(paths.sort(), [...scripts, 'lib/**'].sort())
   })
 
   it('fuzzes for 5 minutes with the changed scripts in focus, and files no issue and runs no other live test', () => {
@@ -101,6 +101,21 @@ describe('fuzz-pr.yml (#724)', () => {
     assert.match(yml, /set -o pipefail/, 'without it tee hides the fuzz exit code from the default shell')
     assert.doesNotMatch(yml, /file-issue-once|gh issue/)
     assert.doesNotMatch(yml, /test:tampermonkey|test:live/)
+  })
+
+  it('is advisory: it files no issue and its token can only comment on the pull request (#1030)', () => {
+    assert.match(yml, /^permissions:\n {2}contents: read\n {2}pull-requests: write\n/m)
+    assert.doesNotMatch(yml, /issues: write/)
+  })
+
+  it('fails a run with no verdict, through pr-verdict.mjs, and leaves one comment that a later push edits (#1030)', () => {
+    assert.match(yml, /- id: verdict\n {8}if: \$\{\{ !cancelled\(\) \}\}\n {8}run: node live\/fuzz\/pr-verdict\.mjs /)
+    assert.match(yml, /FUZZ_OUTCOME: \$\{\{ steps\.fuzz\.outcome \}\}/)
+    assert.match(yml, /if: \$\{\{ steps\.verdict\.outcome == 'failure' \}\}/)
+    const marker = /export const COMMENT_MARKER = '([^']+)'/.exec(fs.readFileSync(path.join(ROOT, 'live', 'fuzz', 'pr-verdict.mjs'), 'utf8'))[1]
+    assert.ok(yml.includes(`startswith("${marker}")`), 'the step looks for the comment by the marker the script writes')
+    assert.match(yml, /gh api --method PATCH /)
+    assert.match(yml, /gh pr comment /)
   })
 
   it('puts a failure into the job summary', () => {
