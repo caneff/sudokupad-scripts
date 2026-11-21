@@ -10,6 +10,7 @@
     "fuzz:mutants": "node live/fuzz/mutants-run.mjs",
     "fuzz:nightly": "node live/fuzz/nightly.mjs",
     "test:fuzz:smoke": "node --test live/fuzz/fuzz.smoke.mjs",
+    "look": "node live/look.mjs",
     "watch:live": "node live/watch.mjs",
     "test:tampermonkey": "node --test --test-concurrency=1 \"live/**/*.tampermonkey.mjs\"",
     "lint": "standard"
