@@ -26,6 +26,10 @@ export function useBrowser (launchOptions) {
   return () => browser
 }
 
+// Launches a Chromium context that keeps its profile in `profileDir` (the cache and storage a second launch finds again), for a check
+// of what a script keeps between browser sessions. The caller closes it.
+export const launchPersistent = (profileDir, options) => chromium.launchPersistentContext(profileDir, options)
+
 // A script is a file name from SCRIPT_FILES, or `{ code }` for text of the test's own, such as a script with a break planted.
 const codeOf = (script) => typeof script === 'string' ? scriptSource(script) : script.code
 
