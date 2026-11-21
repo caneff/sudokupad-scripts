@@ -1,6 +1,6 @@
 name: Fuzz pull request
 
-# Advisory (#1030): no branch protection makes it a required check, so a red run is read, not waited on, and it files no issue. A red run leaves one
+# Advisory (#1030): main has no branch protection, so this is not a required check; a red run is read, not waited on, and it files no issue. A red run leaves one
 # comment on the pull request (edited on a later push) with the seed and the failure. A change to the fuzz harness alone does not start it:
 # its own tests (`npm test`) cover that, and the scripts it fuzzes are not in the diff.
 on:
@@ -73,16 +73,18 @@ jobs:
             cat "$RUNNER_TEMP/fuzz.out"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      # One comment per pull request: a later red push edits the one that is there, found by its first line.
-      - name: Comment the red fuzz on the pull request
-        if: ${{ steps.verdict.outcome == 'failure' }}
+      # One comment per pull request, found by its first line: a red run creates it or edits it, and a later green run edits an earlier red one to say it passed, so the pull
+      # request never keeps a stale failure. A fork's token cannot comment, so a fork's pull request has none.
+      - name: Comment the result on the pull request
+        if: ${{ !cancelled() && (steps.verdict.outcome == 'success' || steps.verdict.outcome == 'failure') && github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- fuzz-pr -->")) | .id' | head -n 1)
           if [ -n "$id" ]; then
             gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/fuzz-comment.md" > /dev/null
-          else
+          elif [ "$VERDICT" = failure ]; then
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/fuzz-comment.md"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          VERDICT: ${{ steps.verdict.outcome }}

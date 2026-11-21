@@ -15,8 +15,11 @@ const RUN_URL = 'https://example.test/run/1'
 const verdict = (output, outcome = 'success') => prVerdict({ output, outcome, sha: SHA, runUrl: RUN_URL })
 
 describe('prVerdict (#1030)', () => {
-  it('passes only a verdict of lists run, from a fuzz step that succeeded', () => {
-    assert.deepEqual(verdict(PASSED), { ok: true, body: '' })
+  it('passes only a verdict of lists run, from a fuzz step that succeeded, and its comment says so, to replace a red one an earlier push left (P6)', () => {
+    const r = verdict(PASSED)
+    assert.equal(r.ok, true)
+    assert.ok(r.body.startsWith(COMMENT_MARKER))
+    assert.match(r.body, /passed on `abc1234`/)
   })
 
   it('fails a red fuzz, and its comment names the seed, the failure, the steps and the replay', () => {
@@ -65,13 +68,15 @@ describe('pr-verdict.mjs as a command', () => {
       if (output !== null) writeFileSync(out, output)
       const r = spawnSync(process.execPath, [new URL('./pr-verdict.mjs', import.meta.url).pathname, out, comment, outcome, SHA, RUN_URL], { encoding: 'utf8' })
       let body = null
-      try { body = readFileSync(comment, 'utf8') } catch {}
+      try { body = readFileSync(comment, 'utf8') } catch (e) { if (e.code !== 'ENOENT') throw e }
       return { status: r.status, body }
     } finally { rmSync(dir, { recursive: true, force: true }) }
   }
 
-  it('exits 0 and writes no comment for a pass', () => {
-    assert.deepEqual(run(PASSED, 'success'), { status: 0, body: null })
+  it('exits 0 and writes the passed comment for a pass', () => {
+    const r = run(PASSED, 'success')
+    assert.equal(r.status, 0)
+    assert.match(r.body, /passed on `abc1234`/)
   })
 
   it('exits 1 and writes the comment for a failure, a zero-list pass and a missing output', () => {

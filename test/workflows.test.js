@@ -111,7 +111,8 @@ describe('fuzz-pr.yml (#724)', () => {
   it('fails a run with no verdict, through pr-verdict.mjs, and leaves one comment that a later push edits (#1030)', () => {
     assert.match(yml, /- id: verdict\n {8}if: \$\{\{ !cancelled\(\) \}\}\n {8}run: node live\/fuzz\/pr-verdict\.mjs /)
     assert.match(yml, /FUZZ_OUTCOME: \$\{\{ steps\.fuzz\.outcome \}\}/)
-    assert.match(yml, /if: \$\{\{ steps\.verdict\.outcome == 'failure' \}\}/)
+    assert.match(yml, /- name: Comment the result on the pull request\n {8}if: \$\{\{ !cancelled\(\) && \(steps\.verdict\.outcome == 'success' \|\| steps\.verdict\.outcome == 'failure'\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}/, "a fork's token cannot comment, and a green run edits an earlier red comment")
+    assert.match(yml, /elif \[ "\$VERDICT" = failure \]/, 'a green run creates no comment')
     const marker = /export const COMMENT_MARKER = '([^']+)'/.exec(fs.readFileSync(path.join(ROOT, 'live', 'fuzz', 'pr-verdict.mjs'), 'utf8'))[1]
     assert.ok(yml.includes(`startswith("${marker}")`), 'the step looks for the comment by the marker the script writes')
     assert.match(yml, /gh api --method PATCH /)
@@ -142,7 +143,8 @@ describe('watch.yml (#1026)', () => {
   })
 
   it('has a time limit under the 6 hours GitHub gives a job, so a hung suite fails the night', () => {
-    assert.match(yml, /timeout-minutes: \d+/)
+    const minutes = Number(/timeout-minutes: (\d+)/.exec(yml)?.[1])
+    assert.ok(minutes > 0 && minutes < 360, `timeout-minutes is ${minutes}`)
   })
 })
 

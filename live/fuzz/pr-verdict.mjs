@@ -1,7 +1,7 @@
 // What the pull-request fuzz workflow (`.github/workflows/fuzz-pr.yml`, #1030) makes of a run, and the comment it leaves when the run is red.
 //   node live/fuzz/pr-verdict.mjs <fuzz output file> <comment file> <fuzz step outcome> <head sha> <run url>
-// Exits 0 for a pass and writes nothing. Exits 1 for anything else and writes the comment: a failure the fuzz found, and also a run that
-// never reached a verdict (it crashed before fuzzing, or ran zero action lists, which `parseFuzzOutput` reads as no verdict), so neither
+// Always writes the comment: exits 0 with a short "passed" one for a pass, which the workflow uses only to replace a red comment an earlier push left, and
+// exits 1 with the failure for anything else: a failure the fuzz found, and also a run that never reached a verdict (it crashed before fuzzing, or ran zero action lists, which `parseFuzzOutput` reads as no verdict), so neither
 // reads as a pass. A pass counts only when the fuzz step itself succeeded too.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
@@ -9,7 +9,8 @@ import { parseFuzzOutput } from './fuzz-report.mjs'
 
 // The workflow finds its one comment by this first line, and edits it on a later push instead of adding another.
 export const COMMENT_MARKER = '<!-- fuzz-pr -->'
-// GitHub refuses a comment over 65536 characters; the end of an output is where the failure is.
+// GitHub refuses a comment over 65536 characters; the end of an output is where the failure is. Longer than the nightly's 15 lines (`nightly.mjs`): this comment
+// is all a pull request shows of a run that crashed before fuzzing. A fence inside the output would end ours, so it is escaped.
 const TAIL_CHARS = 20000
 
 const fence = (text) => '```\n' + text.replace(/```/g, "'''") + '\n```'
@@ -17,7 +18,7 @@ const tail = (output) => output.length > TAIL_CHARS ? '... (cut)\n' + output.sli
 
 export function prVerdict ({ output, outcome, sha, runUrl }) {
   const verdict = output ? parseFuzzOutput(output) : null
-  if (verdict?.passed && outcome === 'success') return { ok: true, body: '' }
+  if (verdict?.passed && outcome === 'success') return { ok: true, body: `${COMMENT_MARKER}\nThe pull-request fuzz passed on \`${sha}\`. Run: ${runUrl}` }
   const head = [COMMENT_MARKER, `The pull-request fuzz is red on \`${sha}\`. It is advisory: read it, it does not block the merge. Run: ${runUrl}`, '']
   if (verdict?.failed) {
     return {
@@ -56,6 +57,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   let output = null
   try { output = readFileSync(outputFile, 'utf8') } catch (e) { if (e.code !== 'ENOENT') throw e }
   const { ok, body } = prVerdict({ output, outcome, sha, runUrl })
-  if (!ok) writeFileSync(commentFile, body)
+  writeFileSync(commentFile, body)
   process.exitCode = ok ? 0 : 1
 }
