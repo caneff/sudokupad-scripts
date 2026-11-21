@@ -1,6 +1,6 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { pickTool, selectCell } from './board.mjs'
+import { pickTool } from './board.mjs'
 import { captureConsoleErrors } from './page.mjs'
 import { SCRIPTS } from './scripts.mjs'
 import { addScripts, openWith, reloadWith } from './session.mjs'
@@ -59,11 +59,6 @@ export async function assertNoCrash (p, errors) {
 export const cellsState = (p) => p.evaluate(() => Framework.app.puzzle.createState().cells)
 
 export const noteCount = (p) => p.locator(NOTES).count()
-
-export async function typeDigits (p, [row, col], digits) {
-  await selectCell(p, row, col)
-  await p.keyboard.type(digits)
-}
 
 export async function attack (browser, body) {
   const { context, p, errors } = await openWithAllScripts(browser)
