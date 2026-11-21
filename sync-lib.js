@@ -34,7 +34,6 @@ const blockLines = (name, module, indent) => {
 
 const ANY_CONST_VERSION = /^\s*const VERSION =/m
 
-// null when either version is not a plain X.Y.Z it can raise.
 function bumpPatch (source) {
   if (!SCRIPT_VERSION.test(source) || (ANY_CONST_VERSION.test(source) && !CONST_VERSION.test(source))) return null
   return [SCRIPT_VERSION, CONST_VERSION].reduce(
@@ -120,13 +119,10 @@ const libNamesOnDisk = () => fs.readdirSync(LIB_DIR).filter((f) => f.endsWith('.
 // A script's old install address, which every copy installed from it still checks for updates, to its new one. The old file stays
 // frozen at one handover version whose @updateURL and @downloadURL name the new file, so those copies' next update leads there (#711;
 // docs/research/tampermonkey-in-playwright.md § Driving an update check has what is known of how).
-// It is no script of its own: scriptFiles() leaves it out, so this file never syncs it.
 const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
 const scriptFiles = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js') && !(f in HANDOVERS)).sort()
 
-// The names of the lib blocks a script carries, in order.
 const libBlockNames = (source) => [...source.matchAll(BLOCK)].map((match) => match[1])
-// A script's own code: its text with every lib block taken out.
 const withoutLibBlocks = (source) => source.replace(BLOCK, '')
 
 function guardId (source) {
