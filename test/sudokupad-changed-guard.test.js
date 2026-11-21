@@ -9,7 +9,7 @@ const ROOT = join(__dirname, '..')
 
 const SCRIPTS = scriptFiles()
 
-// The second test is run, not read: each script starts on a stand-in page, SudokuPad then changes so that every call into it throws, and every
+// The second test is run: each script starts on a stand-in page, SudokuPad then changes so that every call into it throws, and every
 // way back into the script is taken (broken-sudokupad.js). Blind to what that file's head names (a path behind a state the stand-in never takes,
 // and the methods a script wraps), and to real SudokuPad: the bar, the console and each script's other features after a missing internal are
 // `npm run test:live`'s (`live/*/*-guard.live.mjs` and the rest).

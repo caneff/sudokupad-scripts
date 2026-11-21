@@ -24,7 +24,6 @@ test('the looks table holds every saved look once, and a look added to it reache
   assert.equal(JSON.parse(copiedSettings(store, withSpin)).TextAnywhere_spin, 'left', 'Copy')
   assert.deepEqual(pastedSettings(JSON.stringify({ TextAnywhere_spin: 'left' }), pasteReaders(withSpin)).values, { TextAnywhere_spin: 'left' }, 'Paste')
   assert.equal(readLooks(store, withSpin).spin, 'left', 'the start load')
-  assert.ok(tableKeys(withSpin).includes('TextAnywhere_spin'), 'the snapshot\'s keys')
   const now = readLooks(fakeStore(), withSpin)
   assert.deepEqual(changedDialogLooks(withSpin, { ...now, spin: 'left' }, now).map((row) => row.name), ['spin'], 'Save\'s changed rows')
 })

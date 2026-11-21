@@ -72,3 +72,11 @@ test('the Color by Digit settings dialog edits a selected profile in two columns
   assert.equal(count(eachRow(renderMenu(STATE, colorOf), 'data-role="menu-row"'), /data-role="chip"/g), 3)
   assert.equal(count(byDigit.iconHtml('cell', byDigit.shownChips('cell', EACH, EACH), colorOf), /data-role="chip"/g), 3)
 })
+
+test('Color by Digit\'s profile drag shifts the rows between the dragged row\'s start and its drop by one step, the other way', () => {
+  const { asideOf } = byDigit
+  const shifts = (from, to) => [0, 1, 2, 3].map((i) => asideOf(from, to, 20, i))
+  assert.deepEqual(shifts(0, 2), [0, -20, -20, 0])
+  assert.deepEqual(shifts(3, 1), [0, 20, 20, 0])
+  assert.deepEqual(shifts(1, 1), [0, 0, 0, 0])
+})

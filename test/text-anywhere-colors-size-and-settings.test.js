@@ -46,3 +46,28 @@ test('Text Anywhere\'s Size slider range and text size, a missing opacity read a
   assert.deepEqual(pasted, { values: { TextAnywhere_colors: PEN, TextAnywhere_opacity: 100, TextAnywhere_outline: 'medium', TextAnywhere_box: 'page', TextAnywhere_frame: false, TextAnywhere_font: 'proportional' }, skipped: 1 })
   assert.throws(() => textAnywhere.pastedSettings('not settings', textAnywhere.READERS))
 })
+
+test('Text Anywhere\'s note color is 2 with nothing saved and a saved 1 stays 1', () => {
+  const { readColor } = textAnywhere
+  assert.equal(readColor(undefined), 2)
+  assert.equal(readColor(null), 2)
+  assert.equal(readColor(1), 1)
+})
+
+test('a new note\'s size follows the cell size against a 9x9, and holding + or - repeats faster as it is held, up to a cap', () => {
+  const { newNoteWidth, textSizeFor, DEFAULT_WIDTH, REFERENCE_GRID, heldSliderSteps, HELD_SLIDER_MAX_STEPS, HELD_REPEAT_MS, HELD_RAMP_MS } = textAnywhere
+  assert.equal(REFERENCE_GRID, 9)
+  assert.equal(newNoteWidth(DEFAULT_WIDTH, 9), DEFAULT_WIDTH)
+  // Measured in cells, the drawn size on a 4x4 and a 16x16 is within a fifth of a 9x9's.
+  const inCells = (grid) => textSizeFor(newNoteWidth(DEFAULT_WIDTH, grid)) / grid
+  for (const grid of [4, 16]) assert.ok(Math.abs(inCells(grid) / inCells(9) - 1) < 0.2, `${grid}x${grid}`)
+  // Not the 9x9's size unchanged, which against the cell would be 2.25 times as big on a 4x4 and little over half on a 16x16.
+  assert.ok(newNoteWidth(DEFAULT_WIDTH, 4) < DEFAULT_WIDTH && newNoteWidth(DEFAULT_WIDTH, 16) > DEFAULT_WIDTH)
+  // Steps a tick, by how long the key has been held: none before the pause, then one, ramping to the cap.
+  assert.equal(heldSliderSteps(HELD_REPEAT_MS - 1), 0, 'a short press is one step, taken on the press')
+  assert.equal(heldSliderSteps(HELD_REPEAT_MS), 1)
+  const ticks = [HELD_REPEAT_MS, HELD_RAMP_MS / 2, HELD_RAMP_MS, HELD_RAMP_MS * 2].map(heldSliderSteps)
+  assert.ok(ticks.every((steps, i) => i === 0 || steps >= ticks[i - 1]) && ticks.at(-1) > ticks[0], `${ticks}`)
+  assert.equal(HELD_SLIDER_MAX_STEPS > 1, true)
+  assert.equal(heldSliderSteps(HELD_RAMP_MS * 10), HELD_SLIDER_MAX_STEPS)
+})

@@ -102,7 +102,7 @@ function restartPage () {
   }
 }
 
-test('the restart-Undo tracker tells Color by Digit and Text Anywhere which Undo loads the board from before a Restart', async () => {
+test('the restart-Undo tracker answers "does this Undo load the board from before a Restart" before the Undo (as Color by Digit asks) and calls back after it (as Text Anywhere does)', async () => {
   const page = restartPage()
   const tracker = trackRestartUndo(page.app, (fn) => fn)
   const undos = []

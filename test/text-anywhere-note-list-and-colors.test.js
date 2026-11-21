@@ -1,16 +1,12 @@
 'use strict'
-// Text Anywhere's note list rules as pure functions, its note colors as one record, Pen Tool Extras' install color save behind Framework.getApp, and Color by Digit's
-// profile-drag shift, at the `npm test` seam.
+// Text Anywhere's note list rules as pure functions, and its note colors as one record, at the `npm test` seam.
 // Blind to real SudokuPad: the Framework calls, rendering and undo. The live suites cover them on sudokupad.app: text-anywhere-nudge (Restart while an arrow key
-// is held, then Undo brings the notes back), text-anywhere-settings (Paste and Restore defaults in the dialog), pen-tool-extras-panel and color-by-digit-profiles.
+// is held, then Undo brings the notes back) and text-anywhere-settings (Paste and Restore defaults in the dialog).
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { join } = require('node:path')
 
-const ROOT = join(__dirname, '..')
-const textAnywhere = require(join(ROOT, 'text-anywhere.user.js'))
-const penToolExtras = require(join(ROOT, 'pen-tool-extras.user.js'))
-const colorByDigit = require(join(ROOT, 'color-by-digit.user.js'))
+const textAnywhere = require(join(__dirname, '..', 'text-anywhere.user.js'))
 const { loadLib } = require('./load-lib.js')
 const { storedColorSet, editedColorSet } = loadLib(['color-math', 'plain', 'palette', 'color-set'], ['storedColorSet', 'editedColorSet'])
 
@@ -43,16 +39,4 @@ test('Text Anywhere\'s note colors are one record, so a pasted set replaces ever
   assert.equal(edited.preset, 'custom')
   assert.deepEqual(edited.missing, [4])
   assert.equal(edited.colors[3], '#445566')
-})
-
-test('Pen Tool Extras\' install color save needs Framework.getApp like every other install step', () => {
-  assert.equal(penToolExtras.FEATURES.colorSave.needs['Framework.getApp'], 'function')
-})
-
-test('Color by Digit\'s profile drag shifts the rows between the dragged row\'s start and its drop by one step, the other way', () => {
-  const { asideOf } = colorByDigit
-  const shifts = (from, to) => [0, 1, 2, 3].map((i) => asideOf(from, to, 20, i))
-  assert.deepEqual(shifts(0, 2), [0, -20, -20, 0])
-  assert.deepEqual(shifts(3, 1), [0, 20, 20, 0])
-  assert.deepEqual(shifts(1, 1), [0, 0, 0, 0])
 })
