@@ -75,7 +75,7 @@ describe('targetAt', () => {
   const puzzle = byName('outside clues 9x9')
 
   it('gives the index of the target at a 0-based row and column, margin cells included', () => {
-    for (const [row, col] of [[0, 0], [-1, 3], [9, 4]]) assert.deepEqual(puzzle.cells[targetAt(puzzle, row, col)], [row, col])
+    for (const [row, col] of [[0, 2], [-1, 3], [9, 4]]) assert.deepEqual(puzzle.cells[targetAt(puzzle, row, col)], [row, col])
   })
 
   it('throws at once, naming the cell and the puzzle, for a cell that is no target (a typo, a given, off the grid)', () => {
