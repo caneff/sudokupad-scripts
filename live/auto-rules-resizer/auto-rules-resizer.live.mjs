@@ -241,6 +241,29 @@ describe('a dl corner drag that shrinks a pane at the window\'s edge', { concurr
   }
 })
 
+// The fuzz's seed 1198984770 (#1015): the fuzz's long rules in a 1200 x 900 window, the ur corner dragged 241 px down and f- pressed 3 times. Each f- shortens the fitted pane the
+// shrink is taken from, until the pane's floor holds it taller than the shrink asks; the column kept the whole move, ended below the window's bottom and the button's pad-menu arrow
+// had no press point, so its menu never opened.
+describe('a ur corner drag that shrinks a pane, then f-, with Color by Digit\'s button in the column', { concurrency: false }, () => {
+  const window = { width: 1200, height: 900 }
+  it('keeps the column inside the window, and the button\'s arrow opens the menu', async () => {
+    const { context, p, errors } = await rulesPage(window, undefined, RULES_TEXT)
+    try {
+      await inject(p, [SCRIPT_FILE, 'color-by-digit.user.js'])
+      await settle(async () => (await fontPx(p)) > 0, true)
+      await dragCorner(p, 'ur', 0, 241)
+      for (let i = 0; i < 3; i++) await clickFont(p, 'f-')
+      const bottom = await stable(() => column(p).then((c) => c.bottom))
+      assert.equal(bottom <= window.height, true, `the controls column ends at ${bottom} px of a ${window.height} px window`)
+      await p.click('#control-colorbydigit [data-role="menu"]', { timeout: 2000 })
+      await p.locator('#color-by-digit-menu').waitFor({ state: 'visible', timeout: 2000 })
+      assert.deepEqual(errors, [])
+    } finally {
+      await context.close()
+    }
+  })
+})
+
 describe('a landscape window, long rules: what the pane\'s controls cover and how its lines break', { concurrency: false }, () => {
   let context, p
 

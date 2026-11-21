@@ -209,6 +209,20 @@ async function pickProfileFromMenu (p, i) {
   await p.locator(PROFILE_MENU).waitFor({ state: 'detached' })
 }
 
+// Where a press on the Color by Digit button lands on it: `buttonPoint`, or the nearest point of a 5 x 5 grid over the button when a note dragged over it covers that one. null when
+// the button is covered everywhere, as no press then reaches it.
+async function uncoveredButtonPoint (p) {
+  const first = await buttonPoint(p)
+  const spots = await p.evaluate(([button, x, y]) => {
+    const box = document.querySelector(button).getBoundingClientRect()
+    const onButton = ([px, py]) => document.elementFromPoint(px, py)?.closest(button) != null
+    const grid = []
+    for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) grid.push([box.x + box.width * (i + 0.5) / 5, box.y + box.height * (j + 0.5) / 5])
+    return [[x, y], ...grid.sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y))].filter(onButton)
+  }, [COLOR_BUTTON, first.x, first.y])
+  return spots.length > 0 ? { x: spots[0][0], y: spots[0][1] } : null
+}
+
 function envFor (p, puzzle, { beforeReload, reads }) {
   const openPen = async () => {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
@@ -290,7 +304,9 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     undoAll: () => undoAll(p),
     clickColorMode: () => clickIn(p, COLOR_BUTTON),
     holdColorMode: async (drift) => {
-      const { x, y } = await buttonPoint(p)
+      const point = await uncoveredButtonPoint(p)
+      if (point === null) return // a note left over the whole button takes every press there, and a user's too (#1015)
+      const { x, y } = point
       await p.mouse.move(x, y)
       await p.mouse.down()
       try {
