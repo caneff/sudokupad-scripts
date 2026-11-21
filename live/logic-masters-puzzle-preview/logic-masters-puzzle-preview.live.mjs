@@ -16,6 +16,7 @@ const VIEWPORT = { width: 1200, height: 768 }
 const NEAR_MARGIN = 400 // the script's NEAR_SCREEN_PX
 const BUSY_KEY = 'lm-puzzle-preview-busy-until' // the script's BUSY_KEY, in localStorage
 const BUSY_DELAY_MS = 100 // shorter than the gap, so the second request is still waiting when the 503 lands
+const ANSWER_MS = 700 // longer than three gaps, so a third slot would show as 3 in flight
 const QUIET_MS = 2000 // "nothing more is fetched" window; the script starts a request at most every 250 ms
 const START_GAP_MS = 250 // the script's START_GAP_MS
 const MAX_IN_FLIGHT = 2 // the script's MAX_IN_FLIGHT
@@ -157,7 +158,7 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
 
   it('a first visit has at most 2 requests in flight, starts them at least 250 ms apart, and shows the near pictures faster than one at a time', async () => {
     const t0 = Date.now()
-    const { page, hits } = await session(join(dir, 'pace-profile'), 'ok', 300)
+    const { page, hits } = await session(join(dir, 'pace-profile'), 'ok', ANSWER_MS)
     const near = await nearIds(page)
     await waitForShown(page, near.length, 60000)
     const elapsed = Date.now() - t0
@@ -167,7 +168,7 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
     assert.equal(hits.maxInFlight, MAX_IN_FLIGHT)
     const gaps = starts.slice(1).map((t, i) => t - starts[i])
     assert.ok(Math.min(...gaps) >= START_GAP_MS - 20, `gaps ${gaps.map(Math.round)}`)
-    // One at a time with 500 ms after each took at least this long for the same requests.
-    assert.ok(elapsed < starts.length * OLD_GAP_MS, `${elapsed} ms for ${near.length} pictures`)
+    // One at a time, with 500 ms after each answer, took at least this long for the same requests.
+    assert.ok(elapsed < starts.length * (ANSWER_MS + OLD_GAP_MS), `${elapsed} ms for ${near.length} pictures`)
   })
 })
