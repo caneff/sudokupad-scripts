@@ -105,3 +105,10 @@ export const puzzleByName = (name) => {
   if (!puzzle) throw new Error(`no puzzle "${name}"; known: ${FUZZ_PUZZLES.map((p) => p.name).join(', ')}`)
   return puzzle
 }
+
+// The index of the target at `row`, `col` (0-based) of `puzzle`; a cell that is no target throws, so a mistyped cell in a test fails here and not as an action on index -1.
+export const targetAt = (puzzle, row, col) => {
+  const i = puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+  if (i === -1) throw new Error(`r${row + 1}c${col + 1} is no target of the ${puzzle.name} puzzle`)
+  return i
+}
