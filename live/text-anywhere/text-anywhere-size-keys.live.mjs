@@ -93,11 +93,11 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.equal(await width(), blurred, 'the blur stopped the hold')
   })
 
-  it('with Ctrl, Alt or Meta held the keys leave the size alone (Alt is what the script\'s own check stops)', async () => {
+  it('with Alt, Ctrl or Meta held the keys leave the size alone, since each switches the tool away', async () => {
     await typeText(p, A, 'A')
     await clickAt(p, A)
     await p.keyboard.press('+')
-    // Ctrl (and Cmd, which SudokuPad treats alike) switches the tool while held, so the Control and Meta cases pass for that reason and only the Alt ones witness the script's own check; Alt goes first because a chord after a Ctrl one would never reach this script.
+    // Each modifier switches the tool while held, so these pass because Text Anywhere is not current; the script's own chord check stays as a backstop that no live test reaches.
     for (const chord of ['Alt+=', 'Alt+-', 'Meta+=', 'Control+-']) {
       await p.keyboard.press(chord)
       assert.equal(await savedSize('A'), 21, `${chord} left the size as the plain + made it`)

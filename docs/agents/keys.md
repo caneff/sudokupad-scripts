@@ -10,7 +10,6 @@ Read before you propose, add or change a keyboard shortcut in any script.
 - **A key the pen tool ignores is free while a script's tool is current:** the digit keys, `+` and `-`. Pen Tool Extras picks a pen with a digit
   key and steps Thickness with `+` and `-`; Text Anywhere steps Size with them.
 - **A key typed into a script's own text field is free.** Ctrl+Enter closes a Text Anywhere note, and stays.
-- **Left Alt's edit mode breaks the rule and is being removed** (#1070). Delete this line when that lands.
 
 Sources: `docs/research/sudokupad-pen-tool.md` (§ Holding a modifier leaves the pen tool, § + and -), `docs/research/sudokupad-custom-tool.md`
 § Tool keys, `docs/research/sudokupad-letter-tool.md` and `docs/research/sudokupad-color-tool-paging.md`. The research does not say what

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.48
+// @version      1.32.49
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.48'
+  const VERSION = '1.32.49'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1472,7 +1472,6 @@
     document.querySelectorAll(`.${prefix}picker input`).forEach((input) => { input.value = colorOf(input.dataset.key) })
   }
 
-  // Left Alt held opens edit mode until it is released, as SudokuPad's own color tool does.
   function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
     const toolClass = `tool-${tool}`
     const editing = `${prefix}editing`
@@ -1482,7 +1481,6 @@
     // SudokuPad keeps one panel element and swaps its `tool-<name>` class for the next tool's, so a class watcher ends edit mode when the panel stops being this tool's.
     let leaveWatch = null
     let editPanel = null
-    let altOpened = false
 
     function exit () {
       if (leaveWatch) leaveWatch.disconnect()
@@ -1490,7 +1488,6 @@
       editPanel.classList.remove(editing)
       editPanel.querySelectorAll(`.${pickerClass}`).forEach((el) => el.remove())
       editPanel = null
-      altOpened = false
     }
 
     const endEditMode = () => { if (editPanel) exit() }
@@ -1553,20 +1550,8 @@
     document.addEventListener('contextmenu', (event) => {
       if ((timer !== undefined || holdDone) && event.target.closest(targets)) event.preventDefault()
     }, true)
-    // On the window, in the capture phase, so it runs ahead of SudokuPad's own Alt (a temporary switch to another tool, which would take the panel away) and can stop it.
     window.addEventListener('keydown', (event) => guard(() => {
-      if (event.code === 'Escape' || event.key === 'Escape') return endEditMode()
-      if (event.code !== 'AltLeft' || event.target.closest?.('input, textarea, [contenteditable]')) return
-      const panel = document.querySelector(`.${toolClass}`)
-      if (!panel) return
-      // Stopped even with edit mode already open, or SudokuPad's own Alt would switch tools and take the panel away.
-      event.stopImmediatePropagation()
-      if (event.repeat || editPanel) return
-      enter(panel)
-      altOpened = true
-    }), true)
-    window.addEventListener('keyup', (event) => guard(() => {
-      if (event.code === 'AltLeft' && altOpened) endEditMode()
+      if (event.code === 'Escape' || event.key === 'Escape') endEditMode()
     }), true)
     window.addEventListener('blur', () => guard(endEditMode))
     document.addEventListener('input', (event) => {

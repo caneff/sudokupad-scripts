@@ -93,7 +93,7 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
     assert.equal(await saved(), RANGE.min)
   })
 
-  // Left Alt keeps the pen tool current, so the script's own check is what refuses the key (Ctrl switches the tool, and the unit test holds that case).
+  // Alt switches the tool while held (docs/research/sudokupad-pen-tool.md § Holding a modifier leaves the pen tool), so the key reaches no pen tool at all; the script's own check is the backstop (the unit test holds the Ctrl case).
   it('does nothing with Alt held', async () => {
     await setThickness(8)
     await p.keyboard.press('Alt+Minus')
