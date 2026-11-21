@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Logic Masters Puzzle Preview
 // @namespace    http://tampermonkey.net/
-// @version      1.2.0
+// @version      1.3.1
 // @description  Show puzzle preview images inline on Logic Masters portal pages, cached between visits
 // @author       Juggler (first version); caching and request limits by ChinStrap
 // @match        https://logic-masters.de/Raetselportal/*
@@ -26,11 +26,11 @@
   const PAGE_TTL = 7 * 24 * 3600 * 1000 // a puzzle page is looked at again after a week
   const MISS_TTL = 24 * 3600 * 1000 // a page with no image is looked at again after a day
   const MAX_IMAGES = 600 // about 25 MB at the usual 40-50 KB a picture; the oldest go first
-  const NEAR_SCREEN_PX = 400 // links this far below the viewport are looked up too
+  const NEAR_SCREEN_PX = 400 // links this near the viewport are looked up before the rest
   const PRUNE_DELAY_MS = 5000 // the image cache is trimmed once the page has settled
-  const MAX_IN_FLIGHT = 2 // network requests at once, to be gentle on the server
-  const START_GAP_MS = 250 // least time between the starts of two network requests
-  const LINKS = 'a[href*="zeigen.php"]'
+  const REQUEST_GAP_MS = 200 // from the end of one network request to the start of the next
+  const LINKS = 'a[href*="zeigen.php"]' // candidates: the portal's menu has more links that match, and isPuzzleLink sorts them out
+  const REQUEST_TIMEOUT_MS = 20 * 1000 // a request that never answers would hold the queue and leave its box at Loading...
 
   // ---- storage ----
   const dbReady = new Promise((resolve) => {
@@ -78,56 +78,60 @@
     }
   }
 
-  // ---- network: two requests at a time, a gap between their starts, and a long pause when the server is busy ----
-  // LMD answers 503 when it is loaded or throttling. Then nothing more is asked of it for BUSY_PAUSE_MS,
-  // and the failed lookup is not saved, so a later visit tries again.
-  const BUSY_PAUSE_MS = 5 * 60 * 1000
-  const BUSY_KEY = 'lm-puzzle-preview-busy-until' // kept in localStorage so every open page and the next visit wait too
-  const busyUntil = () => Number(localStorage.getItem(BUSY_KEY)) || 0
+  // ---- network: one request at a time, a gap after each, and a pause when the server answers busy ----
+  // LMD answers 503 or 429 when it is loaded or throttling. That lookup alone fails, nothing is asked for BUSY_PAUSE_MS,
+  // and it is not saved, so a later visit tries again. After MAX_BUSY_IN_A_ROW busy answers in a row the page asks no more.
+  const BUSY_PAUSE_MS = 30 * 1000
+  const MAX_BUSY_IN_A_ROW = 3
+  class BusyError extends Error {}
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
   const waiting = []
-  let inFlight = 0
-  let lastStart = 0
-  let startTimer = null
-  function startNext () {
-    if (startTimer !== null || inFlight >= MAX_IN_FLIGHT || waiting.length === 0) return
-    const wait = lastStart + START_GAP_MS - Date.now()
-    if (wait > 0) {
-      startTimer = setTimeout(() => { startTimer = null; startNext() }, wait)
-      return
-    }
-    const { job, resolve, reject } = waiting.shift()
-    let busy
-    try {
-      busy = Date.now() < busyUntil()
-    } catch (error) {
-      reject(error) // an unreadable busy mark fails this lookup, as it did before two slots
-      startNext()
-      return
-    }
-    // A 503 that lands while a request waits for its gap stops it here, as it stops every later one.
-    if (busy) {
-      reject(new Error('server busy, waiting'))
-      startNext()
-      return
-    }
-    lastStart = Date.now()
-    inFlight++
-    job().then((response) => {
-      if (response.status === 503 || response.status === 429) localStorage.setItem(BUSY_KEY, String(Date.now() + BUSY_PAUSE_MS))
-      return response
-    }).then(resolve, reject).finally(() => { inFlight--; startNext() })
-    startNext()
+  let running = false
+  let busyInARow = 0
+  let stopped = false
+
+  // The lookup with the lowest rank goes next; a lower rank is nearer the screen, then earlier in the page.
+  function takeNext () {
+    let best = 0
+    waiting.forEach((entry, i) => { if (entry.rank < waiting[best].rank) best = i })
+    return waiting.splice(best, 1)[0]
   }
-  function politely (job) {
+
+  async function runQueue () {
+    running = true
+    await sleep(REQUEST_GAP_MS) // cache reads of a page's links finish within this, so the nearest links are queued before the first request
+    while (waiting.length > 0) {
+      const { job, resolve, reject } = takeNext()
+      let busy = false
+      try {
+        const response = await job()
+        busy = response.status === 503 || response.status === 429
+        if (busy) reject(new BusyError('server busy'))
+        else resolve(response)
+      } catch (error) {
+        reject(error)
+      }
+      busyInARow = busy ? busyInARow + 1 : 0
+      if (busyInARow >= MAX_BUSY_IN_A_ROW) {
+        stopped = true
+        for (const entry of waiting.splice(0)) entry.reject(new BusyError('server busy, stopped'))
+      }
+      await sleep(busy ? BUSY_PAUSE_MS : REQUEST_GAP_MS)
+    }
+    running = false
+  }
+
+  function politely (job, rank) {
     return new Promise((resolve, reject) => {
-      waiting.push({ job, resolve, reject })
-      startNext()
+      if (stopped) return reject(new BusyError('server busy, stopped'))
+      waiting.push({ job, rank, resolve, reject })
+      if (!running) runQueue()
     })
   }
 
   // The first bild.php image on a puzzle page, read from the page text without building a document.
-  async function fetchImageAddress (pageUrl) {
-    const response = await politely(() => fetch(pageUrl))
+  async function fetchImageAddress (pageUrl, rank) {
+    const response = await politely(() => fetch(pageUrl, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }), rank)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const html = await response.text()
     const match = html.match(/<img[^>]+src="([^"]*bild\.php[^"]*)"/i)
@@ -141,31 +145,32 @@
     return pending.get(key)
   }
 
-  function imageAddressFor (pageUrl) {
+  function imageAddressFor (pageUrl, rank) {
     return once('page:' + pageUrl, async () => {
       const saved = await dbGet('pages', pageUrl)
       const ttl = saved && saved.src ? PAGE_TTL : MISS_TTL
       if (saved && Date.now() - saved.checked < ttl) return saved.src
       try {
-        const src = await fetchImageAddress(pageUrl)
+        const src = await fetchImageAddress(pageUrl, rank)
         dbPut('pages', pageUrl, { src, checked: Date.now() })
         return src
-      } catch {
-        // Offline, busy or an error: use what was saved. With nothing saved this shows no preview, and saves nothing, so a later visit tries again.
-        return saved ? saved.src : null
+      } catch (error) {
+        // Offline, busy or an error: use what was saved. With nothing saved the error stands and nothing is saved, so a later visit tries again.
+        if (saved) return saved.src
+        throw error
       }
     })
   }
 
   // An object URL for the image, from the cache when it is there.
-  function imageUrlFor (src) {
+  function imageUrlFor (src, rank) {
     return once('image:' + src, async () => {
       const saved = await dbGet('images', src)
       if (saved) {
         dbPut('images', src, { blob: saved.blob, used: Date.now() })
         return URL.createObjectURL(saved.blob)
       }
-      const response = await politely(() => fetch(src))
+      const response = await politely(() => fetch(src, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }), rank)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const blob = await response.blob()
       dbPut('images', src, { blob, used: Date.now() })
@@ -174,6 +179,11 @@
   }
 
   // ---- the preview box ----
+  function showFailure (label, text) {
+    label.textContent = text
+    label.style.color = '#999'
+  }
+
   function insertPreview (link) {
     const parent = link.parentElement
     if (!parent || parent.querySelector('.puzzle-preview')) return null
@@ -190,7 +200,7 @@
     img.decoding = 'async'
     img.style.cssText = 'max-width: 100px; height: auto; display: block; border-radius: 2px;'
     img.onload = () => label.remove()
-    img.onerror = () => { label.textContent = 'No preview'; label.style.color = '#999' }
+    img.onerror = () => showFailure(label, 'No preview')
 
     box.append(label, img)
     parent.insertBefore(box, parent.firstChild)
@@ -198,36 +208,45 @@
     return { box, img, label }
   }
 
-  async function showPreview (link) {
-    const pageUrl = link.href
-    const src = await imageAddressFor(pageUrl)
-    if (!src) return
-    const preview = insertPreview(link)
-    if (!preview) return
+  // `rank` orders the lookups in the queue, and an image's lookup keeps its link's rank.
+  async function showPreview (link, preview, rank) {
     try {
-      preview.img.src = await imageUrlFor(src)
-    } catch {
+      const src = await imageAddressFor(link.href, rank)
+      if (!src) {
+        preview.box.remove()
+        return
+      }
+      preview.img.src = await imageUrlFor(src, rank)
+    } catch (error) {
       // No direct load of the address: it would skip the queue, the gap and the pause after a 503, and ask the busy server again.
-      preview.label.textContent = 'No preview'
+      showFailure(preview.label, error instanceof BusyError ? 'Busy, try later' : 'No preview')
     }
   }
 
-  // ---- only links on or near the screen are looked up ----
+  // ---- every link is looked up, those on or near the screen first, then the rest in page order ----
+  const FAR_RANK = 1e9 // added to the rank of a link away from the screen
   const seen = new WeakSet()
-  const nearScreen = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue
-      nearScreen.unobserve(entry.target)
-      showPreview(entry.target)
-    }
-  }, { rootMargin: `${NEAR_SCREEN_PX}px 0px` })
+  let linksSeen = 0
+
+  // A puzzle's page is /Raetsel/zeigen.php with an id; the menu's "Rätsel anzeigen" has none, and kommentarezeigen.php and loeserzeigen.php are other pages.
+  function isPuzzleLink (link) {
+    const url = new URL(link.href, location.href)
+    return url.pathname.endsWith('/Raetsel/zeigen.php') && Boolean(url.searchParams.get('id'))
+  }
+
+  function isNearScreen (link) {
+    const rect = link.getBoundingClientRect()
+    return rect.bottom > -NEAR_SCREEN_PX && rect.top < window.innerHeight + NEAR_SCREEN_PX
+  }
 
   function watch (root) {
     const links = root.matches && root.matches(LINKS) ? [root] : root.querySelectorAll(LINKS)
     for (const link of links) {
       if (seen.has(link)) continue
       seen.add(link)
-      nearScreen.observe(link)
+      if (!isPuzzleLink(link)) continue
+      const preview = insertPreview(link)
+      if (preview) showPreview(link, preview, linksSeen++ + (isNearScreen(link) ? 0 : FAR_RANK))
     }
   }
 

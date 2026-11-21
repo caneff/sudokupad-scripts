@@ -7,24 +7,34 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { launchPersistent } from '../session.mjs'
 
-const SCRIPT = readFileSync(new URL('../../logic-masters-puzzle-preview.user.js', import.meta.url), 'utf8')
+const SOURCE = readFileSync(new URL('../../logic-masters-puzzle-preview.user.js', import.meta.url), 'utf8')
 const HOST = 'logic-masters.de'
 const PORTAL = `https://${HOST}/Raetselportal/`
 const LINK_COUNT = 40
 const ROW_HEIGHT = 150
 const VIEWPORT = { width: 1200, height: 768 }
 const NEAR_MARGIN = 400 // the script's NEAR_SCREEN_PX
-const BUSY_KEY = 'lm-puzzle-preview-busy-until' // the script's BUSY_KEY, in localStorage
-const BUSY_DELAY_MS = 100 // shorter than the gap, so the second request is still waiting when the 503 lands
-const ANSWER_MS = 700 // longer than three gaps, so a third slot would show as 3 in flight
-const QUIET_MS = 2000 // "nothing more is fetched" window; the script starts a request at most every 250 ms
-const START_GAP_MS = 250 // the script's START_GAP_MS
-const MAX_IN_FLIGHT = 2 // the script's MAX_IN_FLIGHT
-const CLOCK_SLACK_MS = 20 // the page's resource-timing clock and the script's Date.now() can differ by a few ms
+const LOADING_DELAY_MS = 100 // each answer is held this long, so the Loading... labels are still up when the test looks
+const ANSWER_MS = 300 // long enough that two requests in flight would overlap
+const QUIET_MS = 2000 // "nothing more is fetched" window
+const REQUEST_GAP_MS = 200 // the script's REQUEST_GAP_MS: from the end of one request to the start of the next
+const BUSY_PAUSE_MS = 1500 // stands in for the script's 30 s pause so a run takes seconds; the script's own value is asserted below
+const CLOCK_SLACK_MS = 30 // a response takes a few ms to reach the page, which the gap is measured from on the script's side
+const BUSY_TEXT = 'Busy, try later'
+const TIMEOUT_MS = 1500 // stands in for the script's REQUEST_TIMEOUT_MS
+const PUZZLE_LINKS = 'a[href*="Raetsel/zeigen.php?id="]' // the page's puzzle links, and only those
 // A 1x1 PNG.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
 
-const portalHtml = () => `<!doctype html><meta charset="utf-8"><body style="margin:0">${
+// The script with its 30 s pause shortened, so a run that waits out a busy answer takes seconds.
+const PAUSE_LINE = 'const BUSY_PAUSE_MS = 30 * 1000'
+const TIMEOUT_LINE = 'const REQUEST_TIMEOUT_MS = 20 * 1000'
+const SCRIPT = SOURCE.replace(PAUSE_LINE, `const BUSY_PAUSE_MS = ${BUSY_PAUSE_MS}`).replace(TIMEOUT_LINE, `const REQUEST_TIMEOUT_MS = ${TIMEOUT_MS}`)
+assert.ok(SOURCE.includes(PAUSE_LINE) && SOURCE.includes(TIMEOUT_LINE), `${PAUSE_LINE} or ${TIMEOUT_LINE} is not in the script, so it is not shortened`)
+
+// The portal's menu holds links that match `zeigen.php` and are not puzzles.
+const MENU_LINKS = ['/Raetselportal/Raetsel/zeigen.php', 'Raetsel/zeigen.php?id=', 'Raetsel/kommentarezeigen.php?id=7', 'Raetsel/loeserzeigen.php?id=7']
+const portalHtml = () => `<!doctype html><meta charset="utf-8"><body style="margin:0"><nav>${MENU_LINKS.map((href) => `<a href="${href}">menu</a>`).join('')}</nav>${
   Array.from({ length: LINK_COUNT }, (_, i) => `<div style="height:${ROW_HEIGHT}px"><a href="Raetsel/zeigen.php?id=${i + 1}">Puzzle ${i + 1}</a></div>`).join('')
 }</body>`
 const puzzleHtml = (id) => `<!doctype html><meta charset="utf-8"><body><img src="bild.php?data=synthetic-${id}"></body>`
@@ -32,33 +42,43 @@ const puzzleHtml = (id) => `<!doctype html><meta charset="utf-8"><body><img src=
 // Every context a test opens, closed after it whether the test passed or not: an open Chromium keeps the process alive.
 const open = []
 
-// One browser session on `profile`, with the script injected at DOMContentLoaded as a userscript manager does. `mode` is what the site answers: 'ok', 'busy' (503 on puzzle pages) or 'busy-image' (503 on images).
-// `delay` holds each answer that long, so requests overlap and a busy answer lands while the next one waits its turn.
-async function session (profile, mode, delay = 0) {
+// One browser session on `profile`, with the script injected at DOMContentLoaded as a userscript manager does.
+// `busyPages` and `busyImages` are the ids whose puzzle page or image the site answers 503;
+// `delay` holds each answer that long; `scrollTo` scrolls the page before the script runs.
+async function session (profile, { busyPages = [], busyImages = [], hangPages = [], delay = 0, scrollTo = 0 } = {}) {
   const context = await launchPersistent(profile, { headless: true, viewport: VIEWPORT })
   open.push(context)
-  const hits = { pages: [], images: [], aborted: [], inFlight: 0, maxInFlight: 0 }
+  // `log` holds each puzzle page and image request in the order the site saw them, with its start and end on this process's clock.
+  const hits = { pages: [], images: [], aborted: [], requested: [], log: [], inFlight: 0, maxInFlight: 0 }
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url())
     if (url.hostname !== HOST) { hits.aborted.push(url.href); return route.abort() }
     if (url.pathname === '/Raetselportal/') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: portalHtml() })
+    hits.requested.push(url.pathname + url.search)
+    const isPage = url.pathname.endsWith('/Raetsel/zeigen.php') && url.searchParams.get('id')
+    const entry = { kind: isPage ? 'page' : 'image', id: (isPage ? url.searchParams.get('id') : url.searchParams.get('data') || '').replace('synthetic-', ''), start: Date.now(), end: 0 }
+    hits.log.push(entry)
     hits.inFlight++
     hits.maxInFlight = Math.max(hits.maxInFlight, hits.inFlight)
     if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
     hits.inFlight--
-    if (url.pathname.endsWith('/zeigen.php')) {
-      hits.pages.push(url.searchParams.get('id'))
-      if (mode === 'busy') return route.fulfill({ status: 503, body: 'busy' })
-      return route.fulfill({ contentType: 'text/html; charset=utf-8', body: puzzleHtml(url.searchParams.get('id')) })
+    entry.end = Date.now()
+    if (entry.kind === 'page') {
+      const id = url.searchParams.get('id')
+      if (hangPages.includes(id)) return new Promise(() => {}) // never answered
+      hits.pages.push(id)
+      if (busyPages.includes(id)) return route.fulfill({ status: 503, body: 'busy' })
+      return route.fulfill({ contentType: 'text/html; charset=utf-8', body: puzzleHtml(id) })
     }
     if (url.pathname.endsWith('/bild.php')) {
-      hits.images.push(url.searchParams.get('data'))
-      if (mode === 'busy-image') return route.fulfill({ status: 503, body: 'busy' })
+      const id = url.searchParams.get('data').replace('synthetic-', '')
+      hits.images.push(id)
+      if (busyImages.includes(id)) return route.fulfill({ status: 503, body: 'busy' })
       return route.fulfill({ contentType: 'image/png', body: PNG, headers: { pragma: 'no-cache', 'cache-control': 'no-cache', expires: '0' } })
     }
     return route.fulfill({ status: 404, body: '' })
   })
-  await context.addInitScript({ content: `document.addEventListener('DOMContentLoaded', () => { ${SCRIPT} })` })
+  await context.addInitScript({ content: `document.addEventListener('DOMContentLoaded', () => { window.scrollTo(0, ${scrollTo}); ${SCRIPT} })` })
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
@@ -66,28 +86,20 @@ async function session (profile, mode, delay = 0) {
   return { context, page, hits, errors }
 }
 
-// The ids of the links the script may look up before any scroll: those whose top is above the viewport's bottom plus the margin.
-const nearIds = (page) => page.evaluate(({ margin }) => [...document.querySelectorAll('a[href*="zeigen.php"]')]
-  .filter((a) => a.getBoundingClientRect().top < window.innerHeight + margin)
-  .map((a) => new URL(a.href).searchParams.get('id')), { margin: NEAR_MARGIN })
-
-// Start times, in ms on the page's clock, of every puzzle page and image request, in order.
-const startTimes = (page) => page.evaluate(() => performance.getEntriesByType('resource')
-  .filter((e) => /zeigen\.php|bild\.php/.test(e.name)).map((e) => e.startTime).sort((a, b) => a - b))
+// The ids of the links the script puts first: those within the margin of the viewport, in page order.
+const nearIds = (page) => page.evaluate(({ margin, links }) => [...document.querySelectorAll(links)]
+  .filter((a) => { const r = a.getBoundingClientRect(); return r.bottom > -margin && r.top < window.innerHeight + margin })
+  .map((a) => new URL(a.href).searchParams.get('id')), { margin: NEAR_MARGIN, links: PUZZLE_LINKS })
 
 const shown = (page) => page.$$eval('.puzzle-preview img', (imgs) => imgs.filter((i) => i.complete && i.naturalWidth > 0).length)
 // Resolves once at least `count` previews show a loaded picture.
 const waitForShown = (page, count, timeout) => page.waitForFunction((n) => [...document.querySelectorAll('.puzzle-preview img')].filter((i) => i.complete && i.naturalWidth > 0).length >= n, count, { timeout })
-
-// Scrolls down a screen at a time, so every link is on screen once, and waits for every preview to show.
-async function scrollThrough (page) {
-  const height = await page.evaluate(() => document.documentElement.scrollHeight)
-  for (let y = 0; y < height; y += VIEWPORT.height / 2) {
-    await page.evaluate((top) => window.scrollTo(0, top), y)
-    await page.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
-  }
-  await waitForShown(page, LINK_COUNT, 120000)
-}
+// Resolves once `count` boxes carry this label text.
+const waitForLabels = (page, text, count, timeout) => page.waitForFunction(({ text, count }) => [...document.querySelectorAll('.puzzle-preview div')].filter((d) => d.textContent === text).length === count, { text, count }, { timeout })
+// The link ids, in page order, whose box carries this label text.
+const idsLabelled = (page, text) => page.evaluate((text) => [...document.querySelectorAll('.puzzle-preview')]
+  .filter((box) => box.querySelector('div') && box.querySelector('div').textContent === text)
+  .map((box) => new URL(box.parentElement.querySelector('a').href).searchParams.get('id')), text)
 
 // A pause that proves a negative: nothing more was fetched in this time.
 const quiet = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -98,77 +110,112 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
   afterEach(async () => { await Promise.all(open.splice(0).map((context) => context.close())) })
   after(() => { rmSync(dir, { recursive: true, force: true }) })
 
+  it('the script names a 30 s pause after a busy answer and a 200 ms gap between requests', () => {
+    assert.ok(SOURCE.includes(PAUSE_LINE), `${PAUSE_LINE} is not in the script`)
+    assert.ok(SOURCE.includes(`const REQUEST_GAP_MS = ${REQUEST_GAP_MS}`), 'REQUEST_GAP_MS is not 200 in the script')
+  })
+
+  it("the portal menu's zeigen.php links get no box and are not fetched", async () => {
+    const { page, hits } = await session(join(dir, 'menu-profile'))
+    await waitForShown(page, LINK_COUNT, 120000)
+    assert.equal(await page.$$eval('nav .puzzle-preview', (boxes) => boxes.length), 0)
+    assert.equal(await page.$$eval('.puzzle-preview', (boxes) => boxes.length), LINK_COUNT)
+    assert.deepEqual(hits.requested.filter((path) => /zeigen\.php/.test(path) && !/^\/Raetselportal\/Raetsel\/zeigen\.php\?id=\d+$/.test(path)), [])
+  })
+
+  it('a puzzle page that never answers ends as No preview, and the queue goes on', async () => {
+    const { page } = await session(join(dir, 'hang-profile'), { hangPages: ['5'] })
+    await waitForShown(page, LINK_COUNT - 1, 120000)
+    await waitForLabels(page, 'No preview', 1, 5000)
+    assert.equal(await page.$$eval('.puzzle-preview div', (labels) => labels.filter((d) => d.textContent === 'Loading...').length), 0)
+  })
+
   it('a second load in the same profile fetches no puzzle page and no image', async () => {
     const profile = join(dir, 'cache-profile')
-    const first = await session(profile, 'ok')
-    await scrollThrough(first.page)
+    const first = await session(profile)
+    await waitForShown(first.page, LINK_COUNT, 120000)
     assert.equal(first.hits.pages.length, LINK_COUNT)
     assert.equal(first.hits.images.length, LINK_COUNT)
     assert.deepEqual(first.errors, [])
     await first.context.close()
 
-    const second = await session(profile, 'ok')
-    await scrollThrough(second.page)
+    const second = await session(profile)
+    await waitForShown(second.page, LINK_COUNT, 60000)
+    await quiet(QUIET_MS)
     assert.equal(await shown(second.page), LINK_COUNT)
     assert.deepEqual(second.hits.pages, [])
     assert.deepEqual(second.hits.images, [])
     assert.deepEqual([...first.hits.aborted, ...second.hits.aborted], [])
     assert.deepEqual(second.errors, [])
-    await second.context.close()
   })
 
-  it('before any scroll, only links within the viewport plus 400 px are fetched', async () => {
-    const { page, hits } = await session(join(dir, 'near-profile'), 'ok')
+  it('every link has a box at once, some still saying Loading..., and every puzzle is fetched with no scroll', async () => {
+    const { page, hits, errors } = await session(join(dir, 'all-profile'), { delay: LOADING_DELAY_MS })
+    await page.waitForFunction((n) => document.querySelectorAll('.puzzle-preview').length === n, LINK_COUNT, { timeout: 5000 })
+    assert.ok(await page.$$eval('.puzzle-preview div', (labels) => labels.some((d) => d.textContent === 'Loading...')))
+    await waitForShown(page, LINK_COUNT, 120000)
+    assert.equal(await page.evaluate(() => window.scrollY), 0)
+    assert.deepEqual([...hits.pages].sort((a, b) => a - b), Array.from({ length: LINK_COUNT }, (_, i) => String(i + 1)))
+    assert.deepEqual(errors, [])
+  })
+
+  it('links on or near the screen go first, then the rest in page order', async () => {
+    const { page, hits } = await session(join(dir, 'order-profile'), { scrollTo: 3000 })
     const near = await nearIds(page)
-    assert.ok(near.length > 0 && near.length < LINK_COUNT, `${near.length} near links of ${LINK_COUNT}`)
-    await waitForShown(page, near.length, 60000)
-    await quiet(QUIET_MS)
-    assert.deepEqual([...hits.pages].sort(), [...near].sort())
-    assert.equal(hits.images.length, near.length)
+    assert.ok(near.length > 0 && near.length < LINK_COUNT && near[0] !== '1', `near links: ${near}`)
+    await waitForShown(page, LINK_COUNT, 120000)
+    const rest = Array.from({ length: LINK_COUNT }, (_, i) => String(i + 1)).filter((id) => !near.includes(id))
+    assert.deepEqual(hits.pages, [...near, ...rest])
   })
 
-  it('after a 503 on a puzzle page, the next load in the same profile fetches nothing', async () => {
+  it('a 503 gives only its own link "Busy, try later", the queue waits, and the next load tries that link again', async () => {
     const profile = join(dir, 'busy-profile')
-    const first = await session(profile, 'busy', BUSY_DELAY_MS)
-    await first.page.waitForFunction((key) => window.localStorage.getItem(key) !== null, BUSY_KEY, { timeout: 60000 })
-    await quiet(QUIET_MS)
-    assert.equal(first.hits.pages.length, 1)
-    assert.deepEqual(first.hits.images, [])
+    const first = await session(profile, { busyPages: ['5', '13'], busyImages: ['9'] })
+    await waitForShown(first.page, LINK_COUNT - 3, 120000)
+    await waitForLabels(first.page, BUSY_TEXT, 3, 5000)
+    assert.deepEqual(await idsLabelled(first.page, BUSY_TEXT), ['5', '9', '13'])
+    assert.equal(first.hits.pages.length, LINK_COUNT)
+    assert.equal(await first.page.evaluate(() => window.localStorage.length), 0)
+    // The request after a busy answer starts a whole pause after it ended.
+    const { log } = first.hits
+    const at = log.findIndex((e) => e.kind === 'page' && e.id === '5')
+    assert.ok(log[at + 1].start - log[at].end >= BUSY_PAUSE_MS - CLOCK_SLACK_MS, `pause ${log[at + 1].start - log[at].end} ms`)
     await first.context.close()
 
-    const second = await session(profile, 'ok')
-    await quiet(QUIET_MS)
-    assert.deepEqual(second.hits.pages, [])
-    assert.deepEqual(second.hits.images, [])
-    assert.deepEqual([...first.hits.aborted, ...second.hits.aborted], [])
+    const second = await session(profile)
+    await waitForShown(second.page, LINK_COUNT, 60000)
+    assert.deepEqual(second.hits.pages.sort((a, b) => a - b), ['5', '13'])
+    assert.deepEqual(second.hits.images.sort((a, b) => a - b), ['5', '9', '13'])
   })
 
-  it('after a 503 on an image, no further image is asked for, now or on the next load', async () => {
-    const profile = join(dir, 'busy-image-profile')
-    const first = await session(profile, 'busy-image', BUSY_DELAY_MS)
-    await first.page.waitForFunction((key) => window.localStorage.getItem(key) !== null, BUSY_KEY, { timeout: 60000 })
+  it('three 503s in a row stop the run, and every link still waiting says "Busy, try later"', async () => {
+    const { page, hits } = await session(join(dir, 'stop-profile'), { busyPages: ['1', '2', '3'] })
+    await waitForLabels(page, BUSY_TEXT, LINK_COUNT, 60000)
     await quiet(QUIET_MS)
-    assert.equal(first.hits.images.length, 1)
-    await first.context.close()
-
-    const second = await session(profile, 'ok')
-    await quiet(QUIET_MS)
-    assert.deepEqual(second.hits.images, [])
+    assert.deepEqual(hits.pages, ['1', '2', '3'])
+    assert.deepEqual(hits.images, [])
+    assert.equal(await page.evaluate(() => window.localStorage.length), 0)
   })
 
-  it('a first visit has at most 2 requests in flight, starts them at least 250 ms apart, and shows the near pictures faster than one at a time', async () => {
-    const t0 = Date.now()
-    const { page, hits } = await session(join(dir, 'pace-profile'), 'ok', ANSWER_MS)
-    const near = await nearIds(page)
-    await waitForShown(page, near.length, 60000)
-    const elapsed = Date.now() - t0
-    console.log(`first visit, ${near.length} on-screen pictures shown after ${elapsed} ms`)
-    const starts = await startTimes(page)
-    assert.equal(starts.length, near.length * 2)
-    assert.equal(hits.maxInFlight, MAX_IN_FLIGHT)
-    const gaps = starts.slice(1).map((t, i) => t - starts[i])
-    assert.ok(Math.min(...gaps) >= START_GAP_MS - CLOCK_SLACK_MS, `gaps ${gaps.map(Math.round)}`)
-    // Requests made one at a time cannot finish before this, whatever the gap: each waits for the answer before it.
-    assert.ok(elapsed < starts.length * ANSWER_MS, `${elapsed} ms for ${near.length} pictures`)
+  it('a link added after the run stopped asks for nothing and says "Busy, try later"', async () => {
+    const { page, hits } = await session(join(dir, 'late-profile'), { busyPages: ['1', '2', '3'] })
+    await waitForLabels(page, BUSY_TEXT, LINK_COUNT, 60000)
+    await page.evaluate(() => {
+      const row = document.createElement('div')
+      row.innerHTML = '<a href="Raetsel/zeigen.php?id=99">Puzzle 99</a>'
+      document.body.append(row)
+    })
+    await waitForLabels(page, BUSY_TEXT, LINK_COUNT + 1, 5000)
+    await quiet(QUIET_MS) // nothing more is fetched in this time
+    assert.deepEqual(hits.pages, ['1', '2', '3'])
+  })
+
+  it('requests go one at a time, each starting at least 200 ms after the one before ended', async () => {
+    const { page, hits } = await session(join(dir, 'pace-profile'), { delay: ANSWER_MS })
+    await waitForShown(page, 5, 60000)
+    assert.equal(hits.maxInFlight, 1)
+    const gaps = hits.log.slice(1).map((e, i) => e.start - hits.log[i].end)
+    assert.ok(gaps.length >= 9, `${gaps.length} gaps`)
+    assert.ok(Math.min(...gaps) >= REQUEST_GAP_MS - CLOCK_SLACK_MS, `gaps ${gaps}`)
   })
 })
