@@ -10,7 +10,7 @@ import { openPenTool, penDrawnCount, penValuesAt, plantUnchecked, setSlider } fr
 import { settle, stable, STABLE_MS } from '../settle.mjs'
 import { addPage, openWith, useBrowser } from '../session.mjs'
 
-const DATA_KEY = 'EdgeMarks_marks'
+const DATA_KEY = extras.MARKS_DATA_KEY
 const OPACITY_KEY = 'PenColor_opacity'
 const COLORS_KEY = 'PenColor_colors'
 const { CORNER_RADIUS, MARK_VALUES, MARKS_LAYER_ID } = extras.scriptExports
