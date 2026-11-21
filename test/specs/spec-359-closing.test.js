@@ -51,15 +51,17 @@ const runSlides = (count) => {
 // same slides, and the theme rules in style.css. This seam is blind to a real browser: clicking a real Next button, what the browser draws and the
 // hover and focus looks are `npm run test:live`'s (live/site-slideshow.live.mjs), and the Pages site after the merge is checked by hand.
 test('spec 359: the homepage is rows of slideshows, the details pages carry the same slides, and the slideshow steps and wraps', () => {
-  // Homepage: one row per script in order; UI Tweaks is the last, with one picture.
+  // Homepage: one row per script in order; UI Tweaks has one picture, and Logic Masters Puzzle Preview, last, is a text-only row (`row-plain`).
   const home = read('index.html')
   const rows = rowsOf(home)
-  assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'UI Tweaks'])
+  assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer', 'UI Tweaks', 'Logic Masters Puzzle Preview'])
   assert.match(home, /\.row \{[^}]*grid-template-columns: 30rem 1fr/)
 
-  // Dark Page keeps one picture and no pager; the other three rows are slideshows with a picture, caption and Install each.
-  assert.equal(imgsOf(rows[3]).length, 1)
-  assert.doesNotMatch(rows[3], /slideshow|slide-caption/)
+  // Dark Page and Auto Rules Resizer keep one picture and no pager; the other three rows are slideshows with a picture, caption and Install each.
+  for (const row of rows.slice(3, 5)) {
+    assert.equal(imgsOf(row).length, 1)
+    assert.doesNotMatch(row, /slideshow|slide-caption/)
+  }
   const details = { 'Pen Tool Extras': 'pen-tool-extras.html', 'Text Anywhere': 'text-anywhere.html', 'Color by Digit': 'color-by-digit.html' }
   rows.slice(0, 3).forEach((row, i) => {
     const heading = Object.keys(details)[i]

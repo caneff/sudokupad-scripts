@@ -2,7 +2,7 @@
 // light and dark: no horizontal scroll, every image loaded, and the Install buttons lined up
 // within each kind of entry. Entries with a picture put Install in the right-hand text column,
 // all at one offset; a picture-less entry (`row-plain`, added with #550) is a single column, so
-// its Install sits at the entry's left edge, offset 0. The two kinds differ on purpose (#576). The page's
+// its Install sits at the entry's text edge, left of the picture entries' offset. The two kinds differ on purpose (#576). The page's
 // raw.githubusercontent.com images come from this checkout, since a branch is not on main yet.
 // The dark one goes to $SHOTS, else /tmp.
 // Run from the repo root: node docs/research/site/site-homepage-screenshot.mjs
@@ -25,7 +25,7 @@ for (const [name, width] of [['desktop', 1280]]) {
         offsets: { picture: installOffsets('section:not(.row-plain)'), plain: installOffsets('section.row-plain') }
       }
     })
-    if (m.scroll > 0 || m.broken > 0 || m.offsets.picture.length !== 1 || m.offsets.plain.join() !== '0') throw new Error(`${name} ${scheme}: ${JSON.stringify(m)}`)
+    if (m.scroll > 0 || m.broken > 0 || m.offsets.picture.length !== 1 || m.offsets.plain.length > 1 || (m.offsets.plain.length === 1 && m.offsets.plain[0] >= m.offsets.picture[0])) throw new Error(`${name} ${scheme}: ${JSON.stringify(m)}`)
     const out = scheme === 'light' && name === 'desktop' ? new URL('./site-homepage-desktop.png', import.meta.url).pathname : `${process.env.SHOTS || '/tmp'}/site-${name}-${scheme}.png`
     await page.screenshot({ path: out, fullPage: true })
     console.log(name, scheme, JSON.stringify(m))

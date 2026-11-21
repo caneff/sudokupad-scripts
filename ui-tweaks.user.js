@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.35
+// @version      0.1.38
 // @author       ChinStrap
-// @description  Small changes to SudokuPad's buttons, each switched on or off in a settings dialog: Tab never switches the number pad to letters, hide the Select button, and wrap the bottom row of buttons after five.
+// @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches the number pad to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.35'
+  const VERSION = '0.1.38'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -30,6 +30,19 @@
     { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after 5. It has no effect with Color by Digit installed, which already wraps it.', default: false }
   ]
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
+  // The digit pad's step, saved under its own key as the percent of SudokuPad's own size its rule uses.
+  const DIGIT_PAD = 'digitPad'
+  const DIGIT_PAD_STEPS = [{ label: 'Smaller', percent: 80 }, { label: 'Normal', percent: 100 }, { label: 'Larger', percent: 125 }, { label: 'Largest', percent: 150 }]
+  const DIGIT_PAD_SIZES = DIGIT_PAD_STEPS.map((step) => step.percent)
+  const DIGIT_PAD_DEFAULT = 100
+  const DIGIT_PAD_KEY = 'UiTweaks_digitPad'
+  // The eight percentages an earlier build offered; a saved one reads as the nearest step, a tie going to the one nearer Normal.
+  const OLD_DIGIT_PAD_PERCENTS = [80, 90, 100, 110, 120, 130, 140, 150]
+  const nearestStep = (percent) => DIGIT_PAD_SIZES.reduce((best, size) => {
+    const [gap, bestGap] = [Math.abs(size - percent), Math.abs(best - percent)]
+    return gap < bestGap || (gap === bestGap && Math.abs(size - DIGIT_PAD_DEFAULT) < Math.abs(best - DIGIT_PAD_DEFAULT)) ? size : best
+  })
+  const savedDigitPad = (data) => (DIGIT_PAD_SIZES.includes(data) || OLD_DIGIT_PAD_PERCENTS.includes(data) ? nearestStep(data) : undefined)
 
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
@@ -93,7 +106,10 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
 
-  const OPTION_ROWS = OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: savedBoolean }))
+  const OPTION_ROWS = [
+    ...OPTIONS.map((option) => ({ name: option.id, key: option.key, fallback: option.default, read: savedBoolean })),
+    { name: DIGIT_PAD, key: DIGIT_PAD_KEY, fallback: DIGIT_PAD_DEFAULT, read: savedDigitPad }
+  ]
   const DEFAULT_OPTIONS = tableDefaults(OPTION_ROWS)
 
   const savedOptions = (store) => readTable(OPTION_ROWS, store)
@@ -139,11 +155,30 @@
   function isHeldTabToStop (event, { toolOn, dialogOpen }) {
     return event.key === TAB_KEY && event.repeat === true && toolOn && !dialogOpen
   }
+  // SudokuPad sizes every controls button 4rem square and the digit font 2rem (1.4rem in the corner and centre tools), and refits #controls to its box on each resize, so a size in rem is refitted with the rest of the column.
+  const DIGIT_BUTTON_REM = 4
+  const DIGIT_FONT_REM = 2
+  const DELETE_EXTRA_REM = 0.3
+  const DIGIT_FONT_SMALL_REM = 1.4
+  function digitPadCss (percent) {
+    if (percent === DIGIT_PAD_DEFAULT) return false
+    const scaled = (value) => rem(value * percent / 100)
+    const side = `${scaled(DIGIT_BUTTON_REM)}rem`
+    const deleteWidth = `${rem(2 * scaled(DIGIT_BUTTON_REM) + DELETE_EXTRA_REM)}rem`
+    return [
+      // SudokuPad puts the pen line-mode box at 13rem, over the Delete row of 4rem rows: three rows and a 1rem gap.
+      `.penlinemode { top: ${rem(3 * scaled(DIGIT_BUTTON_REM) + 1)}rem !important; height: ${side} !important; }`,
+      `.controls-input button.digit { flex: 0 0 ${side} !important; width: ${side} !important; height: ${side} !important; font-size: ${scaled(DIGIT_FONT_REM)}rem !important; }`,
+      // SudokuPad's own 8.3rem: two digit columns of 4rem and their 0.3rem of margin, less the Delete key's own margin.
+      `.controls-input button[data-control="delete"] { flex: 0 0 ${deleteWidth} !important; width: ${deleteWidth} !important; height: ${side} !important; }`,
+      `.tool-corner .controls-input button.digit, .tool-centre .controls-input button.digit { font-size: ${scaled(DIGIT_FONT_SMALL_REM)}rem !important; }`
+    ].join('\n')
+  }
   const HIDE_SELECT_CSS = `${BOTTOM_ROW} [data-control="select"] { display: none !important; }`
 
   // Tab adds no rule: it works on the letter tool's key list.
   function buildCss (options) {
-    return [options.hideSelect && HIDE_SELECT_CSS, options.wrapButtons && BOTTOM_ROW_CSS].filter(Boolean).join('\n')
+    return [options.hideSelect && HIDE_SELECT_CSS, options.wrapButtons && BOTTOM_ROW_CSS, digitPadCss(options[DIGIT_PAD])].filter(Boolean).join('\n')
   }
 
   // <lib:write-style>
@@ -838,6 +873,32 @@
 
     return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
   }
+
+  // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
+  // `app.preRestartSavedProgress`, which it keeps only when something was entered (docs/research/sudokupad-custom-tool.md § Saving the notes).
+  // A script may act in its own 'restarted' handler, so the stack the Restart leaves is read once every handler has run, and an Undo that finds
+  // no more than that on it is the Restart's. A reset or a load starts the count again. `wrap` is the caller's guard for the listeners.
+  function trackRestartUndo (app, wrap) {
+    let restartLength = 0
+    const atRestart = () => app.puzzle.undoStack.length <= restartLength
+    // SudokuPad triggers `act` after the action, so what the stack was before an Undo is read off the event before it.
+    let wasAtRestart = false
+    const read = () => { wasAtRestart = atRestart() }
+    const callbacks = []
+    app.on('restarted', wrap(() => queueMicrotask(() => { restartLength = app.puzzle.undoStack.length; read() })))
+    const forgetRestart = wrap(() => { restartLength = 0; read() })
+    for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, forgetRestart)
+    app.puzzle.on('act', wrap((_, action) => {
+      const was = wasAtRestart
+      read()
+      if (action?.type === 'undo' && was) callbacks.forEach((fn) => fn())
+    }))
+    return {
+      loadsBoard: () => atRestart() && app.preRestartSavedProgress !== undefined,
+      // `fn` runs after the Undo that found the stack where the Restart left it, whether or not that Undo loaded a board.
+      onRestartUndo: (fn) => { callbacks.push(fn) }
+    }
+  }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
   const FEATURES = {
@@ -857,7 +918,7 @@
   const { saved, tab, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, OPTIONS, DEFAULT_OPTIONS, savedOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
+    module.exports = { VERSION, OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, savedOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -885,9 +946,11 @@
   }
 
   function applyOptions (next) {
+    const padChanged = next[DIGIT_PAD] !== options[DIGIT_PAD]
     options = next
     writeStyle(STYLE_ID, buildCss(next))
     applyTab(next.tab)
+    if (padChanged) window.dispatchEvent(new Event('resize'))
   }
 
   const CLASS_PREFIX = 'ui-tweaks-'
@@ -896,6 +959,7 @@
   const DIALOG_CSS = [
     `#${DIALOG_ID} .${CLASS_PREFIX}option { display: flex !important; align-items: flex-start; gap: 10px; margin: 10px 0; cursor: pointer; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}option input { position: static !important; margin: 3px 0 0 !important; flex: none; width: 18px !important; height: 18px !important; cursor: pointer; }`,
+    `#${DIALOG_ID} .${CLASS_PREFIX}option select { position: static !important; margin: 0 !important; flex: none; width: auto !important; height: auto !important; cursor: pointer; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}option small { display: block; opacity: .65; }`
   ].join('\n')
   const dialogs = guard.dialogsFor(settingsEntry)
@@ -910,6 +974,9 @@
 
   const optionRow = (option) =>
     `<label class="${CLASS_PREFIX}option"><input type="checkbox" data-option="${option.id}"><span>${option.label}<small>${option.hint}</small></span></label>`
+
+  // SudokuPad fits #controls to its box only on a resize, so a size change is not seen until one.
+  const DIGIT_PAD_ROW = `<label class="${CLASS_PREFIX}option"><select data-option="${DIGIT_PAD}">${DIGIT_PAD_STEPS.map((step) => `<option value="${step.percent}">${step.label}</option>`).join('')}</select><span>Digit pad size<small>Smaller or larger digit buttons. SudokuPad fits the whole controls column to the window, so the digits grow most on a large screen, and on a laptop the other buttons shrink to make room.</small></span></label>`
 
   function openDialog () {
     const draft = { ...options }
@@ -937,22 +1004,28 @@
           applyOptions(next)
           OPTION_ROWS.filter((row) => row.key in values).forEach((row) => {
             draft[row.name] = next[row.name]
-            box(row.name).checked = next[row.name]
+            showDraft(row.name)
           })
         }
       },
       restore: () => restoreDefaults()
     })
     if (!body) return
-    const restoreDefaults = () => OPTIONS.forEach((option) => {
-      draft[option.id] = DEFAULT_OPTIONS[option.id]
-      box(option.id).checked = draft[option.id]
+    const field = (name) => body.querySelector(`[data-option="${name}"]`)
+    const showDraft = (name) => {
+      if (name === DIGIT_PAD) field(name).value = String(draft[name])
+      else field(name).checked = draft[name]
+    }
+    const restoreDefaults = () => OPTION_ROWS.forEach((row) => {
+      draft[row.name] = DEFAULT_OPTIONS[row.name]
+      showDraft(row.name)
     })
-    body.innerHTML = OPTIONS.map(optionRow).join('')
-    const box = (id) => body.querySelector(`input[data-option="${id}"]`)
-    OPTIONS.forEach((option) => {
-      box(option.id).checked = draft[option.id]
-      box(option.id).addEventListener('change', (event) => { draft[option.id] = event.target.checked })
+    body.innerHTML = OPTIONS.map(optionRow).join('') + DIGIT_PAD_ROW
+    OPTION_ROWS.forEach((row) => {
+      showDraft(row.name)
+      field(row.name).addEventListener('change', (event) => {
+        draft[row.name] = row.name === DIGIT_PAD ? Number(event.target.value) : event.target.checked
+      })
     })
   }
 

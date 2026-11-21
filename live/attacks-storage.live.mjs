@@ -45,22 +45,18 @@ describe('attacks on storage', { concurrency: false }, () => {
           return set.call(this, key, value)
         }
       }, owns)
-      // Text Anywhere tells a refused note in SudokuPad's dialog, unless another dialog is open; the other two tell in a bar.
-      const dismissNotice = async () => {
-        const ok = p.locator('.dialog button').filter({ hasText: /^\s*OK\s*$/ })
-        if (await ok.count() > 0) await ok.click()
-      }
-
+      // A refused note goes through the guarded store like every other write, so each script tells it in a bar and none opens a dialog.
       await pickTool(p, 'textanywhere')
       await typeText(p, [4.5, 4.5], '15')
-      await dismissNotice()
+      // The note's save is Text Anywhere's first write, so its bar or a dialog, whichever shows first, is the answer to it.
+      await p.locator(`${NOTICE_BAR}[data-script="text-anywhere"], .dialog`).first().waitFor()
+      assert.equal(await p.locator('.dialog').count(), 0, 'no dialog for a refused note')
       assert.deepEqual(await textAnywhere.texts(p), ['15'], 'Text Anywhere draws the note')
 
       // With a note selected the slider changes that note; with none it saves the next note's size, a settings write.
       await p.keyboard.press('Escape')
       if (await p.locator(textAnywhere.SELECTED).count() > 0) await p.keyboard.press('Escape')
       await slideTo(p, textAnywhere.SIZE_SLIDER, 12)
-      await dismissNotice()
       await setSlider(p, THICKNESS, 9)
       await mouseDrag(p, [[1.5, 1.5], [1.5, 4.5]])
       assert.equal((await penEntries(p)).length, 3, 'Pen Tool Extras draws the line')

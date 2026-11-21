@@ -1,7 +1,7 @@
 import { before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
-import { actionList, MAX_START_STEPS } from './actions.mjs'
+import { actionList, MAX_START_STEPS, scriptedList } from './actions.mjs'
 import { CONFIGS, WAITS } from './configs.mjs'
 import { ACTION_SETTLE_MS, runFuzz, runScript, strokeSinceReload } from './engine.mjs'
 import { fakeTargets, quietPage } from './fake-target.mjs'
@@ -92,6 +92,53 @@ describe('the stroke fact reaches the rules (#681)', () => {
   })
   it('a reload with no stroke before it may not', async () => {
     await assert.rejects(runScript({ openTarget: strokePage(), puzzle: PUZZLES[0], actions: [key, reload] }), /reload-changes-nothing/)
+  })
+})
+
+describe('the buttons a note covers', () => {
+  it('are cleared before every action, three kinds of it checked (#880)', async () => {
+    const puzzle = FUZZ_PUZZLES[0]
+    const cases = [['click cell', 0], ['dark page', ['#000000', false]], ['move note', null]]
+    for (const [kind, arg] of cases) {
+      const target = await fakeTargets().openTarget(puzzle)
+      const seenBefore = []
+      target.env.clearControls = async () => { seenBefore.push(target.log.length) }
+      await runScript({ openTarget: async () => target, puzzle, actions: scriptedList(puzzle, [[kind, arg]]) })
+      assert.deepEqual(seenBefore, [0], `${kind} cleared once, before any call of its own`)
+    }
+  })
+})
+
+describe('a note moved off a button the step presses (#1006)', () => {
+  // A finished note covers a button: the page drags it off before the step presses the button, as a player would, and the note stays where it was dropped.
+  // `dragAt` is the clear that finds it covered (1 is the undo's, 2 the redo's).
+  const coveredPage = (dragAt) => {
+    let at = [1, 1]
+    let clears = 0
+    const openTarget = async (puzzle) => {
+      const target = await fakeTargets().openTarget(puzzle)
+      const plain = target.snapshot
+      target.snapshot = async () => {
+        const read = await plain()
+        return { ...read, page: { ...read.page, notesSeen: ['z'], notesDrawn: ['z'], notesSaved: [{ kind: 'text', text: 'z', at }] } }
+      }
+      target.env.clearControls = async () => {
+        if (++clears !== dragAt) return false
+        at = [2, 2]
+        return true
+      }
+      return target
+    }
+    return openTarget
+  }
+  const puzzle = FUZZ_PUZZLES[0]
+  const undoThenRedo = () => scriptedList(puzzle, [['undo', null], ['redo', null]])
+
+  it('is not an undo and redo that moved it: the page before the undo is read after the drag', async () => {
+    await runScript({ openTarget: coveredPage(1), puzzle, actions: undoThenRedo() })
+  })
+  it('is not a redo that moved it either: a redo after a drag does not follow the undo straight', async () => {
+    await runScript({ openTarget: coveredPage(2), puzzle, actions: undoThenRedo() })
   })
 })
 

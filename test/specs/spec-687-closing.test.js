@@ -72,8 +72,8 @@ test('#700: identifiers match the glossary and no stored key changed', () => {
   assert.match(source('pen-tool-extras'), /function renderLineModeButton/)
   assert.equal('KEYS' in uiTweaks, false, 'UI Tweaks has no KEYS export')
   const store = fakeStore()
-  uiTweaks.saveOptions(store, { tab: false, hideSelect: true, wrapButtons: true })
-  assert.deepEqual(Object.keys(store.data).sort(), ['UiTweaks_hideSelect', 'UiTweaks_tab', 'UiTweaks_wrapButtons'], 'UI Tweaks\' stored keys')
+  uiTweaks.saveOptions(store, { tab: false, hideSelect: true, wrapButtons: true, digitPad: 80 })
+  assert.deepEqual(Object.keys(store.data).sort(), ['UiTweaks_digitPad', 'UiTweaks_hideSelect', 'UiTweaks_tab', 'UiTweaks_wrapButtons'], 'UI Tweaks\' stored keys')
   assert.equal(darkPage.DATA_KEY, 'DarkPage_color', 'Dark Page\'s stored key')
   assert.match(source('auto-rules-resizer'), /writeStyle\(`\$\{ID\}-style`, STYLE\)/, 'Auto Rules Resizer adds its style through its copied writeStyle')
   assert.doesNotMatch(source('auto-rules-resizer'), /function addStyle \(/)
@@ -94,4 +94,6 @@ test('#701: a resized puzzle keeps its sizing, another puzzle starts at the defa
   assert.deepEqual(result, arr.noSizing(), 'the puzzle starts at the default')
   assert.deepEqual(broken.data['AutoRulesResizer_sizing_puzzle-c_unreadable'], bad, 'the unreadable value is kept aside')
   assert.equal(warnings.length, 1)
+
+  assert.match(readFileSync(join(__dirname, '..', '..', 'site', 'index.html'), 'utf8'), /kept per puzzle/, 'the site says sizing is kept per puzzle')
 })

@@ -1,6 +1,6 @@
 # sudokupad-scripts
 
-Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
+Standalone Tampermonkey userscripts for SudokuPad, written to be shared, and one for the Logic Masters puzzle portal. Each
 script is one `*.user.js` file with no build step for users. Shared code lives in `lib/<name>.js` and `node sync-lib.js` copies it into each
 script between `// <lib:name>` and `// </lib:name>` markers, so an installed script is still one file.
 
@@ -8,7 +8,8 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
 - **Netlify**: serves `site/` from the `release` branch (`netlify.toml`). `git push origin main:release` publishes it and
   spends 15 of the plan's 300 credits a month (`docs/research/netlify-credits.md`). It is pushed very rarely, so it lags
-  `main` by design: Chris kept Netlify on 2026-11-05.
+  `main` by design: Chris kept Netlify on 2026-11-05. It will not be pushed for a long time, so no report, PR or ticket mentions
+  Netlify or what it lacks (Chris, 2026-11-21).
 - **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
   Each script's notes and pictures are in its own folder (`docs/research/<script name>/`), pictures of a whole site page in `docs/research/site/`,
   and notes about SudokuPad itself at the top.
@@ -17,6 +18,9 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   it is Text Anywhere's handover, frozen at 0.45.1 (`GLOSSARY.md`), and a change to Text Anywhere never touches it; `test/text-anywhere.test.js` fails when its bytes change (Chris, 2026-11-10).
 - **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live` every night at 06:17 UTC on GitHub Actions (and by hand through
   `workflow_dispatch`); `live/README.md` § The daily watch has the rule.
+- **Logic Masters Puzzle Preview** (`logic-masters-puzzle-preview.user.js`): runs on logic-masters.de, not SudokuPad. Its first version is Juggler's, published here with their permission
+  (Chris, 2026-11-21). `OTHER_SITE_SCRIPTS` in `sync-lib.js` keeps it out of every loop over SudokuPad's scripts (`scriptFiles()`), while the homepage and version checks still
+  cover it (`publishedScriptFiles()`). No test, check or screenshot requests logic-masters.de, which answered a few requests with a 503: `live/logic-masters-puzzle-preview/` serves synthetic pages.
 - **`GLOSSARY.md`**: the vocabulary.
 - **A change to what a script shows** (its panel, buttons, dialog or what it draws) updates that script's text in `site/` and retakes the site pictures that
   show it, with their scripts (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
@@ -38,10 +42,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   replay, and a history interleaved with SudokuPad's must catch every Undo first, which risks digit Undo for a small gain. No ticket proposes either.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
   2026-11-06). A dark page means Dark Page.
-- **Keys SudokuPad owns**: a design never proposes one of these as a script's shortcut (four shortcut proposals were rejected on this ground): Tab, Space,
-  PageUp and PageDown, the tool hotkeys Z X C V B N M, the digit keys, `/`, and the modifiers Ctrl, Cmd, Shift and Alt, which switch the tool while held, so every
-  chord with one (Ctrl+A and Ctrl+Enter included) is off the table. Sources: `docs/research/sudokupad-custom-tool.md` § Tool keys, `docs/research/sudokupad-letter-tool.md`
-  and `docs/research/sudokupad-color-tool-paging.md`; the research does not say what Ctrl+A or Ctrl+Enter do in SudokuPad itself.
+- **Keys**: before you propose, add or change a keyboard shortcut: read `docs/agents/keys.md`. A key SudokuPad's own pen tool acts on is never a script's shortcut.
 - **Pen values are not scarce** (#721): Pen Tool Extras is not running out. Before you say it is, read `docs/research/sudokupad-pen-edge-marks.md`
   § Pen values past `z` (which characters work as a pen value).
 
@@ -71,7 +72,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 ## End-to-end seam
 
 - **Seam**: `npm test` (`node --test`), against each script's pure functions (`test/`), each shared module's (`lib/*.test.js`), the live harness's helper tests
-  (`live/**/*.test.mjs`) and every page in `site/` (`test/site.test.js`: every script but the one hidden (Auto Rules Resizer, until Chris hears from Nell) has an install link on the homepage, and no page links the hidden one)
+  (`live/**/*.test.mjs`) and every page in `site/` (`test/site.test.js`: every script has an install link on the homepage)
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run test:live` (every `live/**/*.live.mjs`)
   covers them on sudokupad.app in headless Chromium, with the script injected after Start Puzzle.
 - Before you write or debug a live test: read `live/README.md`.
@@ -83,7 +84,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   The controller's merge rerun takes the files in `live/README.md` § The merge rerun.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
-- `npm run test:tampermonkey` installs every script into a real Tampermonkey; `live/README.md` § The Tampermonkey test
+- `npm run test:tampermonkey` installs every SudokuPad script (`scriptFiles()`) into a real Tampermonkey, and leaves out Logic Masters Puzzle Preview (its install and update from the root address stay owed to a person); `live/README.md` § The Tampermonkey test
   says what it covers and needs. It needs the network, so it stays out of `npm test`, `npm run test:live` and
   `land.testcmd`. Run it when a change touches any line of a `// ==UserScript==` header; the controller's merge check
   runs it then too.
