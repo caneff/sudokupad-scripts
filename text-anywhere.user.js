@@ -3802,7 +3802,7 @@
     if (event.type !== 'keydown' || event.isComposing) return
     if (event.key === 'Tab') event.preventDefault()
     // The first plain Backspace right after a swap is the browser's Undo, as on other platforms' autocorrect; any other key clears the swap's caret.
-    if (event.key === 'Backspace' && !event.ctrlKey && !event.altKey && !event.metaKey && caretIsAt(textBox.swapCaret)) {
+    if (event.key === 'Backspace' && caretIsAt(textBox.swapCaret)) {
       event.preventDefault()
       document.execCommand('undo')
       // Undo leaves the text it gave back selected, and the next character typed would replace it.

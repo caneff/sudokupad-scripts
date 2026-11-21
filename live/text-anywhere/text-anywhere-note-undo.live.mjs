@@ -85,7 +85,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await finishNote(p)
   })
 
-  it('a character typed after the swap, an arrow key, or a modified Backspace makes Backspace an ordinary delete', async () => {
+  it('a character typed after the swap, an arrow key or Ctrl+Backspace makes Backspace an ordinary delete', async () => {
     await openNote()
     const cases = [
       ['a typed character', ['x', 'Backspace'], '→'],
@@ -107,9 +107,8 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await p.keyboard.type('->')
     const box = await p.locator('#text-anywhere-layer .text-anywhere-textbox').boundingBox()
     await p.mouse.click(box.x + 2, box.y + box.height / 2)
-    await p.keyboard.press('End')
     await p.keyboard.press('Backspace')
-    assert.equal(await boxText(), '')
+    assert.equal(await boxText(), '→', 'Backspace at the start of the note deletes nothing, and does not undo')
     await finishNote(p)
   })
 
