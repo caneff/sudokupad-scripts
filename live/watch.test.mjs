@@ -27,9 +27,9 @@ describe('suiteEnv', () => {
     assert.deepEqual(suiteEnv(env, '/home/u', 'linux'), env)
   })
 
-  it('is what the suite runs with, beside its refresh and reporter settings', () => {
+  it('is what the suite runs with, beside its refresh, timing-gate and reporter settings', () => {
     assert.deepEqual(suiteRunEnv({ XDG_CACHE_HOME: '/x/cache' }, '/home/u', 'linux'), {
-      XDG_CACHE_HOME: '/x/cache', PLAYWRIGHT_BROWSERS_PATH: '/home/u/.cache/ms-playwright', LIVE_REFRESH: '1', NODE_OPTIONS: '--test-reporter=tap'
+      XDG_CACHE_HOME: '/x/cache', PLAYWRIGHT_BROWSERS_PATH: '/home/u/.cache/ms-playwright', LIVE_REFRESH: '1', LIVE_TIMING: '1', NODE_OPTIONS: '--test-reporter=tap'
     })
   })
 

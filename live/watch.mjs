@@ -28,8 +28,8 @@ export const suiteEnv = (env, home, platform = process.platform) => platform ===
   ? { ...env, PLAYWRIGHT_BROWSERS_PATH: join(cacheHome({}, home), 'ms-playwright') }
   : env
 
-// What `npm run test:live` runs with under the watch.
-export const suiteRunEnv = (env, home, platform) => ({ ...suiteEnv(env, home, platform), LIVE_REFRESH: '1', NODE_OPTIONS: '--test-reporter=tap' })
+// What `npm run test:live` runs with under the watch. LIVE_TIMING=1 makes attack 78's time budget count (live/timing.mjs).
+export const suiteRunEnv = (env, home, platform) => ({ ...suiteEnv(env, home, platform), LIVE_REFRESH: '1', LIVE_TIMING: '1', NODE_OPTIONS: '--test-reporter=tap' })
 
 export const FULL_RUN_MS = 7 * 24 * 60 * 60 * 1000
 export const fullRunPath = (env, home) => join(dirname(harPath(env, home)), 'last-full-run')

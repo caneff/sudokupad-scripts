@@ -8,6 +8,15 @@ a test that hangs on a promise that never settles fails there, and the watch rep
 process open (a timer, a hook that never returns) still needs a kill. Run live files through these scripts, never `node --test` directly.
 The suite is run locally and never in `npm test` or the CI workflow; only the daily watch runs it on GitHub Actions.
 
+## Time budgets (#1031)
+
+A wall-clock budget is not a correctness check on a shared box: attack 78's 3 s budget failed 3 of 3 merge checks at load 12-50 on code that was fine. Attack 78's time budget
+therefore decides the test only when the run sets `LIVE_TIMING=1` (`timingGated` in `live/timing.mjs`; exactly `1`, anything else is off). The watch sets it (`suiteRunEnv` in `live/watch.mjs`), so a
+regression in the time is a red check there and files the watch's bug. The watch runs the suite on a new SudokuPad version and once a week (`FULL_RUN_MS`), not every night. A merge check and a
+bare `npm run test:live` measure the time, print it as a diagnostic, and fail only when the result is wrong (the action's result still has to show within 30 s). Attack 78 is the one budget gated this way;
+attack 74's paste budget (`attacks-storage.live.mjs`) and Text Anywhere's frame budget (`text-anywhere-render.live.mjs`) still decide their tests everywhere. There is no retry and no quarantine: nothing is
+skipped or rerun, so there is no list of either.
+
 ## The merge rerun
 
 The controller's merge check reruns the full suite, unless the worker's "PR up" names a full run at the head being merged and `origin/main` is already in that head.
@@ -216,7 +225,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **The tests**: `actions.test.mjs`, `signals.test.mjs`, `rules.test.mjs` (hand-built snapshots) and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
   seed gives the same actions, every kind is generated and runs, and a planted page error is caught, shrunk to one step and replayed.
   `puzzle-set.test.mjs` tests the puzzle set, and `actions.test.mjs` and `engine.test.mjs` that every puzzle is generated and a list's puzzle replays from its path.
-  `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 3 minutes) is the live test: every puzzle opens once and takes a click, a digit key and an undo, short fixed-seed runs pass, and a page error planted on Escape during a drag (`--plant-escape-error` plants the same one by hand) is caught, shrunk to the one
+  `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 3 minutes on a quiet box, up to 18 for the planted-bug test alone on a loaded one) is the live test: every puzzle opens once and takes a click, a digit key and an undo, short fixed-seed runs pass, and a page error planted on Escape during a drag (`--plant-escape-error` plants the same one by hand) is caught, shrunk to the one
   interrupted step and replayed from the command it prints; a bug planted in a script (`tab-turns-pad-to-letters`) is injected, caught, shrunk to the Tab and printed with its `--plant`.
 
 Each failure the run finds is fixed in a ticket of its own, whose PR adds the shrunk list as a named fixed live test.
