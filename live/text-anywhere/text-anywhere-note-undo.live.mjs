@@ -57,6 +57,37 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await finishNote(p)
   })
 
+  it('the first Backspace right after a symbol swap undoes it, and any other key makes Backspace a delete again', async () => {
+    await openNote()
+    for (const [typed, swapped, undone] of [['->', '→', '->'], ['a<-', 'a←', 'a<-'], ['!=', '≠', '!='], ['<=', '≤', '<='], ['>=', '≥', '>='], ['sum ', 'Σ ', 'sum ']]) {
+      await p.keyboard.type(typed)
+      assert.equal(await boxText(), swapped)
+      await p.keyboard.press('Backspace')
+      assert.equal(await boxText(), undone, `Backspace after ${typed}`)
+      await p.keyboard.press('Control+a')
+      await p.keyboard.press('Delete')
+    }
+    await p.keyboard.type('->x')
+    await p.keyboard.press('Backspace')
+    assert.equal(await boxText(), '→', 'a character typed after the swap makes Backspace a delete')
+    await p.keyboard.press('Control+a')
+    await p.keyboard.press('Delete')
+    await p.keyboard.type('ab->')
+    await p.keyboard.press('Backspace')
+    assert.equal(await boxText(), 'ab->')
+    // The browser's Undo selects the text it gave back, so the second Backspace deletes it as any Backspace would.
+    await p.keyboard.press('Backspace')
+    assert.equal(await boxText(), 'ab', 'the second Backspace is an ordinary delete')
+    await p.keyboard.press('Control+a')
+    await p.keyboard.press('Delete')
+    await p.keyboard.type('->')
+    await p.keyboard.press('ArrowLeft')
+    await p.keyboard.press('ArrowRight')
+    await p.keyboard.press('Backspace')
+    assert.equal(await boxText(), '', 'a caret move in between makes Backspace a delete')
+    await finishNote(p)
+  })
+
   it('a character typed right after a symbol is its own undo step', async () => {
     await openNote()
     await p.keyboard.type('->x')
