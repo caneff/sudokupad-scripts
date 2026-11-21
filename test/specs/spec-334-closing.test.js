@@ -23,7 +23,7 @@ const CARRIES = {
 const MODULE_NAMES = ['parseColor', 'darkenColor', 'toHex', 'isTransparent', 'GAMUT_EDGE', 'LIGHTNESS_FACTOR', 'pastedSettings', 'pasteReport',
   'SUDOKUPAD_PEN_COLORS', 'PEN_COLOR_NUMBERS', 'darkerPageColors', 'isPlainObject', 'rem', 'installSliderGuards']
 
-// Spec 334's acceptance as one pass at `npm test`: the six modules in lib/, each copied whole into exactly the scripts the spec
+// Spec 334's acceptance as one pass at `npm test`: the six modules it names, each copied whole into exactly the scripts the spec
 // names and in step with lib/ (the sync check, naming its command), no script keeping its own copy of a module's names, one
 // parseColor for every color format, each script still one file with no @require, sync-lib.js at the root and out of site/,
 // and the rules that state the scheme. This seam is blind to real SudokuPad: the shared picker's hold and palette modes, the

@@ -23,7 +23,7 @@ const count = (html, re) => (html.match(re) || []).length
 // row's pulldowns, the two-column layout's CSS, the selected row
 // apart from the cell and digit profiles, rename, "+ New profile", the paint editor's palette and digit keys (#347), the three-chip
 // cap, and the details page's annotated dialog picture. This seam is blind to real SudokuPad: the Framework calls, the
-// dialog's rendering at 1200 and 390 px, Save reaching the puzzle and undo are `npm run test:live`'s
+// dialog's rendering at 1200 px, Save reaching the puzzle and undo are `npm run test:live`'s
 // (live/color-by-digit/*.live.mjs), and a real Tampermonkey install is `npm run test:tampermonkey`'s.
 test('spec 300: the Color by Digit settings dialog edits a selected profile in two columns, by painting digits', () => {
   const { renderEditor, renderProfiles, renderMenu, setSync, setActive, setDigitActive, copyProfile, renameProfile, setUseDigitColors } = byDigit

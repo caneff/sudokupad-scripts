@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.44
+// @version      1.32.45
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -22,7 +22,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.44'
+  const VERSION = '1.32.45'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1063,7 +1063,7 @@
   }
 
   // 2. Pen colors: the saved set, derived colors and edit mode
-  // Keys saved by the scripts this one replaced, kept so their saved data still reads.
+  // The saved pen colors' key, from a script this one replaced, kept so its saved data still reads.
   const COLORS_KEY = 'PenColor_colors'
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
@@ -3185,7 +3185,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
     // SudokuPad's own colors when page 1 cannot be read.
     const restoreDefaults = () => {
-      // The sliders and boxes are drafts like the colors: Cancel leaves what is in force. The mark boxes keep their draft: Restore defaults has never reset the edge and corner cycles.
+      // The sliders and boxes are drafts like the colors: Cancel leaves what is in force. The mark boxes keep their draft: Restore defaults has never reset any mark box (the edge, corner and cell cycles).
       draft = { ...settingDefaults(), marks: draft.marks }
       if (!pickPreset(availablePresets()[0])) pickPreset(SUDOKUPAD_PRESET)
     }
