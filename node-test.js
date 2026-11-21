@@ -3,7 +3,7 @@
 // one file per core (31 on the dev box), so a worker's plain `npm test` loaded the shared machine; this caps it at DEFAULT_JOBS files at once.
 // TESTS_JOBS, a whole number of 1 or more, sets the width instead, above the default as well as below it: a worker raises it only after
 // recording a parallel job. Unset or empty is the default; any other value stops the run with exit 2 rather than running at some other width.
-const { spawnSync } = require('node:child_process')
+const { spawn } = require('node:child_process')
 
 const DEFAULT_JOBS = 4
 
@@ -24,11 +24,14 @@ if (require.main === module) {
     console.error(`node-test.js: ${e.message}`)
     process.exit(2)
   }
-  const r = spawnSync(process.execPath, args, { stdio: 'inherit' })
-  if (r.error) {
-    console.error(`node-test.js: ${r.error.message}`)
+  const child = spawn(process.execPath, args, { stdio: 'inherit' })
+  // Not spawnSync: a signal sent to this wrapper (a timeout, a Ctrl-C to the group aside) must reach `node --test`, which stops its test processes, as it did
+  // when `sh` ran it directly.
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => child.kill(signal))
+  child.on('error', (e) => {
+    console.error(`node-test.js: ${e.message}`)
     process.exit(2)
-  }
-  // A child killed by a signal has no status: that is a failure, never a pass.
-  process.exit(r.status ?? 1)
+  })
+  // A child killed by a signal has no code: that is a failure, never a pass.
+  child.on('close', (code) => process.exit(code ?? 1))
 }

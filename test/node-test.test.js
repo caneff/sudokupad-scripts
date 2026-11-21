@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { spawnSync } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const { DEFAULT_JOBS, jobsFrom, nodeTestArgs } = require('../node-test.js')
 const { scripts } = require('../package.json')
 
@@ -49,6 +49,28 @@ describe('node-test.js (#1090): npm test and test:live:files cap how many files 
     it('exits 0 for a passing test and non-zero for a failing one', () => {
       assert.equal(withTest('', (file) => run(file).status), 0)
       assert.notEqual(withTest('throw new Error("red")', (file) => run(file).status), 0)
+    })
+
+    it('passes a SIGTERM on to node --test, so no test process outlives it (C4)', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'node-test-'))
+      try {
+        const pidFile = path.join(dir, 'pid')
+        const file = path.join(dir, 'sleep.test.js')
+        fs.writeFileSync(file, `require('node:test')('sleep', async () => { require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); await new Promise((resolve) => setTimeout(resolve, 60000)) })\n`)
+        const child = spawn(process.execPath, [WRAPPER, file], { env: { ...process.env, NODE_TEST_CONTEXT: undefined }, stdio: 'ignore' })
+        const closed = new Promise((resolve) => child.on('close', (code, signal) => resolve({ code, signal })))
+        for (let i = 0; i < 100 && !fs.existsSync(pidFile); i++) await new Promise((resolve) => setTimeout(resolve, 100))
+        const testPid = Number(fs.readFileSync(pidFile, 'utf8'))
+        child.kill('SIGTERM')
+        const { code, signal } = await closed
+        assert.ok(code !== 0 || signal !== null, 'the wrapper does not report a killed run as a pass')
+        let alive = true
+        for (let i = 0; i < 30 && alive; i++) {
+          try { process.kill(testPid, 0); await new Promise((resolve) => setTimeout(resolve, 100)) } catch { alive = false }
+        }
+        if (alive) process.kill(testPid, 'SIGKILL')
+        assert.equal(alive, false, 'the test process was left running')
+      } finally { fs.rmSync(dir, { recursive: true, force: true }) }
     })
 
     it('exits 2 naming TESTS_JOBS, running nothing, when it is not a number', () => {
