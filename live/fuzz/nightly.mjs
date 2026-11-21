@@ -18,7 +18,7 @@ const MIN_RUN_MINUTES = 1
 export const FUZZ_TIMEOUT_MS = (FUZZ_MINUTES + 20) * MINUTE_MS
 const TRAILER = issueTrailer('npm run fuzz:nightly', 'live/fuzz/nightly.mjs')
 
-// A short, stable name for what failed, from the error line the fuzz prints (engine.mjs): the broken rules' names, or the first crash signal with its
+// A short, stable name for what failed, from the error line the fuzz prints (engine.mjs): the broken rules' names, the locator a Playwright timeout waited for, or the first crash signal with its
 // numbers folded, so the same failure on another seed or step still has the same title.
 export function failureTitle (error) {
   const rules = /^rules? broken after (?:".*?"|the last action): (.*)$/s.exec(error)
@@ -26,6 +26,8 @@ export function failureTitle (error) {
     const names = [...new Set(rules[1].split('; ').map((v) => /^([\w-]+): /.exec(v)?.[1]).filter(Boolean))]
     if (names.length) return `Fuzz: rule broken: ${names.join(', ')}`
   }
+  const timeout = /^([\w.]+): Timeout \d+ms exceeded\.[\s\S]*?\n\s*- waiting for locator\((['"`])(.*?)\2\)/.exec(error)
+  if (timeout) return `Fuzz: error: ${timeout[1]} timed out: ${timeout[3]}`.slice(0, TITLE_MAX).trimEnd()
   const signal = /^crash signals? after (?:".*?"|the last action): (.*)$/s.exec(error)
   const text = (signal ? signal[1].split('; ')[0] : error).split('\n')[0].replace(/\d+/g, 'N').trim()
   return `Fuzz: ${signal ? 'crash' : 'error'}: ${text}`.slice(0, TITLE_MAX).trimEnd()
