@@ -1,16 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { didNotRunIssue, failedChecks, FULL_RUN_MS, fileIssue, fullRunDue, fullRunPath, issueFor, issueTrailer, readLastFullRun, readState, statePath, suiteEnv, suiteRunEnv, watch, writeState } from './watch.mjs'
-
-describe('statePath', () => {
-  it('sits beside the recording', () => {
-    assert.equal(statePath({ XDG_CACHE_HOME: '/x/cache' }, '/home/u'), '/x/cache/sudokupad-scripts/live/last-version')
-    assert.equal(statePath({}, '/home/u'), '/home/u/.cache/sudokupad-scripts/live/last-version')
-  })
-})
+import { readFileSync } from 'node:fs'
+import { didNotRunIssue, exitCodeFor, failedChecks, fileIssue, issueFor, issueTrailer, MISSED_NIGHT_MS, previousRunAt, suiteEnv, suiteRunEnv, testsRan, watch } from './watch.mjs'
 
 describe('suiteEnv', () => {
   it('pins Playwright to its default browser folder when XDG_CACHE_HOME moves the harness cache', () => {
@@ -37,26 +28,6 @@ describe('suiteEnv', () => {
     assert.equal('PLAYWRIGHT_BROWSERS_PATH' in suiteEnv({}, '/home/u', 'linux'), false)
     assert.equal('PLAYWRIGHT_BROWSERS_PATH' in suiteEnv({ XDG_CACHE_HOME: '' }, '/home/u', 'linux'), false)
     assert.equal('PLAYWRIGHT_BROWSERS_PATH' in suiteEnv({ XDG_CACHE_HOME: '/x/cache' }, '/home/u', 'darwin'), false)
-  })
-})
-
-describe('the remembered version', () => {
-  it('is null before anything is written, then reads back what was written', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'watch-'))
-    try {
-      const file = join(dir, 'nested', 'last-version')
-      assert.equal(readState(file), null)
-      writeState(file, '0.612.0')
-      assert.equal(readFileSync(file, 'utf8'), '0.612.0\n')
-      assert.equal(readState(file), '0.612.0')
-    } finally { rmSync(dir, { recursive: true, force: true }) }
-  })
-
-  it('throws when the file cannot be read, so an unreadable state does not pass for a new version', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'watch-'))
-    try {
-      assert.throws(() => readState(dir), { code: 'EISDIR' })
-    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
 
@@ -101,9 +72,16 @@ describe('failedChecks', () => {
 describe('issueFor', () => {
   it('names the version and every failing check', () => {
     const { title, body } = issueFor('0.612.0', { checks: ['one', 'two'], unrun: [] })
-    assert.equal(title, 'Live tests fail on SudokuPad 0.612.0')
+    assert.equal(title, 'Live tests fail: the nightly full suite is red')
+    assert.equal(issueFor('0.613.0', { checks: ['one'], unrun: [] }).title, title, 'one issue, whatever the version')
     assert.match(body, /0\.612\.0/)
     assert.match(body, /- one\n- two/)
+  })
+
+  it('has a comment for a later red night, naming the date and every failing check, which fileIssue posts on the open issue instead of filing another', () => {
+    const { comment } = issueFor('0.612.0', { checks: ['one', 'two'], unrun: [] }, { now: Date.UTC(2026, 10, 22, 6, 30) })
+    assert.match(comment, /^Red again on 2026-11-22, on SudokuPad 0\.612\.0\./)
+    assert.match(comment, /- one\n- two/)
   })
 
   it('names what did not run', () => {
@@ -127,14 +105,15 @@ describe('fileIssue', () => {
     assert.equal(seen[seen.indexOf('--label') + 1], 'bug,needs-info')
   })
 
-  it('throws when gh fails, so the version is not remembered as filed', async () => {
+  it('throws when gh fails, so the night is red rather than silently unreported', async () => {
     await assert.rejects(fileIssue({ title: 'T', body: 'B' }, async () => ({ ok: false })), /gh issue create failed/)
   })
 })
 
 describe('watch', () => {
-  const NOW = Date.UTC(2026, 10, 7)
+  const NOW = Date.UTC(2026, 10, 7, 6, 17)
   const REAL_FAILURE = "    not ok 1 - the check\n      ---\n      failureType: 'testCodeFailure'\n      ...\n"
+  const GREEN = '# tests 1678\n# pass 1678\n# fail 0\n'
   const harness = (over = {}) => {
     const calls = []
     const issues = []
@@ -143,53 +122,52 @@ describe('watch', () => {
       issues,
       deps: {
         liveVersion: async () => '0.612.0',
-        lastVersion: () => '0.611.0',
-        lastFullRun: () => NOW,
         now: () => NOW,
-        runSuite: async () => { calls.push('run'); return { ok: true, output: '' } },
+        previousRunAt: async () => NOW - 24 * 60 * 60 * 1000,
+        runSuite: async () => { calls.push('run'); return { ok: true, output: GREEN } },
         fileIssue: async (i) => { calls.push(`file:${i.title}`); issues.push(i) },
-        remember: (v) => calls.push(`remember:${v}`),
-        rememberFullRun: (t) => calls.push(`full:${t}`),
         ...over
       }
     }
   }
 
-  it('does nothing on a version already checked', async () => {
-    const { calls, deps } = harness({ lastVersion: () => '0.612.0' })
-    assert.equal(await watch(deps), 'unchanged')
-    assert.deepEqual(calls, [])
-  })
-
-  it('runs the suite on a new version and remembers it when green', async () => {
+  it('runs the full suite every night, whatever the version, and is green when it passes', async () => {
     const { calls, deps } = harness()
     assert.equal(await watch(deps), 'green')
-    assert.deepEqual(calls, ['run', 'remember:0.612.0', `full:${NOW}`])
+    assert.deepEqual(calls, ['run'])
   })
 
-  it('files one issue naming the failing checks on red, then remembers the version', async () => {
+  it('files one issue naming the failing checks on red, with a comment for the nights after', async () => {
     const { calls, issues, deps } = harness({
       runSuite: async () => { calls.push('run'); return { ok: false, output: REAL_FAILURE } }
     })
     assert.equal(await watch(deps), 'red')
-    assert.deepEqual(calls, ['run', 'file:Live tests fail on SudokuPad 0.612.0', 'remember:0.612.0', `full:${NOW}`])
-    assert.doesNotMatch(issues[0].body, /weekly/, 'a new version is not the weekly run')
+    assert.deepEqual(calls, ['run', 'file:Live tests fail: the nightly full suite is red'])
+    assert.equal(issues[0].once, true)
+    assert.match(issues[0].comment, /Red again on 2026-11-07/)
   })
 
-  it('does not remember a version whose issue could not be filed', async () => {
-    const { calls, deps } = harness({
+  it('throws when the red issue could not be filed, so the night is red in Actions as well', async () => {
+    const { deps } = harness({
       runSuite: async () => ({ ok: false, output: REAL_FAILURE }),
       fileIssue: async () => { throw new Error('gh down') }
     })
     await assert.rejects(watch(deps), /gh down/)
-    assert.deepEqual(calls, [])
   })
 
-  it('files the did-not-run issue, remembers nothing and reports it when the tests never ran', async () => {
+  it('files the did-not-run issue and reports it when the tests never ran', async () => {
     const { calls, issues, deps } = harness({ runSuite: async () => { calls.push('run'); return { ok: false, output: "    not ok 1 - a\n      ---\n      failureType: 'hookFailed'\n      ...\n" } } })
     assert.equal(await watch(deps), 'did-not-run')
     assert.equal(issues[0].once, true, 'filed once, not every night')
     assert.deepEqual(calls, ['run', `file:${didNotRunIssue('0.612.0', 'x').title}`])
+  })
+
+  it('reports a suite that exited 0 having run no tests as did-not-run, never as green (#1026)', async () => {
+    for (const output of ['', '# tests 0\n# pass 0\n# fail 0\n', 'Could not find \'live/x.live.mjs\'\n']) {
+      const { calls, issues, deps } = harness({ runSuite: async () => { calls.push('run'); return { ok: true, output } } })
+      assert.equal(await watch(deps), 'did-not-run', JSON.stringify(output))
+      assert.match(issues[0].body, /ran no tests/)
+    }
   })
 
   it('files the did-not-run issue when the suite process itself could not start', async () => {
@@ -204,74 +182,77 @@ describe('watch', () => {
     assert.deepEqual(calls, [`file:${didNotRunIssue('unknown', 'x').title}`])
   })
 
-  it('remembers nothing when the did-not-run issue could not be filed', async () => {
-    const { calls, deps } = harness({ liveVersion: async () => { throw new Error('offline') }, fileIssue: async () => { throw new Error('gh down') } })
-    await assert.rejects(watch(deps), /gh down/)
-    assert.deepEqual(calls, [])
-  })
-
-  describe('the weekly forced run', () => {
-    it('runs the suite on an unchanged version once the last full run is a week old, and records the run', async () => {
-      const { calls, deps } = harness({ lastVersion: () => '0.612.0', lastFullRun: () => NOW - FULL_RUN_MS })
-      assert.equal(await watch(deps), 'green')
-      assert.deepEqual(calls, ['run', 'remember:0.612.0', `full:${NOW}`])
+  describe('a night the workflow did not run (#1026)', () => {
+    it('is reported when the run before this one is more than 36 hours old, and the suite still runs', async () => {
+      const { calls, issues, deps } = harness({ previousRunAt: async () => NOW - MISSED_NIGHT_MS - 1 })
+      assert.equal(await watch(deps), 'missed-night')
+      assert.deepEqual(calls, [`file:${didNotRunIssue('0.612.0', 'x').title}`, 'run'])
+      assert.match(issues[0].body, /no run of the watch between 2026-11-05/)
     })
 
-    it('runs the suite on an unchanged version when no full run was ever recorded', async () => {
-      const { calls, deps } = harness({ lastVersion: () => '0.612.0', lastFullRun: () => null })
-      assert.equal(await watch(deps), 'green')
-      assert.deepEqual(calls.slice(0, 1), ['run'])
+    it('is not reported at exactly 36 hours, or when there is no earlier run to compare with', async () => {
+      for (const previous of [NOW - MISSED_NIGHT_MS, null]) {
+        const { calls, deps } = harness({ previousRunAt: async () => previous })
+        assert.equal(await watch(deps), 'green')
+        assert.deepEqual(calls, ['run'])
+      }
     })
 
-    it('does nothing on an unchanged version whose last full run is under a week old', async () => {
-      const { calls, deps } = harness({ lastVersion: () => '0.612.0', lastFullRun: () => NOW - FULL_RUN_MS + 1 })
-      assert.equal(await watch(deps), 'unchanged')
-      assert.deepEqual(calls, [])
-    })
-
-    it('files the red issue saying it was the weekly run, and records the run', async () => {
-      const { calls, deps } = harness({
-        lastVersion: () => '0.612.0',
-        lastFullRun: () => 0,
-        runSuite: async () => ({ ok: false, output: REAL_FAILURE }),
-        fileIssue: async (i) => { calls.push(`file:${i.body.includes('weekly') ? 'weekly' : 'new-version'}:${i.once}`) }
-      })
+    it('stays red when the suite is red as well, with both issues filed', async () => {
+      const { calls, deps } = harness({ previousRunAt: async () => 0, runSuite: async () => { calls.push('run'); return { ok: false, output: REAL_FAILURE } } })
       assert.equal(await watch(deps), 'red')
-      assert.deepEqual(calls, ['file:weekly:true', 'remember:0.612.0', `full:${NOW}`])
+      assert.deepEqual(calls, [`file:${didNotRunIssue('0.612.0', 'x').title}`, 'run', 'file:Live tests fail: the nightly full suite is red'])
+    })
+
+    it('carries a second failure of the same night as a comment on the issue the gap filed, so its cause is not lost (C3)', async () => {
+      const { issues, deps } = harness({ previousRunAt: async () => 0, runSuite: async () => { throw new Error('spawn npm ENOENT') } })
+      assert.equal(await watch(deps), 'did-not-run')
+      assert.equal(issues.length, 2)
+      assert.equal(issues[0].title, issues[1].title)
+      assert.match(issues[1].comment, /spawn npm ENOENT/)
+    })
+
+    it('still runs the suite when the earlier run cannot be read, files the did-not-run issue and is not green (C5)', async () => {
+      const { calls, issues, deps } = harness({ previousRunAt: async () => { throw new Error('gh run list failed') } })
+      assert.equal(await watch(deps), 'did-not-run')
+      assert.deepEqual(calls, [`file:${didNotRunIssue('0.612.0', 'x').title}`, 'run'])
+      assert.match(issues[0].body, /gh run list failed/)
     })
   })
 })
 
-describe('fullRunDue', () => {
-  it('is due with no record, at exactly a week, and not before', () => {
-    assert.equal(fullRunDue({ lastFullRun: null, now: 1000 }), true)
-    assert.equal(fullRunDue({ lastFullRun: 1000, now: 1000 + FULL_RUN_MS }), true)
-    assert.equal(fullRunDue({ lastFullRun: 1000, now: 1000 + FULL_RUN_MS - 1 }), false)
-    assert.equal(fullRunDue({ lastFullRun: 5000, now: 1000 }), true, 'a record in the future is none')
+describe('exitCodeFor', () => {
+  it('is 0 for a green night only: a red night, a night that did not run and a skipped night all exit 1', () => {
+    assert.equal(exitCodeFor('green'), 0)
+    for (const outcome of ['red', 'did-not-run', 'missed-night']) assert.equal(exitCodeFor(outcome), 1, outcome)
   })
 })
 
-describe('the remembered full run', () => {
-  it('sits beside the recording, is null before it is written, and reads back the time', () => {
-    assert.equal(fullRunPath({}, '/home/u'), '/home/u/.cache/sudokupad-scripts/live/last-full-run')
-    const dir = mkdtempSync(join(tmpdir(), 'watch-'))
-    try {
-      const file = join(dir, 'last-full-run')
-      assert.equal(readLastFullRun(file), null)
-      writeState(file, '1762473600000')
-      assert.equal(readLastFullRun(file), 1762473600000)
-    } finally { rmSync(dir, { recursive: true, force: true }) }
+describe('testsRan', () => {
+  it('reads the count of the TAP summary, and is 0 for output with none', () => {
+    assert.equal(testsRan('x\n# tests 1678\n# pass 1678\n'), 1678)
+    assert.equal(testsRan('# tests 0\n'), 0)
+    assert.equal(testsRan('Could not find x'), 0)
+    assert.equal(testsRan('    # tests 9\n'), 0, 'a nested line is not the summary')
+  })
+})
+
+describe('previousRunAt', () => {
+  const ENV = { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '300' }
+  const list = (rows) => async (cmd, args) => ({ ok: true, output: rows.map(([id, at]) => `${id}\t${at}`).join('\n'), args })
+
+  it('is the newest run other than this one', async () => {
+    assert.equal(await previousRunAt(ENV, list([[300, '2026-11-07T06:17:00Z'], [299, '2026-11-06T06:20:00Z'], [298, '2026-11-05T06:19:00Z']])), Date.parse('2026-11-06T06:20:00Z'))
   })
 
-  it('reads as no record when the file holds no number, so a damaged file forces a run', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'watch-'))
-    try {
-      const file = join(dir, 'last-full-run')
-      writeState(file, 'garbage')
-      assert.equal(readLastFullRun(file), null)
-      writeState(file, 'Infinity')
-      assert.equal(readLastFullRun(file), null)
-    } finally { rmSync(dir, { recursive: true, force: true }) }
+  it('is null with no other run, and off Actions, where nothing is asked', async () => {
+    assert.equal(await previousRunAt(ENV, list([[300, '2026-11-07T06:17:00Z']])), null)
+    assert.equal(await previousRunAt({}, async () => { throw new Error('asked') }), null)
+  })
+
+  it('throws when gh fails, and when a time does not parse, rather than reading either as no gap', async () => {
+    await assert.rejects(previousRunAt(ENV, async () => ({ ok: false, output: '' })), /gh run list failed/)
+    await assert.rejects(previousRunAt(ENV, list([[299, 'not a time']])), /does not parse/)
   })
 })
 
@@ -287,7 +268,6 @@ describe('every issue body the watch files ends with its Blocked by section (#80
   const tail = (body) => body.slice(-end.length)
   it('ends the failing-checks issue and the did-not-run issue with it', () => {
     assert.equal(tail(issueFor('0.612.0', { checks: ['one'], unrun: ['a'] }).body), end)
-    assert.equal(tail(issueFor('0.612.0', { checks: ['one'], unrun: [] }, { weekly: true }).body), end)
     assert.equal(tail(didNotRunIssue('0.612.0', 'no Chromium').body), end)
   })
 })
@@ -307,6 +287,12 @@ describe('didNotRunIssue', () => {
     assert.equal(a.once, true)
     assert.match(a.body, /no Chromium/)
     assert.match(a.body, /0\.612\.0/)
+  })
+
+  it('does not blame the machine or SudokuPad, and has a comment naming the cause for a later night that finds the issue open', () => {
+    const { body, comment } = didNotRunIssue('0.612.0', 'no run of the watch since Tuesday', { now: Date.UTC(2026, 10, 22) })
+    assert.match(body, /GitHub not starting a scheduled run/)
+    assert.match(comment, /^Again on 2026-11-22: no run of the watch since Tuesday/)
   })
 })
 

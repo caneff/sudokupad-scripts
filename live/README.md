@@ -6,26 +6,40 @@ you need to write or debug one.
 `npm run test:live` and `npm run test:live:files -- <files>` (a run of some files) give every test a time limit (`--test-timeout` in `package.json`):
 a test that hangs on a promise that never settles fails there, and the watch reports it as a failed check. The limit is per test, so a hang that holds the
 process open (a timer, a hook that never returns) still needs a kill. Run live files through these scripts, never `node --test` directly.
-The suite is run locally and never in `npm test` or the CI workflow; only the daily watch runs it on GitHub Actions.
+The full suite never runs in `npm test` or CI; the nightly watch runs it on GitHub (§ The daily watch). A worker and the controller run only the live files a change touches (§ The live gate).
 
 ## Time budgets (#1031)
 
 A wall-clock budget is not a correctness check on a shared box: attack 78's 3 s budget failed 3 of 3 merge checks at load 12-50 on code that was fine. Attack 78's time budget
 therefore decides the test only when the run sets `LIVE_TIMING=1` (`timingGated` in `live/timing.mjs`; exactly `1`, anything else is off). The watch sets it (`suiteRunEnv` in `live/watch.mjs`), so a
-regression in the time is a red check there and files the watch's bug. The watch runs the suite on a new SudokuPad version and once a week (`FULL_RUN_MS`), not every night. A merge check and a
+regression in the time is a red check there and files the watch's bug. The watch runs the full suite every night. A merge check and a
 bare `npm run test:live` measure the time, print it as a diagnostic, and fail only when the result is wrong (the action's result still has to show within 30 s). Attack 78 is the one budget gated this way;
 attack 74's paste budget (`attacks-storage.live.mjs`) and Text Anywhere's frame budget (`text-anywhere-render.live.mjs`) still decide their tests everywhere. There is no retry and no quarantine: nothing is
 skipped or rerun, so there is no list of either.
 
-## The merge rerun
+## The live gate (#1026)
 
-The controller's merge check reruns the full suite, unless the worker's "PR up" names a full run at the head being merged and `origin/main` is already in that head.
-Then it reruns, with `npm run test:live:files`, the files this change touches against `origin/main`:
+The full suite is no merge gate: on the shared box it is slow and fails on load timeouts that have nothing to do with the change. The nightly watch runs all of it (§ The daily watch).
+Before "PR up" the worker runs, and at the merge the controller reruns, the live files the change touches:
 
-- `live/<script name>/` for each script whose `*.user.js` or `live/<script name>/` folder changed;
-- every top-level `live/*.live.mjs`, since most of them load every script.
+```
+npm run test:live:changed -- [--changed <ref>] [--list]
+```
 
-A change to a `live/*.mjs` helper, `package.json`, `site/` or `.github/` reruns the full suite (#717).
+`live/changed.mjs` (tested in `npm test`) takes the paths the branch changed against `<ref>` (default `origin/main`; committed, edited and untracked) and selects, for each:
+
+- a `*.live.mjs`: itself;
+- a root `*.user.js`: `live/<script name>/*.live.mjs`, and for a SudokuPad script every top-level `live/*.live.mjs`, since most of them load every script;
+- `site/`: `live/site-slideshow.live.mjs`;
+- `package.json` or `node-test.js`, which every live run goes through: `live/startup.live.mjs`, so one live file runs through the changed runner;
+- a file a live file names by a relative path in a string (`./x.mjs`, `../sync-lib.js`, `createRequire(...)('../../x.user.js')`, `new URL('./y.txt', import.meta.url)`) or, from a file in a script's own folder, by a bare script name (`'dark-page.user.js'`: Pen Tool Extras' panel suite loads Dark Page):
+  every live file that reaches it, through the files it loads in turn. A change to `live/session.mjs` or `lib/sudokupad.js` therefore selects nearly everything, and one to `live/board.mjs` most of it.
+  A bare name in a file directly under `live/` (`scripts.mjs`, `attacks.mjs`) is not followed: those tables name every script and nearly every suite loads them.
+
+Docs, `test/`, `.github/`, `lib/` (the scripts that embed a `lib/` file change in the same diff) and a `live/` file no live file loads (`watch.mjs`, `look.mjs`, `fuzz/`) touch no live file: their own tests run in `npm test`.
+A path it cannot place widens the run to every live file, and says which path: `package-lock.json` (a new Playwright is a new Chromium), `.nvmrc`, a new top-level directory. Its last line says `(narrowed: <k> of <n> live files)` or `(widened: <path> ...)`, and an empty selection prints
+`no live file touched`, never nothing. A file it cannot read (anything but "no such file") stops it with the error. `--list` prints the files one per line and runs none. The run goes through `npm run test:live:files`, so it has the time limit and the width cap.
+A new `*.live.mjs` needs no edit anywhere: it is found by its name.
 
 ## Opening SudokuPad
 
@@ -43,7 +57,7 @@ The settings dialogs' buttons are `live/settings.mjs`'s (`STATUS`, `actButton`).
 
 `live/logic-masters-puzzle-preview/` checks Logic Masters Puzzle Preview, which runs on another site than SudokuPad. It answers every request itself, from its own
 routes with synthetic pages, and aborts the rest, so nothing reaches logic-masters.de. It opens its pages through `launchPersistent` (`live/session.mjs`), a context that
-keeps its profile in a directory the check owns, and never loads SudokuPad, so it is the one folder the shared-harness check (`test/specs/spec-129-closing.test.mjs`) leaves out.
+keeps its profile in a directory the check owns, and never loads SudokuPad.
 
 ## Injection time
 
@@ -300,38 +314,29 @@ npm run fuzz:mutants -- [--per-script <n>] [--seeds <k>] [--budget <seconds per 
 
 ## The pull-request fuzz
 
-`.github/workflows/fuzz-pr.yml` (#724) fuzzes a pull request for 5 minutes (`npm run test:fuzz -- --minutes 5 --shrink-minutes 3`), so a bug a change adds fails its check and
-not the nightly the morning after. It runs on a `pull_request` whose paths are one of the six `*.user.js` (not `draw-tool.user.js`), `lib/` or `live/fuzz/`.
+`.github/workflows/fuzz-pr.yml` (#724) fuzzes a pull request for 5 minutes (`npm run test:fuzz -- --minutes 5 --shrink-minutes 3`), so a bug a change adds shows on the pull request and not in the nightly the morning after.
+It runs on a `pull_request` whose paths are one of the six `*.user.js` (not `draw-tool.user.js`) or `lib/`. A change to `live/fuzz/` alone does not start it (#1030): its own tests run in `npm test`, and no script it fuzzes changed.
 
-- **`--focus` is set from the diff**: each script the pull request changes against its base is a `--focus`, read from the diff, so a new script needs no edit there beyond `paths:`. A change to `lib/` or to the fuzz alone has none, so the actions are as
+- **It is advisory** (#1030). Main has no branch protection, so it is no required check: a red run is read, not waited on, and a merge does not wait for the 5 minutes. Three of the pull requests merged before this ruling were merged red.
+- **`--focus` is set from the diff**: each script the pull request changes against its base is a `--focus`, read from the diff, so a new script needs no edit there beyond `paths:`. A change to `lib/` alone has none, so the actions are as
   they are in the nightly.
-- **A failure fails the check** and prints the seed, the shrunk steps and the replay command into the job summary (the fuzz's own output, the same as `npm run test:fuzz` prints). It files no issue:
-  the pull request is where it is seen. Replay it on your machine with the command in the summary, which carries the `--focus`.
+- **A red run leaves one comment on the pull request** with the seed, the failure, the shrunk steps and the replay command (`pr-verdict.mjs`, tested in `npm test`). A later push edits that comment, found by its first line, `<!-- fuzz-pr -->`, so there is never a second, and a later green run edits a red one to say it passed. A pull request from a fork gets no comment (its token cannot). The job summary has the full output too. It files no issue.
+- **A run with no verdict is red** (#1030): a fuzz that crashed before fuzzing, or ran zero action lists (which exits 0 on its own), fails the `verdict` step and leaves the same comment, saying it reached no verdict, with the end of its output.
 - **It runs neither the Tampermonkey test nor the live suite.** A push to the pull request cancels the run on the old head.
 - **A failure may not be the pull request's.** The fuzz is random, and a bug already on `main` can fail the check; check whether the nightly has filed the same failure, or replay it on `main` (the replay command with `git checkout main` first).
 
 ## The daily watch
 
-`npm run watch:live` (`live/watch.mjs`) is for a daily schedule, so a SudokuPad update that breaks a script shows
-up as a bug and not when someone installs it. Its header comment is the full rule: a new version runs the suite
-with `LIVE_REFRESH=1`, red files one `bug` and `needs-info` issue, and a version already checked is a no-op until a week has passed. The last version
-checked lives in `last-version`, beside the recording.
+`npm run watch:live` (`live/watch.mjs`) runs the full live suite every night (#1026), so a SudokuPad update that breaks a script, and a merge that ran only the files its change touched, show up as a bug and not when someone installs it. Its header comment is the full rule.
+SudokuPad is recorded again for every run (`LIVE_REFRESH=1`), since `?v=` may not move when its assets do, and nothing is kept between nights.
 A run with `XDG_CACHE_HOME` set moves the recording and Playwright's browser lookup alike, so `suiteEnv` pins `PLAYWRIGHT_BROWSERS_PATH` to `~/.cache/ms-playwright` for the suite (on Linux, unless it or npm's `playwright_browsers_path` is already set, which is how to point the watch at browsers installed under a moved `XDG_CACHE_HOME`).
 
-Two more rules close gaps in that:
+- **A red night files one `bug` and `needs-info` issue** titled "Live tests fail: the nightly full suite is red", naming every failing test and the SudokuPad version. A night that is red while that issue is still open (whatever the version) comments on it with that night's failing tests instead of filing another.
+- **A night that cannot be called green** files one issue titled "Watch did not run: the live suite could not be checked" and exits 1, so the night is red in Actions too. It files no second one while one is open: a later cause is a comment on it. It does not claim SudokuPad broke. That is a run that cannot reach the checks (no Chromium, a failed recording, a version
+  that could not be read); a suite that exited 0 having run no tests (`testsRan` reads the TAP summary: no summary or `# tests 0`); and a **skipped night**: the run before this one (read with `gh run list`, which is why the workflow has `actions: read`) started more than 36 hours ago (`MISSED_NIGHT_MS`),
+  so GitHub never started one. A run that never started cannot say so itself, so the next night's run does, and still runs the suite. A `gh run list` that fails or gives a time that does not parse is the same issue (a skipped night cannot be ruled out), and the suite still runs. A workflow step before the watch that fails (`npm ci`, the Chromium install) files the same issue from the workflow.
 
-- **A weekly forced run.** `?v=` may not move when SudokuPad's assets do, so a run also happens, recording again, when
-  the last full run (the time in `last-full-run`, beside the recording) is seven days old or missing. A red weekly run
-  files the `bug` issue and says it was the weekly run, unless an open issue already has that title.
-- **A "did not run" issue.** A run that cannot reach the checks (no Chromium, a failed recording, a version that could
-  not be read) files one issue titled "Watch did not run: the live suite could not be checked", remembers nothing, and
-  exits 1, so the next night tries again. It files no second one while one is open. It does not claim SudokuPad broke. A
-  workflow step before the watch that fails (`npm ci`, the Chromium install) files the same issue from the workflow.
-
-It runs nightly on GitHub Actions (`.github/workflows/watch.yml`, 06:17 UTC; `workflow_dispatch` runs it by hand).
-The recording, `last-version` and `last-full-run` persist between runs in the Actions cache, saved under a key ending in the run id and
-attempt, and restored by prefix, because a cache entry cannot be overwritten. The recording never goes in the repo or an
-artifact. A run on an unchanged version, inside its week, makes one request to SudokuPad and runs no suite.
+It runs nightly on GitHub Actions (`.github/workflows/watch.yml`, 06:17 UTC, though GitHub often starts it hours late; `workflow_dispatch` runs it by hand), 120 minutes at most. The recording never goes in the repo, an artifact or the Actions cache.
 
 GitHub turns off a public repository's scheduled workflows after 60 days with no repository activity. To turn it
 back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow" (or run

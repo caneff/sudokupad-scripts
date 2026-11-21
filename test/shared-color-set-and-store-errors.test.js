@@ -1,18 +1,17 @@
 'use strict'
-// Spec #964's closing test: one color set for Pen Tool Extras and Text Anywhere, a store read that throws in a dialog action going on to
-// Copy in all six scripts, the one title-row click handler with Clear through clearErrorLog, the one row-read contract, the store naming
-// every slot it kept an unreadable value in, and escapeHtml in the shared basics, driven at the `npm test` seam.
+// One color set for Pen Tool Extras and Text Anywhere, a store read that throws in a dialog action going on to Copy in all six scripts, the title-row click
+// handler with Clear through clearErrorLog, the row-read contract, the store naming every slot it kept an unreadable value in, and escapeHtml, at the `npm test` seam.
 // Blind to real SudokuPad: the Framework calls (each script's Copy wired through `runInDialog` and a blocked storage on the page),
 // rendering (the dialogs, the missing-color note, Color by Digit's unreadable note) and hold-to-edit. `npm run test:live` covers them on
 // sudokupad.app: attack 76 in live/attacks-storage.live.mjs, and the settings and profiles suites of each script.
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { join } = require('node:path')
-const { loadLib } = require('../load-lib.js')
-const { fakeStore, quietly } = require('../fake-store.js')
-const { memoryStorage } = require('../fake-page-storage.js')
+const { loadLib } = require('./load-lib.js')
+const { fakeStore, quietly } = require('./fake-store.js')
+const { memoryStorage } = require('./fake-page-storage.js')
 
-const ROOT = join(__dirname, '..', '..')
+const ROOT = join(__dirname, '..')
 const script = (file) => require(join(ROOT, file))
 const penToolExtras = script('pen-tool-extras.user.js')
 const textAnywhere = script('text-anywhere.user.js')
@@ -27,7 +26,7 @@ const { escapeHtml } = loadLib(['plain'], ['escapeHtml'])
 
 const NINE = { 1: '#010101', 2: '#020202', 3: '#030303', 4: '#040404', 5: '#050505', 6: '#060606', 7: '#070707', 8: '#080808', 9: '#090909' }
 
-test('#964: both scripts read one saved color set the same way: Custom is the string custom, and nothing usable saved is no set', () => {
+test('both scripts read one saved color set the same way: Custom is the string custom, and nothing usable saved is no set', () => {
   for (const saved of [NINE, { ...NINE, preset: 'page-2' }, { ...NINE, 4: 'red' }]) {
     assert.deepEqual(penToolExtras.readPenColors(saved), textAnywhere.readNoteColorSet(saved), JSON.stringify(saved))
   }
@@ -39,7 +38,7 @@ test('#964: both scripts read one saved color set the same way: Custom is the st
   }
 })
 
-test('#964: a preset set carries the page its missing pens came from, and an edit drops only the edited pen from them', () => {
+test('a preset set carries the page its missing pens came from, and an edit drops only the edited pen from them', () => {
   const pages = [['k0', 'k1', 'k2', 'k3']]
   const readCell = (key) => (key === 'k1' ? 'rgb(200, 0, 0)' : 'transparent')
   const picked = penToolExtras.presetColorSet('page-1', pages, readCell)
@@ -49,7 +48,7 @@ test('#964: a preset set carries the page its missing pens came from, and an edi
   assert.deepEqual([edited.colors[4], edited.preset, edited.missing, edited.fromPreset], ['#010203', 'custom', [2, 3, 5, 6, 7, 8, 9], 'page-1'])
 })
 
-test('#964: in each of the six scripts, Copy\'s read of a blocked storage in a dialog action throws on and leaves the feature on', () => {
+test('in each of the six scripts, Copy\'s read of a blocked storage in a dialog action throws on and leaves the feature on', () => {
   const guard = createGuard({ script: 'demo', name: 'Demo', version: '1.0.0', features: { saved: { label: 'saved settings', needs: {} } } })
   const feature = guard.features.saved
   const store = guard.storeFor(feature)
@@ -64,7 +63,7 @@ test('#964: in each of the six scripts, Copy\'s read of a blocked storage in a d
   }
 })
 
-test('#964: the one title-row handler says Copy could not read, and Clear empties the log through clearErrorLog', async () => {
+test('the one title-row handler says Copy could not read, and Clear empties the log through clearErrorLog', async () => {
   const status = { textContent: '', dataset: {} }
   let click
   const root = { querySelector: () => status, addEventListener: (type, fn) => { click = fn } }
@@ -80,7 +79,7 @@ test('#964: the one title-row handler says Copy could not read, and Clear emptie
   assert.equal(status.textContent, 'The error log was already empty.')
 })
 
-test('#964: a refused saved row reads as its fallback, and a refused pasted one is skipped', () => {
+test('a refused saved row reads as its fallback, and a refused pasted one is skipped', () => {
   const store = fakeStore({ TextAnywhere_width: 0.3, TextAnywhere_opacity: 55 })
   const looks = textAnywhere.readLooks(store)
   assert.deepEqual([looks.width, looks.opacity], [textAnywhere.DEFAULT_WIDTH, 55])
@@ -88,7 +87,7 @@ test('#964: a refused saved row reads as its fallback, and a refused pasted one 
   assert.deepEqual([values, skipped], [{ TextAnywhere_opacity: 55 }, 1])
 })
 
-test('#964: the store names the slot it kept an unreadable value in, the next slot for a second one, and Color by Digit\'s note names every slot', () => {
+test('the store names the slot it kept an unreadable value in, the next slot for a second one, and Color by Digit\'s note names every slot', () => {
   const key = 'ColorByDigit_profiles'
   const store = fakeStore({ [key]: { profiles: 'later', active: 0 } })
   const read = () => undefined
@@ -101,7 +100,7 @@ test('#964: the store names the slot it kept an unreadable value in, the next sl
   assert.match(html, new RegExp(`kept under ${key}_unreadable and ${key}_unreadable2\\.`))
 })
 
-test('#964: escapeHtml is in the shared basics, and Pen Tool Extras\' line-mode label goes through it', () => {
+test('escapeHtml is in the shared basics, and Pen Tool Extras\' line-mode label goes through it', () => {
   assert.equal(escapeHtml('a & <b> "c"'), 'a &amp; &lt;b&gt; &quot;c&quot;')
   assert.match(penToolExtras.renderLineModeButton('both'), /title="Center &amp; Edge" aria-label="Center &amp; Edge"/)
 })

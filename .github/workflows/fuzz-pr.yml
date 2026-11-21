@@ -1,6 +1,8 @@
 name: Fuzz pull request
 
-# Files no issue: the pull request is where a failure is seen.
+# Advisory (#1030): main has no branch protection, so this is not a required check; a red run is read, not waited on, and it files no issue. A red run leaves one
+# comment on the pull request (edited on a later push) with the seed and the failure. A change to the fuzz harness alone does not start it:
+# its own tests (`npm test`) cover that, and the scripts it fuzzes are not in the diff.
 on:
   pull_request:
     paths:
@@ -11,10 +13,10 @@ on:
       - text-anywhere.user.js
       - ui-tweaks.user.js
       - lib/**
-      - live/fuzz/**
 
 permissions:
   contents: read
+  pull-requests: write
 
 # A new push to the pull request makes the run on the old one worthless.
 concurrency:
@@ -50,6 +52,15 @@ jobs:
           npm run test:fuzz -- --minutes 5 --shrink-minutes 3 "${focus[@]}" 2>&1 | tee "$RUNNER_TEMP/fuzz.out"
         env:
           BASE_REF: ${{ github.base_ref }}
+      # The step above exits 0 on a run that fuzzed zero action lists, and has no output at all when something before it failed: this step
+      # fails both, so neither reads as a pass, and writes the comment (live/fuzz/pr-verdict.mjs).
+      - id: verdict
+        if: ${{ !cancelled() }}
+        run: node live/fuzz/pr-verdict.mjs "$RUNNER_TEMP/fuzz.out" "$RUNNER_TEMP/fuzz-comment.md" "$FUZZ_OUTCOME" "$HEAD_SHA" "$RUN_URL"
+        env:
+          FUZZ_OUTCOME: ${{ steps.fuzz.outcome }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       - name: Show the failure in the job summary
         if: ${{ failure() && steps.fuzz.outcome == 'failure' }}
         run: |
@@ -62,3 +73,18 @@ jobs:
             cat "$RUNNER_TEMP/fuzz.out"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      # One comment per pull request, found by its first line: a red run creates it or edits it, and a later green run edits an earlier red one to say it passed, so the pull
+      # request never keeps a stale failure. A fork's token cannot comment, so a fork's pull request has none.
+      - name: Comment the result on the pull request
+        if: ${{ !cancelled() && (steps.verdict.outcome == 'success' || steps.verdict.outcome == 'failure') && github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- fuzz-pr -->")) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/fuzz-comment.md" > /dev/null
+          elif [ "$VERDICT" = failure ]; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/fuzz-comment.md"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          VERDICT: ${{ steps.verdict.outcome }}

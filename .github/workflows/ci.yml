@@ -1,11 +1,20 @@
 name: CI
 
+# One run per push (#1027): a push to a pull request branch also fires `push`, which doubled every run, so `push` is main only and the pull
+# request's own run is the one that reports.
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
+
+# A new push to a pull request makes the run on its old head worthless. A run on main is never cancelled: each main commit has a group of its own (its sha),
+# since GitHub keeps one waiting run per group and cancels an older waiting one even with cancel-in-progress off, which would leave a commit with no verdict.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

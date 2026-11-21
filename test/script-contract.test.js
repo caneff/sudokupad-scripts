@@ -23,6 +23,10 @@ for (const file of scriptFiles()) {
     assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', file), 'utf8')))
   })
 
+  test(`${id}: the header has no @require, so the installed script is one file`, () => {
+    assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', file), 'utf8').split('// ==/UserScript==')[0], /@require/)
+  })
+
   test(`${id}: a page with no Framework is not SudokuPad, so the script starts without a warning`, () => {
     assert.deepEqual(startOnPage(file, undefined), [])
   })

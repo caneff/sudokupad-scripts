@@ -66,15 +66,32 @@ describe('the workflows', () => {
   }
 })
 
+describe('ci.yml (#1027)', () => {
+  const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
+
+  it('starts one run for a push to a pull request: pull_request for any branch, push for main only', () => {
+    assert.match(yml, /^on:\n {2}push:\n {4}branches: \[main\]\n {2}pull_request:\n/m)
+  })
+
+  it('cancels a superseded pull-request run and never a run on main, whose every push has a group of its own so none waits behind another to be dropped', () => {
+    assert.match(yml, /^concurrency:\n {2}group: ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}\n {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}\n/m)
+  })
+
+  it('keeps the job named test, so the check a pull request shows is the same one', () => {
+    assert.match(yml, /^jobs:\n {2}test:\n/m)
+    assert.doesNotMatch(yml, /^ {4}name:/m)
+  })
+})
+
 describe('fuzz-pr.yml (#724)', () => {
   const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'fuzz-pr.yml'), 'utf8')
 
-  it('runs on pull requests that change a script, lib/ or the fuzz, and on nothing else', () => {
+  it('runs on pull requests that change a script or lib/, and on nothing else: not on a change to the fuzz harness alone (#1030)', () => {
     assert.match(yml, /^on:\n {2}pull_request:\n {4}paths:\n/m)
     assert.doesNotMatch(yml, /^ {2}(push|schedule|workflow_dispatch):/m)
     const paths = yml.split('paths:\n')[1].split(/\n(?! {6}- )/)[0].split('\n').map((l) => l.replace(/^ {6}- /, ''))
     const scripts = scriptFiles()
-    assert.deepEqual(paths.sort(), [...scripts, 'lib/**', 'live/fuzz/**'].sort())
+    assert.deepEqual(paths.sort(), [...scripts, 'lib/**'].sort())
   })
 
   it('fuzzes for 5 minutes with the changed scripts in focus, and files no issue and runs no other live test', () => {
@@ -86,9 +103,48 @@ describe('fuzz-pr.yml (#724)', () => {
     assert.doesNotMatch(yml, /test:tampermonkey|test:live/)
   })
 
+  it('is advisory: it files no issue and its token can only comment on the pull request (#1030)', () => {
+    assert.match(yml, /^permissions:\n {2}contents: read\n {2}pull-requests: write\n/m)
+    assert.doesNotMatch(yml, /issues: write/)
+  })
+
+  it('fails a run with no verdict, through pr-verdict.mjs, and leaves one comment that a later push edits (#1030)', () => {
+    assert.match(yml, /- id: verdict\n {8}if: \$\{\{ !cancelled\(\) \}\}\n {8}run: node live\/fuzz\/pr-verdict\.mjs /)
+    assert.match(yml, /FUZZ_OUTCOME: \$\{\{ steps\.fuzz\.outcome \}\}/)
+    assert.match(yml, /- name: Comment the result on the pull request\n {8}if: \$\{\{ !cancelled\(\) && \(steps\.verdict\.outcome == 'success' \|\| steps\.verdict\.outcome == 'failure'\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}/, "a fork's token cannot comment, and a green run edits an earlier red comment")
+    assert.match(yml, /elif \[ "\$VERDICT" = failure \]/, 'a green run creates no comment')
+    const marker = /export const COMMENT_MARKER = '([^']+)'/.exec(fs.readFileSync(path.join(ROOT, 'live', 'fuzz', 'pr-verdict.mjs'), 'utf8'))[1]
+    assert.ok(yml.includes(`startswith("${marker}")`), 'the step looks for the comment by the marker the script writes')
+    assert.match(yml, /gh api --method PATCH /)
+    assert.match(yml, /gh pr comment /)
+  })
+
   it('puts a failure into the job summary', () => {
     assert.match(yml, />> "\$GITHUB_STEP_SUMMARY"/)
     assert.match(yml, /if: \$\{\{ failure\(\) && steps\.fuzz\.outcome == 'failure' \}\}/)
+  })
+})
+
+describe('watch.yml (#1026)', () => {
+  const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'watch.yml'), 'utf8')
+
+  it('runs the full live suite every night through watch:live, which files the issue and exits 1 when the night is not green', () => {
+    assert.match(yml, /schedule:\n {4}- cron: '\d+ \d+ \* \* \*'/)
+    assert.match(yml, /- id: watch\n {8}run: npm run watch:live\n/)
+    assert.match(yml, /issues: write/)
+  })
+
+  it('may read the workflow\'s earlier runs, which is how it sees a skipped night', () => {
+    assert.match(yml, /^ {2}actions: read$/m)
+  })
+
+  it('keeps nothing between nights: the recording is made again each run, so no Actions cache holds a version or a run time', () => {
+    assert.doesNotMatch(yml, /actions\/cache/)
+  })
+
+  it('has a time limit under the 6 hours GitHub gives a job, so a hung suite fails the night', () => {
+    const minutes = Number(/timeout-minutes: (\d+)/.exec(yml)?.[1])
+    assert.ok(minutes > 0 && minutes < 360, `timeout-minutes is ${minutes}`)
   })
 })
 

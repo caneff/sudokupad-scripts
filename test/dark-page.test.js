@@ -38,6 +38,7 @@ test('readSaved reads the saved color through the Framework, and lets a Framewor
 
 test('earlyColor reads the saved color straight from localStorage, where Framework has put it, and lets blocked storage throw', () => {
   assert.equal(LOCAL_DATA_KEY, 'svencodes_DarkPage_color')
+  assert.equal(DATA_KEY, 'DarkPage_color')
   assert.equal(earlyColor({ getItem: (key) => (key === LOCAL_DATA_KEY ? '#ABCDEF' : null) }), '#abcdef')
   assert.equal(earlyColor({ getItem: () => null }), null)
   assert.equal(earlyColor({ getItem: () => 'red' }), null)
