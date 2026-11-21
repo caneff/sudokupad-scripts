@@ -112,13 +112,16 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
   it('a bug planted in a script is injected in its place: caught, shrunk to the Tab and printed with the plant to replay', async () => {
     const plant = plantById('tab-turns-pad-to-letters')
-    // `minutes` is the fuzz's own time limit (2 by default), which on a loaded box ends the run at list 18 of 150 with a pass before Tab comes up (#1007).
-    const result = await fuzz({ browser: browser(), seed: TAB_PLANT_SEED, runs: 150, minutes: 15, plant, shrinkMinutes: 5 })
+    // The fuzz stops at its own time limit and reports that as a pass, so each limit here is set above the run's time on a loaded box: the seed reaches Tab in about 5 minutes at load 25.
+    // The three limits sum to 18 minutes, inside the 20 of `test:live:files` (#1007).
+    const result = await fuzz({ browser: browser(), seed: TAB_PLANT_SEED, runs: 150, minutes: 10, plant, shrinkMinutes: 3 })
     assert.equal(result.failed, true, 'the planted bug failed the run')
     assert.match(result.error, plant.expect)
     assert.deepEqual(result.sequence, ['press Tab'])
     assert.match(result.replayCommand, / --plant tab-turns-pad-to-letters$/)
-    assert.equal((await fuzz({ browser: browser(), seed: TAB_PLANT_SEED, runs: 20 })).failed, false, 'the same seed on the shipped script passes')
+    const shipped = await fuzz({ browser: browser(), seed: TAB_PLANT_SEED, runs: 20, minutes: 5 })
+    assert.equal(shipped.failed, false, 'the same seed on the shipped script passes')
+    assert.equal(shipped.runs, 20, 'all 20 lists ran, none cut off by the time limit')
   })
 
   it('a note open for typing at a reload is kept (#668): the recorded failing list passes', async () => {

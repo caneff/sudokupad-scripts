@@ -212,7 +212,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **The tests**: `actions.test.mjs`, `signals.test.mjs`, `rules.test.mjs` (hand-built snapshots) and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
   seed gives the same actions, every kind is generated and runs, and a planted page error is caught, shrunk to one step and replayed.
   `puzzle-set.test.mjs` tests the puzzle set, and `actions.test.mjs` and `engine.test.mjs` that every puzzle is generated and a list's puzzle replays from its path.
-  `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 3 minutes) is the live test: every puzzle opens once and takes a click, a digit key and an undo, short fixed-seed runs pass, and a page error planted on Escape during a drag (`--plant-escape-error` plants the same one by hand) is caught, shrunk to the one
+  `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 3 minutes on a quiet box, up to 18 for the planted-bug test alone on a loaded one) is the live test: every puzzle opens once and takes a click, a digit key and an undo, short fixed-seed runs pass, and a page error planted on Escape during a drag (`--plant-escape-error` plants the same one by hand) is caught, shrunk to the one
   interrupted step and replayed from the command it prints; a bug planted in a script (`tab-turns-pad-to-letters`) is injected, caught, shrunk to the Tab and printed with its `--plant`.
 
 Each failure the run finds is fixed in a ticket of its own, whose PR adds the shrunk list as a named fixed live test.
