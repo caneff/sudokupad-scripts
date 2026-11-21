@@ -57,7 +57,7 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
     await finishNote(p)
   })
 
-  it('the first Backspace right after a symbol swap undoes it, and any other key makes Backspace a delete again', async () => {
+  it('the first Backspace right after each symbol swap undoes it', async () => {
     await openNote()
     for (const [typed, swapped, undone] of [['->', '→', '->'], ['a<-', 'a←', 'a<-'], ['!=', '≠', '!='], ['<=', '≤', '<='], ['>=', '≥', '>='], ['sum ', 'Σ ', 'sum ']]) {
       await p.keyboard.type(typed)
@@ -67,24 +67,49 @@ describe('Text Anywhere\'s undo inside an open note', { concurrency: false }, ()
       await p.keyboard.press('Control+a')
       await p.keyboard.press('Delete')
     }
-    await p.keyboard.type('->x')
+    await finishNote(p)
+  })
+
+  it('after the undo the caret is collapsed, so the next Backspace deletes one character and typing keeps the restored text', async () => {
+    await openNote()
+    await p.keyboard.type('ab->')
     await p.keyboard.press('Backspace')
-    assert.equal(await boxText(), '→', 'a character typed after the swap makes Backspace a delete')
+    await p.keyboard.type('x')
+    assert.equal(await boxText(), 'ab->x')
     await p.keyboard.press('Control+a')
     await p.keyboard.press('Delete')
     await p.keyboard.type('ab->')
     await p.keyboard.press('Backspace')
-    assert.equal(await boxText(), 'ab->')
-    // The browser's Undo selects the text it gave back, so the second Backspace deletes it as any Backspace would.
     await p.keyboard.press('Backspace')
-    assert.equal(await boxText(), 'ab', 'the second Backspace is an ordinary delete')
-    await p.keyboard.press('Control+a')
-    await p.keyboard.press('Delete')
+    assert.equal(await boxText(), 'ab-')
+    await finishNote(p)
+  })
+
+  it('a character typed after the swap, an arrow key, or a modified Backspace makes Backspace an ordinary delete', async () => {
+    await openNote()
+    const cases = [
+      ['a typed character', ['x', 'Backspace'], '→'],
+      ['an arrow key', ['ArrowLeft', 'ArrowRight', 'Backspace'], ''],
+      ['Ctrl+Backspace', ['Control+Backspace'], '']
+    ]
+    for (const [name, keys, expected] of cases) {
+      await p.keyboard.type('->')
+      for (const key of keys) await (key.length === 1 ? p.keyboard.type(key) : p.keyboard.press(key))
+      assert.equal(await boxText(), expected, name)
+      await p.keyboard.press('Control+a')
+      await p.keyboard.press('Delete')
+    }
+    await finishNote(p)
+  })
+
+  it('a click that moves the caret makes Backspace an ordinary delete', async () => {
+    await openNote()
     await p.keyboard.type('->')
-    await p.keyboard.press('ArrowLeft')
-    await p.keyboard.press('ArrowRight')
+    const box = await p.locator('#text-anywhere-layer .text-anywhere-textbox').boundingBox()
+    await p.mouse.click(box.x + 2, box.y + box.height / 2)
+    await p.keyboard.press('End')
     await p.keyboard.press('Backspace')
-    assert.equal(await boxText(), '', 'a caret move in between makes Backspace a delete')
+    assert.equal(await boxText(), '')
     await finishNote(p)
   })
 

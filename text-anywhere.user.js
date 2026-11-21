@@ -3680,7 +3680,7 @@
     if (shownIndex !== null && element.firstChild) window.getSelection().collapse(element.firstChild, rawOffset(item.text, shownText, shownIndex))
   }
 
-  // A symbol the last typed character completed is typed over with its sign, as an insertion, so the caret stays after it and the browser's Undo can give the typed characters back. Returns where the caret is left, or null with no swap.
+  // A symbol the last typed character completed is typed over with its sign, as an insertion, so the caret stays after it and the browser's Undo can give the typed characters back.
   function replaceTypedSymbol () {
     const selection = window.getSelection()
     const { anchorNode, anchorOffset } = selection
@@ -3703,7 +3703,7 @@
     return { node: selection.anchorNode, offset: selection.anchorOffset }
   }
 
-  // The caret still where a swap left it, so the first Backspace there is the browser's Undo, as on other platforms' autocorrect. Any other key clears it, and a moved caret fails this.
+  // Whether the caret is still where the swap left it.
   function caretIsAt (spot) {
     const { isCollapsed, anchorNode, anchorOffset } = window.getSelection()
     return Boolean(spot) && isCollapsed && anchorNode === spot.node && anchorOffset === spot.offset
@@ -3801,9 +3801,12 @@
     event.stopImmediatePropagation()
     if (event.type !== 'keydown' || event.isComposing) return
     if (event.key === 'Tab') event.preventDefault()
-    if (event.key === 'Backspace' && !event.isComposing && caretIsAt(textBox.swapCaret)) {
+    // The first plain Backspace right after a swap is the browser's Undo, as on other platforms' autocorrect; any other key clears the swap's caret.
+    if (event.key === 'Backspace' && !event.ctrlKey && !event.altKey && !event.metaKey && caretIsAt(textBox.swapCaret)) {
       event.preventDefault()
       document.execCommand('undo')
+      // Undo leaves the text it gave back selected, and the next character typed would replace it.
+      window.getSelection().collapseToEnd()
     }
     textBox.swapCaret = null
     if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
