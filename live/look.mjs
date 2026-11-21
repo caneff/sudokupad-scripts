@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { chromium } from 'playwright'
 import { harPath } from './cache.mjs'
-import { pickTool } from './attack-fixtures.mjs'
+import { pickTool } from './board.mjs'
 import { SCRIPTS } from './scripts.mjs'
 import { openWith, SCRIPT_FILES } from './session.mjs'
 
