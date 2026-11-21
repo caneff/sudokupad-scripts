@@ -3,7 +3,7 @@
 > [!WARNING]
 > **These scripts can break at any time, and there are no guarantees.** They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.
 
-Tampermonkey userscripts for [SudokuPad](https://sudokupad.app).
+Tampermonkey userscripts for [SudokuPad](https://sudokupad.app), and one for the [Logic Masters](https://logic-masters.de/Raetselportal/) puzzle portal.
 
 Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 

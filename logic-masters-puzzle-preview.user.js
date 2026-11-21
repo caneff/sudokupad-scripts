@@ -26,6 +26,8 @@
   const PAGE_TTL = 7 * 24 * 3600 * 1000 // a puzzle page is looked at again after a week
   const MISS_TTL = 24 * 3600 * 1000 // a page with no image is looked at again after a day
   const MAX_IMAGES = 600 // about 25 MB at the usual 40-50 KB a picture; the oldest go first
+  const NEAR_SCREEN_PX = 400 // links this far below the viewport are looked up too
+  const PRUNE_DELAY_MS = 5000 // the image cache is trimmed once the page has settled
   const GAP_MS = 500 // pause between two network requests, to be gentle on the server
   const LINKS = 'a[href*="zeigen.php"]'
 
@@ -46,7 +48,7 @@
     return new Promise((resolve) => {
       const req = db.transaction(store).objectStore(store).get(key)
       req.onsuccess = () => resolve(req.result)
-      req.onerror = () => resolve(undefined)
+      req.onerror = () => resolve(undefined) // a failed read counts as a miss: the lookup is made again and saved
     })
   }
 
@@ -119,7 +121,8 @@
         dbPut('pages', pageUrl, { src, checked: Date.now() })
         return src
       } catch {
-        return saved ? saved.src : null // offline or an error: fall back to what we had
+        // Offline, busy or an error: use what was saved. With nothing saved this shows no preview, and saves nothing, so a later visit tries again.
+        return saved ? saved.src : null
       }
     })
   }
@@ -140,7 +143,7 @@
     })
   }
 
-  // ---- the preview box, as before ----
+  // ---- the preview box ----
   function insertPreview (link) {
     const parent = link.parentElement
     if (!parent || parent.querySelector('.puzzle-preview')) return null
@@ -174,7 +177,8 @@
     try {
       preview.img.src = await imageUrlFor(src)
     } catch {
-      preview.img.src = src // the cache failed: let the browser load it the usual way
+      // No direct load of the address: it would skip the queue, the gap and the pause after a 503, and ask the busy server again.
+      preview.label.textContent = 'No preview'
     }
   }
 
@@ -186,7 +190,7 @@
       nearScreen.unobserve(entry.target)
       showPreview(entry.target)
     }
-  }, { rootMargin: '400px 0px' })
+  }, { rootMargin: `${NEAR_SCREEN_PX}px 0px` })
 
   function watch (root) {
     const links = root.matches && root.matches(LINKS) ? [root] : root.querySelectorAll(LINKS)
@@ -206,7 +210,7 @@
         }
       }
     }).observe(document.body, { childList: true, subtree: true })
-    setTimeout(pruneImages, 5000)
+    setTimeout(pruneImages, PRUNE_DELAY_MS)
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init)

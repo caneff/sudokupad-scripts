@@ -1,6 +1,6 @@
 # sudokupad-scripts
 
-Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
+Standalone Tampermonkey userscripts for SudokuPad, written to be shared, and one for the Logic Masters puzzle portal. Each
 script is one `*.user.js` file with no build step for users. Shared code lives in `lib/<name>.js` and `node sync-lib.js` copies it into each
 script between `// <lib:name>` and `// </lib:name>` markers, so an installed script is still one file.
 
@@ -86,7 +86,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   The controller's merge rerun takes the files in `live/README.md` § The merge rerun.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
-- `npm run test:tampermonkey` installs every script into a real Tampermonkey; `live/README.md` § The Tampermonkey test
+- `npm run test:tampermonkey` installs every SudokuPad script (`scriptFiles()`) into a real Tampermonkey, and leaves out Logic Masters Puzzle Preview (its install and update from the root address stay owed to a person); `live/README.md` § The Tampermonkey test
   says what it covers and needs. It needs the network, so it stays out of `npm test`, `npm run test:live` and
   `land.testcmd`. Run it when a change touches any line of a `// ==UserScript==` header; the controller's merge check
   runs it then too.

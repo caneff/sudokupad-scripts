@@ -306,7 +306,7 @@ back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow
 
 ## The Tampermonkey test
 
-`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every `*.user.js` into a real
+`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every SudokuPad script (`scriptFiles()` of `sync-lib.js`, so not Logic Masters Puzzle Preview, which runs on another site) into a real
 Tampermonkey in Playwright's Chromium, the way a user does: open the script's URL, click Install. Each script's copy on
 main goes in first, from `raw.githubusercontent.com`, then the checkout's copy, served from `127.0.0.1`, over it.
 Tampermonkey must offer the second as an update and its dashboard must list each script once, at the checkout's

@@ -13,7 +13,8 @@ const PORTAL = `https://${HOST}/Raetselportal/`
 const LINK_COUNT = 40
 const ROW_HEIGHT = 150
 const VIEWPORT = { width: 1200, height: 768 }
-const NEAR_MARGIN = 400 // the script's IntersectionObserver rootMargin
+const NEAR_MARGIN = 400 // the script's NEAR_SCREEN_PX
+const BUSY_KEY = 'lm-puzzle-preview-busy-until' // the script's BUSY_KEY, in localStorage
 const QUIET_MS = 2000 // "nothing more is fetched" window; the script waits 500 ms between requests
 // A 1x1 PNG.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
@@ -26,7 +27,7 @@ const puzzleHtml = (id) => `<!doctype html><meta charset="utf-8"><body><img src=
 // Every context a test opens, closed after it whether the test passed or not: an open Chromium keeps the process alive.
 const open = []
 
-// One browser session on `profile`, with the script injected at DOMContentLoaded as a userscript manager does. `mode` is what the puzzle pages answer.
+// One browser session on `profile`, with the script injected at DOMContentLoaded as a userscript manager does. `mode` is what the site answers: 'ok', 'busy' (503 on puzzle pages) or 'busy-image' (503 on images).
 async function session (profile, mode) {
   const context = await launchPersistent(profile, { headless: true, viewport: VIEWPORT })
   open.push(context)
@@ -42,6 +43,7 @@ async function session (profile, mode) {
     }
     if (url.pathname.endsWith('/bild.php')) {
       hits.images.push(url.searchParams.get('data'))
+      if (mode === 'busy-image') return route.fulfill({ status: 503, body: 'busy' })
       return route.fulfill({ contentType: 'image/png', body: PNG, headers: { pragma: 'no-cache', 'cache-control': 'no-cache', expires: '0' } })
     }
     return route.fulfill({ status: 404, body: '' })
@@ -60,6 +62,8 @@ const nearIds = (page) => page.evaluate(({ margin }) => [...document.querySelect
   .map((a) => new URL(a.href).searchParams.get('id')), { margin: NEAR_MARGIN })
 
 const shown = (page) => page.$$eval('.puzzle-preview img', (imgs) => imgs.filter((i) => i.complete && i.naturalWidth > 0).length)
+// Resolves once at least `count` previews show a loaded picture.
+const waitForShown = (page, count, timeout) => page.waitForFunction((n) => [...document.querySelectorAll('.puzzle-preview img')].filter((i) => i.complete && i.naturalWidth > 0).length >= n, count, { timeout })
 
 // Scrolls down a screen at a time, so every link is on screen once, and waits for every preview to show.
 async function scrollThrough (page) {
@@ -68,7 +72,7 @@ async function scrollThrough (page) {
     await page.evaluate((top) => window.scrollTo(0, top), y)
     await page.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
   }
-  await page.waitForFunction((count) => [...document.querySelectorAll('.puzzle-preview img')].filter((i) => i.complete && i.naturalWidth > 0).length === count, LINK_COUNT, { timeout: 120000 })
+  await waitForShown(page, LINK_COUNT, 120000)
 }
 
 // A pause that proves a negative: nothing more was fetched in this time.
@@ -100,20 +104,19 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
   })
 
   it('before any scroll, only links within the viewport plus 400 px are fetched', async () => {
-    const { context, page, hits } = await session(join(dir, 'near-profile'), 'ok')
+    const { page, hits } = await session(join(dir, 'near-profile'), 'ok')
     const near = await nearIds(page)
     assert.ok(near.length > 0 && near.length < LINK_COUNT, `${near.length} near links of ${LINK_COUNT}`)
-    await page.waitForFunction((count) => [...document.querySelectorAll('.puzzle-preview img')].filter((i) => i.complete && i.naturalWidth > 0).length >= count, near.length, { timeout: 60000 })
+    await waitForShown(page, near.length, 60000)
     await quiet(QUIET_MS)
     assert.deepEqual([...hits.pages].sort(), [...near].sort())
     assert.equal(hits.images.length, near.length)
-    await context.close()
   })
 
   it('after a 503 on a puzzle page, the next load in the same profile fetches nothing', async () => {
     const profile = join(dir, 'busy-profile')
     const first = await session(profile, 'busy')
-    await first.page.waitForFunction(() => window.localStorage.getItem('lm-puzzle-preview-busy-until') !== null, null, { timeout: 60000 })
+    await first.page.waitForFunction((key) => window.localStorage.getItem(key) !== null, BUSY_KEY, { timeout: 60000 })
     await quiet(QUIET_MS)
     assert.equal(first.hits.pages.length, 1)
     assert.deepEqual(first.hits.images, [])
@@ -124,6 +127,18 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
     assert.deepEqual(second.hits.pages, [])
     assert.deepEqual(second.hits.images, [])
     assert.deepEqual([...first.hits.aborted, ...second.hits.aborted], [])
-    await second.context.close()
+  })
+
+  it('after a 503 on an image, no further image is asked for, now or on the next load', async () => {
+    const profile = join(dir, 'busy-image-profile')
+    const first = await session(profile, 'busy-image')
+    await first.page.waitForFunction((key) => window.localStorage.getItem(key) !== null, BUSY_KEY, { timeout: 60000 })
+    await quiet(QUIET_MS)
+    assert.equal(first.hits.images.length, 1)
+    await first.context.close()
+
+    const second = await session(profile, 'ok')
+    await quiet(QUIET_MS)
+    assert.deepEqual(second.hits.images, [])
   })
 })

@@ -125,9 +125,8 @@ const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
 // Scripts for another site than SudokuPad: published like the others (install link on the homepage, @version raised on a change) but
 // with no Framework, guard, lib blocks or settings dialog, so every loop over SudokuPad's scripts (scriptFiles) leaves them out.
 const OTHER_SITE_SCRIPTS = ['logic-masters-puzzle-preview.user.js']
-const rootScripts = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js') && !(f in HANDOVERS)).sort()
-const scriptFiles = () => rootScripts().filter((f) => !OTHER_SITE_SCRIPTS.includes(f))
-const publishedScriptFiles = () => rootScripts()
+const publishedScriptFiles = () => fs.readdirSync(__dirname).filter((f) => f.endsWith('.user.js') && !(f in HANDOVERS)).sort()
+const scriptFiles = () => publishedScriptFiles().filter((f) => !OTHER_SITE_SCRIPTS.includes(f))
 
 // The names of the lib blocks a script carries, in order.
 const libBlockNames = (source) => [...source.matchAll(BLOCK)].map((match) => match[1])
