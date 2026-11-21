@@ -17,7 +17,7 @@ const {
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarks,
   clickedMarks, marksAtPoint, holdsMark, DOT_FILL_CSS,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, normalizePen, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
+  PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, thicknessKeyStep, heldThicknessStep, HELD_REPEAT_MS, HELD_RAMP_MS, HELD_SLIDER_MAX_STEPS, normalizePen, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, hitRadiusAt, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS_MAX,
@@ -1856,8 +1856,7 @@ test('a slider row built from a range normalizes and saves by that range alone',
   assert.deepEqual(calls, [['set', 'New_key', 6], ['remove', 'New_key']])
 })
 
-test('a row built with no effect has one that does nothing', () => {
-  assert.equal(flag('Flag_key').effect(), undefined)
+test('a row that passes the do-nothing effect has one that does nothing', () => {
   assert.equal(SETTINGS.eraseClicks.effect(), undefined)
 })
 
@@ -2189,6 +2188,15 @@ test('digitKeyPen: a bare digit 1 to 9 picks that pen on the page showing, and n
   assert.equal(digitKeyPen(key('3', { target: field }), 0), null, 'a key typed into a field')
   assert.equal(digitKeyPen(key('3', { target: { closest: () => null } }), 0), '3', 'a key on a non-field')
   for (const mod of ['ctrlKey', 'altKey', 'metaKey', 'shiftKey']) assert.equal(digitKeyPen(key('3', { [mod]: true }), 0), null, mod)
+})
+
+test('a held thickness key waits out the pause, then steps once a tick and ramps, within the range, as a held + or - does in Text Anywhere', () => {
+  assert.equal(heldThicknessStep(1, HELD_REPEAT_MS - 1, 5), 5, 'a short press is the one step taken on the press')
+  assert.equal(heldThicknessStep(1, HELD_REPEAT_MS, 5), 5 + THICKNESS.step)
+  assert.equal(heldThicknessStep(-1, HELD_REPEAT_MS, 5), 5 - THICKNESS.step)
+  assert.equal(heldThicknessStep(1, HELD_REPEAT_MS + HELD_RAMP_MS * 10, 5), 5 + HELD_SLIDER_MAX_STEPS * THICKNESS.step)
+  assert.equal(heldThicknessStep(1, HELD_RAMP_MS * 10, THICKNESS.max - THICKNESS.step), THICKNESS.max, 'stops at the top')
+  assert.equal(heldThicknessStep(-1, HELD_RAMP_MS * 10, THICKNESS.min), THICKNESS.min, 'stops at the bottom')
 })
 
 test('thicknessKeyStep: + and = step Thickness up and - steps it down, by its step and within its range, and no other key does', () => {

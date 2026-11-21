@@ -22,7 +22,7 @@ const { THICKNESS, DASH, ARROW_SPACING } = createRequire(import.meta.url)('../..
 const UI_TWEAKS = createRequire(import.meta.url)('../../ui-tweaks.user.js')
 const DARK_PAGE = createRequire(import.meta.url)('../../dark-page.user.js')
 const AUTO_RULES_RESIZER = createRequire(import.meta.url)('../../auto-rules-resizer.user.js')
-const { BOX_LINES, NUDGE_REPEAT_MS, SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
+const { BOX_LINES, HELD_REPEAT_MS, SPEED_WINDOW_MS } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 
 const runOn = async (action, options) => {
   const target = await fakeTargets(options).openTarget()
@@ -374,7 +374,7 @@ describe('the action vocabulary', () => {
         for (const [, k] of keyCalls) seen.keys.add(k)
         for (const [, k] of keyCalls) assert.match(k, /^Arrow(?:Left|Right|Up|Down)$/)
         if (held.length) {
-          assert.ok(held[0][1] > NUDGE_REPEAT_MS, 'held past the delay before repeating')
+          assert.ok(held[0][1] > HELD_REPEAT_MS, 'held past the delay before repeating')
           assert.equal(keyCalls.length, 1)
         }
         seen.shift.add(calls(log, 'keyboard.down').some(([, k]) => k === 'Shift'))
