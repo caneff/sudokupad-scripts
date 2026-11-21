@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { didNotRunIssue, failedChecks, fileIssue, issueFor, issueTrailer, MISSED_NIGHT_MS, previousRunAt, suiteEnv, suiteRunEnv, testsRan, watch } from './watch.mjs'
+import { didNotRunIssue, exitCodeFor, failedChecks, fileIssue, issueFor, issueTrailer, MISSED_NIGHT_MS, previousRunAt, suiteEnv, suiteRunEnv, testsRan, watch } from './watch.mjs'
 
 describe('suiteEnv', () => {
   it('pins Playwright to its default browser folder when XDG_CACHE_HOME moves the harness cache', () => {
@@ -72,14 +72,15 @@ describe('failedChecks', () => {
 describe('issueFor', () => {
   it('names the version and every failing check', () => {
     const { title, body } = issueFor('0.612.0', { checks: ['one', 'two'], unrun: [] })
-    assert.equal(title, 'Live tests fail on SudokuPad 0.612.0')
+    assert.equal(title, 'Live tests fail: the nightly full suite is red')
+    assert.equal(issueFor('0.613.0', { checks: ['one'], unrun: [] }).title, title, 'one issue, whatever the version')
     assert.match(body, /0\.612\.0/)
     assert.match(body, /- one\n- two/)
   })
 
   it('has a comment for a later red night, naming the date and every failing check, which fileIssue posts on the open issue instead of filing another', () => {
     const { comment } = issueFor('0.612.0', { checks: ['one', 'two'], unrun: [] }, { now: Date.UTC(2026, 10, 22, 6, 30) })
-    assert.match(comment, /^Red again on 2026-11-22\./)
+    assert.match(comment, /^Red again on 2026-11-22, on SudokuPad 0\.612\.0\./)
     assert.match(comment, /- one\n- two/)
   })
 
@@ -141,7 +142,7 @@ describe('watch', () => {
       runSuite: async () => { calls.push('run'); return { ok: false, output: REAL_FAILURE } }
     })
     assert.equal(await watch(deps), 'red')
-    assert.deepEqual(calls, ['run', 'file:Live tests fail on SudokuPad 0.612.0'])
+    assert.deepEqual(calls, ['run', 'file:Live tests fail: the nightly full suite is red'])
     assert.equal(issues[0].once, true)
     assert.match(issues[0].comment, /Red again on 2026-11-07/)
   })
@@ -200,13 +201,30 @@ describe('watch', () => {
     it('stays red when the suite is red as well, with both issues filed', async () => {
       const { calls, deps } = harness({ previousRunAt: async () => 0, runSuite: async () => { calls.push('run'); return { ok: false, output: REAL_FAILURE } } })
       assert.equal(await watch(deps), 'red')
-      assert.equal(calls.length, 3)
+      assert.deepEqual(calls, [`file:${didNotRunIssue('0.612.0', 'x').title}`, 'run', 'file:Live tests fail: the nightly full suite is red'])
     })
 
-    it('throws when the earlier run cannot be read, rather than assuming there was no gap', async () => {
-      const { deps } = harness({ previousRunAt: async () => { throw new Error('gh run list failed') } })
-      await assert.rejects(watch(deps), /gh run list failed/)
+    it('carries a second failure of the same night as a comment on the issue the gap filed, so its cause is not lost (C3)', async () => {
+      const { issues, deps } = harness({ previousRunAt: async () => 0, runSuite: async () => { throw new Error('spawn npm ENOENT') } })
+      assert.equal(await watch(deps), 'did-not-run')
+      assert.equal(issues.length, 2)
+      assert.equal(issues[0].title, issues[1].title)
+      assert.match(issues[1].comment, /spawn npm ENOENT/)
     })
+
+    it('still runs the suite when the earlier run cannot be read, files the did-not-run issue and is not green (C5)', async () => {
+      const { calls, issues, deps } = harness({ previousRunAt: async () => { throw new Error('gh run list failed') } })
+      assert.equal(await watch(deps), 'did-not-run')
+      assert.deepEqual(calls, [`file:${didNotRunIssue('0.612.0', 'x').title}`, 'run'])
+      assert.match(issues[0].body, /gh run list failed/)
+    })
+  })
+})
+
+describe('exitCodeFor', () => {
+  it('is 0 for a green night only: a red night, a night that did not run and a skipped night all exit 1', () => {
+    assert.equal(exitCodeFor('green'), 0)
+    for (const outcome of ['red', 'did-not-run', 'missed-night']) assert.equal(exitCodeFor(outcome), 1, outcome)
   })
 })
 
@@ -232,8 +250,9 @@ describe('previousRunAt', () => {
     assert.equal(await previousRunAt({}, async () => { throw new Error('asked') }), null)
   })
 
-  it('throws when gh fails', async () => {
+  it('throws when gh fails, and when a time does not parse, rather than reading either as no gap', async () => {
     await assert.rejects(previousRunAt(ENV, async () => ({ ok: false, output: '' })), /gh run list failed/)
+    await assert.rejects(previousRunAt(ENV, list([[299, 'not a time']])), /does not parse/)
   })
 })
 
@@ -268,6 +287,12 @@ describe('didNotRunIssue', () => {
     assert.equal(a.once, true)
     assert.match(a.body, /no Chromium/)
     assert.match(a.body, /0\.612\.0/)
+  })
+
+  it('does not blame the machine or SudokuPad, and has a comment naming the cause for a later night that finds the issue open', () => {
+    const { body, comment } = didNotRunIssue('0.612.0', 'no run of the watch since Tuesday', { now: Date.UTC(2026, 10, 22) })
+    assert.match(body, /GitHub not starting a scheduled run/)
+    assert.match(comment, /^Again on 2026-11-22: no run of the watch since Tuesday/)
   })
 })
 

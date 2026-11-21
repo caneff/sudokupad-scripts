@@ -62,10 +62,13 @@ const failingList = ({ checks, unrun }) => [
   ...(unrun.length ? ['', 'Did not run (a file that failed to load, or a failed `before` hook):', '', ...unrun.map((c) => `- ${c}`)] : [])
 ]
 
-// `once`: a night that is still red on a version whose issue is open must not file the same bug again; it posts `comment` on that issue, so the one issue names
-// the failing tests of every night it stayed open.
+const day = (now) => new Date(now).toISOString().slice(0, 10)
+
+// One title whatever the version, and `once`: a night that is red while the issue is open posts `comment` on it instead of filing another, so the one issue names the
+// failing tests of every night it stayed open, and the SudokuPad version each ran against.
+export const LIVE_ISSUE_TITLE = 'Live tests fail: the nightly full suite is red'
 export const issueFor = (version, failed, { now = Date.now() } = {}) => ({
-  title: `Live tests fail on SudokuPad ${version}`,
+  title: LIVE_ISSUE_TITLE,
   once: true,
   body: [
     `\`npm run test:live\` is red against SudokuPad ${version}, recorded again for the run. Failing checks:`,
@@ -74,20 +77,22 @@ export const issueFor = (version, failed, { now = Date.now() } = {}) => ({
     '',
     TRAILER
   ].join('\n'),
-  comment: [`Red again on ${new Date(now).toISOString().slice(0, 10)}. Failing checks:`, '', ...failingList(failed)].join('\n')
+  comment: [`Red again on ${day(now)}, on SudokuPad ${version}. Failing checks:`, '', ...failingList(failed)].join('\n')
 })
 
-// The fixed title is the dedupe key: `fileIssue` files an `once` issue only when no open issue has its title.
-export const didNotRunIssue = (version, why) => ({
+// The fixed title is the dedupe key: `fileIssue` files an `once` issue only when no open issue has its title, and posts `comment` on the open one, so a second cause on a
+// night that already filed it (a skipped night, then a suite that would not start) is not lost.
+export const didNotRunIssue = (version, why, { now = Date.now() } = {}) => ({
   title: 'Watch did not run: the live suite could not be checked',
   once: true,
   body: [
-    `\`npm run watch:live\` could not check SudokuPad ${version}, so the next run tries again. The cause may be this machine (no Chromium, no network) or a SudokuPad change that stopped the suite starting (the version tag gone, a control renamed); what stopped it:`,
+    `\`npm run watch:live\` could not check SudokuPad ${version}, so the next run tries again. The cause may be this machine (no Chromium, no network), a SudokuPad change that stopped the suite starting (the version tag gone, a control renamed) or GitHub not starting a scheduled run; what stopped it:`,
     '',
     why,
     '',
     TRAILER
-  ].join('\n')
+  ].join('\n'),
+  comment: `Again on ${day(now)}: ${why}`
 })
 
 // A suite that could not get to its checks (or a version that could not be read) files the did-not-run issue: a bug for it would blame SudokuPad, which may or may
@@ -95,13 +100,22 @@ export const didNotRunIssue = (version, why) => ({
 export async function watch ({ liveVersion, now, previousRunAt, runSuite, fileIssue }) {
   let version = 'unknown'
   const didNotRun = async (why) => {
-    await fileIssue(didNotRunIssue(version, why))
+    await fileIssue(didNotRunIssue(version, why, { now: now() }))
     return 'did-not-run'
   }
   try { version = await liveVersion() } catch (e) { return didNotRun(`the version could not be read: ${e.message}`) }
-  const previous = await previousRunAt()
-  const missed = previous !== null && now() - previous > MISSED_NIGHT_MS
-  if (missed) await fileIssue(didNotRunIssue(version, `no run of the watch between ${new Date(previous).toISOString()} and ${new Date(now()).toISOString()}: GitHub skipped a night, or the workflow was off.`))
+  // The suite runs whatever this finds: it is the only full run, and a failed lookup must not cost the night its checks. Not green either way.
+  let flagged = null
+  try {
+    const previous = await previousRunAt()
+    if (previous !== null && now() - previous > MISSED_NIGHT_MS) {
+      flagged = 'missed-night'
+      await fileIssue(didNotRunIssue(version, `no run of the watch between ${new Date(previous).toISOString()} and ${new Date(now()).toISOString()}: GitHub skipped a night, or the workflow was off.`, { now: now() }))
+    }
+  } catch (e) {
+    flagged = 'did-not-run'
+    await fileIssue(didNotRunIssue(version, `the run before this one could not be read, so a skipped night cannot be ruled out: ${e.message}`, { now: now() }))
+  }
   let result
   try { result = await runSuite() } catch (e) { return didNotRun(`the suite could not be started: ${e.message}`) }
   const { ok, output } = result
@@ -112,8 +126,10 @@ export async function watch ({ liveVersion, now, previousRunAt, runSuite, fileIs
     return 'red'
   }
   if (testsRan(output) === 0) return didNotRun('the suite exited 0 but ran no tests')
-  return missed ? 'missed-night' : 'green'
+  return flagged ?? 'green'
 }
+
+export const exitCodeFor = (outcome) => outcome === 'green' ? 0 : 1
 
 // `mergeStderr` also captures stderr into the output (a crash before any verdict prints only there); `timeout` kills a child still running after that many ms.
 export const run = (command, args, { env = process.env, input, mergeStderr = false, timeout } = {}) => new Promise((resolve, reject) => {
@@ -150,7 +166,10 @@ export async function previousRunAt (env, runGh = run) {
   const list = await runGh('gh', ['run', 'list', '--repo', REPO, '--workflow', 'watch.yml', '--limit', '20', '--json', 'databaseId,createdAt', '--jq', '.[] | "\\(.databaseId)\t\\(.createdAt)"'])
   if (!list.ok) throw new Error('gh run list failed')
   const earlier = list.output.split('\n').filter(Boolean).map((l) => l.split('\t')).filter(([id]) => id !== env.GITHUB_RUN_ID)
-  return earlier.length === 0 ? null : Math.max(...earlier.map(([, at]) => Date.parse(at)))
+  const times = earlier.map(([, at]) => Date.parse(at))
+  // A NaN would make the gap check false and a skipped night would go unreported.
+  if (times.some(Number.isNaN)) throw new Error(`gh run list gave a time that does not parse: ${earlier.map(([, at]) => at).join(', ')}`)
+  return times.length === 0 ? null : Math.max(...times)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -162,5 +181,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     fileIssue
   })
   console.error(`watch:live: ${outcome}`)
-  process.exitCode = outcome === 'green' ? 0 : 1
+  process.exitCode = exitCodeFor(outcome)
 }
