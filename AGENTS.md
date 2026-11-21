@@ -38,10 +38,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   replay, and a history interleaved with SudokuPad's must catch every Undo first, which risks digit Undo for a small gain. No ticket proposes either.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
   2026-11-06). A dark page means Dark Page.
-- **Keys SudokuPad owns**: a design never proposes one of these as a script's shortcut (four shortcut proposals were rejected on this ground): Tab, Space,
-  PageUp and PageDown, the tool hotkeys Z X C V B N M, the digit keys, `/`, and the modifiers Ctrl, Cmd, Shift and Alt, which switch the tool while held, so every
-  chord with one (Ctrl+A and Ctrl+Enter included) is off the table. Sources: `docs/research/sudokupad-custom-tool.md` § Tool keys, `docs/research/sudokupad-letter-tool.md`
-  and `docs/research/sudokupad-color-tool-paging.md`; the research does not say what Ctrl+A or Ctrl+Enter do in SudokuPad itself.
+- **Keys**: before you propose, add or change a keyboard shortcut: read `docs/agents/keys.md`. A key SudokuPad's own pen tool acts on is never a script's shortcut.
 - **Pen values are not scarce** (#721): Pen Tool Extras is not running out. Before you say it is, read `docs/research/sudokupad-pen-edge-marks.md`
   § Pen values past `z` (which characters work as a pen value).
 
@@ -71,7 +68,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 ## End-to-end seam
 
 - **Seam**: `npm test` (`node --test`), against each script's pure functions (`test/`), each shared module's (`lib/*.test.js`), the live harness's helper tests
-  (`live/**/*.test.mjs`) and every page in `site/` (`test/site.test.js`: every script but the one hidden (Auto Rules Resizer, until Chris hears from Nell) has an install link on the homepage, and no page links the hidden one)
+  (`live/**/*.test.mjs`) and every page in `site/` (`test/site.test.js`: every script has an install link on the homepage)
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run test:live` (every `live/**/*.live.mjs`)
   covers them on sudokupad.app in headless Chromium, with the script injected after Start Puzzle.
 - Before you write or debug a live test: read `live/README.md`.
