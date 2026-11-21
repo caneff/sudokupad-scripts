@@ -40,6 +40,7 @@ const measure = (p) => p.evaluate(() => {
   return {
     digit: Math.round(digit.width * 10) / 10,
     digitHeight: Math.round(digit.height * 10) / 10,
+    keys: ['0', '9'].reduce((found, value) => ({ ...found, [value]: box(document.querySelector(`.controls-input button.digit[data-value="${value}"]`)) }), { delete: box(document.querySelector('.controls-input button[data-control="delete"]')) }),
     scale: Math.round(controls.getBoundingClientRect().width / controls.offsetWidth * 1000) / 1000,
     board: box(document.getElementById('board')),
     controls: box(controls),
@@ -74,6 +75,14 @@ for (const windowSize of WINDOWS) {
       }
     })
     after(async () => { await context.close() })
+
+    for (const percent of Object.keys(STEPS)) {
+      it(`at ${STEPS[percent]} the Delete key is as tall as the 0 and ends where the 9 ends`, () => {
+        const { keys } = sizes[percent]
+        assert.equal(Math.abs((keys.delete.bottom - keys.delete.top) - (keys[0].bottom - keys[0].top)) < 0.5, true, `delete ${JSON.stringify(keys.delete)} against 0 ${JSON.stringify(keys[0])}`)
+        assert.equal(Math.abs(keys.delete.right - keys[9].right) < 0.5, true, `delete ${JSON.stringify(keys.delete)} against 9 ${JSON.stringify(keys[9])}`)
+      })
+    }
 
     it('each step makes the digit buttons measurably larger than the one before (at least 3 px), and they stay square', () => {
       const widths = Object.keys(STEPS).map((percent) => sizes[percent].digit)

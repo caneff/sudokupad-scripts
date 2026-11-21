@@ -244,3 +244,8 @@ test('buildCss: the corner and centre tools get the digit font scaled from 1.4re
   assert.match(css, /button\.digit \{[^}]*font-size: 3rem !important/)
   assert.match(css, /\.penlinemode \{ top: 19rem !important; height: 6rem !important; \}/)
 })
+
+test('buildCss: the Delete key is as tall as a digit and spans two digit columns, as SudokuPad\'s 8.3rem does at 4rem', () => {
+  assert.match(buildCss({ ...DEFAULT_OPTIONS, digitPad: 150 }), /button\[data-control="delete"\] \{ flex: 0 0 12\.3rem !important; width: 12\.3rem !important; height: 6rem !important; \}/)
+  assert.match(buildCss({ ...DEFAULT_OPTIONS, digitPad: 80 }), /button\[data-control="delete"\] \{ flex: 0 0 6\.7rem !important; width: 6\.7rem !important; height: 3\.2rem !important; \}/)
+})

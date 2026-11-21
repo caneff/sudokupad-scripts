@@ -158,15 +158,19 @@
   // SudokuPad sizes every controls button 4rem square and the digit font 2rem (1.4rem in the corner and centre tools), and refits #controls to its box on each resize, so a size in rem is refitted with the rest of the column.
   const DIGIT_BUTTON_REM = 4
   const DIGIT_FONT_REM = 2
+  const DELETE_EXTRA_REM = 0.3
   const DIGIT_FONT_SMALL_REM = 1.4
   function digitPadCss (percent) {
     if (percent === DIGIT_PAD_DEFAULT) return false
     const scaled = (value) => rem(value * percent / 100)
     const side = `${scaled(DIGIT_BUTTON_REM)}rem`
+    const deleteWidth = `${rem(2 * scaled(DIGIT_BUTTON_REM) + DELETE_EXTRA_REM)}rem`
     return [
       // SudokuPad puts the pen line-mode box at 13rem, over the Delete row of 4rem rows: three rows and a 1rem gap.
       `.penlinemode { top: ${rem(3 * scaled(DIGIT_BUTTON_REM) + 1)}rem !important; height: ${side} !important; }`,
       `.controls-input button.digit { flex: 0 0 ${side} !important; width: ${side} !important; height: ${side} !important; font-size: ${scaled(DIGIT_FONT_REM)}rem !important; }`,
+      // SudokuPad's own 8.3rem: two digit columns of 4rem and their 0.3rem of margin, less the Delete key's own margin.
+      `.controls-input button[data-control="delete"] { flex: 0 0 ${deleteWidth} !important; width: ${deleteWidth} !important; height: ${side} !important; }`,
       `.tool-corner .controls-input button.digit, .tool-centre .controls-input button.digit { font-size: ${scaled(DIGIT_FONT_SMALL_REM)}rem !important; }`
     ].join('\n')
   }
