@@ -96,8 +96,16 @@
       return
     }
     const { job, resolve, reject } = waiting.shift()
+    let busy
+    try {
+      busy = Date.now() < busyUntil()
+    } catch (error) {
+      reject(error) // an unreadable busy mark fails this lookup, as it did before two slots
+      startNext()
+      return
+    }
     // A 503 that lands while a request waits for its gap stops it here, as it stops every later one.
-    if (Date.now() < busyUntil()) {
+    if (busy) {
       reject(new Error('server busy, waiting'))
       startNext()
       return
@@ -106,8 +114,8 @@
     inFlight++
     job().then((response) => {
       if (response.status === 503 || response.status === 429) localStorage.setItem(BUSY_KEY, String(Date.now() + BUSY_PAUSE_MS))
-      resolve(response)
-    }, reject).finally(() => { inFlight--; startNext() })
+      return response
+    }).then(resolve, reject).finally(() => { inFlight--; startNext() })
     startNext()
   }
   function politely (job) {

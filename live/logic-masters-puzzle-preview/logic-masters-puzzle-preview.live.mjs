@@ -20,7 +20,7 @@ const ANSWER_MS = 700 // longer than three gaps, so a third slot would show as 3
 const QUIET_MS = 2000 // "nothing more is fetched" window; the script starts a request at most every 250 ms
 const START_GAP_MS = 250 // the script's START_GAP_MS
 const MAX_IN_FLIGHT = 2 // the script's MAX_IN_FLIGHT
-const OLD_GAP_MS = 500 // one request at a time with this gap after each was the script before two slots
+const CLOCK_SLACK_MS = 20 // the page's resource-timing clock and the script's Date.now() can differ by a few ms
 // A 1x1 PNG.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
 
@@ -167,8 +167,8 @@ describe('Logic Masters Puzzle Preview', { timeout: 300000 }, () => {
     assert.equal(starts.length, near.length * 2)
     assert.equal(hits.maxInFlight, MAX_IN_FLIGHT)
     const gaps = starts.slice(1).map((t, i) => t - starts[i])
-    assert.ok(Math.min(...gaps) >= START_GAP_MS - 20, `gaps ${gaps.map(Math.round)}`)
-    // One at a time, with 500 ms after each answer, took at least this long for the same requests.
-    assert.ok(elapsed < starts.length * (ANSWER_MS + OLD_GAP_MS), `${elapsed} ms for ${near.length} pictures`)
+    assert.ok(Math.min(...gaps) >= START_GAP_MS - CLOCK_SLACK_MS, `gaps ${gaps.map(Math.round)}`)
+    // Requests made one at a time cannot finish before this, whatever the gap: each waits for the answer before it.
+    assert.ok(elapsed < starts.length * ANSWER_MS, `${elapsed} ms for ${near.length} pictures`)
   })
 })
