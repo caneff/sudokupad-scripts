@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.40
+// @version      0.1.41
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -23,7 +23,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.40'
+  const VERSION = '0.1.41'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
@@ -283,6 +283,9 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  // The settings wiring every script keeps: that feature (keyed `settings`, or `editor` in Color by Digit) never needs `Framework.getApp`,
+  // so a SudokuPad without it still gets the entry, added at start. A dialog's Save and Copy both go through the store of the feature that
+  // reads the saved settings at startup: with that feature off, the defaults show, nothing is kept, and the off-note says so.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -636,7 +639,7 @@
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  // exists; `store`, SudokuPad's Framework unless given, holds a dismissal under `<script>-notice`.
   function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
@@ -814,7 +817,7 @@
 
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
-    function probe ({ roots, store, doc = document }) {
+    function probe ({ roots, store = Framework, doc = document }) {
       sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
@@ -822,6 +825,29 @@
       })
       page = { store, doc, sudokupad }
       showNotice()
+    }
+
+    // A failure outside every feature turns off this one, named for the script, instead of an unhandled rejection naming nothing.
+    const startup = createFeature('startup', { label: 'startup' })
+    const startupFailed = (error) => startup.skip(error)
+    // `fn` as a function whose throw, or the rejection of the promise it returns, is reported as the startup's. A throw is reported at once.
+    const catchStartup = (fn) => (...args) => {
+      try {
+        return Promise.resolve(fn(...args)).catch(startupFailed)
+      } catch (error) {
+        startupFailed(error)
+        return Promise.resolve()
+      }
+    }
+
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
+    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    function start (begin, { roots = () => ({}) } = {}) {
+      const run = catchStartup((app) => {
+        probe({ roots: { Framework, app, ...roots() } })
+        return begin(app)
+      })
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
@@ -868,7 +894,7 @@
       closeDialog: () => feature.run(() => Framework.closeDialog())
     })
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, start, catchStartup, storeFor, dialogsFor }
   }
 
   // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
@@ -904,7 +930,6 @@
     settings: {
       label: 'settings',
       needs: {
-        'Framework.getApp': 'function',
         ...SETTINGS_DIALOG_NEEDS,
         'Framework.setData': 'function',
         'Framework.removeData': 'function'
@@ -960,11 +985,9 @@
     `#${DIALOG_ID} .${CLASS_PREFIX}option small { display: block; opacity: .65; }`
   ].join('\n')
   const dialogs = guard.dialogsFor(settingsEntry)
-  // The options are written only from the dialog, so a write that fails reaches its status line with the settings entry still on.
-  const savedSettings = guard.storeFor(settingsEntry)
-  // Copy reads under the feature that reads the options at startup.
+  // Save and Copy go through the store of the feature that reads the options at startup (lib/settings-dialog.js).
   const savedOptionsStore = guard.storeFor(saved)
-  const snapshotOptions = () => snapshotStore(savedSettings, tableKeys(OPTION_ROWS), () => {
+  const snapshotOptions = () => snapshotStore(savedOptionsStore, tableKeys(OPTION_ROWS), () => {
     const was = options
     return () => applyOptions(was)
   })
@@ -989,7 +1012,7 @@
       snapshot: snapshotOptions,
       feature: settingsEntry,
       save: () => {
-        saveOptions(savedSettings, draft)
+        saveOptions(savedOptionsStore, draft)
         applyOptions({ ...draft })
       },
       copyPaste: {
@@ -997,7 +1020,7 @@
         readers: READERS,
         apply: (values) => {
           const next = pastedOptions(options, values)
-          saveOptions(savedSettings, next)
+          saveOptions(savedOptionsStore, next)
           applyOptions(next)
           OPTION_ROWS.filter((row) => row.key in values).forEach((row) => {
             draft[row.name] = next[row.name]
@@ -1037,11 +1060,9 @@
   }
 
   const start = () => {
-    guard.probe({ roots: { Framework, ToolLetter: typeof ToolLetter === 'undefined' ? undefined : ToolLetter }, store: Framework })
     applyOptions(saved.run(() => savedOptions(Framework), () => DEFAULT_OPTIONS))
     listenForHeldTab()
     addSettingsEntry(dialogs, settingsEntry, { name: 'uitweaks', content: 'UI Tweaks', open: openDialog })
   }
-  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
-  else start()
+  guard.start(start, { roots: () => ({ ToolLetter: typeof ToolLetter === 'undefined' ? undefined : ToolLetter }) })
 })()

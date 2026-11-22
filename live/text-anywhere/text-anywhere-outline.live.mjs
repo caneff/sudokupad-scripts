@@ -78,7 +78,8 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
     await pick(p, 'None').click()
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.ok(await reach('A') > 0)
-    assert.equal(await savedValue(p, OUTLINE_KEY), 'medium')
+    // Thick ('medium') is the fallback, so no key is kept.
+    assert.equal(await savedValue(p, OUTLINE_KEY), null)
     await chooseOutline('Thin')
     await reload()
     await p.click(SETTINGS_BUTTON)
@@ -107,12 +108,13 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
     const other = await textAnywhere.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
     try {
       await textAnywhere.pickTextAnywhere(other.p)
-      for (const [text, outline] of [[copied, 'none'], [JSON.stringify({ [OUTLINE_KEY]: 'plaid' }), 'medium']]) {
+      // An invalid paste reads as Thick, the fallback, which keeps no key.
+      for (const [text, outline, saved] of [[copied, 'none', 'none'], [JSON.stringify({ [OUTLINE_KEY]: 'plaid' }), 'medium', null]]) {
         await other.p.evaluate((t) => navigator.clipboard.writeText(t), text)
         await other.p.click(SETTINGS_BUTTON)
         await actButton(other.p, 'paste-settings').click()
         await other.p.locator(STATUS).filter({ hasText: /Pasted \d+ settings?\./ }).waitFor()
-        assert.equal(await savedValue(other.p, OUTLINE_KEY), outline)
+        assert.equal(await savedValue(other.p, OUTLINE_KEY), saved)
         assert.equal(await other.p.locator(`${PICKS}[aria-pressed="true"]`).getAttribute('data-value'), outline, 'the dialog shows it')
         assert.equal(await dialogButton(other.p, 'Save').count(), 1)
         await closeDialogWith(other.p, 'Cancel', EDITOR)

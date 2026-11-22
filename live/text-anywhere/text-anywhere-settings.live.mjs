@@ -263,7 +263,7 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
-  it('Restore defaults fills the draft with the pen colors and the default looks; Cancel keeps what was saved and Save stores the defaults', async () => {
+  it('Restore defaults fills the draft with the pen colors and the default looks; Cancel keeps what was saved and Save puts the defaults back, keeping no key', async () => {
     const changed = { [OUTLINE_KEY]: 'none', [BOX_KEY]: 'yellow', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' }
     await read(p, (values) => Object.entries(values).forEach(([key, value]) => Framework.setData(key, value)), changed)
     await textAnywhere.reload(p)
@@ -288,7 +288,8 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await savedPreset(p), 'pen')
     assert.deepEqual(await savedColors(p), penColors, 'the saved colors are the pen colors')
-    assert.deepEqual(await savedKeys(p, Object.keys(changed)), { [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false, [FONT_KEY]: 'proportional' })
+    // Each look saved at its fallback keeps no key, so a later change of default reaches it.
+    assert.deepEqual(await savedKeys(p, Object.keys(changed)), { [OUTLINE_KEY]: null, [BOX_KEY]: null, [FRAME_KEY]: null, [FONT_KEY]: null })
   })
 
   it('a paste leaves an unsaved edit of a setting it does not hold in the draft, and replaces the ones it does', async () => {

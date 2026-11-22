@@ -172,7 +172,9 @@
   needs or its own code throws: one console warning names it, the **error log** records it, the **notice bar** lists it, and so does the "Off because SudokuPad changed" line in every script's settings dialog (`lib/settings-dialog.js`),
   and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
 - **SudokuPad guard** — `lib/sudokupad.js`: a script declares its **features**, each with a label and the SudokuPad internals it needs, and a
-  feature that lacks one at startup, or whose own code throws, turns off alone while the rest of the script keeps working.
+  feature that lacks one at startup, or whose own code throws, turns off alone while the rest of the script keeps working. Every script starts
+  through it (`start`; Dark Page, which starts at document-start, through its `catchStartup`), so a throw at startup outside every feature turns
+  off one more, labelled startup, under the script's name, and the features that had started stay on.
 - **feature** — a part of a script declared to the **SudokuPad guard**, with the label the console warning and the **notice bar** call it and
   the SudokuPad internals it needs. Its calls into SudokuPad run under it, so one that throws turns it off; off, it acts as if the script
   lacked it, until the page reloads. Its saved settings go through the guard's store for it. Two failures leave it on: a **refused

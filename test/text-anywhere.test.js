@@ -9,7 +9,7 @@ const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./broken-sudokupad.js')
 const { loadLib } = require('./load-lib.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds } = require('../text-anywhere.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -331,6 +331,19 @@ test('copyOldKeys: old keys only, so every setting, the index and each puzzle\'s
   assert.deepEqual(saved, { ...old, ...copied })
   assert.deepEqual(loadNotes(store, 'p1').items, [sum], 'the copied notes load under the new key')
   assert.deepEqual(readLooks(store).width, 3.5, 'the copied settings read under the new keys')
+})
+
+test('saveLook: a look put back at its fallback removes its key, as every script\'s row save does, and any other value is saved', () => {
+  const saved = { [WIDTH_KEY]: 3.5, [OUTLINE_KEY]: 'thin' }
+  const store = fakeStore(saved)
+  saveLook(store, 'width', DEFAULT_WIDTH)
+  saveLook(store, 'outline', DEFAULT_OUTLINE)
+  saveLook(store, 'opacity', MIN_OPACITY)
+  assert.deepEqual(saved, { [OPACITY_KEY]: MIN_OPACITY })
+})
+
+test('a look already saved at its fallback still reads as that value', () => {
+  assert.equal(readLooks(fakeStore({ [WIDTH_KEY]: DEFAULT_WIDTH })).width, DEFAULT_WIDTH)
 })
 
 test('copyOldKeys: new keys only, nothing changes', () => {

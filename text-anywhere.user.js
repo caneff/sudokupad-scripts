@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.52
+// @version      0.46.53
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.52'
+  const VERSION = '0.46.53'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -1280,6 +1280,7 @@
     lookRowOf('noteFont', FONT_KEY, readFont, { dialog: true })
   ]
   const lookRow = (name) => LOOKS.find((row) => row.name === name)
+  const saveLook = (store, name, value) => saveRow(store, lookRow(name), value)
   const readLooks = (store, looks = LOOKS) => readTable(looks, store)
   const dialogLooks = (looks) => looks.filter((row) => row.dialog)
   const changedDialogLooks = (looks, draft, now) => changedRows(dialogLooks(looks), draft, now)
@@ -1595,6 +1596,9 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  // The settings wiring every script keeps: that feature (keyed `settings`, or `editor` in Color by Digit) never needs `Framework.getApp`,
+  // so a SudokuPad without it still gets the entry, added at start. A dialog's Save and Copy both go through the store of the feature that
+  // reads the saved settings at startup: with that feature off, the defaults show, nothing is kept, and the off-note says so.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -1948,7 +1952,7 @@
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  // exists; `store`, SudokuPad's Framework unless given, holds a dismissal under `<script>-notice`.
   function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
@@ -2126,7 +2130,7 @@
 
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
-    function probe ({ roots, store, doc = document }) {
+    function probe ({ roots, store = Framework, doc = document }) {
       sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
@@ -2134,6 +2138,29 @@
       })
       page = { store, doc, sudokupad }
       showNotice()
+    }
+
+    // A failure outside every feature turns off this one, named for the script, instead of an unhandled rejection naming nothing.
+    const startup = createFeature('startup', { label: 'startup' })
+    const startupFailed = (error) => startup.skip(error)
+    // `fn` as a function whose throw, or the rejection of the promise it returns, is reported as the startup's. A throw is reported at once.
+    const catchStartup = (fn) => (...args) => {
+      try {
+        return Promise.resolve(fn(...args)).catch(startupFailed)
+      } catch (error) {
+        startupFailed(error)
+        return Promise.resolve()
+      }
+    }
+
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
+    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    function start (begin, { roots = () => ({}) } = {}) {
+      const run = catchStartup((app) => {
+        probe({ roots: { Framework, app, ...roots() } })
+        return begin(app)
+      })
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
@@ -2180,7 +2207,7 @@
       closeDialog: () => feature.run(() => Framework.closeDialog())
     })
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, start, catchStartup, storeFor, dialogsFor }
   }
 
   // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
@@ -2361,7 +2388,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook }
   }
   if (typeof document === 'undefined') return
 
@@ -2797,7 +2824,7 @@
   function setLook (name, value) {
     const row = lookRow(name)
     look[name] = value
-    savedData.setData(row.key, value)
+    saveLook(savedData, name, value)
     if (row.dialog) showBoxes()
   }
 
@@ -4436,9 +4463,7 @@
   // SudokuPad calls these. A throw from one turns the Text Anywhere tool off, and the event goes on to SudokuPad's own tools.
   const tool = Object.fromEntries(Object.entries(toolHandlers).map(([name, handler]) => [name, typeof handler === 'function' ? (...args) => textTool.run(() => handler(...args), () => false) : handler]))
 
-  // Without getApp there is no app: the features that need one are off, and the rest start without it.
   const start = (app) => {
-    guard.probe({ roots: { Framework, app }, store: Framework })
     if (!storage.off) copyOldKeys(savedData)
     color = readColor(savedData.getData(COLOR_KEY))
     Object.assign(look, readLooks(savedData))
@@ -4497,6 +4522,5 @@
     // Undo after the Restart, past any selection made since, still brings the notes back.
     undoRestart.run(() => trackRestartUndo(app, undoRestart.bind).onRestartUndo(restoreRestarted))
   }
-  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
-  else start(undefined)
+  guard.start(start)
 })()

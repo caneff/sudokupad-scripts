@@ -72,7 +72,8 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       assert.equal((await looks(p)).one.fill, 'rgb(255, 255, 255)')
       await dialog(p, () => choose(p, 'page'))
       assert.equal((await looks(p)).six.fill, 'rgb(221, 238, 255)')
-      assert.equal(await savedValue(p, BOX_KEY), 'page')
+      // Page is the fallback, so no key is kept.
+      assert.equal(await savedValue(p, BOX_KEY), null)
     } finally {
       await p.evaluate(() => document.body.style.removeProperty('--body-bg'))
     }
@@ -172,7 +173,8 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     })
     assert.equal(await savedValue(p, OUTLINE_KEY), 'thin')
     assert.equal(await savedValue(p, BOX_KEY), 'tint')
-    assert.equal(await savedValue(p, FRAME_KEY), false)
+    // No frame is the fallback, so no key is kept.
+    assert.equal(await savedValue(p, FRAME_KEY), null)
     const { one, bare } = await looks(p)
     assert.match(one.fill, /^color\(srgb /)
     assert.equal(one.shadow, 'none')
@@ -203,13 +205,14 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       await textAnywhere.plantNotes(other.p, ITEMS)
       await textAnywhere.reload(other.p)
       await pickTextAnywhere(other.p)
-      for (const [text, box, frame] of [[JSON.stringify(copied), 'yellow', true], [JSON.stringify({ [BOX_KEY]: 'plaid', [FRAME_KEY]: 'yes' }), 'page', false]]) {
+      // An invalid paste reads as the fallbacks, Page and off, which keep no key.
+      for (const [text, box, frame, savedBox, savedFrame] of [[JSON.stringify(copied), 'yellow', true, 'yellow', true], [JSON.stringify({ [BOX_KEY]: 'plaid', [FRAME_KEY]: 'yes' }), 'page', false, null, null]]) {
         await other.p.evaluate((t) => navigator.clipboard.writeText(t), text)
         await other.p.click(SETTINGS_BUTTON)
         await actButton(other.p, 'paste-settings').click()
         await other.p.locator(STATUS).filter({ hasText: /^Pasted \d settings?\.$/ }).waitFor()
-        assert.equal(await savedValue(other.p, BOX_KEY), box)
-        assert.equal(await savedValue(other.p, FRAME_KEY), frame)
+        assert.equal(await savedValue(other.p, BOX_KEY), savedBox)
+        assert.equal(await savedValue(other.p, FRAME_KEY), savedFrame)
         assert.equal(await pickedBox(other.p), box)
         assert.equal(await other.p.locator(FRAME_ON).getAttribute('aria-pressed'), String(frame))
         assert.equal((await looks(other.p)).one.shadow === 'none', !frame, `the shadow is ${(await looks(other.p)).one.shadow}`)
