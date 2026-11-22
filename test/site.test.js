@@ -645,7 +645,7 @@ const cardOf = name => {
   return plain(row.match(/<h2>[^<]*<\/h2>\s*<p>([\s\S]*?)<\/p>/)[1])
 }
 
-for (const { name, details } of [...SUMMARY_SCRIPTS, { name: 'Logic Masters Puzzle Preview', off: true }]) {
+for (const { name, details } of [...SUMMARY_SCRIPTS, { name: 'Logic Masters Puzzle Preview' }]) {
   test(`${name}'s README row says its @description`, () => {
     assert.equal(readmeRow(name), descriptionOf(name))
   })
@@ -661,13 +661,13 @@ for (const { name, details } of [...SUMMARY_SCRIPTS, { name: 'Logic Masters Puzz
   })
 }
 
-const homeOrder = () => rowsOf(read(HOME)).map(r => r[0] && r.match(/<h2>([^<]*)<\/h2>/)[1])
+const homeOrder = () => rowsOf(read(HOME)).map(r => r.match(/<h2>([^<]*)<\/h2>/)[1])
 test("the README's table and its script notes follow the homepage's order", () => {
   const table = [...README.matchAll(/^\| ([^|]*?) \| .* \| \[Install\]\(/gm)].map(m => m[1]).filter(n => n !== 'Script')
   assert.deepEqual(table.filter(n => homeOrder().includes(n)), homeOrder())
   const notes = [...README.matchAll(/^### (.*)$/gm)].map(m => m[1])
   assert.deepEqual(notes, homeOrder().filter(n => notes.includes(n)))
-  assert.deepEqual(notes.length > 0 && notes, notes, 'the README has script notes')
+  assert.ok(notes.length > 0, 'the README has script notes')
 })
 
 test("Pen Tool Extras' README Details link goes to its site page", () => {
@@ -679,16 +679,18 @@ test(`${HOME} says once where every script's settings are and that every dialog 
   const home = plain(read(HOME))
   assert.equal(home.split(SETTINGS_SENTENCE).length - 1, 1)
   for (const { name } of SUMMARY_SCRIPTS) assert.doesNotMatch(cardOf(name), /Restore defaults/, `the ${name} card repeats Restore defaults`)
-  const dark = rowsOf(read(HOME)).find(r => r.includes('<h2>Dark Page</h2>'))
-  const resizer = rowsOf(read(HOME)).find(r => r.includes('<h2>Auto Rules Resizer</h2>'))
-  for (const row of [dark, resizer]) assert.doesNotMatch(plain(row), /Restore defaults/)
-  const tweaks = plain(rowsOf(read(HOME)).find(r => r.includes('<h2>UI Tweaks</h2>')))
-  assert.doesNotMatch(tweaks, /Restore defaults/)
+  for (const name of ['Dark Page', 'Auto Rules Resizer', 'UI Tweaks']) {
+    assert.doesNotMatch(plain(rowsOf(read(HOME)).find(r => r.includes(`<h2>${name}</h2>`))), /Restore defaults/, `the ${name} row repeats Restore defaults`)
+  }
 })
 
-test('the Dark Page and Auto Rules Resizer cards are about as long as the others', () => {
-  const longest = Math.max(...['Pen Tool Extras', 'Text Anywhere', 'Color by Digit'].map(n => cardOf(n).length))
-  for (const name of ['Dark Page', 'Auto Rules Resizer']) assert.ok(cardOf(name).length <= longest + 120, `the ${name} card is ${cardOf(name).length} characters`)
+// The limits and per-puzzle detail live in the README notes: past its summary a card carries one sentence at most (a credit).
+test('the Dark Page and Auto Rules Resizer cards are their summary and one sentence at most', () => {
+  for (const name of ['Dark Page', 'Auto Rules Resizer']) {
+    const rest = cardOf(name).slice(descriptionOf(name).length).trim()
+    const sentences = rest.split(/(?<=\.)\s+/).filter(Boolean)
+    assert.ok(sentences.length <= 1, `the ${name} card adds: ${rest}`)
+  }
 })
 
 const CONTACT = 'Questions, bugs or suggestions? Message me on Discord: @ChinStrap'

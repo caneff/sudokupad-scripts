@@ -57,7 +57,8 @@ test('the slideshow script labels its buttons, shows the first slide, caption an
   const next = pager.querySelector('.next').clicks.click
   const prev = pager.querySelector('.prev').clicks.click
   // Each button's accessible name names its slideshow, so a page with several tells their buttons apart.
-  assert.match(pager.innerHTML, /aria-label="Previous: The X show"[\s\S]*aria-label="Next: The X show"/)
+  assert.equal(pager.querySelector('.prev').attrs['aria-label'], 'Previous: The X show')
+  assert.equal(pager.querySelector('.next').attrs['aria-label'], 'Next: The X show')
   assert.deepEqual(shown(), { slide: 0, caption: 0, count: '1 / 5', currentSlides: 1 })
   next()
   assert.deepEqual(shown(), { slide: 1, caption: 1, count: '2 / 5', currentSlides: 1 })

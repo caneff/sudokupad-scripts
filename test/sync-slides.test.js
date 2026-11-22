@@ -82,3 +82,10 @@ test('syncDir rewrites each page and names the page of every problem', () => {
     assert.equal(fs.readFileSync(path.join(dir, 'a.html'), 'utf8'), page(renderShow(show, 2, hashOf)))
   } finally { fs.rmSync(dir, { recursive: true }) }
 })
+
+test('a slideshow with no name is a problem naming it, and its block is left as it was', () => {
+  const { name, ...nameless } = show
+  const result = syncText(page('  old'), { x: nameless }, hashOf)
+  assert.deepEqual(result.problems, ['slideshow x in slideshows.json has no "name"'])
+  assert.equal(result.text, page('  old'))
+})

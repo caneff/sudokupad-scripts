@@ -43,6 +43,8 @@ const syncText = (text, shows = SHOWS, hashOf = tagOf) => {
   let blocks = 0
   const out = text.replace(BLOCK, (block, space, id) => {
     if (!shows[id]) { problems.push(`<!-- slideshow:${id} --> names no slideshow in slideshows.json`); return block }
+    // The name is each pager button's accessible name, so a show without one would read "Previous: undefined".
+    if (typeof shows[id].name !== 'string' || !shows[id].name) { problems.push(`slideshow ${id} in slideshows.json has no "name"`); return block }
     blocks++
     return `${space}<!-- slideshow:${id} -->\n${renderShow(shows[id], space.length, hashOf)}\n${space}<!-- /slideshow:${id} -->`
   })

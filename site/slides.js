@@ -12,9 +12,12 @@ for (const show of document.querySelectorAll('.slideshow')) {
   const name = bar.dataset.name
   const pager = document.createElement('div')
   pager.className = 'slide-pager'
-  pager.innerHTML = `<button type="button" class="prev" aria-label="Previous: ${name}">${ARROW_ICON('M15 5l-7 7 7 7')}</button>` +
+  pager.innerHTML = `<button type="button" class="prev" aria-label="Previous">${ARROW_ICON('M15 5l-7 7 7 7')}</button>` +
     '<span class="slide-count" aria-live="polite"></span>' +
-    `<button type="button" class="next" aria-label="Next: ${name}">${ARROW_ICON('M9 5l7 7-7 7')}</button>`
+    `<button type="button" class="next" aria-label="Next">${ARROW_ICON('M9 5l7 7-7 7')}</button>`
+  // Set as attributes, not written into the markup above, so a quote in the name stays text.
+  pager.querySelector('.prev').setAttribute('aria-label', `Previous: ${name}`)
+  pager.querySelector('.next').setAttribute('aria-label', `Next: ${name}`)
   bar.appendChild(pager)
   let at = 0
   const go = (to) => {

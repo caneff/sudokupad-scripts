@@ -36,9 +36,11 @@ for (const file of scriptFiles()) {
   })
 
   test(`${id}: the settings feature's label is "settings", and every label is plain lowercase`, () => {
-    // Tab is a key's name and Text Anywhere the script's own, so those two keep a capital.
-    for (const [name, { label }] of Object.entries(FEATURES)) assert.match(label, /^(?:[a-z]|Tab key$|Text Anywhere tool$)/, `${name}: ${label}`)
-    if (FEATURES.settings || FEATURES.editor) assert.equal((FEATURES.settings || FEATURES.editor).label, 'settings')
+    // Tab is a key's name, Restart a button's and Text Anywhere the script's own, so only those keep a capital.
+    for (const [name, { label }] of Object.entries(FEATURES)) assert.match(label.replace(/\b(?:Tab|Restart|Text Anywhere)\b/g, ''), /^[a-z ]+$/, `${name}: ${label}`)
+    const settings = FEATURES.settings || FEATURES.editor
+    assert.ok(settings, `${id} has no settings feature (keyed settings or editor)`)
+    assert.equal(settings.label, 'settings')
   })
 
   test(`${id}: a page with no Framework is not SudokuPad, so the script starts without a warning`, () => {

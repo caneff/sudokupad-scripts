@@ -46,3 +46,11 @@ test('a picture\'s source srcset is tagged and listed like an image src', () => 
   assert.equal(tagPictures(ANIMATED, hashOf), ANIMATED.replace('a.png"', 'a.png?v=aaaaaaa"').replace('b.gif"', 'b.gif?v=bbbbbbb"'))
   assert.deepEqual(pictureTags(ANIMATED), [{ file: 'docs/research/a.png', tag: undefined }, { file: 'docs/research/b.gif', tag: undefined }])
 })
+
+// A link preview's picture (#1107) is a repo picture too, so a retake must retag it like a slide's.
+const PREVIEW = `<meta property="og:image" content="${RAW}docs/research/a.png?v=0000000">`
+
+test('a link preview\'s og:image is tagged and listed like an image src', () => {
+  assert.equal(tagPictures(PREVIEW, hashOf), PREVIEW.replace('?v=0000000', '?v=aaaaaaa'))
+  assert.deepEqual(pictureTags(PREVIEW), [{ file: 'docs/research/a.png', tag: '0000000' }])
+})
