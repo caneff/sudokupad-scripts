@@ -28,8 +28,8 @@ for (const file of publishedScriptFiles()) {
   })
 }
 
-// @namespace is half of Tampermonkey's script identity, and the frozen handover (draw-tool.user.js) carries this one,
-// which Text Anywhere must share; the other scripts keep it too, so no installed copy is matched on a new one.
+// A new @namespace installs a second copy beside the old (docs/research/tampermonkey-in-playwright.md), so each script keeps the one
+// its installed copies have, which the frozen handover (draw-tool.user.js) carries too.
 for (const file of scriptFiles()) {
   test(`${file}: @namespace is the one installed copies were given`, () => {
     assert.equal(headerField(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), 'namespace'), 'https://github.com/caneff/sudokupad-scripts')
