@@ -1,8 +1,9 @@
 name: Fuzz pull request
 
 # Advisory (#1030): main has no branch protection, so this is not a required check; a red run is read, not waited on, and it files no issue. A red run leaves one
-# comment on the pull request (edited on a later push) with the seed and the failure. A change to the fuzz harness alone does not start it:
-# its own tests (`npm test`) cover that, and the scripts it fuzzes are not in the diff.
+# comment on the pull request (edited on a later push) with the seed and the failure. A change to the fuzz harness (live/fuzz/**), to a shared live
+# module the fuzz imports (test/workflows.test.js walks the imports, so a new one fails there until it is listed) or to the lockfile starts it too, and a
+# harness change also runs the smoke test (`npm run test:fuzz:smoke`), the live test of the harness itself (live/README.md § The pull-request fuzz).
 on:
   pull_request:
     paths:
@@ -13,6 +14,28 @@ on:
       - text-anywhere.user.js
       - ui-tweaks.user.js
       - lib/**
+      - live/fuzz/**
+      - live/all-scripts.mjs
+      - live/auto-rules-resizer/auto-rules-resizer-fixtures.mjs
+      - live/board.mjs
+      - live/cache.mjs
+      - live/color-by-digit/color-by-digit-fixtures.mjs
+      - live/input.mjs
+      - live/issues.mjs
+      - live/page.mjs
+      - live/pen-tool-extras/pen-tool-extras-fixtures.mjs
+      - live/pen.mjs
+      - live/puzzles.mjs
+      - live/scripts.mjs
+      - live/session.mjs
+      - live/settings.mjs
+      - live/settle.mjs
+      - live/text-anywhere/text-anywhere-fixtures.mjs
+      - sync-lib.js
+      - userscript-header.js
+      - package-lock.json
+      - .github/actions/setup-repo/**
+      - .github/workflows/fuzz-pr.yml
 
 permissions:
   contents: read
@@ -26,18 +49,22 @@ concurrency:
 jobs:
   fuzz:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v6
         with:
           # The changed scripts are read from the diff against the base.
           fetch-depth: 0
-      - uses: actions/setup-node@v6
+      - uses: ./.github/actions/setup-repo
         with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
+          playwright: true
+      # The smoke test is the live test of the harness, so it runs only when the harness changed against the base.
+      - id: harness
+        run: |
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- live/fuzz)
+          if [ -n "$changed" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; else echo "changed=false" >> "$GITHUB_OUTPUT"; fi
+        env:
+          BASE_REF: ${{ github.base_ref }}
       - id: fuzz
         run: |
           set -o pipefail
@@ -52,7 +79,10 @@ jobs:
           npm run test:fuzz -- --minutes 5 --shrink-minutes 3 "${focus[@]}" 2>&1 | tee "$RUNNER_TEMP/fuzz.out"
         env:
           BASE_REF: ${{ github.base_ref }}
-      # The step above exits 0 on a run that fuzzed zero action lists, and has no output at all when something before it failed: this step
+      - name: Smoke-test the fuzz harness
+        if: ${{ !cancelled() && steps.harness.outputs.changed == 'true' }}
+        run: npm run test:fuzz:smoke
+      # The fuzz step exits 0 on a run that fuzzed zero action lists, and has no output at all when something before it failed: this step
       # fails both, so neither reads as a pass, and writes the comment (live/fuzz/pr-verdict.mjs).
       - id: verdict
         if: ${{ !cancelled() }}

@@ -40,6 +40,7 @@ Docs, `test/`, `.github/`, `lib/` (the scripts that embed a `lib/` file change i
 A path it cannot place widens the run to every live file, and says which path: `package-lock.json` (a new Playwright is a new Chromium), `.nvmrc`, a new top-level directory. Its last line says `(narrowed: <k> of <n> live files)` or `(widened: <path> ...)`, and an empty selection prints
 `no live file touched`, never nothing. A file it cannot read (anything but "no such file") stops it with the error. `--list` prints the files one per line and runs none. The run goes through `npm run test:live:files`, so it has the time limit and the width cap.
 A new `*.live.mjs` needs no edit anywhere: it is found by its name.
+A change to `live/fuzz/` or to a shared live module it imports (`live/fuzz/*.mjs` reach `session.mjs`, `page.mjs`, `puzzles.mjs` and the fixtures among others) also runs `npm run test:fuzz:smoke` (§ The fuzz run), before "PR up" and at the merge, since no live file loads the fuzz and so none of the files above covers it. The pull-request fuzz runs it on GitHub for a change under `live/fuzz/`.
 
 ## Opening SudokuPad
 
@@ -322,7 +323,8 @@ npm run fuzz:mutants -- [--per-script <n>] [--seeds <k>] [--budget <seconds per 
 ## The pull-request fuzz
 
 `.github/workflows/fuzz-pr.yml` (#724) fuzzes a pull request for 5 minutes (`npm run test:fuzz -- --minutes 5 --shrink-minutes 3`), so a bug a change adds shows on the pull request and not in the nightly the morning after.
-It runs on a `pull_request` whose paths are one of the six `*.user.js` (not `draw-tool.user.js`) or `lib/`. A change to `live/fuzz/` alone does not start it (#1030): its own tests run in `npm test`, and no script it fuzzes changed.
+It runs on a `pull_request` whose paths are one of the six `*.user.js` (not `draw-tool.user.js`), `lib/`, `live/fuzz/`, a shared live module the fuzz imports (`live/session.mjs`, `live/page.mjs` and the rest; `test/workflows.test.js` follows the fuzz's imports and fails on one the paths miss), `sync-lib.js`, `userscript-header.js` or `package-lock.json` (a new Playwright is a new Chromium).
+A change under `live/fuzz/` also runs `npm run test:fuzz:smoke` after the fuzz (the `harness` step reads the diff against the base), since the harness's own unit tests run on a fake page and the smoke is its test on the real one. A change under `live/fuzz/` alone fuzzes with no `--focus`, as a change to `lib/` does.
 
 - **It is advisory** (#1030). Main has no branch protection, so it is no required check: a red run is read, not waited on, and a merge does not wait for the 5 minutes. Three of the pull requests merged before this ruling were merged red.
 - **`--focus` is set from the diff**: each script the pull request changes against its base is a `--focus`, read from the diff, so a new script needs no edit there beyond `paths:`. A change to `lib/` alone has none, so the actions are as
@@ -330,6 +332,7 @@ It runs on a `pull_request` whose paths are one of the six `*.user.js` (not `dra
 - **A red run leaves one comment on the pull request** with the seed, the failure, the shrunk steps and the replay command (`pr-verdict.mjs`, tested in `npm test`). A later push edits that comment, found by its first line, `<!-- fuzz-pr -->`, so there is never a second, and a later green run edits a red one to say it passed. A pull request from a fork gets no comment (its token cannot). The job summary has the full output too. It files no issue.
 - **A run with no verdict is red** (#1030): a fuzz that crashed before fuzzing, or ran zero action lists (which exits 0 on its own), fails the `verdict` step and leaves the same comment, saying it reached no verdict, with the end of its output.
 - **It runs neither the Tampermonkey test nor the live suite.** A push to the pull request cancels the run on the old head.
+- **SudokuPad is recorded fresh on every run, here and in the nightly fuzz** (#1114). A runner starts with no recording (`live/cache.mjs` records one when none exists, § The recording), and neither fuzz workflow keeps it between runs (no Actions cache, no artifact). The watch sets `LIVE_REFRESH=1` and so records fresh too, so all three read whatever sudokupad.app serves that minute. Restoring one recording across runs would mean a cache keyed on SudokuPad's version, which the watch deliberately avoids (`?v=` may not move when its assets do). So **a SudokuPad change can fail a pull request's fuzz** with no change of the pull request's own; a run that fails on an untouched script, or fails the same way on another pull request in the same hours, points at SudokuPad.
 - **A failure may not be the pull request's.** The fuzz is random, and a bug already on `main` can fail the check; check whether the nightly has filed the same failure, or replay it on `main` (the replay command with `git checkout main` first).
 
 ## The daily watch
