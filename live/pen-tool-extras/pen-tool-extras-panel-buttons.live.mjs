@@ -6,7 +6,7 @@ import * as extras from './pen-tool-extras-fixtures.mjs'
 import { clickLeftEdge, PAGE_BUTTON, padValues } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
-import { EXTRAS_EDITOR as EDITOR } from '../settings.mjs'
+import { EXTRAS_EDITOR as EDITOR } from '../scripts.mjs'
 
 const LINE_MODE_BUTTON = '.pen-tool-extras-mode'
 const SETTINGS_BUTTON = '.pen-tool-extras-settings'
