@@ -1,6 +1,5 @@
 'use strict'
-// The fields of a userscript's `// ==UserScript==` header, read from the source text. The one reader and parser of `@version`:
-// the sync tool (sync-lib.js) raises it through VERSION_LINE, and the tests read and compare it through the rest.
+// The fields of a userscript's `// ==UserScript==` header, read from the source text: the one reader and parser of `@version`.
 
 function headerField (source, field) {
   const header = new RegExp(`^// @${field}\\s+(.+?)\\s*$`, 'm').exec(source)

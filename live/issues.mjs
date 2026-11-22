@@ -1,5 +1,5 @@
-// Shared by the watch (`live/watch.mjs`) and the nightly fuzz (`live/fuzz/nightly.mjs`): files an issue on this repo through gh, or comments on the
-// open one with the same title, and builds the trailer every filed issue ends with. `run` is the process runner gh goes through, and the watch's suite run too.
+// Files an issue on this repo through gh, or comments on the open one with the same title, and builds the trailer every filed issue ends with.
+// `run` is the process runner gh goes through.
 // Not a check, so `live/**/*.live.mjs` skips it.
 
 import { spawn } from 'node:child_process'

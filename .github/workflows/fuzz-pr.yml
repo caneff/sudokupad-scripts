@@ -25,6 +25,7 @@ on:
       - live/page.mjs
       - live/pen-tool-extras/pen-tool-extras-fixtures.mjs
       - live/pen.mjs
+      - live/puzzle-url.txt
       - live/puzzles.mjs
       - live/scripts.mjs
       - live/session.mjs
@@ -32,6 +33,7 @@ on:
       - live/settle.mjs
       - live/text-anywhere/text-anywhere-fixtures.mjs
       - sync-lib.js
+      - test/load-lib.js
       - userscript-header.js
       - package-lock.json
       - .github/actions/setup-repo/**
@@ -79,16 +81,18 @@ jobs:
           npm run test:fuzz -- --minutes 5 --shrink-minutes 3 "${focus[@]}" 2>&1 | tee "$RUNNER_TEMP/fuzz.out"
         env:
           BASE_REF: ${{ github.base_ref }}
-      - name: Smoke-test the fuzz harness
+      - id: smoke
+        name: Smoke-test the fuzz harness
         if: ${{ !cancelled() && steps.harness.outputs.changed == 'true' }}
         run: npm run test:fuzz:smoke
       # The fuzz step exits 0 on a run that fuzzed zero action lists, and has no output at all when something before it failed: this step
       # fails both, so neither reads as a pass, and writes the comment (live/fuzz/pr-verdict.mjs).
       - id: verdict
         if: ${{ !cancelled() }}
-        run: node live/fuzz/pr-verdict.mjs "$RUNNER_TEMP/fuzz.out" "$RUNNER_TEMP/fuzz-comment.md" "$FUZZ_OUTCOME" "$HEAD_SHA" "$RUN_URL"
+        run: node live/fuzz/pr-verdict.mjs "$RUNNER_TEMP/fuzz.out" "$RUNNER_TEMP/fuzz-comment.md" "$FUZZ_OUTCOME" "$HEAD_SHA" "$RUN_URL" "$SMOKE_OUTCOME"
         env:
           FUZZ_OUTCOME: ${{ steps.fuzz.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       - name: Show the failure in the job summary

@@ -132,7 +132,9 @@ describe('the setup action', () => {
       const setup = stepWith(yml, `uses: ${SETUP_ACTION}`)
       assert.equal(/playwright: '?true'?/.test(setup), playwright)
       const all = jobs(yml).flatMap((j) => steps(j.block))
-      assert.ok(all.findIndex((s) => s.includes('actions/checkout@')) < all.findIndex((s) => s.includes(SETUP_ACTION)), 'a local action exists only after the checkout')
+      const checkout = all.findIndex((s) => s.includes('actions/checkout@'))
+      assert.ok(checkout >= 0, 'a checkout step')
+      assert.ok(checkout < all.findIndex((s) => s.includes(SETUP_ACTION)), 'a local action exists only after the checkout')
       assert.doesNotMatch(yml, /^\s*(- )?(uses|run): .*(setup-node|npm ci|playwright install)/m)
     })
   }
@@ -186,19 +188,20 @@ describe('fuzz-pr.yml (#724)', () => {
 
   it('runs on a change to any module the fuzz imports from outside live/fuzz/, found by following its imports', () => {
     const seen = new Set()
-    const queue = fs.readdirSync(path.join(ROOT, 'live', 'fuzz')).filter((f) => f.endsWith('.mjs')).map((f) => `live/fuzz/${f}`)
+    const queue = fs.readdirSync(path.join(ROOT, 'live', 'fuzz')).filter((f) => f.endsWith('.mjs') && !f.endsWith('.test.mjs')).map((f) => `live/fuzz/${f}`)
     while (queue.length) {
       const file = queue.pop()
       if (seen.has(file)) continue
       seen.add(file)
       const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
-      for (const m of source.matchAll(/(?:from|import\(|require\()\s*'(\.[^']+)'/g)) {
+      // Every way a fuzz module loads a file: import, require, `createRequire(import.meta.url)('…')` and a data file read through `new URL('…', import.meta.url)`.
+      for (const m of source.matchAll(/(?:from|import\(|require\(|\)\(|new URL\()\s*'(\.[^']+)'/g)) {
         const target = path.relative(ROOT, path.join(ROOT, path.dirname(file), m[1])).split(path.sep).join('/')
         if (fs.existsSync(path.join(ROOT, target)) && fs.statSync(path.join(ROOT, target)).isFile()) queue.push(target)
       }
     }
     const outside = [...seen].filter((f) => !f.startsWith('live/fuzz/'))
-    assert.ok(outside.includes('live/session.mjs') && outside.includes('sync-lib.js'), 'the walk reached the shared modules')
+    for (const file of ['live/session.mjs', 'sync-lib.js', 'test/load-lib.js', 'live/puzzle-url.txt']) assert.ok(outside.includes(file), `the walk reached ${file}`)
     for (const file of outside) assert.ok(covered(file), `${file} is imported by the fuzz and no path of fuzz-pr.yml covers it`)
   })
 
@@ -214,13 +217,23 @@ describe('fuzz-pr.yml (#724)', () => {
 
   it('runs the smoke test when the fuzz harness changed against the base, and not otherwise', () => {
     const smoke = stepWith(yml, 'run: npm run test:fuzz:smoke')
-    assert.match(smoke, /if: .*steps\.\w+\.outputs\.\w+ == 'true'/)
+    const gate = /^ {8}if: \$\{\{ !cancelled\(\) && steps\.(\w+)\.outputs\.(\w+) == 'true' \}\}$/m.exec(smoke)
+    assert.ok(gate, `the smoke step runs only when the harness changed: ${/if: .*/.exec(smoke)?.[0]}`)
     const detect = stepWith(yml, '-- live/fuzz')
+    assert.ok(detect.includes(`id: ${gate[1]}`), 'the smoke step reads the detecting step')
     assert.match(detect, /git diff --name-only "origin\/\$BASE_REF\.\.\.HEAD" -- live\/fuzz/)
-    assert.match(detect, /GITHUB_OUTPUT/)
-    const outputName = /steps\.(\w+)\.outputs\.(\w+) == 'true'/.exec(smoke)
-    assert.ok(detect.includes(`id: ${outputName[1]}`), 'the smoke step reads the detecting step')
-    assert.ok(detect.includes(`${outputName[2]}=`), 'the detecting step writes the output the smoke step reads')
+    // Run the detecting step's script with a git that answers a changed file, then none: it must write true, then false.
+    const script = /run: \|\n((?: {10}.*\n)+)/.exec(detect + '\n')[1].replace(/^ {10}/gm, '')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fuzz-pr-harness-'))
+    try {
+      fs.writeFileSync(path.join(dir, 'git'), '#!/bin/sh\nprintf "%s" "$CHANGED"\n', { mode: 0o755 })
+      for (const [changed, expected] of [['live/fuzz/fuzz.mjs\n', 'true'], ['', 'false']]) {
+        const output = path.join(dir, `out-${expected}`)
+        const r = spawnSync('bash', ['-e', '-c', script], { env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, CHANGED: changed, GITHUB_OUTPUT: output, BASE_REF: 'main' }, encoding: 'utf8' })
+        assert.equal(r.status, 0, r.stderr)
+        assert.equal(fs.readFileSync(output, 'utf8').trim(), `${gate[2]}=${expected}`)
+      }
+    } finally { fs.rmSync(dir, { recursive: true, force: true }) }
   })
 
   it('is advisory: it files no issue and its token can only comment on the pull request (#1030)', () => {
@@ -236,6 +249,9 @@ describe('fuzz-pr.yml (#724)', () => {
     const verdict = stepWith(yml, 'run: node live/fuzz/pr-verdict.mjs')
     assert.match(verdict, /if: \$\{\{ !cancelled\(\) \}\}/)
     assert.match(verdict, /FUZZ_OUTCOME: \$\{\{ steps\.fuzz\.outcome \}\}/)
+    assert.match(verdict, /SMOKE_OUTCOME: \$\{\{ steps\.smoke\.outcome \}\}/, 'a red smoke test is red in the comment too')
+    assert.match(verdict, /"\$SMOKE_OUTCOME"/)
+    assert.match(stepWith(yml, 'run: npm run test:fuzz:smoke'), /id: smoke/)
     const comment = stepWith(yml, 'Comment the result on the pull request')
     assert.match(comment, /if: .*!cancelled\(\).*steps\.verdict\.outcome == 'success'.*steps\.verdict\.outcome == 'failure'.*head\.repo\.full_name == github\.repository/, "a fork's token cannot comment, and a green run edits an earlier red comment")
     assert.match(comment, /elif \[ "\$VERDICT" = failure \]/, 'a green run creates no comment')
