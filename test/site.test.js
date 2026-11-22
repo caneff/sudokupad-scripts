@@ -23,6 +23,9 @@ const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && f !== 
 // Comments are dropped first: a link inside one is not a link on the page.
 const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 
+// A page's <head> and one of its <meta name|property> contents.
+const headOf = name => read(name).split('</head>')[0]
+const metaOf = (head, key) => (head.match(new RegExp(`<meta (?:name|property)="${key}" content="([^"]+)"`)) || [])[1]
 const plain = html => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 const targets = page => [...page.matchAll(/\b(?:href|src|srcset)="([^"]*)"/g)].map(m => m[1])
 const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX))
@@ -103,10 +106,10 @@ for (const name of PAGES) {
 // #1107: every page has a tab icon and a link preview (title, summary and picture), so a pasted link shows one in Discord.
 test('every page has a favicon that exists, a meta description and Open Graph title, description and image', () => {
   for (const name of PAGES) {
-    const head = read(name).split('</head>')[0]
+    const head = headOf(name)
     const icon = head.match(/<link rel="icon" href="([^"]+)"/)
     assert.ok(icon && fs.existsSync(path.join(SITE_DIR, icon[1])), `site/${name} has no <link rel="icon"> to a file of site/`)
-    const meta = key => (head.match(new RegExp(`<meta (?:name|property)="${key}" content="([^"]+)"`)) || [])[1]
+    const meta = key => metaOf(head, key)
     assert.ok(meta('description'), `site/${name} has no meta description`)
     for (const key of ['og:title', 'og:description', 'og:image']) assert.ok(meta(key), `site/${name} has no ${key}`)
     assert.equal(meta('og:title'), head.match(/<title>([^<]*)<\/title>/)[1], `site/${name}: og:title is not its <title>`)
@@ -288,7 +291,7 @@ test(`${HOME} puts its rows under a SudokuPad group (the six SudokuPad scripts)`
 })
 
 // Each slideshow's pictures, alt text and captions live once, in site/slideshows.json; `node sync-slides.js` writes them into the pages.
-const { SHOWS: SOURCE, syncText } = require('../sync-slides.js')
+const { SHOWS: SOURCE, syncText, escape: escapeHtml } = require('../sync-slides.js')
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, id: 'color-by-digit' },
   { heading: 'Pen Tool Extras', page: DETAILS, id: 'pen-tool-extras' },
@@ -481,6 +484,32 @@ const pictureSize = (file) => {
   assert.equal(bytes.subarray(0, 3).toString(), 'GIF', `${file} is neither a PNG nor a GIF`)
   return [bytes.readUInt16LE(6), bytes.readUInt16LE(8)]
 }
+
+// #1142: Discord shows a small thumbnail beside the text unless the card is summary_large_image; it also reads the site name, the
+// picture's size and alt text, and the accent color from the head.
+test('every page asks for a large link preview: card, site name, picture size and alt, accent color', () => {
+  const slides = Object.values(SOURCE).flatMap(show => show.slides.map(slide => ({ file: show.dir + slide.picture, alt: slide.alt })))
+  const siteName = read(HOME).match(/<title>([^<]*)<\/title>/)[1]
+  const accent = fs.readFileSync(path.join(SITE_DIR, 'style.css'), 'utf8').match(/--accent:\s*(#[0-9a-f]{6})/i)[1]
+  for (const name of PAGES) {
+    const head = headOf(name)
+    const meta = key => metaOf(head, key)
+    const where = `site/${name}`
+    assert.equal(meta('twitter:card'), 'summary_large_image', `${where}: twitter:card is not summary_large_image`)
+    assert.equal(meta('og:site_name'), siteName, `${where}: og:site_name is not the homepage title`)
+    assert.equal(meta('theme-color'), accent, `${where}: theme-color is not the --accent of style.css`)
+    const file = meta('og:image').slice(RAW.length).replace(/\?.*$/, '')
+    const [width, height] = pictureSize(file)
+    assert.equal(meta('og:image:width'), String(width), `${where}: og:image:width is not ${file}'s width`)
+    assert.equal(meta('og:image:height'), String(height), `${where}: og:image:height is not ${file}'s height`)
+    for (const key of ['og:image:width', 'og:image:height', 'og:image:alt']) {
+      assert.ok(head.indexOf(`"${key}"`) > head.indexOf('"og:image"'), `${where}: ${key} comes before og:image`)
+    }
+    const slide = slides.find(s => s.file === file)
+    assert.ok(slide, `${file} is no slide of slideshows.json`)
+    assert.equal(meta('og:image:alt'), escapeHtml(slide.alt), `${where}: og:image:alt is not the alt of ${file}`)
+  }
+})
 
 const assertDeclaredAtFileShape = (img, file, what) => {
   const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))

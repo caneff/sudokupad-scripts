@@ -57,4 +57,4 @@ const syncDir = (dir, shows = SHOWS, hashOf = tagOf) => rewritePages(dir, html =
 
 if (require.main === module) runOnSite(html => syncText(html))
 
-module.exports = { renderShow, syncText, syncDir, SHOWS }
+module.exports = { renderShow, syncText, syncDir, SHOWS, escape }
