@@ -53,16 +53,31 @@ const globalNames = (module) => [...module.matchAll(GLOBAL_COMMENT)]
 // Matches the one-declaration-per-line form every lib module uses for a top-level name.
 const definesName = (module, name) => new RegExp(`^(?:const|let|var|function\\*?|async function|class) ${name.replace(ESCAPE, '\\$&')}(?![\\w$])`, 'm').test(module)
 
-// One problem per name a copied module reads from a lib module the script does not copy. A name no other lib module defines is a
-// browser global or the script's own, and is allowed.
+// The part of a module that runs when the script loads: its top-level statements, less comments, function and class declarations, and any
+// statement holding an arrow or `function`, which only runs when called. A statement is a line at column 0 and what is indented after it.
+// A load-time use inside such a callback is missed, never invented.
+const loadTimeText = (module) => module
+  .replace(LINT_HEADER, '')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|\s)\/\/.*$/gm, '$1')
+  .split(/\n(?=[^\s}\])`])/)
+  .filter((statement) => !/^(?:async\s+)?function\b|^class\b|=>|\bfunction\b/.test(statement))
+  .join('\n')
+
+const readsAtLoad = (module, name) => new RegExp(`(?<![\\w$.])${name.replace(ESCAPE, '\\$&')}(?![\\w$])`).test(loadTimeText(module))
+
+// One problem per name a copied module reads from a lib module the script does not copy, and one per name it reads at load time from a
+// module the script copies after it. A name no other lib module defines is a browser global or the script's own, and is allowed.
 function dependencyProblems (copied, readModule, libNames) {
   const problems = []
-  for (const name of copied) {
+  copied.forEach((name, at) => {
     for (const used of globalNames(readModule(name))) {
       const owner = libNames.find((other) => other !== name && definesName(readModule(other), used))
-      if (owner !== undefined && !copied.includes(owner)) problems.push(`lib:${name} reads ${used} from lib:${owner}, which this script does not copy in`)
+      if (owner === undefined) continue
+      if (!copied.includes(owner)) problems.push(`lib:${name} reads ${used} from lib:${owner}, which this script does not copy in`)
+      else if (copied.indexOf(owner) > at && readsAtLoad(readModule(name), used)) problems.push(`lib:${name} reads ${used} when it loads, from lib:${owner}, which this script copies after it`)
     }
-  }
+  })
   return problems
 }
 
