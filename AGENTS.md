@@ -28,12 +28,10 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 - **No feature relies on a right-button drag** (Chris, 2026-11-07): SudokuPad's Test Large Puzzle UI setting pans the board on it and no
   script sees the moves (`docs/research/large-puzzle-ui-right-drag.md`). A right click is fine; a right-drag may only be an extra on top of
   one, and the site teaches the right click.
-- **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07). No change is checked, styled, screenshot or
-  demonstrated at a phone or tablet size, and no ticket or PR asks for it.
+- **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07): `.out-of-scope/phones-and-tablets.md`.
 - **Text Anywhere's notes stay off Undo and Redo** (Chris, 2026-11-10): putting them on SudokuPad's undo stack would put them in the
   replay, and a history interleaved with SudokuPad's must catch every Undo first, which risks digit Undo for a small gain. No ticket proposes either.
-- **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
-  2026-11-06). A dark page means Dark Page.
+- **SudokuPad's own dark mode** is not supported, in any script (Chris, 2026-11-06): `.out-of-scope/sudokupad-dark-mode.md`. A dark page means Dark Page.
 - **Keys**: before you propose, add or change a keyboard shortcut: read `docs/agents/keys.md`. A key SudokuPad's own pen tool acts on is never a script's shortcut.
 - **Pen values are not scarce** (#721): Pen Tool Extras is not running out. Before you say it is, read `docs/research/sudokupad-pen-edge-marks.md`
   § Pen values past `z` (which characters work as a pen value).
