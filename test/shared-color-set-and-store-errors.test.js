@@ -19,7 +19,7 @@ const colorByDigit = script('color-by-digit.user.js')
 const COPYING_SCRIPTS = ['auto-rules-resizer.user.js', 'color-by-digit.user.js', 'dark-page.user.js', 'pen-tool-extras.user.js', 'text-anywhere.user.js', 'ui-tweaks.user.js']
 
 const Framework = {}
-const { createGuard, ERROR_LOG_KEY, wireActs } = loadLib(['sudokupad', 'write-style', 'settings-dialog'], ['createGuard', 'ERROR_LOG_KEY', 'wireActs'], { Framework })
+const { createGuard, ERROR_LOG_KEY, wireActs } = loadLib(['plain', 'sudokupad', 'write-style', 'settings-dialog'], ['createGuard', 'ERROR_LOG_KEY', 'wireActs'], { Framework })
 const { editedColorSet } = loadLib(['color-math', 'plain', 'palette', 'color-set'], ['editedColorSet'])
 const { loadEnveloped, unreadableSlots } = loadLib(['plain', 'store'], ['loadEnveloped', 'unreadableSlots'])
 const { escapeHtml } = loadLib(['plain'], ['escapeHtml'])

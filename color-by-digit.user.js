@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.80
+// @version      0.25.83
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,9 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.80'
+  const VERSION = '0.25.83'
+  // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
+  const SCRIPT_ID = 'color-by-digit'
   const SCRIPT_NAME = 'Color by Digit'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -255,7 +257,7 @@
 
   // The one reader of the profiles, saved or pasted: a state that would lose a profile, or holds more than MAX_PROFILES, is refused whole,
   // so nothing saved over it drops a profile unseen. An active or digit pick that is no profile falls back.
-  function readProfiles (data) {
+  function savedProfiles (data) {
     if (!data || !Array.isArray(data.profiles) || data.profiles.length === 0 || data.profiles.length > MAX_PROFILES) return undefined
     const profiles = data.profiles.map(normalizeProfile)
     if (profiles.includes(null)) return undefined
@@ -283,6 +285,9 @@
   const SECONDARY_BUTTON = 2
   const PRIMARY_HELD = 1
   const SECONDARY_HELD = 2
+
+  // The settings dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
+  const DIALOG_PURPLE = '#6b3fa0'
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:store>
@@ -405,7 +410,7 @@
   const PRELOAD_ROWS = ADDED_PRELOADS.map(({ key }) => ({ name: key, key, fallback: false, read: savedBoolean }))
   const SETTING_ROWS = [MODE_ROW, ...PRELOAD_ROWS]
   // The profiles are no row: their fallback comes from the groups saved before them, and they are saved in the store's envelope, with their own read.
-  const READERS = { [PROFILES_KEY]: readProfiles, ...pasteReaders(SETTING_ROWS) }
+  const READERS = { [PROFILES_KEY]: savedProfiles, ...pasteReaders(SETTING_ROWS) }
   // Settings copied before the mode existed carry auto mode's on/off in its place.
   const withModeFromAuto = (data) => (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY) ? { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) } : data)
   // A mode never saved reads as auto mode's saved on/off, which came before it.
@@ -449,7 +454,7 @@
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
   const preloadedState = () => makeState(preloadProfiles(), 0, undefined, true)
 
-  const stateFromStored = (store) => loadEnveloped(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
+  const stateFromStored = (store) => loadEnveloped(store, { key: PROFILES_KEY, read: savedProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
 
   function stateFromLegacy (legacyGroups) {
     const preloads = preloadProfiles()
@@ -1228,6 +1233,11 @@
     }
   }
 
+  // What a script with the Darker page presets loses to a bad palette, for paletteNoteHtml.
+  const PRESETS_LEFT_OUT = 'the Darker page presets are left out'
+  // A dialog's line for a bad palette: readPalettePages' `note`, then `outcome`, what the script does without the palette's pages. '' with no note.
+  const paletteNoteHtml = (note, outcome, className = '') => note ? `<div${className ? ` class="${className}"` : ''} data-role="palette-note">${note}, so ${outcome}.</div>` : ''
+
   // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
   // '' for a value it rejects or a variable with none.
   function readRootColor (name) {
@@ -1251,7 +1261,8 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */
+  // A script that copies in settings-dialog as well has a second `global` naming DIALOG_PURPLE, which the linter calls a redeclaration.
+  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */ // eslint-disable-line no-redeclare
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1262,8 +1273,8 @@
   // The pickers are rare enough to fade in; ending edit mode takes them away at once, with no fade out.
   const PICKER_ENTRY_SCALE = 0.95
   const PICKER_ENTRY_MS = 150
-  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it. A function: settings-dialog, which names its color, may be copied in after this module.
-  const choiceArrow = () => `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${encodeURIComponent(DIALOG_PURPLE)}'/%3E%3C/svg%3E")`
+  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
+  const CHOICE_ARROW = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${encodeURIComponent(DIALOG_PURPLE)}'/%3E%3C/svg%3E")`
 
   // A preset in force that is not among the pickable `presets` (Custom, a page the palette no longer has) is shown first, selected and disabled, so the pulldown says what is in force and
   // every preset stays pickable: picking the option already shown fires no `change`. `labels` names each id.
@@ -1299,7 +1310,7 @@
     return [
       `${at('color-block')} { display: grid; justify-items: start; gap: 6px; margin: 6px 0; }`,
       // As wide as the block, whatever its longest option: a select is otherwise as wide as that, and would widen the dialog's column.
-      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${choiceArrow()} no-repeat right 10px center; }`,
+      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; }`,
       `${at('color-row')} { display: flex; align-items: flex-start; gap: 12px; }`,
       `${at('swatches')} { display: grid; grid-template-columns: repeat(${PICKER_COLUMNS}, ${SWATCH_PX}px); gap: ${SWATCH_GAP_PX}px; }`,
       // With nothing beside it the grid takes the block's width, so its edges line up with the pulldown's; a block with `beside` content keeps SWATCH_PX swatches, which that content's rows line up with.
@@ -1571,8 +1582,11 @@
     })
   }
 
-  // A palette of a shape the script does not know is reported as Text Anywhere reports it (readPalettePages), and the dialog says no colors were found.
-  const readPalette = (paletteKeyColor) => layoutPages(readPalettePages('color-by-digit').pages, colorTool()?.currentPage, paletteKeyColor)
+  // The laid-out pages, and readPalettePages' note for the dialog to show, as Text Anywhere's and Pen Tool Extras' dialogs do.
+  function readPalette (paletteKeyColor) {
+    const { pages, note } = readPalettePages(SCRIPT_ID)
+    return { pages: layoutPages(pages, colorTool()?.currentPage, paletteKeyColor), note }
+  }
 
   const pageSlots = (p) => [p.zero, ...p.rows.flat()]
 
@@ -1775,15 +1789,13 @@
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle */ // eslint-disable-line no-redeclare
+  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle, DIALOG_PURPLE */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
-  // The dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
-  const DIALOG_PURPLE = '#6b3fa0'
   // The options row's rule, the buttons' face, ink and border, the Save button's border, and the title tools' hover.
   const DIALOG_RULE = '#e3dff0'
   const DIALOG_BUTTON_FACE = '#f1eff5'
@@ -1867,9 +1879,7 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
-  // The settings wiring every script keeps: that feature (keyed `settings`, or `editor` in Color by Digit) never needs `Framework.getApp`,
-  // so a SudokuPad without it still gets the entry, added at start. A dialog's Save and Copy both go through the store of the feature that
-  // reads the saved settings at startup: with that feature off, the defaults show, nothing is kept, and the off-note says so.
+  // `Framework.getApp` is not among them, so a SudokuPad without it still gets the entry.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -2112,6 +2122,8 @@
   const DIALOG_ID = 'color-by-digit-editor'
   const MENU = '#color-by-digit-menu'
   const STYLE_ID = 'color-by-digit-style'
+  // The menu and the dialog share one sheet, so the dialog's style id, DIALOG_STYLE_ID in every script, names that sheet.
+  const DIALOG_STYLE_ID = STYLE_ID
 
   const MUTED = '#8a8496'
   // One chip's size in pixels, in the dialog's profile list and the profile menu, and the width of a column of three:
@@ -2205,12 +2217,13 @@
   // Matched as text, not by a selector, since a custom palette's key may hold a quote.
   const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
 
-  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadableSlots = [], confirmHtml = '' }) {
+  function renderEditor ({ groups, pages, page, brush, paletteNote = '', pulldownsHtml = '', profilesHtml = '', unreadableSlots = [], confirmHtml = '' }) {
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
     const clear = `<button type="button" class="${CLASS_PREFIX}button" data-act="clear">Clear all</button>`
+    const noColors = paletteNoteHtml(paletteNote, 'digits cannot be painted', `${CLASS_PREFIX}note`) || `<div class="${CLASS_PREFIX}note">No palette colors found: digits cannot be painted.</div>`
     const paint = colors.length === 0
-      ? `<div class="${CLASS_PREFIX}note">No palette colors found: digits cannot be painted.</div>` + renderPad(groups, colors)
+      ? noColors + renderPad(groups, colors)
       : renderPaint(groups, pages, shown, brush, colors)
     const kept = unreadableSlots.length ? `<div class="${CLASS_PREFIX}note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${unreadableSlots.join(' and ')}.</div>` : ''
     return `${kept}${confirmHtml}${pulldownsHtml}` +
@@ -2405,10 +2418,10 @@
     `${ARROW}::after { content: ''; position: absolute; inset: -${(MIN_TARGET_PX - ARROW_BOX_PX) / 2}px; }`
   ].join('\n')
   const BUTTON_STYLE_ID = 'color-by-digit-button'
-  const guard = createGuard({ script: 'color-by-digit', name: SCRIPT_NAME, version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: SCRIPT_ID, name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, asideOf, isVisibleColor, layoutPages, layoutColors, palettePages, readPalette, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, asideOf, isVisibleColor, layoutPages, layoutColors, palettePages, readPalette, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2994,14 +3007,15 @@
   function openDialog (app) {
     let savedState = loadState()
     const keptSlots = unreadableSlots(savedData, PROFILES_KEY)
-    let draft = openingDraft(savedState, mode, readPalette(paletteKeyColor))
+    const palette = readPalette(paletteKeyColor)
+    let draft = openingDraft(savedState, mode, palette.pages)
     const box = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: SCRIPT_NAME,
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
-      styleId: STYLE_ID,
+      styleId: DIALOG_STYLE_ID,
       css: STYLE_CSS,
       changed: () => draft.mode !== mode || JSON.stringify(draft.state) !== JSON.stringify(savedState),
       snapshot: snapshotSave,
@@ -3039,7 +3053,7 @@
     const setStop = (grid, stop) => grid.querySelectorAll('button').forEach((button) => { button.tabIndex = button === stop ? 0 : -1 })
     const draw = () => {
       const { state, mode: draftMode, selected, pages, page, brush } = draft
-      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, paletteKeyColor, selected), unreadableSlots: keptSlots, confirmHtml: confirming ? renderRestoreConfirm() : '' })
+      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, paletteNote: palette.note, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, paletteKeyColor, selected), unreadableSlots: keptSlots, confirmHtml: confirming ? renderRestoreConfirm() : '' })
       box.querySelectorAll(PAINT_GRIDS).forEach((grid) => setStop(grid, grid.querySelector('[aria-pressed="true"]') || grid.querySelector('button')))
     }
     box.addEventListener('focusin', (event) => {

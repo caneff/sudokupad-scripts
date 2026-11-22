@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.55
+// @version      0.46.58
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,9 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.55'
+  const VERSION = '0.46.58'
+  // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
+  const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
   const TOOL_NAME = 'textanywhere'
   // Every class and id the script makes starts with this.
@@ -156,6 +158,11 @@
     }
   }
 
+  // What a script with the Darker page presets loses to a bad palette, for paletteNoteHtml.
+  const PRESETS_LEFT_OUT = 'the Darker page presets are left out'
+  // A dialog's line for a bad palette: readPalettePages' `note`, then `outcome`, what the script does without the palette's pages. '' with no note.
+  const paletteNoteHtml = (note, outcome, className = '') => note ? `<div${className ? ` class="${className}"` : ''} data-role="palette-note">${note}, so ${outcome}.</div>` : ''
+
   // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
   // '' for a value it rejects or a variable with none.
   function readRootColor (name) {
@@ -177,7 +184,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:palette>
   // The page's own color, as SudokuPad's buttons use it behind their icons. Dark Page leaves it on the board's box and paints the page around it its own color, which it puts in
-  // DARK_PAGE_COLOR_VAR (Dark Page's name; test/cross-script-names.test.js holds them equal): a note off the board takes that.
+  // DARK_PAGE_COLOR_VAR (Dark Page's name; test/cross-script-names.test.js checks it against Dark Page's CSS): a note off the board takes that.
   const PAGE_COLOR = 'var(--body-bg, #fff)'
   const DARK_PAGE_COLOR_VAR = '--dark-page-color'
   const MARGIN_COLOR = `var(${DARK_PAGE_COLOR_VAR}, ${PAGE_COLOR})`
@@ -612,11 +619,11 @@
   }
 
   // A keypad button's data-value is text, and Framework.getData parses a saved number back as a number.
-  function noteColorNumber (value) {
+  function savedColorNumber (value) {
     const n = typeof value === 'string' && /^[0-9]$/.test(value) ? Number(value) : value
     return Number.isInteger(n) && n >= 1 && n <= NOTE_COLOR_COUNT ? n : undefined
   }
-  const readColor = (saved) => noteColorNumber(saved) ?? DEFAULT_COLOR
+  const readColor = (saved) => savedColorNumber(saved) ?? DEFAULT_COLOR
   const readWidth = (saved) => savedSliderValue(WIDTH_RANGE, saved) ?? DEFAULT_WIDTH
   const readFlag = (saved) => saved === true
   const readBackground = readFlag
@@ -747,6 +754,9 @@
   const SECONDARY_BUTTON = 2
   const PRIMARY_HELD = 1
   const SECONDARY_HELD = 2
+
+  // The settings dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
+  const DIALOG_PURPLE = '#6b3fa0'
   /* eslint-enable no-unused-vars */
   // </lib:plain>
 
@@ -1030,7 +1040,8 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */
+  // A script that copies in settings-dialog as well has a second `global` naming DIALOG_PURPLE, which the linter calls a redeclaration.
+  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */ // eslint-disable-line no-redeclare
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1041,8 +1052,8 @@
   // The pickers are rare enough to fade in; ending edit mode takes them away at once, with no fade out.
   const PICKER_ENTRY_SCALE = 0.95
   const PICKER_ENTRY_MS = 150
-  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it. A function: settings-dialog, which names its color, may be copied in after this module.
-  const choiceArrow = () => `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${encodeURIComponent(DIALOG_PURPLE)}'/%3E%3C/svg%3E")`
+  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
+  const CHOICE_ARROW = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${encodeURIComponent(DIALOG_PURPLE)}'/%3E%3C/svg%3E")`
 
   // A preset in force that is not among the pickable `presets` (Custom, a page the palette no longer has) is shown first, selected and disabled, so the pulldown says what is in force and
   // every preset stays pickable: picking the option already shown fires no `change`. `labels` names each id.
@@ -1078,7 +1089,7 @@
     return [
       `${at('color-block')} { display: grid; justify-items: start; gap: 6px; margin: 6px 0; }`,
       // As wide as the block, whatever its longest option: a select is otherwise as wide as that, and would widen the dialog's column.
-      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${choiceArrow()} no-repeat right 10px center; }`,
+      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; }`,
       `${at('color-row')} { display: flex; align-items: flex-start; gap: 12px; }`,
       `${at('swatches')} { display: grid; grid-template-columns: repeat(${PICKER_COLUMNS}, ${SWATCH_PX}px); gap: ${SWATCH_GAP_PX}px; }`,
       // With nothing beside it the grid takes the block's width, so its edges line up with the pulldown's; a block with `beside` content keeps SWATCH_PX swatches, which that content's rows line up with.
@@ -1289,7 +1300,7 @@
   const readNoteColorSet = (saved) => savedColorSet(saved, NOTE_PRESETS)
 
   // A palette of a shape the script does not know is the dialog's own note, and does not turn the presets off.
-  const dialogPalette = (presetsOff) => presetsOff ? { pages: [], note: '' } : readPalettePages('text-anywhere')
+  const dialogPalette = (presetsOff) => presetsOff ? { pages: [], note: '' } : readPalettePages(SCRIPT_ID)
   const presetOptions = (pageCount) => [PEN_PRESET, ...paletteOptions(pageCount)]
 
   // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
@@ -1309,7 +1320,11 @@
     lookRowOf('noteFont', FONT_KEY, readFont, { dialog: true })
   ]
   const lookRow = (name) => LOOKS.find((row) => row.name === name)
-  const saveLook = (store, name, value) => saveRow(store, lookRow(name), value)
+  // A look at its fallback removes its key, except while its pre-0.45 twin holds a value: copyOldKeys would copy that back at the next start, so the fallback is saved instead.
+  function saveLook (store, row, value) {
+    if (sameValue(value, row.fallback) && store.getData(oldKey(row.key)) !== null) store.setData(row.key, value)
+    else saveRow(store, row, value)
+  }
   const readLooks = (store, looks = LOOKS) => readTable(looks, store)
   const dialogLooks = (looks) => looks.filter((row) => row.dialog)
   const changedDialogLooks = (looks, draft, now) => changedRows(dialogLooks(looks), draft, now)
@@ -1327,7 +1342,7 @@
   const isStoredSize = (value) => Number.isInteger(value) && value > 0
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
   const isBox = (box) => isPoint(box) && box.every((side) => side > 0)
-  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && noteColorNumber(item.color) !== undefined && isStoredOpacity(item.opacity) &&
+  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && savedColorNumber(item.color) !== undefined && isStoredOpacity(item.opacity) &&
     (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isStoredSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
   const isOldEntry = (item) => isPlainObject(item) && OLD_KINDS.includes(item.kind)
@@ -1342,7 +1357,7 @@
     return read
   }
 
-  // `unreadable` is the reason when the whole saved value could not be read, and is then copied aside by `load`.
+  // `unreadable` is the reason when the whole saved value could not be read, and is then copied aside by `loadEnveloped`.
   function loadNotes (store, key) {
     const { value, unreadable } = loadEnveloped(store, { key: notesKey(key), read: readNotes })
     return { ...(value ?? { items: [], kept: [] }), unreadable }
@@ -1535,15 +1550,13 @@
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle */ // eslint-disable-line no-redeclare
+  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle, DIALOG_PURPLE */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
-  // The dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
-  const DIALOG_PURPLE = '#6b3fa0'
   // The options row's rule, the buttons' face, ink and border, the Save button's border, and the title tools' hover.
   const DIALOG_RULE = '#e3dff0'
   const DIALOG_BUTTON_FACE = '#f1eff5'
@@ -1627,9 +1640,7 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
-  // The settings wiring every script keeps: that feature (keyed `settings`, or `editor` in Color by Digit) never needs `Framework.getApp`,
-  // so a SudokuPad without it still gets the entry, added at start. A dialog's Save and Copy both go through the store of the feature that
-  // reads the saved settings at startup: with that feature off, the defaults show, nothing is kept, and the off-note says so.
+  // `Framework.getApp` is not among them, so a SudokuPad without it still gets the entry.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -2419,14 +2430,14 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, noteColorSet, dialogPalette, copiedSettings, pastedSettings, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook, TRAY_CLASS, DARK_PAGE_COLOR_VAR }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, savedColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, noteColorSet, dialogPalette, copiedSettings, pastedSettings, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook, TRAY_CLASS }
   }
   if (typeof document === 'undefined') return
 
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
 
-  const guard = createGuard({ script: 'text-anywhere', name: SCRIPT_NAME, version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: SCRIPT_ID, name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets, undoRestart } = guard.features
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const savedData = guard.storeFor(storage)
@@ -2856,7 +2867,7 @@
   function setLook (name, value) {
     const row = lookRow(name)
     look[name] = value
-    saveLook(savedData, name, value)
+    saveLook(savedData, row, value)
     if (row.dialog) showBoxes()
   }
 
@@ -2942,7 +2953,7 @@
       const options = presetChoices(draft.preset, presetOptions(pages.length), PRESET_LABELS)
       box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft.colors[n], label: `Text color ${n}` })) }) +
-        (paletteNote ? `<div data-role="palette-note">${paletteNote}, so the Darker page presets are left out.</div>` : '') +
+        paletteNoteHtml(paletteNote, PRESETS_LEFT_OUT) +
         (draft.missing.length ? `<div data-role="missing-note">${missingColorsText(draft.missing, draft.fromPreset)}</div>` : '') +
         `<div class="${CLASS_PREFIX}font-row"><span class="${CLASS_PREFIX}section-title">Font</span>${renderFontChoice(draftLooks.noteFont)}</div>` +
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft.colors[color] })
@@ -4421,7 +4432,7 @@
     // A digit key or keypad button gets the button's data-value. With Text Anywhere current it picks a color, and no key
     // or button enters anything in a cell.
     handleToolButton (value) {
-      const picked = noteColorNumber(value)
+      const picked = savedColorNumber(value)
       // A held erase keeps the notes it touched as they were at the press, and a color pick would replace them.
       if (picked !== undefined && !erasing) pickColor(picked)
       return true

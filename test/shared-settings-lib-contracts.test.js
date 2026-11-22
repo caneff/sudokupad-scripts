@@ -26,14 +26,14 @@ test('each of the six scripts copies its settings through its table, and every k
 })
 
 test('UI Tweaks saves an option at its default by removing its key, so a later change of the default reaches it', () => {
-  const { OPTIONS, DEFAULT_OPTIONS, saveOptions, savedOptions } = scripts['ui-tweaks']
+  const { OPTIONS, DEFAULT_OPTIONS, saveOptions, readOptions } = scripts['ui-tweaks']
   const option = OPTIONS[0]
   const store = fakeStore({ [option.key]: !option.default })
   saveOptions(store, { ...DEFAULT_OPTIONS, [option.id]: !option.default })
   assert.equal(store.getData(option.key), !option.default, 'a value off its default is kept')
   saveOptions(store, DEFAULT_OPTIONS)
   assert.equal(store.getData(option.key), null, 'a value at its default leaves no key')
-  assert.deepEqual(savedOptions(store), DEFAULT_OPTIONS)
+  assert.deepEqual(readOptions(store), DEFAULT_OPTIONS)
 })
 
 test('a paste puts only the pasted rows into a draft, from the pasted values themselves', () => {

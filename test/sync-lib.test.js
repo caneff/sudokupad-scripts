@@ -182,6 +182,7 @@ test('scriptFiles lists every *.user.js at the root but a handover and a script 
 test('guardId reads the id a script hands its guard, and says so when a script has no such call', () => {
   assert.equal(guardId("const guard = createGuard({ script: 'dark-page', features: FEATURES })"), 'dark-page')
   assert.throws(() => guardId('const guard = createGuard(FEATURES)'), /no createGuard/)
+  assert.equal(guardId("  const SCRIPT_ID = 'ui-tweaks'\n  const guard = createGuard({ script: SCRIPT_ID, features: FEATURES })"), 'ui-tweaks')
 })
 
 test('every script\'s lib blocks match lib/ (run node sync-lib.js to fix)', () => {

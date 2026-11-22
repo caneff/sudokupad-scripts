@@ -4,34 +4,34 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { fakeStore } = require('./fake-store.js')
-const { OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, savedOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES } = require('../ui-tweaks.user.js')
+const { OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES } = require('../ui-tweaks.user.js')
 
 test('the defaults: Tab never switches to letters is on, the other two are off, the digit pad is Normal', () => {
   assert.deepEqual(DEFAULT_OPTIONS, { tab: true, hideSelect: false, wrapButtons: false, digitPad: 100 })
   assert.deepEqual(OPTIONS.map((o) => o.id), ['tab', 'hideSelect', 'wrapButtons'])
 })
 
-test('savedOptions: nothing saved reads as the defaults', () => {
-  assert.deepEqual(savedOptions(fakeStore()), DEFAULT_OPTIONS)
+test('readOptions: nothing saved reads as the defaults', () => {
+  assert.deepEqual(readOptions(fakeStore()), DEFAULT_OPTIONS)
 })
 
-test('savedOptions: each saved boolean wins over its default, the others keep theirs', () => {
-  assert.deepEqual(savedOptions(fakeStore({ UiTweaks_tab: false })), { ...DEFAULT_OPTIONS, tab: false })
-  assert.deepEqual(savedOptions(fakeStore({ UiTweaks_hideSelect: true })), { ...DEFAULT_OPTIONS, hideSelect: true })
-  assert.deepEqual(savedOptions(fakeStore({ UiTweaks_wrapButtons: true })), { ...DEFAULT_OPTIONS, wrapButtons: true })
+test('readOptions: each saved boolean wins over its default, the others keep theirs', () => {
+  assert.deepEqual(readOptions(fakeStore({ UiTweaks_tab: false })), { ...DEFAULT_OPTIONS, tab: false })
+  assert.deepEqual(readOptions(fakeStore({ UiTweaks_hideSelect: true })), { ...DEFAULT_OPTIONS, hideSelect: true })
+  assert.deepEqual(readOptions(fakeStore({ UiTweaks_wrapButtons: true })), { ...DEFAULT_OPTIONS, wrapButtons: true })
 })
 
-test('savedOptions: a saved value that is not a boolean reads as the default', () => {
+test('readOptions: a saved value that is not a boolean reads as the default', () => {
   const store = fakeStore({ UiTweaks_tab: 'no', UiTweaks_hideSelect: 1, UiTweaks_wrapButtons: null })
-  assert.deepEqual(savedOptions(store), DEFAULT_OPTIONS)
+  assert.deepEqual(readOptions(store), DEFAULT_OPTIONS)
 })
 
-test('saveOptions keeps every option under its own key, and savedOptions reads them back', () => {
+test('saveOptions keeps every option under its own key, and readOptions reads them back', () => {
   const store = fakeStore()
   const chosen = { tab: false, hideSelect: true, wrapButtons: true, digitPad: 125 }
   saveOptions(store, chosen)
   assert.deepEqual(store.data, { UiTweaks_tab: false, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true, UiTweaks_digitPad: 125 })
-  assert.deepEqual(savedOptions(store), chosen)
+  assert.deepEqual(readOptions(store), chosen)
 })
 
 test('saveOptions leaves no key for an option at its default, and removes one saved earlier', () => {
@@ -40,9 +40,9 @@ test('saveOptions leaves no key for an option at its default, and removes one sa
   assert.deepEqual(store.data, { UiTweaks_hideSelect: true })
 })
 
-test('savedOptions reads a key saved at its default without removing it', () => {
+test('readOptions reads a key saved at its default without removing it', () => {
   const store = fakeStore({ UiTweaks_tab: true })
-  assert.deepEqual(savedOptions(store), DEFAULT_OPTIONS)
+  assert.deepEqual(readOptions(store), DEFAULT_OPTIONS)
   assert.deepEqual(store.data, { UiTweaks_tab: true })
 })
 
@@ -191,20 +191,20 @@ test('the digit pad has four steps, Smaller, Normal, Larger and Largest, at 80, 
   assert.equal(DEFAULT_OPTIONS.digitPad, 100)
 })
 
-test('savedOptions: each of the four saved steps is read back', () => {
-  for (const { percent } of DIGIT_PAD_STEPS) assert.equal(savedOptions(fakeStore({ UiTweaks_digitPad: percent })).digitPad, percent, String(percent))
+test('readOptions: each of the four saved steps is read back', () => {
+  for (const { percent } of DIGIT_PAD_STEPS) assert.equal(readOptions(fakeStore({ UiTweaks_digitPad: percent })).digitPad, percent, String(percent))
 })
 
-test('savedOptions: a percentage an earlier build offered reads as the nearest step, a tie going to the one nearer Normal', () => {
-  const read = (saved) => savedOptions(fakeStore({ UiTweaks_digitPad: saved })).digitPad
+test('readOptions: a percentage an earlier build offered reads as the nearest step, a tie going to the one nearer Normal', () => {
+  const read = (saved) => readOptions(fakeStore({ UiTweaks_digitPad: saved })).digitPad
   assert.deepEqual([80, 90, 100, 110, 120, 130, 140, 150].map(read), [80, 100, 100, 100, 125, 125, 150, 150])
 })
 
-test('savedOptions: a missing or unreadable digit pad size reads as Normal', () => {
+test('readOptions: a missing or unreadable digit pad size reads as Normal', () => {
   for (const bad of [undefined, null, 'big', '120', 95, 0, -100, 160, 100.5, NaN, true, {}, [120], 'Larger']) {
-    assert.equal(savedOptions(fakeStore({ UiTweaks_digitPad: bad })).digitPad, 100, String(bad))
+    assert.equal(readOptions(fakeStore({ UiTweaks_digitPad: bad })).digitPad, 100, String(bad))
   }
-  assert.equal(savedOptions(fakeStore()).digitPad, 100)
+  assert.equal(readOptions(fakeStore()).digitPad, 100)
 })
 
 test('a paste takes the four steps and the old percentages (as the nearest step) for the digit pad, and skips the rest', () => {

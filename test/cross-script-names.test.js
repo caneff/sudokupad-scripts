@@ -26,6 +26,12 @@ test('Dark Page styles the Auto Rules Resizer font bar by the id Auto Rules Resi
   assert.ok(darkCss.includes(`#${autoRulesResizer.FONT_BAR_ID} `), `no #${autoRulesResizer.FONT_BAR_ID} rule in Dark Page's CSS`)
 })
 
-test('Text Anywhere reads the page color under the variable Dark Page sets', () => {
-  assert.equal(textAnywhere.DARK_PAGE_COLOR_VAR, darkPage.PAGE_COLOR_VAR)
+test('Text Anywhere backs a note off the board with the page color variable Dark Page sets', () => {
+  assert.ok(darkCss.includes(`${darkPage.PAGE_COLOR_VAR}: `), `Dark Page's CSS sets no ${darkPage.PAGE_COLOR_VAR}`)
+  const board = { left: 100, right: 500, top: 100, bottom: 500 }
+  assert.ok(textAnywhere.noteBackdrop([99, 300], board).startsWith(`var(${darkPage.PAGE_COLOR_VAR}, `), 'an off-board note\'s backdrop reads Dark Page\'s variable')
+})
+
+test('Dark Page keeps its button borders off the Text Anywhere tool by the tool name Text Anywhere registers', () => {
+  assert.ok(darkCss.includes(`:not(.tool-${textAnywhere.TOOL_NAME})`), `no :not(.tool-${textAnywhere.TOOL_NAME}) in Dark Page's CSS`)
 })

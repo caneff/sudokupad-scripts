@@ -27,12 +27,13 @@ const withFramework = (Framework, run) => {
 test('Color by Digit reports a bad palette page and shows no colors, and reads a good one onto the lib\'s columns', () => {
   const red = () => 'rgb(255, 0, 0)'
   withFramework({ app: { tools: { colour: { palette: { pages: [['a'], 'oops'] }, currentPage: 0 } } } }, (warnings) => {
-    assert.deepEqual(colorByDigit.readPalette(red), [])
+    assert.deepEqual(colorByDigit.readPalette(red), { pages: [], note: 'SudokuPad\'s color palette has no pages of color keys' })
     assert.equal(warnings.length, 1)
     assert.match(warnings[0], /^color-by-digit: .*no pages of color keys/)
   })
   withFramework({ app: { tools: { colour: { palette: { pages: [['0', '1', '2', '3', '4']] }, currentPage: 0 } } } }, (warnings) => {
-    const [page] = colorByDigit.readPalette(red)
+    const { pages: [page], note } = colorByDigit.readPalette(red)
+    assert.equal(note, '')
     const libColumns = Number(colorByDigit.STYLE_CSS.match(/\.cbd-swatches \{[^}]*grid-template-columns: repeat\((\d+), /)[1])
     assert.equal(page.rows[0].length, libColumns)
     assert.deepEqual(page.rows[0].map((slot) => slot.key), ['1', '2', '3'])
@@ -45,7 +46,7 @@ test('Color by Digit and Text Anywhere report a bad palette the same way: one wa
   const bad = { app: { tools: { colour: { palette: { pages: [['a'], 'oops'] }, currentPage: 0 } } } }
   const byScript = {}
   withFramework(bad, (warnings) => {
-    assert.deepEqual(colorByDigit.readPalette(() => 'rgb(255, 0, 0)'), [])
+    assert.deepEqual(colorByDigit.readPalette(() => 'rgb(255, 0, 0)').pages, [])
     byScript['color-by-digit'] = [...warnings]
   })
   withFramework(bad, (warnings) => {

@@ -144,9 +144,10 @@ const scriptFiles = () => publishedScriptFiles().filter((f) => !OTHER_SITE_SCRIP
 const libBlockNames = (source) => [...source.matchAll(BLOCK)].map((match) => match[1])
 const withoutLibBlocks = (source) => source.replace(BLOCK, '')
 
+// A script names its id once, as `const SCRIPT_ID = '<id>'`, and passes it to createGuard; a script that writes the id into the call itself is read there.
 function guardId (source) {
-  const found = /createGuard\(\{ script: '([a-z-]+)'/.exec(source)
-  if (found === null) throw new Error("no createGuard({ script: '<id>' ... }) call in the script")
+  const found = /^ *const SCRIPT_ID = '([a-z-]+)'$/m.exec(source) ?? /createGuard\(\{ script: '([a-z-]+)'/.exec(source)
+  if (found === null) throw new Error("no const SCRIPT_ID = '<id>' line and no createGuard({ script: '<id>' ... }) call in the script")
   return found[1]
 }
 

@@ -10,7 +10,7 @@ const { loadLib } = require('./load-lib.js')
 const ROOT = join(__dirname, '..')
 const colorByDigit = require(join(ROOT, 'color-by-digit.user.js'))
 const rulesResizer = require(join(ROOT, 'auto-rules-resizer.user.js'))
-const { showSettingsDialog } = loadLib(['sudokupad', 'write-style', 'settings-dialog'], ['showSettingsDialog'], { Framework: {} })
+const { showSettingsDialog } = loadLib(['plain', 'sudokupad', 'write-style', 'settings-dialog'], ['showSettingsDialog'], { Framework: {} })
 
 // The shared dialog, with SudokuPad's showDialog and the page faked: Save, Cancel and the extra buttons are the options showDialog is given.
 function fakeDialog ({ save, restore }) {

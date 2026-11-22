@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.53
+// @version      1.32.56
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,9 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.53'
+  const VERSION = '1.32.56'
+  // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
+  const SCRIPT_ID = 'pen-tool-extras'
   const SCRIPT_NAME = 'Pen Tool Extras'
   // Every class and id the script makes starts with this.
   const CLASS_PREFIX = 'pen-tool-extras-'
@@ -72,6 +74,9 @@
   const SECONDARY_BUTTON = 2
   const PRIMARY_HELD = 1
   const SECONDARY_HELD = 2
+
+  // The settings dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
+  const DIALOG_PURPLE = '#6b3fa0'
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:settings-table>
@@ -591,15 +596,13 @@
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle */ // eslint-disable-line no-redeclare
+  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle, DIALOG_PURPLE */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
-  // The dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
-  const DIALOG_PURPLE = '#6b3fa0'
   // The options row's rule, the buttons' face, ink and border, the Save button's border, and the title tools' hover.
   const DIALOG_RULE = '#e3dff0'
   const DIALOG_BUTTON_FACE = '#f1eff5'
@@ -683,9 +686,7 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
-  // The settings wiring every script keeps: that feature (keyed `settings`, or `editor` in Color by Digit) never needs `Framework.getApp`,
-  // so a SudokuPad without it still gets the entry, added at start. A dialog's Save and Copy both go through the store of the feature that
-  // reads the saved settings at startup: with that feature off, the defaults show, nothing is kept, and the off-note says so.
+  // `Framework.getApp` is not among them, so a SudokuPad without it still gets the entry.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -1248,6 +1249,11 @@
     }
   }
 
+  // What a script with the Darker page presets loses to a bad palette, for paletteNoteHtml.
+  const PRESETS_LEFT_OUT = 'the Darker page presets are left out'
+  // A dialog's line for a bad palette: readPalettePages' `note`, then `outcome`, what the script does without the palette's pages. '' with no note.
+  const paletteNoteHtml = (note, outcome, className = '') => note ? `<div${className ? ` class="${className}"` : ''} data-role="palette-note">${note}, so ${outcome}.</div>` : ''
+
   // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
   // '' for a value it rejects or a variable with none.
   function readRootColor (name) {
@@ -1431,7 +1437,8 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */
+  // A script that copies in settings-dialog as well has a second `global` naming DIALOG_PURPLE, which the linter calls a redeclaration.
+  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */ // eslint-disable-line no-redeclare
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1442,8 +1449,8 @@
   // The pickers are rare enough to fade in; ending edit mode takes them away at once, with no fade out.
   const PICKER_ENTRY_SCALE = 0.95
   const PICKER_ENTRY_MS = 150
-  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it. A function: settings-dialog, which names its color, may be copied in after this module.
-  const choiceArrow = () => `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${encodeURIComponent(DIALOG_PURPLE)}'/%3E%3C/svg%3E")`
+  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
+  const CHOICE_ARROW = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${encodeURIComponent(DIALOG_PURPLE)}'/%3E%3C/svg%3E")`
 
   // A preset in force that is not among the pickable `presets` (Custom, a page the palette no longer has) is shown first, selected and disabled, so the pulldown says what is in force and
   // every preset stays pickable: picking the option already shown fires no `change`. `labels` names each id.
@@ -1479,7 +1486,7 @@
     return [
       `${at('color-block')} { display: grid; justify-items: start; gap: 6px; margin: 6px 0; }`,
       // As wide as the block, whatever its longest option: a select is otherwise as wide as that, and would widen the dialog's column.
-      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${choiceArrow()} no-repeat right 10px center; }`,
+      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; }`,
       `${at('color-row')} { display: flex; align-items: flex-start; gap: 12px; }`,
       `${at('swatches')} { display: grid; grid-template-columns: repeat(${PICKER_COLUMNS}, ${SWATCH_PX}px); gap: ${SWATCH_GAP_PX}px; }`,
       // With nothing beside it the grid takes the block's width, so its edges line up with the pulldown's; a block with `beside` content keeps SWATCH_PX swatches, which that content's rows line up with.
@@ -1689,7 +1696,8 @@
   // The set in force. Until the install save it is SudokuPad's own, which is what the page shows with no override.
   let active = { ...SUDOKUPAD_SET, preset: UNSAVED, fromPreset: UNSAVED }
 
-  const availablePresets = () => paletteOptions(steps.colors.off ? 0 : readPalettePages('pen-tool-extras').pages.length)
+  // Read once per dialog open, as Text Anywhere's dialog does, so a bad palette warns once and not on every redraw.
+  const dialogPalette = () => steps.colors.off ? { pages: [], note: '' } : readPalettePages(SCRIPT_ID)
 
   function adoptColors (set) {
     active = set
@@ -2916,7 +2924,7 @@
   const SETTINGS_ICON_SVG = `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg>`
   /* eslint-enable no-unused-vars */
   // </lib:panel>
-  const guard = createGuard({ script: 'pen-tool-extras', name: SCRIPT_NAME, version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: SCRIPT_ID, name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const steps = guard.features
   // The saved data is read and written only here: with the saved settings off nothing is read, so the defaults show, and nothing is kept.
   const savedData = guard.storeFor(steps.saved)
@@ -3242,7 +3250,7 @@ ${EDITOR} .${CLASS_PREFIX}divider { margin-left: 0; }
       '</div>'
     const cell = (markup) => `<div class="${CELL}">${markup}</div>`
     return `<div class="${CLASS_PREFIX}layout">` +
-      cell(sectionTitle('Pen colors') + colorBlock + missingNote(state.missing, state.fromPreset)) +
+      cell(sectionTitle('Pen colors') + colorBlock + paletteNoteHtml(state.paletteNote, PRESETS_LEFT_OUT, NOTE) + missingNote(state.missing, state.fromPreset)) +
       cell(section('Line settings') + DIVIDER + section('Line styles')) +
       cell(sectionTitle('Marks to cycle') + marksTable) +
       cell(section('Other')) + '</div>'
@@ -3264,8 +3272,10 @@ ${EDITOR} .${CLASS_PREFIX}divider { margin-left: 0; }
     let colorsChosen = false
     let draft = { ...inForce }
     let box = null
+    const { pages, note: paletteNote } = dialogPalette()
+    const presets = paletteOptions(pages.length)
     const draw = () => {
-      box.innerHTML = renderEditor({ ...set, presets: availablePresets(), ...draft })
+      box.innerHTML = renderEditor({ ...set, presets, paletteNote, ...draft })
       setOffNote(box.closest('.dialog'), guard.off)
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
@@ -3281,7 +3291,7 @@ ${EDITOR} .${CLASS_PREFIX}divider { margin-left: 0; }
     const restoreDefaults = () => {
       // The sliders and boxes are drafts like the colors: Cancel leaves what is in force. Restore defaults leaves the mark boxes (the edge, corner and cell cycles) as they are, and a live test holds it there.
       draft = { ...settingDefaults(), marks: draft.marks }
-      if (!pickPreset(availablePresets()[0])) pickPreset(SUDOKUPAD_PRESET)
+      if (!pickPreset(presets[0])) pickPreset(SUDOKUPAD_PRESET)
     }
     box = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
