@@ -5,7 +5,7 @@
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-export const REPO = 'caneff/sudokupad-scripts'
+export const REPO = 'chinstrap45/sudokupad-scripts'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 // The end of an issue body a check files: the command and file that filed it, then the Blocked by section that drain and triage read

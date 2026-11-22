@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.46
+// @version      0.1.47
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
-// @homepageURL  https://caneff.github.io/sudokupad-scripts/
-// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
+// @supportURL   https://github.com/chinstrap45/sudokupad-scripts/issues
 // @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -13,8 +13,8 @@
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
 // @run-at       document-idle
-// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js
-// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js
+// @updateURL    https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/ui-tweaks.user.js
+// @downloadURL  https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/ui-tweaks.user.js
 // ==/UserScript==
 
 /* global ToolLetter */
@@ -23,7 +23,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.46'
+  const VERSION = '0.1.47'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'ui-tweaks'
   const SCRIPT_NAME = 'UI Tweaks'
@@ -551,7 +551,7 @@
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
   // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
-  const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
+  const REPORT_URL = 'https://github.com/chinstrap45/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
   const INTERNAL_KINDS = {

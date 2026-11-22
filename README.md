@@ -5,7 +5,7 @@
 
 Tampermonkey userscripts for [SudokuPad](https://sudokupad.app) and for other puzzle sites: the [Logic Masters](https://logic-masters.de/Raetselportal/) puzzle portal so far.
 
-Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
+Browse them with pictures at <https://chinstrap45.github.io/sudokupad-scripts/>.
 
 ## Install
 
@@ -14,13 +14,13 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 
 | Script | What it does | Install |
 | --- | --- | --- |
-| Pen Tool Extras | Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first. [Details](https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js) |
-| Text Anywhere | Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes. [Details](https://caneff.github.io/sudokupad-scripts/text-anywhere.html) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js) |
-| Color by Digit | Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve. [Details](https://caneff.github.io/sudokupad-scripts/color-by-digit.html) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js) |
-| Dark Page | Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |
-| Auto Rules Resizer | Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js) |
-| UI Tweaks | Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js) |
-| Logic Masters Puzzle Preview | Show puzzle preview images inline on Logic Masters portal pages, cached between visits | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js) |
+| Pen Tool Extras | Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first. [Details](https://chinstrap45.github.io/sudokupad-scripts/pen-tool-extras.html) | [Install](https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/pen-tool-extras.user.js) |
+| Text Anywhere | Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes. [Details](https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html) | [Install](https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/text-anywhere.user.js) |
+| Color by Digit | Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve. [Details](https://chinstrap45.github.io/sudokupad-scripts/color-by-digit.html) | [Install](https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/color-by-digit.user.js) |
+| Dark Page | Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode. | [Install](https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/dark-page.user.js) |
+| Auto Rules Resizer | Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand. | [Install](https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/auto-rules-resizer.user.js) |
+| UI Tweaks | Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger. | [Install](https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/ui-tweaks.user.js) |
+| Logic Masters Puzzle Preview | Show puzzle preview images inline on Logic Masters portal pages, cached between visits | [Install](https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js) |
 
 Logic Masters Puzzle Preview's first version is by Juggler, published here with their permission.
 
@@ -34,7 +34,7 @@ If a SudokuPad update changes something a script needs, that part logs a console
 
 ## Questions, bugs and suggestions
 
-Message me on Discord, [@ChinStrap](https://discord.com/users/184770560356646923), or [open an issue](https://github.com/caneff/sudokupad-scripts/issues).
+Message me on Discord, [@ChinStrap](https://discord.com/users/184770560356646923), or [open an issue](https://github.com/chinstrap45/sudokupad-scripts/issues).
 
 ## Script notes
 

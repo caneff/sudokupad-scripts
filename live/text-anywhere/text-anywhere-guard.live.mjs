@@ -72,7 +72,7 @@ for (const kase of CASES) {
       const bar = p.locator(BAR)
       await bar.waitFor({ state: 'attached' })
       assert.match(await bar.textContent(), new RegExp(`^Text Anywhere: ${kase.off} is off because SudokuPad changed\\.Report`))
-      assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
+      assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/chinstrap45\/sudokupad-scripts\/issues\/new\?title=/)
       await bar.locator('button[aria-label="Dismiss"]').click()
       assert.equal(await bar.count(), 0)
     })

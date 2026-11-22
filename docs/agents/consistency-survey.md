@@ -23,7 +23,7 @@ as one read-only Opus subagent with the prompt below, then puts the findings to 
 > - a feature with a preview, fade, cursor or confirm in one script but not its twin.
 >
 > Already decided, do not report: anything an open or closed issue already covers (search
-> `gh issue list --repo caneff/sudokupad-scripts --state all --search "<words>"` before reporting), `.audit-ignore.md`
+> `gh issue list --repo chinstrap45/sudokupad-scripts --state all --search "<words>"` before reporting), `.audit-ignore.md`
 > entries, and any difference a comment or doc says is deliberate. Phones/tablets and SudokuPad's own dark mode are
 > unsupported (AGENTS.md); ignore them.
 >

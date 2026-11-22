@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { headerField, headerVersion } from '../../userscript-header.js'
 import { RAW } from '../../tag-pictures.js'
+import { CANEFF_RAW } from '../../sync-lib.js'
 import { newPage, gotoPuzzle, startPuzzle } from '../page.mjs'
 import { SCRIPTS } from '../scripts.mjs'
 import { SCRIPT_FILES, scriptSource } from '../session.mjs'
@@ -106,10 +107,10 @@ describe(`${OLD_FILE} hands over to ${NEW_FILE}`, { concurrency: false }, () => 
     const response = await fetch(LAST_OLD_COPY)
     assert.equal(response.ok, true, `${LAST_OLD_COPY} answered ${response.status}`)
     const old = await response.text()
-    assert.equal(headerField(old, 'updateURL'), RAW + OLD_FILE, 'the old copy updates from the old address')
+    assert.equal(headerField(old, 'updateURL'), CANEFF_RAW + OLD_FILE, 'the old copy updates from the old address')
     const files = {}
     served = await serveFiles(files)
-    const local = (text) => text.split(RAW).join(served.url)
+    const local = (text) => text.replaceAll(CANEFF_RAW, served.url).replaceAll(RAW, served.url)
     Object.assign(files, { [`old/${OLD_FILE}`]: local(old), [OLD_FILE]: local(readFile(OLD_FILE)), [NEW_FILE]: local(scriptSource(NEW_FILE)) })
     tm = await launchTampermonkey()
     const name = headerField(old, 'name')

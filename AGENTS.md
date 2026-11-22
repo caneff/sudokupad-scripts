@@ -47,7 +47,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 
 ### Issue tracker
 
-GitHub issues at `caneff/sudokupad-scripts`, through `gh`. See `docs/agents/issue-tracker.md`.
+GitHub issues at `chinstrap45/sudokupad-scripts`, through `gh`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

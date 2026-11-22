@@ -73,6 +73,11 @@ Machine: WSL2 Linux, Playwright 1.64.1, its Chromium "Chrome for Testing"
     Anywhere would for anyone who installs by hand. Not tested: what Tampermonkey's
     own scheduled update (via `@updateURL`/`@downloadURL`) does when the name at
     that URL changed. That needs its update-check trigger driven.
+  - `@namespace` changed, `@name` unchanged (2026-11-22, #1055, `npm run test:tampermonkey`
+    with Dark Page's `@namespace` moved from `caneff` to `chinstrap45`): Tampermonkey offered
+    the checkout's copy as a new install, and the dashboard listed two "SudokuPad Dark Page"
+    rows, 0.7.50 and 0.7.51. So `@namespace` is part of the identity, like `@name`, and the
+    scripts kept theirs through the move to `chinstrap45`.
 - `probe5.mjs`: the real raw URL
   `https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js`
   gave the same install page, with that URL shown, and one installed row.

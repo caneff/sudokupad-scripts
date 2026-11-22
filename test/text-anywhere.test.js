@@ -559,13 +559,14 @@ const newerThan = (a, b) => compareVersions(a, b) > 0
 
 test('draw-tool.user.js is the frozen handover: it sends updates to text-anywhere.user.js under the same @name and @namespace', () => {
   const { RAW } = require('../tag-pictures.js')
-  const { HANDOVERS } = require('../sync-lib.js')
+  const { HANDOVERS, CANEFF_RAW } = require('../sync-lib.js')
   const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
   const handover = read(OLD_ADDRESS)
   const script = read(NEW_ADDRESS)
   assert.deepEqual(HANDOVERS, { [OLD_ADDRESS]: NEW_ADDRESS })
-  for (const source of [handover, script]) {
-    for (const field of ['updateURL', 'downloadURL']) assert.equal(headerField(source, field), RAW + NEW_ADDRESS, field)
+  // The handover is frozen, so it still names the caneff address; Text Anywhere names the live one.
+  for (const [source, raw] of [[handover, CANEFF_RAW], [script, RAW]]) {
+    for (const field of ['updateURL', 'downloadURL']) assert.equal(headerField(source, field), raw + NEW_ADDRESS, field)
   }
   for (const field of ['name', 'namespace']) assert.equal(headerField(handover, field), headerField(script, field), field)
   assert.equal(headerVersion(handover), HANDOVER_VERSION, 'the handover is frozen at one version')

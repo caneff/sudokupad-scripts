@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.43
+// @version      0.7.44
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
-// @homepageURL  https://caneff.github.io/sudokupad-scripts/
-// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
+// @supportURL   https://github.com/chinstrap45/sudokupad-scripts/issues
 // @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -13,8 +13,8 @@
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
 // @run-at       document-idle
-// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js
-// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js
+// @updateURL    https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/auto-rules-resizer.user.js
+// @downloadURL  https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/auto-rules-resizer.user.js
 // ==/UserScript==
 
 // Credit: Auto Rules Resizer grew from Nell Gwyn's SudokuPad-ResizeRules 0.1.5. It takes from that script:
@@ -27,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.43'
+  const VERSION = '0.7.44'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'auto-rules-resizer'
   const SCRIPT_NAME = 'Auto Rules Resizer'
@@ -920,7 +920,7 @@
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
   // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
-  const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
+  const REPORT_URL = 'https://github.com/chinstrap45/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
   const INTERNAL_KINDS = {

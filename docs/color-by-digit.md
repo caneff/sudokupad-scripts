@@ -3,7 +3,7 @@
 > [!WARNING]
 > **This script can break at any time, and there are no guarantees.** It relies on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break it without notice.
 
-The full reference. For a quick look, see the [details page](https://caneff.github.io/sudokupad-scripts/color-by-digit.html).
+The full reference. For a quick look, see the [details page](https://chinstrap45.github.io/sudokupad-scripts/color-by-digit.html).
 
 In Cell mode, every cell holding a digit, and every empty cell whose center marks all belong to one group, takes its group's color and keeps it in step as you solve. In Digit mode the digits themselves take it instead, in a darker shade, and Both does both. You set the groups in a settings dialog.
 

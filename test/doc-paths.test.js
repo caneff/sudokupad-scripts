@@ -11,7 +11,7 @@ const KNOWN_EXTENSIONS = /\.(md|js|mjs|json|jsonl|png|webp|html|yml|yaml|py|sh|r
 const IS_PATH = /^[\w.+@-]+(\/[\w.+@-]+)*\/?$/
 const NOT_REPO = /^(\.scratch\/|node_modules\/|origin\/|\.claude\/|\.git\/|\.\.?\/|\.\w+$)/
 // Named in the docs and not in this repo: the GitHub repo's own name and a skill's file in the agent-skills repo.
-const OTHER_REPOS = ['caneff/sudokupad-scripts', 'implement/SKILL.md']
+const OTHER_REPOS = ['chinstrap45/sudokupad-scripts', 'implement/SKILL.md']
 
 // The repo paths a Markdown text names in code spans, with a trailing `:line` or ` § section` dropped.
 function namedPaths (text) {

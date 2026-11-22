@@ -166,7 +166,7 @@ describe('SudokuPad has no ToolLetter.tool.keyHandlers', { concurrency: false },
   it('the bar names the feature with a Report link, and goes when dismissed', async () => {
     const bar = p.locator(BAR)
     assert.match(await bar.textContent(), /^UI Tweaks: Tab key is off because SudokuPad changed\.Report/)
-    assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
+    assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/chinstrap45\/sudokupad-scripts\/issues\/new\?title=/)
     await bar.locator('button[aria-label="Dismiss"]').click()
     assert.equal(await bar.count(), 0)
   })

@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.51
+// @version      0.7.52
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.
-// @homepageURL  https://caneff.github.io/sudokupad-scripts/
-// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
+// @supportURL   https://github.com/chinstrap45/sudokupad-scripts/issues
 // @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -13,15 +13,15 @@
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
 // @run-at       document-start
-// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js
-// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js
+// @updateURL    https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/dark-page.user.js
+// @downloadURL  https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/dark-page.user.js
 // ==/UserScript==
 
 (function () {
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.51'
+  const VERSION = '0.7.52'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'dark-page'
   const SCRIPT_NAME = 'Dark Page'
@@ -669,7 +669,7 @@
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
   // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
-  const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
+  const REPORT_URL = 'https://github.com/chinstrap45/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
   const INTERNAL_KINDS = {

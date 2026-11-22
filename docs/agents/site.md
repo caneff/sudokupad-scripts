@@ -5,7 +5,7 @@ Read this before you change `site/`, retake a picture, edit a slideshow or touch
 ## Hosting
 
 - **Pages**: `site/` is the static homepage and one details page per script that has one. GitHub Pages serves it from `main`
-  (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
+  (`.github/workflows/pages.yml`, at `https://chinstrap45.github.io/sudokupad-scripts/`).
 - **Netlify**: serves `site/` from the `release` branch (`netlify.toml`). `git push origin main:release` publishes it and
   spends 15 of the plan's 300 credits a month (`docs/research/tooling/netlify-credits.md`). It is pushed very rarely, so it lags
   `main` by design, and Netlify is kept (Chris, 2026-11-05). It will not be pushed for a long time, so no report, PR or ticket mentions

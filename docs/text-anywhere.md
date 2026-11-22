@@ -3,7 +3,7 @@
 > [!WARNING]
 > **This script can break at any time, and there are no guarantees.** It relies on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break it without notice.
 
-The full reference. For a quick look, see the [details page](https://caneff.github.io/sudokupad-scripts/text-anywhere.html). What
+The full reference. For a quick look, see the [details page](https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html). What
 every script shares, the settings dialog and the guard, is in [What every script shares](shared.md).
 
 Text Anywhere adds a tool to SudokuPad's tool buttons, named Text on its button, for typing notes anywhere on the page. `T` makes

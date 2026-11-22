@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 require('./fake-page-storage.js')
-const { scriptFiles, guardId } = require('../sync-lib.js')
+const { scriptFiles, publishedScriptFiles, guardId } = require('../sync-lib.js')
 const { pageStandIn } = require('./page-stand-in.js')
 const { startScript, withScript } = require('./unit-start.js')
 const { headerVersion, headerField } = require('../userscript-header.js')
@@ -13,6 +13,28 @@ const { headerVersion, headerField } = require('../userscript-header.js')
 // which internal holds back which feature; this file holds what is the same for all of them.
 // Starts the script on that page with `framework` (undefined: no Framework at all) and returns what it warned.
 const startOnPage = (file, framework) => startScript(path.join(__dirname, '..', file), { ...pageStandIn(), Framework: framework }).warnings
+
+// A literal, not tag-pictures.js's RAW, so the headers and RAW are each checked against it rather than against each other.
+const LIVE_RAW = 'https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/'
+
+test('RAW, the address the site and tests build on, is the chinstrap45 repo\'s', () => {
+  assert.equal(require('../tag-pictures.js').RAW, LIVE_RAW)
+})
+
+for (const file of publishedScriptFiles()) {
+  test(`${file}: the header updates from its own file in the chinstrap45 repo`, () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
+    for (const field of ['updateURL', 'downloadURL']) assert.equal(headerField(source, field), LIVE_RAW + file, field)
+  })
+}
+
+// A new @namespace installs a second copy beside the old (docs/research/tooling/tampermonkey-in-playwright.md), so each script keeps the one
+// its installed copies have, which the frozen handover (draw-tool.user.js) carries too.
+for (const file of scriptFiles()) {
+  test(`${file}: @namespace is the one installed copies were given`, () => {
+    assert.equal(headerField(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), 'namespace'), 'https://github.com/caneff/sudokupad-scripts')
+  })
+}
 
 for (const file of scriptFiles()) {
   const id = file.replace(/\.user\.js$/, '')
@@ -29,8 +51,8 @@ for (const file of scriptFiles()) {
 
   test(`${id}: the header gives a home page, the repo's issues as the support link and the MIT license, and no @sandbox`, () => {
     const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
-    assert.match(headerField(source, 'homepageURL'), /^https:\/\/caneff\.github\.io\/sudokupad-scripts\/(?:[a-z-]+\.html)?$/)
-    assert.equal(headerField(source, 'supportURL'), 'https://github.com/caneff/sudokupad-scripts/issues')
+    assert.match(headerField(source, 'homepageURL'), /^https:\/\/chinstrap45\.github\.io\/sudokupad-scripts\/(?:[a-z-]+\.html)?$/)
+    assert.equal(headerField(source, 'supportURL'), 'https://github.com/chinstrap45/sudokupad-scripts/issues')
     assert.equal(headerField(source, 'license'), 'MIT')
     assert.doesNotMatch(source.split('// ==/UserScript==')[0], /@sandbox/)
   })

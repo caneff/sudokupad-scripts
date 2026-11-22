@@ -4,7 +4,7 @@
 const { execFileSync } = require('node:child_process')
 const { runOnSite } = require('./site-pages.js')
 
-const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
+const RAW = 'https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/'
 const TAG_LENGTH = 7
 const COMMENT = /(<!--[\s\S]*?-->)/
 const PICTURE_SRC = new RegExp(`(<(?:img|source)\\b[^>]*?\\b(?:src|srcset)="|<meta property="og:image" content=")${RAW.replace(/\./g, '\\.')}([^"?]+)(\\?[^"]*)?"`, 'g')
