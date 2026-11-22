@@ -244,7 +244,7 @@ describe('Text Anywhere\'s Tint box with Dark Page on', { concurrency: false }, 
   after(async () => { await context.close() })
 
   it('a note off the board gets the same light tint as one on it, not a tint of the dark page', async () => {
-    assert.equal(await p.evaluate(() => getComputedStyle(document.body).getPropertyValue('--dark-page-color').trim() !== ''), true, 'Dark Page is on')
+    assert.equal(await p.evaluate(() => window.getComputedStyle(document.body).getPropertyValue('--dark-page-color').trim() !== ''), true, 'Dark Page is on')
     const { on, off } = await looks(p)
     assert.notEqual(on.fill, TRANSPARENT)
     const channels = (fill) => fill.match(/[\d.]+/g).slice(-3).map(Number)
