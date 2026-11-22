@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.55
+// @version      0.46.56
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.55'
+  const VERSION = '0.46.56'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -129,19 +129,28 @@
 
   const colorTool = () => Framework.app?.tools?.colour
 
-  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
-  // values for them exist earlier and say nothing about a custom palette).
-  function readyColorTool () {
-    const tool = colorTool()
-    const pages = tool?.palette?.pages
-    return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
-  }
+  const BAD_PALETTE = 'SudokuPad\'s color palette has no pages of color keys'
 
+  // The one reader of the palette's pages: none while SudokuPad has no palette, and a throw for a palette of a shape the script does not know.
   function palettePages () {
     const palette = colorTool()?.palette
     if (!palette) return []
-    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error(BAD_PALETTE)
     return palette.pages
+  }
+
+  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
+  // values for them exist earlier and say nothing about a custom palette).
+  const readyColorTool = () => palettePages().length > 0 ? colorTool() : null
+
+  // A bad palette is a warning under the script's id and no pages, so a dialog still opens; `note` is the warning's text, for the dialog to show.
+  function readPalettePages (scriptId) {
+    try {
+      return { pages: palettePages(), note: '' }
+    } catch (error) {
+      console.warn(`${scriptId}: ${error.message}`)
+      return { pages: [], note: error.message }
+    }
   }
 
   // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
@@ -1270,6 +1279,8 @@
   // null when nothing usable is saved, which means the first-use copy of the pen colors is still owed.
   const readNoteColorSet = (saved) => savedColorSet(saved, NOTE_PRESETS)
 
+  // A palette of a shape the script does not know is the dialog's own note, and does not turn the presets off.
+  const dialogPalette = (presetsOff) => presetsOff ? { pages: [], note: '' } : readPalettePages('text-anywhere')
   const presetOptions = (pageCount) => [PEN_PRESET, ...paletteOptions(pageCount)]
 
   // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
@@ -2391,7 +2402,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, noteColorSet, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, noteColorSet, dialogPalette, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook }
   }
   if (typeof document === 'undefined') return
 
@@ -2865,17 +2876,7 @@
     let colorsEdited = false
     let draftLooks = { ...look }
     let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
-    let pages = []
-    let paletteNote = ''
-    // A palette of a shape the script does not know is the dialog's own note, and does not turn the presets off.
-    if (!presets.off) {
-      try {
-        pages = palettePages()
-      } catch (error) {
-        console.warn(`text-anywhere: ${error.message}`)
-        paletteNote = error.message
-      }
-    }
+    const { pages, note: paletteNote } = dialogPalette(presets.off)
     const editedLooks = () => changedDialogLooks(LOOKS, draftLooks, look)
     const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
@@ -2923,7 +2924,7 @@
       const options = presetChoices(draft.preset, presetOptions(pages.length), PRESET_LABELS)
       box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft.colors[n], label: `Text color ${n}` })) }) +
-        (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
+        (paletteNote ? `<div data-role="palette-note">${paletteNote}, so the Darker page presets are left out.</div>` : '') +
         (draft.missing.length ? `<div data-role="missing-note">${missingColorsText(draft.missing, draft.fromPreset)}</div>` : '') +
         `<div class="${CLASS_PREFIX}font-row"><span class="${CLASS_PREFIX}section-title">Font</span>${renderFontChoice(draftLooks.noteFont)}</div>` +
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft.colors[color] })

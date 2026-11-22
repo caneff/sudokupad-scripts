@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.79
+// @version      0.25.80
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.79'
+  const VERSION = '0.25.80'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1195,19 +1195,28 @@
 
   const colorTool = () => Framework.app?.tools?.colour
 
-  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
-  // values for them exist earlier and say nothing about a custom palette).
-  function readyColorTool () {
-    const tool = colorTool()
-    const pages = tool?.palette?.pages
-    return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
-  }
+  const BAD_PALETTE = 'SudokuPad\'s color palette has no pages of color keys'
 
+  // The one reader of the palette's pages: none while SudokuPad has no palette, and a throw for a palette of a shape the script does not know.
   function palettePages () {
     const palette = colorTool()?.palette
     if (!palette) return []
-    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error(BAD_PALETTE)
     return palette.pages
+  }
+
+  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
+  // values for them exist earlier and say nothing about a custom palette).
+  const readyColorTool = () => palettePages().length > 0 ? colorTool() : null
+
+  // A bad palette is a warning under the script's id and no pages, so a dialog still opens; `note` is the warning's text, for the dialog to show.
+  function readPalettePages (scriptId) {
+    try {
+      return { pages: palettePages(), note: '' }
+    } catch (error) {
+      console.warn(`${scriptId}: ${error.message}`)
+      return { pages: [], note: error.message }
+    }
   }
 
   // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
@@ -1553,18 +1562,8 @@
     })
   }
 
-  // A palette of a shape the script does not know is a warning and no pages, so the dialog still opens and says no colors were found
-  // (Text Anywhere does the same); a throw here would turn the whole dialog off.
-  function readPalette (readColor) {
-    let pages
-    try {
-      pages = palettePages()
-    } catch {
-      console.warn('color-by-digit: SudokuPad\'s color palette has no pages of color keys, so digits cannot be painted')
-      return []
-    }
-    return layoutPages(pages, colorTool()?.currentPage, readColor)
-  }
+  // A palette of a shape the script does not know is reported as Text Anywhere reports it (readPalettePages), and the dialog says no colors were found.
+  const readPalette = (readColor) => layoutPages(readPalettePages('color-by-digit').pages, colorTool()?.currentPage, readColor)
 
   const pageSlots = (p) => [p.zero, ...p.rows.flat()]
 

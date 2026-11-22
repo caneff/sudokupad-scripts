@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.53
+// @version      1.32.54
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.53'
+  const VERSION = '1.32.54'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1204,19 +1204,28 @@
 
   const colorTool = () => Framework.app?.tools?.colour
 
-  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
-  // values for them exist earlier and say nothing about a custom palette).
-  function readyColorTool () {
-    const tool = colorTool()
-    const pages = tool?.palette?.pages
-    return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
-  }
+  const BAD_PALETTE = 'SudokuPad\'s color palette has no pages of color keys'
 
+  // The one reader of the palette's pages: none while SudokuPad has no palette, and a throw for a palette of a shape the script does not know.
   function palettePages () {
     const palette = colorTool()?.palette
     if (!palette) return []
-    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error(BAD_PALETTE)
     return palette.pages
+  }
+
+  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
+  // values for them exist earlier and say nothing about a custom palette).
+  const readyColorTool = () => palettePages().length > 0 ? colorTool() : null
+
+  // A bad palette is a warning under the script's id and no pages, so a dialog still opens; `note` is the warning's text, for the dialog to show.
+  function readPalettePages (scriptId) {
+    try {
+      return { pages: palettePages(), note: '' }
+    } catch (error) {
+      console.warn(`${scriptId}: ${error.message}`)
+      return { pages: [], note: error.message }
+    }
   }
 
   // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
@@ -1662,10 +1671,7 @@
   // The set in force. Until the install save it is SudokuPad's own, which is what the page shows with no override.
   let active = { ...SUDOKUPAD_SET, preset: UNSAVED, fromPreset: UNSAVED }
 
-  const availablePresets = () => {
-    const tool = steps.colors.off ? null : readyColorTool()
-    return paletteOptions(tool ? tool.palette.pages.length : 0)
-  }
+  const availablePresets = () => paletteOptions(steps.colors.off ? 0 : readPalettePages('pen-tool-extras').pages.length)
 
   function adoptColors (set) {
     active = set
@@ -3247,7 +3253,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
-      const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_COLOR_SET : steps.colors.run(() => presetColorSet(id, readyColorTool().palette.pages, readCellColor), () => null)
+      const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_COLOR_SET : steps.colors.run(() => presetColorSet(id, palettePages(), readCellColor), () => null)
       if (picked) {
         set = picked
         colorsChosen = true
