@@ -41,7 +41,7 @@
 <body>
   <header class="banner">
     <h1>Puzzle Scripts</h1>
-    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a> and for other puzzle sites. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.</p>
+    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a> and for other puzzle sites. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it. Each script's settings are in SudokuPad's settings, in the Experimental group, and every dialog has Restore defaults.</p>
   </header>
   <p class="warning">These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.</p>
   <div class="rows">
@@ -90,7 +90,7 @@
           <p class="slide-caption">Thickness</p>
           <p class="slide-caption">Opacity</p>
           <p class="slide-caption">White outlines off, then on</p>
-          <p class="slide-caption">Right click a line to delete it</p>
+          <p class="slide-caption">Right-click a line to erase it</p>
           <p class="slide-caption">Settings: presets, styles, marks</p>
         </div>
       </div>
@@ -98,7 +98,7 @@
     <!-- /slideshow:pen-tool-extras -->
     <div class="row-text">
       <h2>Pen Tool Extras</h2>
-      <p>Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners.</p>
+      <p>Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js">Install<span class="visually-hidden"> Pen Tool Extras</span></a><a href="pen-tool-extras.html">Details &rarr;</a></p>
     </div>
   </section>
@@ -195,7 +195,7 @@
     </div>
     <div class="row-text">
       <h2>Dark Page</h2>
-      <p>Turns the page black around the puzzle, or any color you pick, and darkens the control buttons, the Pen Tool Extras and Text Anywhere panels and the dim behind a dialog when the color is dark. The text under the puzzle stays readable on any color. Puzzle colors stay as intended, unlike SudokuPad's dark mode. Restore defaults in its settings dialog goes back to black.</p>
+      <p>Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js">Install<span class="visually-hidden"> Dark Page</span></a></p>
     </div>
   </section>
@@ -205,7 +205,7 @@
     </div>
     <div class="row-text">
       <h2>Auto Rules Resizer</h2>
-      <p>Fits the rules pane to your screen: it takes the spare height, widens for long rules, and grows or shrinks the text to fit. A size you set with f+, f- or the drag corners is kept per puzzle. Thanks to Nell Gwyn, whose SudokuPad-ResizeRules this grew from.</p>
+      <p>Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand. Thanks to Nell Gwyn, whose SudokuPad-ResizeRules this grew from.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js">Install<span class="visually-hidden"> Auto Rules Resizer</span></a></p>
     </div>
   </section>
@@ -215,7 +215,7 @@
     </div>
     <div class="row-text">
       <h2>UI Tweaks</h2>
-      <p>Small changes to SudokuPad's buttons, each switched on or off in a settings dialog that opens from SudokuPad's settings. Restore defaults there puts the choices back to how they start.</p>
+      <p>Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.</p>
       <ul>
         <li><strong>Tab never switches to letters</strong> (on at first): a stray Tab no longer switches the number pad to letters. The letter button and the / key still do.</li>
         <li><strong>Hide the Select button</strong> (off at first): takes the button out of the bottom row, and the other buttons close up.</li>

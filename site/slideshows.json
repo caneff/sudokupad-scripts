@@ -63,7 +63,7 @@
         "picture": "pen-tool-extras-slide-12-erase.png",
         "animation": "pen-tool-extras-slide-12-erase.webp",
         "alt": "A red ring on the first line, where a right press is held, then the board with that whole line gone and every other line and mark still there",
-        "caption": "Right click a line to delete it"
+        "caption": "Right-click a line to erase it"
       },
       {
         "picture": "pen-tool-extras-slide-13-settings.png",

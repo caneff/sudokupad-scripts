@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Text Anywhere: SudokuPad scripts</title>
-<meta name="description" content="Adds to SudokuPad a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.">
+<meta name="description" content="Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Text Anywhere: SudokuPad scripts">
-<meta property="og:description" content="Adds to SudokuPad a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.">
+<meta property="og:description" content="Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.">
 <meta property="og:image" content="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-1-type.png?v=85517f9">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" href="Fredoka.woff2" as="font" type="font/woff2" crossorigin>
@@ -18,7 +18,7 @@
   <p class="back"><a href="index.html">&larr; All SudokuPad scripts</a></p>
   <h1>Text Anywhere</h1>
   <p class="warning">This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad. When an update breaks one part, only that part turns off, and a bar at the bottom of the page names it with a link to report it.</p>
-  <p class="lede">Adds to <a href="https://sudokupad.app">SudokuPad</a> a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.</p>
+  <p class="lede">Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.</p>
   <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js">Install Text Anywhere</a></p>
 
   <!-- slideshow:text-anywhere -->
@@ -70,12 +70,12 @@
     <li><strong>Typed notes anywhere</strong> <p>Click to type; Esc or Ctrl+Enter finishes; Ctrl+Z and Ctrl+Y undo and redo the typing; double-click a note to edit.</p></li>
     <li><strong>Formatting</strong> <p>Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and <code>-></code>, <code>!=</code> or <code>sum</code> typed as → ≠ Σ. One note below shows every style, and the text that made it.</p></li>
     <li><strong>Long notes</strong> <p>Wraps and scrolls; drag a corner to resize.</p></li>
-    <li><strong>Readable over digits</strong> <p>A white outline round the letters, and an optional box behind them.</p></li>
-    <li><strong>Colors, size and opacity</strong> <p>Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make each selected note, or the next note, one Size step bigger or smaller than it is, and holding one keeps going, faster the longer you hold. New notes start in a dark grey (color 2) at a size that fits the grid; a color you pick stays your default. A color, size, opacity or Background you set on a note also becomes the setting for the next note.</p></li>
+    <li><strong>Readable over digits</strong> <p>A halo round the letters, and an optional box behind them.</p></li>
+    <li><strong>Colors, size and opacity</strong> <p>Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make each selected note, or the next note, one Size step bigger or smaller than it is, and holding one keeps going, faster the longer you hold. New notes start in a dark gray (color 2) at a size that fits the grid; a color you pick stays your default. A color, size, opacity or Background you set on a note also becomes the setting for the next note.</p></li>
     <li><strong>Select and move</strong> <p>Click a note or drag a box round several; drag to move, arrow keys nudge.</p></li>
-    <li><strong>Key to switch on</strong> <p>Press <code>T</code> to pick the Text tool (not while you are typing in a note, a dialog or the Letter tool).</p></li>
+    <li><strong>Key to switch on</strong> <p>Press <code>T</code> to pick the Text Anywhere tool (not while you are typing in a note, a dialog or the Letter tool).</p></li>
     <li><strong>Hide all notes</strong> <p>The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.</p></li>
-    <li><strong>Erase</strong> <p>Right-click a note, or drag with the right button across several; they go when you let go. Or press Delete.</p></li>
+    <li><strong>Erase</strong> <p>Right-click a note, or drag with the right button across several; they erase when you let go. Or press Delete.</p></li>
     <li><strong>Kept per puzzle</strong> <p>Notes survive a reload, for your last 50 puzzles.</p></li>
     <li><strong>Settings</strong> <p>Color presets, font (proportional or fixed width), halo, box color and border by sample; Copy and Paste to another browser.</p></li>
   </ul>
@@ -97,7 +97,7 @@
   <!-- /slideshow:text-anywhere-formatting -->
 
   <h2>The Text Anywhere panel</h2>
-  <p>Pick the Text tool and its panel opens beside the puzzle.</p>
+  <p>Pick the Text Anywhere tool and its panel opens beside the puzzle.</p>
   <div class="figure"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-panel-annotated.png?v=46e3aab" alt="The Text Anywhere panel with each part labelled on its left. Color buttons: click or press 1 to 9, and hold to edit. Background: boxes new or selected notes. Clear all: deletes the selected notes, or all. Settings: opens the settings. Size: a slider for the text size, from small to large. Opacity: a slider from faint to solid. Eye: hides or shows all notes." width="519" height="332"></div>
 
   <h2>Good to know</h2>
@@ -105,7 +105,7 @@
     <li>The notes are kept in this browser only, so another browser or device does not show them.</li>
     <li>Undo right after Restart restores the notes. If the notes cannot be saved, a message says so.</li>
   </ul>
-  <footer><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
+  <footer><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a><br>Questions, bugs or suggestions? Message me on Discord: <a href="https://discord.com/users/184770560356646923">@ChinStrap</a></footer>
   <script src="slides.js"></script>
 </body>
 </html>
