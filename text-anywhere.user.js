@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.57
+// @version      0.46.58
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.57'
+  const VERSION = '0.46.58'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -616,9 +616,7 @@
     return Number.isInteger(n) && n >= 1 && n <= NOTE_COLOR_COUNT ? n : undefined
   }
   const readColor = (saved) => noteColorNumber(saved) ?? DEFAULT_COLOR
-  const isWidth = (value) => onSliderStep(WIDTH_RANGE, value)
-  const isOpacity = (value) => onSliderStep(OPACITY_RANGE, value)
-  const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
+  const readWidth = (saved) => savedSliderValue(WIDTH_RANGE, saved) ?? DEFAULT_WIDTH
   const readFlag = (saved) => saved === true
   const readBackground = readFlag
   const BOX_PRESETS = { page: 'Page', white: 'White', yellow: 'Yellow', tint: 'Tint' }
@@ -690,7 +688,7 @@
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
   const noteOpacity = (item) => itemOpacity(item) / 100
-  const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
+  const readOpacity = (saved) => savedSliderValue(OPACITY_RANGE, saved) ?? DEFAULT_OPACITY
 
   // A color or background the notes do not share is null; a slider must show one value, so it shows the first note's (the oldest).
   function panelLooks (items) {
@@ -752,6 +750,7 @@
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
   // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
   const onSliderStep = ({ min, max, step }, value) => typeof value === 'number' && value >= min && value <= max && Number.isInteger((value - min) / step)
+  const savedSliderValue = (range, data) => (onSliderStep(range, data) ? data : undefined)
   // SudokuPad drops every keydown with `event.repeat` before a tool sees it, so a script times a held key itself: nothing until the pause, then a tick of steps that ramps up.
   const HELD_REPEAT_MS = 300
   const HELD_RAMP_MS = 1500
@@ -858,6 +857,9 @@
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
   // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
+  // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
+  const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
+
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -1292,8 +1294,8 @@
   // An invalid pasted outline reads as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
   const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })
   const LOOKS = [
-    lookRowOf('width', WIDTH_KEY, (data) => (isWidth(data) ? data : undefined), { fallback: DEFAULT_WIDTH }),
-    lookRowOf('opacity', OPACITY_KEY, (data) => (isOpacity(data) ? data : undefined), { fallback: DEFAULT_OPACITY }),
+    lookRowOf('width', WIDTH_KEY, (data) => savedSliderValue(WIDTH_RANGE, data), { fallback: DEFAULT_WIDTH }),
+    lookRowOf('opacity', OPACITY_KEY, (data) => savedSliderValue(OPACITY_RANGE, data), { fallback: DEFAULT_OPACITY }),
     lookRowOf('outline', OUTLINE_KEY, readOutline, { dialog: true }),
     lookRowOf('boxColor', BOX_KEY, readBoxColor, { dialog: true }),
     lookRowOf('frame', FRAME_KEY, readFrame, { dialog: true }),

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.81
+// @version      0.25.82
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.81'
+  const VERSION = '0.25.82'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -356,6 +356,9 @@
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
   // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
+  // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
+  const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
+
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -390,10 +393,9 @@
   const saveTable = (store, rows, values) => rows.forEach((row) => saveRow(store, row, values[row.name]))
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
-  const readPastedFlag = (data) => (typeof data === 'boolean' ? data : undefined)
-  const readPastedMode = (data) => (MODES.includes(data) ? data : undefined)
-  const MODE_ROW = { name: 'mode', key: MODE_KEY, fallback: DEFAULT_MODE, read: readPastedMode }
-  const PRELOAD_ROWS = ADDED_PRELOADS.map(({ key }) => ({ name: key, key, fallback: false, read: readPastedFlag }))
+  const savedMode = (data) => (MODES.includes(data) ? data : undefined)
+  const MODE_ROW = { name: 'mode', key: MODE_KEY, fallback: DEFAULT_MODE, read: savedMode }
+  const PRELOAD_ROWS = ADDED_PRELOADS.map(({ key }) => ({ name: key, key, fallback: false, read: savedBoolean }))
   const SETTING_ROWS = [MODE_ROW, ...PRELOAD_ROWS]
   // The profiles are no row: their fallback comes from the groups saved before them, and they are saved in the store's envelope, with their own read.
   const READERS = { [PROFILES_KEY]: readProfiles, ...pasteReaders(SETTING_ROWS) }
