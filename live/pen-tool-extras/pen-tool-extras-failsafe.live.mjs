@@ -239,7 +239,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           assert.equal(await bar.count(), 0)
           return
         }
-        assert.match(await bar.textContent(), new RegExp(`^Pen Tool Extras: ${kase.off} (is|are) off — SudokuPad changed\\.Report`))
+        assert.match(await bar.textContent(), new RegExp(`^Pen Tool Extras: ${kase.off} (is|are) off because SudokuPad changed\\.Report`))
         assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
         await bar.locator('button[aria-label="Dismiss"]').click()
         assert.equal(await bar.count(), 0)
