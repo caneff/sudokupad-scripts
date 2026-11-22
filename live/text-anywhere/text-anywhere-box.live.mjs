@@ -2,9 +2,9 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { actButton, closeDialogWith, savedValue, STATUS } from '../settings.mjs'
-import { useBrowser } from '../session.mjs'
+import { openWith, reloadWith, useBrowser } from '../session.mjs'
 
-const { BOX_CUSTOM_INPUT: CUSTOM, BOX_KEY, BOX_PICKS: PICKS, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, pickTextAnywhere } = textAnywhere
+const { BOX_CUSTOM_INPUT: CUSTOM, SCRIPT_FILE, TOOL_BUTTON, BOX_KEY, BOX_PICKS: PICKS, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, pickTextAnywhere } = textAnywhere
 const FRAME_PICKS = `${EDITOR} button[data-role="frame-pick"]`
 const FRAME_ON = `${FRAME_PICKS}[data-value="on"]`
 const FRAME_OFF = `${FRAME_PICKS}[data-value="off"]`
@@ -222,6 +222,38 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     } finally {
       await other.context.close()
     }
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('Text Anywhere\'s Tint box with Dark Page on', { concurrency: false }, () => {
+  const SCRIPTS = [SCRIPT_FILE, 'dark-page.user.js']
+  let context, p, errors
+  before(async () => {
+    ;({ context, p, errors } = await openWith(browser(), SCRIPTS))
+    await p.locator(TOOL_BUTTON).waitFor({ state: 'visible' })
+    await textAnywhere.forgetNotes(p)
+    await p.evaluate((box) => Framework.setData(box, 'tint'), BOX_KEY)
+    await textAnywhere.plantNotes(p, [
+      { kind: 'text', color: 1, size: 20, opacity: 100, bg: true, text: 'on', at: [30, 30] },
+      { kind: 'text', color: 1, size: 20, opacity: 100, bg: true, text: 'off', at: [700, 30] }
+    ])
+    await reloadWith(p, SCRIPTS)
+    await pickTextAnywhere(p)
+  })
+  after(async () => { await context.close() })
+
+  it('a note off the board gets the same light tint as one on it, not a tint of the dark page', async () => {
+    assert.notEqual(await p.evaluate(() => window.getComputedStyle(document.body).getPropertyValue('--dark-page-color').trim()), '', 'Dark Page is on')
+    const { on, off } = await looks(p)
+    assert.notEqual(on.fill, TRANSPARENT)
+    // A mix computes as color(srgb r g b) with each channel 0 to 1; the 0.8 bound below means nothing in any other form.
+    assert.match(off.fill, /^color\(srgb /)
+    const channels = (fill) => fill.match(/[\d.]+/g).slice(-3).map(Number)
+    const [r, g, b] = channels(off.fill)
+    for (const channel of [r, g, b]) assert.equal(channel > 0.8, true, `a light tint, not near black: ${off.fill}`)
+    assert.equal(g > b && g > r, true, `leans toward the note's own green: ${off.fill}`)
+    assert.equal(off.fill, on.fill)
     assert.deepEqual(errors, [])
   })
 })

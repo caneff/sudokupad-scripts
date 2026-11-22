@@ -133,8 +133,8 @@ set them; a saved note keeps its own), starting at the point clicked: its stored
   all off when all have one.
 - **Box color** row: the color of the box behind every note that has one. Five sample buttons, each a short "A=B" note in the text
   color on that box: Page (the default, `--body-bg`; a note off the board takes Dark Page's page color, `--dark-page-color`, where
-  Dark Page is on), White, Yellow (`#fff4b0`), Tint (15% of each note's own color over the page color) or Own (a #rrggbb color
-  from a picker shown under the row while Own is picked). Global: it recolors every boxed note, old and new, since a note stores
+  Dark Page is on), White, Yellow (`#fff4b0`), Tint (15% of each note's own color over the light page color, on the board and off
+  it, even where Dark Page paints the margin) or Own (a #rrggbb color from a picker shown under the row while Own is picked). Global: it recolors every boxed note, old and new, since a note stores
   only `bg: true`. Saved under `TextAnywhere_box` as the preset's id or the hex color; a value that is not one reads as Page. The
   halo stays the page color.
 - **Box border** row (the frame): two sample buttons, None and Thin gray, each a boxed note. With Thin gray, every boxed note gets

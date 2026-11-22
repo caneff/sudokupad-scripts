@@ -665,11 +665,13 @@ test('the box is filled with the page color, white, the yellow, a tint of the no
   assert.notEqual(boxFill('tint', 'red'), boxFill('tint', 'blue'))
 })
 
-test('a Page or Tint box off the board takes the color behind it', () => {
+test('a Page box off the board takes the color behind it, and a Tint, White or Yellow box stays light', () => {
   const behind = 'var(--dark-page-color, var(--body-bg, #fff))'
   assert.equal(boxFill('page', 'var(--c)', behind), behind)
-  assert.equal(boxFill('tint', 'var(--c)', behind), `color-mix(in srgb, var(--c) 15%, ${behind})`)
+  assert.equal(boxFill('tint', 'var(--c)', behind), boxFill('tint', 'var(--c)'))
+  assert.equal(boxFill('tint', 'var(--c)', behind), 'color-mix(in srgb, var(--c) 15%, var(--body-bg, #fff))')
   assert.equal(boxFill('white', 'var(--c)', behind), '#ffffff')
+  assert.equal(boxFill('yellow', 'var(--c)', behind), BOX_YELLOW)
 })
 
 test('a note whose middle is on the board has the board\'s color behind it, and one off the board the page color Dark Page paints', () => {
