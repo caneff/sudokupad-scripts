@@ -28,6 +28,7 @@ const runSlides = (count) => {
   const slides = Array.from({ length: count }, fakeElement)
   const captions = Array.from({ length: count }, fakeElement)
   const barParent = show.querySelector('.slide-bar')
+  barParent.dataset = { name: 'The X show' }
   const live = show.querySelector('.slide-captions')
   show.querySelectorAll = (selector) => (selector === '.slide' ? slides : captions)
   let pager
@@ -55,7 +56,8 @@ test('the slideshow script labels its buttons, shows the first slide, caption an
   })
   const next = pager.querySelector('.next').clicks.click
   const prev = pager.querySelector('.prev').clicks.click
-  assert.match(pager.innerHTML, /aria-label="Previous"[\s\S]*aria-label="Next"/)
+  // Each button's accessible name names its slideshow, so a page with several tells their buttons apart.
+  assert.match(pager.innerHTML, /aria-label="Previous: The X show"[\s\S]*aria-label="Next: The X show"/)
   assert.deepEqual(shown(), { slide: 0, caption: 0, count: '1 / 5', currentSlides: 1 })
   next()
   assert.deepEqual(shown(), { slide: 1, caption: 1, count: '2 / 5', currentSlides: 1 })

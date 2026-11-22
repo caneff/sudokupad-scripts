@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Puzzle Scripts</title>
+<meta name="description" content="Small userscripts for SudokuPad and for other puzzle sites: pen colors and marks, typed notes on the board, colors by digit, a dark page and more.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Puzzle Scripts">
+<meta property="og:description" content="Small userscripts for SudokuPad and for other puzzle sites: pen colors and marks, typed notes on the board, colors by digit, a dark page and more.">
+<meta property="og:image" content="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-1-color.png?v=6e323ce">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" href="Fredoka.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="Nunito.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
@@ -72,7 +78,7 @@
         </picture>
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-13-settings.png?v=05b635e" alt="A red ring on the settings button in the pen panel, beside the Pen Tool Extras settings dialog it opens: pen color presets, Thickness and Opacity, line styles, the marks each click cycles through, White outlines, and Save, Cancel and Restore defaults" width="684" height="430">
       </div>
-      <div class="slide-bar">
+      <div class="slide-bar" data-name="Pen Tool Extras">
         <div class="slide-captions">
           <p class="slide-caption current">Draw a line, hold its button to recolor</p>
           <p class="slide-caption">A solid line</p>
@@ -93,7 +99,7 @@
     <div class="row-text">
       <h2>Pen Tool Extras</h2>
       <p>Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners.</p>
-      <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js">Install<span class="visually-hidden"> Pen Tool Extras</span></a><a class="more" href="pen-tool-extras.html">Details &rarr;</a></p>
+      <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js">Install<span class="visually-hidden"> Pen Tool Extras</span></a><a href="pen-tool-extras.html">Details &rarr;</a></p>
     </div>
   </section>
   <section class="row">
@@ -125,7 +131,7 @@
         </picture>
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-9-settings.png?v=3dbc67d" alt="Two green notes on the board in a fixed-width font, r4: 2,7 with a thick white halo over a grid line and A=B+5 in a yellow box, beside the settings dialog's Font, Halo, Box color and Box border rows with Fixed width, Thick and Yellow picked" width="800" height="500">
       </div>
-      <div class="slide-bar">
+      <div class="slide-bar" data-name="Text Anywhere">
         <div class="slide-captions">
           <p class="slide-caption current">Left click to type a note</p>
           <p class="slide-caption">Formatting: **bold**, # headers, -&gt;</p>
@@ -143,7 +149,7 @@
     <div class="row-text">
       <h2>Text Anywhere</h2>
       <p>Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.</p>
-      <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js">Install<span class="visually-hidden"> Text Anywhere</span></a><a class="more" href="text-anywhere.html">Details &rarr;</a></p>
+      <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js">Install<span class="visually-hidden"> Text Anywhere</span></a><a href="text-anywhere.html">Details &rarr;</a></p>
     </div>
   </section>
   <section class="row">
@@ -161,7 +167,7 @@
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-9-modular.png?v=e66c805" alt="Modular picked: the boxes recolored in its orange, pink and yellow groups" width="900" height="375">
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-10-split.png?v=0e5a6c4" alt="Both mode with the cells filled in the first profile's red, green and yellow, and the digits and marks shaded in Modular's olive, purple and brown" width="900" height="375">
       </div>
-      <div class="slide-bar">
+      <div class="slide-bar" data-name="Color by Digit">
         <div class="slide-captions">
           <p class="slide-caption current">Start</p>
           <p class="slide-caption">Type a 1</p>
@@ -180,7 +186,7 @@
     <div class="row-text">
       <h2>Color by Digit</h2>
       <p>Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.</p>
-      <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install<span class="visually-hidden"> Color by Digit</span></a><a class="more" href="color-by-digit.html">Details &rarr;</a></p>
+      <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install<span class="visually-hidden"> Color by Digit</span></a><a href="color-by-digit.html">Details &rarr;</a></p>
     </div>
   </section>
   <section class="row">
@@ -211,10 +217,10 @@
       <h2>UI Tweaks</h2>
       <p>Small changes to SudokuPad's buttons, each switched on or off in a settings dialog that opens from SudokuPad's settings. Restore defaults there puts the choices back to how they start.</p>
       <ul>
-        <li><b>Tab never switches to letters</b> (on at first): a stray Tab no longer switches the number pad to letters. The letter button and the / key still do.</li>
-        <li><b>Hide the Select button</b> (off at first): takes the button out of the bottom row, and the other buttons close up.</li>
-        <li><b>Wrap buttons</b> (off at first): the bottom row of tool buttons wraps onto a second line after five. It has no effect with Color by Digit installed, which already wraps it.</li>
-        <li><b>Digit pad size</b> (Normal at first): Smaller, Normal, Larger or Largest digit buttons. SudokuPad fits the whole controls column to the window, so the digits grow most on a large screen, and on a laptop the other buttons shrink to make room.</li>
+        <li><strong>Tab never switches to letters</strong> (on at first): a stray Tab no longer switches the number pad to letters. The letter button and the / key still do.</li>
+        <li><strong>Hide the Select button</strong> (off at first): takes the button out of the bottom row, and the other buttons close up.</li>
+        <li><strong>Wrap buttons</strong> (off at first): the bottom row of tool buttons wraps onto a second line after five. It has no effect with Color by Digit installed, which already wraps it.</li>
+        <li><strong>Digit pad size</strong> (Normal at first): Smaller, Normal, Larger or Largest digit buttons. SudokuPad fits the whole controls column to the window, so the digits grow most on a large screen, and on a laptop the other buttons shrink to make room.</li>
       </ul>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js">Install<span class="visually-hidden"> UI Tweaks</span></a></p>
     </div>

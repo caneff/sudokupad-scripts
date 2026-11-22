@@ -100,6 +100,22 @@ for (const name of PAGES) {
   })
 }
 
+// #1107: every page has a tab icon and a link preview (title, summary and picture), so a pasted link shows one in Discord.
+test('every page has a favicon that exists, a meta description and Open Graph title, description and image', () => {
+  for (const name of PAGES) {
+    const head = read(name).split('</head>')[0]
+    const icon = head.match(/<link rel="icon" href="([^"]+)"/)
+    assert.ok(icon && fs.existsSync(path.join(SITE_DIR, icon[1])), `site/${name} has no <link rel="icon"> to a file of site/`)
+    const meta = key => (head.match(new RegExp(`<meta (?:name|property)="${key}" content="([^"]+)"`)) || [])[1]
+    assert.ok(meta('description'), `site/${name} has no meta description`)
+    for (const key of ['og:title', 'og:description', 'og:image']) assert.ok(meta(key), `site/${name} has no ${key}`)
+    assert.equal(meta('og:title'), head.match(/<title>([^<]*)<\/title>/)[1], `site/${name}: og:title is not its <title>`)
+    assert.equal(meta('og:description'), meta('description'), `site/${name}: og:description is not its description`)
+    // A preview picture is fetched by the chat site, so its address is absolute, and it is a picture of a repo file.
+    assert.ok(meta('og:image').startsWith(RAW), `site/${name}: og:image is not a repo picture at ${RAW}`)
+  }
+})
+
 test('each details page is named for its h1: lower-case words joined by hyphens', () => {
   for (const name of PAGES.filter(f => f !== HOME)) {
     const h1 = read(name).match(/<h1>([^<]*)<\/h1>/)
@@ -111,7 +127,9 @@ test('each details page is named for its h1: lower-case words joined by hyphens'
 test(`${REDIRECT} is the one redirect page: a meta refresh and a plain link to ${DRAW}`, () => {
   const page = read(REDIRECT)
   assert.match(page, new RegExp(`<meta http-equiv="refresh" content="0; url=${DRAW.replace('.', '\\.')}">`))
-  assert.deepEqual(siteLinks(page), [DRAW])
+  assert.deepEqual(siteLinks(page), [DRAW, DRAW])
+  assert.match(page, /<html lang="en">/)
+  assert.match(page, new RegExp(`<link rel="canonical" href="${DRAW.replace('.', '\\.')}">`))
   assert.doesNotMatch(page, /<script\b/i)
   for (const t of targets(page)) assert.doesNotMatch(t, SITE_ADDRESS, `site/${REDIRECT} links ${t} by its absolute address`)
 })

@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Text Anywhere: SudokuPad scripts</title>
+<meta name="description" content="Adds to SudokuPad a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Text Anywhere: SudokuPad scripts">
+<meta property="og:description" content="Adds to SudokuPad a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.">
+<meta property="og:image" content="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-1-type.png?v=85517f9">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" href="Fredoka.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="Nunito.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
@@ -43,7 +49,7 @@
       </picture>
       <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-slide-9-settings.png?v=3dbc67d" alt="Two green notes on the board in a fixed-width font, r4: 2,7 with a thick white halo over a grid line and A=B+5 in a yellow box, beside the settings dialog's Font, Halo, Box color and Box border rows with Fixed width, Thick and Yellow picked" width="800" height="500">
     </div>
-    <div class="slide-bar">
+    <div class="slide-bar" data-name="Text Anywhere">
       <div class="slide-captions">
         <p class="slide-caption current">Left click to type a note</p>
         <p class="slide-caption">Formatting: **bold**, # headers, -&gt;</p>
@@ -81,7 +87,7 @@
       <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-formatting-raw.png?v=0c41355" alt="One large note on the board, beside the grid, open for typing and showing the text typed: # Header one, ## Header two, ### Header three, -# subtext, **bold**, *italic*, _italic_, ***bold italics***, __underlined__ and its combinations, ~~struck through~~, - a bullet, an indented - nested bullet, 1. and 2. numbered items, - [x] a ticked item, - [ ] an empty item, `inline code`, a block between two lines of ```, and the keys for the symbols, -&gt; &lt;- != &lt;= &gt;= sum" width="777" height="716">
       <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-formatting.png?v=9e0fba1" alt="The same note finished, showing every style rendered: three headers of falling size, small faded subtext, bold, italic and bold italics, underlined, underlined italics, underlined bold and underlined bold italics, struck through, a bullet with a nested bullet, a numbered list of two items, a ticked checklist item and an empty one, inline code and a code block in monospace, and the symbols → ← ≠ ≤ ≥ Σ" width="777" height="716">
     </div>
-    <div class="slide-bar">
+    <div class="slide-bar" data-name="Text Anywhere formatting">
       <div class="slide-captions">
         <p class="slide-caption current">Before: what you type</p>
         <p class="slide-caption">After: what the note shows. Click a checklist box to tick it.</p>
@@ -91,7 +97,7 @@
   <!-- /slideshow:text-anywhere-formatting -->
 
   <h2>The Text Anywhere panel</h2>
-  <p class="prose">Pick the Text tool and its panel opens beside the puzzle.</p>
+  <p>Pick the Text tool and its panel opens beside the puzzle.</p>
   <div class="figure"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/text-anywhere/text-anywhere-panel-annotated.png?v=46e3aab" alt="The Text Anywhere panel with each part labelled on its left. Color buttons: click or press 1 to 9, and hold to edit. Background: boxes new or selected notes. Clear all: deletes the selected notes, or all. Settings: opens the settings. Size: a slider for the text size, from small to large. Opacity: a slider from faint to solid. Eye: hides or shows all notes." width="519" height="332"></div>
 
   <h2>Good to know</h2>

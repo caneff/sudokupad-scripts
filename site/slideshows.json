@@ -1,5 +1,6 @@
 {
   "pen-tool-extras": {
+    "name": "Pen Tool Extras",
     "dir": "docs/research/pen-tool-extras/",
     "width": 684,
     "height": 430,
@@ -72,6 +73,7 @@
     ]
   },
   "color-by-digit": {
+    "name": "Color by Digit",
     "dir": "docs/research/color-by-digit/",
     "width": 900,
     "height": 375,
@@ -129,6 +131,7 @@
     ]
   },
   "text-anywhere": {
+    "name": "Text Anywhere",
     "dir": "docs/research/text-anywhere/",
     "width": 800,
     "height": 500,
@@ -186,6 +189,7 @@
     ]
   },
   "text-anywhere-formatting": {
+    "name": "Text Anywhere formatting",
     "dir": "docs/research/text-anywhere/",
     "width": 777,
     "height": 716,
