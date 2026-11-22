@@ -22,6 +22,8 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 | UI Tweaks | Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js) |
 | Logic Masters Puzzle Preview | Show puzzle preview images inline on Logic Masters portal pages, cached between visits | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js) |
 
+Logic Masters Puzzle Preview's first version is by Juggler, published here with their permission.
+
 ## Settings
 
 Each script adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it. A script's dialog shows its version beside the heading.

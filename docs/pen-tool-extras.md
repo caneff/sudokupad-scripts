@@ -37,14 +37,14 @@ The title row ends with two icon buttons, Copy settings (two overlapping squares
 The pen colors never change on their own. Only picking a preset and saving, or editing a color, changes them, with one exception: the install save.
 
 - **Install save:** on the first load with no pen colors saved, the script saves cell color page 1, darkened, as the "Darker page 1" preset. This happens once. It also happens on the first load after updating from a version that saved nothing, even when another cell color page is current. The script waits for the color tool for as long as it takes; until then the pens show SudokuPad's own colors. With no color tool at all, it saves "SudokuPad colors" instead. A save made in the dialog before the install save wins.
-- **Darker page:** each pen takes the cell color on the same button number, darkened, and button 0 is not used. The darkest grey becomes black. A cell color that is transparent or unreadable leaves SudokuPad's own pen color on that button, and the dialog says which.
+- **Darker page:** each pen takes the cell color on the same button number, darkened, and button 0 is not used. The darkest gray becomes black. A cell color that is transparent or unreadable leaves SudokuPad's own pen color on that button, and the dialog says which.
 - The saved colors are a snapshot. A later change to the cell colors or the current page doesn't touch them.
 - Strokes already drawn and the color buttons change with the colors. Recoloring a pen changes it on every page.
 - Colors saved by an older version are kept as they are and show as Custom.
 
 Three ways to change them:
 
-- **Preset pulldown**, at the top of the dialog's Pen colors section: "Darker page 1", "Darker page 2" and "Darker page 3" (one per page the current puzzle's palette has, up to 3), then "SudokuPad colors". Picking one fills the nine pickers, worked out at that moment from the palette in force. Save keeps the colors and the preset's name, and Cancel drops them. The pulldown then shows the last preset picked. When the colors in force are no preset it offers, it shows them first, greyed out so they can't be picked: "Custom" while the colors are your own, a darker page the current palette doesn't have, or "SudokuPad (unsaved)" before the install save.
+- **Preset pulldown**, at the top of the dialog's Pen colors section: "Darker page 1", "Darker page 2" and "Darker page 3" (one per page the current puzzle's palette has, up to 3), then "SudokuPad colors". Picking one fills the nine pickers, worked out at that moment from the palette in force. Save keeps the colors and the preset's name, and Cancel drops them. The pulldown then shows the last preset picked. When the colors in force are no preset it offers, it shows them first, grayed out so they can't be picked: "Custom" while the colors are your own, a darker page the current palette doesn't have, or "SudokuPad (unsaved)" before the install save.
 - **Settings dialog pickers:** a 3 by 3 grid of square color inputs, 4px apart and without numbers, in the arrangement of the pen buttons. An edit turns the pulldown to Custom. Save keeps your colors.
 - **Hold a pen color button for a second**, with either mouse button: a picker appears over each button, as in the cell color tool. Click one to open it. The pen changes live and the set is saved, as Custom. Hold again, or leave the pen tool, to close them.
 
@@ -65,7 +65,7 @@ Both sliders sit in the pen tool's panel, across its full width under the three 
 
 **Marks above lines:** every edge mark, corner mark and cell circle, cross and dot is drawn above every pen line, whichever cell holds it. SudokuPad draws strokes in cell order, which used to bury a mark under a line in a later cell. A mark in the same color as the line under it still doesn't stand out on a thick line; it shows only by its shape.
 
-**The drag highlight shows the pen:** it is SudokuPad's 16-wide stroke for every pen, and a page 2 pen's is dashed (the Dash length slider, laid out for that width) and a page 3 pen's has arrowheads beside it, one run to each cell of the drag, pointing the way it went. An erasing drag's red highlight stays solid.
+**The line preview shows the pen:** it is SudokuPad's 16-wide stroke for every pen, and a page 2 pen's is dashed (the Dash length slider, laid out for that width) and a page 3 pen's has arrowheads beside it, one run to each cell of the drag, pointing the way it went. An erasing drag's red highlight stays solid.
 
 **Opacity on the whole layer:** strokes that overlap don't darken at the joins. Where two colors cross, the later stroke covers the earlier one instead of blending with it. The drag and erase highlights keep SudokuPad's own look at every value.
 
