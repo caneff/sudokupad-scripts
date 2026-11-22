@@ -2,9 +2,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { openWithAllScripts, rulesWidth, setLongRules } from '../attacks.mjs'
+import { openWithAllScripts, rulesWidth, setLongRules } from '../all-scripts.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen } from '../board.mjs'
+import { TEXT_ANYWHERE_BUTTON } from '../scripts.mjs'
 import { ARROW, MENU } from '../color-by-digit/color-by-digit-fixtures.mjs'
 
 const { SLIDERS, TEXT_BOX, pickTextAnywhere } = textAnywhere
@@ -108,13 +109,13 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     await p.locator(`${MENU} [data-act=pick][data-target=cells]`).nth(1).click()
     await p.locator(MENU).waitFor({ state: 'detached' })
     assert.equal(await boxOpen(p), false, 'the menu row opened a note')
-    const [x, y] = await centerOf('#control-textanywhere')
-    assert.equal(await p.evaluate(([px, py]) => document.elementFromPoint(px, py).closest('#control-textanywhere') !== null, [x, y]), true, 'the tool button is on top')
+    const [x, y] = await centerOf(TEXT_ANYWHERE_BUTTON)
+    assert.equal(await p.evaluate(([px, py, button]) => document.elementFromPoint(px, py).closest(button) !== null, [x, y, TEXT_ANYWHERE_BUTTON]), true, 'the tool button is on top')
   })
 
   it('a press on a tool button, the rules text or the timer (which pauses with its own dialog) does not open a note', async () => {
     // The footer is a transparent div with text: a control.
-    for (const selector of ['#control-textanywhere', '.puzzle-rules', '.controls-footer', '.timer']) {
+    for (const selector of [TEXT_ANYWHERE_BUTTON, '.puzzle-rules', '.controls-footer', '.timer']) {
       await p.mouse.click(...await centerOf(selector))
       assert.equal(await boxOpen(p), false, `${selector} opened a note`)
     }

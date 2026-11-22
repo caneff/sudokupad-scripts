@@ -3,7 +3,7 @@
 // handler with Clear through clearErrorLog, the row-read contract, the store naming every slot it kept an unreadable value in, and escapeHtml, at the `npm test` seam.
 // Blind to real SudokuPad: the Framework calls (each script's Copy wired through `runInDialog` and a blocked storage on the page),
 // rendering (the dialogs, the missing-color note, Color by Digit's unreadable note) and hold-to-edit. `npm run test:live` covers them on
-// sudokupad.app: attack 76 in live/attacks-storage.live.mjs, and the settings and profiles suites of each script.
+// sudokupad.app: attack 79 in live/attacks-storage.live.mjs, and the settings and profiles suites of each script.
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { join } = require('node:path')

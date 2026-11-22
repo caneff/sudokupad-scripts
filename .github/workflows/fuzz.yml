@@ -26,12 +26,9 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: ./.github/actions/setup-repo
         with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
+          playwright: true
       - id: fuzz
         run: npm run fuzz:nightly
         env:

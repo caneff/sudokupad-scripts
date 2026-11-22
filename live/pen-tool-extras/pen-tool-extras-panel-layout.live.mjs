@@ -6,8 +6,9 @@ import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { holdUntil } from '../input.mjs'
 import { openPenTool } from '../pen.mjs'
-import { dialogButton, EXTRAS_EDITOR, openExtrasEditor } from '../settings.mjs'
+import { dialogButton } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
+import { EXTRAS_EDITOR, openExtrasEditor } from '../scripts.mjs'
 
 const { HOLD_WAIT_MS } = extras
 

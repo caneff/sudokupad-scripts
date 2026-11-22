@@ -7,7 +7,7 @@
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
-import { openExtrasEditor } from '../../../live/settings.mjs'
+import { openExtrasEditor } from '../../../live/scripts.mjs'
 
 const VIEWPORTS = [['desktop', { width: 1200, height: 900 }], ['phone', { width: 390, height: 800 }]]
 const STATES = ['opened', 'flipped']

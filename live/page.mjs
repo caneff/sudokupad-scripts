@@ -39,6 +39,12 @@ export const collectSkipLines = (page, errors, expectedSkips = []) => {
   })
 }
 
+// Collects into `warned` the text of every console warning the page logs that `pattern` matches (every warning, with no pattern). The one warning capture of the
+// live suites: a suite that checks a script warned, or warned once, reads `warned`.
+export const collectWarnings = (page, warned, pattern = /(?:)/) => {
+  page.on('console', (m) => { if (m.type() === 'warning' && pattern.test(m.text())) warned.push(m.text()) })
+}
+
 // Collects into `errors` every uncaught page error as its stack (which starts with the name and message), so a suite that
 // asserts `errors` is empty prints where the error came from when it fails.
 export const collectPageErrors = (page, errors) => {

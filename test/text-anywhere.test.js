@@ -4,7 +4,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { headerField, headerVersion } = require('./header-version.js')
+const { compareVersions, headerField, headerVersion } = require('../userscript-header.js')
 const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./broken-sudokupad.js')
@@ -555,7 +555,7 @@ const LAST_OLD_VERSION = '0.44.14'
 const HANDOVER_VERSION = '0.45.1'
 // The SHA-256 of draw-tool.user.js as 0.45.1 shipped it (commit 2341bc3). Text Anywhere's later changes never reach it: nobody installs from it (#800).
 const HANDOVER_SHA256 = '872fd65050ec26595d4eb923dd6e576cfdfab77dbbfc162fec281a00f0829171'
-const newerThan = (a, b) => a.localeCompare(b, undefined, { numeric: true }) > 0
+const newerThan = (a, b) => compareVersions(a, b) > 0
 
 test('draw-tool.user.js is the frozen handover: it sends updates to text-anywhere.user.js under the same @name and @namespace', () => {
   const { RAW } = require('../tag-pictures.js')

@@ -1,12 +1,14 @@
 // Shared by the live checks: a panel slider set with the real mouse, and attack 17 (a slider drag with a tool hotkey mid-drag). Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { savedState, savedValue } from './settings.mjs'
 import { stable } from './settle.mjs'
-import { OTHER_TOOL, OTHER_TOOL_KEY } from './attacks.mjs'
+import { OTHER_TOOL, OTHER_TOOL_KEY } from './all-scripts.mjs'
 
-// The slider thumb's width in rem, as lib/panel.js's SLIDER_THUMB_REM draws it.
-const SLIDER_THUMB_REM = 1.1
+// The slider thumb's width in rem, read from lib/panel.js, which draws it, through the lib tests' loader (the module is pasted text, not a module).
+const { loadLib } = createRequire(import.meta.url)('../test/load-lib.js')
+const { SLIDER_THUMB_REM } = loadLib(['plain', 'sudokupad', 'panel'], ['SLIDER_THUMB_REM'])
 
 // Presses on `slider`'s track where `value` lies and releases, with real mouse input. The thumb's centre runs from half a thumb in from each end of the track.
 // A press on the thumb drags it by the offset it was pressed at and does not jump, so when the thumb is under the target the track is first pressed at its other end.

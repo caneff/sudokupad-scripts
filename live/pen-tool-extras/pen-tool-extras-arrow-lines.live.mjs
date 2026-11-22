@@ -5,11 +5,11 @@ import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { setInputValue } from '../input.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
 import { cellCentre, undoAll } from '../board.mjs'
 import { drag, goToPenPage, openPenTool, padValues, PAGE_ONE, PAGE_THREE, penDrawnCount, penEntries, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../scripts.mjs'
 
 // The sizes of an arrow line are the script's own, so the checks read them from it and a retuning moves both.
 const { ARROW_LINE, ARROW_SPACING } = extras.scriptExports
@@ -260,10 +260,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const base = await arrows()
     assert.equal(base > 0, true)
     // The arrows in the page 3 pen button's swatch, which the spacing does not set: it has two, a quarter and three quarters along.
-    const swatchArrows = () => read(() => {
-      const rule = document.getElementById('pen-tool-extras-style').textContent.split('\n').find((l) => l.startsWith('.tool-pen button[data-key="1"][data-pen-page="3"]:after'))
+    const swatchArrows = () => read((style) => {
+      const rule = document.querySelector(style).textContent.split('\n').find((l) => l.startsWith('.tool-pen button[data-key="1"][data-pen-page="3"]:after'))
       return (decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule)[1]).match(/Z/g) || []).length
-    })
+    }, extras.STYLE)
     assert.equal(await swatchArrows(), 2)
     const slider = () => editor().locator('input[data-setting="arrowSpacing"]')
     const setSpacing = (value) => setInputValue(slider(), value)

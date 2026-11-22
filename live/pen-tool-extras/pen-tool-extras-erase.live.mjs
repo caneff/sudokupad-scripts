@@ -5,11 +5,11 @@ import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
 import { cellCentre, gridPoint, mouseDrag, undoAll, undoDepth } from '../board.mjs'
 import { drag, openPenTool, penEntries, selectPenOnPage } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../scripts.mjs'
 
 // The saved key keeps its old name, so old saves read the same.
 const ERASE_KEY = 'PenColor_middleerase'

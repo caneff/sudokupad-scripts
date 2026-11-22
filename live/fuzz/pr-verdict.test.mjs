@@ -46,6 +46,19 @@ describe('prVerdict (#1030)', () => {
     assert.equal(verdict(PASSED, 'failure').ok, false)
   })
 
+  it('fails a passed fuzz when the harness smoke test failed, and its comment names the smoke test', () => {
+    const r = prVerdict({ output: PASSED, outcome: 'success', sha: SHA, runUrl: RUN_URL, smokeOutcome: 'failure' })
+    assert.equal(r.ok, false)
+    assert.match(r.body, /smoke test failed/)
+    assert.doesNotMatch(r.body, /passed on/)
+  })
+
+  it('passes a passed fuzz when the smoke test passed or did not run', () => {
+    for (const smokeOutcome of ['success', 'skipped', '']) {
+      assert.equal(prVerdict({ output: PASSED, outcome: 'success', sha: SHA, runUrl: RUN_URL, smokeOutcome }).ok, true, smokeOutcome)
+    }
+  })
+
   it('fails when there is no output file at all', () => {
     const r = verdict(null, 'skipped')
     assert.equal(r.ok, false)
@@ -60,13 +73,13 @@ describe('prVerdict (#1030)', () => {
 })
 
 describe('pr-verdict.mjs as a command', () => {
-  const run = (output, outcome) => {
+  const run = (output, outcome, smoke = '') => {
     const dir = mkdtempSync(join(tmpdir(), 'pr-verdict-'))
     try {
       const out = join(dir, 'fuzz.out')
       const comment = join(dir, 'comment.md')
       if (output !== null) writeFileSync(out, output)
-      const r = spawnSync(process.execPath, [new URL('./pr-verdict.mjs', import.meta.url).pathname, out, comment, outcome, SHA, RUN_URL], { encoding: 'utf8' })
+      const r = spawnSync(process.execPath, [new URL('./pr-verdict.mjs', import.meta.url).pathname, out, comment, outcome, SHA, RUN_URL, smoke], { encoding: 'utf8' })
       let body = null
       try { body = readFileSync(comment, 'utf8') } catch (e) { if (e.code !== 'ENOENT') throw e }
       return { status: r.status, body }
@@ -79,9 +92,9 @@ describe('pr-verdict.mjs as a command', () => {
     assert.match(r.body, /passed on `abc1234`/)
   })
 
-  it('exits 1 and writes the comment for a failure, a zero-list pass and a missing output', () => {
-    for (const [output, outcome] of [[FAILED, 'failure'], [ZERO, 'success'], [null, 'skipped']]) {
-      const r = run(output, outcome)
+  it('exits 1 and writes the comment for a failure, a zero-list pass, a missing output and a failed smoke test', () => {
+    for (const [output, outcome, smoke] of [[FAILED, 'failure'], [ZERO, 'success'], [null, 'skipped'], [PASSED, 'success', 'failure']]) {
+      const r = run(output, outcome, smoke)
       assert.equal(r.status, 1)
       assert.ok(r.body.startsWith(COMMENT_MARKER))
     }

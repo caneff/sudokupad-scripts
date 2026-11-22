@@ -2,7 +2,7 @@
 // Clicks, drags and keys are real input; the display changes are Chromium's own emulation.
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { assertNoCrash, openWithAllScripts, reloadWithScripts } from './attacks.mjs'
+import { assertNoCrash, openWithAllScripts, reloadWithScripts } from './all-scripts.mjs'
 import { cellCentre, finishNote, gridPoint, mouseDrag, pickTool, typeText } from './board.mjs'
 import { penDrawnCount, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'

@@ -24,12 +24,9 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: ./.github/actions/setup-repo
         with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
+          playwright: true
       # The recording is SudokuPad's own code: it is made again for every run and kept nowhere (not the repo, an artifact or the Actions cache).
       - id: watch
         run: npm run watch:live

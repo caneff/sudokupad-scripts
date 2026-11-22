@@ -5,6 +5,7 @@ import { openSettings } from '../settings.mjs'
 import { LETTER_MODE_KEY as MODE_KEY, numberPadText } from '../scripts.mjs'
 import { settle } from '../settle.mjs'
 import { openWith, scriptSource, useBrowser } from '../session.mjs'
+import { collectWarnings } from '../page.mjs'
 
 const SCRIPT_FILE = 'ui-tweaks.user.js'
 // The script with `breaks` run first, once SudokuPad is up and before the script's own startup check.
@@ -119,7 +120,7 @@ describe('the Tab binding is not found', () => {
     const { context, p } = await openWith(browser(), [SCRIPT_FILE], {
       expectedSkips: [WARNING],
       seed: (page) => {
-        page.on('console', (m) => { if (m.type() === 'warning') warnings.push(m.text()) })
+        collectWarnings(page, warnings)
         warned = page.waitForEvent('console', { predicate: (m) => WARNING.test(m.text()), timeout: 30000 })
       },
       afterStart: (page) => page.evaluate(() => { ToolLetter.tool.keyHandlers = ToolLetter.tool.keyHandlers.filter((e) => e.key !== 'Tab') })
@@ -149,7 +150,7 @@ describe('SudokuPad has no ToolLetter.tool.keyHandlers', { concurrency: false },
     ;({ context, p, errors } = await openWith(browser(), [withBreak(breaks)], {
       expectedSkips: [WARNING],
       seed: (page) => {
-        page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })
+        collectWarnings(page, warned, WARNING)
       }
     }))
     await p.evaluate(() => Framework.setSetting('toolletter', true))
@@ -193,7 +194,7 @@ describe('SudokuPad has no Framework.getData', { concurrency: false }, () => {
     const breaks = 'const original = Framework.getData; Framework.getData = undefined; Framework.getApp().then(() => { Framework.getData = original })'
     ;({ context, p, errors } = await openWith(browser(), [withBreak(breaks)], {
       expectedSkips: [WARNING],
-      seed: (page) => { page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) }) }
+      seed: (page) => { collectWarnings(page, warned, WARNING) }
     }))
     await p.evaluate(() => Framework.setSetting('toolletter', true))
     await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })

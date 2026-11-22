@@ -1,6 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
+import { TEXT_ANYWHERE_STYLE } from '../scripts.mjs'
 import { plantUnchecked } from '../pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 import { addScripts, useBrowser } from '../session.mjs'
@@ -35,8 +36,8 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
       await textAnywhere.pickTextAnywhere(p)
       await p.locator(SLIDERS).waitFor({ state: 'visible' })
       // SudokuPad's own keypad for this tool: the script's stylesheet off and the parts it adds hidden, for one reading.
-      const own = await p.evaluate(([styleId, parts]) => {
-        const style = document.getElementById(styleId)
+      const own = await p.evaluate(([styleSelector, parts]) => {
+        const style = document.querySelector(styleSelector)
         const added = [...document.querySelectorAll(parts)]
         style.disabled = true
         added.forEach((e) => { e.style.display = 'none' })
@@ -44,7 +45,7 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
         style.disabled = false
         added.forEach((e) => { e.style.display = '' })
         return height
-      }, ['text-anywhere-style', '.text-anywhere-tray, .text-anywhere-clear, .text-anywhere-background, .text-anywhere-settings, .text-anywhere-sliders'])
+      }, [TEXT_ANYWHERE_STYLE, '.text-anywhere-tray, .text-anywhere-clear, .text-anywhere-background, .text-anywhere-settings, .text-anywhere-sliders'])
       const panel = await keypadBox(p)
       assert.equal(Math.abs(panel.height - own) <= NEAR_PX, true, `the panel is ${panel.height} px tall, SudokuPad's keypad ${own} px`)
       assert.equal(panel.partsTop >= panel.top - NEAR_PX, true, `the top part ${panel.partsTop} starts inside the panel's top ${panel.top}`)
@@ -81,7 +82,7 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
     // Last, so the checks above run with one copy of the script on the page.
     it('a second start adds no second panel style', async () => {
       await addScripts(p, [textAnywhere.SCRIPT_FILE])
-      assert.equal(await p.locator('style#text-anywhere-style').count(), 1)
+      assert.equal(await p.locator(TEXT_ANYWHERE_STYLE).count(), 1)
     })
 
     it('the page raised no error', () => { assert.deepEqual(errors, []) })

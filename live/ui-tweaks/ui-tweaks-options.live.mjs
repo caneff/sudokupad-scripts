@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { numberPadText } from '../scripts.mjs'
+import { COLOR_BY_DIGIT_BUTTON, numberPadText, TEXT_ANYWHERE_BUTTON, UI_TWEAKS_DIALOG } from '../scripts.mjs'
 import { keydownDefaults } from '../input.mjs'
 import { closeDialogWith, dialogButton, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
@@ -8,7 +8,7 @@ import { openWith, reloadWith, useBrowser } from '../session.mjs'
 
 const SCRIPT_FILE = 'ui-tweaks.user.js'
 
-const DIALOG = '#ui-tweaks-dialog'
+const DIALOG = UI_TWEAKS_DIALOG
 const ROW = '.controls-aux'
 const SELECT = `${ROW} [data-control="select"]`
 const TOGGLE_BUTTON = 'button[data-control="toggleletter"]'
@@ -191,7 +191,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
   before(async () => {
     ;({ context, p, errors } = await open(['color-by-digit.user.js', 'pen-tool-extras.user.js', 'text-anywhere.user.js', SCRIPT_FILE]))
     await p.evaluate(() => Framework.setSetting('toolpen', true))
-    await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })
+    await p.locator(COLOR_BY_DIGIT_BUTTON).waitFor({ state: 'visible' })
   })
   after(async () => { await context.close() })
 
@@ -219,7 +219,7 @@ describe('with Color by Digit, Pen Tool Extras and Text Anywhere in the row', { 
 
   it('the tool buttons of the other scripts stay visible', async () => {
     assert.equal(await p.locator('#control-pen').isVisible(), true)
-    assert.equal(await p.locator('#control-textanywhere').isVisible(), true)
+    assert.equal(await p.locator(TEXT_ANYWHERE_BUTTON).isVisible(), true)
   })
 
   it('the page raised no error', () => {

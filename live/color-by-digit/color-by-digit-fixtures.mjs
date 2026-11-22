@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { reloadWith, openWith } from '../session.mjs'
 import { CLASSIC_GRID } from '../puzzles.mjs'
-import { COLOR_BY_DIGIT_DIALOG, group, labelOn, modeLabel, ODD_EVEN } from '../scripts.mjs'
+import { COLOR_BY_DIGIT_DIALOG, group, labelOn, modeLabel, ODD_EVEN, COLOR_BY_DIGIT_BUTTON } from '../scripts.mjs'
 import { POLL_MS, settle } from '../settle.mjs'
 import { middleOf } from '../input.mjs'
 import { savedState } from '../settings.mjs'
@@ -42,7 +42,7 @@ export const AUTO_STORAGE_KEY = storedAt(AUTO_KEY)
 // The mode's value on an untouched board: SEED's profiles with the mode saved Off, so nothing is colored until a test says so.
 export const SEEDED_OFF = { ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'off' }
 
-export const BUTTON = '#control-colorbydigit'
+export const BUTTON = COLOR_BY_DIGIT_BUTTON
 export const EDITOR = COLOR_BY_DIGIT_DIALOG.editor
 export const ARROW = `${BUTTON} [data-role="menu"]`
 export const MENU = '#color-by-digit-menu'

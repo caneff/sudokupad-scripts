@@ -1,4 +1,4 @@
-// Not a check itself, so `live/**/*.live.mjs` skips it.
+// A measurement tool, not a check: no live check imports it, and `live/**/*.live.mjs` skips it. It times each handler a script runs.
 // A handler is a MutationObserver, requestAnimationFrame or event listener callback registered from code carrying PROBE_TAG, so inject the script with `tagged(code)`.
 
 export const PROBE_TAG = 'redraw-probe-script.js'

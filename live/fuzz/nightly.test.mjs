@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { fileIssue, issueTrailer, run } from '../watch.mjs'
+import { fileIssue, issueTrailer, run } from '../issues.mjs'
 import { FUZZ_MINUTES, FUZZ_TIMEOUT_MS, MINUTE_MS, NIGHTLY_CONFIG, NIGHTLY_HUNTS, didNotRunIssue, failureTitle, fuzzProcess, huntCount, mergeNeverRun, nightly } from './nightly.mjs'
 import { CONFIGS } from './configs.mjs'
 import { formatFuzzReport, parseFuzzOutput } from './fuzz-report.mjs'

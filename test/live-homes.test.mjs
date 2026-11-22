@@ -1,13 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { filesUnder, read } from './repo-files.mjs'
 
 // The live harness's shared helpers each have one home: the cell actions and board reads in live/board.mjs, middleOf and the hold-for-pickers gesture in
 // live/input.mjs, the saved-value reads in live/settings.mjs, and Color by Digit's row drag and name typing in its fixtures. A check by name misses a copy
 // under a new name, so these read the bodies too. Blind to real SudokuPad: that the helpers still work on sudokupad.app is `npm run test:live`'s to show.
-const ROOT = new URL('../', import.meta.url)
-const read = (path) => readFileSync(new URL(path, ROOT), 'utf8')
-const liveFiles = readdirSync(new URL('live/', ROOT), { recursive: true }).filter((name) => name.endsWith('.mjs')).map((name) => `live/${name}`)
+const liveFiles = filesUnder('live', /\.mjs$/)
 const declares = (text, name) => new RegExp(`^\\s*(?:export\\s+)?(?:(?:async\\s+)?function\\s+|(?:const|let|var)\\s+)${name}\\b`, 'm').test(text)
 const declarersOf = (name) => liveFiles.filter((file) => declares(read(file), name))
 // A wait inside a try whose finally lets the mouse go: every hold-for-pickers copy had this shape, whatever pressed first.
@@ -45,4 +43,59 @@ test('Color by Digit\'s profiles suite drags rows and types names through its fi
   assert.doesNotMatch(suite, /pressSequentially|DROP_PAST_MIDDLE_PX/, 'the suite types or places a drag of its own')
   assert.match(suite, /\bdragProfileRow\b/)
   assert.match(suite, /\btypeProfileName\b/)
+})
+
+// The top-level suites (live/*.live.mjs), whose tests run the attacks of #590 and #628 with all six scripts on one page.
+const topLevelSuites = liveFiles.filter((file) => /^live\/[^/]+\.live\.mjs$/.test(file))
+const attackNumbers = (file) => [...read(file).matchAll(/\bit\(['`]attack (\d+):/g)].map((m) => Number(m[1]))
+
+test('every top-level attack number belongs to one suite, and its suite is named attacks-*, so a rule can say attacks-*', () => {
+  const seen = new Map()
+  for (const file of topLevelSuites) {
+    for (const n of new Set(attackNumbers(file))) seen.set(n, [...(seen.get(n) ?? []), file])
+  }
+  assert.ok(seen.size > 0)
+  assert.deepEqual([...seen].filter(([, files]) => files.length > 1), [], 'an attack number used by two suites')
+  assert.deepEqual(topLevelSuites.filter((file) => attackNumbers(file).length > 0 && !/^live\/attacks-[a-z-]+\.live\.mjs$/.test(file)), [])
+  assert.ok(liveFiles.includes('live/attacks-replay.live.mjs'), 'attack 65, the replay tool, is an attacks-* suite too')
+})
+
+test('the suites that test the harness itself are named harness-*', () => {
+  for (const file of ['live/harness-settings-dialog.live.mjs', 'live/harness-page-errors.live.mjs']) assert.ok(liveFiles.includes(file), file)
+  assert.match(read('live/harness-settings-dialog.live.mjs'), /\bopenScriptDialog\b/)
+  // It plants console warnings and reads them back from the error list openWith collects: what makes it a test of the harness.
+  const pageErrors = read('live/harness-page-errors.live.mjs')
+  assert.match(pageErrors, /\{[^}]*\berrors\b[^}]*\} = await openWith\(/)
+  assert.match(pageErrors, /console\.warn\(/)
+})
+
+test('all-scripts.mjs holds the all-six-scripts helpers, and no module is named attacks.mjs', () => {
+  assert.equal(liveFiles.includes('live/attacks.mjs'), false)
+  assert.deepEqual(declarersOf('openWithAllScripts'), ['live/all-scripts.mjs'])
+})
+
+test('page.mjs is the only home of the console-warning capture', () => {
+  assert.deepEqual(liveFiles.filter((file) => /\.type\(\) === 'warning'/.test(read(file))), ['live/page.mjs'])
+})
+
+test('the slider helper reads the thumb\'s size from lib/panel.js, not a copy', () => {
+  assert.doesNotMatch(read('live/slider.mjs'), /SLIDER_THUMB_REM\s*=\s*[\d.]/)
+})
+
+test('each script\'s element ids sit on its record in scripts.mjs, and settings.mjs keeps only the dialog mechanics', () => {
+  // Every id scripts.mjs names as a constant, used again as a selector (`'#id'`, `'style#id'`) or read by `getElementById` anywhere else in live/. A bare id
+  // in a list of a button row's ids is an expected value beside SudokuPad's own, not a selector. The harness's own unit tests (`*.test.mjs`) are
+  // left out: an id there is data in a fake message.
+  const ids = [...read('live/scripts.mjs').matchAll(/^(?:export )?const [A-Z_]+ = '(?:style)?#([a-z-]+)'$/gm)].map((m) => m[1])
+  assert.ok(ids.includes('control-colorbydigit') && ids.includes('pen-tool-extras-style') && ids.includes('text-anywhere-style'), `the ids read from scripts.mjs: ${ids}`)
+  const copies = liveFiles.filter((file) => file !== 'live/scripts.mjs' && !file.endsWith('.test.mjs'))
+    .flatMap((file) => ids.filter((id) => new RegExp(`['\`](?:style)?#${id}['\`]|getElementById\\(['\`]${id}['\`]`).test(read(file))).map((id) => `${file}: ${id}`))
+  assert.deepEqual(copies, [], 'a script id written out again')
+  assert.deepEqual(declarersOf('EXTRAS_EDITOR'), ['live/scripts.mjs'])
+  assert.doesNotMatch(read('live/settings.mjs'), /headerVersion/, 'the header is read from userscript-header.js')
+})
+
+test('issue filing and its trailer live in issues.mjs, not in the watch', () => {
+  for (const name of ['fileIssue', 'issueTrailer']) assert.deepEqual(declarersOf(name), ['live/issues.mjs'], name)
+  assert.doesNotMatch(read('live/watch.mjs'), /'issue', 'create'/)
 })

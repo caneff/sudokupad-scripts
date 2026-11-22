@@ -2,10 +2,11 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, pressTo, PROFILES_KEY, reloadSession, SEED, watch, wrongColorCountOn, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { colorCell, selectCell } from '../board.mjs'
-import { closeDialogWith, headerVersion, openSettings, savedState } from '../settings.mjs'
+import { closeDialogWith, openSettings, savedState } from '../settings.mjs'
 import { settle, stable } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 import { restingMiddle } from '../input.mjs'
+import { headerVersion } from '../../userscript-header.js'
 
 const script = scriptSource('color-by-digit.user.js')
 

@@ -3,7 +3,7 @@
 // take the Undo after a Restart by one shared tracker, and a note is found by one padded box, at the `npm test` seam.
 // Blind to real SudokuPad: the Framework calls (localStorage behind getData and setData), the guard's bar on the page, rendering, and
 // SudokuPad's own Restart and Undo. `npm run test:live` covers them on sudokupad.app: attack 73 in live/attacks-storage.live.mjs (a full
-// store told in the bar), attack 49 in live/sudokupad-attacks.live.mjs and live/text-anywhere/text-anywhere-note-undo.live.mjs (Restart
+// store told in the bar), attack 49 in live/attacks-sudokupad.live.mjs and live/text-anywhere/text-anywhere-note-undo.live.mjs (Restart
 // then Undo with both scripts installed).
 require('./fake-page-storage.js')
 const test = require('node:test')

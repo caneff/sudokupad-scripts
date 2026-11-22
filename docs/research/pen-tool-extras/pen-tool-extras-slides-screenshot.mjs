@@ -28,7 +28,7 @@ import { openPage, startPuzzle } from '../../../live/page.mjs'
 import { cellCentre, gridPoint, mouseDrag } from '../../../live/board.mjs'
 import { openPenTool, PAGE_BUTTON, penStrings, penValuesNoColor } from '../../../live/pen.mjs'
 import { setInputValue } from '../../../live/input.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from '../../../live/settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../../../live/scripts.mjs'
 import { writeAnimation } from '../site/slide-animation.mjs'
 import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extras-recolor.mjs'
 

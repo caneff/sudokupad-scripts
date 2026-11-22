@@ -1,8 +1,8 @@
 // What the pull-request fuzz workflow (`.github/workflows/fuzz-pr.yml`, #1030) makes of a run, and the comment it leaves when the run is red.
-//   node live/fuzz/pr-verdict.mjs <fuzz output file> <comment file> <fuzz step outcome> <head sha> <run url>
+//   node live/fuzz/pr-verdict.mjs <fuzz output file> <comment file> <fuzz step outcome> <head sha> <run url> [<smoke step outcome>]
 // Always writes the comment: exits 0 with a short "passed" one for a pass, which the workflow uses only to replace a red comment an earlier push left, and
 // exits 1 with the failure for anything else: a failure the fuzz found, and also a run that never reached a verdict (it crashed before fuzzing, or ran zero action lists, which `parseFuzzOutput` reads as no verdict), so neither
-// reads as a pass. A pass counts only when the fuzz step itself succeeded too.
+// reads as a pass. A pass counts only when the fuzz step itself succeeded too, and when the harness smoke test, if it ran, did not fail.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { parseFuzzOutput } from './fuzz-report.mjs'
@@ -16,10 +16,13 @@ const TAIL_CHARS = 20000
 const fence = (text) => '```\n' + text.replace(/```/g, "'''") + '\n```'
 const tail = (output) => output.length > TAIL_CHARS ? '... (cut)\n' + output.slice(-TAIL_CHARS) : output
 
-export function prVerdict ({ output, outcome, sha, runUrl }) {
+export function prVerdict ({ output, outcome, sha, runUrl, smokeOutcome = '' }) {
   const verdict = output ? parseFuzzOutput(output) : null
-  if (verdict?.passed && outcome === 'success') return { ok: true, body: `${COMMENT_MARKER}\nThe pull-request fuzz passed on \`${sha}\`. Run: ${runUrl}` }
   const head = [COMMENT_MARKER, `The pull-request fuzz is red on \`${sha}\`. It is advisory: read it, it does not block the merge. Run: ${runUrl}`, '']
+  if (verdict?.passed && outcome === 'success') {
+    if (smokeOutcome !== 'failure') return { ok: true, body: `${COMMENT_MARKER}\nThe pull-request fuzz passed on \`${sha}\`. Run: ${runUrl}` }
+    return { ok: false, body: [...head, 'The fuzz passed, but the **harness smoke test failed** (`npm run test:fuzz:smoke`): the harness may no longer catch a planted bug. Its output is in the run.'].join('\n') }
+  }
   if (verdict?.failed) {
     return {
       ok: false,
@@ -53,10 +56,10 @@ export function prVerdict ({ output, outcome, sha, runUrl }) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [outputFile, commentFile, outcome, sha, runUrl] = process.argv.slice(2)
+  const [outputFile, commentFile, outcome, sha, runUrl, smokeOutcome] = process.argv.slice(2)
   let output = null
   try { output = readFileSync(outputFile, 'utf8') } catch (e) { if (e.code !== 'ENOENT') throw e }
-  const { ok, body } = prVerdict({ output, outcome, sha, runUrl })
+  const { ok, body } = prVerdict({ output, outcome, sha, runUrl, smokeOutcome })
   writeFileSync(commentFile, body)
   process.exitCode = ok ? 0 : 1
 }

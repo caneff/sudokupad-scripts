@@ -66,41 +66,174 @@ describe('the workflows', () => {
   }
 })
 
+const WORKFLOW_DIR = path.join(ROOT, '.github', 'workflows')
+const read = (name) => fs.readFileSync(path.join(WORKFLOW_DIR, name), 'utf8')
+const workflowFiles = fs.readdirSync(WORKFLOW_DIR).filter((f) => f.endsWith('.yml'))
+const SETUP_ACTION = './.github/actions/setup-repo'
+
+// The text of one top-level key's block (`on`, `concurrency`, `jobs`), up to the next top-level key.
+function section (yml, key) {
+  const m = new RegExp(`^${key}:.*\\n(?:(?: .*| *#.*)?\\n)*`, 'm').exec(yml)
+  assert.ok(m, `no top-level ${key}`)
+  return m[0]
+}
+// A job's block, and a job's steps, as text blocks. The files hold no flow-style steps, so a line starting `      - ` begins one.
+function jobs (yml) {
+  const body = section(yml, 'jobs')
+  return body.split(/\n(?= {2}\w[\w-]*:\n)/).slice(1).map((block) => ({ name: /^\s*(\S+):/.exec(block)[1], block }))
+}
+function steps (jobBlock) {
+  return jobBlock.split(/\n(?= {6}- )/).slice(1)
+}
+const stepWith = (yml, needle) => {
+  const found = jobs(yml).flatMap((j) => steps(j.block)).filter((s) => s.includes(needle))
+  assert.equal(found.length, 1, `exactly one step with ${needle}`)
+  return found[0]
+}
+const cancelInProgress = (yml) => /^ {2}cancel-in-progress: (.+)$/m.exec(section(yml, 'concurrency'))?.[1]
+
+describe('every workflow', () => {
+  for (const name of workflowFiles) {
+    it(`${name}: every job has a time limit under the 6 hours GitHub gives a job, so a hung run fails`, () => {
+      const all = jobs(read(name))
+      assert.ok(all.length > 0)
+      for (const { name: job, block } of all) {
+        const minutes = Number(/^ {4}timeout-minutes: (\d+)$/m.exec(block)?.[1])
+        assert.ok(minutes > 0 && minutes < 360, `${name} job ${job}: timeout-minutes is ${minutes}`)
+      }
+    })
+  }
+})
+
+describe('the setup action', () => {
+  const dir = path.join(ROOT, '.github', 'actions', 'setup-repo')
+  const action = fs.readFileSync(path.join(dir, 'action.yml'), 'utf8')
+
+  it('is composite and sets up Node from .nvmrc alone, a bare major version, pinning none of its own', () => {
+    assert.match(fs.readFileSync(path.join(ROOT, '.nvmrc'), 'utf8'), /^\d+\s*$/)
+    assert.match(action, /^ {2}using: composite$/m)
+    assert.match(action, /uses: actions\/setup-node@v6\n\s+with:\n\s+node-version-file: \.nvmrc\n/)
+    assert.doesNotMatch(action, /^\s+node-version: /m)
+  })
+
+  it('installs the packages with npm ci, and Chromium only when asked, so the CI job stays browserless', () => {
+    assert.match(action, /run: npm ci$/m)
+    assert.match(action, /inputs:\n {2}playwright:\n(?: {4}.*\n)*? {4}default: 'false'/)
+    const chromium = action.split(/\n(?= {4}- )/).find((s) => s.includes('playwright install'))
+    assert.ok(chromium, 'a Playwright install step')
+    assert.match(chromium, /npx playwright install --with-deps chromium/)
+    assert.match(chromium, /if: \$\{\{ inputs\.playwright == 'true' \}\}/)
+  })
+
+  const USERS = { 'ci.yml': false, 'fuzz-pr.yml': true, 'fuzz.yml': true, 'watch.yml': true }
+  for (const [name, playwright] of Object.entries(USERS)) {
+    it(`${name} sets up through the action after its checkout, and repeats none of it${playwright ? ', asking for Chromium' : ', without Chromium'}`, () => {
+      const yml = read(name)
+      const setup = stepWith(yml, `uses: ${SETUP_ACTION}`)
+      assert.equal(/playwright: '?true'?/.test(setup), playwright)
+      const all = jobs(yml).flatMap((j) => steps(j.block))
+      const checkout = all.findIndex((s) => s.includes('actions/checkout@'))
+      assert.ok(checkout >= 0, 'a checkout step')
+      assert.ok(checkout < all.findIndex((s) => s.includes(SETUP_ACTION)), 'a local action exists only after the checkout')
+      assert.doesNotMatch(yml, /^\s*(- )?(uses|run): .*(setup-node|npm ci|playwright install)/m)
+    })
+  }
+})
+
 describe('ci.yml (#1027)', () => {
-  const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
+  const yml = read('ci.yml')
 
   it('starts one run for a push to a pull request: pull_request for any branch, push for main only', () => {
-    assert.match(yml, /^on:\n {2}push:\n {4}branches: \[main\]\n {2}pull_request:\n/m)
+    const on = section(yml, 'on')
+    assert.match(on, /^ {2}push:\n {4}branches: \[main\]$/m)
+    assert.match(on, /^ {2}pull_request:/m)
   })
 
   it('cancels a superseded pull-request run and never a run on main, whose every push has a group of its own so none waits behind another to be dropped', () => {
-    assert.match(yml, /^concurrency:\n {2}group: ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}\n {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}\n/m)
+    const concurrency = section(yml, 'concurrency')
+    assert.match(concurrency, /group: .*pull_request\.number.*github\.sha/)
+    assert.match(cancelInProgress(yml), /github\.event_name == 'pull_request'/)
   })
 
   it('keeps the job named test, so the check a pull request shows is the same one', () => {
-    assert.match(yml, /^jobs:\n {2}test:\n/m)
-    assert.doesNotMatch(yml, /^ {4}name:/m)
+    assert.deepEqual(jobs(yml).map((j) => j.name), ['test'])
+    assert.doesNotMatch(jobs(yml)[0].block, /^ {4}name:/m)
+  })
+
+  it('has the history, for the version-bump test', () => {
+    assert.match(stepWith(yml, 'actions/checkout@'), /fetch-depth: 0/)
+  })
+
+  it('runs the tests, and runs the lint even when a test fails', () => {
+    assert.match(stepWith(yml, 'run: npm test'), /^ {6}- run: npm test$/m)
+    const lint = stepWith(yml, 'run: npm run lint')
+    assert.match(lint, /if: \$\{\{ !cancelled\(\) \}\}|if: \$\{\{ always\(\) \}\}/)
   })
 })
 
 describe('fuzz-pr.yml (#724)', () => {
-  const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'fuzz-pr.yml'), 'utf8')
+  const yml = read('fuzz-pr.yml')
+  const paths = () => section(yml, 'on').split('paths:\n')[1].split('\n').map((l) => /^ {6}- (.+)$/.exec(l)?.[1]).filter(Boolean)
+  const covered = (file) => paths().some((p) => p === file || (p.endsWith('/**') && file.startsWith(p.slice(0, -2))))
 
-  it('runs on pull requests that change a script or lib/, and on nothing else: not on a change to the fuzz harness alone (#1030)', () => {
-    assert.match(yml, /^on:\n {2}pull_request:\n {4}paths:\n/m)
-    assert.doesNotMatch(yml, /^ {2}(push|schedule|workflow_dispatch):/m)
-    const paths = yml.split('paths:\n')[1].split(/\n(?! {6}- )/)[0].split('\n').map((l) => l.replace(/^ {6}- /, ''))
-    const scripts = scriptFiles()
-    assert.deepEqual(paths.sort(), [...scripts, 'lib/**'].sort())
+  it('runs on pull requests only, and files no other trigger', () => {
+    assert.match(section(yml, 'on'), /^ {2}pull_request:\n {4}paths:\n/m)
+    assert.doesNotMatch(section(yml, 'on'), /^ {2}(push|schedule|workflow_dispatch):/m)
+  })
+
+  it('runs on a change to a script, lib/, the fuzz harness or the lockfile (a new Playwright is a new Chromium)', () => {
+    for (const file of [...scriptFiles(), 'lib/sudokupad.js', 'live/fuzz/fuzz.mjs', 'package-lock.json']) assert.ok(covered(file), file)
+    assert.ok(!covered('draw-tool.user.js'), 'the frozen handover is not fuzzed')
+  })
+
+  it('runs on a change to any module the fuzz imports from outside live/fuzz/, found by following its imports', () => {
+    const seen = new Set()
+    const queue = fs.readdirSync(path.join(ROOT, 'live', 'fuzz')).filter((f) => f.endsWith('.mjs') && !f.endsWith('.test.mjs')).map((f) => `live/fuzz/${f}`)
+    while (queue.length) {
+      const file = queue.pop()
+      if (seen.has(file)) continue
+      seen.add(file)
+      const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
+      // Every way a fuzz module loads a file: import, require, `createRequire(import.meta.url)('…')` and a data file read through `new URL('…', import.meta.url)`.
+      for (const m of source.matchAll(/(?:from|import\(|require\(|\)\(|new URL\()\s*'(\.[^']+)'/g)) {
+        const target = path.relative(ROOT, path.join(ROOT, path.dirname(file), m[1])).split(path.sep).join('/')
+        if (fs.existsSync(path.join(ROOT, target)) && fs.statSync(path.join(ROOT, target)).isFile()) queue.push(target)
+      }
+    }
+    const outside = [...seen].filter((f) => !f.startsWith('live/fuzz/'))
+    for (const file of ['live/session.mjs', 'sync-lib.js', 'test/load-lib.js', 'live/puzzle-url.txt']) assert.ok(outside.includes(file), `the walk reached ${file}`)
+    for (const file of outside) assert.ok(covered(file), `${file} is imported by the fuzz and no path of fuzz-pr.yml covers it`)
   })
 
   it('fuzzes for 5 minutes with the changed scripts in focus, and files no issue and runs no other live test', () => {
-    assert.match(yml, /npm run test:fuzz -- --minutes 5 /)
-    assert.match(yml, /changed=\$\(git diff --name-only "origin\/\$BASE_REF\.\.\.HEAD" -- '\*\.user\.js'\)/)
-    assert.match(yml, /focus\+=\(--focus "\$\{file%\.user\.js\}"\)/)
-    assert.match(yml, /set -o pipefail/, 'without it tee hides the fuzz exit code from the default shell')
+    const fuzz = stepWith(yml, 'npm run test:fuzz -- --minutes')
+    assert.match(fuzz, /npm run test:fuzz -- --minutes 5 /)
+    assert.match(fuzz, /git diff --name-only "origin\/\$BASE_REF\.\.\.HEAD" -- '\*\.user\.js'/)
+    assert.match(fuzz, /--focus/)
+    assert.match(fuzz, /set -o pipefail/, 'without it tee hides the fuzz exit code from the default shell')
     assert.doesNotMatch(yml, /file-issue-once|gh issue/)
     assert.doesNotMatch(yml, /test:tampermonkey|test:live/)
+  })
+
+  it('runs the smoke test when the fuzz harness changed against the base, and not otherwise', () => {
+    const smoke = stepWith(yml, 'run: npm run test:fuzz:smoke')
+    const gate = /^ {8}if: \$\{\{ !cancelled\(\) && steps\.(\w+)\.outputs\.(\w+) == 'true' \}\}$/m.exec(smoke)
+    assert.ok(gate, `the smoke step runs only when the harness changed: ${/if: .*/.exec(smoke)?.[0]}`)
+    const detect = stepWith(yml, '-- live/fuzz')
+    assert.ok(detect.includes(`id: ${gate[1]}`), 'the smoke step reads the detecting step')
+    assert.match(detect, /git diff --name-only "origin\/\$BASE_REF\.\.\.HEAD" -- live\/fuzz/)
+    // Run the detecting step's script with a git that answers a changed file, then none: it must write true, then false.
+    const script = /run: \|\n((?: {10}.*\n)+)/.exec(detect + '\n')[1].replace(/^ {10}/gm, '')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fuzz-pr-harness-'))
+    try {
+      fs.writeFileSync(path.join(dir, 'git'), '#!/bin/sh\nprintf "%s" "$CHANGED"\n', { mode: 0o755 })
+      for (const [changed, expected] of [['live/fuzz/fuzz.mjs\n', 'true'], ['', 'false']]) {
+        const output = path.join(dir, `out-${expected}`)
+        const r = spawnSync('bash', ['-e', '-c', script], { env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, CHANGED: changed, GITHUB_OUTPUT: output, BASE_REF: 'main' }, encoding: 'utf8' })
+        assert.equal(r.status, 0, r.stderr)
+        assert.equal(fs.readFileSync(output, 'utf8').trim(), `${gate[2]}=${expected}`)
+      }
+    } finally { fs.rmSync(dir, { recursive: true, force: true }) }
   })
 
   it('is advisory: it files no issue and its token can only comment on the pull request (#1030)', () => {
@@ -108,67 +241,56 @@ describe('fuzz-pr.yml (#724)', () => {
     assert.doesNotMatch(yml, /issues: write/)
   })
 
+  it('cancels a superseded run, since the run on the old head is worthless', () => {
+    assert.equal(cancelInProgress(yml), 'true')
+  })
+
   it('fails a run with no verdict, through pr-verdict.mjs, and leaves one comment that a later push edits (#1030)', () => {
-    assert.match(yml, /- id: verdict\n {8}if: \$\{\{ !cancelled\(\) \}\}\n {8}run: node live\/fuzz\/pr-verdict\.mjs /)
-    assert.match(yml, /FUZZ_OUTCOME: \$\{\{ steps\.fuzz\.outcome \}\}/)
-    assert.match(yml, /- name: Comment the result on the pull request\n {8}if: \$\{\{ !cancelled\(\) && \(steps\.verdict\.outcome == 'success' \|\| steps\.verdict\.outcome == 'failure'\) && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}/, "a fork's token cannot comment, and a green run edits an earlier red comment")
-    assert.match(yml, /elif \[ "\$VERDICT" = failure \]/, 'a green run creates no comment')
+    const verdict = stepWith(yml, 'run: node live/fuzz/pr-verdict.mjs')
+    assert.match(verdict, /if: \$\{\{ !cancelled\(\) \}\}/)
+    assert.match(verdict, /FUZZ_OUTCOME: \$\{\{ steps\.fuzz\.outcome \}\}/)
+    assert.match(verdict, /SMOKE_OUTCOME: \$\{\{ steps\.smoke\.outcome \}\}/, 'a red smoke test is red in the comment too')
+    assert.match(verdict, /"\$SMOKE_OUTCOME"/)
+    assert.match(stepWith(yml, 'run: npm run test:fuzz:smoke'), /id: smoke/)
+    const comment = stepWith(yml, 'Comment the result on the pull request')
+    assert.match(comment, /if: .*!cancelled\(\).*steps\.verdict\.outcome == 'success'.*steps\.verdict\.outcome == 'failure'.*head\.repo\.full_name == github\.repository/, "a fork's token cannot comment, and a green run edits an earlier red comment")
+    assert.match(comment, /elif \[ "\$VERDICT" = failure \]/, 'a green run creates no comment')
     const marker = /export const COMMENT_MARKER = '([^']+)'/.exec(fs.readFileSync(path.join(ROOT, 'live', 'fuzz', 'pr-verdict.mjs'), 'utf8'))[1]
-    assert.ok(yml.includes(`startswith("${marker}")`), 'the step looks for the comment by the marker the script writes')
-    assert.match(yml, /gh api --method PATCH /)
-    assert.match(yml, /gh pr comment /)
+    assert.ok(comment.includes(`startswith("${marker}")`), 'the step looks for the comment by the marker the script writes')
+    assert.match(comment, /gh api --method PATCH /)
+    assert.match(comment, /gh pr comment /)
   })
 
   it('puts a failure into the job summary', () => {
-    assert.match(yml, />> "\$GITHUB_STEP_SUMMARY"/)
-    assert.match(yml, /if: \$\{\{ failure\(\) && steps\.fuzz\.outcome == 'failure' \}\}/)
+    const summary = stepWith(yml, 'GITHUB_STEP_SUMMARY')
+    assert.match(summary, /if: \$\{\{ failure\(\) && steps\.fuzz\.outcome == 'failure' \}\}/)
+  })
+})
+
+describe('fuzz.yml: the nightly fuzz', () => {
+  it('never cancels a run in progress, so no two runs overlap and none is dropped', () => {
+    assert.equal(cancelInProgress(read('fuzz.yml')), 'false')
   })
 })
 
 describe('watch.yml (#1026)', () => {
-  const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'watch.yml'), 'utf8')
+  const yml = read('watch.yml')
 
   it('runs the full live suite every night through watch:live, which files the issue and exits 1 when the night is not green', () => {
-    assert.match(yml, /schedule:\n {4}- cron: '\d+ \d+ \* \* \*'/)
-    assert.match(yml, /- id: watch\n {8}run: npm run watch:live\n/)
-    assert.match(yml, /issues: write/)
+    assert.match(section(yml, 'on'), /schedule:\n {4}- cron: '\d+ \d+ \* \* \*'/)
+    assert.match(stepWith(yml, 'run: npm run watch:live'), /id: watch/)
+    assert.match(section(yml, 'permissions'), /issues: write/)
   })
 
-  it('may read the workflow\'s earlier runs, which is how it sees a skipped night', () => {
-    assert.match(yml, /^ {2}actions: read$/m)
+  it("may read the workflow's earlier runs, which is how it sees a skipped night", () => {
+    assert.match(section(yml, 'permissions'), /^ {2}actions: read$/m)
+  })
+
+  it('never cancels a run in progress, so two nights do not each file the bug', () => {
+    assert.equal(cancelInProgress(yml), 'false')
   })
 
   it('keeps nothing between nights: the recording is made again each run, so no Actions cache holds a version or a run time', () => {
     assert.doesNotMatch(yml, /actions\/cache/)
-  })
-
-  it('has a time limit under the 6 hours GitHub gives a job, so a hung suite fails the night', () => {
-    const minutes = Number(/timeout-minutes: (\d+)/.exec(yml)?.[1])
-    assert.ok(minutes > 0 && minutes < 360, `timeout-minutes is ${minutes}`)
-  })
-})
-
-describe('Node version', () => {
-  const dir = path.join(ROOT, '.github', 'workflows')
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.yml'))
-
-  it('lives in .nvmrc alone, as a bare major version', () => {
-    assert.match(fs.readFileSync(path.join(ROOT, '.nvmrc'), 'utf8'), /^\d+\s*$/)
-  })
-
-  for (const name of ['ci.yml', 'fuzz-pr.yml', 'fuzz.yml', 'watch.yml']) {
-    it(`${name} reads it through node-version-file and pins none of its own`, () => {
-      assert.ok(files.includes(name))
-      const yml = fs.readFileSync(path.join(dir, name), 'utf8')
-      assert.match(yml, /uses: actions\/setup-node@v6\n\s+with:\n\s+node-version-file: \.nvmrc\n/)
-      assert.doesNotMatch(yml, /^\s+node-version: /m)
-    })
-  }
-
-  it('is set up in every workflow that sets up Node', () => {
-    for (const f of files) {
-      const yml = fs.readFileSync(path.join(dir, f), 'utf8')
-      if (/setup-node/.test(yml)) assert.match(yml, /node-version-file: \.nvmrc/, f)
-    }
   })
 })

@@ -2,8 +2,9 @@
 import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor, STATUS } from '../settings.mjs'
+import { STATUS } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
+import { closeExtrasEditorWith, EXTRAS_EDITOR, openExtrasEditor } from '../scripts.mjs'
 
 const SLIDERS = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth']
 const HALF_PIXEL = 0.5

@@ -7,7 +7,7 @@ require('./fake-page-storage.js')
 const { scriptFiles, guardId } = require('../sync-lib.js')
 const { pageStandIn } = require('./page-stand-in.js')
 const { startScript, withScript } = require('./unit-start.js')
-const { headerVersion, headerField } = require('./header-version.js')
+const { headerVersion, headerField } = require('../userscript-header.js')
 
 // The startup promises every script makes, checked once for each file `scriptFiles()` lists. Each script's own test file keeps its table of
 // which internal holds back which feature; this file holds what is the same for all of them.

@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { useBrowser } from '../session.mjs'
-import { EXTRAS_EDITOR as EDITOR } from '../settings.mjs'
+import { EXTRAS_EDITOR as EDITOR } from '../scripts.mjs'
 
 const BUTTON = '.pen-tool-extras-settings'
 

@@ -10,11 +10,14 @@
     "fuzz:plants": "node live/fuzz/plants-run.mjs",
     "fuzz:mutants": "node live/fuzz/mutants-run.mjs",
     "fuzz:nightly": "node live/fuzz/nightly.mjs",
-    "test:fuzz:smoke": "node --test live/fuzz/fuzz.smoke.mjs",
+    "test:fuzz:smoke": "node --test --test-timeout=1200000 live/fuzz/fuzz.smoke.mjs",
     "look": "node live/look.mjs",
     "watch:live": "node live/watch.mjs",
-    "test:tampermonkey": "node --test --test-concurrency=1 \"live/**/*.tampermonkey.mjs\"",
+    "test:tampermonkey": "node --test --test-timeout=1200000 --test-concurrency=1 \"live/**/*.tampermonkey.mjs\"",
     "lint": "standard"
+  },
+  "engines": {
+    "node": ">=24"
   },
   "devDependencies": {
     "acorn": "^8.19.0",

@@ -4,24 +4,11 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { headerVersion } = require('./header-version.js')
+const { compareVersions, headerVersion } = require('../userscript-header.js')
 const { publishedScriptFiles } = require('../sync-lib.js')
 
 const ROOT = path.join(__dirname, '..')
 const BASE_REF = 'origin/main'
-
-// A version's three numbers. Throws on any other shape, so an unreadable version fails the check instead of passing it.
-function parseVersion (version) {
-  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`@version "${version}" is not X.Y.Z`)
-  return version.split('.').map(Number)
-}
-
-// Positive when `a` is a higher version than `b`.
-function compareVersions (a, b) {
-  const [pa, pb] = [parseVersion(a), parseVersion(b)]
-  for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] - pb[i]
-  return 0
-}
 
 // One message per script this branch changed since the merge base whose @version is not above the one on `baseRef`.
 // `current`, `mergeBase` and `tip` each take a file name and return its text there, or null when the file does not exist there.

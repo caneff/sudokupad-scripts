@@ -3,12 +3,13 @@ import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { restartPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, dialogButton, openExtrasEditor, openSettings } from '../settings.mjs'
+import { collectWarnings, restartPuzzle } from '../page.mjs'
+import { dialogButton, openSettings } from '../settings.mjs'
 import { cellCentre, undoDepth } from '../board.mjs'
 import { openPenTool, penDrawnCount, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle, stable, STABLE_MS } from '../settle.mjs'
 import { addPage, openWith, useBrowser } from '../session.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../scripts.mjs'
 
 const DATA_KEY = extras.MARKS_DATA_KEY
 const OPACITY_KEY = 'PenColor_opacity'
@@ -880,12 +881,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('at the default the grid matches SudokuPad\'s own per-stroke opacity to within a few levels per channel, where marks do not overlap', async () => {
       // The white outline (on by default) is a filter on the layer, which fading the layer as one picture and fading each stroke do not agree on; it is left out of both pictures.
-      const dropLines = (drop) => read((source) => {
-        const style = document.getElementById('pen-tool-extras-style')
+      const dropLines = (drop) => read(([source, selector]) => {
+        const style = document.querySelector(selector)
         const before = style.textContent.length
         style.textContent = style.textContent.split('\n').filter((line) => !new RegExp(source).test(line)).join('\n')
         return [before, style.textContent.length]
-      }, drop.source)
+      }, [drop.source, extras.STYLE])
       const [filterBefore, filterAfter] = await dropLines(/filter: url/)
       assert.equal(filterAfter < filterBefore, true, `the outline filter line was in the style: ${filterBefore} then ${filterAfter}`)
       const withRule = await grid()
@@ -1157,7 +1158,7 @@ describe('without the script', { concurrency: false }, () => {
 describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   // Each is read by the corner click or its hit test; with one gone the click wrap would throw on every pen click, so the script skips the marks step and warns once.
   const TURNED_OFF = /^pen-tool-extras: .*marks.* skipped because SudokuPad /
-  const watchSkips = (warnings) => (page) => page.on('console', (m) => { if (m.type() === 'warning' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
+  const watchSkips = (warnings) => (page) => collectWarnings(page, warnings, TURNED_OFF)
   const REMOVALS = {
     'ToolPen.tool.actStart': () => { ToolPen.tool.actStart = undefined },
     'ToolPen.tool.getInputRc': () => { ToolPen.tool.getInputRc = undefined },

@@ -16,6 +16,8 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 - **Tests**: unit tests are in `test/` (`test/<script name>.test.js`), each shared module's in `lib/<name>.test.js`, and live tests in
   `live/<script name>/`. Every `*.user.js` stays at the root: every installed copy checks that address for updates. Never edit `draw-tool.user.js`:
   it is Text Anywhere's handover, frozen at 0.45.1 (`GLOSSARY.md`), and a change to Text Anywhere never touches it; `test/text-anywhere.test.js` fails when its bytes change (Chris, 2026-11-10).
+- **Module formats**: CommonJS at the root, in `lib/` and in `test/` (`require`, `.js`); ES modules in `live/` (`import`, `.mjs`), and a `test/` file that reads `live/` as one (`.mjs`).
+- **The fuzz**: before you run or change the fuzz, read `live/README.md` § The fuzz run.
 - **The PR fuzz** (`.github/workflows/fuzz-pr.yml`) is advisory, not a required check: read a red one, do not wait on it to merge; it comments the seed on the PR (`live/README.md` § The pull-request fuzz).
 - **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live`, the full live suite, every night at 06:17 UTC on GitHub Actions (and by hand through
   `workflow_dispatch`); `live/README.md` § The daily watch has the rule.
@@ -84,6 +86,8 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   `land.testcmd`.
 - **The full live suite is no gate** (Chris, 2026-11-18, #1026): the nightly watch runs all of it on GitHub and files a bug when it is red. Extra run: every change also runs `npm run test:live:changed`, the live files its diff touches
   (a path it cannot place widens it, and its last line says so; nothing touched runs nothing): before "PR up" and again at the merge. The merge skip rule never skips it. `live/README.md` § The live gate has what it selects.
+- Extra run: a change to `live/fuzz/` or to any other path `.github/workflows/fuzz-pr.yml` lists under `live/` or as a single file (the modules the fuzz loads) also runs
+  `npm run test:fuzz:smoke`, before "PR up" and again at the merge: no live file loads the fuzz, so `npm run test:live:changed` never covers it.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
 - `npm run test:tampermonkey` installs every SudokuPad script (`scriptFiles()`) into a real Tampermonkey, and leaves out Logic Masters Puzzle Preview (its install and update from the root address stay owed to a person); `live/README.md` § The Tampermonkey test

@@ -1,6 +1,6 @@
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
-import { EXTRAS_EDITOR, openScriptDialog, openSettings } from './settings.mjs'
+import { closeDialogWith, openScriptDialog, openSettings } from './settings.mjs'
 import { gridPoint, placeNote } from './board.mjs'
 import { openPenTool, PAGE_BUTTON, penEntries } from './pen.mjs'
 import { keydownDefaults } from './input.mjs'
@@ -10,11 +10,20 @@ export const BLACK = 'rgb(0, 0, 0)'
 export const DIGITS = '1234567890'
 export const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 export const numberPadText = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
-// Text Anywhere's tool button and settings dialog, named here once: a shared module imports no script's fixtures, which re-export them.
+// Each script's element ids the live suites use, named once here and set on its record in SCRIPTS (`button`, `style`, `dialog.editor`):
+// a shared module imports no script's fixtures, so the fixtures and suites import them from here.
+export const COLOR_BY_DIGIT_BUTTON = '#control-colorbydigit'
 export const TEXT_ANYWHERE_BUTTON = '#control-textanywhere'
 export const TEXT_ANYWHERE_EDITOR = '#text-anywhere-dialog'
-// Color by Digit's button and its aria-label, `Color by Digit: ` and then the mode's word, and the mode read back off the label.
-const COLOR_BY_DIGIT_BUTTON = '#control-colorbydigit'
+export const TEXT_ANYWHERE_STYLE = '#text-anywhere-style'
+export const EXTRAS_EDITOR = '#pen-tool-extras-editor'
+export const PEN_TOOL_EXTRAS_STYLE = 'style#pen-tool-extras-style'
+const DARK_PAGE_DIALOG = '#dark-page-dialog'
+export const DARK_PAGE_STYLE = '#dark-page-style'
+export const UI_TWEAKS_DIALOG = '#ui-tweaks-dialog'
+const UI_TWEAKS_STYLE = '#ui-tweaks-style'
+export const AUTO_RULES_RESIZER_STYLE = '#auto-rules-resizer-style'
+// Color by Digit's aria-label, `Color by Digit: ` and then the mode's word, and the mode read back off the label.
 const LABEL_PREFIX = 'Color by Digit: '
 export const modeLabel = (mode) => `${LABEL_PREFIX}${mode}`
 export const labelOn = async (p) => {
@@ -33,12 +42,13 @@ export const ODD_EVEN = [group('1', ['1', '3', '5', '7', '9']), group('2', ['0',
 
 // The `dialog` record of a script with a settings dialog: `asDefault`, where there is one, is the value that Copy writes for a setting at its default and that the script saves as no key.
 // `saved` is a value the script saves under `key`, inside a `{ v, data }` envelope where `enveloped` is set; `badKey` and `bad` are a value the script's reader refuses.
-// Per script: its file, what shows it has started (`ready`), its control (`control`) and one representative action (`act`).
+// Per script: its file, its element ids (`button`, its tool button; `style`, the style element it adds), what shows it has started (`ready`), its control (`control`) and one representative action (`act`).
 // `ready` runs after Start Puzzle and the injection, `act` and then `control` after `ready`.
 export const SCRIPTS = [
   {
     name: 'Color by Digit',
     file: 'color-by-digit.user.js',
+    button: COLOR_BY_DIGIT_BUTTON,
     dialog: { owns: /^ColorByDigit_/, editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, enveloped: true, badKey: 'ColorByDigit_mode', bad: 'sideways' },
     ready: (p) => p.locator(COLOR_BY_DIGIT_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(COLOR_BY_DIGIT_BUTTON).waitFor({ state: 'visible' }),
@@ -55,8 +65,9 @@ export const SCRIPTS = [
   {
     name: 'Dark Page',
     file: 'dark-page.user.js',
-    dialog: { owns: /^DarkPage_/, editor: '#dark-page-dialog', key: 'DarkPage_color', saved: '#336699', asDefault: '#000000', badKey: 'DarkPage_color', bad: 'blue' },
-    ready: (p) => p.locator('#dark-page-style').waitFor({ state: 'attached' }),
+    style: DARK_PAGE_STYLE,
+    dialog: { owns: /^DarkPage_/, editor: DARK_PAGE_DIALOG, key: 'DarkPage_color', saved: '#336699', asDefault: '#000000', badKey: 'DarkPage_color', bad: 'blue' },
+    ready: (p) => p.locator(DARK_PAGE_STYLE).waitFor({ state: 'attached' }),
     control: (p) => settingsEntry(p, /^\s*Dark Page\s*$/),
     act: async (p) => {
       const background = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
@@ -66,10 +77,11 @@ export const SCRIPTS = [
   {
     name: 'UI Tweaks',
     file: 'ui-tweaks.user.js',
-    dialog: { owns: /^UiTweaks_/, editor: '#ui-tweaks-dialog', key: 'UiTweaks_hideSelect', saved: true, asDefault: false, badKey: 'UiTweaks_hideSelect', bad: 'yes' },
+    style: UI_TWEAKS_STYLE,
+    dialog: { owns: /^UiTweaks_/, editor: UI_TWEAKS_DIALOG, key: 'UiTweaks_hideSelect', saved: true, asDefault: false, badKey: 'UiTweaks_hideSelect', bad: 'yes' },
     // The letter tool's own button, which the Tab option leaves in place, shows once the tool is on.
     ready: async (p) => {
-      await p.locator('#ui-tweaks-style').waitFor({ state: 'attached' })
+      await p.locator(UI_TWEAKS_STYLE).waitFor({ state: 'attached' })
       await p.evaluate(() => Framework.setSetting('toolletter', true))
       await p.locator(LETTER_TOGGLE).waitFor({ state: 'attached' })
     },
@@ -83,8 +95,8 @@ export const SCRIPTS = [
       assert.equal(await p.evaluate((key) => Framework.getData(key), LETTER_MODE_KEY), null, 'no letter mode was saved')
       const select = p.locator('.controls-aux [data-control="select"]')
       await select.waitFor({ state: 'visible' })
-      await openScriptDialog(p, 'UI Tweaks', '#ui-tweaks-dialog')
-      await p.locator('#ui-tweaks-dialog input[data-option="hideSelect"]').check()
+      await openScriptDialog(p, 'UI Tweaks', UI_TWEAKS_DIALOG)
+      await p.locator(`${UI_TWEAKS_DIALOG} input[data-option="hideSelect"]`).check()
       await p.locator('.dialog button').filter({ hasText: /^\s*Save\s*$/ }).click()
       await select.waitFor({ state: 'hidden' })
     }
@@ -92,10 +104,11 @@ export const SCRIPTS = [
   {
     name: 'Auto Rules Resizer',
     file: 'auto-rules-resizer.user.js',
+    style: AUTO_RULES_RESIZER_STYLE,
     dialog: { owns: /^AutoRulesResizer_/, editor: '#rules-resizer-dialog', key: 'AutoRulesResizer_maxWidth', saved: 640, enveloped: true, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
     // The recorded puzzle has no rules: SudokuPad is given some, and its own layout calls the script's fit.
     ready: async (p) => {
-      await p.locator('#auto-rules-resizer-style').waitFor({ state: 'attached' })
+      await p.locator(AUTO_RULES_RESIZER_STYLE).waitFor({ state: 'attached' })
       await p.evaluate(() => {
         Framework.app.showMetaInfoUI({ title: 'Rules', author: 'Tester', rules: 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle.' })
         Framework.app.resize()
@@ -115,9 +128,10 @@ export const SCRIPTS = [
   {
     name: 'Pen Tool Extras',
     file: 'pen-tool-extras.user.js',
+    style: PEN_TOOL_EXTRAS_STYLE,
     dialog: { owns: /^(PenColor_|EdgeMarks_)/, editor: EXTRAS_EDITOR, key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 },
     ready: async (p) => {
-      await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
+      await p.locator(PEN_TOOL_EXTRAS_STYLE).waitFor({ state: 'attached' })
       await p.evaluate(() => Framework.setSetting('toolpen', true))
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       assert.equal(await openPenTool(p), true, 'the pen tool opened')
@@ -138,12 +152,21 @@ export const SCRIPTS = [
   {
     name: 'Text Anywhere',
     file: 'text-anywhere.user.js',
+    button: TEXT_ANYWHERE_BUTTON,
+    style: TEXT_ANYWHERE_STYLE,
     dialog: { owns: /^TextAnywhere_/, editor: TEXT_ANYWHERE_EDITOR, key: 'TextAnywhere_width', saved: 3.5, badKey: 'TextAnywhere_width', bad: 500 },
     ready: (p) => p.locator(TEXT_ANYWHERE_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(TEXT_ANYWHERE_BUTTON).waitFor({ state: 'visible' }),
     act: (p) => placeNote(p, [2.5, 2.5], '15')
   }
 ]
+
+// A script's record in SCRIPTS, by file name.
+export const scriptRecord = (file) => SCRIPTS.find((script) => script.file === file)
+
+// Pen Tool Extras' settings dialog, opened the way a user finds it and closed by one of its buttons.
+export const openExtrasEditor = (p) => openScriptDialog(p, 'Pen Tool Extras', EXTRAS_EDITOR)
+export const closeExtrasEditorWith = (p, text) => closeDialogWith(p, text, EXTRAS_EDITOR)
 
 // The scripts with a settings dialog, one flat record each, in the order SCRIPTS lists them; `open` opens the dialog the way a user finds it.
 export const SETTINGS_SCRIPTS = SCRIPTS.filter((script) => script.dialog).map(({ name, file, dialog }) => ({

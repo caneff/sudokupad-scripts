@@ -6,11 +6,11 @@ import { createRequire } from 'node:module'
 import { scaleOf } from '../page.mjs'
 import { openWith, reloadWith, scriptSource } from '../session.mjs'
 import { openPenTool, PAGE_BUTTON } from '../pen.mjs'
-import { EXTRAS_EDITOR } from '../settings.mjs'
+import { EXTRAS_EDITOR, PEN_TOOL_EXTRAS_STYLE } from '../scripts.mjs'
 
 export const SCRIPT_FILE = 'pen-tool-extras.user.js'
 export const script = scriptSource(SCRIPT_FILE)
-export const STYLE = 'style#pen-tool-extras-style'
+export const STYLE = PEN_TOOL_EXTRAS_STYLE
 export const MARKS_DATA_KEY = 'EdgeMarks_marks'
 
 export const scriptExports = createRequire(import.meta.url)('../../pen-tool-extras.user.js')

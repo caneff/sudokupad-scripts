@@ -1,11 +1,8 @@
-// Shared by the live checks: opening SudokuPad's settings dialog the way a user finds a script's
-// entry, the version in a script's header, the Copy settings and Paste settings buttons of the scripts with a dialog, and a value a script saved. Not a check itself, so `live/**/*.live.mjs` skips it.
-
-import { createRequire } from 'node:module'
+// Shared by the live checks: the mechanics of SudokuPad's settings dialog (opening it the way a user finds a script's entry, its buttons, the
+// Copy settings and Paste settings buttons of the scripts with a dialog) and a value a script saved. Each script's own element ids are on its
+// record in live/scripts.mjs. Not a check itself, so `live/**/*.live.mjs` skips it.
 
 const GROUP_LABEL = 'Experimental'
-
-export const { headerVersion } = createRequire(import.meta.url)('../test/header-version.js')
 
 // Opens the settings dialog, expands the Experimental group (SudokuPad starts it collapsed) and
 // returns the group's locator.
@@ -39,10 +36,6 @@ export async function closeDialogWith (p, text, editorSel) {
   await dialogButton(p, text).click()
   await p.locator(editorSel).waitFor({ state: 'detached' })
 }
-
-export const EXTRAS_EDITOR = '#pen-tool-extras-editor'
-export const openExtrasEditor = (p) => openScriptDialog(p, 'Pen Tool Extras', EXTRAS_EDITOR)
-export const closeExtrasEditorWith = (p, text) => closeDialogWith(p, text, EXTRAS_EDITOR)
 
 // What a script saved under `key` through SudokuPad's own store, or null when nothing is.
 export const savedValue = (p, key) => p.evaluate((k) => Framework.getData(k) ?? null, key)
