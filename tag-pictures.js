@@ -1,13 +1,11 @@
 'use strict'
 // Run after retaking a picture: node tag-pictures.js
 // Browsers keep showing a picture whose address has not changed, so each repo picture's address ends in ?v=<tag>.
-const fs = require('node:fs')
-const path = require('node:path')
 const { execFileSync } = require('node:child_process')
+const { runOnSite } = require('./site-pages.js')
 
 const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const TAG_LENGTH = 7
-const SITE_DIR = path.join(__dirname, 'site')
 const COMMENT = /(<!--[\s\S]*?-->)/
 const PICTURE_SRC = new RegExp(`(<(?:img|source)\\b[^>]*?\\b(?:src|srcset)="|<meta property="og:image" content=")${RAW.replace(/\./g, '\\.')}([^"?]+)(\\?[^"]*)?"`, 'g')
 const TAG_QUERY = /^\?v=([0-9a-f]{7})$/
@@ -21,13 +19,6 @@ const pictureTags = html => html.split(COMMENT).filter((_, i) => i % 2 === 0).fl
 const tagPictures = (html, hashOf = tagOf) => html.split(COMMENT).map((part, i) =>
   i % 2 ? part : part.replace(PICTURE_SRC, (_, head, file) => `${head}${RAW}${file}?v=${hashOf(file)}"`)).join('')
 
-if (require.main === module) {
-  for (const name of fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))) {
-    const page = path.join(SITE_DIR, name)
-    const html = fs.readFileSync(page, 'utf8')
-    const tagged = tagPictures(html)
-    if (tagged !== html) fs.writeFileSync(page, tagged)
-  }
-}
+if (require.main === module) runOnSite(html => ({ text: tagPictures(html), problems: [] }))
 
 module.exports = { tagPictures, pictureTags, tagOf, RAW, TAG_QUERY }

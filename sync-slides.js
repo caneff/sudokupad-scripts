@@ -6,8 +6,8 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { RAW, tagOf } = require('./tag-pictures.js')
+const { SITE_DIR, rewritePages, runOnSite } = require('./site-pages.js')
 
-const SITE_DIR = path.join(__dirname, 'site')
 const SHOWS = JSON.parse(fs.readFileSync(path.join(SITE_DIR, 'slideshows.json'), 'utf8'))
 const BLOCK = /^([ \t]*)<!-- slideshow:([\w-]+) -->\n[\s\S]*?\n[ \t]*<!-- \/slideshow:\2 -->/gm
 const OPENING = /<!-- slideshow:([\w-]+) -->/g
@@ -53,18 +53,8 @@ const syncText = (text, shows = SHOWS, hashOf = tagOf) => {
   return { text: problems.length ? text : out, problems }
 }
 
-const syncDir = (dir, shows = SHOWS, hashOf = tagOf) => fs.readdirSync(dir).filter(f => f.endsWith('.html')).flatMap(name => {
-  const page = path.join(dir, name)
-  const html = fs.readFileSync(page, 'utf8')
-  const { text, problems } = syncText(html, shows, hashOf)
-  if (text !== html) fs.writeFileSync(page, text)
-  return problems.map(problem => `${name}: ${problem}`)
-})
+const syncDir = (dir, shows = SHOWS, hashOf = tagOf) => rewritePages(dir, html => syncText(html, shows, hashOf))
 
-if (require.main === module) {
-  const problems = syncDir(SITE_DIR)
-  for (const problem of problems) console.error(problem)
-  if (problems.length) process.exitCode = 1
-}
+if (require.main === module) runOnSite(html => syncText(html))
 
 module.exports = { renderShow, syncText, syncDir, SHOWS }

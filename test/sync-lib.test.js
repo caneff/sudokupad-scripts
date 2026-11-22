@@ -93,6 +93,27 @@ test('a block whose dependency is copied in, before or after it, is fine', () =>
   }
 })
 
+const eager = { base: 'const LIMIT = 4\nfunction helper () {}\n', needy: '/* global helper, LIMIT */\n// LIMIT in a comment\nconst use = () => helper()\nconst CAP = LIMIT * 2\n' }
+const eagerBlock = wrap('needy', '  const use = () => helper()\n  const CAP = LIMIT * 2')
+const eagerBase = wrap('base', '  const LIMIT = 4\n  function helper () {}')
+
+test('a block that reads a name when it loads, copied before the module that defines it, is a problem naming both', () => {
+  const result = syncText(script(`${eagerBlock}\n${eagerBase}`), (name) => eager[name], libNames)
+  assert.deepEqual(result.problems, ['lib:needy reads LIMIT when it loads, from lib:base, which this script copies after it'])
+})
+
+test('the same load-time read is fine when its module is copied first, and a read only inside a function or a comment is fine in either order', () => {
+  assert.deepEqual(syncText(script(`${eagerBase}\n${eagerBlock}`), (name) => eager[name], libNames).problems, [])
+  const lazy = { ...eager, needy: '/* global helper, LIMIT */\n// LIMIT in a comment\nconst use = () => helper() + LIMIT\nfunction run () {\n  return LIMIT\n}\n' }
+  assert.deepEqual(syncText(script(`${wrap('needy', '  const use = 1')}\n${eagerBase}`), (name) => lazy[name], libNames).problems, [])
+})
+
+test('the real panel module, copied before plain or sudokupad, is a problem', () => {
+  const order = ['panel', 'plain', 'sudokupad']
+  const problems = syncText(script(order.map((name) => wrap(name, '  const x = 1')).join('\n')), readLib, libNamesOnDisk()).problems
+  assert.deepEqual(problems.map((p) => p.replace(/^lib:panel reads \w+ /, '')), ['when it loads, from lib:plain, which this script copies after it', 'when it loads, from lib:sudokupad, which this script copies after it'])
+})
+
 test('a name no lib module defines (a browser global, or one the script defines) is not a dependency', () => {
   const unrelated = { base: 'function other () {}\n', needy: '/* global window, helper */\nconst use = 1\n' }
   assert.deepEqual(syncText(script(needyBlock), (name) => unrelated[name], libNames).problems, [])
