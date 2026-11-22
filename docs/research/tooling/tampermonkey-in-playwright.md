@@ -103,7 +103,7 @@ Violentmonkey, the Edge or Firefox builds. Each of the other four scripts has an
   listing says Tampermonkey sends anonymous statistics and requests to its own
   servers (blacklist and update checks); the install flow also went through
   `tampermonkey.net` in the probe, so the test needs that site reachable.
-  Tampermonkey is closed-source freeware (the repo's `docs/research/tampermonkey-shared-code.md`
+  Tampermonkey is closed-source freeware (the repo's `docs/research/tooling/tampermonkey-shared-code.md`
   and the listing give no redistribution grant). I did not find terms that allow
   or forbid a CI download; the safe stance is to download it at run time from
   Google's endpoint for the test and never commit or publish the files.

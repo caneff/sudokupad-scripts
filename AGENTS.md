@@ -4,15 +4,13 @@ Standalone Tampermonkey userscripts for SudokuPad, written to be shared, and one
 script is one `*.user.js` file with no build step for users. Shared code lives in `lib/<name>.js` and `node sync-lib.js` copies it into each
 script between `// <lib:name>` and `// </lib:name>` markers, so an installed script is still one file.
 
-- **Pages**: `site/` is the static homepage and its Pen Tool Extras details page. GitHub Pages serves it from `main`
-  (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
-- **Netlify**: serves `site/` from the `release` branch (`netlify.toml`). `git push origin main:release` publishes it and
-  spends 15 of the plan's 300 credits a month (`docs/research/netlify-credits.md`). It is pushed very rarely, so it lags
-  `main` by design: Chris kept Netlify on 2026-11-05. It will not be pushed for a long time, so no report, PR or ticket mentions
-  Netlify or what it lacks (Chris, 2026-11-21).
-- **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
-  Each script's notes and pictures are in its own folder (`docs/research/<script name>/`), pictures of a whole site page in `docs/research/site/`,
-  and notes about SudokuPad itself at the top.
+- **Site and hosting**: before you change `site/`, a picture, a slideshow or the hosting: read `docs/agents/site.md`. `site/` is
+  the static homepage and one details page per script that has one.
+- **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take
+  them and frozen scratch. Each script's notes and pictures are in its own folder (`docs/research/<script name>/`), pictures of a
+  whole site page in `docs/research/site/`, notes about the repo's own tooling (fuzz, Tampermonkey, shared code, hosting) in
+  `docs/research/tooling/`, and notes about SudokuPad itself at the top. `docs/research/README.md` indexes every note, and
+  `test/doc-paths.test.js` fails when a path named there or in this file is missing.
 - **Tests**: unit tests are in `test/` (`test/<script name>.test.js`), each shared module's in `lib/<name>.test.js`, and live tests in
   `live/<script name>/`. Every `*.user.js` stays at the root: every installed copy checks that address for updates. Never edit `draw-tool.user.js`:
   it is Text Anywhere's handover, frozen at 0.45.1 (`GLOSSARY.md`), and a change to Text Anywhere never touches it; `test/text-anywhere.test.js` fails when its bytes change (Chris, 2026-11-10).
@@ -26,36 +24,26 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   cover it (`publishedScriptFiles()`). No test, check or screenshot requests logic-masters.de, which answered a few requests with a 503: `live/logic-masters-puzzle-preview/` serves synthetic pages.
   Debugging a bug by hand may query it, a few requests at a time and never in bulk (Chris, 2026-11-21): it answers 503 after a few dozen requests in a minute or two.
 - **`GLOSSARY.md`**: the vocabulary.
-- **A change to what a script shows** (its panel, buttons, dialog or what it draws) updates that script's text in `site/` and retakes the site pictures that
-  show it, with their scripts (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
-  After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
-  and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
-  A small touch a user would not look for (a hover state, a fade, a snap feel, a cursor) gets no line in `site/`, on any script's page; only a feature a user
-  would look up gets one (Chris, 2026-11-08). Pictures are still retaken when a change alters what they show.
-- **Slideshows**: `site/slideshows.json` is the one source of every slideshow's pictures, `alt` text and captions. After editing it, or retaking a slide picture,
-  run `node sync-slides.js`: it rewrites each `<!-- slideshow:id -->` block on the homepage and the details page, picture tags included.
-  Never edit inside a block; `test/site.test.js` fails until you run it.
+- **A change to what a script shows** (its panel, buttons, dialog or what it draws) updates that script's text in `site/`, in its
+  reference page where it has one (`docs/<script name>.md`, as `docs/pen-tool-extras.md`) and in the README's script notes, and
+  retakes its pictures, in the same PR (Chris, 2026-11-06). The picture and slideshow commands are in `docs/agents/site.md`.
 - **Shared code**: never edit inside a marked block; `lib/*.test.js` tests each module. After editing `lib/<name>.js`, run `node sync-lib.js`, as `node tag-pictures.js` is run after a picture: it rewrites each
   marked block in the `*.user.js` and raises the version of every script it changed. `test/sync-lib.test.js` fails until you do.
 - **No feature relies on a right-button drag** (Chris, 2026-11-07): SudokuPad's Test Large Puzzle UI setting pans the board on it and no
   script sees the moves (`docs/research/large-puzzle-ui-right-drag.md`). A right click is fine; a right-drag may only be an extra on top of
   one, and the site teaches the right click.
-- **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07). No change is checked, styled, screenshot or
-  demonstrated at a phone or tablet size, and no ticket or PR asks for it.
+- **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07): `.out-of-scope/phones-and-tablets.md`.
 - **Text Anywhere's notes stay off Undo and Redo** (Chris, 2026-11-10): putting them on SudokuPad's undo stack would put them in the
   replay, and a history interleaved with SudokuPad's must catch every Undo first, which risks digit Undo for a small gain. No ticket proposes either.
-- **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
-  2026-11-06). A dark page means Dark Page.
+- **SudokuPad's own dark mode** is not supported, in any script (Chris, 2026-11-06): `.out-of-scope/sudokupad-dark-mode.md`. A
+  dark page means Dark Page.
 - **Keys**: before you propose, add or change a keyboard shortcut: read `docs/agents/keys.md`. A key SudokuPad's own pen tool acts on is never a script's shortcut.
 - **Pen values are not scarce** (#721): Pen Tool Extras is not running out. Before you say it is, read `docs/research/sudokupad-pen-edge-marks.md`
   § Pen values past `z` (which characters work as a pen value).
 
 ## Agent skills
 
-- **Dispatch cap** (Chris, 2026-11-08): a controller has at most 6 workers out at once, and at most 2 whose tickets change the same
-  `*.user.js`; a new ticket waits for a slot. Every merge raises a script's version, so parallel PRs on one script each need another merge of main.
-- **The consistency survey**: after a drain run that merged a change to what a script shows, and at least monthly, run
-  `docs/agents/consistency-survey.md`. It finds twin features that behave differently, which no test or audit compares.
+- Before you dispatch workers or after a drain run: read `docs/agents/dispatch.md` (the dispatch cap and the consistency survey).
 
 ### Issue tracker
 
@@ -78,25 +66,22 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 - **Seam**: `npm test` (`node --test`), against each script's pure functions (`test/`), each shared module's (`lib/*.test.js`), the live harness's helper tests
   (`live/**/*.test.mjs`) and every page in `site/` (`test/site.test.js`: every script has an install link on the homepage)
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run test:live` (every `live/**/*.live.mjs`)
-  covers them on sudokupad.app in headless Chromium, with the script injected after Start Puzzle.
+  covers them on sudokupad.app in headless Chromium, with the script injected after Start Puzzle by default.
 - Before you write or debug a live test: read `live/README.md`.
 - **Concurrency**: `npm test` and `npm run test:live:files` (so `npm run test:live` too) run at most 4 test files at once (`node-test.js`, #1090), not one per core.
   `TESTS_JOBS=<k>` sets the width instead; a worker sets it only after recording the parallel job (`implement/SKILL.md` § Control). A value that is not a whole number of 1 or more stops the run with exit 2.
-- `npm run test:live` needs a Playwright Chromium (`npx playwright install chromium`), so it stays out of `npm test` and
-  `land.testcmd`.
+- Before you run `npm run test:live` or `npm run test:tampermonkey`: read `live/README.md` (§ The Tampermonkey test for the
+  second); neither is in `npm test` or `land.testcmd`.
 - **The full live suite is no gate** (Chris, 2026-11-18, #1026): the nightly watch runs all of it on GitHub and files a bug when it is red. Extra run: every change also runs `npm run test:live:changed`, the live files its diff touches
   (a path it cannot place widens it, and its last line says so; nothing touched runs nothing): before "PR up" and again at the merge. The merge skip rule never skips it. `live/README.md` § The live gate has what it selects.
 - Extra run: a change to `live/fuzz/` or to any other path `.github/workflows/fuzz-pr.yml` lists under `live/` or as a single file (the modules the fuzz loads) also runs
   `npm run test:fuzz:smoke`, before "PR up" and again at the merge: no live file loads the fuzz, so `npm run test:live:changed` never covers it.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
-- `npm run test:tampermonkey` installs every SudokuPad script (`scriptFiles()`) into a real Tampermonkey, and leaves out Logic Masters Puzzle Preview (its install and update from the root address stay owed to a person); `live/README.md` § The Tampermonkey test
-  says what it covers and needs. It needs the network, so it stays out of `npm test`, `npm run test:live` and
-  `land.testcmd`. Run it when a change touches any line of a `// ==UserScript==` header; the controller's merge check
-  runs it then too.
+- Extra run: a change to any line of a `// ==UserScript==` header also runs `npm run test:tampermonkey`; the controller's merge
+  check runs it then too.
 - A PR names as owed only what `live/README.md` § The Tampermonkey test says the test does not cover. `crackingthecryptic.com` only redirects to
   SudokuPad now, so no PR, ticket or report names it as owed (Chris, 2026-11-07).
 
-`npm run lint` runs StandardJS over the repo, excluding `docs/research/`. `land.testcmd` runs it after the tests, so a land fails on a lint error.
-Run it before you hand off a change anyway, since it also runs on every push and pull request: `.github/workflows/ci.yml` runs `npm ci`,
-`npm test` and `npm run lint`, lint even when a test fails (no Playwright browser; the live suite stays out).
+`npm run lint` (StandardJS, excluding `docs/research/`) runs after the tests in `land.testcmd` and in CI: run it before you hand
+off a change.

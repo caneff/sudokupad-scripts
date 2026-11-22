@@ -249,7 +249,7 @@ describe('the mode button and its menu', { concurrency: false }, () => {
   })
 })
 
-// The grid draws a cell color at 60% opacity (SudokuPad's own, `color-by-digit.user.js` § darkenColor).
+// The grid draws a cell color at 60% opacity (SudokuPad's own, `darkenColor` in `color-by-digit.user.js`).
 const CELL_OPACITY = 0.6
 const WHITE = [255, 255, 255]
 // The channels of a computed color, `rgb()` or `rgba()`, alpha last when there is one.
