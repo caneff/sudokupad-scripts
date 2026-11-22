@@ -5,9 +5,6 @@ const { execFileSync } = require('node:child_process')
 const { runOnSite } = require('./site-pages.js')
 
 const RAW = 'https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/'
-// The address before the repo moved to chinstrap45 (#1055). raw.githubusercontent.com still serves it, and copies installed
-// before the move, and the frozen handover (draw-tool.user.js), update from it.
-const OLD_RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const TAG_LENGTH = 7
 const COMMENT = /(<!--[\s\S]*?-->)/
 const PICTURE_SRC = new RegExp(`(<(?:img|source)\\b[^>]*?\\b(?:src|srcset)="|<meta property="og:image" content=")${RAW.replace(/\./g, '\\.')}([^"?]+)(\\?[^"]*)?"`, 'g')
@@ -24,4 +21,4 @@ const tagPictures = (html, hashOf = tagOf) => html.split(COMMENT).map((part, i) 
 
 if (require.main === module) runOnSite(html => ({ text: tagPictures(html), problems: [] }))
 
-module.exports = { tagPictures, pictureTags, tagOf, RAW, OLD_RAW, TAG_QUERY }
+module.exports = { tagPictures, pictureTags, tagOf, RAW, TAG_QUERY }

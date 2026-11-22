@@ -558,14 +558,14 @@ const HANDOVER_SHA256 = '872fd65050ec26595d4eb923dd6e576cfdfab77dbbfc162fec281a0
 const newerThan = (a, b) => compareVersions(a, b) > 0
 
 test('draw-tool.user.js is the frozen handover: it sends updates to text-anywhere.user.js under the same @name and @namespace', () => {
-  const { RAW, OLD_RAW } = require('../tag-pictures.js')
-  const { HANDOVERS } = require('../sync-lib.js')
+  const { RAW } = require('../tag-pictures.js')
+  const { HANDOVERS, CANEFF_RAW } = require('../sync-lib.js')
   const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
   const handover = read(OLD_ADDRESS)
   const script = read(NEW_ADDRESS)
   assert.deepEqual(HANDOVERS, { [OLD_ADDRESS]: NEW_ADDRESS })
-  // The handover is frozen at the address before the move to chinstrap45 (#1055), which raw.githubusercontent.com still serves.
-  for (const [source, raw] of [[handover, OLD_RAW], [script, RAW]]) {
+  // The handover is frozen, so it still names the caneff address; Text Anywhere names the live one.
+  for (const [source, raw] of [[handover, CANEFF_RAW], [script, RAW]]) {
     for (const field of ['updateURL', 'downloadURL']) assert.equal(headerField(source, field), raw + NEW_ADDRESS, field)
   }
   for (const field of ['name', 'namespace']) assert.equal(headerField(handover, field), headerField(script, field), field)

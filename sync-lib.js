@@ -135,6 +135,9 @@ const libNamesOnDisk = () => fs.readdirSync(LIB_DIR).filter((f) => f.endsWith('.
 // frozen at one handover version whose @updateURL and @downloadURL name the new file, so those copies' next update leads there (#711;
 // docs/research/tampermonkey-in-playwright.md § Driving an update check has what is known of how).
 const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
+// The repo's raw address under its first owner. raw.githubusercontent.com still serves it, and the frozen handover and every
+// copy installed from it check it for updates, so no repo of that owner and name may ever be made again.
+const CANEFF_RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 // Scripts for another site than SudokuPad: published like the others (install link on the homepage, @version raised on a change) but
 // with no Framework, guard, lib blocks or settings dialog, so every loop over SudokuPad's scripts (scriptFiles) leaves them out.
 const OTHER_SITE_SCRIPTS = ['logic-masters-puzzle-preview.user.js']
@@ -164,4 +167,4 @@ if (require.main === module) {
   if (failed) process.exit(1)
 }
 
-module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, publishedScriptFiles, OTHER_SITE_SCRIPTS, HANDOVERS, guardId, generatedLine, RUN, libBlockNames, withoutLibBlocks }
+module.exports = { syncText, readLib, libNamesOnDisk, scriptFiles, publishedScriptFiles, OTHER_SITE_SCRIPTS, HANDOVERS, CANEFF_RAW, guardId, generatedLine, RUN, libBlockNames, withoutLibBlocks }

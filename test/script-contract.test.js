@@ -14,8 +14,7 @@ const { headerVersion, headerField } = require('../userscript-header.js')
 // Starts the script on that page with `framework` (undefined: no Framework at all) and returns what it warned.
 const startOnPage = (file, framework) => startScript(path.join(__dirname, '..', file), { ...pageStandIn(), Framework: framework }).warnings
 
-// The repo moved to chinstrap45 (#1055). @namespace is half of Tampermonkey's script identity, and the frozen handover
-// (draw-tool.user.js) carries the old one, so it stays: a new namespace would install a second copy beside the first.
+// The address is a literal, not tag-pictures.js's RAW, so a wrong RAW fails here.
 for (const file of publishedScriptFiles()) {
   test(`${file}: the header updates from its own file in the chinstrap45 repo`, () => {
     const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
@@ -23,6 +22,8 @@ for (const file of publishedScriptFiles()) {
   })
 }
 
+// @namespace is half of Tampermonkey's script identity, and the frozen handover (draw-tool.user.js) carries this one,
+// which Text Anywhere must share; the other scripts keep it too, so no installed copy is matched on a new one.
 for (const file of scriptFiles()) {
   test(`${file}: @namespace is the one installed copies were given`, () => {
     assert.equal(headerField(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), 'namespace'), 'https://github.com/caneff/sudokupad-scripts')

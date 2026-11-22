@@ -171,10 +171,9 @@ test('a complete SudokuPad lacks nothing, and without one internal only the feat
   assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['tab']]]))
 })
 
-test('the header names the script, points updates at its own file and asks for no grant, so the settings entry is its one way in', () => {
+test('the header names the script and asks for no grant, so the settings entry is its one way in', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'ui-tweaks.user.js'), 'utf8')
   assert.match(source, /^\/\/ @name\s+SudokuPad UI Tweaks$/m)
-  assert.match(source, /^\/\/ @updateURL\s+https:\/\/raw\.githubusercontent\.com\/chinstrap45\/sudokupad-scripts\/main\/ui-tweaks\.user\.js$/m)
   assert.match(source, /^\/\/ @grant\s+none$/m)
   assert.doesNotMatch(source, /GM_registerMenuCommand/)
 })

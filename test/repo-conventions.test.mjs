@@ -1,7 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
+import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { SETTINGS_SCRIPTS } from '../live/scripts.mjs'
 import { filesUnder, read, ROOT } from './repo-files.mjs'
 
@@ -87,4 +89,17 @@ test('the helpers for a broken SudokuPad sit in the unit tests\' folder, not a s
   assert.ok(existsSync(new URL('test/broken-sudokupad.js', ROOT)))
   assert.equal(existsSync(new URL('test/specs/', ROOT)), false)
   assert.deepEqual(hits(filesUnder('test', /\.m?js$/).filter((file) => file !== 'test/repo-conventions.test.mjs'), /specs\/broken-sudokupad/), [])
+})
+
+// The repo lives at chinstrap45 (#1055). Pages answers 404 at the caneff host, and a caneff raw address works only while no
+// repo is made there. The frozen handover and the dated research notes keep it; each other line that may is named.
+test('no tracked text names the caneff repo or Pages host, but the lines that must', () => {
+  const tracked = execFileSync('git', ['ls-files'], { cwd: fileURLToPath(ROOT), encoding: 'utf8' }).split('\n')
+    .filter((file) => /\.(?:m?js|md|html|json|ya?ml|txt|css|toml)$/.test(file) && !['draw-tool.user.js', 'test/repo-conventions.test.mjs'].includes(file) && !file.startsWith('docs/research/'))
+  const kept = /^\/\/ @namespace {4}https:\/\/github\.com\/caneff\/sudokupad-scripts$|^const (?:CANEFF_RAW|LAST_OLD_COPY) = |'namespace'\), 'https:\/\/github\.com\/caneff\/sudokupad-scripts'\)$/
+  const named = hits(tracked, /caneff\\?\/sudokupad-scripts|caneff\\?\.github\\?\.io/).filter((at) => {
+    const [file, line] = at.split(':')
+    return !kept.test(read(file).split('\n')[line - 1].trim())
+  })
+  assert.deepEqual(named, [])
 })
