@@ -27,10 +27,11 @@ as one read-only Opus subagent with the prompt below, then puts the findings to 
 > entries, and any difference a comment or doc says is deliberate. Phones/tablets and SudokuPad's own dark mode are
 > unsupported (AGENTS.md); ignore them.
 >
-> Sources, in this order: GLOSSARY.md (it states behavior precisely), site/*.html and docs/*.md (what users are told),
+> Sources, in this order: the reference pages docs/*.md (they state behavior precisely: docs/shared.md for what every script
+> shares, one page per script, and the README's script notes for UI Tweaks), GLOSSARY.md for the words, site/*.html (what users are told),
 > then the scripts themselves (text-anywhere.user.js is Text Anywhere, pen-tool-extras.user.js, color-by-digit.user.js,
 > dark-page.user.js, ui-tweaks.user.js, auto-rules-resizer.user.js) to confirm each finding in code. Every finding must
-> be confirmed in code with file:line, not only from the glossary. Do not run live tests or the fuzz.
+> be confirmed in code with file:line, not only from a reference page. Do not run live tests or the fuzz.
 >
 > Report, as your final message only (no file): a numbered list of every confirmed inconsistency, best first, with no cap. Each item: one line saying
 > the inconsistency in plain words as a solver would meet it; the two behaviors with file:line for each; and a one-line
