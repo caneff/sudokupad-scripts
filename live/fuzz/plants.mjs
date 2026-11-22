@@ -64,8 +64,8 @@ export const PLANTS = [
     file: 'text-anywhere.user.js',
     kind: 'rule',
     bug: 'Text Anywhere saves a changed box color but keeps drawing boxes in the old one',
-    find: '    look[name] = value\n    savedData.setData(row.key, value)',
-    replace: '    look[name] = name === \'boxColor\' ? look[name] : value\n    savedData.setData(row.key, value)',
+    find: '    look[name] = value\n    saveLook(savedData, name, value)',
+    replace: '    look[name] = name === \'boxColor\' ? look[name] : value\n    saveLook(savedData, name, value)',
     expect: /note-box-color/
   },
   {
