@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.42
+// @version      0.1.43
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -23,8 +23,11 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.42'
-  const STYLE_ID = 'ui-tweaks-style'
+  const VERSION = '0.1.43'
+  const SCRIPT_NAME = 'UI Tweaks'
+  // Every class and id the script makes starts with this.
+  const CLASS_PREFIX = 'ui-tweaks-'
+  const STYLE_ID = `${CLASS_PREFIX}style`
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
     { id: 'tab', key: 'UiTweaks_tab', label: 'Tab never switches to letters', hint: 'The letter button and the / key still switch.', default: true },
@@ -59,6 +62,12 @@
 
   // Text into HTML markup or an attribute value: the four characters that would end one or open another.
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // A mouse event's `button` numbers the button that changed; its `buttons` has one bit per button held.
+  const PRIMARY_BUTTON = 0
+  const SECONDARY_BUTTON = 2
+  const PRIMARY_HELD = 1
+  const SECONDARY_HELD = 2
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:settings-table>
@@ -68,7 +77,7 @@
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // (the store module's `{ load: loadEnveloped, save: saveEnveloped }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `loadEnveloped`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
@@ -946,7 +955,7 @@
       }
     }
   }
-  const guard = createGuard({ script: 'ui-tweaks', name: 'UI Tweaks', version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: 'ui-tweaks', name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { saved, tab, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -985,8 +994,8 @@
     if (padChanged) window.dispatchEvent(new Event('resize'))
   }
 
-  const CLASS_PREFIX = 'ui-tweaks-'
-  const DIALOG_ID = 'ui-tweaks-dialog'
+  const DIALOG_ID = `${CLASS_PREFIX}dialog`
+  const DIALOG_STYLE_ID = `${DIALOG_ID}-style`
   // SudokuPad styles a dialog's labels and inputs by tag, so these are forced.
   const DIALOG_CSS = [
     `#${DIALOG_ID} .${CLASS_PREFIX}option { display: flex !important; align-items: flex-start; gap: 10px; margin: 10px 0; cursor: pointer; }`,
@@ -997,7 +1006,7 @@
   const dialogs = guard.dialogsFor(settingsEntry)
   // Save and Copy go through the store of the feature that reads the options at startup (lib/settings-dialog.js).
   const savedOptionsStore = guard.storeFor(saved)
-  const snapshotOptions = () => snapshotStore(savedOptionsStore, tableKeys(OPTION_ROWS), () => {
+  const snapshotSave = () => snapshotStore(savedOptionsStore, tableKeys(OPTION_ROWS), () => {
     const was = options
     return () => applyOptions(was)
   })
@@ -1012,14 +1021,14 @@
     const draft = { ...options }
     const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'UI Tweaks',
+      name: SCRIPT_NAME,
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
-      styleId: 'ui-tweaks-dialog-style',
+      styleId: DIALOG_STYLE_ID,
       css: DIALOG_CSS,
       changed: () => changedRows(OPTION_ROWS, draft, options).length > 0,
-      snapshot: snapshotOptions,
+      snapshot: snapshotSave,
       feature: settingsEntry,
       save: () => {
         saveOptions(savedOptionsStore, draft)
@@ -1072,7 +1081,7 @@
   const start = () => {
     applyOptions(saved.run(() => savedOptions(Framework), () => DEFAULT_OPTIONS))
     listenForHeldTab()
-    addSettingsEntry(dialogs, settingsEntry, { name: 'uitweaks', content: 'UI Tweaks', open: openDialog })
+    addSettingsEntry(dialogs, settingsEntry, { name: 'uitweaks', content: SCRIPT_NAME, open: openDialog })
   }
   guard.start(start, { roots: () => ({ ToolLetter: typeof ToolLetter === 'undefined' ? undefined : ToolLetter }) })
 })()

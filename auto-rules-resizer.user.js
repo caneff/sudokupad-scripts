@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.39
+// @version      0.7.40
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -27,7 +27,12 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.39'
+  const VERSION = '0.7.40'
+  const SCRIPT_NAME = 'Auto Rules Resizer'
+  // Every class starts with CLASS_PREFIX, and every id but the dialog's with ID; live tests and Dark Page name both.
+  const CLASS_PREFIX = 'rules-resizer-'
+  const ID = 'auto-rules-resizer'
+  const FONT_BAR_ID = `${ID}-font`
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -37,7 +42,7 @@
   const REM_PX = 16
   const RULES_MIN = { width: 15 * REM_PX, height: 7 * REM_PX } // the pane's floor under a drag, css px
   const RESIZE_MS = 100
-  const CORNERS = ['ur', 'dl']
+  const RULES_CORNERS = ['ur', 'dl']
 
   // `fits` must be true up to some size and false past it.
   function largestSize (fits, min, max) {
@@ -83,6 +88,12 @@
 
   // Text into HTML markup or an attribute value: the four characters that would end one or open another.
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // A mouse event's `button` numbers the button that changed; its `buttons` has one bit per button held.
+  const PRIMARY_BUTTON = 0
+  const SECONDARY_BUTTON = 2
+  const PRIMARY_HELD = 1
+  const SECONDARY_HELD = 2
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:store>
@@ -117,7 +128,7 @@
 
   // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
   // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
-  function load (store, { key, read }) {
+  function loadEnveloped (store, { key, read }) {
     const raw = store.getData(key)
     if (raw === null) return { value: undefined }
     try {
@@ -147,7 +158,7 @@
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
   // A value already saved as it is writes nothing: a write is a storage round trip.
-  function save (store, key, data) {
+  function saveEnveloped (store, key, data) {
     const envelope = { v: STORE_VERSION, data }
     if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
     store.setData(key, envelope)
@@ -161,7 +172,7 @@
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // (the store module's `{ load: loadEnveloped, save: saveEnveloped }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `loadEnveloped`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
@@ -201,7 +212,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
   // Each limit is kept in the store's envelope; no limit is no key, so a fresh install saves nothing.
-  const LIMIT_ROWS = [['maxWidth', MAX_WIDTH_KEY], ['maxHeight', MAX_HEIGHT_KEY]].map(([name, key]) => ({ name, key, fallback: null, read: savedLimit(name), envelope: { load, save } }))
+  const LIMIT_ROWS = [['maxWidth', MAX_WIDTH_KEY], ['maxHeight', MAX_HEIGHT_KEY]].map(([name, key]) => ({ name, key, fallback: null, read: savedLimit(name), envelope: { load: loadEnveloped, save: saveEnveloped } }))
 
   const readLimits = (store) => readTable(LIMIT_ROWS, store)
 
@@ -297,7 +308,7 @@
   // stopped corner stays under it. Where the window and the board stop a drag is `clampDrag`'s, at each fit.
   const noRulesDrag = () => ({ w: 0, h: 0, x: 0, y: 0 })
   function dragRulesBox (box, corner, dx, dy, paneSize, minSize) {
-    if (!CORNERS.includes(corner)) throw new Error(`the rules pane has no corner "${corner}"`)
+    if (!RULES_CORNERS.includes(corner)) throw new Error(`the rules pane has no corner "${corner}"`)
     const ur = corner === 'ur'
     // The floor stops a shrink; it never grows a pane that SudokuPad laid out smaller.
     const growW = Math.max(ur ? dx : -dx, Math.min(0, minSize.width - paneSize.width))
@@ -345,7 +356,7 @@
     return [w, h, x, y].every(Number.isFinite) ? { fontOffsetPx: data.nudgePx, box: { w, h, x, y } } : undefined
   }
 
-  const loadSizing = (store, puzzle) => load(store, { key: SIZING_KEY_PREFIX + puzzle, read: readSizing }).value ?? noSizing()
+  const loadSizing = (store, puzzle) => loadEnveloped(store, { key: SIZING_KEY_PREFIX + puzzle, read: readSizing }).value ?? noSizing()
 
   function saveSizing (store, puzzle, sizing) {
     const key = SIZING_KEY_PREFIX + puzzle
@@ -353,7 +364,7 @@
     const data = isDefaultSizing(sizing) ? null : { nudgePx: sizing.fontOffsetPx, box: { w, h, x, y } }
     if (data === null) {
       if (store.getData(key) !== null) store.removeData(key)
-    } else save(store, key, data)
+    } else saveEnveloped(store, key, data)
   }
 
   // `part` is saved as the fit applied it, so a press the floor or cap cancelled, or a drag past the board, is not kept; a fit that bailed
@@ -1327,7 +1338,7 @@
       }
     }
   }
-  const guard = createGuard({ script: 'auto-rules-resizer', name: 'Auto Rules Resizer', version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: 'auto-rules-resizer', name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { fit: rulesFit, refit: rulesRefit, sizing: savedSizing, settings: maxSizeSettings } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -1337,7 +1348,6 @@
       MAX_WIDTH_KEY,
       copiedSettings,
       pastedSettings,
-      pasteReport,
       MAX_HEIGHT_KEY,
       LIMIT_FLOORS,
       limitFromBox,
@@ -1366,7 +1376,8 @@
       makeTrailing,
       watchCornerDrag,
       lackingInternals,
-      FEATURES
+      FEATURES,
+      FONT_BAR_ID
     }
   }
   if (typeof document === 'undefined') return
@@ -1374,11 +1385,9 @@
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
 
-  const ID = 'auto-rules-resizer'
-  const FONT_BAR_ID = `${ID}-font`
-  const CORNER_CLASS = `${ID}-corner`
-  const SHOWN_CLASS = `${ID}-shown`
-  const DRAG_CLASS = `${ID}-dragging`
+  const CORNER_CLASS = `${CLASS_PREFIX}corner`
+  const SHOWN_CLASS = `${CLASS_PREFIX}shown`
+  const DRAG_CLASS = `${CLASS_PREFIX}dragging`
   const MAX_WIDTH_INPUT_ID = `${ID}-max-width`
   const MAX_HEIGHT_INPUT_ID = `${ID}-max-height`
   // SudokuPad's rules pane pads its text by 16px: a corner this size sits wholly in the padding, and so does the font bar's height.
@@ -1393,7 +1402,7 @@
   const COPY_ICON = '.rules-copy'
   // On the pane while it is fitted, so the fit measures the text as it will be set. A stylesheet rule, not inline, leaves a
   // reader's own text-spacing override the last word.
-  const TEXT_CLASS = `${ID}-text`
+  const TEXT_CLASS = `${CLASS_PREFIX}text`
 
   // The corners and the font bar show while the pointer is over the pane, a corner or the bar, or a drag is under
   // way. They sit in the pane's padding, so the pointer never leaves the pane on its way to them.
@@ -1456,7 +1465,7 @@
     saveSizing(sizingStore, now.puzzle, now.wanted)
   }
 
-  function addFontBar () {
+  function installFontBar () {
     const bar = document.createElement('div')
     bar.id = FONT_BAR_ID
     for (const [label, step] of [['f+', 1], ['f-', -1]]) {
@@ -1472,7 +1481,7 @@
     document.body.appendChild(bar)
   }
 
-  function addCorner (corner) {
+  function installCorner (corner) {
     const el = document.createElement('div')
     el.id = cornerId(corner)
     el.className = CORNER_CLASS
@@ -1618,12 +1627,11 @@
     return fitted
   }
 
-  const CLASS_PREFIX = 'rules-resizer-'
-  const DIALOG_ID = 'rules-resizer-dialog'
+  const DIALOG_ID = `${CLASS_PREFIX}dialog`
   const dialogs = guard.dialogsFor(maxSizeSettings)
   // The limits are written only from the dialog, so a write that fails reaches its status line with the max size settings still on.
   const savedLimits = guard.storeFor(maxSizeSettings)
-  const snapshotLimits = () => snapshotStore(savedLimits, tableKeys(LIMIT_ROWS), () => {
+  const snapshotSave = () => snapshotStore(savedLimits, tableKeys(LIMIT_ROWS), () => {
     const was = limits
     return () => { limits = was }
   })
@@ -1643,12 +1651,12 @@
     })
     const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'Auto Rules Resizer',
+      name: SCRIPT_NAME,
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
       changed: () => changedRows(LIMIT_ROWS, typedLimits(), limits).length > 0,
-      snapshot: snapshotLimits,
+      snapshot: snapshotSave,
       feature: maxSizeSettings,
       // Restore defaults edits the draft like the other scripts'; resetting this puzzle's size is its own button, and acts at once.
       restore: () => restoreDefaults(),
@@ -1702,10 +1710,10 @@
     maxSizeSettings.run(() => {
       limits = readLimits(Framework)
     })
-    addSettingsEntry(dialogs, maxSizeSettings, { name: 'rulesresizer', content: 'Auto Rules Resizer', open: openDialog })
+    addSettingsEntry(dialogs, maxSizeSettings, { name: 'rulesresizer', content: SCRIPT_NAME, open: openDialog })
     writeStyle(`${ID}-style`, STYLE)
-    addFontBar()
-    for (const corner of CORNERS) addCorner(corner)
+    installFontBar()
+    for (const corner of RULES_CORNERS) installCorner(corner)
     // SudokuPad calls resize on every layout: a new puzzle, a resize, a turn of the device. It scales the controls column to fit the
     // page as it measures it, so it measures with the fit off, or the taller pane would shrink the whole column.
     rulesRefit.run(() => rulesRefit.wrap(app, 'resize', (stock, ...args) => {

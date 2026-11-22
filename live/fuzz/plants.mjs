@@ -73,8 +73,8 @@ export const PLANTS = [
     file: 'dark-page.user.js',
     kind: 'rule',
     bug: 'Dark Page paints a saved color as a light gray',
-    find: '    pageColor = color\n    style.textContent = buildCss(pageColor)\n  }\n\n  const CLASS_PREFIX',
-    replace: '    pageColor = color === DEFAULT_COLOR ? color : \'#f4f4f4\'\n    style.textContent = buildCss(pageColor)\n  }\n\n  const CLASS_PREFIX',
+    find: '    pageColor = color\n    style.textContent = buildCss(pageColor)\n  }\n\n  const DIALOG_ID',
+    replace: '    pageColor = color === DEFAULT_COLOR ? color : \'#f4f4f4\'\n    style.textContent = buildCss(pageColor)\n  }\n\n  const DIALOG_ID',
     expect: /page-stays-dark/
   },
   {

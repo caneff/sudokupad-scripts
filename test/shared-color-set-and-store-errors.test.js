@@ -21,7 +21,7 @@ const COPYING_SCRIPTS = ['auto-rules-resizer.user.js', 'color-by-digit.user.js',
 const Framework = {}
 const { createGuard, ERROR_LOG_KEY, wireActs } = loadLib(['sudokupad', 'write-style', 'settings-dialog'], ['createGuard', 'ERROR_LOG_KEY', 'wireActs'], { Framework })
 const { editedColorSet } = loadLib(['color-math', 'plain', 'palette', 'color-set'], ['editedColorSet'])
-const { load, unreadableSlots } = loadLib(['plain', 'store'], ['load', 'unreadableSlots'])
+const { loadEnveloped, unreadableSlots } = loadLib(['plain', 'store'], ['loadEnveloped', 'unreadableSlots'])
 const { escapeHtml } = loadLib(['plain'], ['escapeHtml'])
 
 const NINE = { 1: '#010101', 2: '#020202', 3: '#030303', 4: '#040404', 5: '#050505', 6: '#060606', 7: '#070707', 8: '#080808', 9: '#090909' }
@@ -91,9 +91,9 @@ test('the store names the slot it kept an unreadable value in, the next slot for
   const key = 'ColorByDigit_profiles'
   const store = fakeStore({ [key]: { profiles: 'later', active: 0 } })
   const read = () => undefined
-  assert.equal(quietly(() => load(store, { key, read })).result.slot, `${key}_unreadable`)
+  assert.equal(quietly(() => loadEnveloped(store, { key, read })).result.slot, `${key}_unreadable`)
   store.setData(key, { profiles: 'later still', active: 0 })
-  assert.equal(quietly(() => load(store, { key, read })).result.slot, `${key}_unreadable2`)
+  assert.equal(quietly(() => loadEnveloped(store, { key, read })).result.slot, `${key}_unreadable2`)
   const slots = unreadableSlots(store, key)
   assert.deepEqual(slots, [`${key}_unreadable`, `${key}_unreadable2`])
   const html = colorByDigit.renderEditor({ groups: [], pages: [], page: 0, brush: null, unreadableSlots: slots })

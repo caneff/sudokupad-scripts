@@ -5,7 +5,7 @@ const assert = require('node:assert/strict')
 const path = require('node:path')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
-const { save } = loadLib(['plain', 'store'], ['save'])
+const { saveEnveloped } = loadLib(['plain', 'store'], ['saveEnveloped'])
 const { failEachListener } = require('./broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { withScript, withoutPath } = require('./unit-start.js')
@@ -195,7 +195,7 @@ test('garbage under the profiles key gives the preloads, and is still in _unread
   const store = fakeStore({ [PROFILES]: 'garbage from a newer version' })
   const { result: state } = quietly(() => stateFromStored(store))
   assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
-  save(store, PROFILES, state)
+  saveEnveloped(store, PROFILES, state)
   assert.equal(store.data[`${PROFILES}_unreadable`], 'garbage from a newer version')
   assert.deepEqual(stateFromStored(store), state)
 })
@@ -980,7 +980,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
   const Framework = {
     getApp: () => Promise.resolve(app),
     getData: () => null,
-    setData: (key, value) => calls.push(['save', key, value]),
+    setData: (key, value) => calls.push(['saveEnveloped', key, value]),
     removeData () {},
     addControlButton: () => calls.push(['button']),
     addSetting: () => calls.push(['setting']),
@@ -993,7 +993,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     const order = calls.map((c) => c[0])
     assert.ok(order.includes('setting'), `no setting in ${order}`)
     assert.ok(order.indexOf('refresh') > order.indexOf('button'), `refresh before button in ${order}`)
-    const savedModes = () => calls.filter((c) => c[0] === 'save' && c[1] === 'ColorByDigit_mode').map((c) => c[2])
+    const savedModes = () => calls.filter((c) => c[0] === 'saveEnveloped' && c[1] === 'ColorByDigit_mode').map((c) => c[2])
     assert.deepEqual(savedModes(), [])
     press()
     assert.deepEqual(savedModes(), ['digit'])
@@ -1611,7 +1611,7 @@ function oklch (hex) {
   return { L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, C: Math.hypot(A, B), h: (Math.atan2(B, A) * 180 / Math.PI + 360) % 360 }
 }
 
-// The palette the puzzle shows, as readColor resolves it: key b unreadable.
+// The palette the puzzle shows, as paletteKeyColor resolves it: key b unreadable.
 const SHOWN = { a: 'rgb(61, 153, 245)', c: 'rgb(245, 58, 55)', b: '' }
 const shownColor = (key) => SHOWN[key] ?? ''
 const digitsNamed = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m[1]))]

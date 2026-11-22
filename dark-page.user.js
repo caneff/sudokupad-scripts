@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.46
+// @version      0.7.47
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -21,8 +21,11 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.46'
-  const STYLE_ID = 'dark-page-style'
+  const VERSION = '0.7.47'
+  const SCRIPT_NAME = 'Dark Page'
+  // Every class and id the script makes starts with this.
+  const CLASS_PREFIX = 'dark-page-'
+  const STYLE_ID = `${CLASS_PREFIX}style`
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
   const PAGE = `body:has(#${BOARD_ID})`
@@ -35,11 +38,15 @@
   const BUTTON_BORDER = '#4a4a4a'
   const BUTTON_GROUPS = ['.controls-app', '.controls-tool', '.controls-aux']
   // Pen Tool Extras' and Text Anywhere's trays, light purple boxes behind their panels' control buttons. Each panel's color buttons carry a `data-key`; every other button in it sits on the tray.
-  const TRAYS = ['.pen-tool-extras-tray', '.text-anywhere-tray']
+  // These names are the other scripts'; test/cross-script-names.test.js holds them equal.
+  const PEN_TOOL_EXTRAS_TRAY_CLASS = 'pen-tool-extras-tray'
+  const TEXT_ANYWHERE_TRAY_CLASS = 'text-anywhere-tray'
+  const TRAYS = [PEN_TOOL_EXTRAS_TRAY_CLASS, TEXT_ANYWHERE_TRAY_CLASS].map((tray) => `.${tray}`)
   const TRAY_PANELS = TRAYS.map((tray) => `.controls-input:has(${tray})`)
   const TRAY_BUTTON = 'button:not([data-key])'
   // Auto Rules Resizer's f+ and f- bar, on the page's body beside the rules pane, wears SudokuPad's button face, so it goes dark with SudokuPad's buttons.
-  const SCRIPT_BUTTONS = ['#auto-rules-resizer-font button']
+  const RULES_FONT_BAR_ID = 'auto-rules-resizer-font'
+  const SCRIPT_BUTTONS = [`#${RULES_FONT_BAR_ID} button`]
   // A step above a black page and below BUTTON_BG, as the light tray sits between SudokuPad's white page and its white buttons.
   const TRAY_BG = '#1d1a20'
   // SudokuPad's own overlay is rgba(60, 60, 60, .7), which lightens any page darker than #3c3c3c.
@@ -67,6 +74,12 @@
 
   // Text into HTML markup or an attribute value: the four characters that would end one or open another.
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // A mouse event's `button` numbers the button that changed; its `buttons` has one bit per button held.
+  const PRIMARY_BUTTON = 0
+  const SECONDARY_BUTTON = 2
+  const PRIMARY_HELD = 1
+  const SECONDARY_HELD = 2
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:settings-table>
@@ -76,7 +89,7 @@
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // (the store module's `{ load: loadEnveloped, save: saveEnveloped }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `loadEnveloped`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
@@ -1059,11 +1072,11 @@
       }
     }
   }
-  const guard = createGuard({ script: 'dark-page', name: 'Dark Page', version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: 'dark-page', name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { savedPageColor, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, earlyColor, LOCAL_DATA_KEY, buildCss, PAGE, BOARD_ID, STYLE_ID, PAGE_COLOR_VAR, lackingInternals, FEATURES }
+    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, DEFAULT_COLOR, readSaved, earlyColor, LOCAL_DATA_KEY, buildCss, PAGE, BOARD_ID, STYLE_ID, PAGE_COLOR_VAR, PEN_TOOL_EXTRAS_TRAY_CLASS, TEXT_ANYWHERE_TRAY_CLASS, RULES_FONT_BAR_ID, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -1099,10 +1112,10 @@
     style.textContent = buildCss(pageColor)
   }
 
-  const CLASS_PREFIX = 'dark-page-'
-  const DIALOG_ID = 'dark-page-dialog'
-  const INPUT_ID = 'dark-page-input'
-  const SWATCH_ID = 'dark-page-swatch'
+  const DIALOG_ID = `${CLASS_PREFIX}dialog`
+  const DIALOG_STYLE_ID = `${DIALOG_ID}-style`
+  const INPUT_ID = `${CLASS_PREFIX}input`
+  const SWATCH_ID = `${CLASS_PREFIX}swatch`
   // SudokuPad's overlay covers the page while the dialog is open, so the swatch shows the picked color: the page around a white square for the board.
   const DIALOG_CSS = [
     `.${CLASS_PREFIX}color-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }`,
@@ -1111,20 +1124,20 @@
   ].join('\n')
   const dialogs = guard.dialogsFor(settingsEntry)
   // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
-  const snapshotColor = () => snapshotStore(savedColorStore, tableKeys(SETTING_ROWS))
+  const snapshotSave = () => snapshotStore(savedColorStore, tableKeys(SETTING_ROWS))
 
   function openDialog () {
     let picked = pageColor
     const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'Dark Page',
+      name: SCRIPT_NAME,
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
-      styleId: `${DIALOG_ID}-style`,
+      styleId: DIALOG_STYLE_ID,
       css: DIALOG_CSS,
       changed: () => picked !== pageColor,
-      snapshot: snapshotColor,
+      snapshot: snapshotSave,
       feature: settingsEntry,
       save: () => saveColor(picked),
       copyPaste: {
@@ -1175,7 +1188,7 @@
       style.textContent = buildCss(pageColor)
     }
     // The entry waits for the app, as every other script's does; with no getApp it goes in now, as theirs do.
-    const addEntry = () => addSettingsEntry(dialogs, settingsEntry, { name: 'darkpage', content: 'Dark Page', open: openDialog })
+    const addEntry = () => addSettingsEntry(dialogs, settingsEntry, { name: 'darkpage', content: SCRIPT_NAME, open: openDialog })
     if (typeof Framework.getApp !== 'function') return addEntry()
     return Framework.getApp().then(addEntry)
   }

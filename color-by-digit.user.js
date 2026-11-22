@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.79
+// @version      0.25.80
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,8 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.79'
+  const VERSION = '0.25.80'
+  const SCRIPT_NAME = 'Color by Digit'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -276,6 +277,12 @@
 
   // Text into HTML markup or an attribute value: the four characters that would end one or open another.
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // A mouse event's `button` numbers the button that changed; its `buttons` has one bit per button held.
+  const PRIMARY_BUTTON = 0
+  const SECONDARY_BUTTON = 2
+  const PRIMARY_HELD = 1
+  const SECONDARY_HELD = 2
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:store>
@@ -310,7 +317,7 @@
 
   // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
   // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
-  function load (store, { key, read }) {
+  function loadEnveloped (store, { key, read }) {
     const raw = store.getData(key)
     if (raw === null) return { value: undefined }
     try {
@@ -340,7 +347,7 @@
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
   // A value already saved as it is writes nothing: a write is a storage round trip.
-  function save (store, key, data) {
+  function saveEnveloped (store, key, data) {
     const envelope = { v: STORE_VERSION, data }
     if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
     store.setData(key, envelope)
@@ -354,7 +361,7 @@
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // (the store module's `{ load: loadEnveloped, save: saveEnveloped }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `loadEnveloped`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
@@ -442,7 +449,7 @@
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
   const preloadedState = () => makeState(preloadProfiles(), 0, undefined, true)
 
-  const stateFromStored = (store) => load(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
+  const stateFromStored = (store) => loadEnveloped(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
 
   function stateFromLegacy (legacyGroups) {
     const preloads = preloadProfiles()
@@ -1244,7 +1251,7 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE */
+  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1387,7 +1394,7 @@
       if (editPanel && !editPanel.contains(event.target)) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        if (event.button === 0) document.addEventListener('click', swallowClick, true)
+        if (event.button === PRIMARY_BUTTON) document.addEventListener('click', swallowClick, true)
         endEditMode()
         return
       }
@@ -1547,13 +1554,13 @@
   const PAGE_BUTTONS = 10
 
   // A null entry keeps the empty space, so every other color stays on its index.
-  function layoutPages (pages, currentPage, readColor) {
+  function layoutPages (pages, currentPage, paletteKeyColor) {
     return pages.map((keys, page) => {
       const list = keys.slice(0, PAGE_BUTTONS)
       const slot = (index) => {
         if (list[index] === undefined) return null
         const key = String(list[index])
-        const value = String(readColor(key)).trim()
+        const value = String(paletteKeyColor(key)).trim()
         return isVisibleColor(value) ? { key, value } : null
       }
       const rows = []
@@ -1565,7 +1572,7 @@
   }
 
   // A palette of a shape the script does not know is reported as Text Anywhere reports it (readPalettePages), and the dialog says no colors were found.
-  const readPalette = (readColor) => layoutPages(readPalettePages('color-by-digit').pages, colorTool()?.currentPage, readColor)
+  const readPalette = (paletteKeyColor) => layoutPages(readPalettePages('color-by-digit').pages, colorTool()?.currentPage, paletteKeyColor)
 
   const pageSlots = (p) => [p.zero, ...p.rows.flat()]
 
@@ -1656,7 +1663,7 @@
 
   function renderDigitKey (digit, key, colors) {
     const color = colors.find((c) => c.key === key)
-    const look = !key ? '' : color ? ` style="background:${fillWithOpacity(escapeHtml(color.value), CELL_COLOR_OPACITY)}"` : ' class="cbd-unset"'
+    const look = !key ? '' : color ? ` style="background:${fillWithOpacity(escapeHtml(color.value), CELL_COLOR_OPACITY)}"` : ` class="${CLASS_PREFIX}unset"`
     return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${escapeHtml(key || '')}"${look}>${digit}</button>`
   }
 
@@ -2101,8 +2108,8 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
-  const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
-  const EDITOR_ID = 'color-by-digit-editor'
+  const heading = (text, extra = '') => `<div class="${CLASS_PREFIX}heading">${text}${extra}</div>`
+  const DIALOG_ID = 'color-by-digit-editor'
   const MENU = '#color-by-digit-menu'
   const STYLE_ID = 'color-by-digit-style'
 
@@ -2121,17 +2128,17 @@
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const chosen = i === selected
-      return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
+      return `<div class="${CLASS_PREFIX}profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
-        `<span class="cbd-chips">${renderChips(cellChips(profile.groups), colorOf, { size: CHIP_PX })}</span>` +
-        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</span>`) +
-        `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
+        `<span class="${CLASS_PREFIX}chips">${renderChips(cellChips(profile.groups), colorOf, { size: CHIP_PX })}</span>` +
+        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="${CLASS_PREFIX}name" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</span>`) +
+        `<button type="button" class="${CLASS_PREFIX}text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
-    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
+    return heading('Profiles', `<span class="${CLASS_PREFIX}count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
       `<div role="radiogroup" aria-label="Profile to edit">${rows}</div>` +
-      `<button type="button" class="cbd-text-button" data-act="new-profile"${full ? ` disabled title="${FULL_NOTE}"` : ''}>+ New profile</button>` +
-      (full ? `<div class="cbd-note" data-role="full-note">${FULL_NOTE}</div>` : '')
+      `<button type="button" class="${CLASS_PREFIX}text-button" data-act="new-profile"${full ? ` disabled title="${FULL_NOTE}"` : ''}>+ New profile</button>` +
+      (full ? `<div class="${CLASS_PREFIX}note" data-role="full-note">${FULL_NOTE}</div>` : '')
   }
 
   const MENU_ROW = 'display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 6px;border-radius:6px'
@@ -2182,8 +2189,8 @@
     const shownMode = allowedMode(mode, usesDigitColors(state))
     const digit = digitChoice(state)
     const named = (picked) => state.profiles.map((p, i) => optionHtml(i, p.name, picked === String(i), i)).join('')
-    const pulldown = (role, label, options) => `<label class="cbd-pulldown"><span>${label}</span><select class="${CLASS_PREFIX}color-choice" data-role="${role}">${options}</select></label>`
-    return '<div class="cbd-pulldowns">' +
+    const pulldown = (role, label, options) => `<label class="${CLASS_PREFIX}pulldown"><span>${label}</span><select class="${CLASS_PREFIX}color-choice" data-role="${role}">${options}</select></label>`
+    return `<div class="${CLASS_PREFIX}pulldowns">` +
       pulldown('mode-draft', 'Mode', modesFor(usesDigitColors(state)).map((m) => optionHtml(m, MODE_NAMES[m], m === shownMode)).join('')) +
       pulldown('cell-profile', 'Cell', named(String(state.active))) +
       pulldown('digit-profile', 'Digit', optionHtml('same', 'Same as cell', digit === 'same') + named(digit) + optionHtml('none', 'None', digit === 'none')) +
@@ -2191,9 +2198,9 @@
   }
 
   const RESTORE_ASK = 'Restore the preloaded profiles? Your own profiles and edits are removed when you Save.'
-  const renderRestoreConfirm = () => '<div class="cbd-note cbd-confirm" role="alertdialog" aria-label="Restore defaults" data-role="restore-confirm">' +
-    `<div>${RESTORE_ASK}</div><div class="cbd-confirm-buttons"><button type="button" class="cbd-button" data-act="restore-keep">Keep my profiles</button>` +
-    '<button type="button" class="cbd-button" data-act="restore-go">Restore defaults</button></div></div>'
+  const renderRestoreConfirm = () => `<div class="${CLASS_PREFIX}note ${CLASS_PREFIX}confirm" role="alertdialog" aria-label="Restore defaults" data-role="restore-confirm">` +
+    `<div>${RESTORE_ASK}</div><div class="${CLASS_PREFIX}confirm-buttons"><button type="button" class="${CLASS_PREFIX}button" data-act="restore-keep">Keep my profiles</button>` +
+    `<button type="button" class="${CLASS_PREFIX}button" data-act="restore-go">Restore defaults</button></div></div>`
 
   // Matched as text, not by a selector, since a custom palette's key may hold a quote.
   const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
@@ -2201,84 +2208,84 @@
   function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadableSlots = [], confirmHtml = '' }) {
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
-    const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
+    const clear = `<button type="button" class="${CLASS_PREFIX}button" data-act="clear">Clear all</button>`
     const paint = colors.length === 0
-      ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
+      ? `<div class="${CLASS_PREFIX}note">No palette colors found: digits cannot be painted.</div>` + renderPad(groups, colors)
       : renderPaint(groups, pages, shown, brush, colors)
-    const kept = unreadableSlots.length ? `<div class="cbd-note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${unreadableSlots.join(' and ')}.</div>` : ''
+    const kept = unreadableSlots.length ? `<div class="${CLASS_PREFIX}note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${unreadableSlots.join(' and ')}.</div>` : ''
     return `${kept}${confirmHtml}${pulldownsHtml}` +
-      `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
-      `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
+      `<div class="${CLASS_PREFIX}columns ${CLASS_PREFIX}divider"><div class="${CLASS_PREFIX}column">${profilesHtml}</div>` +
+      `<div class="${CLASS_PREFIX}column">${heading('Digits', clear)}${paint}</div></div>`
   }
 
   // One stylesheet, every rule scoped to the editor, the dialog itself (its width), the dialog's options row, or the profile menu.
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
-  const EDITOR = `#${EDITOR_ID}`
+  const EDITOR = `#${DIALOG_ID}`
   const DIALOG = `.dialog:has(${EDITOR})`
   // Only for someone who has not asked the system for less motion; a fading menu takes no clicks.
   const MENU_FADE_MS = 100
   const ROW_SLIDE_MS = 80
   const MOTION_CSS = [
-    `${MENU}.cbd-closing { pointer-events: none; }`,
+    `${MENU}.${CLASS_PREFIX}closing { pointer-events: none; }`,
     '@media (prefers-reduced-motion: no-preference) {',
     // Material's standard-accelerate easing, the one for something leaving.
-    `  ${MENU}.cbd-closing { opacity: 0; transition: opacity ${MENU_FADE_MS}ms cubic-bezier(0.3, 0, 1, 1); }`,
-    `  ${EDITOR} .cbd-profile { transition: transform ${ROW_SLIDE_MS}ms ease-out; }`,
+    `  ${MENU}.${CLASS_PREFIX}closing { opacity: 0; transition: opacity ${MENU_FADE_MS}ms cubic-bezier(0.3, 0, 1, 1); }`,
+    `  ${EDITOR} .${CLASS_PREFIX}profile { transition: transform ${ROW_SLIDE_MS}ms ease-out; }`,
     '}'
   ].join('\n')
 
   const STYLE_CSS = [
-    [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px; height: 34px'],
-    [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
+    [`${EDITOR} .${CLASS_PREFIX}heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px; height: 34px'],
+    [`${EDITOR} .${CLASS_PREFIX}count`, 'font-weight: 400; font-size: .8rem; color: #666'],
     [DIALOG, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
-    [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${DIALOG_RULE}; margin: 12px 0 0; padding-top: 10px`],
-    [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
-    [`${EDITOR} .cbd-confirm`, `background: ${ACTIVE_FILL}; border: 1px solid ${ACTIVE_RING}; border-radius: 8px; padding: 8px 10px; margin: 0 0 10px`],
-    [`${EDITOR} .cbd-confirm-buttons`, 'display: flex; gap: 8px; margin-top: 8px'],
-    [`${EDITOR} .cbd-pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
-    [`${EDITOR} .cbd-pulldown`, `display: grid; grid-template-columns: ${PULLDOWN_LABEL_WIDTH}px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left`],
-    [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
-    [`${EDITOR} .cbd-column`, 'min-width: 0'],
-    [`${EDITOR} .cbd-button`, `background: ${DIALOG_BUTTON_FACE}; color: ${DIALOG_BUTTON_INK}; border: 1px solid ${DIALOG_BUTTON_BORDER}; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer`],
+    [`${EDITOR} .${CLASS_PREFIX}divider`, `border-top: 1px solid ${DIALOG_RULE}; margin: 12px 0 0; padding-top: 10px`],
+    [`${EDITOR} .${CLASS_PREFIX}note`, 'margin: 6px 0'],
+    [`${EDITOR} .${CLASS_PREFIX}confirm`, `background: ${ACTIVE_FILL}; border: 1px solid ${ACTIVE_RING}; border-radius: 8px; padding: 8px 10px; margin: 0 0 10px`],
+    [`${EDITOR} .${CLASS_PREFIX}confirm-buttons`, 'display: flex; gap: 8px; margin-top: 8px'],
+    [`${EDITOR} .${CLASS_PREFIX}pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
+    [`${EDITOR} .${CLASS_PREFIX}pulldown`, `display: grid; grid-template-columns: ${PULLDOWN_LABEL_WIDTH}px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left`],
+    [`${EDITOR} .${CLASS_PREFIX}columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
+    [`${EDITOR} .${CLASS_PREFIX}column`, 'min-width: 0'],
+    [`${EDITOR} .${CLASS_PREFIX}button`, `background: ${DIALOG_BUTTON_FACE}; color: ${DIALOG_BUTTON_INK}; border: 1px solid ${DIALOG_BUTTON_BORDER}; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer`],
     [EDITOR, 'user-select: none; -webkit-user-select: none'],
     [`${EDITOR} [data-role="paint"]`, `display: grid; gap: ${SWATCH_GAP_PX}px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}); touch-action: none`],
     [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
     [`${EDITOR} [data-act="digit"]:not([data-key=""])`, `color: ${ENTERED_DIGIT_BLUE}`],
-    [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
+    [`${EDITOR} .${CLASS_PREFIX}unset`, 'border-style: dashed'],
     [`${EDITOR} [role="radiogroup"]`, 'display: flex; flex-direction: column; gap: 2px'],
-    [`${EDITOR} .cbd-profile`, 'cursor: pointer; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px; border-radius: 6px'],
-    [`${EDITOR} .cbd-profile:hover`, `background: ${HOVER_FILL}`],
-    [`${EDITOR} .cbd-profile[aria-checked="true"]`, `background: ${ACTIVE_FILL}`],
+    [`${EDITOR} .${CLASS_PREFIX}profile`, 'cursor: pointer; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px; border-radius: 6px'],
+    [`${EDITOR} .${CLASS_PREFIX}profile:hover`, `background: ${HOVER_FILL}`],
+    [`${EDITOR} .${CLASS_PREFIX}profile[aria-checked="true"]`, `background: ${ACTIVE_FILL}`],
     // Hidden, not removed, so every row keeps its layout.
-    [`${EDITOR} .cbd-profile [data-role="handle"], ${EDITOR} .cbd-profile [data-act="delete"]`, 'visibility: hidden'],
-    [`${EDITOR} .cbd-profile:hover [data-role="handle"], ${EDITOR} .cbd-profile:hover [data-act="delete"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-role="handle"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-act="delete"]`, 'visibility: visible'],
+    [`${EDITOR} .${CLASS_PREFIX}profile [data-role="handle"], ${EDITOR} .${CLASS_PREFIX}profile [data-act="delete"]`, 'visibility: hidden'],
+    [`${EDITOR} .${CLASS_PREFIX}profile:hover [data-role="handle"], ${EDITOR} .${CLASS_PREFIX}profile:hover [data-act="delete"], ${EDITOR} .${CLASS_PREFIX}profile[aria-checked="true"] [data-role="handle"], ${EDITOR} .${CLASS_PREFIX}profile[aria-checked="true"] [data-act="delete"]`, 'visibility: visible'],
     [`${EDITOR} [data-role="handle"]`, `cursor: grab; touch-action: none; user-select: none; color: ${MUTED}; font-size: 18px; line-height: 1`],
     // One width for every run, so the names line up.
-    [`${EDITOR} .cbd-chips`, `display: flex; flex: none; width: ${CHIP_COLUMN_PX}px`],
+    [`${EDITOR} .${CLASS_PREFIX}chips`, `display: flex; flex: none; width: ${CHIP_COLUMN_PX}px`],
     // Its left padding is the name field's padding and border, so a name starts where the selected row's does.
-    [`${EDITOR} .cbd-name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: .9rem; font-weight: 400`],
-    [`${EDITOR} .cbd-text-button`, `background: none; border: none; box-shadow: none; color: ${MUTED}; font-size: .9rem; font-weight: 500; padding: 2px 6px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 1.4; border-radius: 6px; cursor: pointer`],
-    [`${EDITOR} .cbd-text-button:hover:not(:disabled)`, `background: ${HOVER_FILL}; color: #222`],
-    [`${EDITOR} .cbd-text-button:disabled`, 'opacity: .4; cursor: default'],
+    [`${EDITOR} .${CLASS_PREFIX}name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: .9rem; font-weight: 400`],
+    [`${EDITOR} .${CLASS_PREFIX}text-button`, `background: none; border: none; box-shadow: none; color: ${MUTED}; font-size: .9rem; font-weight: 500; padding: 2px 6px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 1.4; border-radius: 6px; cursor: pointer`],
+    [`${EDITOR} .${CLASS_PREFIX}text-button:hover:not(:disabled)`, `background: ${HOVER_FILL}; color: #222`],
+    [`${EDITOR} .${CLASS_PREFIX}text-button:disabled`, 'opacity: .4; cursor: default'],
     [`${EDITOR} [data-act="delete"]`, 'flex: none; font-size: 1.1rem; line-height: 1'],
     [`${EDITOR} [data-act="new-profile"]`, 'margin: 4px 0'],
     [`${EDITOR} [data-role="profile-name"]`, `box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px ${NAME_PAD}px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text`],
     [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
-    [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
+    [`${EDITOR} .${CLASS_PREFIX}profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
     // SudokuPad's `button:focus { outline: none }` hides the browser's ring, so the dialog draws its own, for the keyboard only.
-    [`${EDITOR} button:focus-visible, ${EDITOR} [data-role="swatch"]:focus-visible, ${EDITOR} .cbd-profile:focus-visible`, `outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px`],
+    [`${EDITOR} button:focus-visible, ${EDITOR} [data-role="swatch"]:focus-visible, ${EDITOR} .${CLASS_PREFIX}profile:focus-visible`, `outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px`],
     // The pressed swatch's own outline takes the property, so its focus ring is drawn beside it.
     [`${EDITOR} [data-role="swatch"][aria-pressed="true"]`, 'position: relative'],
     [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible`, 'outline: 3px solid #000; outline-offset: 0'],
     [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible::after`, `content: ''; position: absolute; inset: -7px; border: 2px solid ${SUDOKUPAD_PURPLE}; border-radius: 9px; pointer-events: none`],
-    [`${EDITOR} .cbd-button:hover`, `background: ${CONTROL_HOVER}`],
+    [`${EDITOR} .${CLASS_PREFIX}button:hover`, `background: ${CONTROL_HOVER}`],
     [`${EDITOR} [data-act="digit"]:not([style]):hover`, `background: ${CONTROL_HOVER}`],
     [`${EDITOR} [data-act="digit"]:hover`, `box-shadow: inset 0 0 0 2px ${SUDOKUPAD_PURPLE}`],
     [`${EDITOR} [data-role="swatch"]:not([data-empty]):hover`, `box-shadow: 0 0 0 2px ${SUDOKUPAD_PURPLE}`],
-    [`${EDITOR} .cbd-button:active, ${EDITOR} [data-act="digit"]:active, ${EDITOR} [data-role="swatch"]:not([data-empty]):active`, PRESS_LAYER],
+    [`${EDITOR} .${CLASS_PREFIX}button:active, ${EDITOR} [data-act="digit"]:active, ${EDITOR} [data-role="swatch"]:not([data-empty]):active`, PRESS_LAYER],
     [`${EDITOR} [data-act="delete"], ${EDITOR} [data-role="handle"]`, `display: inline-flex; align-items: center; justify-content: center; min-width: ${MIN_TARGET_PX}px; min-height: ${MIN_TARGET_PX}px; box-sizing: border-box`],
     // The handle holds the pointer capture, so its cursor shows wherever the pointer goes; every element has its own, so it is forced.
-    [`${EDITOR}.cbd-dragging *`, 'cursor: grabbing !important']
+    [`${EDITOR}.${CLASS_PREFIX}dragging *`, 'cursor: grabbing !important']
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR) + '\n' + MOTION_CSS
 
   // <lib:wrap-index>
@@ -2386,10 +2393,10 @@
   }
   const BUTTON = '#control-colorbydigit'
   const ARROW = `${BUTTON} [data-role="menu"]`
-  const PRESSED_CLASS = 'cbd-pressed'
-  const DRAGGING_CLASS = 'cbd-dragging'
+  const PRESSED_CLASS = `${CLASS_PREFIX}pressed`
+  const DRAGGING_CLASS = `${CLASS_PREFIX}dragging`
   // A slot that is no button is an empty cell of the layout.
-  const PAINT_GRIDS = '[data-role="paint"], .cbd-swatches'
+  const PAINT_GRIDS = `[data-role="paint"], .${CLASS_PREFIX}swatches`
   const FOCUSABLE_SLOT = 'button'
   // The pressed look is a class, set on pointerdown: the button's `mousedown` is cancelled, and an engine may then drop `:active`.
   // The arrow's ::after widens its 14 px box to 24 px, outward over the button's corner (WCAG 2.2 SC 2.5.8).
@@ -2398,7 +2405,7 @@
     `${ARROW}::after { content: ''; position: absolute; inset: -${(MIN_TARGET_PX - ARROW_BOX_PX) / 2}px; }`
   ].join('\n')
   const BUTTON_STYLE_ID = 'color-by-digit-button'
-  const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: 'color-by-digit', name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, asideOf, isVisibleColor, layoutPages, layoutColors, palettePages, readPalette, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
@@ -2410,7 +2417,7 @@
   const savedData = guard.storeFor(storage)
   const dialogs = guard.dialogsFor(editor)
 
-  const saveState = (state) => save(savedData, PROFILES_KEY, state)
+  const saveState = (state) => saveEnveloped(savedData, PROFILES_KEY, state)
   const loadState = () => stateFromStored(savedData)
 
   function addPreloadsOnce () {
@@ -2424,7 +2431,7 @@
   }
   const loadGroups = () => activeGroups(loadState())
 
-  function readColor (key) {
+  function paletteKeyColor (key) {
     const resolved = readCellColor(key)
     return isVisibleColor(resolved) ? resolved : ''
   }
@@ -2633,7 +2640,7 @@
   }
 
   // The whole page: SudokuPad swaps the board's elements when a puzzle loads.
-  function watchBoard () {
+  function syncDigitsOnBoardChange () {
     let queued = false
     new window.MutationObserver((records) => {
       if (queued || !colorsDigits(mode) || !records.some(isBoardChange)) return
@@ -2644,7 +2651,7 @@
 
   // Digit colors are a stylesheet, not SudokuPad state, so they are never an undo step.
   function showDigitColors () {
-    writeStyle(DIGIT_STYLE_ID, colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : '')
+    writeStyle(DIGIT_STYLE_ID, colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), paletteKeyColor)}\n${CIRCLE_CSS}` : '')
     syncDigits()
   }
 
@@ -2661,7 +2668,7 @@
     modeButton.run(() => {
       const icon = document.querySelector(`${BUTTON} .icon`)
       const state = loadState()
-      if (icon) icon.outerHTML = iconHtml(mode, buttonChips(mode, state), readColor)
+      if (icon) icon.outerHTML = iconHtml(mode, buttonChips(mode, state), paletteKeyColor)
       labelButton()
     })
     digitColors.run(showDigitColors)
@@ -2844,7 +2851,7 @@
     menu = null
     pickedRow.style.background = ACTIVE_FILL
     menuTimer = setTimeout(() => {
-      leaving.classList.add('cbd-closing')
+      leaving.classList.add(`${CLASS_PREFIX}closing`)
       menuTimer = setTimeout(dropLeavingMenu, MENU_FADE_MS)
     }, MENU_BLINK_MS)
   }
@@ -2860,7 +2867,7 @@
     menu.setAttribute('role', 'menu')
     menu.style.cssText = 'position:fixed;z-index:10000;width:max-content;max-width:calc(100vw - 8px);box-sizing:border-box;padding:6px;border-radius:10px;background:#fff;color:#1d1b26;' +
       'box-shadow:0 10px 30px rgba(30,20,60,.28),0 0 0 1px rgba(0,0,0,.08);font:14px/1.2 sans-serif;text-align:left;user-select:none'
-    menu.innerHTML = renderMenu(loadState(), readColor)
+    menu.innerHTML = renderMenu(loadState(), paletteKeyColor)
     document.body.appendChild(menu)
     const rect = button.getBoundingClientRect()
     const left = Math.min(Math.max(rect.right - menu.offsetWidth + 8, 4), window.innerWidth - menu.offsetWidth - 4)
@@ -2937,7 +2944,7 @@
     document.addEventListener('pointerdown', modeButton.bind((event) => {
       if (menu && !within(event, MENU) && !onArrow(event)) closeMenu()
       endHold()
-      if (!onButtonProper(event) || (event.pointerType === 'mouse' && event.button !== 0)) return
+      if (!onButtonProper(event) || (event.pointerType === 'mouse' && event.button !== PRIMARY_BUTTON)) return
       const { clientX, clientY } = event
       const moved = (e) => Math.hypot(e.clientX - clientX, e.clientY - clientY) > HOLD_SLOP
       setPressed(true)
@@ -2987,13 +2994,13 @@
   function openDialog (app) {
     let savedState = loadState()
     const keptSlots = unreadableSlots(savedData, PROFILES_KEY)
-    let draft = openingDraft(savedState, mode, readPalette(readColor))
+    let draft = openingDraft(savedState, mode, readPalette(paletteKeyColor))
     const box = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'Color by Digit',
+      name: SCRIPT_NAME,
       version: VERSION,
       off: guard.off,
-      bodyId: EDITOR_ID,
+      bodyId: DIALOG_ID,
       styleId: STYLE_ID,
       css: STYLE_CSS,
       changed: () => draft.mode !== mode || JSON.stringify(draft.state) !== JSON.stringify(savedState),
@@ -3032,7 +3039,7 @@
     const setStop = (grid, stop) => grid.querySelectorAll('button').forEach((button) => { button.tabIndex = button === stop ? 0 : -1 })
     const draw = () => {
       const { state, mode: draftMode, selected, pages, page, brush } = draft
-      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadableSlots: keptSlots, confirmHtml: confirming ? renderRestoreConfirm() : '' })
+      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, paletteKeyColor, selected), unreadableSlots: keptSlots, confirmHtml: confirming ? renderRestoreConfirm() : '' })
       box.querySelectorAll(PAINT_GRIDS).forEach((grid) => setStop(grid, grid.querySelector('[aria-pressed="true"]') || grid.querySelector('button')))
     }
     box.addEventListener('focusin', (event) => {
@@ -3058,7 +3065,7 @@
       const { state, selected } = draft
       const name = state.profiles[selected].name
       box.querySelector(`[data-role="profile-row"][data-index="${selected}"]`).setAttribute('aria-label', name)
-      box.querySelectorAll(`.cbd-pulldown option[data-index="${selected}"]`).forEach((option) => { option.textContent = name })
+      box.querySelectorAll(`.${CLASS_PREFIX}pulldown option[data-index="${selected}"]`).forEach((option) => { option.textContent = name })
     })
     // Enter, or leaving the box, shows the name the draft holds: a blank box shows the kept name again.
     const settleName = (nameBox) => { nameBox.value = draft.state.profiles[draft.selected].name }
@@ -3081,7 +3088,7 @@
     // A press in a gap (not on a control) paints from the first digit the drag reaches, so a slightly early press selects no text and drags no page.
     box.addEventListener('pointerdown', (event) => {
       const target = event.target
-      if (target.closest('select, input, [data-role="handle"]') || (event.pointerType === 'mouse' && event.button !== 0)) return
+      if (target.closest('select, input, [data-role="handle"]') || (event.pointerType === 'mouse' && event.button !== PRIMARY_BUTTON)) return
       event.preventDefault()
       if (target.hasPointerCapture && target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId)
       const pressed = target.closest('[data-act="digit"]')
@@ -3099,7 +3106,7 @@
     })
     box.addEventListener('pointerdown', (event) => {
       const handle = event.target.closest('[data-role="handle"]')
-      if (!handle || (event.pointerType === 'mouse' && event.button !== 0)) return
+      if (!handle || (event.pointerType === 'mouse' && event.button !== PRIMARY_BUTTON)) return
       event.preventDefault()
       const from = Number(handle.dataset.index)
       const rows = [...box.querySelectorAll('[data-role="profile-row"]')]
@@ -3216,19 +3223,19 @@
       setTimeout(() => editor.run(() => openDialog(app)), 0)
     })
     // The features are independent: one that fails to install costs the others nothing.
-    addSettingsEntry(dialogs, editor, { name: 'colorbydigit', content: 'Color by Digit', open: () => openDialog(app) })
+    addSettingsEntry(dialogs, editor, { name: 'colorbydigit', content: SCRIPT_NAME, open: () => openDialog(app) })
     addPreloadsOnce()
     const state = loadState()
     mode = allowedMode(startingMode(savedData.getData(MODE_KEY), savedData.getData(AUTO_KEY)), usesDigitColors(state))
     writeStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
     writeStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {
-      installButton(Framework, app, mode, buttonChips(mode, state), readColor)
+      installButton(Framework, app, mode, buttonChips(mode, state), paletteKeyColor)
       labelButton()
     })
     installCellColoring(app)
     modeButton.run(() => listenForButton(app, openEditor))
-    digitColors.run(watchBoard)
+    digitColors.run(syncDigitsOnBoardChange)
     whenProgressLoaded(app, redraw)
     // A Restart colors the board itself, so a startup pass still waiting would color the board an Undo loads in a group of its own.
     if (colorsCells(mode)) {

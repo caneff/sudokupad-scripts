@@ -14,7 +14,7 @@ const SCRIPTS = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'pen-tool-
 const scripts = Object.fromEntries(SCRIPTS.map((name) => [name, require(join(ROOT, `${name}.user.js`))]))
 const lib = loadLib(
   ['plain', 'sudokupad', 'color-math', 'slider-keys', 'panel', 'write-style', 'store', 'settings-table'],
-  ['savedHex', 'onSliderStep', 'sliderRowMarkup', 'writeStyle', 'save', 'sameValue']
+  ['savedHex', 'onSliderStep', 'sliderRowMarkup', 'writeStyle', 'saveEnveloped', 'sameValue']
 )
 
 test('each of the six scripts copies its settings through its table, and every key it copies has a paste reader that takes the copied value', () => {
@@ -86,10 +86,10 @@ test('the store writes nothing for a value already saved as it is', () => {
   const writes = []
   const base = fakeStore({})
   const store = { ...base, getData: (key) => base.getData(key), setData: (key, value) => { writes.push(key); base.setData(key, value) } }
-  lib.save(store, 'K', { a: 1 })
-  lib.save(store, 'K', { a: 1 })
+  lib.saveEnveloped(store, 'K', { a: 1 })
+  lib.saveEnveloped(store, 'K', { a: 1 })
   assert.deepEqual(writes, ['K'])
-  lib.save(store, 'K', { a: 2 })
+  lib.saveEnveloped(store, 'K', { a: 2 })
   assert.deepEqual(writes, ['K', 'K'])
 })
 
