@@ -58,11 +58,10 @@ test('every picture the site loads is in a script folder of docs/research/ or in
   }
 })
 
-// A handover (draw-tool.user.js) is an old address kept so installed copies move on, and is never linked. Logic Masters Puzzle Preview is
-// off the homepage for now (Chris, 2026-11-21), so only SudokuPad's scripts are checked.
-test('every SudokuPad script in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
+// A handover (draw-tool.user.js) is an old address kept so installed copies move on, and is never linked.
+test('every script in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
-  for (const s of scriptFiles()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const s of publishedScriptFiles()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
 })
 
 for (const name of PAGES) {
@@ -249,7 +248,7 @@ test(`${DETAILS} good to know says others need the script to see dashed and arro
 
 // One row per script, in this order, each script's file named for its shown name; Details only where a details page exists.
 const ROWS = [
-  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined]
+  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined], ['Logic Masters Puzzle Preview', undefined]
 ]
 const rowsOf = html => html.split(/<section class="row(?: row-plain)?">/).slice(1)
 
@@ -281,12 +280,20 @@ test(`${HOME}'s other rows show one picture and no pager`, () => {
   }
 })
 
-// Logic Masters Puzzle Preview is off the homepage for now (Chris, 2026-11-21), so the Other group is gone with it.
-test(`${HOME} puts its rows under a SudokuPad group (the six SudokuPad scripts)`, () => {
+test(`${HOME}'s Logic Masters Puzzle Preview row credits Juggler and says it is gentle on the site`, () => {
+  const row = rowsOf(read(HOME)).find(r => r.includes('<h2>Logic Masters Puzzle Preview</h2>'))
+  assert.ok(row, `site/${HOME} has no Logic Masters Puzzle Preview row`)
+  const text = plain(row)
+  assert.match(text, /first version was written by Juggler/)
+  assert.match(text, /gentle on the server/)
+})
+
+test(`${HOME} splits its rows into a SudokuPad group (the six SudokuPad scripts) and an Other group (Logic Masters Puzzle Preview)`, () => {
   const html = read(HOME)
   const groups = [...html.matchAll(/<h2 class="group">([^<]*)<\/h2>([\s\S]*?)(?=<h2 class="group">|<footer>)/g)].map(m => [m[1], rowsOf(m[2]).map(r => r.match(/<h2>([^<]*)<\/h2>/)[1])])
   assert.deepEqual(groups, [
-    ['SudokuPad', ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer', 'UI Tweaks']]
+    ['SudokuPad', ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer', 'UI Tweaks']],
+    ['Other', ['Logic Masters Puzzle Preview']]
   ])
 })
 
@@ -678,7 +685,6 @@ for (const { name, details } of [...SUMMARY_SCRIPTS, { name: 'Logic Masters Puzz
   test(`${name}'s README row says its @description`, () => {
     assert.equal(readmeRow(name), descriptionOf(name))
   })
-  if (name === 'Logic Masters Puzzle Preview') continue
   test(`${name}'s homepage card opens with its @description`, () => {
     assert.ok(cardOf(name).startsWith(descriptionOf(name)), `the card says: ${cardOf(name)}`)
   })
