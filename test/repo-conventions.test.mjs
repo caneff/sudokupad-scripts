@@ -119,3 +119,13 @@ test('GLOSSARY.md opens with Shared and SudokuPad, each section is in alphabetic
 test('.audit-ignore.md cites a test by its title, never a line number', () => {
   assert.deepEqual(hits(['.audit-ignore.md'], /\.m?js:\d+/), [])
 })
+
+test('the research index\'s do-not-move list is exactly the research pictures the site and the README link', () => {
+  const pages = ['README.md', ...filesUnder('site', /\.(html|json|css|js)$/)]
+  const linked = new Set(pages.flatMap((file) => read(file).match(/docs\/research\/[\w./-]+?\.(?:png|webp|jpg|gif|svg)/g) ?? []))
+  const section = read('docs/research/README.md').split('## Published pictures: do not move')[1].split(/^## /m)[0]
+  const listed = new Set(listItems(section).map((item) => item.match(/^- `([^`]+)`/)?.[1]).filter(Boolean))
+  assert.ok(linked.size > 30, `${linked.size} linked pictures are read`)
+  assert.deepEqual([...linked].filter((picture) => !listed.has(picture)), [], 'linked but not listed')
+  assert.deepEqual([...listed].filter((picture) => !linked.has(picture)), [], 'listed but not linked')
+})
