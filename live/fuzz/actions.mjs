@@ -100,7 +100,7 @@ export const ERROR_LOG_SCRIPTS = SETTINGS_SCRIPTS.map(({ entry }) => entry.toLow
 const dialogEntry = (words) => SETTINGS_SCRIPTS.find(({ entry }) => entry.toLowerCase() === words).entry
 const settingsTextLabel = (name, text, save) => `${name} dialog: ${text === null ? 'Copy settings' : `Paste settings ${jsonWords(text)}`} ${save ? 'Save' : 'Cancel'}`
 
-// The rules box's two drag corners (`CORNERS` of auto-rules-resizer.user.js, which does not export it; the fake-page test checks them against `dragRulesBox`), and how far a drag goes either way:
+// The rules box's two drag corners (`RULES_CORNERS` of auto-rules-resizer.user.js, which does not export it; the fake-page test checks them against `dragRulesBox`), and how far a drag goes either way:
 // far enough to grow the box past the window and to shrink it to its floor, so the script's clamps get reached.
 export const RULES_CORNERS = ['ur', 'dl']
 export const RULES_DRAG_REACH_PX = 500

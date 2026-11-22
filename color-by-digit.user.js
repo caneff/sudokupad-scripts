@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.79
+// @version      0.25.80
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.79'
+  const VERSION = '0.25.80'
   const SCRIPT_NAME = 'Color by Digit'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -277,6 +277,12 @@
 
   // Text into HTML markup or an attribute value: the four characters that would end one or open another.
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // A mouse event's `button` numbers the button that changed; its `buttons` has one bit per button held.
+  const PRIMARY_BUTTON = 0
+  const SECONDARY_BUTTON = 2
+  const PRIMARY_HELD = 1
+  const SECONDARY_HELD = 2
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:store>
@@ -311,7 +317,7 @@
 
   // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
   // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
-  function load (store, { key, read }) {
+  function loadEnveloped (store, { key, read }) {
     const raw = store.getData(key)
     if (raw === null) return { value: undefined }
     try {
@@ -341,7 +347,7 @@
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
   // A value already saved as it is writes nothing: a write is a storage round trip.
-  function save (store, key, data) {
+  function saveEnveloped (store, key, data) {
     const envelope = { v: STORE_VERSION, data }
     if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
     store.setData(key, envelope)
@@ -355,7 +361,7 @@
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // (the store module's `{ load: loadEnveloped, save: saveEnveloped }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `loadEnveloped`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
@@ -443,7 +449,7 @@
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
   const preloadedState = () => makeState(preloadProfiles(), 0, undefined, true)
 
-  const stateFromStored = (store) => load(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
+  const stateFromStored = (store) => loadEnveloped(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
 
   function stateFromLegacy (legacyGroups) {
     const preloads = preloadProfiles()
@@ -1245,7 +1251,7 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE */
+  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1388,7 +1394,7 @@
       if (editPanel && !editPanel.contains(event.target)) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        if (event.button === 0) document.addEventListener('click', swallowClick, true)
+        if (event.button === PRIMARY_BUTTON) document.addEventListener('click', swallowClick, true)
         endEditMode()
         return
       }
@@ -1548,13 +1554,13 @@
   const PAGE_BUTTONS = 10
 
   // A null entry keeps the empty space, so every other color stays on its index.
-  function layoutPages (pages, currentPage, readColor) {
+  function layoutPages (pages, currentPage, paletteKeyColor) {
     return pages.map((keys, page) => {
       const list = keys.slice(0, PAGE_BUTTONS)
       const slot = (index) => {
         if (list[index] === undefined) return null
         const key = String(list[index])
-        const value = String(readColor(key)).trim()
+        const value = String(paletteKeyColor(key)).trim()
         return isVisibleColor(value) ? { key, value } : null
       }
       const rows = []
@@ -1566,7 +1572,7 @@
   }
 
   // A palette of a shape the script does not know is reported as Text Anywhere reports it (readPalettePages), and the dialog says no colors were found.
-  const readPalette = (readColor) => layoutPages(readPalettePages('color-by-digit').pages, colorTool()?.currentPage, readColor)
+  const readPalette = (paletteKeyColor) => layoutPages(readPalettePages('color-by-digit').pages, colorTool()?.currentPage, paletteKeyColor)
 
   const pageSlots = (p) => [p.zero, ...p.rows.flat()]
 
@@ -2411,7 +2417,7 @@
   const savedData = guard.storeFor(storage)
   const dialogs = guard.dialogsFor(editor)
 
-  const saveState = (state) => save(savedData, PROFILES_KEY, state)
+  const saveState = (state) => saveEnveloped(savedData, PROFILES_KEY, state)
   const loadState = () => stateFromStored(savedData)
 
   function addPreloadsOnce () {
@@ -2425,7 +2431,7 @@
   }
   const loadGroups = () => activeGroups(loadState())
 
-  function readColor (key) {
+  function paletteKeyColor (key) {
     const resolved = readCellColor(key)
     return isVisibleColor(resolved) ? resolved : ''
   }
@@ -2634,7 +2640,7 @@
   }
 
   // The whole page: SudokuPad swaps the board's elements when a puzzle loads.
-  function watchBoard () {
+  function syncDigitsOnBoardChange () {
     let queued = false
     new window.MutationObserver((records) => {
       if (queued || !colorsDigits(mode) || !records.some(isBoardChange)) return
@@ -2645,7 +2651,7 @@
 
   // Digit colors are a stylesheet, not SudokuPad state, so they are never an undo step.
   function showDigitColors () {
-    writeStyle(DIGIT_STYLE_ID, colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : '')
+    writeStyle(DIGIT_STYLE_ID, colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), paletteKeyColor)}\n${CIRCLE_CSS}` : '')
     syncDigits()
   }
 
@@ -2662,7 +2668,7 @@
     modeButton.run(() => {
       const icon = document.querySelector(`${BUTTON} .icon`)
       const state = loadState()
-      if (icon) icon.outerHTML = iconHtml(mode, buttonChips(mode, state), readColor)
+      if (icon) icon.outerHTML = iconHtml(mode, buttonChips(mode, state), paletteKeyColor)
       labelButton()
     })
     digitColors.run(showDigitColors)
@@ -2861,7 +2867,7 @@
     menu.setAttribute('role', 'menu')
     menu.style.cssText = 'position:fixed;z-index:10000;width:max-content;max-width:calc(100vw - 8px);box-sizing:border-box;padding:6px;border-radius:10px;background:#fff;color:#1d1b26;' +
       'box-shadow:0 10px 30px rgba(30,20,60,.28),0 0 0 1px rgba(0,0,0,.08);font:14px/1.2 sans-serif;text-align:left;user-select:none'
-    menu.innerHTML = renderMenu(loadState(), readColor)
+    menu.innerHTML = renderMenu(loadState(), paletteKeyColor)
     document.body.appendChild(menu)
     const rect = button.getBoundingClientRect()
     const left = Math.min(Math.max(rect.right - menu.offsetWidth + 8, 4), window.innerWidth - menu.offsetWidth - 4)
@@ -2938,7 +2944,7 @@
     document.addEventListener('pointerdown', modeButton.bind((event) => {
       if (menu && !within(event, MENU) && !onArrow(event)) closeMenu()
       endHold()
-      if (!onButtonProper(event) || (event.pointerType === 'mouse' && event.button !== 0)) return
+      if (!onButtonProper(event) || (event.pointerType === 'mouse' && event.button !== PRIMARY_BUTTON)) return
       const { clientX, clientY } = event
       const moved = (e) => Math.hypot(e.clientX - clientX, e.clientY - clientY) > HOLD_SLOP
       setPressed(true)
@@ -2988,7 +2994,7 @@
   function openDialog (app) {
     let savedState = loadState()
     const keptSlots = unreadableSlots(savedData, PROFILES_KEY)
-    let draft = openingDraft(savedState, mode, readPalette(readColor))
+    let draft = openingDraft(savedState, mode, readPalette(paletteKeyColor))
     const box = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: SCRIPT_NAME,
@@ -3033,7 +3039,7 @@
     const setStop = (grid, stop) => grid.querySelectorAll('button').forEach((button) => { button.tabIndex = button === stop ? 0 : -1 })
     const draw = () => {
       const { state, mode: draftMode, selected, pages, page, brush } = draft
-      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadableSlots: keptSlots, confirmHtml: confirming ? renderRestoreConfirm() : '' })
+      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, paletteKeyColor, selected), unreadableSlots: keptSlots, confirmHtml: confirming ? renderRestoreConfirm() : '' })
       box.querySelectorAll(PAINT_GRIDS).forEach((grid) => setStop(grid, grid.querySelector('[aria-pressed="true"]') || grid.querySelector('button')))
     }
     box.addEventListener('focusin', (event) => {
@@ -3082,7 +3088,7 @@
     // A press in a gap (not on a control) paints from the first digit the drag reaches, so a slightly early press selects no text and drags no page.
     box.addEventListener('pointerdown', (event) => {
       const target = event.target
-      if (target.closest('select, input, [data-role="handle"]') || (event.pointerType === 'mouse' && event.button !== 0)) return
+      if (target.closest('select, input, [data-role="handle"]') || (event.pointerType === 'mouse' && event.button !== PRIMARY_BUTTON)) return
       event.preventDefault()
       if (target.hasPointerCapture && target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId)
       const pressed = target.closest('[data-act="digit"]')
@@ -3100,7 +3106,7 @@
     })
     box.addEventListener('pointerdown', (event) => {
       const handle = event.target.closest('[data-role="handle"]')
-      if (!handle || (event.pointerType === 'mouse' && event.button !== 0)) return
+      if (!handle || (event.pointerType === 'mouse' && event.button !== PRIMARY_BUTTON)) return
       event.preventDefault()
       const from = Number(handle.dataset.index)
       const rows = [...box.querySelectorAll('[data-role="profile-row"]')]
@@ -3224,12 +3230,12 @@
     writeStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
     writeStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {
-      installButton(Framework, app, mode, buttonChips(mode, state), readColor)
+      installButton(Framework, app, mode, buttonChips(mode, state), paletteKeyColor)
       labelButton()
     })
     installCellColoring(app)
     modeButton.run(() => listenForButton(app, openEditor))
-    digitColors.run(watchBoard)
+    digitColors.run(syncDigitsOnBoardChange)
     whenProgressLoaded(app, redraw)
     // A Restart colors the board itself, so a startup pass still waiting would color the board an Undo loads in a group of its own.
     if (colorsCells(mode)) {

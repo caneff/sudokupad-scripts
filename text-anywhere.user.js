@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.54
+// @version      0.46.55
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.54'
+  const VERSION = '0.46.55'
   const SCRIPT_NAME = 'Text Anywhere'
   const TOOL_NAME = 'textanywhere'
   // Every class and id the script makes starts with this.
@@ -277,8 +277,6 @@
   const RESTARTED_PREFIX = KEY_PREFIX + 'restarted_'
   const KEPT_PUZZLES = 50
   const HIT_MARGIN_PX = 4
-  const PRIMARY_BUTTON = 0
-  const SECONDARY_BUTTON = 2
   const TEXT_KIND = 'text'
   // Kinds an earlier version saved; they are kept with the entries no note check passes, stay in storage and are never drawn.
   const OLD_KINDS = ['stroke', 'shape']
@@ -743,6 +741,12 @@
 
   // Text into HTML markup or an attribute value: the four characters that would end one or open another.
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // A mouse event's `button` numbers the button that changed; its `buttons` has one bit per button held.
+  const PRIMARY_BUTTON = 0
+  const SECONDARY_BUTTON = 2
+  const PRIMARY_HELD = 1
+  const SECONDARY_HELD = 2
   /* eslint-enable no-unused-vars */
   // </lib:plain>
 
@@ -814,7 +818,7 @@
 
   // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
   // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
-  function load (store, { key, read }) {
+  function loadEnveloped (store, { key, read }) {
     const raw = store.getData(key)
     if (raw === null) return { value: undefined }
     try {
@@ -844,7 +848,7 @@
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
   // A value already saved as it is writes nothing: a write is a storage round trip.
-  function save (store, key, data) {
+  function saveEnveloped (store, key, data) {
     const envelope = { v: STORE_VERSION, data }
     if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
     store.setData(key, envelope)
@@ -858,7 +862,7 @@
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // (the store module's `{ load: loadEnveloped, save: saveEnveloped }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `loadEnveloped`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
   // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
@@ -1026,7 +1030,7 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE */
+  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1169,7 +1173,7 @@
       if (editPanel && !editPanel.contains(event.target)) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        if (event.button === 0) document.addEventListener('click', swallowClick, true)
+        if (event.button === PRIMARY_BUTTON) document.addEventListener('click', swallowClick, true)
         endEditMode()
         return
       }
@@ -1340,7 +1344,7 @@
 
   // `unreadable` is the reason when the whole saved value could not be read, and is then copied aside by `load`.
   function loadNotes (store, key) {
-    const { value, unreadable } = load(store, { key: notesKey(key), read: readNotes })
+    const { value, unreadable } = loadEnveloped(store, { key: notesKey(key), read: readNotes })
     return { ...(value ?? { items: [], kept: [] }), unreadable }
   }
 
@@ -1387,7 +1391,7 @@
     const notes = items.concat(kept)
     const index = readIndex(store.getData(INDEX_KEY))
     if (notes.length > 0) {
-      writeIndexed(store, index, key, notesKey(key), notes, (k, v) => save(store, k, v))
+      writeIndexed(store, index, key, notesKey(key), notes, (k, v) => saveEnveloped(store, k, v))
       return
     }
     store.removeData(notesKey(key))
@@ -2685,6 +2689,7 @@
   // hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
+  const SETTINGS_ICON_SVG = `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg>`
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   const COLOR_LABEL_REM = 1.7
@@ -2772,7 +2777,7 @@
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
   const SETTINGS_LABEL = 'Text Anywhere settings'
-  const controlIcon = (paths, viewBox = '0 0 24 24') => `<svg viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
+  const controlIcon = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
   const CLEAR_LABEL = 'Clear all'
   const DELETE_SELECTED_LABEL = 'Delete the selected notes'
   const HIDE_LABEL = 'Hide all notes'
@@ -3048,7 +3053,7 @@
     settings.className = SETTINGS_CLASS
     settings.title = SETTINGS_LABEL
     settings.setAttribute('aria-label', SETTINGS_LABEL)
-    settings.innerHTML = controlIcon(SETTINGS_ICON, SETTINGS_ICON_VIEWBOX)
+    settings.innerHTML = SETTINGS_ICON_SVG
     settings.addEventListener('click', settingsUi.bind(openDialog))
     const backgroundButton = document.createElement('button')
     backgroundButton.className = BACKGROUND_CLASS
@@ -4328,10 +4333,6 @@
       centerOverBoard: true
     }))
   }
-
-  // The mouse button each gesture is held by, as a bit of a MouseEvent's `buttons`.
-  const PRIMARY_HELD = 1
-  const SECONDARY_HELD = 2
 
   const toolHandlers = {
     name: TOOL_NAME,
