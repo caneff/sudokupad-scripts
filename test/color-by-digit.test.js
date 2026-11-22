@@ -1281,7 +1281,7 @@ test('readPalette reports a bad palette page as a warning and no pages, so the d
   try {
     global.Framework = { app: { tools: { colour: { palette: { pages: [['a', 'b'], 'oops'] }, currentPage: 0 } } } }
     assert.deepEqual(readPalette(red), [])
-    assert.deepEqual(warnings, ['color-by-digit: SudokuPad\'s color palette has no pages of color keys, so digits cannot be painted'])
+    assert.deepEqual(warnings, ['color-by-digit: SudokuPad\'s color palette has no pages of color keys'])
     warnings.length = 0
     global.Framework = { app: { tools: { colour: { palette: { pages: [['a', 'b']] }, currentPage: 0 } } } }
     const [page] = readPalette(red)

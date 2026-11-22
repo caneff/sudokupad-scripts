@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.45
+// @version      0.7.46
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.45'
+  const VERSION = '0.7.46'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -78,6 +78,9 @@
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
   // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
+  // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
+  const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
+
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -319,7 +322,15 @@
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
-  const SAVE_FILL = '#6b3fa0'
+  // The dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
+  const DIALOG_PURPLE = '#6b3fa0'
+  // The options row's rule, the buttons' face, ink and border, the Save button's border, and the title tools' hover.
+  const DIALOG_RULE = '#e3dff0'
+  const DIALOG_BUTTON_FACE = '#f1eff5'
+  const DIALOG_BUTTON_INK = '#333'
+  const DIALOG_BUTTON_BORDER = '#cfc9db'
+  const DIALOG_SAVE_BORDER = '#5a3489'
+  const DIALOG_TOOLS_HOVER = '#f0edf5'
   // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
@@ -543,7 +554,7 @@
       `.${prefix}off-note:empty { display: none; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
-      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} button:hover { background: ${DIALOG_TOOLS_HOVER} !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
@@ -561,11 +572,11 @@
       // Inherited by every checkbox, slider and other form control in the dialog, in place of the browser's blue.
       `${dialog} { accent-color: ${SUDOKUPAD_PURPLE}; }`,
       // The row sits on the text parts' box, so their side padding as its margin puts its edges, the top line's included, on the content column's.
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
-      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
-      `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${DIALOG_RULE}; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
+      `${row} button { background: ${DIALOG_BUTTON_FACE} !important; color: ${DIALOG_BUTTON_INK} !important; border: 1px solid ${DIALOG_BUTTON_BORDER} !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
+      `${row} button[data-role="save"] { background: ${DIALOG_PURPLE} !important; color: #fff !important; border: 1px solid ${DIALOG_SAVE_BORDER} !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
-      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
+      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${DIALOG_PURPLE} !important; }`,
       `${row} button:active { ${PRESS_LAYER} !important; }`,
       `${row} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px; }`
     ].join('\n')
@@ -1095,7 +1106,7 @@
   // SudokuPad's overlay covers the page while the dialog is open, so the swatch shows the picked color: the page around a white square for the board.
   const DIALOG_CSS = [
     `.${CLASS_PREFIX}color-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }`,
-    `#${SWATCH_ID} { display: flex; align-items: center; justify-content: center; height: 64px; margin: 6px 0; border: 1px solid #cfc9db; border-radius: 8px; }`,
+    `#${SWATCH_ID} { display: flex; align-items: center; justify-content: center; height: 64px; margin: 6px 0; border: 1px solid ${DIALOG_BUTTON_BORDER}; border-radius: 8px; }`,
     `#${SWATCH_ID}::after { content: ""; width: 32px; height: 32px; background: #fff; }`
   ].join('\n')
   const dialogs = guard.dialogsFor(settingsEntry)

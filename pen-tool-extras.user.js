@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.51
+// @version      1.32.52
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.51'
+  const VERSION = '1.32.52'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -75,6 +75,9 @@
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
   // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
+  // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
+  const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
+
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -117,6 +120,7 @@
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
   // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
   const onSliderStep = ({ min, max, step }, value) => typeof value === 'number' && value >= min && value <= max && Number.isInteger((value - min) / step)
+  const savedSliderValue = (range, data) => (onSliderStep(range, data) ? data : undefined)
   // SudokuPad drops every keydown with `event.repeat` before a tool sees it, so a script times a held key itself: nothing until the pause, then a tick of steps that ramps up.
   const HELD_REPEAT_MS = 300
   const HELD_RAMP_MS = 1500
@@ -586,7 +590,15 @@
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
-  const SAVE_FILL = '#6b3fa0'
+  // The dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
+  const DIALOG_PURPLE = '#6b3fa0'
+  // The options row's rule, the buttons' face, ink and border, the Save button's border, and the title tools' hover.
+  const DIALOG_RULE = '#e3dff0'
+  const DIALOG_BUTTON_FACE = '#f1eff5'
+  const DIALOG_BUTTON_INK = '#333'
+  const DIALOG_BUTTON_BORDER = '#cfc9db'
+  const DIALOG_SAVE_BORDER = '#5a3489'
+  const DIALOG_TOOLS_HOVER = '#f0edf5'
   // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
@@ -810,7 +822,7 @@
       `.${prefix}off-note:empty { display: none; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
-      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} button:hover { background: ${DIALOG_TOOLS_HOVER} !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
@@ -828,11 +840,11 @@
       // Inherited by every checkbox, slider and other form control in the dialog, in place of the browser's blue.
       `${dialog} { accent-color: ${SUDOKUPAD_PURPLE}; }`,
       // The row sits on the text parts' box, so their side padding as its margin puts its edges, the top line's included, on the content column's.
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
-      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
-      `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${DIALOG_RULE}; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
+      `${row} button { background: ${DIALOG_BUTTON_FACE} !important; color: ${DIALOG_BUTTON_INK} !important; border: 1px solid ${DIALOG_BUTTON_BORDER} !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
+      `${row} button[data-role="save"] { background: ${DIALOG_PURPLE} !important; color: #fff !important; border: 1px solid ${DIALOG_SAVE_BORDER} !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
-      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
+      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${DIALOG_PURPLE} !important; }`,
       `${row} button:active { ${PRESS_LAYER} !important; }`,
       `${row} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px; }`
     ].join('\n')
@@ -918,11 +930,11 @@
 
   // `effect` runs once `inForce` holds the new value; the style is written after the effects, so an effect need not.
   function slider (key, range, effect, dialog) {
-    return { key, fallback: range.fallback, read: (data) => onSliderStep(range, data) ? data : undefined, effect, range, dialog }
+    return { key, fallback: range.fallback, read: (data) => savedSliderValue(range, data), effect, range, dialog }
   }
 
   function flag (key, effect, dialog) {
-    return { key, fallback: true, read: (data) => typeof data === 'boolean' ? data : undefined, effect, dialog }
+    return { key, fallback: true, read: savedBoolean, effect, dialog }
   }
 
   // `normalize` reads an accepted value: a name saved under an old name, as `legacyNames` lists, is accepted too.
@@ -1153,7 +1165,7 @@
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
 
-  // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
+  // A color set (lib/color-set.js) without its `fromPreset`.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
 
   // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so color N lines up with cell color button N.
@@ -1204,19 +1216,28 @@
 
   const colorTool = () => Framework.app?.tools?.colour
 
-  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
-  // values for them exist earlier and say nothing about a custom palette).
-  function readyColorTool () {
-    const tool = colorTool()
-    const pages = tool?.palette?.pages
-    return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
-  }
+  const BAD_PALETTE = 'SudokuPad\'s color palette has no pages of color keys'
 
+  // The one reader of the palette's pages: none while SudokuPad has no palette, and a throw for a palette of a shape the script does not know.
   function palettePages () {
     const palette = colorTool()?.palette
     if (!palette) return []
-    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error(BAD_PALETTE)
     return palette.pages
+  }
+
+  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
+  // values for them exist earlier and say nothing about a custom palette).
+  const readyColorTool = () => palettePages().length > 0 ? colorTool() : null
+
+  // A bad palette is a warning under the script's id and no pages, so a dialog still opens; `note` is the warning's text, for the dialog to show.
+  function readPalettePages (scriptId) {
+    try {
+      return { pages: palettePages(), note: '' }
+    } catch (error) {
+      console.warn(`${scriptId}: ${error.message}`)
+      return { pages: [], note: error.message }
+    }
   }
 
   // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
@@ -1258,11 +1279,6 @@
   const SAVED_PRESETS = [...PAGE_PRESETS, SUDOKUPAD_PRESET]
   const UNSAVED = 'unsaved'
 
-  // `fromPreset` is the page the set's missing pens came from, which the dialog's note names; the set carries it, so a hand edit (Custom) still names that page.
-  const presetColorSet = (preset, pages, readCell) => ({ ...paletteColors(preset, pages, readCell), fromPreset: preset })
-  // SudokuPad's own colors read no page, so their set needs no color tool.
-  const SUDOKUPAD_COLOR_SET = presetColorSet(SUDOKUPAD_PRESET, [], () => undefined)
-
   // null means the install save is still owed.
   const readPenColors = (data) => savedColorSet(data, SAVED_PRESETS)
 
@@ -1270,13 +1286,7 @@
     ...pasteReaders(SETTING_ROWS),
     [COLORS_KEY]: (data) => pastedColorSet(data, SAVED_PRESETS)
   }
-  // Every setting at the value in force, defaults included, so a paste can put one back to its default; the pen colors only once they are saved.
-  function copiedSettings (store) {
-    const copied = copiedTable(SETTING_ROWS, store)
-    const colors = copiedColorSet(store.getData(COLORS_KEY), SAVED_PRESETS)
-    if (colors) copied[COLORS_KEY] = colors
-    return JSON.stringify(copied)
-  }
+  const copiedSettings = (store) => copiedSettingsWithColors(SETTING_ROWS, store, COLORS_KEY, SAVED_PRESETS)
 
   // Only the install save (`wait`, then page 1 darkened, or `save` with no color tool at all) changes the colors without the user.
   function startupPenColors (data, hasColorTool) {
@@ -1413,7 +1423,7 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS, escapeHtml */
+  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1424,8 +1434,8 @@
   // The pickers are rare enough to fade in; ending edit mode takes them away at once, with no fade out.
   const PICKER_ENTRY_SCALE = 0.95
   const PICKER_ENTRY_MS = 150
-  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
-  const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
+  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it. A function: settings-dialog, which names its color, may be copied in after this module.
+  const choiceArrow = () => `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${encodeURIComponent(DIALOG_PURPLE)}'/%3E%3C/svg%3E")`
 
   // A preset in force that is not among the pickable `presets` (Custom, a page the palette no longer has) is shown first, selected and disabled, so the pulldown says what is in force and
   // every preset stays pickable: picking the option already shown fires no `change`. `labels` names each id.
@@ -1461,7 +1471,7 @@
     return [
       `${at('color-block')} { display: grid; justify-items: start; gap: 6px; margin: 6px 0; }`,
       // As wide as the block, whatever its longest option: a select is otherwise as wide as that, and would widen the dialog's column.
-      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; }`,
+      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${choiceArrow()} no-repeat right 10px center; }`,
       `${at('color-row')} { display: flex; align-items: flex-start; gap: 12px; }`,
       `${at('swatches')} { display: grid; grid-template-columns: repeat(${PICKER_COLUMNS}, ${SWATCH_PX}px); gap: ${SWATCH_GAP_PX}px; }`,
       // With nothing beside it the grid takes the block's width, so its edges line up with the pulldown's; a block with `beside` content keeps SWATCH_PX swatches, which that content's rows line up with.
@@ -1593,7 +1603,7 @@
   // <lib:color-set>
   // Generated from lib/color-set.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global parseColor, toHex, savedHex, isPlainObject, SUDOKUPAD_PEN_COLORS, PEN_COLOR_NUMBERS */ // eslint-disable-line no-redeclare
+  /* global parseColor, toHex, savedHex, isPlainObject, SUDOKUPAD_PEN_COLORS, PEN_COLOR_NUMBERS, paletteColors, copiedTable */ // eslint-disable-line no-redeclare
   // A color set is `{ colors, preset, missing, fromPreset }`: the nine #rrggbb colors, the preset they came from, the pens a page preset left with SudokuPad's own,
   // and the preset the dialog's note names them for. A hand edit keeps the last two, so the note still names the page. Every change makes a whole new record.
   // `presets` is the list of preset ids a script saves beside its colors; any other is Custom.
@@ -1636,10 +1646,27 @@
     return set ? storedColorSet(set) : undefined
   }
 
+  // The set a preset gives, `fromPreset` naming it, with its own copy of the colors.
+  function presetColorSet (preset, pages, readCell) {
+    const { colors, missing } = paletteColors(preset, pages, readCell)
+    return { colors: { ...colors }, preset, missing, fromPreset: preset }
+  }
+
+  // Copy's text: every row of the settings table at the value in force, defaults included, so a paste can put one back to its default; the colors only once they are saved.
+  function copiedSettingsWithColors (rows, store, colorsKey, presets) {
+    const copied = copiedTable(rows, store)
+    const colors = copiedColorSet(store.getData(colorsKey), presets)
+    if (colors) copied[colorsKey] = colors
+    return JSON.stringify(copied)
+  }
+
   // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
   const colorSetCss = (colors, varOf) => [':root:root {', ...PEN_COLOR_NUMBERS.map((n) => `  ${varOf(n)}: ${colors[n]};`), '}'].join('\n')
   /* eslint-enable no-unused-vars */
   // </lib:color-set>
+
+  // SudokuPad's own colors read no page, so their set needs no color tool.
+  const SUDOKUPAD_COLOR_SET = presetColorSet(SUDOKUPAD_PRESET, [], () => undefined)
 
   const PRESET_LABELS = {
     ...PALETTE_PRESET_LABELS,
@@ -1656,10 +1683,7 @@
   // The set in force. Until the install save it is SudokuPad's own, which is what the page shows with no override.
   let active = { ...SUDOKUPAD_SET, preset: UNSAVED, fromPreset: UNSAVED }
 
-  const availablePresets = () => {
-    const tool = steps.colors.off ? null : readyColorTool()
-    return paletteOptions(tool ? tool.palette.pages.length : 0)
-  }
+  const availablePresets = () => paletteOptions(steps.colors.off ? 0 : readPalettePages('pen-tool-extras').pages.length)
 
   function adoptColors (set) {
     active = set
@@ -3241,7 +3265,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
-      const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_COLOR_SET : steps.colors.run(() => presetColorSet(id, readyColorTool().palette.pages, readCellColor), () => null)
+      const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_COLOR_SET : steps.colors.run(() => presetColorSet(id, palettePages(), readCellColor), () => null)
       if (picked) {
         set = picked
         colorsChosen = true

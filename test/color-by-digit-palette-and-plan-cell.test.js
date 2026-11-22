@@ -40,6 +40,27 @@ test('Color by Digit reports a bad palette page and shows no colors, and reads a
   })
 })
 
+test('Color by Digit and Text Anywhere report a bad palette the same way: one warning, under each script\'s id, with the same text, and no pages', () => {
+  const textAnywhere = require('../text-anywhere.user.js')
+  const bad = { app: { tools: { colour: { palette: { pages: [['a'], 'oops'] }, currentPage: 0 } } } }
+  const byScript = {}
+  withFramework(bad, (warnings) => {
+    assert.deepEqual(colorByDigit.readPalette(() => 'rgb(255, 0, 0)'), [])
+    byScript['color-by-digit'] = [...warnings]
+  })
+  withFramework(bad, (warnings) => {
+    const { pages, note } = textAnywhere.dialogPalette(false)
+    assert.deepEqual(pages, [])
+    assert.equal(warnings[0], `text-anywhere: ${note}`)
+    byScript['text-anywhere'] = [...warnings]
+  })
+  const unprefixed = (script) => byScript[script].map((line) => line.slice(`${script}: `.length))
+  assert.equal(byScript['color-by-digit'].length, 1)
+  assert.deepEqual(unprefixed('text-anywhere'), unprefixed('color-by-digit'))
+  assert.match(byScript['color-by-digit'][0], /^color-by-digit: /)
+  assert.match(byScript['text-anywhere'][0], /^text-anywhere: /)
+})
+
 test('Color by Digit\'s pulldowns take the lib\'s select rule and the editor holds no copy of it', () => {
   const state = colorByDigit.stateFromStored(fakeStore())
   const selects = colorByDigit.renderPulldowns(state, 'cell').match(/<select [^>]*>/g)

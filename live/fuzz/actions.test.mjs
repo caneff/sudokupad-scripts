@@ -1071,7 +1071,7 @@ describe('the settings dialogs\' Copy, Paste, Restore defaults and error log (#9
   it('the texts reach what the ticket names: a legacy auto mode, a pasted limit of none, a pasted palette and a foreign key', () => {
     assert.ok(COLOR_BY_DIGIT_TEXTS.some((t) => t && /ColorByDigit_auto/.test(t)), 'withModeFromAuto')
     assert.ok(COLOR_BY_DIGIT_TEXTS.some((t) => t && /addedPreloads":false/.test(t)), 'a preload mark at its default')
-    assert.ok(AUTO_RULES_RESIZER_TEXTS.some((t) => t && /maxWidth":null/.test(t)), 'readLimit on none')
+    assert.ok(AUTO_RULES_RESIZER_TEXTS.some((t) => t && /maxWidth":null/.test(t)), 'savedLimit on none')
     assert.ok(TEXT_ANYWHERE_TEXTS.some((t) => t && /TextAnywhere_colors/.test(t)), 'readPastedColors')
     assert.ok(PEN_TOOL_EXTRAS_TEXTS.some((t) => t && /PenColor_colors/.test(t)), 'the pen palette')
     for (const [name, , texts] of TEXT_SCRIPTS) assert.ok(texts.some((t) => t && /Other_key/.test(t)), `${name}: a foreign key`)

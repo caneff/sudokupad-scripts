@@ -9,7 +9,7 @@ const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./broken-sudokupad.js')
 const { loadLib } = require('./load-lib.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook } = require('../text-anywhere.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, noteColorSet, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -568,12 +568,12 @@ test('the presets are Pen colors, a Darker page for each page up to three, then 
 })
 
 test('SudokuPad colors is SudokuPad\'s nine, and Pen colors is the pen colors as read', () => {
-  assert.deepEqual(presetColors('sudokupad', [], () => undefined, () => undefined), { colors: SUDOKUPAD_PEN_COLORS, missing: [] })
-  assert.deepEqual(presetColors('pen', [], () => undefined, (n) => `rgb(${n}, 0, 0)`), { colors: copiedPenColors((n) => `rgb(${n}, 0, 0)`), missing: [] })
+  assert.deepEqual(noteColorSet('sudokupad', [], () => undefined, () => undefined), { colors: SUDOKUPAD_PEN_COLORS, preset: 'sudokupad', missing: [], fromPreset: 'sudokupad' })
+  assert.deepEqual(noteColorSet('pen', [], () => undefined, (n) => `rgb(${n}, 0, 0)`), { colors: copiedPenColors((n) => `rgb(${n}, 0, 0)`), preset: 'pen', missing: [], fromPreset: 'pen' })
 })
 
 test('a Darker page preset darkens the page\'s color at each index and makes the darkest gray black', () => {
-  const { colors, missing } = presetColors('page-1', [PAGE.map((_, i) => String(i))], (key) => PAGE[Number(key)], () => undefined)
+  const { colors, missing } = noteColorSet('page-1', [PAGE.map((_, i) => String(i))], (key) => PAGE[Number(key)], () => undefined)
   assert.deepEqual(missing, [])
   assert.equal(colors[9], '#000000')
   assert.notEqual(colors[1], SUDOKUPAD_PEN_COLORS[1])
@@ -582,14 +582,14 @@ test('a Darker page preset darkens the page\'s color at each index and makes the
 })
 
 test('a Darker page preset names the pens whose cell color is unusable, which keep SudokuPad\'s own', () => {
-  const { colors, missing } = presetColors('page-1', [PAGE.map((_, i) => String(i))], (key) => Number(key) === 4 ? 'transparent' : PAGE[Number(key)], () => undefined)
+  const { colors, missing } = noteColorSet('page-1', [PAGE.map((_, i) => String(i))], (key) => Number(key) === 4 ? 'transparent' : PAGE[Number(key)], () => undefined)
   assert.deepEqual(missing, [4])
   assert.equal(colors[4], SUDOKUPAD_PEN_COLORS[4])
 })
 
 test('a Darker page preset the palette lacks, or an unknown one, throws', () => {
-  assert.throws(() => presetColors('page-2', [['0']], () => undefined, () => undefined), /not a preset/)
-  assert.throws(() => presetColors('nope', [], () => undefined, () => undefined), /not a preset/)
+  assert.throws(() => noteColorSet('page-2', [['0']], () => undefined, () => undefined), /not a preset/)
+  assert.throws(() => noteColorSet('nope', [], () => undefined, () => undefined), /not a preset/)
 })
 
 test('Copy settings holds the colors, size, opacity, outline, box color, frame and font, defaults included, and no notes, color pick or background', () => {
@@ -1907,7 +1907,7 @@ test('a paste changes only the pasted looks in the draft; the others keep their 
 test('a color set is one record: colors, preset, the pens a page preset missed, and the preset the dialog names them for', () => {
   const pages = [PAGE.map((_, i) => String(i))]
   const cell = (key) => Number(key) === 4 ? 'transparent' : PAGE[Number(key)]
-  const picked = presetColorSet('page-1', pages, cell, () => undefined)
+  const picked = noteColorSet('page-1', pages, cell, () => undefined)
   assert.deepEqual([picked.preset, picked.missing, picked.fromPreset], ['page-1', [4], 'page-1'])
   assert.deepEqual(penColorSet((n) => `rgb(${n}, 0, 0)`), { colors: copiedPenColors((n) => `rgb(${n}, 0, 0)`), preset: 'pen', missing: [], fromPreset: null })
 })
