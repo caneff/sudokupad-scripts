@@ -6,7 +6,7 @@
 // At the end it prints one never-run list merged over the hunts.
 import { pathToFileURL } from 'node:url'
 import { stripVTControlCharacters } from 'node:util'
-import { fileIssue, issueTrailer, run } from '../watch.mjs'
+import { fileIssue, issueTrailer, run } from '../issues.mjs'
 import { neverRunReport, parseNeverRun } from './coverage.mjs'
 import { parseFuzzOutput } from './fuzz-report.mjs'
 

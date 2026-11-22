@@ -6,7 +6,7 @@ import { createRequire } from 'node:module'
 import { scaleOf } from '../page.mjs'
 import { openWith, reloadWith, scriptSource } from '../session.mjs'
 import { openPenTool, PAGE_BUTTON } from '../pen.mjs'
-import { EXTRAS_EDITOR } from '../settings.mjs'
+import { EXTRAS_EDITOR } from '../scripts.mjs'
 
 export const SCRIPT_FILE = 'pen-tool-extras.user.js'
 export const script = scriptSource(SCRIPT_FILE)

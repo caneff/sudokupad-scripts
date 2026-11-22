@@ -5,11 +5,11 @@ import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { setInputValue } from '../input.mjs'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
 import { cellCentre, undoAll } from '../board.mjs'
 import { drag, goToPenPage, openPenTool, padValues, PAGE_ONE, PAGE_THREE, penDrawnCount, penEntries, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../scripts.mjs'
 
 // The sizes of an arrow line are the script's own, so the checks read them from it and a retuning moves both.
 const { ARROW_LINE, ARROW_SPACING } = extras.scriptExports

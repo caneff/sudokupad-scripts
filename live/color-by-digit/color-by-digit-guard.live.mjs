@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { BUTTON, coloredCountOn, EDITOR, GIVEN_COUNT, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, savedProfiles, SEEDED_OFF, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
+import { collectWarnings } from '../page.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
 
@@ -66,7 +67,7 @@ for (const kase of CASES) {
         saved: kase.saved,
         buttonExpected: kase.buttonExpected,
         expectedSkips: [WARNING],
-        seed: (page) => { page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) }) }
+        seed: (page) => { collectWarnings(page, warned, WARNING) }
       }))
     })
     after(async () => { await context.close() })

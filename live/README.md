@@ -34,7 +34,7 @@ npm run test:live:changed -- [--changed <ref>] [--list]
 - `package.json` or `node-test.js`, which every live run goes through: `live/startup.live.mjs`, so one live file runs through the changed runner;
 - a file a live file names by a relative path in a string (`./x.mjs`, `../sync-lib.js`, `createRequire(...)('../../x.user.js')`, `new URL('./y.txt', import.meta.url)`) or, from a file in a script's own folder, by a bare script name (`'dark-page.user.js'`: Pen Tool Extras' panel suite loads Dark Page):
   every live file that reaches it, through the files it loads in turn. A change to `live/session.mjs` or `lib/sudokupad.js` therefore selects nearly everything, and one to `live/board.mjs` most of it.
-  A bare name in a file directly under `live/` (`scripts.mjs`, `attacks.mjs`) is not followed: those tables name every script and nearly every suite loads them.
+  A bare name in a file directly under `live/` (`scripts.mjs`, `all-scripts.mjs`) is not followed: those tables name every script and nearly every suite loads them.
 
 Docs, `test/`, `.github/`, `lib/` (the scripts that embed a `lib/` file change in the same diff) and a `live/` file no live file loads (`watch.mjs`, `look.mjs`, `fuzz/`) touch no live file: their own tests run in `npm test`.
 A path it cannot place widens the run to every live file, and says which path: `package-lock.json` (a new Playwright is a new Chromium), `.nvmrc`, a new top-level directory. Its last line says `(narrowed: <k> of <n> live files)` or `(widened: <path> ...)`, and an empty selection prints
@@ -113,19 +113,23 @@ npm run look -- --scripts dark-page --eval probe.js
 `openWith`, `addPage` and `newPage` (`live/page.mjs`) collect into the returned `errors` every uncaught page error and every skip line a script logs
 (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`), of any console type. A suite seeds
 nothing for that: a feature that turns itself off at runtime fails any suite that asserts `errors` is empty.
-`captureConsoleErrors` (a `seed`) adds the page's `console.error` lines.
+`captureConsoleErrors` (a `seed`) adds the page's `console.error` lines. `collectWarnings(page, warned, pattern)` is the one capture of console warnings, for a suite that checks a
+script warned (or warned once).
 
 A suite that breaks a feature on purpose declares the skip lines it expects: `openWith(browser, scripts, { expectedSkips: [/^dark-page: /] })`
 (patterns). Those lines stay out of `errors`, and the suite checks them itself; any other skip line fails it. Declare
 as narrow a pattern as the break allows: a pattern for a whole script lets a second, unplanted skip line pass, unless the
 suite also counts its warnings.
-`live/skip-lines.live.mjs` plants a skip with no declaration and checks it lands in `errors`.
+`live/harness-page-errors.live.mjs` plants a skip with no declaration and checks it lands in `errors`. It and `live/harness-settings-dialog.live.mjs` (that `openScriptDialog`
+returns with the dialog at rest) test the harness itself, not a script, and are named `harness-*` for it.
 
 ## The predefined attacks
 
-`live/sudokupad-attacks.live.mjs` (attacks 49-56, things a player does to SudokuPad) and `live/script-clash-attacks.live.mjs`
-(attacks 57-61, scripts set against each other) are the fixed "try to break it" tests of #590: all six scripts on one page
-(`live/attacks.mjs`), each test named for its attack number, checking the crash signals (a skip line, a page error, a console
+Every top-level attack suite is `live/attacks-*.live.mjs`, and each attack number belongs to one of them (`test/live-homes.test.mjs` checks both).
+`live/attacks-sudokupad.live.mjs` (attacks 49-56, things a player does to SudokuPad) and `live/attacks-script-clash.live.mjs`
+(attacks 57-61, scripts set against each other) are the fixed "try to break it" tests of #590, `live/attacks-replay.live.mjs` is attack 65 (SudokuPad's replay tool),
+and the rest of `live/attacks-*.live.mjs` are #628's: all six scripts on one page
+(`live/all-scripts.mjs`), each test named for its attack number, checking the crash signals (a skip line, a page error, a console
 error, the notice bar) and what a player expects to see. The ones for one script's own gestures are in `live/<script name>/`.
 
 - A test that finds a bug on main is marked `{ todo: '#<bug>' }` with a filed `bug` ticket, so the suite stays green; the fix
@@ -170,8 +174,11 @@ Manager with empty files. `loadInPlace(p, id)` loads a second puzzle in the same
 manager does, and the run fails on a crash signal. It runs for 2 minutes. It is not in `npm test`, `npm run test:live` or `land.testcmd`.
 
 ```
-npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--focus <script> ...] [--coverage]
+npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>] [--focus <script> ...] [--coverage] [--config <name>] [--plant <id>] [--plant-escape-error]
 ```
+
+- **`--config <name>`**, **`--plant <id>`** and **`--plant-escape-error`** are for replaying and measuring: `--config` picks a configuration of `live/fuzz/configs.mjs` (below), `--plant` puts a
+  planted bug or a mutant in (§ Measuring the fuzz: planted bugs), and `--plant-escape-error` plants the page error on Escape during a drag that the smoke test catches.
 
 - **`--coverage`** (#729) tags each injected script with `//# sourceURL=<file>` (V8 leaves an inline script with no URL out of coverage), turns on `page.coverage.startJSCoverage` on every page and, at the end of the run,
   prints per script the functions that no list made run, merged over every page (`live/fuzz/coverage.mjs`, tested in `npm test`). A page's coverage is read before a reload and at the end, since V8 keeps it per
@@ -289,7 +296,7 @@ in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `
 - **A "did not run" issue.** A run that ends with neither verdict (no Chromium, a crash before the first list, the process not starting, a hang killed 50 minutes into the night, a pass that ran no action list) files
   "Fuzz did not run: the nightly fuzz could not be checked", once while it is open (one, whatever the number of hunts), and ends the night: runs already going finish, and no hunt starts another. A workflow step before the fuzz that fails (`npm ci`, the Chromium
   install) files the same issue from the workflow.
-- **Shared code.** Filing is `fileIssue` of `live/watch.mjs` (its `comment` option makes a duplicate a comment). `live/fuzz/nightly.test.mjs` tests it in
+- **Shared code.** Filing is `fileIssue` of `live/issues.mjs` (its `comment` option makes a duplicate a comment), which the watch shares, with `issueTrailer`. `live/fuzz/nightly.test.mjs` tests it in
   `npm test` with `gh` faked, the same seam as `live/watch.test.mjs`.
 - The exit is 1 on a failure in any run of the night or a run that did not run, so the Actions run is red either way.
 

@@ -7,14 +7,11 @@
 // recording, no version read), it exited 0 having run no tests, or the run before this one is over 36 hours old, which means GitHub skipped a night (the next
 // night's run says so, since a run that never started cannot). Exit 1 for all of those, so the night is red in Actions too.
 
-import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { cacheHome, liveVersion } from './cache.mjs'
-
-const REPO = 'caneff/sudokupad-scripts'
-const ROOT = fileURLToPath(new URL('..', import.meta.url))
+import { fileIssue, issueTrailer, REPO, run } from './issues.mjs'
 
 // Playwright looks for its browsers in `<cache home>/ms-playwright` on Linux, so moving the harness cache with
 // XDG_CACHE_HOME (live/cache.mjs) would move that lookup too. The pin is the folder it would use with XDG_CACHE_HOME unset.
@@ -52,9 +49,6 @@ export function failedChecks (tap) {
   return { checks, unrun }
 }
 
-// The end of an issue body a check files: the command and file that filed it, then the Blocked by section that drain and triage read
-// (a finding is never blocked by another ticket). One builder, so every filer's issues end alike.
-export const issueTrailer = (command, file) => `Filed by \`${command}\` (\`${file}\`).\n\n## Blocked by\n\n- None — can start immediately.`
 const TRAILER = issueTrailer('npm run watch:live', 'live/watch.mjs')
 
 const failingList = ({ checks, unrun }) => [
@@ -130,34 +124,6 @@ export async function watch ({ liveVersion, now, previousRunAt, runSuite, fileIs
 }
 
 export const exitCodeFor = (outcome) => outcome === 'green' ? 0 : 1
-
-// `mergeStderr` also captures stderr into the output (a crash before any verdict prints only there); `timeout` kills a child still running after that many ms.
-export const run = (command, args, { env = process.env, input, mergeStderr = false, timeout } = {}) => new Promise((resolve, reject) => {
-  const child = spawn(command, args, { cwd: ROOT, env, timeout, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', mergeStderr ? 'pipe' : 'inherit'] })
-  let output = ''
-  child.stdout.on('data', (d) => { output += d; process.stdout.write(d) })
-  child.stderr?.on('data', (d) => { output += d; process.stderr.write(d) })
-  child.on('error', reject)
-  child.on('close', (code) => resolve({ ok: code === 0, output }))
-  if (input !== undefined) child.stdin.end(input)
-})
-
-// `comment`, with `once`: the text to comment on the open issue that has the title, instead of doing nothing.
-export async function fileIssue ({ title, body, once, comment }, runGh = run) {
-  if (once) {
-    const list = await runGh('gh', ['issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '200', '--json', 'number,title', '--jq', '.[] | "\\(.number)\t\\(.title)"'])
-    if (!list.ok) throw new Error('gh issue list failed')
-    const open = list.output.split('\n').map((l) => l.split('\t')).find(([, t]) => t === title)
-    if (open) {
-      if (!comment) return
-      const { ok } = await runGh('gh', ['issue', 'comment', open[0], '--repo', REPO, '--body-file', '-'], { input: comment })
-      if (!ok) throw new Error('gh issue comment failed')
-      return
-    }
-  }
-  const { ok } = await runGh('gh', ['issue', 'create', '--repo', REPO, '--label', 'bug,needs-info', '--title', title, '--body-file', '-'], { input: body })
-  if (!ok) throw new Error('gh issue create failed')
-}
 
 // When the run of the watch before this one started, or null when there is none or this is not a GitHub Actions run (a hand run has nothing to compare with).
 // A run that GitHub never started leaves no record, so the gap between two records is how a skipped night shows. gh failing is an error, not "no earlier run".

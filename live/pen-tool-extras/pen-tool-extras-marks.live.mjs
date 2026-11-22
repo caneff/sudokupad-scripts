@@ -3,12 +3,13 @@ import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { restartPuzzle } from '../page.mjs'
-import { closeExtrasEditorWith, dialogButton, openExtrasEditor, openSettings } from '../settings.mjs'
+import { collectWarnings, restartPuzzle } from '../page.mjs'
+import { dialogButton, openSettings } from '../settings.mjs'
 import { cellCentre, undoDepth } from '../board.mjs'
 import { openPenTool, penDrawnCount, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle, stable, STABLE_MS } from '../settle.mjs'
 import { addPage, openWith, useBrowser } from '../session.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../scripts.mjs'
 
 const DATA_KEY = extras.MARKS_DATA_KEY
 const OPACITY_KEY = 'PenColor_opacity'
@@ -1157,7 +1158,7 @@ describe('without the script', { concurrency: false }, () => {
 describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   // Each is read by the corner click or its hit test; with one gone the click wrap would throw on every pen click, so the script skips the marks step and warns once.
   const TURNED_OFF = /^pen-tool-extras: .*marks.* skipped because SudokuPad /
-  const watchSkips = (warnings) => (page) => page.on('console', (m) => { if (m.type() === 'warning' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
+  const watchSkips = (warnings) => (page) => collectWarnings(page, warnings, TURNED_OFF)
   const REMOVALS = {
     'ToolPen.tool.actStart': () => { ToolPen.tool.actStart = undefined },
     'ToolPen.tool.getInputRc': () => { ToolPen.tool.getInputRc = undefined },

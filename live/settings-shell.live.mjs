@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { actButton, closeDialogWith, hideGetDataUntilWarn, openScriptDialog, paste, STATUS } from './settings.mjs'
-import { SETTINGS_SCRIPTS } from './scripts.mjs'
+import { SETTINGS_SCRIPTS, settingsScript } from './scripts.mjs'
 import { openWith, useBrowser } from './session.mjs'
 
 // Every script's dialog ends in the same three buttons.
@@ -10,6 +10,7 @@ const EXTRA_BUTTONS = { 'auto-rules-resizer.user.js': ['Reset puzzle size'] }
 const SUDOKUPAD_PURPLE = 'rgb(106, 27, 154)'
 // The laptop size the polish hunt measured the row at.
 const LAPTOP = { width: 1366, height: 768 }
+const DARK_PAGE = settingsScript('dark-page.user.js')
 
 // One real edit of the editor's first control, of whatever kind it is.
 async function editFirstControl (p, editor) {
@@ -113,10 +114,10 @@ describe('a script\'s dialog names the parts that are off because SudokuPad chan
   after(async () => { await context?.close() })
 
   it('Dark Page\'s dialog has the line, and says which part is off', async () => {
-    await openScriptDialog(p, 'Dark Page', '#dark-page-dialog')
+    await openScriptDialog(p, 'Dark Page', DARK_PAGE.editor)
     const note = await p.locator('.dialog .dark-page-off-note').allTextContents()
     assert.deepEqual(note, ['Off because SudokuPad changed: saved color'])
-    await closeDialogWith(p, 'Cancel', '#dark-page-dialog')
+    await closeDialogWith(p, 'Cancel', DARK_PAGE.editor)
   })
 
   it('the page raised no error beyond the declared skip', () => {

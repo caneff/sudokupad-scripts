@@ -46,3 +46,50 @@ test('Color by Digit\'s profiles suite drags rows and types names through its fi
   assert.match(suite, /\bdragProfileRow\b/)
   assert.match(suite, /\btypeProfileName\b/)
 })
+
+// The top-level suites (live/*.live.mjs), whose tests run the attacks of #590 and #628 with all six scripts on one page.
+const topLevelSuites = liveFiles.filter((file) => /^live\/[^/]+\.live\.mjs$/.test(file))
+const attackNumbers = (file) => [...read(file).matchAll(/\bit\(['`]attack (\d+):/g)].map((m) => Number(m[1]))
+
+test('every top-level attack number belongs to one suite, and its suite is named attacks-*, so a rule can say attacks-*', () => {
+  const seen = new Map()
+  for (const file of topLevelSuites) {
+    for (const n of new Set(attackNumbers(file))) seen.set(n, [...(seen.get(n) ?? []), file])
+  }
+  assert.ok(seen.size > 0)
+  assert.deepEqual([...seen].filter(([, files]) => files.length > 1), [], 'an attack number used by two suites')
+  assert.deepEqual(topLevelSuites.filter((file) => attackNumbers(file).length > 0 && !/^live\/attacks-[a-z-]+\.live\.mjs$/.test(file)), [])
+  assert.ok(liveFiles.includes('live/attacks-replay.live.mjs'), 'attack 65, the replay tool, is an attacks-* suite too')
+})
+
+test('the suites that test the harness itself are named harness-*', () => {
+  for (const file of ['live/harness-settings-dialog.live.mjs', 'live/harness-page-errors.live.mjs']) assert.ok(liveFiles.includes(file), file)
+  assert.match(read('live/harness-settings-dialog.live.mjs'), /\bopenScriptDialog\b/)
+  assert.match(read('live/harness-page-errors.live.mjs'), /\bcollectSkipLines\b|\berrors\b/)
+})
+
+test('all-scripts.mjs holds the all-six-scripts helpers, and no module is named attacks.mjs', () => {
+  assert.equal(liveFiles.includes('live/attacks.mjs'), false)
+  assert.deepEqual(declarersOf('openWithAllScripts'), ['live/all-scripts.mjs'])
+})
+
+test('page.mjs is the only home of the console-warning capture', () => {
+  assert.deepEqual(liveFiles.filter((file) => /\.type\(\) === 'warning'/.test(read(file))), ['live/page.mjs'])
+})
+
+test('the slider helper reads the thumb\'s size from lib/panel.js, not a copy', () => {
+  assert.doesNotMatch(read('live/slider.mjs'), /SLIDER_THUMB_REM\s*=\s*[\d.]/)
+})
+
+test('each script\'s element ids sit on its record in scripts.mjs, and settings.mjs keeps only the dialog mechanics', () => {
+  const scriptId = /#(?:control-(?:colorbydigit|textanywhere)|(?:color-by-digit|dark-page|ui-tweaks|auto-rules-resizer|rules-resizer|pen-tool-extras|text-anywhere)-)/
+  assert.doesNotMatch(read('live/settings.mjs'), scriptId, 'a script\'s element id in the settings helper')
+  assert.deepEqual(topLevelSuites.concat(['live/all-scripts.mjs', 'live/puzzles.mjs']).filter((file) => /#control-(?:colorbydigit|textanywhere)'|'#dark-page-(?:style|dialog)'/.test(read(file))), [], 'a script id written out again')
+  assert.deepEqual(declarersOf('EXTRAS_EDITOR'), ['live/scripts.mjs'])
+  assert.doesNotMatch(read('live/settings.mjs'), /headerVersion/, 'the header is read from userscript-header.js')
+})
+
+test('issue filing and its trailer live in issues.mjs, not in the watch', () => {
+  for (const name of ['fileIssue', 'issueTrailer']) assert.deepEqual(declarersOf(name), ['live/issues.mjs'], name)
+  assert.doesNotMatch(read('live/watch.mjs'), /'issue', 'create'/)
+})

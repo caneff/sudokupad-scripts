@@ -16,6 +16,8 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 - **Tests**: unit tests are in `test/` (`test/<script name>.test.js`), each shared module's in `lib/<name>.test.js`, and live tests in
   `live/<script name>/`. Every `*.user.js` stays at the root: every installed copy checks that address for updates. Never edit `draw-tool.user.js`:
   it is Text Anywhere's handover, frozen at 0.45.1 (`GLOSSARY.md`), and a change to Text Anywhere never touches it; `test/text-anywhere.test.js` fails when its bytes change (Chris, 2026-11-10).
+- **Module formats**: CommonJS at the root, in `lib/` and in `test/` (`require`, `.js`); ES modules in `live/` (`import`, `.mjs`), and a `test/` file that reads `live/` as one (`.mjs`).
+- **The fuzz**: before you run or change the fuzz, read `live/README.md` § The fuzz run.
 - **The PR fuzz** (`.github/workflows/fuzz-pr.yml`) is advisory, not a required check: read a red one, do not wait on it to merge; it comments the seed on the PR (`live/README.md` § The pull-request fuzz).
 - **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live`, the full live suite, every night at 06:17 UTC on GitHub Actions (and by hand through
   `workflow_dispatch`); `live/README.md` § The daily watch has the rule.

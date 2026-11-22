@@ -2,12 +2,15 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { EXTRAS_EDITOR, closeExtrasEditorWith, dialogButton, headerVersion, openExtrasEditor, openSettings } from '../settings.mjs'
+import { dialogButton, openSettings } from '../settings.mjs'
 import { currentTool, gridPoint, undoDepth } from '../board.mjs'
 import { middleOf } from '../input.mjs'
 import { openPenTool, penDrawnCount, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { addScripts, openWith, useBrowser } from '../session.mjs'
+import { EXTRAS_EDITOR, closeExtrasEditorWith, openExtrasEditor } from '../scripts.mjs'
+import { headerVersion } from '../../userscript-header.js'
+import { collectWarnings } from '../page.mjs'
 
 const { HOLD_TO_EDIT_MS, HOLD_WAIT_MS, STYLE } = extras
 
@@ -827,7 +830,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
   it('the pens show SudokuPad\'s own colors and nothing is saved while it waits; after 10 s the color save is skipped with a named warning; the dialog offers only SudokuPad colors; a palette that comes later is not saved over them', async () => {
     const { context, p, errors } = await openWithNoPalette({ expectedSkips: [/^pen-tool-extras: color save skipped because/] })
     const warned = []
-    p.on('console', (m) => { if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text()) })
+    collectWarnings(p, warned, /^pen-tool-extras: /)
     try {
       await addScripts(p, [extras.SCRIPT_FILE])
       await p.locator(STYLE).waitFor({ state: 'attached' })

@@ -8,11 +8,12 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from '../settings.mjs'
+import { dialogButton } from '../settings.mjs'
 import { cellCentre, undoDepth } from '../board.mjs'
 import { goToPenPage, openPenTool, padValues, PAGE_BUTTON, PAGE_ONE, PAGE_THREE, PAGE_TWO, penDrawnCount, penStrings, setSlider } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { addPage, addScripts, openWith, useBrowser } from '../session.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../scripts.mjs'
 
 const UI_TWEAKS_FILE = 'ui-tweaks.user.js'
 

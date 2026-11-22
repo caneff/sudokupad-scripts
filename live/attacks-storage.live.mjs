@@ -1,13 +1,13 @@
-// Live attacks 73 to 76 (#628, from #590).
+// Live attacks 73 to 75 and 79 (#628, from #590).
 /* global Framework, Storage */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllScripts } from './attacks.mjs'
+import { assertNoCrash, NOTICE_BAR, loadScripts, reloadWithScripts, openWithAllScripts } from './all-scripts.mjs'
 import { captureConsoleErrors } from './page.mjs'
 import { mouseDrag, pickTool, typeText } from './board.mjs'
 import { openPenTool, penEntries, setSlider } from './pen.mjs'
 import { actButton, closeDialogWith, ownedSettings, paste, STATUS } from './settings.mjs'
-import { SETTINGS_SCRIPTS } from './scripts.mjs'
+import { scriptRecord, SETTINGS_SCRIPTS } from './scripts.mjs'
 import { readUntil } from './settle.mjs'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import * as textAnywhere from './text-anywhere/text-anywhere-fixtures.mjs'
@@ -62,7 +62,7 @@ describe('attacks on storage', { concurrency: false }, () => {
       assert.equal((await penEntries(p)).length, 3, 'Pen Tool Extras draws the line')
 
       const before = await labelOn(p)
-      await p.click('#control-colorbydigit')
+      await p.click(scriptRecord('color-by-digit.user.js').button)
       assert.notEqual(await readUntil(() => labelOn(p), (label) => label !== before), before, 'Color by Digit changes its mode')
 
       assert.deepEqual(errors, [])
@@ -114,7 +114,7 @@ describe('attacks on storage', { concurrency: false }, () => {
     }
   })
 
-  it('attack 76: Copy settings with a blocked storage says it could not copy, copies nothing and leaves the script on, in every script', async () => {
+  it('attack 79: Copy settings with a blocked storage says it could not copy, copies nothing and leaves the script on, in every script', async () => {
     for (const script of SETTINGS_SCRIPTS) {
       ;({ context, p, errors } = await openWith(browser(), [script.file], { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
       await script.open(p)
@@ -146,7 +146,7 @@ describe('attacks on storage', { concurrency: false }, () => {
     // The other tab changes three settings, one of each script, the way a user does.
     await setSlider(other.p, THICKNESS, OTHER_TAB_THICKNESS)
     const modeBefore = await labelOn(other.p)
-    await other.p.click('#control-colorbydigit')
+    await other.p.click(scriptRecord('color-by-digit.user.js').button)
     const modeThere = await readUntil(() => labelOn(other.p), (label) => label !== modeBefore)
     await pickTool(other.p, 'textanywhere')
     await slideTo(other.p, textAnywhere.SIZE_SLIDER, 40)

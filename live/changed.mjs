@@ -47,7 +47,7 @@ export function reachOf (liveFiles, read = readOrNull) {
       const source = /\.m?js$/.test(file) && !file.endsWith('.user.js') ? read(file) : null
       for (const ref of source === null ? [] : referencesOf(source)) {
         const bare = !ref.includes('/')
-        // A bare script name in a file directly under live/ (scripts.mjs, session.mjs, attacks.mjs) is a table of every script, reached by nearly every suite: it would select
+        // A bare script name in a file directly under live/ (scripts.mjs, session.mjs, all-scripts.mjs) is a table of every script, reached by nearly every suite: it would select
         // them all for any script. The top-level suites are already selected by every SudokuPad script's own change, so only a file in a script's folder counts.
         if (bare && posix.dirname(file) === 'live') continue
         const target = bare ? ref : posix.normalize(posix.join(posix.dirname(file), ref))

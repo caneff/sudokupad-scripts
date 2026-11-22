@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { captureConsoleErrors, collectPageErrors, collectSkipLines } from './page.mjs'
+import { captureConsoleErrors, collectPageErrors, collectSkipLines, collectWarnings } from './page.mjs'
 
 const fakePage = () => {
   const listeners = {}
@@ -87,5 +87,28 @@ describe('collectSkipLines', () => {
     page.say('warning', 'pen-tool-extras: marks skipped because SudokuPad has no grid.rows')
     page.say('warning', 'pen-tool-extras: line erase skipped because SudokuPad has no grid.rows')
     assert.deepEqual(errors, ['console.warn: pen-tool-extras: line erase skipped because SudokuPad has no grid.rows'])
+  })
+})
+
+describe('collectWarnings', () => {
+  it('collects the text of each console warning the pattern matches, and no other type or warning', () => {
+    const page = fakePage()
+    const warned = []
+    collectWarnings(page, warned, /^dark-page: /)
+    page.say('warning', 'dark-page: saved color skipped')
+    page.say('error', 'dark-page: an error, not a warning')
+    page.say('log', 'dark-page: a log line')
+    page.say('warning', 'ui-tweaks: another script')
+    assert.deepEqual(warned, ['dark-page: saved color skipped'])
+  })
+
+  it('collects every warning with no pattern', () => {
+    const page = fakePage()
+    const warned = []
+    collectWarnings(page, warned)
+    page.say('warning', 'a')
+    page.say('info', 'b')
+    page.say('warning', 'c')
+    assert.deepEqual(warned, ['a', 'c'])
   })
 })

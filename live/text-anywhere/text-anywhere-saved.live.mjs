@@ -5,6 +5,7 @@ import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 import { addPage, useBrowser } from '../session.mjs'
 import { loadInPlace } from '../puzzles.mjs'
 import { finishNote, gridPoint, mouseDrag, restart, selectCell, typeText } from '../board.mjs'
+import { collectWarnings } from '../page.mjs'
 
 const { DIALOG, DIGIT_BUTTON, NOTES_PREFIX, INDEX_KEY, NOT_NOTES, RESTARTED_PREFIX, TEXTS } = textAnywhere
 
@@ -66,7 +67,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     ;({ context, p, errors } = await textAnywhere.open(browser(), {
       // Only the redraw plants a break; its skip line says SudokuPad changed, any other text-anywhere skip line fails the suite.
       expectedSkips: [/^text-anywhere: .* skipped because SudokuPad changed/],
-      seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /text-anywhere|TextAnywhere_/.test(m.text())) warnings.push(m.text()) })
+      seed: (page) => collectWarnings(page, warnings, /text-anywhere|TextAnywhere_/)
     }))
     await textAnywhere.forgetNotes(p)
   })

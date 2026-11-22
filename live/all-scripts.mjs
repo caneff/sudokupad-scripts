@@ -1,8 +1,9 @@
+// The helpers for all six scripts on one page: opening and reloading it with every script, and the crash signals the attacks check there.
 // Not a check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { pickTool } from './board.mjs'
 import { captureConsoleErrors } from './page.mjs'
-import { SCRIPTS } from './scripts.mjs'
+import { scriptRecord, SCRIPTS } from './scripts.mjs'
 import { addScripts, openWith, reloadWith } from './session.mjs'
 
 export const NOTICE_BAR = '#sudokupad-scripts-notices [data-script]'
@@ -47,7 +48,7 @@ export const rulesScroll = (p) => p.evaluate(() => { const r = document.querySel
 // Reloads the page and puts all the scripts back, without `ready`, which would set the pen tool on again.
 export async function reloadWithScripts (p) {
   await reloadWith(p, FILES)
-  await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })
+  await p.locator(scriptRecord('color-by-digit.user.js').button).waitFor({ state: 'visible' })
 }
 
 export async function assertNoCrash (p, errors) {

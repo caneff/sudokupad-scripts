@@ -5,6 +5,7 @@ import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 import { openWith, useBrowser } from '../session.mjs'
+import { collectWarnings } from '../page.mjs'
 
 const { TOOL_BUTTON, SETTINGS_EDITOR: EDITOR, pickTextAnywhere, script, texts, tool } = textAnywhere
 
@@ -56,7 +57,7 @@ for (const kase of CASES) {
     before(async () => {
       ;({ context, p, errors } = await openWith(browser(), [{ code: `${missingBefore(kase.owner, kase.name)}${script}` }], {
         expectedSkips: [WARNING],
-        seed: (page) => { page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) }) },
+        seed: (page) => { collectWarnings(page, warned, WARNING) },
         afterStart: (page) => textAnywhere.plantNotes(page, [NOTE])
       }))
     })
