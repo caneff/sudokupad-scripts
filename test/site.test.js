@@ -269,7 +269,7 @@ test(`${HOME} has one row per script in order, each with an Install button besid
   rows.forEach((row, i) => {
     const [name, details] = ROWS[i]
     const script = name.toLowerCase().replace(/ /g, '-') + SCRIPT_SUFFIX
-    assert.match(row, new RegExp(`<p class="actions"><a class="install" href="${RAW.replace(/\./g, '\\.')}${script}">Install<span class="visually-hidden"> ${name}</span></a>${details ? `<a class="more" href="${details}">Details &rarr;</a>` : ''}</p>`), name)
+    assert.match(row, new RegExp(`<p class="actions"><a class="install" href="${RAW.replace(/\./g, '\\.')}${script}">Install<span class="visually-hidden"> ${name}</span></a>${details ? `<a href="${details}">Details &rarr;</a>` : ''}</p>`), name)
   })
 })
 
