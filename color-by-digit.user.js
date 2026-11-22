@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.75
+// @version      0.25.76
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
@@ -18,7 +18,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.75'
+  const VERSION = '0.25.76'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -2305,7 +2305,11 @@
         'app.puzzle.cells': 'array',
         'app.puzzle.selectedCells': 'array',
         'app.puzzle.undoStack': 'array',
-        'app.puzzle.redoStack': 'array'
+        'app.puzzle.redoStack': 'array',
+        'app.puzzle.replayStack': 'array',
+        'app.puzzle.saveProgress': 'function',
+        'app.puzzle.addEventListener': 'function',
+        'app.puzzle.removeEventListener': 'function'
       }
     },
     button: {
@@ -2340,7 +2344,7 @@
     // Without it they are drawn at once, before the puzzle's own palette is in force.
     loading: {
       label: 'redraw after the puzzle loads',
-      needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function' }
+      needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function', 'app.puzzle.removeEventListener': 'function' }
     }
   }
   const BUTTON = '#control-colorbydigit'
@@ -2485,11 +2489,23 @@
 
   let mode = 'off'
 
+  // SudokuPad's events ignore `{ once: true }` (docs/research/sudokupad-custom-tool.md), so a one-shot handler removes itself, under `feature`'s guard as SudokuPad calls it.
+  function onProgressLoadedOnce (app, feature, fn) {
+    const cancel = () => app.puzzle.removeEventListener('progressloaded', handler)
+    const handler = feature.bind((...args) => {
+      cancel()
+      return fn(...args)
+    })
+    app.puzzle.addEventListener('progressloaded', handler)
+    return cancel
+  }
+
   // Loading progress resets the board, so a pass before it would be wiped.
-  // With the wait off there is nothing to wait for, so `fn` runs at once.
+  // With the wait off there is nothing to wait for, so `fn` runs at once. Returns what cancels the wait.
   function whenProgressLoaded (app, fn) {
-    if (loading.run(() => allCells(app).length > 0, () => true)) fn()
-    else loading.run(() => app.puzzle.addEventListener('progressloaded', fn, { once: true }), fn)
+    const runNow = () => { fn(); return () => {} }
+    if (loading.run(() => allCells(app).length > 0, () => true)) return runNow()
+    return loading.run(() => onProgressLoadedOnce(app, loading, fn), runNow)
   }
 
   const DIGIT_STYLE_ID = 'color-by-digit-digits'
@@ -2660,23 +2676,37 @@
     if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
   }
 
+  // The replay entries that are not inside a `gs`..`ge` group: what SudokuPad puts back after a Restart besides its coloring, a Keep Time Restart's `wait` among them.
+  function outsideGroups (entries) {
+    let inside = false
+    return entries.filter((entry) => {
+      const act = entry.split('/')[0]
+      if (act === 'gs') inside = true
+      const keep = !inside && act !== 'ge'
+      if (act === 'ge') inside = false
+      return keep
+    })
+  }
+
   // The board an Undo loads from before a Restart ends in the Restart's clears. Its coloring joins their undo step, so taking that step back changes no mode,
-  // and its replay entries go, because SudokuPad puts the Restart's own coloring back on the replay once the board has loaded.
+  // and joins it on the replay too, so a reload takes the same two Undos to an empty board. SudokuPad then puts the Restart's own coloring back on the replay
+  // and saves (`Puzzle.execUndo`, script.js v0.616.0); the caller takes that off before the save, since the live stack does not hold it. Returns the replay's length without it.
   function colorLoadedBoard (app) {
-    if (!colorsCells(mode)) return
-    coloring.run(() => {
+    if (!colorsCells(mode)) return null
+    return coloring.run(() => {
       const { undoStack, replayStack } = app.puzzle
-      const replayLength = replayStack.length
-      const end = undoStack.pop()
+      const undoEnd = undoStack.pop()
+      const replayEnd = replayStack.pop()
       app.puzzle.inGroup = true
       try {
         colorEnteredCells(app)
       } finally {
         app.puzzle.inGroup = false
-        undoStack.push(end)
+        undoStack.push(undoEnd)
+        if (replayEnd !== undefined) replayStack.push(replayEnd)
       }
-      replayStack.length = replayLength
-    })
+      return replayStack.length
+    }, () => null)
   }
 
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
@@ -2693,6 +2723,16 @@
   function installCellColoring (app) {
     coloring.run(() => {
       const restartUndo = trackRestartUndo(app, coloring.bind)
+      // The replay length to cut the Restart's coloring back to at the next forced save, which `Puzzle.execUndo` makes in the same turn as its push; a later turn finds it cleared.
+      let cutReplayAtSave = null
+      coloring.wrap(app.puzzle, 'saveProgress', function (stock, force) {
+        if (force && cutReplayAtSave !== null) {
+          const putBack = this.replayStack.splice(cutReplayAtSave)
+          this.replayStack.push(...outsideGroups(putBack))
+          cutReplayAtSave = null
+        }
+        return stock(force)
+      })
       const coloredEntry = (stock, action) => {
         if (!colorsCells(mode) || !isEntryAction(action)) return stock(action)
         const touched = [...app.puzzle.selectedCells]
@@ -2717,7 +2757,10 @@
           const loadsBeforeRestart = action.type === 'undo' && restartUndo.loadsBoard()
           if (loadsBeforeRestart) {
             // The board it loads ends in the Restart's clears, and arrives after `act` returns.
-            app.puzzle.addEventListener('progressloaded', () => colorLoadedBoard(app), { once: true })
+            onProgressLoadedOnce(app, coloring, () => {
+              cutReplayAtSave = colorLoadedBoard(app)
+              setTimeout(() => { cutReplayAtSave = null })
+            })
             coloring.run(() => { app.puzzle.undoStack.length = 0 })
           }
           const result = stock(action)
@@ -3151,7 +3194,11 @@
     modeButton.run(() => listenForButton(app, openEditor))
     digitColors.run(watchBoard)
     whenProgressLoaded(app, redraw)
-    if (colorsCells(mode)) whenProgressLoaded(app, () => colorEnteredCells(app))
+    // A Restart colors the board itself, so a startup pass still waiting would color the board an Undo loads in a group of its own.
+    if (colorsCells(mode)) {
+      const cancelStartupPass = whenProgressLoaded(app, () => colorEnteredCells(app))
+      coloring.run(() => app.on('restarted', coloring.bind(cancelStartupPass)))
+    }
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
   else start(undefined)

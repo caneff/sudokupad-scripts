@@ -157,6 +157,12 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
     assert.equal(await p.evaluate((key) => Framework.getData(key), MODE_KEY), 'cell')
   })
 
+  it('the replay holds as many groups as the undo stack after the first Undo (#1032)', async () => {
+    const groups = (entries) => entries.filter((entry) => /^gs[/]|^gs$/.test(entry)).length
+    const { stack, replay } = await p.evaluate(() => ({ stack: Framework.app.puzzle.undoStack.slice(), replay: Framework.app.puzzle.replayStack.slice() }))
+    assert.equal(groups(replay), groups(stack))
+  })
+
   it('the second Undo takes back the Restart and the mode stays Cell with the board colored', async () => {
     await undo()
     assert.equal(await settle(() => p.evaluate(() => Framework.app.grid.getCell(0, 2).propGet('normal') ?? null), '4'), '4', 'the digit is back')
