@@ -89,18 +89,33 @@ test('the helpers for a broken SudokuPad sit in the unit tests\' folder, not a s
   assert.deepEqual(hits(filesUnder('test', /\.m?js$/).filter((file) => file !== 'test/repo-conventions.test.mjs'), /specs\/broken-sudokupad/), [])
 })
 
-test('the research index lists every note under docs/research/', () => {
-  const index = read('docs/research/README.md')
+// A Markdown list's items, each with its wrapped continuation lines joined on.
+const listItems = (text) => text.split('\n').reduce((items, line) => {
+  if (line.startsWith('- ')) items.push(line)
+  else if (items.length && /^\s+\S/.test(line)) items[items.length - 1] += ` ${line.trim()}`
+  else if (line.trim() === '' || line.startsWith('#')) items.push(null)
+  return items
+}, []).filter(Boolean)
+
+test('the research index gives every note under docs/research/ a line of its own', () => {
+  const ownLines = new Set(listItems(read('docs/research/README.md')).map((item) => item.match(/^- `([^`]+)`/)?.[1]))
   const notes = filesUnder('docs/research', /\.md$/).filter((file) => file !== 'docs/research/README.md')
   assert.ok(notes.length > 50, `${notes.length} notes are read`)
-  assert.deepEqual(notes.filter((note) => !index.includes(`\`${note}\``)), [])
+  assert.deepEqual(notes.filter((note) => !ownLines.has(note)), [])
 })
 
-test('GLOSSARY.md opens with Shared and SudokuPad, and each section is in alphabetical order', () => {
+// Each glossary entry is a definition of one or two sentences (spec #1074), with behavior on the reference pages; 600 characters is the ceiling such an entry stays under.
+test('GLOSSARY.md opens with Shared and SudokuPad, each section is in alphabetical order, and no entry runs past 600 characters', () => {
   const sections = read('GLOSSARY.md').split(/^## /m).slice(1).map((text) => {
     const [title, ...lines] = text.split('\n')
-    return { title, terms: lines.flatMap((line) => line.match(/^- \*\*(.+?)\*\*/)?.[1].toLowerCase() ?? []) }
+    const entries = listItems(lines.join('\n')).filter((item) => item.startsWith('- **'))
+    return { title, entries, terms: entries.map((entry) => entry.match(/^- \*\*(.+?)\*\*/)[1].toLowerCase()) }
   })
   assert.deepEqual(sections.slice(0, 2).map((section) => section.title), ['Shared', 'SudokuPad'])
   for (const { title, terms } of sections) assert.deepEqual(terms, [...terms].sort((a, b) => a.localeCompare(b)), `${title} is alphabetical`)
+  assert.deepEqual(sections.flatMap((section) => section.entries).filter((entry) => entry.length > 600), [])
+})
+
+test('.audit-ignore.md cites a test by its title, never a line number', () => {
+  assert.deepEqual(hits(['.audit-ignore.md'], /\.m?js:\d+/), [])
 })
