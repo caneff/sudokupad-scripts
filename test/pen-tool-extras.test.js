@@ -1161,14 +1161,14 @@ test('the settings dialog has no line mode pulldown: the panel button is the one
   assert.equal(html.includes('data-line-mode'), false)
 })
 
-test('the line mode button steps Center & Edge, Center only, Edge only and back round', () => {
+test('the line mode button steps Center and edge, Center only, Edge only and back round', () => {
   assert.equal(nextLineMode('both'), 'centeronly')
   assert.equal(nextLineMode('centeronly'), 'edgeonly')
   assert.equal(nextLineMode('edgeonly'), 'both')
 })
 
 test('the line mode button names the current mode with SudokuPad\'s label, as its hover title and its aria-label', () => {
-  const labels = { both: 'Center &amp; Edge', centeronly: 'Center only', edgeonly: 'Edge only' }
+  const labels = { both: 'Center and edge', centeronly: 'Center only', edgeonly: 'Edge only' }
   Object.entries(labels).forEach(([mode, label]) => {
     const html = renderLineModeButton(mode)
     assert.match(html, /^<button [^>]*class="pen-tool-extras-mode"[^>]*>/)
@@ -1260,7 +1260,7 @@ const HEADER = fs.readFileSync(path.join(__dirname, '..', 'pen-tool-extras.user.
 const headerField = (name) => (new RegExp(`^// @${name}\\s+(.+)$`, 'm').exec(HEADER) || [])[1]
 
 test('the header describes the script in Chris\'s approved intro and links its details page', () => {
-  assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
+  assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
   assert.equal(headerField('homepageURL'), 'https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html')
 })
 
@@ -2103,7 +2103,7 @@ test('a Framework with no getApp turns every install step off in one warning nam
   delete framework.getApp
   const entries = []
   framework.addSetting = (setting) => entries.push(setting.name)
-  const steps = ['colors', 'color save', 'pen pages', 'arrow lines', 'drag highlight', 'marks', 'pen panel', 'line erase']
+  const steps = ['colors', 'color save', 'pen pages', 'arrow lines', 'line preview', 'marks', 'pen panel', 'line erase']
   const warnings = withPage(() => loadWithFramework(framework))
   assert.deepEqual(warnings, [`pen-tool-extras: ${steps.join(', ')} skipped because SudokuPad has no Framework.getApp`])
   assert.deepEqual(entries, ['pentoolextras'])

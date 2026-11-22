@@ -1,9 +1,12 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.36
+// @version      0.7.37
 // @author       ChinStrap
-// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A puzzle you resized keeps its sizing; others start at the default. An Auto Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
+// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
+// @homepageURL  https://caneff.github.io/sudokupad-scripts/
+// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -24,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.36'
+  const VERSION = '0.7.37'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -547,7 +550,7 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
-  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
   const CONTENT_INSET = '16px'
@@ -1058,7 +1061,7 @@
       bar.setAttribute('data-script', script)
       bar.style.cssText = NOTICE_BAR_CSS
       const text = doc.createElement('span')
-      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
+      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off because SudokuPad changed.`
       const link = doc.createElement('a')
       link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
       link.target = '_blank'
@@ -1278,7 +1281,7 @@
       needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' }
     },
     settings: {
-      label: 'max size settings',
+      label: 'settings',
       needs: {
         ...SETTINGS_DIALOG_NEEDS,
         'Framework.getData': 'function',
@@ -1359,7 +1362,7 @@
   // way. They sit in the pane's padding, so the pointer never leaves the pane on its way to them.
   const SHOW_WHEN = `body.${SHOWN_CLASS}:is(.${DRAG_CLASS}, :has(.puzzle-rules:hover, .${CORNER_CLASS}:hover, #${FONT_BAR_ID}:hover))`
 
-  // The font buttons are SudokuPad's own buttons in small: its light grey face, grey border, purple label and hover tint.
+  // The font buttons are SudokuPad's own buttons in small: its light gray face, gray border, purple label and hover tint.
   const STYLE = `
     #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; visibility: hidden; gap: 4px; height: ${PANE_PADDING_PX}px; }
     #${FONT_BAR_ID} button { all: unset; box-sizing: border-box; height: 100%; min-width: ${TARGET_PX}px; padding: 0 4px; text-align: center;

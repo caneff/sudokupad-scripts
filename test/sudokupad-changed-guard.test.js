@@ -41,3 +41,12 @@ test('no script calls SudokuPad outside a feature\'s guard: when SudokuPad chang
   // The scripts were reached after the change: their listeners, timers and the callbacks they handed SudokuPad.
   assert.ok(taken >= 100, `${taken} ways back in`)
 })
+
+// The notice bar and the settings dialog's off-note both say a part is "off because SudokuPad changed", in the same words; each lib's own test pins its full line.
+test('the notice bar and the dialog off-note use one wording for off because SudokuPad changed', () => {
+  const bar = /\$\{shown\.length === 1 \? 'is' : 'are'\} (off because SudokuPad changed)\./.exec(readFileSync(join(ROOT, 'lib', 'sudokupad.js'), 'utf8'))
+  const note = /`(Off because SudokuPad changed): \$\{off\.join/.exec(readFileSync(join(ROOT, 'lib', 'settings-dialog.js'), 'utf8'))
+  assert.ok(bar, 'the bar line is not as expected')
+  assert.ok(note, 'the off-note line is not as expected')
+  assert.equal(bar[1], note[1].replace(/^O/, 'o'))
+})

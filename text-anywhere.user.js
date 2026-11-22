@@ -1,9 +1,12 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.51
+// @version      0.46.52
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
+// @homepageURL  https://caneff.github.io/sudokupad-scripts/text-anywhere.html
+// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -17,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.51'
+  const VERSION = '0.46.52'
   const TOOL_NAME = 'textanywhere'
   const LAYER_ID = 'text-anywhere-layer'
   const DIALOG_BLUR_PX = 8
@@ -63,7 +66,7 @@
     9: '#000000'
   })
   const PEN_COLOR_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
-  // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
+  // The OKLCH chroma under which a darkened color counts as gray: SudokuPad's grays are 0, a tinted dark gray such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
   const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
@@ -642,7 +645,7 @@
     `<div class="${CLASS_PREFIX}color-block"><select class="${CLASS_PREFIX}color-choice" data-role="font-choice" aria-label="Font">${Object.entries(FONTS).map(([value, label]) => `<option value="${value}"${value === font ? ' selected' : ''}>${label}</option>`).join('')}</select></div>`
   const HALO_CELL_COLOR = '#8fb8e8'
   const SAMPLE_BOX_STYLE = `display:inline-block;${BOX_SHAPE_CSS}`
-  const FRAME_CHOICES = [['off', 'None'], ['on', 'Thin grey']]
+  const FRAME_CHOICES = [['off', 'None'], ['on', 'Thin gray']]
   function renderSamplePicks ({ outline, box, custom, frame, textColor }) {
     const pickButton = (role, value, label, pressed, sample) =>
       `<button type="button" class="${CLASS_PREFIX}pick" data-role="${role}" data-value="${value}" aria-label="${escapeHtml(label)}" aria-pressed="${pressed}">${sample}<span class="${CLASS_PREFIX}pick-label">${escapeHtml(label)}</span></button>`
@@ -1516,7 +1519,7 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
-  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
   const CONTENT_INSET = '16px'
@@ -2004,7 +2007,7 @@
       bar.setAttribute('data-script', script)
       bar.style.cssText = NOTICE_BAR_CSS
       const text = doc.createElement('span')
-      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
+      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off because SudokuPad changed.`
       const link = doc.createElement('a')
       link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
       link.target = '_blank'
@@ -2221,7 +2224,7 @@
       }
     },
     tool: {
-      label: 'Text tool',
+      label: 'Text Anywhere tool',
       needs: { ...BOARD, 'Framework.addTool': 'function', 'Framework.showDialog': 'function', 'app.getToolNames': 'function', 'Framework.app.grid.rows': 'integer', 'Framework.app.grid.cols': 'integer' },
       onSkip () {
         document.getElementById(`control-${TOOL_NAME}`)?.remove()
@@ -2239,7 +2242,7 @@
       }
     },
     // Undo straight after a Restart brings back the notes it cleared (docs/research/sudokupad-custom-tool.md § Saving the notes).
-    undoRestart: { label: 'Undo after Restart', needs: { 'Framework.app.puzzle': 'object', 'Framework.app.puzzle.undoStack': 'array', 'app.puzzle.on': 'function' } },
+    undoRestart: { label: 'undo after Restart', needs: { 'Framework.app.puzzle': 'object', 'Framework.app.puzzle.undoStack': 'array', 'app.puzzle.on': 'function' } },
     // The Darker page presets of the settings dialog read SudokuPad's color palette.
     presets: { label: 'color presets', needs: { 'Framework.app.tools.colour': 'object' } }
   }
@@ -4430,7 +4433,7 @@
     }
   }
 
-  // SudokuPad calls these. A throw from one turns the Text tool off, and the event goes on to SudokuPad's own tools.
+  // SudokuPad calls these. A throw from one turns the Text Anywhere tool off, and the event goes on to SudokuPad's own tools.
   const tool = Object.fromEntries(Object.entries(toolHandlers).map(([name, handler]) => [name, typeof handler === 'function' ? (...args) => textTool.run(() => handler(...args), () => false) : handler]))
 
   // Without getApp there is no app: the features that need one are off, and the rest start without it.

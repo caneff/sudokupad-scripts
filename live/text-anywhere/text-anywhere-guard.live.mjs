@@ -26,7 +26,7 @@ const CASES = [
     internal: 'Framework.addTool',
     owner: 'Framework',
     name: 'addTool',
-    off: 'Text tool',
+    off: 'Text Anywhere tool',
     works: async (p) => {
       assert.equal(await p.locator(TOOL_BUTTON).count(), 0, 'no tool button')
       assert.deepEqual(await settle(() => texts(p), ['15']), ['15'], 'the saved note is drawn')
@@ -70,7 +70,7 @@ for (const kase of CASES) {
     it('the bar names the feature with a Report link, and goes when dismissed', async () => {
       const bar = p.locator(BAR)
       await bar.waitFor({ state: 'attached' })
-      assert.match(await bar.textContent(), new RegExp(`^Text Anywhere: ${kase.off} is off — SudokuPad changed\\.Report`))
+      assert.match(await bar.textContent(), new RegExp(`^Text Anywhere: ${kase.off} is off because SudokuPad changed\\.Report`))
       assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
       await bar.locator('button[aria-label="Dismiss"]').click()
       assert.equal(await bar.count(), 0)

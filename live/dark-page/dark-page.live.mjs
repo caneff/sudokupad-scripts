@@ -686,12 +686,12 @@ describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => 
 
   it('one console warning names the feature', async () => {
     assert.equal(await settle(async () => warned.length, 1), 1, warned.join('\n'))
-    assert.equal(warned[0], 'dark-page: settings entry skipped because SudokuPad has no Framework.addSetting')
+    assert.equal(warned[0], 'dark-page: settings skipped because SudokuPad has no Framework.addSetting')
   })
 
   it('the bar names the feature with a Report link, and goes when dismissed', async () => {
     const bar = p.locator('#sudokupad-scripts-notices [data-script="dark-page"]')
-    assert.match(await bar.textContent(), /^Dark Page: settings entry is off — SudokuPad changed\.Report/)
+    assert.match(await bar.textContent(), /^Dark Page: settings is off because SudokuPad changed\.Report/)
     assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
     await bar.locator('button[aria-label="Dismiss"]').click()
     assert.equal(await bar.count(), 0)

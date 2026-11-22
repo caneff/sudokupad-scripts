@@ -1005,7 +1005,7 @@ test('entry point: a Framework without getApp turns off the features that need a
   const Framework = { getData: () => null, setData () {}, removeData () {}, addSetting: () => calls.push('setting'), showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }
   await withScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async ({ warnings }) => {
     await new Promise((resolve) => setImmediate(resolve))
-    assert.deepEqual(warnings, ['color-by-digit: cell coloring, mode button, redraw after the puzzle loads skipped because SudokuPad has no Framework.getApp'])
+    assert.deepEqual(warnings, ['color-by-digit: cell coloring, mode button, colors after loading skipped because SudokuPad has no Framework.getApp'])
     assert.deepEqual(calls, ['setting'])
   })
 })

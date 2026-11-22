@@ -805,7 +805,7 @@ test('a Framework without getApp turns the fit and the refit off with one warnin
   const framework = { addSetting: (setting) => entries.push(setting.name), showDialog () {}, closeDialog () {}, getData: () => null, setData () {}, removeData () {} }
   const page = startWith(framework)
   assert.deepEqual(page.warnings, ['auto-rules-resizer: rules fit, rules refit skipped because SudokuPad has no Framework.getApp'])
-  assert.match(page.bar, /^Auto Rules Resizer: rules fit, rules refit are off — SudokuPad changed\.Report/)
+  assert.match(page.bar, /^Auto Rules Resizer: rules fit, rules refit are off because SudokuPad changed\.Report/)
   assert.deepEqual(entries, ['rulesresizer'])
 })
 

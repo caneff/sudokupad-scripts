@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { settle } from './settle.mjs'
 import { openWith, useBrowser } from './session.mjs'
 
-const SKIP = 'dark-page: settings entry skipped because SudokuPad has no Framework.addSetting'
+const SKIP = 'dark-page: settings skipped because SudokuPad has no Framework.addSetting'
 // Logged after `SKIP`. Console messages arrive in order, so once it has landed in `errors`, `SKIP` has been handled.
 const MARKER = 'color-by-digit: marker skipped because SudokuPad has no Framework.addSetting'
 
@@ -26,7 +26,7 @@ describe('a skip line on a page opened with no seed', () => {
   })
 
   it('is left out when the suite declares it', async () => {
-    assert.deepEqual(await plant({ expectedSkips: [/^dark-page: settings entry skipped because/] }), [])
+    assert.deepEqual(await plant({ expectedSkips: [/^dark-page: settings skipped because/] }), [])
   })
 
   it('is collected when the suite declares a different one', async () => {

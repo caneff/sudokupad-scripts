@@ -96,8 +96,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('the line mode button names the mode, steps it through SudokuPad, and the lines drawn after each click follow it', async () => {
     await read((k) => Framework.removeData(k), LINE_MODE_KEY)
     await reload()
-    assert.equal(await modeButton().getAttribute('title'), 'Center & Edge')
-    assert.equal(await modeButton().getAttribute('aria-label'), 'Center & Edge')
+    assert.equal(await modeButton().getAttribute('title'), 'Center and edge')
+    assert.equal(await modeButton().getAttribute('aria-label'), 'Center and edge')
     // SudokuPad's CSS fills every `svg path`; the icon's paths must draw as lines.
     assert.deepEqual(await modeButton().locator('path').evaluateAll((ps) => ps.map((e) => window.getComputedStyle(e).fill)), ['none', 'none', 'none'])
     assert.deepEqual([await dragKinds(acrossMiddles(1)), await dragKinds(alongEdge(3))], [['center'], ['edge']], 'center and edge: each drag stays what it was')
@@ -111,13 +111,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await read(() => ToolPen.tool.lineMode), 'edgeonly')
     assert.deepEqual([await dragKinds(acrossMiddles(7)), await dragKinds(alongEdge(1))], [['edge'], ['edge']], 'edge-only stores edge lines only')
     await pressMode()
-    assert.equal(await modeButton().getAttribute('title'), 'Center & Edge')
+    assert.equal(await modeButton().getAttribute('title'), 'Center and edge')
     assert.equal(await read(() => ToolPen.tool.lineMode), 'both')
     assert.equal(await saved(LINE_MODE_KEY), 'both')
   })
 
   it('a touch tap steps the mode once, even though SudokuPad cancels the touch events on its buttons and a click may follow', async () => {
-    assert.equal(await modeButton().getAttribute('title'), 'Center & Edge')
+    assert.equal(await modeButton().getAttribute('title'), 'Center and edge')
     // SudokuPad's own handlers on its buttons call preventDefault on a touch, which keeps the browser from sending the click.
     await modeButton().evaluate((el) => {
       el.addEventListener('touchend', (event) => event.preventDefault())

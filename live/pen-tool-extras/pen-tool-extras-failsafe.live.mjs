@@ -32,7 +32,7 @@ function planted (anchor, line) {
 // click on an edge is SudokuPad's own toggle off rather than this script's arrow 'm', `noDrag` for a case that removes what a drag needs.
 const CASES = [
   { name: 'pen pages missing', off: 'pen pages', warns: missing('pen pages', 'ToolPen.tool.handleToolExit'), noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
-  { name: 'drag highlight missing', off: 'drag highlight', warns: missing('drag highlight', 'ToolPen.tool.drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
+  { name: 'line preview missing', off: 'line preview', warns: missing('line preview', 'ToolPen.tool.drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
   { name: 'marks missing', off: 'marks, line erase', warns: missing('marks, line erase', 'Framework.app.grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
   // SudokuPad's own clicks read xyToRCExact too, so it is hidden from the script's startup check only, and SudokuPad's own is back after it. The marks need it for the size of their hit zones.
   {

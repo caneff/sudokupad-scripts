@@ -211,17 +211,17 @@ function assertDarkens ({ style, appended }) {
   assert.deepEqual(appended, [style], 'the stylesheet is all the script puts on the page')
 }
 
-test('a Framework without getApp turns the settings entry off with one warning and the bar, and the page still darkens', () => {
+test('a Framework without getApp turns the settings off with one warning and the bar, and the page still darkens', () => {
   const page = startOnBoard({ getData: () => null })
-  assert.deepEqual(page.warnings, ['dark-page: settings entry skipped because SudokuPad has no Framework.getApp'])
-  assert.match(page.bar, /^Dark Page: settings entry is off — SudokuPad changed\.Report/)
+  assert.deepEqual(page.warnings, ['dark-page: settings skipped because SudokuPad has no Framework.getApp'])
+  assert.match(page.bar, /^Dark Page: settings is off because SudokuPad changed\.Report/)
   assertDarkens(page)
 })
 
 test('a Framework whose getData throws (a frame with storage blocked) turns the saved color off, and the page darkens in the default', () => {
   const page = startOnBoard({ getData () { throw new Error('storage blocked') } })
   assert.deepEqual(page.warnings.filter((warning) => warning.includes('saved color')), ['dark-page: saved color skipped because SudokuPad changed: Error: storage blocked'])
-  assert.match(page.bar, /^Dark Page: settings entry, saved color are off/)
+  assert.match(page.bar, /^Dark Page: settings, saved color are off/)
   assertDarkens(page)
 })
 

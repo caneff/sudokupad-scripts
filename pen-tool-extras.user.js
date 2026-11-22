@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.49
+// @version      1.32.50
 // @author       ChinStrap
-// @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
+// @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
+// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -22,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.49'
+  const VERSION = '1.32.50'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -347,7 +349,7 @@
       bar.setAttribute('data-script', script)
       bar.style.cssText = NOTICE_BAR_CSS
       const text = doc.createElement('span')
-      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
+      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off because SudokuPad changed.`
       const link = doc.createElement('a')
       link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
       link.target = '_blank'
@@ -562,7 +564,7 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
-  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
   const CONTENT_INSET = '16px'
@@ -984,9 +986,9 @@
   const FEATURES = {
     saved: { label: 'saved settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' } },
     // The panel's settings button goes with the step, so one already showing is taken out now rather than at the next change to the page.
-    settings: { label: 'settings dialog', needs: SETTINGS_DIALOG_NEEDS, onSkip: () => syncPenPanel() },
+    settings: { label: 'settings', needs: SETTINGS_DIALOG_NEEDS, onSkip: () => syncPenPanel() },
     // The press on the settings dialog's overlay is held back on its own, so a throw installing it costs the dialog nothing; the overlay is SudokuPad's dialog's.
-    overlay: { label: 'dialog overlay', needs: { 'Framework.showDialog': 'function' } },
+    overlay: { label: 'click outside the dialog', needs: { 'Framework.showDialog': 'function' } },
     colors: { label: 'colors', needs: { ...APP, 'Framework.app.tools.colour': 'object' } },
     // The install save runs once the app is ready and waits for the color tool to hold a palette; one that is not ready in time turns only this off, and the pen keeps SudokuPad's own colors.
     colorSave: { label: 'color save', needs: { ...APP, 'Framework.setData': 'function' } },
@@ -1004,7 +1006,7 @@
       label: 'arrow lines',
       needs: { ...APP, 'Framework.app.svgRenderer.renderPen': 'function', 'Framework.app.svgRenderer.renderPart': 'function', ...PEN_ACTIONS, ...CELLS }
     },
-    dragHint: { label: 'drag highlight', needs: { ...APP, 'ToolPen.tool.drawLineHint': 'function' } },
+    dragHint: { label: 'line preview', needs: { ...APP, 'ToolPen.tool.drawLineHint': 'function' } },
     marks: {
       label: 'marks',
       needs: {
@@ -1113,7 +1115,7 @@
     9: '#000000'
   })
   const PEN_COLOR_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
-  // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
+  // The OKLCH chroma under which a darkened color counts as gray: SudokuPad's grays are 0, a tinted dark gray such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
   const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
@@ -2745,7 +2747,7 @@
   // SudokuPad's line mode pulldown (hidden here, stepped by the panel's line mode button), the key it saves the mode under, and its three values with SudokuPad's labels.
   const LINE_MODE_PULLDOWN = '.tool-pen .penlinemode'
   const LINE_MODE_KEY = 'ToolPen_linemode'
-  const LINE_MODES = [['both', 'Center & Edge'], ['centeronly', 'Center only'], ['edgeonly', 'Edge only']]
+  const LINE_MODES = [['both', 'Center and edge'], ['centeronly', 'Center only'], ['edgeonly', 'Edge only']]
 
   // 'both' is SudokuPad's own default.
   function normalizeLineMode (data) {
