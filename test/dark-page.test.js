@@ -211,10 +211,12 @@ function assertDarkens ({ style, appended }) {
   assert.deepEqual(appended, [style], 'the stylesheet is all the script puts on the page')
 }
 
-test('a Framework without getApp turns the settings off with one warning and the bar, and the page still darkens', () => {
-  const page = startOnBoard({ getData: () => null })
-  assert.deepEqual(page.warnings, ['dark-page: settings skipped because SudokuPad has no Framework.getApp'])
-  assert.match(page.bar, /^Dark Page: settings is off because SudokuPad changed\.Report/)
+test('a Framework without getApp gets the settings entry at once, with no warning and no bar, and the page still darkens', () => {
+  const added = []
+  const page = startOnBoard({ getData: () => null, setData () {}, removeData () {}, addSetting: (setting) => added.push(setting.name), showDialog () {}, closeDialog () {} })
+  assert.deepEqual(added, ['darkpage'])
+  assert.deepEqual(page.warnings, [])
+  assert.equal(page.bar, null)
   assertDarkens(page)
 })
 
@@ -249,9 +251,12 @@ test('a SudokuPad with every Framework call Dark Page makes lacks none of them',
 })
 
 test('without one internal, only the feature that needs it is lacking', () => {
-  for (const [internal, feature] of [['getData', 'savedPageColor'], ['getApp', 'settings'], ['addSetting', 'settings'], ['showDialog', 'settings'], ['closeDialog', 'settings'], ['setData', 'settings'], ['removeData', 'settings']]) {
+  for (const [internal, feature] of [['getData', 'savedPageColor'], ['addSetting', 'settings'], ['showDialog', 'settings'], ['closeDialog', 'settings'], ['setData', 'settings'], ['removeData', 'settings']]) {
     const roots = completeFramework()
     delete roots.Framework[internal]
     assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[`Framework.${internal}`, [feature]]]), internal)
   }
+  const roots = completeFramework()
+  delete roots.Framework.getApp
+  assert.deepEqual(lackingInternals(FEATURES, roots), new Map(), 'getApp')
 })

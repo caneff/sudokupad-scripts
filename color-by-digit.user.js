@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.77
+// @version      0.25.78
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.77'
+  const VERSION = '0.25.78'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -705,7 +705,7 @@
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  // exists; `store`, SudokuPad's Framework unless given, holds a dismissal under `<script>-notice`.
   function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
@@ -883,7 +883,7 @@
 
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
-    function probe ({ roots, store, doc = document }) {
+    function probe ({ roots, store = Framework, doc = document }) {
       sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
@@ -891,6 +891,29 @@
       })
       page = { store, doc, sudokupad }
       showNotice()
+    }
+
+    // A failure outside every feature turns off this one, named for the script, instead of an unhandled rejection naming nothing.
+    const startup = createFeature('startup', { label: 'startup' })
+    const startupFailed = (error) => startup.skip(error)
+    // `fn` as a function whose throw, or the rejection of the promise it returns, is reported as the startup's. A throw is reported at once.
+    const catchStartup = (fn) => (...args) => {
+      try {
+        return Promise.resolve(fn(...args)).catch(startupFailed)
+      } catch (error) {
+        startupFailed(error)
+        return Promise.resolve()
+      }
+    }
+
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
+    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    function start (begin, { roots = () => ({}) } = {}) {
+      const run = catchStartup((app) => {
+        probe({ roots: { Framework, app, ...roots() } })
+        return begin(app)
+      })
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
@@ -937,7 +960,7 @@
       closeDialog: () => feature.run(() => Framework.closeDialog())
     })
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, start, catchStartup, storeFor, dialogsFor }
   }
 
   // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
@@ -1829,6 +1852,9 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  // The settings wiring every script keeps: that feature (keyed `settings`, or `editor` in Color by Digit) never needs `Framework.getApp`,
+  // so a SudokuPad without it still gets the entry, added at start. A dialog's Save and Copy both go through the store of the feature that
+  // reads the saved settings at startup: with that feature off, the defaults show, nothing is kept, and the off-note says so.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -3177,7 +3203,6 @@
   }
 
   const start = (app) => {
-    guard.probe({ roots: { Framework, app }, store: Framework })
     const openEditor = () => editor.run(() => {
       Framework.closeDialog()
       setTimeout(() => editor.run(() => openDialog(app)), 0)
@@ -3203,6 +3228,5 @@
       coloring.run(() => app.on('restarted', coloring.bind(cancelStartupPass)))
     }
   }
-  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
-  else start(undefined)
+  guard.start(start)
 })()

@@ -168,7 +168,7 @@ test('a complete SudokuPad lacks nothing, and without one internal only the feat
   }
   const roots = completeSudokuPad()
   delete roots.Framework.getApp
-  assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['tab', 'settings']]]))
+  assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['tab']]]))
 })
 
 test('the header names the script, points updates at its own file and asks for no grant, so the settings entry is its one way in', () => {

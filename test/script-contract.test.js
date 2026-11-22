@@ -6,7 +6,7 @@ const path = require('node:path')
 require('./fake-page-storage.js')
 const { scriptFiles, guardId } = require('../sync-lib.js')
 const { pageStandIn } = require('./page-stand-in.js')
-const { startScript } = require('./unit-start.js')
+const { startScript, withScript } = require('./unit-start.js')
 const { headerVersion, headerField } = require('./header-version.js')
 
 // The startup promises every script makes, checked once for each file `scriptFiles()` lists. Each script's own test file keeps its table of
@@ -47,10 +47,40 @@ for (const file of scriptFiles()) {
     assert.deepEqual(startOnPage(file, undefined), [])
   })
 
-  test(`${id}: a Framework without getApp gives one warning naming getApp, and every warning is the script's own`, () => {
+  test(`${id}: a Framework without getApp names getApp in one warning when a feature needs it, and every warning is the script's own`, () => {
     const warnings = startOnPage(file, {})
-    assert.equal(warnings.filter((warning) => warning.includes('Framework.getApp')).length, 1, warnings.join('\n'))
+    const needsGetApp = Object.values(FEATURES).some(({ needs }) => 'Framework.getApp' in needs)
+    assert.equal(warnings.filter((warning) => warning.includes('Framework.getApp')).length, needsGetApp ? 1 : 0, warnings.join('\n'))
     for (const warning of warnings) assert.ok(warning.startsWith(`${guard}: `), warning)
+  })
+
+  // The settings wiring rule (lib/settings-dialog.js): the settings feature never needs getApp.
+  test(`${id}: a Framework without getApp but with every settings call still gets the settings entry`, () => {
+    const added = []
+    const framework = {
+      addSetting: (setting) => added.push(setting.name),
+      showDialog () {},
+      closeDialog () {},
+      getData: () => null,
+      setData () {},
+      removeData () {},
+      app: { tools: { colour: {} } }
+    }
+    const warnings = startOnPage(file, framework)
+    assert.equal(added.length, 1, warnings.join('\n'))
+    assert.deepEqual(warnings.filter((warning) => warning.includes(' startup ')), [])
+  })
+
+  test(`${id}: a start that throws is reported once under the script's name`, async () => {
+    const framework = {
+      getApp: () => Promise.resolve({}),
+      // Every script's probe reads it, so the throw comes from inside the script's start.
+      get getData () { throw new Error('planted') }
+    }
+    await withScript(path.join(__dirname, '..', file), { ...pageStandIn(), Framework: framework }, async ({ warnings }) => {
+      await new Promise((resolve) => setImmediate(resolve))
+      assert.deepEqual(warnings.filter((warning) => warning.includes('startup')), [`${guard}: startup skipped because SudokuPad changed: Error: planted`])
+    })
   })
 
   // A feature that needs no internal (`needs: {}`) has none to lack: it turns itself off only when its own work fails.

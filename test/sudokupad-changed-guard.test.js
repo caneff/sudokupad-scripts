@@ -31,6 +31,8 @@ test('no script calls SudokuPad outside a feature\'s guard: when SudokuPad chang
     const script = guardId(readFileSync(join(ROOT, file), 'utf8'))
     const run = runOnBrokenSudokuPad(join(ROOT, file), FEATURES)
     assert.deepEqual(run.startupEscaped.map(({ where, error }) => `${where}: ${error}`), [], `${file} on a working SudokuPad`)
+    // The guard's startup catch turns a throw at startup into a warning, so one on the working page fails here as an escaped throw would.
+    assert.deepEqual(run.startupWarnings.filter((warning) => warning.startsWith(`${script}: startup skipped`)), [], `${file} on a working SudokuPad`)
     // A SudokuPad call outside a guard throws SudokuPad's own error, or a TypeError on a member that is gone; a stand-in value no real
     // page would hand a listener (an empty color input) can make a script's own code throw, which is not what this counts.
     const fromSudokuPad = run.escaped.filter(({ error }) => error instanceof SudokuPadChanged || error.name === 'TypeError')

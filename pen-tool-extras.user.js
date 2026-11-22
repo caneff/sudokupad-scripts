@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.50
+// @version      1.32.51
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.50'
+  const VERSION = '1.32.51'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -290,7 +290,7 @@
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  // exists; `store`, SudokuPad's Framework unless given, holds a dismissal under `<script>-notice`.
   function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
@@ -468,7 +468,7 @@
 
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
-    function probe ({ roots, store, doc = document }) {
+    function probe ({ roots, store = Framework, doc = document }) {
       sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
@@ -476,6 +476,29 @@
       })
       page = { store, doc, sudokupad }
       showNotice()
+    }
+
+    // A failure outside every feature turns off this one, named for the script, instead of an unhandled rejection naming nothing.
+    const startup = createFeature('startup', { label: 'startup' })
+    const startupFailed = (error) => startup.skip(error)
+    // `fn` as a function whose throw, or the rejection of the promise it returns, is reported as the startup's. A throw is reported at once.
+    const catchStartup = (fn) => (...args) => {
+      try {
+        return Promise.resolve(fn(...args)).catch(startupFailed)
+      } catch (error) {
+        startupFailed(error)
+        return Promise.resolve()
+      }
+    }
+
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
+    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    function start (begin, { roots = () => ({}) } = {}) {
+      const run = catchStartup((app) => {
+        probe({ roots: { Framework, app, ...roots() } })
+        return begin(app)
+      })
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
@@ -522,7 +545,7 @@
       closeDialog: () => feature.run(() => Framework.closeDialog())
     })
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, start, catchStartup, storeFor, dialogsFor }
   }
 
   // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
@@ -640,6 +663,9 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  // The settings wiring every script keeps: that feature (keyed `settings`, or `editor` in Color by Digit) never needs `Framework.getApp`,
+  // so a SudokuPad without it still gets the entry, added at start. A dialog's Save and Copy both go through the store of the feature that
+  // reads the saved settings at startup: with that feature off, the defaults show, nothing is kept, and the off-note says so.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -3310,7 +3336,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 
   const start = async () => {
     const app = Framework.app
-    guard.probe({ roots: { Framework, ToolPen: typeof ToolPen !== 'undefined' ? ToolPen : undefined }, store: Framework })
     // Read before the panel is built, which the first sync does with the pen tool already on.
     Object.assign(inForce, readSettings(savedData))
     // Read before any step runs, so only the startup check can have turned the colors step off.
@@ -3353,8 +3378,5 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
     if (derived) saveColors(derived)
   }
-  // A failure outside every feature names the script, instead of an unhandled rejection naming nothing.
-  const startFailed = (error) => console.error('pen-tool-extras: startup failed:', error)
-  if (typeof Framework.getApp === 'function') Framework.getApp().then(start).catch(startFailed)
-  else start().catch(startFailed)
+  guard.start(start, { roots: () => ({ ToolPen: typeof ToolPen !== 'undefined' ? ToolPen : undefined }) })
 })()

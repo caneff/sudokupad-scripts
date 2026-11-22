@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.44
+// @version      0.7.45
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.44'
+  const VERSION = '0.7.45'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -396,6 +396,9 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  // The settings wiring every script keeps: that feature (keyed `settings`, or `editor` in Color by Digit) never needs `Framework.getApp`,
+  // so a SudokuPad without it still gets the entry, added at start. A dialog's Save and Copy both go through the store of the feature that
+  // reads the saved settings at startup: with that feature off, the defaults show, nothing is kept, and the off-note says so.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -749,7 +752,7 @@
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  // exists; `store`, SudokuPad's Framework unless given, holds a dismissal under `<script>-notice`.
   function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
@@ -927,7 +930,7 @@
 
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
-    function probe ({ roots, store, doc = document }) {
+    function probe ({ roots, store = Framework, doc = document }) {
       sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
@@ -935,6 +938,29 @@
       })
       page = { store, doc, sudokupad }
       showNotice()
+    }
+
+    // A failure outside every feature turns off this one, named for the script, instead of an unhandled rejection naming nothing.
+    const startup = createFeature('startup', { label: 'startup' })
+    const startupFailed = (error) => startup.skip(error)
+    // `fn` as a function whose throw, or the rejection of the promise it returns, is reported as the startup's. A throw is reported at once.
+    const catchStartup = (fn) => (...args) => {
+      try {
+        return Promise.resolve(fn(...args)).catch(startupFailed)
+      } catch (error) {
+        startupFailed(error)
+        return Promise.resolve()
+      }
+    }
+
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
+    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    function start (begin, { roots = () => ({}) } = {}) {
+      const run = catchStartup((app) => {
+        probe({ roots: { Framework, app, ...roots() } })
+        return begin(app)
+      })
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
@@ -981,7 +1007,7 @@
       closeDialog: () => feature.run(() => Framework.closeDialog())
     })
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, start, catchStartup, storeFor, dialogsFor }
   }
 
   // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
@@ -1016,7 +1042,6 @@
     settings: {
       label: 'settings',
       needs: {
-        'Framework.getApp': 'function',
         ...SETTINGS_DIALOG_NEEDS,
         'Framework.setData': 'function',
         'Framework.removeData': 'function'
@@ -1054,13 +1079,11 @@
     }).observe(document, { childList: true })
   }
 
-  // The color is written only from the dialog, so a write that fails reaches its status line with the settings entry still on.
-  const savedSettings = guard.storeFor(settingsEntry)
-  // Copy reads under the feature that reads the color at startup.
+  // Save and Copy go through the store of the feature that reads the color at startup (lib/settings-dialog.js).
   const savedColorStore = guard.storeFor(savedPageColor)
 
   function saveColor (color) {
-    saveTable(savedSettings, SETTING_ROWS, { color })
+    saveTable(savedColorStore, SETTING_ROWS, { color })
     pageColor = color
     style.textContent = buildCss(pageColor)
   }
@@ -1077,7 +1100,7 @@
   ].join('\n')
   const dialogs = guard.dialogsFor(settingsEntry)
   // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
-  const snapshotColor = () => snapshotStore(savedSettings, tableKeys(SETTING_ROWS))
+  const snapshotColor = () => snapshotStore(savedColorStore, tableKeys(SETTING_ROWS))
 
   function openDialog () {
     let picked = pageColor
@@ -1134,16 +1157,18 @@
   function start () {
     // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the default color.
     if (typeof Framework === 'undefined') return
-    guard.probe({ roots: { Framework }, store: Framework })
+    guard.probe({ roots: { Framework } })
     const saved = savedPageColor.run(() => readSaved(Framework), () => pageColor)
     if (saved !== pageColor) {
       pageColor = saved
       style.textContent = buildCss(pageColor)
     }
-    settingsEntry.run(() => Framework.getApp().then(() => {
-      addSettingsEntry(dialogs, settingsEntry, { name: 'darkpage', content: 'Dark Page', open: openDialog })
-    }))
+    // The entry waits for the app, as every other script's does; with no getApp it goes in now, as theirs do.
+    const addEntry = () => addSettingsEntry(dialogs, settingsEntry, { name: 'darkpage', content: 'Dark Page', open: openDialog })
+    if (typeof Framework.getApp !== 'function') return addEntry()
+    return Framework.getApp().then(addEntry)
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
-  else start()
+  const startPage = guard.catchStartup(start)
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startPage)
+  else startPage()
 })()
