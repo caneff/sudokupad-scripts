@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.59
+// @version      0.46.60
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.59'
+  const VERSION = '0.46.60'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
