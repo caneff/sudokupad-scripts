@@ -100,6 +100,10 @@ Includes No Tab Letters, once its own script.
 - `docs/research/tooling/fuzz-missed-mutants/reload-settings-935.md` — Reload rules read the saved pen and note settings (#935). The rule added after the missed mutants; the folder holds the measure script and runs.
 - `docs/research/tooling/netlify-credits.md` — Netlify credits (2026-11-03). What Netlify charges on the Free plan and what this repo spends. See `docs/agents/site.md`.
 
+## The site
+
+- `docs/research/site/chinstrap-theme/README.md` — The ChinStrap theme mockup (2026-11-10). The site restyled in the look of Chris's stream, as approved in round 14 of the mockup loop; `theme.css` is the spec the build folded into `site/style.css`.
+
 ## Published pictures: do not move
 
 The site and the README link these by raw GitHub address on `main`, and Netlify's copy lags, so a moved picture breaks a page. Every path:
