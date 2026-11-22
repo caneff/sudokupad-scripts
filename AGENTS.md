@@ -20,8 +20,8 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 - **The daily watch**: `.github/workflows/watch.yml` runs `npm run watch:live`, the full live suite, every night at 06:17 UTC on GitHub Actions (and by hand through
   `workflow_dispatch`); `live/README.md` § The daily watch has the rule.
 - **Logic Masters Puzzle Preview** (`logic-masters-puzzle-preview.user.js`): runs on logic-masters.de, not SudokuPad. Its first version is Juggler's, published here with their permission
-  (Chris, 2026-11-21). `OTHER_SITE_SCRIPTS` in `sync-lib.js` keeps it out of every loop over SudokuPad's scripts (`scriptFiles()`), while the version checks still
-  cover it (`publishedScriptFiles()`). It is off the homepage for now (Chris, 2026-11-21); the README still lists it. No test, check or screenshot requests logic-masters.de, which answered a few requests with a 503: `live/logic-masters-puzzle-preview/` serves synthetic pages.
+  (Chris, 2026-11-21). `OTHER_SITE_SCRIPTS` in `sync-lib.js` keeps it out of every loop over SudokuPad's scripts (`scriptFiles()`), while the homepage and version checks still
+  cover it (`publishedScriptFiles()`). No test, check or screenshot requests logic-masters.de, which answered a few requests with a 503: `live/logic-masters-puzzle-preview/` serves synthetic pages.
   Debugging a bug by hand may query it, a few requests at a time and never in bulk (Chris, 2026-11-21): it answers 503 after a few dozen requests in a minute or two.
 - **`GLOSSARY.md`**: the vocabulary.
 - **A change to what a script shows** (its panel, buttons, dialog or what it draws) updates that script's text in `site/`, in its
