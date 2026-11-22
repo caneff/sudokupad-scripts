@@ -46,7 +46,7 @@
   which picks the digit profile, only the second.
 - **mode** — Color by Digit's saved setting, Cell, Digit, Both or Off, named by the word above the button's **chips**, which also draw it (Cell: group
   colors with SudokuPad's blue digits; Digit: white with the darker shades; Both: group colors with the shades; Off:
-  white, grey digits and a grey outline), named again in the button's tooltip, and stepped by a short press on the button, Cell → Digit → Both →
+  white, gray digits and a gray outline), named again in the button's tooltip, and stepped by a short press on the button, Cell → Digit → Both →
   Off → Cell. Cell and Both color cells; Digit and Both color digits with their **digit color**. In Cell and Both, a cell's color keeps in step with
   its digit and centre marks as they change: a pure cell gets its group's color and loses any other
   group's, and a cell that is not pure loses every group's color. Colors in no group are left alone, except that with SudokuPad's Multi-color setting off, adding a group color replaces whatever color the cell held.
@@ -75,7 +75,7 @@
 - **preload** — one of the five ready-made profiles a fresh install starts with: Low/5/High, Odd/Even,
   Entropic ({0,1,2,3}, {4,5,6}, {7,8,9}), Modular ({1,4,7}, {2,5,8}, {0,3,6,9}) and Each digit (each of 1 to 9
   alone, 0 in no group: 5 to 9 on palette keys 5 to 9, and 1 to 4 on keys j, e, h and m of pages 2 and 3, so no
-  digit color is black or grey). Entropic and Modular, and then Each digit, are appended once,
+  digit color is black or gray). Entropic and Modular, and then Each digit, are appended once,
   on load, to an install that already has profiles, each skipped when a profile with equal groups exists or
   six are taken; a saved flag for each records it, so a deleted one stays deleted. A migrated profile is named after the preload its groups equal.
 - **pen color** — one of the pen tool's nine colors, numbered 1 to 9. It is a
@@ -130,7 +130,7 @@
   whole pen layer (`#cell-pen`) instead, so overlapping strokes do not darken. 80 is the default; 100 is solid.
 - **white outline** — the dialog's White outlines box (on by default; saved under `PenColor_outline` only as `false`, since on is the default) and the
   Outline width line under it (a slider, 1 to 8 units, default 2, saved under `PenColor_outlinewidth`, hidden in the dialog while the box is unticked). On, a filter on the pen layer (`#cell-pen`) draws a white band of that width round the layer's combined shape, so lines and marks
-  already drawn get it, it fades with the opacity, and the drag highlight, which sits in its own group beside the layer, is left out. Nothing is stored in the puzzle.
+  already drawn get it, it fades with the opacity, and the line preview, which sits in its own group beside the layer, is left out. Nothing is stored in the puzzle.
 - **pen page** — one of the lists of nine pens in `PEN_PAGES`. Page 1 is SudokuPad's own pens 1 to 9; page 2 is the same
   nine colors drawn as dashed lines (dots at a **dash length** of 0); page 3 is the same nine as **arrow lines**. The pen on color button N has the same color on every page, so recoloring it changes
   it on all of them. A page 2 or 3 whose **line style** is not enabled is out of the rotation.
@@ -163,12 +163,12 @@
   to `9` on page 1, `a` to `i` on page 2, `j` to `z` and `0` on page 3 (two to a pen, see **direction character**). The **pen color** number (1 to 9) is the button the character is on, and the
   only part SudokuPad's own `ToolPen_color` ever holds; the selected character is saved under `PenColor_pen`.
 - **controls row** — the pen panel's row of three 4rem square buttons under the nine color buttons, on the color columns: the **line mode button**, the **page button** (the line type button) and the **settings button**, in that order. A panel with no page to turn to has two, and one whose settings dialog is off has no settings button. They sit with the **pen panel sliders** on the **tray**, a light purple rounded box behind the last two rows; on a dark page Dark Page makes the tray and its buttons dark.
-- **line mode button** — the first button of the **controls row** (the 4rem square button). A click or a touch tap steps **line mode** Center & Edge, Center only, Edge only and round, through SudokuPad's own setting. Its icon is a faint 2x2 cell grid with the center line, the edge line, or both; its hover label (`title`) names the current mode with SudokuPad's labels.
+- **line mode button** — the first button of the **controls row** (the 4rem square button). A click or a touch tap steps **line mode** Center and edge, Center only, Edge only and round, through SudokuPad's own setting. Its icon is a faint 2x2 cell grid with the center line, the edge line, or both; its hover label (`title`) names the current mode with SudokuPad's labels.
 - **page button** — the second button of the **controls row**, also called the line type button. It shows the line the next enabled page draws,
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).
 - **install step** — one of the parts Pen Tool Extras installs at startup, each a **feature** of the **SudokuPad guard**: colors, color save, pen pages, arrow
-  lines, drag highlight, marks, line erase, pen panel. Its saved settings and settings dialog are features too, but not install steps. A step is **skipped** when SudokuPad lacks an internal it
+  lines, line preview, marks, line erase, pen panel. Its saved settings and settings dialog are features too, but not install steps. A step is **skipped** when SudokuPad lacks an internal it
   needs or its own code throws: one console warning names it, the **error log** records it, the **notice bar** lists it, and so does the "Off because SudokuPad changed" line in every script's settings dialog (`lib/settings-dialog.js`),
   and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
 - **SudokuPad guard** — `lib/sudokupad.js`: a script declares its **features**, each with a label and the SudokuPad internals it needs, and a
@@ -182,7 +182,7 @@
   guard warns once in the console, puts up a plain bar, and the feature keeps saving once space frees.
 - **Paste settings** — a settings dialog's paste button (Copy settings is its twin, and carries the saved settings only): it saves the pasted keys at once and puts only those into the dialog's draft, so an unsaved edit of any setting the pasted text lacks stays there for Save or Cancel. In Color by Digit the pasted profiles replace the draft's profiles, and the draft's mode stays unless one was pasted, a mode the draft's profiles do not allow (Digit or Both with Digit set to None) falling back to the one they do.
 - **notice bar** — the guard's bar at the bottom of the page, in the one purple every script's bar uses (Pen Tool Extras' and the site's
-  accent): "<script>: <features> is/are off — SudokuPad changed.", a Report link to a new issue filled in with the script, each feature,
+  accent): "<script>: <features> is/are off because SudokuPad changed.", a Report link to a new issue filled in with the script, each feature,
   its missing internal or error, and SudokuPad's version, and a × that dismisses it. A dismissal is saved per SudokuPad version, so a new
   version shows the bar again; until dismissed it shows on every page load. Where it cannot be saved (a page with no SudokuPad version, or a
   Framework whose saved data is missing or throws) a dismissal holds for the page load only. A **refused write** puts up a second, plain bar in the same
@@ -194,7 +194,7 @@
 - **settings button** — the third button of the **controls row**, an outline gear. A click or tap opens
   Pen Tool Extras' settings dialog and leaves the selected tool and pen color alone.
 - **line mode** — SudokuPad's pen setting for where a dragged line snaps: center and edge, center only, or edge only. It is
-  saved by SudokuPad under `ToolPen_linemode`. The pen panel's **line mode button** steps it: a click goes Center & Edge, Center only, Edge only, and round.
+  saved by SudokuPad under `ToolPen_linemode`. The pen panel's **line mode button** steps it: a click goes Center and edge, Center only, Edge only, and round.
 - **page color** — the color Dark Page paints the page outside the board box: black until a solver picks
   another in the Dark Page dialog, saved under `DarkPage_color`. The page's own text is light or dark, whichever contrasts more
   with the color.
@@ -250,7 +250,7 @@
 - **Outline setting** — the settings dialog's Halo round the letters row, three sample buttons, None, Thin or Thick (the default), each a colored cell with one letter in the text color drawn with that reach of halo; the reach of every note's **halo** (0, 0.07 or 0.14 of its text size). It is global like the box color and the **frame**, applied on Save, saved under `TextAnywhere_outline` (the ids `none`, `thin`, `medium`; anything else reads as Thick) and carried by Copy and Paste settings. A note's own `outline` field, saved by an earlier version, is ignored and left as saved.
 - **Background** — the button between Clear all and the gear, on or off, and a setting for the NEXT text: a text made while it is on stores `bg: true` and is drawn with a rounded box behind it (the **background box color**'s), and one made while it is off has none; a saved text with no `bg` has none. The state is remembered under `TextAnywhere_background`. Pressing it never changes a text already made, except the one open in the text box and the **selected** ones, and the state pressed is also the next text's: while texts are selected it shows theirs (neither on nor off when they differ: a dashed ring, `aria-pressed="mixed"`) and turns them all on, or all off when all have one.
 - **background box color** — the setting, in Text Anywhere's settings dialog (its Box color row), for the color of the box behind every note that has one: five sample buttons, each a short "A=B" note in the text color on that box, Page (the default, `--body-bg`; a note off the board takes Dark Page's page color, `--dark-page-color`, where Dark Page is on), White, Yellow (`#fff4b0`), Tint (15% of each note's own color over the page color) or Own (a #rrggbb color from a picker shown under the row while Own is picked). Global: it recolors every boxed note, old and new, since a note stores only `bg: true`. Saved under `TextAnywhere_box` as the preset's id or the hex color; a value that is not one reads as Page. The **halo** stays the page color.
-- **frame** — the settings dialog's Box border row, two sample buttons, None and Thin grey, each a boxed note: Thin grey, every boxed note gets a 1 screen pixel `#c4c4c4` ring round its box, drawn as a `box-shadow` so it takes no room; a note with no box gets none. Global, off by default, saved under `TextAnywhere_frame` (only `true` is on). Copy and Paste settings carry it and the box color.
+- **frame** — the settings dialog's Box border row, two sample buttons, None and Thin gray, each a boxed note: Thin gray, every boxed note gets a 1 screen pixel `#c4c4c4` ring round its box, drawn as a `box-shadow` so it takes no room; a note with no box gets none. Global, off by default, saved under `TextAnywhere_frame` (only `true` is on). Copy and Paste settings carry it and the box color.
 - **font setting** — the settings dialog's Font pulldown, Proportional (the default, the page's own font) or Fixed width (a monospace stack, the one a code span uses). It applies to every note, existing and new, is saved as `TextAnywhere_font`, and travels with Copy settings and Paste settings; a value that is neither reads as Proportional.
 - **erase** — Text Anywhere's right click or drag: the press and drag collect every text the pointer is near, and the release removes them whole, in one save. Escape, a lost pointer or a tool switch cancels it with nothing removed. Clear all (the trash button) erases every note, after asking, while nothing is selected; while texts are selected it deletes only them, without asking, as the Delete and Backspace keys do.
 - **move** — Text Anywhere's left-drag that starts on a text (the topmost): the **selection** follows the pointer, after the text is selected alone if it was not selected, and each text's stored place changes once, on release, pinned or fixed by where it is dropped, then shifted by up to half a device pixel so its left and top land on whole device pixels. It stops at the last point inside the window; a text may be dropped on SudokuPad's controls. A click with no drag selects the text. A left-drag that starts on a **resize handle** resizes the note and never moves it. In the **text box** a left-drag that starts inside it selects text and never moves it; only one that starts in the 4 px band just outside it (which shows the move cursor) moves the note, after closing it.

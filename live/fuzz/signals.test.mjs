@@ -19,7 +19,7 @@ describe('crashSignals', () => {
   })
 
   it('the notice bar counts, with the script\'s own words', () => {
-    assert.deepEqual(crashSignals({ errors: [], notices: ['Text Anywhere: note editing is off — SudokuPad changed.'] }), ['notice bar: Text Anywhere: note editing is off — SudokuPad changed.'])
+    assert.deepEqual(crashSignals({ errors: [], notices: ['Text Anywhere: note editing is off because SudokuPad changed.'] }), ['notice bar: Text Anywhere: note editing is off because SudokuPad changed.'])
   })
 })
 

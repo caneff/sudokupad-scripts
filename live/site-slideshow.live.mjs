@@ -109,9 +109,9 @@ for (const [where, file] of PAGES) {
         await page.goto(new URL(`site/${file}`, ROOT).href, { waitUntil: 'load' })
       })
 
-      it('starts on slide 1 with its caption, the buttons are labelled and a step announces its caption', async () => {
+      it('starts on slide 1 with its caption, the buttons are labelled with the slideshow name and a step announces its caption', async () => {
         assert.deepEqual(await shown(root), at(1, show.first, show.slides))
-        assert.equal(await page.locator(`${root} button`).evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')).join()), 'Previous,Next')
+        assert.equal(await page.locator(`${root} button`).evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')).join()), `Previous: ${show.heading},Next: ${show.heading}`)
         assert.equal(await page.locator(`${root} .slide-captions`).getAttribute('aria-live'), 'polite')
       })
 

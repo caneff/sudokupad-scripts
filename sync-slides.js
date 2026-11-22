@@ -14,7 +14,7 @@ const OPENING = /<!-- slideshow:([\w-]+) -->/g
 
 const escape = text => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-const renderShow = ({ dir, width, height, slides }, indent, hashOf = tagOf) => {
+const renderShow = ({ name, dir, width, height, slides }, indent, hashOf = tagOf) => {
   const at = n => ' '.repeat(indent + n)
   const current = i => i === 0 ? ' current' : ''
   return [
@@ -28,7 +28,7 @@ const renderShow = ({ dir, width, height, slides }, indent, hashOf = tagOf) => {
         : [still(4)]
     }),
     `${at(2)}</div>`,
-    `${at(2)}<div class="slide-bar">`,
+    `${at(2)}<div class="slide-bar" data-name="${escape(name)}">`,
     `${at(4)}<div class="slide-captions">`,
     ...slides.map(({ caption }, i) => `${at(6)}<p class="slide-caption${current(i)}">${escape(caption)}</p>`),
     `${at(4)}</div>`,
@@ -43,6 +43,8 @@ const syncText = (text, shows = SHOWS, hashOf = tagOf) => {
   let blocks = 0
   const out = text.replace(BLOCK, (block, space, id) => {
     if (!shows[id]) { problems.push(`<!-- slideshow:${id} --> names no slideshow in slideshows.json`); return block }
+    // The name is each pager button's accessible name, so a show without one would read "Previous: undefined".
+    if (typeof shows[id].name !== 'string' || !shows[id].name) { problems.push(`slideshow ${id} in slideshows.json has no "name"`); return block }
     blocks++
     return `${space}<!-- slideshow:${id} -->\n${renderShow(shows[id], space.length, hashOf)}\n${space}<!-- /slideshow:${id} -->`
   })

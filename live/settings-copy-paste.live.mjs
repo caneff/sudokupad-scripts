@@ -184,7 +184,7 @@ describe('auto-rules-resizer.user.js: a Save whose height write throws', { concu
   let context, p, errors
   after(async () => { await context?.close() })
 
-  it('says it was not saved, the width key is still unsaved and the max size settings stay on', async () => {
+  it('says it was not saved, the width key is still unsaved and the settings stay on', async () => {
     ({ context, p, errors } = await openWith(browser(), ['auto-rules-resizer.user.js']))
     await openScriptDialog(p, 'Auto Rules Resizer', '#auto-rules-resizer-max-width')
     await failNextWriteOf(p, 'AutoRulesResizer_maxHeight', 'planted height write failure')

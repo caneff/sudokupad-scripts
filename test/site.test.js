@@ -100,6 +100,22 @@ for (const name of PAGES) {
   })
 }
 
+// #1107: every page has a tab icon and a link preview (title, summary and picture), so a pasted link shows one in Discord.
+test('every page has a favicon that exists, a meta description and Open Graph title, description and image', () => {
+  for (const name of PAGES) {
+    const head = read(name).split('</head>')[0]
+    const icon = head.match(/<link rel="icon" href="([^"]+)"/)
+    assert.ok(icon && fs.existsSync(path.join(SITE_DIR, icon[1])), `site/${name} has no <link rel="icon"> to a file of site/`)
+    const meta = key => (head.match(new RegExp(`<meta (?:name|property)="${key}" content="([^"]+)"`)) || [])[1]
+    assert.ok(meta('description'), `site/${name} has no meta description`)
+    for (const key of ['og:title', 'og:description', 'og:image']) assert.ok(meta(key), `site/${name} has no ${key}`)
+    assert.equal(meta('og:title'), head.match(/<title>([^<]*)<\/title>/)[1], `site/${name}: og:title is not its <title>`)
+    assert.equal(meta('og:description'), meta('description'), `site/${name}: og:description is not its description`)
+    // A preview picture is fetched by the chat site, so its address is absolute, and it is a picture of a repo file.
+    assert.ok(meta('og:image').startsWith(RAW), `site/${name}: og:image is not a repo picture at ${RAW}`)
+  }
+})
+
 test('each details page is named for its h1: lower-case words joined by hyphens', () => {
   for (const name of PAGES.filter(f => f !== HOME)) {
     const h1 = read(name).match(/<h1>([^<]*)<\/h1>/)
@@ -111,7 +127,9 @@ test('each details page is named for its h1: lower-case words joined by hyphens'
 test(`${REDIRECT} is the one redirect page: a meta refresh and a plain link to ${DRAW}`, () => {
   const page = read(REDIRECT)
   assert.match(page, new RegExp(`<meta http-equiv="refresh" content="0; url=${DRAW.replace('.', '\\.')}">`))
-  assert.deepEqual(siteLinks(page), [DRAW])
+  assert.deepEqual(siteLinks(page), [DRAW, DRAW])
+  assert.match(page, /<html lang="en">/)
+  assert.match(page, new RegExp(`<link rel="canonical" href="${DRAW.replace('.', '\\.')}">`))
   assert.doesNotMatch(page, /<script\b/i)
   for (const t of targets(page)) assert.doesNotMatch(t, SITE_ADDRESS, `site/${REDIRECT} links ${t} by its absolute address`)
 })
@@ -169,7 +187,7 @@ test(`${HOME} opens with the title sticker: the title, Puzzle Scripts, then the 
   const m = read(HOME).match(/<body>\s*<header class="banner">\s*<h1>([^<]*)<\/h1>\s*<p class="lede">([\s\S]*?)<\/p>\s*<\/header>/)
   assert.ok(m, `site/${HOME} does not open with a <header class="banner"> holding the <h1> and then the lede`)
   assert.equal(m[1], 'Puzzle Scripts')
-  assert.equal(plain(m[2]), "Small userscripts for SudokuPad and for other puzzle sites. Install Tampermonkey, click a script's Install button, and Tampermonkey asks if you want it.")
+  assert.equal(plain(m[2]), "Small userscripts for SudokuPad and for other puzzle sites. Install Tampermonkey, click a script's Install button, and Tampermonkey asks if you want it. Each script's settings are in SudokuPad's settings, in the Experimental group, and every dialog has Restore defaults.")
   assert.match(read(HOME), /<title>Puzzle Scripts<\/title>/)
 })
 
@@ -211,12 +229,6 @@ const section = (file, heading) => {
 const leadIn = li => (li.match(/^<strong>([^<]*)<\/strong>/) || [])[1]
 const leadIns = page => items(page).map(leadIn).filter(Boolean)
 
-test(`${DETAILS} intro says what the script adds`, () => {
-  const m = read(DETAILS).match(/<\/p>\s*<p class="lede">(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>'s pen tool[\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${DETAILS} has no intro paragraph starting "Adds to SudokuPad's pen tool", with SudokuPad linked`)
-  assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
-})
-
 const altOf = img => (img.match(/alt="([^"]*)"/) || [])[1] || ''
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
 const withoutTag = img => img.replace(/\?v=[0-9a-f]{7}"/, '"')
@@ -232,13 +244,6 @@ test(`${DETAILS} good to know says others need the script to see dashed and arro
   assert.deepEqual(section(DETAILS, 'Good to know'), ['Others see your dashed and arrow lines only if they have the script too.'])
 })
 
-test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, () => {
-  const m = read(HOME).match(/<h2>Pen Tool Extras<\/h2>\s*<p>([\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${HOME} has no Pen Tool Extras description`)
-  assert.doesNotMatch(m[1], /slider/i)
-  assert.equal(m[1], "Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners.")
-})
-
 // One row per script, in this order, each script's file named for its shown name; Details only where a details page exists.
 const ROWS = [
   ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined]
@@ -251,7 +256,7 @@ test(`${HOME} has one row per script in order, each with an Install button besid
   rows.forEach((row, i) => {
     const [name, details] = ROWS[i]
     const script = name.toLowerCase().replace(/ /g, '-') + SCRIPT_SUFFIX
-    assert.match(row, new RegExp(`<p class="actions"><a class="install" href="${RAW.replace(/\./g, '\\.')}${script}">Install<span class="visually-hidden"> ${name}</span></a>${details ? `<a class="more" href="${details}">Details &rarr;</a>` : ''}</p>`), name)
+    assert.match(row, new RegExp(`<p class="actions"><a class="install" href="${RAW.replace(/\./g, '\\.')}${script}">Install<span class="visually-hidden"> ${name}</span></a>${details ? `<a href="${details}">Details &rarr;</a>` : ''}</p>`), name)
   })
 })
 
@@ -364,7 +369,7 @@ const DETAIL_CONTENT = [
       'Marks on cell edges Click an edge for an X, a circle or an arrow.',
       'Marks on grid corners Click near a corner for an X or a circle.',
       'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
-      'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
+      'Erase a whole line Right-click a line to erase all of it, or a mark to erase that.',
       'White outlines An outline keeps lines readable over colored cells.'
     ],
     leadIns: ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Plus and minus keys set the thickness', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
@@ -376,12 +381,12 @@ const DETAIL_CONTENT = [
       'Typed notes anywhere Click to type; Esc or Ctrl+Enter finishes; Ctrl+Z and Ctrl+Y undo and redo the typing; double-click a note to edit.',
       'Formatting Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and ->, != or sum typed as → ≠ Σ. One note below shows every style, and the text that made it.',
       'Long notes Wraps and scrolls; drag a corner to resize.',
-      'Readable over digits A white outline round the letters, and an optional box behind them.',
-      'Colors, size and opacity Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make each selected note, or the next note, one Size step bigger or smaller than it is, and holding one keeps going, faster the longer you hold. New notes start in a dark grey (color 2) at a size that fits the grid; a color you pick stays your default. A color, size, opacity or Background you set on a note also becomes the setting for the next note.',
+      'Readable over digits A halo round the letters, and an optional box behind them.',
+      'Colors, size and opacity Nine colors of its own (keys 1-9), and Size and Opacity sliders. The + and - keys make each selected note, or the next note, one Size step bigger or smaller than it is, and holding one keeps going, faster the longer you hold. New notes start in a dark gray (color 2) at a size that fits the grid; a color you pick stays your default. A color, size, opacity or Background you set on a note also becomes the setting for the next note.',
       'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
-      'Key to switch on Press T to pick the Text tool (not while you are typing in a note, a dialog or the Letter tool).',
+      'Key to switch on Press T to pick the Text Anywhere tool (not while you are typing in a note, a dialog or the Letter tool).',
       'Hide all notes The eye beside the sliders hides every note to show the board, and shows them again. Placing a note shows them too, and a reload does.',
-      'Erase Right-click a note, or drag with the right button across several; they go when you let go. Or press Delete.',
+      'Erase Right-click a note, or drag with the right button across several; they erase when you let go. Or press Delete.',
       'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
       'Settings Color presets, font (proportional or fixed width), halo, box color and border by sample; Copy and Paste to another browser.'
     ],
@@ -442,17 +447,10 @@ test(`${DETAILS} shows the pen panel as one annotated picture whose alt text nam
   }
 })
 
-const SCRIPT_INTRO = /<\/p>\s*<p(?: class="lede")?>(Adds (?:a button )?to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
-const shared = ({ page, script, name, summary, intro, homePicture }) => {
+const shared = ({ page, script, name, summary, homePicture }) => {
   test(`${script}.user.js's @description is the homepage summary`, () => {
     const head = fs.readFileSync(path.join(ROOT, script + SCRIPT_SUFFIX), 'utf8')
     assert.equal((head.match(/^\/\/ @description\s+(.*)$/m) || [])[1], summary)
-  })
-
-  test(`${page} intro says what the script adds, with SudokuPad linked`, () => {
-    const m = read(page).match(SCRIPT_INTRO)
-    assert.ok(m, `site/${page} has no intro paragraph starting "Adds to SudokuPad" or "Adds a button to SudokuPad", with SudokuPad linked`)
-    assert.equal(plain(m[1]), intro)
   })
 
   test(`${page} has no picture inside its feature grid`, () => {
@@ -475,12 +473,6 @@ const shared = ({ page, script, name, summary, intro, homePicture }) => {
 }
 
 const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.'
-
-test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside its slideshow`, () => {
-  const m = read(HOME).match(/<\/div>\s*<div class="row-text">\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${HOME} has no Color by Digit entry`)
-  assert.equal(m[1], CBD_SUMMARY)
-})
 
 // A picture's pixel size, from its file's header: a PNG's IHDR or a GIF's logical screen.
 const pictureSize = (file) => {
@@ -559,12 +551,6 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 
 const DRAW_SUMMARY = 'Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
 
-test(`${HOME} describes Text Anywhere in a short summary ending in a Details link`, () => {
-  const m = read(HOME).match(/<h2>Text Anywhere<\/h2>\s*<p>([\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${HOME} has no Text Anywhere description`)
-  assert.equal(m[1], DRAW_SUMMARY)
-})
-
 test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated picture whose alt text names every label`, () => {
   const m = read(DRAW).match(/<h2>The Text Anywhere panel<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${DRAW} has no <h2>The Text Anywhere panel</h2>`)
@@ -605,20 +591,11 @@ test('the README has a Text Anywhere row with a Details link, and the Settings s
   assert.match(readme, /Each script adds an entry to SudokuPad's settings/)
 })
 
-test('the README has a Color by Digit row with the short summary and a Details link', () => {
-  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
-  const row = readme.match(/^\| Color by Digit \|.*$/m)
-  assert.ok(row, 'the README has no Color by Digit row')
-  assert.ok(row[0].includes(` ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)} [Details](https://caneff.github.io/sudokupad-scripts/${CBD}) `), row[0])
-  assert.match(row[0], /\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/color-by-digit\.user\.js\)/)
-})
-
 shared({
   page: DRAW,
   script: 'text-anywhere',
   name: 'Text Anywhere',
   summary: DRAW_SUMMARY,
-  intro: 'Adds to SudokuPad a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.',
   homePicture: 'text-anywhere-slide-1-type.png'
 })
 
@@ -627,7 +604,6 @@ shared({
   script: 'color-by-digit',
   name: 'Color by Digit',
   summary: CBD_SUMMARY,
-  intro: 'Adds a button to SudokuPad that colors cells, or the digits in them, by which group each digit is in, and keeps the colors up to date as you solve.',
   homePicture: 'color-by-digit-slide-1-start.png'
 })
 
@@ -644,4 +620,119 @@ test('the homepage words UI Tweaks\' options as its settings dialog does', () =>
   const home = plain(read(HOME))
   for (const option of OPTIONS) assert.ok(home.includes(option.label), `the homepage names "${option.label}"`)
   assert.ok(home.includes('no effect with Color by Digit installed'))
+})
+
+// #1108: one summary per script, the same in the README row, the script's @description, the homepage card and the details page.
+const README = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
+const SUMMARY_SCRIPTS = [
+  { name: 'Pen Tool Extras', details: DETAILS },
+  { name: 'Text Anywhere', details: DRAW },
+  { name: 'Color by Digit', details: CBD },
+  { name: 'Dark Page' },
+  { name: 'Auto Rules Resizer' },
+  { name: 'UI Tweaks' }
+]
+const fileOf = name => name.toLowerCase().replace(/ /g, '-') + SCRIPT_SUFFIX
+const descriptionOf = name => headerField(fs.readFileSync(path.join(ROOT, fileOf(name)), 'utf8'), 'description')
+const readmeRow = name => {
+  const row = README.match(new RegExp(`^\\| ${name} \\| (.*) \\| \\[Install\\]\\(`, 'm'))
+  assert.ok(row, `the README has no ${name} row`)
+  return row[1].replace(/ \[Details\]\([^)]*\)$/, '')
+}
+const cardOf = name => {
+  const row = rowsOf(read(HOME)).find(r => r.includes(`<h2>${name}</h2>`))
+  assert.ok(row, `site/${HOME} has no ${name} card`)
+  return plain(row.match(/<h2>[^<]*<\/h2>\s*<p>([\s\S]*?)<\/p>/)[1])
+}
+
+for (const { name, details } of [...SUMMARY_SCRIPTS, { name: 'Logic Masters Puzzle Preview' }]) {
+  test(`${name}'s README row says its @description`, () => {
+    assert.equal(readmeRow(name), descriptionOf(name))
+  })
+  if (name === 'Logic Masters Puzzle Preview') continue
+  test(`${name}'s homepage card opens with its @description`, () => {
+    assert.ok(cardOf(name).startsWith(descriptionOf(name)), `the card says: ${cardOf(name)}`)
+  })
+  if (!details) continue
+  test(`${details}'s intro is ${name}'s @description`, () => {
+    const lede = read(details).match(/<p class="lede">([\s\S]*?)<\/p>/)
+    assert.ok(lede, `site/${details} has no lede`)
+    assert.equal(plain(lede[1]), descriptionOf(name))
+  })
+}
+
+const homeOrder = () => rowsOf(read(HOME)).map(r => r.match(/<h2>([^<]*)<\/h2>/)[1])
+test("the README's table and its script notes follow the homepage's order", () => {
+  const table = [...README.matchAll(/^\| ([^|]*?) \| .* \| \[Install\]\(/gm)].map(m => m[1]).filter(n => n !== 'Script')
+  assert.deepEqual(table.filter(n => homeOrder().includes(n)), homeOrder())
+  const notes = [...README.matchAll(/^### (.*)$/gm)].map(m => m[1])
+  assert.deepEqual(notes, homeOrder().filter(n => notes.includes(n)))
+  assert.ok(notes.length > 0, 'the README has script notes')
+})
+
+test("Pen Tool Extras' README Details link goes to its site page", () => {
+  assert.match(README, /^\| Pen Tool Extras \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/pen-tool-extras\.html\)/m)
+})
+
+const SETTINGS_SENTENCE = "Each script's settings are in SudokuPad's settings, in the Experimental group, and every dialog has Restore defaults."
+test(`${HOME} says once where every script's settings are and that every dialog has Restore defaults, and no card repeats Restore defaults`, () => {
+  const home = plain(read(HOME))
+  assert.equal(home.split(SETTINGS_SENTENCE).length - 1, 1)
+  for (const { name } of SUMMARY_SCRIPTS) assert.doesNotMatch(cardOf(name), /Restore defaults/, `the ${name} card repeats Restore defaults`)
+  for (const name of ['Dark Page', 'Auto Rules Resizer', 'UI Tweaks']) {
+    assert.doesNotMatch(plain(rowsOf(read(HOME)).find(r => r.includes(`<h2>${name}</h2>`))), /Restore defaults/, `the ${name} row repeats Restore defaults`)
+  }
+})
+
+// The limits and per-puzzle detail live in the README notes: past its summary a card carries one sentence at most (a credit).
+test('the Dark Page and Auto Rules Resizer cards are their summary and one sentence at most', () => {
+  for (const name of ['Dark Page', 'Auto Rules Resizer']) {
+    const rest = cardOf(name).slice(descriptionOf(name).length).trim()
+    const sentences = rest.split(/(?<=\.)\s+/).filter(Boolean)
+    assert.ok(sentences.length <= 1, `the ${name} card adds: ${rest}`)
+  }
+})
+
+const CONTACT = 'Questions, bugs or suggestions? Message me on Discord: @ChinStrap'
+const DISCORD = 'https://discord.com/users/184770560356646923'
+test('every details page ends with the homepage\'s contact line, and the README says how to reach Chris', () => {
+  assert.ok(plain(read(HOME)).includes(CONTACT))
+  for (const { details } of SUMMARY_SCRIPTS.filter(s => s.details)) {
+    const footer = read(details).match(/<footer>([\s\S]*?)<\/footer>/)[1]
+    assert.ok(plain(footer).includes(CONTACT), `site/${details}'s footer has no contact line`)
+    assert.ok(footer.includes(`href="${DISCORD}"`), `site/${details}'s footer does not link Discord`)
+  }
+  assert.ok(README.includes(DISCORD), 'the README has no Discord link')
+  assert.match(README, /github\.com\/caneff\/sudokupad-scripts\/issues/)
+})
+
+test('the README Settings section holds the notice-bar paragraph, with the Copy error log and Clear row, and UI Tweaks notes do not', () => {
+  const settings = README.match(/## Settings\n([\s\S]*?)\n## /)[1]
+  assert.match(settings, /bar at the bottom of the page/)
+  assert.match(settings, /Copy error log/)
+  assert.match(settings, /Clear/)
+  const tweaks = README.match(/### UI Tweaks\n([\s\S]*?)\n## /)[1]
+  assert.doesNotMatch(tweaks, /bar at the bottom/)
+})
+
+test("Color by Digit's long notes are a reference page of their own, linked from a More detail line on its details page", () => {
+  assert.ok(fs.existsSync(path.join(ROOT, 'docs', 'color-by-digit.md')))
+  assert.match(read(CBD), /<p>More detail: <a href="https:\/\/github\.com\/caneff\/sudokupad-scripts\/blob\/main\/docs\/color-by-digit\.md">the full reference<\/a>\.<\/p>/)
+  const notes = README.match(/### Color by Digit\n([\s\S]*?)\n### /)[1]
+  assert.ok(notes.length < 1500, `the README's Color by Digit notes are ${notes.length} characters`)
+  assert.match(notes, /docs\/color-by-digit\.md/)
+})
+
+test("Dark Page's README text says the tool panels and the dimmed dialog background go dark too", () => {
+  assert.match(README.match(/### Dark Page\n([\s\S]*?)\n### /)[1], /two tool panels \(Pen Tool Extras and Text Anywhere\) and the dimmed background behind a dialog go dark too/)
+})
+
+test('site/, the README and GLOSSARY.md spell gray with an a, name the Text Anywhere tool, and keep "white outline" to Pen Tool Extras', () => {
+  const texts = { README, 'GLOSSARY.md': fs.readFileSync(path.join(ROOT, 'GLOSSARY.md'), 'utf8'), 'slideshows.json': fs.readFileSync(path.join(SITE_DIR, 'slideshows.json'), 'utf8') }
+  for (const page of PAGES) texts[page] = read(page)
+  for (const [file, text] of Object.entries(texts)) {
+    assert.doesNotMatch(text, /\bgrey/i, `${file} spells grey`)
+    assert.doesNotMatch(text, /\bText tool\b/, `${file} says the Text tool`)
+  }
+  assert.doesNotMatch(plain(read(DRAW)), /white outline/i)
 })

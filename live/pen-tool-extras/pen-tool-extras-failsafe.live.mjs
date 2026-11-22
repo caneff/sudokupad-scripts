@@ -32,7 +32,7 @@ function planted (anchor, line) {
 // click on an edge is SudokuPad's own toggle off rather than this script's arrow 'm', `noDrag` for a case that removes what a drag needs.
 const CASES = [
   { name: 'pen pages missing', off: 'pen pages', warns: missing('pen pages', 'ToolPen.tool.handleToolExit'), noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
-  { name: 'drag highlight missing', off: 'drag highlight', warns: missing('drag highlight', 'ToolPen.tool.drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
+  { name: 'line preview missing', off: 'line preview', warns: missing('line preview', 'ToolPen.tool.drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
   { name: 'marks missing', off: 'marks, line erase', warns: missing('marks, line erase', 'Framework.app.grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
   // SudokuPad's own clicks read xyToRCExact too, so it is hidden from the script's startup check only, and SudokuPad's own is back after it. The marks need it for the size of their hit zones.
   {
@@ -239,7 +239,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           assert.equal(await bar.count(), 0)
           return
         }
-        assert.match(await bar.textContent(), new RegExp(`^Pen Tool Extras: ${kase.off} (is|are) off — SudokuPad changed\\.Report`))
+        assert.match(await bar.textContent(), new RegExp(`^Pen Tool Extras: ${kase.off} (is|are) off because SudokuPad changed\\.Report`))
         assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
         await bar.locator('button[aria-label="Dismiss"]').click()
         assert.equal(await bar.count(), 0)
@@ -274,7 +274,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         assert.equal(pulldown, kase.pulldown || 'hidden', 'SudokuPad\'s line mode pulldown')
       })
 
-      // A dragged line is SudokuPad's own stroke; it needs the drag highlight, which one case removes.
+      // A dragged line is SudokuPad's own stroke; it needs the line preview, which one case removes.
       if (!kase.noDrag) {
         it('SudokuPad\'s own dragged line still draws', async () => {
           await undoAll(p)

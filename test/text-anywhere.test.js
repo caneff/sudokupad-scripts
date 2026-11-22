@@ -559,7 +559,7 @@ test('SudokuPad colors is SudokuPad\'s nine, and Pen colors is the pen colors as
   assert.deepEqual(presetColors('pen', [], () => undefined, (n) => `rgb(${n}, 0, 0)`), { colors: copiedPenColors((n) => `rgb(${n}, 0, 0)`), missing: [] })
 })
 
-test('a Darker page preset darkens the page\'s color at each index and makes the darkest grey black', () => {
+test('a Darker page preset darkens the page\'s color at each index and makes the darkest gray black', () => {
   const { colors, missing } = presetColors('page-1', [PAGE.map((_, i) => String(i))], (key) => PAGE[Number(key)], () => undefined)
   assert.deepEqual(missing, [])
   assert.equal(colors[9], '#000000')
@@ -1437,15 +1437,15 @@ test('without one internal, only the features that need it are lacking', () => {
   }
 })
 
-// With the Text tool picked, so a listener reaches its own code past that check.
+// With the Text Anywhere tool picked, so a listener reaches its own code past that check.
 const textToolPicked = ({ Framework }) => { Framework.app.tool = TOOL_NAME }
 
 test('a window listener of Text Anywhere whose own code throws turns its feature off, and the throw stays in the script', () => {
   const runs = failEachListener(path.join(__dirname, '..', 'text-anywhere.user.js'), FEATURES, 'window', textToolPicked)
   assert.ok(runs.length >= 15, runs.map(({ where }) => where).join(', '))
   for (const { where, escaped } of runs) assert.deepEqual(escaped.map(({ error }) => String(error)), [], where)
-  // Most listeners act only mid-gesture; the ones that read their event at once show the throw turning the Text tool off.
-  const warned = runs.filter(({ warnings }) => warnings.some((warning) => /^text-anywhere: Text tool skipped because SudokuPad changed: Error: the listener read event\./.test(warning)))
+  // Most listeners act only mid-gesture; the ones that read their event at once show the throw turning the Text Anywhere tool off.
+  const warned = runs.filter(({ warnings }) => warnings.some((warning) => /^text-anywhere: Text Anywhere tool skipped because SudokuPad changed: Error: the listener read event\./.test(warning)))
   assert.ok(warned.length >= 2, warned.map(({ where }) => where).join(', '))
 })
 
@@ -1477,7 +1477,7 @@ test('the sample rows are three halo buttons, five box buttons and two border bu
   const html = samples()
   assert.deepEqual(pick(html, 'outline-pick').map((b) => [b.value, b.label]), [['none', 'None'], ['thin', 'Thin'], ['medium', 'Thick']])
   assert.deepEqual(pick(html, 'box-pick').map((b) => [b.value, b.label]), [['page', 'Page'], ['white', 'White'], ['yellow', 'Yellow'], ['tint', 'Tint'], ['custom', 'Own']])
-  assert.deepEqual(pick(html, 'frame-pick').map((b) => [b.value, b.label]), [['off', 'None'], ['on', 'Thin grey']])
+  assert.deepEqual(pick(html, 'frame-pick').map((b) => [b.value, b.label]), [['off', 'None'], ['on', 'Thin gray']])
 })
 
 test('exactly the picked button of each row is pressed', () => {
@@ -1514,7 +1514,7 @@ test('each box sample is "A=B" in the text color on its box color, Tint followin
   }
 })
 
-test('the box samples carry the current border, and the border samples show none and thin grey', () => {
+test('the box samples carry the current border, and the border samples show none and thin gray', () => {
   const edge = (html, role, value) => html.match(new RegExp(`data-role="${role}" data-value="${value}"[^>]*>(.*?)</button>`))[1]
   contains(edge(samples({ frame: true }), 'box-pick', 'white'), frameShadow(true))
   contains(edge(samples({ frame: false }), 'box-pick', 'white'), frameShadow(false))

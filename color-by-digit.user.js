@@ -1,9 +1,12 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.76
+// @version      0.25.77
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
+// @homepageURL  https://caneff.github.io/sudokupad-scripts/color-by-digit.html
+// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -18,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.76'
+  const VERSION = '0.25.77'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -63,8 +66,8 @@
       { key: '5', digits: ['2', '5', '8'] },
       { key: '8', digits: ['0', '3', '6', '9'] }
     ],
-    // Nine colors whose darker shades are all distinct and none black or grey, so an entered digit never looks like a
-    // given: 5 to 9 on their own keys of SudokuPad's first palette page, and 1 to 4 (whose first-page keys are grey,
+    // Nine colors whose darker shades are all distinct and none black or gray, so an entered digit never looks like a
+    // given: 5 to 9 on their own keys of SudokuPad's first palette page, and 1 to 4 (whose first-page keys are gray,
     // black and a green near 8's yellow) on purple, pink and brown from page 2 and green from page 3.
     'Each digit': [['1', 'j'], ['2', 'e'], ['3', 'h'], ['4', 'm'], ['5', '5'], ['6', '6'], ['7', '7'], ['8', '8'], ['9', '9']].map(([d, key]) => ({ key, digits: [d] }))
   }
@@ -761,7 +764,7 @@
       bar.setAttribute('data-script', script)
       bar.style.cssText = NOTICE_BAR_CSS
       const text = doc.createElement('span')
-      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
+      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off because SudokuPad changed.`
       const link = doc.createElement('a')
       link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
       link.target = '_blank'
@@ -1106,7 +1109,7 @@
     9: '#000000'
   })
   const PEN_COLOR_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
-  // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
+  // The OKLCH chroma under which a darkened color counts as gray: SudokuPad's grays are 0, a tinted dark gray such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
   const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
@@ -1717,7 +1720,7 @@
     const cells = chips.map(({ digit, cellKey, digitProfileKey }, i) => {
       const key = style === 'digit' ? digitProfileKey : cellKey
       const look = CHIP_LOOKS[style](cellKey === undefined ? '' : colorOf(cellKey), digitProfileKey === undefined ? '' : colorOf(digitProfileKey))
-      // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
+      // A digit in no cell group is left uncolored on the board, so its chip is white, not the gray of an unreadable color.
       const fill = cellKey === undefined ? '#fff' : look.fill
       const tinted = cellKey !== undefined && (style === 'cell' || style === 'both')
       const tint = tinted ? ` fill-opacity="${CELL_COLOR_OPACITY}"` : ''
@@ -1750,7 +1753,7 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
-  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
   const CONTENT_INSET = '16px'
@@ -2322,7 +2325,7 @@
       }
     },
     editor: {
-      label: 'editor',
+      label: 'settings',
       needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', ...SETTINGS_DIALOG_NEEDS, 'Framework.app.tools.colour': 'object' },
       onSkip () {
         Framework.closeDialog()
@@ -2343,7 +2346,7 @@
     // The mode button's icon, the digit shades and the cell colors wait for the puzzle's progress, which resets the board, to load.
     // Without it they are drawn at once, before the puzzle's own palette is in force.
     loading: {
-      label: 'redraw after the puzzle loads',
+      label: 'colors after loading',
       needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function', 'app.puzzle.removeEventListener': 'function' }
     }
   }

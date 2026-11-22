@@ -7,7 +7,7 @@ require('./fake-page-storage.js')
 const { scriptFiles, guardId } = require('../sync-lib.js')
 const { pageStandIn } = require('./page-stand-in.js')
 const { startScript } = require('./unit-start.js')
-const { headerVersion } = require('./header-version.js')
+const { headerVersion, headerField } = require('./header-version.js')
 
 // The startup promises every script makes, checked once for each file `scriptFiles()` lists. Each script's own test file keeps its table of
 // which internal holds back which feature; this file holds what is the same for all of them.
@@ -25,6 +25,22 @@ for (const file of scriptFiles()) {
 
   test(`${id}: the header has no @require, so the installed script is one file`, () => {
     assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', file), 'utf8').split('// ==/UserScript==')[0], /@require/)
+  })
+
+  test(`${id}: the header gives a home page, the repo's issues as the support link and the MIT license, and no @sandbox`, () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
+    assert.match(headerField(source, 'homepageURL'), /^https:\/\/caneff\.github\.io\/sudokupad-scripts\/(?:[a-z-]+\.html)?$/)
+    assert.equal(headerField(source, 'supportURL'), 'https://github.com/caneff/sudokupad-scripts/issues')
+    assert.equal(headerField(source, 'license'), 'MIT')
+    assert.doesNotMatch(source.split('// ==/UserScript==')[0], /@sandbox/)
+  })
+
+  test(`${id}: the settings feature's label is "settings", and every label is plain lowercase`, () => {
+    // Tab is a key's name, Restart a button's and Text Anywhere the script's own, so only those keep a capital.
+    for (const [name, { label }] of Object.entries(FEATURES)) assert.match(label.replace(/\b(?:Tab|Restart|Text Anywhere)\b/g, ''), /^[a-z ]+$/, `${name}: ${label}`)
+    const settings = FEATURES.settings || FEATURES.editor
+    assert.ok(settings, `${id} has no settings feature (keyed settings or editor)`)
+    assert.equal(settings.label, 'settings')
   })
 
   test(`${id}: a page with no Framework is not SudokuPad, so the script starts without a warning`, () => {

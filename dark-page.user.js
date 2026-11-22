@@ -1,9 +1,12 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.43
+// @version      0.7.44
 // @author       ChinStrap
-// @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
+// @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.
+// @homepageURL  https://caneff.github.io/sudokupad-scripts/
+// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -18,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.43'
+  const VERSION = '0.7.44'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -47,7 +50,7 @@
   const BUTTON_HOVER_BG = '#37343a'
   const BUTTON_PRESS_BG = '#3b373e'
   // The page's own text pair. Pure white or black never falls below about 4.58:1 on any page color, where the
-  // shared LIGHT_TEXT and DARK_TEXT (#ddd, #222) fall to 3.5:1 on a mid grey.
+  // shared LIGHT_TEXT and DARK_TEXT (#ddd, #222) fall to 3.5:1 on a mid gray.
   const PAGE_LIGHT_TEXT = '#ffffff'
   const PAGE_DARK_TEXT = '#000000'
   // <lib:plain>
@@ -317,7 +320,7 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
-  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
   const CONTENT_INSET = '16px'
@@ -805,7 +808,7 @@
       bar.setAttribute('data-script', script)
       bar.style.cssText = NOTICE_BAR_CSS
       const text = doc.createElement('span')
-      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
+      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off because SudokuPad changed.`
       const link = doc.createElement('a')
       link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
       link.target = '_blank'
@@ -1011,7 +1014,7 @@
   const FEATURES = {
     savedPageColor: { label: 'saved color', needs: { 'Framework.getData': 'function' } },
     settings: {
-      label: 'settings entry',
+      label: 'settings',
       needs: {
         'Framework.getApp': 'function',
         ...SETTINGS_DIALOG_NEEDS,

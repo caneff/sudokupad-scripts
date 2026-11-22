@@ -1,15 +1,17 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.39
+// @version      0.1.40
 // @author       ChinStrap
-// @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches the number pad to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
+// @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
+// @homepageURL  https://caneff.github.io/sudokupad-scripts/
+// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
-// @sandbox      raw
 // @run-at       document-idle
 // @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js
 // @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/ui-tweaks.user.js
@@ -21,13 +23,13 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.39'
+  const VERSION = '0.1.40'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
     { id: 'tab', key: 'UiTweaks_tab', label: 'Tab never switches to letters', hint: 'The letter button and the / key still switch.', default: true },
     { id: 'hideSelect', key: 'UiTweaks_hideSelect', label: 'Hide the Select button', hint: 'The other buttons in the row close up.', default: false },
-    { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after 5. It has no effect with Color by Digit installed, which already wraps it.', default: false }
+    { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after five. It has no effect with Color by Digit installed, which already wraps it.', default: false }
   ]
   const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
   // The digit pad's step, saved under its own key as the percent of SudokuPad's own size its rule uses.
@@ -205,7 +207,7 @@
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
   const SAVE_FILL = '#6b3fa0'
-  // 6.6:1 on the dialog's white, so an error reads apart from the muted grey of a plain message.
+  // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
   const CONTENT_INSET = '16px'
@@ -693,7 +695,7 @@
       bar.setAttribute('data-script', script)
       bar.style.cssText = NOTICE_BAR_CSS
       const text = doc.createElement('span')
-      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
+      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off because SudokuPad changed.`
       const link = doc.createElement('a')
       link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
       link.target = '_blank'
@@ -900,7 +902,7 @@
     saved: { label: 'saved options', needs: { 'Framework.getData': 'function' } },
     tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array', 'Framework.app.tools': 'object' } },
     settings: {
-      label: 'settings entry',
+      label: 'settings',
       needs: {
         'Framework.getApp': 'function',
         ...SETTINGS_DIALOG_NEEDS,

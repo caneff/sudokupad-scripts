@@ -79,7 +79,7 @@ for (const kase of CASES) {
     it('the bar names the feature with a Report link, and goes when dismissed', async () => {
       const bar = p.locator(BAR)
       await bar.waitFor({ state: 'attached' })
-      assert.match(await bar.textContent(), new RegExp(`^Color by Digit: ${kase.off} is off — SudokuPad changed\\.Report`))
+      assert.match(await bar.textContent(), new RegExp(`^Color by Digit: ${kase.off} is off because SudokuPad changed\\.Report`))
       assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
       await bar.locator('button[aria-label="Dismiss"]').click()
       assert.equal(await bar.count(), 0)

@@ -1,5 +1,6 @@
 {
   "pen-tool-extras": {
+    "name": "Pen Tool Extras",
     "dir": "docs/research/pen-tool-extras/",
     "width": 684,
     "height": 430,
@@ -62,7 +63,7 @@
         "picture": "pen-tool-extras-slide-12-erase.png",
         "animation": "pen-tool-extras-slide-12-erase.webp",
         "alt": "A red ring on the first line, where a right press is held, then the board with that whole line gone and every other line and mark still there",
-        "caption": "Right click a line to delete it"
+        "caption": "Right-click a line to erase it"
       },
       {
         "picture": "pen-tool-extras-slide-13-settings.png",
@@ -72,6 +73,7 @@
     ]
   },
   "color-by-digit": {
+    "name": "Color by Digit",
     "dir": "docs/research/color-by-digit/",
     "width": 900,
     "height": 375,
@@ -129,6 +131,7 @@
     ]
   },
   "text-anywhere": {
+    "name": "Text Anywhere",
     "dir": "docs/research/text-anywhere/",
     "width": 800,
     "height": 500,
@@ -186,6 +189,7 @@
     ]
   },
   "text-anywhere-formatting": {
+    "name": "Text Anywhere formatting",
     "dir": "docs/research/text-anywhere/",
     "width": 777,
     "height": 716,
