@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { captureConsoleErrors, collectWarnings, START } from '../page.mjs'
 import { pickTool, placeNote, selectCell } from '../board.mjs'
 import { openWithAllScripts } from '../all-scripts.mjs'
+import { DARK_PAGE_STYLE } from '../scripts.mjs'
 import { openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 import { openWith, reloadWith, scriptSource, useBrowser } from '../session.mjs'
@@ -234,13 +235,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // seen beating it, which is what the tool's black on black needs.
   it('the replay tool\'s readout is readable on black, where SudokuPad\'s own color is not', async () => {
     assert.equal(await readoutColor(p), CREDIT_TEXT)
-    const own = await p.evaluate(() => {
-      const style = document.getElementById('dark-page-style')
+    const own = await p.evaluate((selector) => {
+      const style = document.querySelector(selector)
       style.disabled = true
       const color = window.getComputedStyle(document.querySelector('.controls-input'), '::after').color
       style.disabled = false
       return color
-    })
+    }, DARK_PAGE_STYLE)
     assert.notEqual(own, CREDIT_TEXT)
   })
 

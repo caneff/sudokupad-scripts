@@ -1,7 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { compareVersions, headerField, headerVersion, parseVersion, VERSION_LINE } = require('../userscript-header.js')
+const { compareVersions, headerField, headerVersion, VERSION_LINE } = require('../userscript-header.js')
 
 const header = (version) => `// ==UserScript==\n// @name         Demo\n// @version      ${version}\n// @match        https://sudokupad.app/*\n// ==/UserScript==\n`
 
@@ -15,9 +15,12 @@ test('a script with no such header throws', () => {
   assert.throws(() => headerVersion('// @name Demo\n'), /no @version header/)
 })
 
-test('parseVersion reads X.Y.Z as three numbers and throws on any other shape', () => {
-  assert.deepEqual(parseVersion('0.10.2'), [0, 10, 2])
-  for (const bad of ['1.2', '1.2.3.4', 'v1.2.3', '1.2.x', '']) assert.throws(() => parseVersion(bad), /is not X\.Y\.Z/, bad)
+test('compareVersions reads X.Y.Z as three numbers and throws on any other shape', () => {
+  assert.equal(compareVersions('0.10.2', '0.10.2'), 0)
+  for (const bad of ['1.2', '1.2.3.4', 'v1.2.3', '1.2.x', '']) {
+    assert.throws(() => compareVersions(bad, '1.0.0'), /is not X\.Y\.Z/, bad)
+    assert.throws(() => compareVersions('1.0.0', bad), /is not X\.Y\.Z/, bad)
+  }
 })
 
 test('compareVersions compares numerically, part by part', () => {

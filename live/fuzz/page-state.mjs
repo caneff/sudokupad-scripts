@@ -6,6 +6,7 @@ import { PROFILES_KEY } from '../color-by-digit/color-by-digit-fixtures.mjs'
 import { TEXT_BOX } from '../board.mjs'
 import { BACKGROUND_BUTTON, BOX_KEY, KEYPAD, saved as savedNotes, SEEN_TEXTS, SELECTION, TEXT_BGS, TEXTS } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { POLL_MS } from '../settle.mjs'
+import { COLOR_BY_DIGIT_BUTTON } from '../scripts.mjs'
 import { rulesPaneFits } from './rules.mjs'
 
 const { stateFromStored, activeGroups } = createRequire(import.meta.url)('../../color-by-digit.user.js')
@@ -24,7 +25,7 @@ const COLOR_BUTTON_TITLE = /^Color by Digit: (\w+)$/
 // reads the finished fit, and a pane that never fits is still read and reported.
 const RULES_FIT_MS = 2000
 
-const readDom = ({ texts, seenTexts, boxedTexts, boxKey, profilesKey, sizingKeyPrefix, expectRules, penToolName, noteToolName, noteBackground, noteBusy, keypad }) => {
+const readDom = ({ colorByDigitButton, texts, seenTexts, boxedTexts, boxKey, profilesKey, sizingKeyPrefix, expectRules, penToolName, noteToolName, noteBackground, noteBusy, keypad }) => {
   const puzzle = Framework.app.puzzle
   const rootVar = (name) => window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
   const colorVars = (prefix) => Array.from({ length: 9 }, (_, i) => rootVar(`${prefix}${i + 1}`))
@@ -72,7 +73,7 @@ const readDom = ({ texts, seenTexts, boxedTexts, boxKey, profilesKey, sizingKeyP
     }),
     board: (({ left, top, right, bottom }) => ({ left, top, right, bottom }))(document.getElementById('svgrenderer').getBoundingClientRect()),
     savedBox: Framework.getData(boxKey) ?? null,
-    buttonTitle: document.querySelector('#control-colorbydigit')?.title ?? null,
+    buttonTitle: document.querySelector(colorByDigitButton)?.title ?? null,
     profiles: Framework.getData(profilesKey),
     digits: puzzle.cells.map((cell) => ({ digit: String(cell.value || ''), given: Boolean(cell.given), colours: cell.colours.map(String) })),
     pageColor: window.getComputedStyle(document.body).backgroundColor,
@@ -102,7 +103,7 @@ const withExpectedFills = (p, boxedNotes, boxColor, board) => p.evaluate(([notes
 
 // `expectRules` says whether the puzzle has rules text. A puzzle that does must show the pane (or the read throws); the snapshot's `rulesPane` is null when no pane is shown.
 export async function readPageState (p, { expectRules }) {
-  const args = { texts: TEXTS, seenTexts: SEEN_TEXTS, boxedTexts: TEXT_BGS, boxKey: BOX_KEY, profilesKey: PROFILES_KEY, sizingKeyPrefix: SIZING_KEY_PREFIX, expectRules, penToolName: PEN_TOOL, noteToolName: NOTE_TOOL, noteBackground: BACKGROUND_BUTTON, noteBusy: NOTE_BUSY, keypad: KEYPAD }
+  const args = { colorByDigitButton: COLOR_BY_DIGIT_BUTTON, texts: TEXTS, seenTexts: SEEN_TEXTS, boxedTexts: TEXT_BGS, boxKey: BOX_KEY, profilesKey: PROFILES_KEY, sizingKeyPrefix: SIZING_KEY_PREFIX, expectRules, penToolName: PEN_TOOL, noteToolName: NOTE_TOOL, noteBackground: BACKGROUND_BUTTON, noteBusy: NOTE_BUSY, keypad: KEYPAD }
   let dom = await p.evaluate(readDom, args)
   for (const deadline = Date.now() + RULES_FIT_MS; dom.rulesPane !== null && !rulesPaneFits(dom.rulesPane) && Date.now() < deadline;) {
     await sleep(POLL_MS)

@@ -1,18 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { SETTINGS_SCRIPTS } from '../live/scripts.mjs'
+import { filesUnder, read, ROOT } from './repo-files.mjs'
 
 // The repo's conventions, each a rule that guarded later work in the closing tests of specs 334, 449, 685, 688, 834 and 835 (retired in #1029), read off the
 // tree as text. Blind to real SudokuPad: that the suites and scripts still work there is `npm run test:live`'s to show.
 const require = createRequire(import.meta.url)
 const { fakeStore } = require('./fake-store.js')
 const { scriptFiles, withoutLibBlocks } = require('../sync-lib.js')
-const ROOT = new URL('../', import.meta.url)
-const read = (path) => readFileSync(new URL(path, ROOT), 'utf8')
-const filesUnder = (dir, extension) => readdirSync(new URL(`${dir}/`, ROOT), { recursive: true })
-  .filter((name) => extension.test(name) && !name.includes('node_modules')).map((name) => `${dir}/${name}`)
 // The lines of `files` a pattern matches, as `file:line`.
 const hits = (files, pattern) => files.flatMap((file) => read(file).split('\n').flatMap((text, index) => (pattern.test(text) ? [`${file}:${index + 1}`] : [])))
 const liveFiles = filesUnder('live', /\.m?js$/)
@@ -80,8 +77,9 @@ test('every script declares its features through the shared guard', () => {
 test('the tests read the script list from the sync tool, and the contract test loops over it', () => {
   const tests = filesUnder('test', /\.test\.m?js$/).filter((file) => !['test/sync-lib.test.js', 'test/repo-conventions.test.mjs'].includes(file))
   assert.ok(tests.length > 30, `${tests.length} test files are read`)
-  // A listing of the root by extension, or a regex over the lib block markers or the header's version, is the tool's grammar written again.
-  assert.deepEqual(hits(tests, /endsWith\('\.user\.js'\)|<lib:\(|@version\\s/), [])
+  // A listing of the root by extension, or a regex over the lib block markers, is the tool's grammar written again. A pattern for `@version` is
+  // test/userscript-header.test.js's to catch.
+  assert.deepEqual(hits(tests, /endsWith\('\.user\.js'\)|<lib:\(/), [])
   assert.match(read('test/script-contract.test.js'), /for \(const \w+ of scriptFiles\(\)\)|scriptFiles\(\)\.(map|forEach|filter)/)
 })
 

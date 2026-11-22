@@ -27,4 +27,4 @@ function compareVersions (a, b) {
   return 0
 }
 
-module.exports = { headerField, headerVersion, VERSION_LINE, parseVersion, compareVersions }
+module.exports = { headerField, headerVersion, VERSION_LINE, compareVersions }

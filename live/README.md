@@ -40,7 +40,7 @@ Docs, `test/`, `.github/`, `lib/` (the scripts that embed a `lib/` file change i
 A path it cannot place widens the run to every live file, and says which path: `package-lock.json` (a new Playwright is a new Chromium), `.nvmrc`, a new top-level directory. Its last line says `(narrowed: <k> of <n> live files)` or `(widened: <path> ...)`, and an empty selection prints
 `no live file touched`, never nothing. A file it cannot read (anything but "no such file") stops it with the error. `--list` prints the files one per line and runs none. The run goes through `npm run test:live:files`, so it has the time limit and the width cap.
 A new `*.live.mjs` needs no edit anywhere: it is found by its name.
-A change to `live/fuzz/` or to a shared live module it imports (`live/fuzz/*.mjs` reach `session.mjs`, `page.mjs`, `puzzles.mjs` and the fixtures among others) also runs `npm run test:fuzz:smoke` (§ The fuzz run), before "PR up" and at the merge, since no live file loads the fuzz and so none of the files above covers it. The pull-request fuzz runs it on GitHub for a change under `live/fuzz/`.
+None of the files above loads the fuzz, so a change to `live/fuzz/` or to a module the fuzz loads (the single-file paths of `.github/workflows/fuzz-pr.yml`) runs `npm run test:fuzz:smoke` (§ The fuzz run) as a second extra run, before "PR up" and at the merge: `AGENTS.md` § End-to-end seam states it. The pull-request fuzz runs it on GitHub only for a change under `live/fuzz/`.
 
 ## Opening SudokuPad
 

@@ -8,7 +8,6 @@ import { closeExtrasEditorWith, EXTRAS_EDITOR as EDITOR, openExtrasEditor } from
 
 const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
-const STYLE = '#pen-tool-extras-style'
 
 const browser = useBrowser()
 
@@ -24,7 +23,7 @@ describe('Pen Tool Extras\' Save is all-or-nothing', { concurrency: false }, () 
   it('a Save whose settings step throws leaves the stored pen colors and thickness as they were, and says Not saved', async () => {
     const colorsBefore = await stored(COLORS_KEY)
     const thicknessBefore = await stored(THICKNESS_KEY)
-    const styleBefore = await p.locator(STYLE).evaluate((el) => el.textContent)
+    const styleBefore = await p.locator(extras.STYLE).evaluate((el) => el.textContent)
     // The style is written once for the colors and once after the settings; the second write throws, once.
     await p.evaluate((selector) => {
       const style = document.querySelector(selector)
@@ -39,7 +38,7 @@ describe('Pen Tool Extras\' Save is all-or-nothing', { concurrency: false }, () 
           own.set.call(this, value)
         }
       })
-    }, STYLE)
+    }, extras.STYLE)
     await openExtrasEditor(p)
     await p.locator(`${EDITOR} select[data-role="color-choice"]`).selectOption('sudokupad')
     await p.locator(`${EDITOR} input[data-setting="thickness"]`).evaluate((input) => {
@@ -50,7 +49,7 @@ describe('Pen Tool Extras\' Save is all-or-nothing', { concurrency: false }, () 
     await p.locator(STATUS).filter({ hasText: 'Not saved: style refused' }).waitFor()
     assert.deepEqual(await stored(COLORS_KEY), colorsBefore)
     assert.equal(await stored(THICKNESS_KEY), thicknessBefore)
-    assert.equal(await p.locator(STYLE).evaluate((el) => el.textContent), styleBefore, 'the page draws with the colors and thickness in force before Save')
+    assert.equal(await p.locator(extras.STYLE).evaluate((el) => el.textContent), styleBefore, 'the page draws with the colors and thickness in force before Save')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 })

@@ -86,6 +86,8 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   `land.testcmd`.
 - **The full live suite is no gate** (Chris, 2026-11-18, #1026): the nightly watch runs all of it on GitHub and files a bug when it is red. Extra run: every change also runs `npm run test:live:changed`, the live files its diff touches
   (a path it cannot place widens it, and its last line says so; nothing touched runs nothing): before "PR up" and again at the merge. The merge skip rule never skips it. `live/README.md` § The live gate has what it selects.
+- Extra run: a change to `live/fuzz/` or to any other path `.github/workflows/fuzz-pr.yml` lists under `live/` or as a single file (the modules the fuzz loads) also runs
+  `npm run test:fuzz:smoke`, before "PR up" and again at the merge: no live file loads the fuzz, so `npm run test:live:changed` never covers it.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
 - `npm run test:tampermonkey` installs every SudokuPad script (`scriptFiles()`) into a real Tampermonkey, and leaves out Logic Masters Puzzle Preview (its install and update from the root address stay owed to a person); `live/README.md` § The Tampermonkey test

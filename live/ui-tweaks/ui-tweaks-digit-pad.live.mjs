@@ -1,6 +1,7 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { SCRIPT_FILES, addScripts, openWith, reloadWith, useBrowser } from '../session.mjs'
+import { UI_TWEAKS_DIALOG } from '../scripts.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { clickUntil, stable } from '../settle.mjs'
 
@@ -8,7 +9,7 @@ const SCRIPT_FILE = 'ui-tweaks.user.js'
 // The recorded puzzle has no rules, so each page is given some through SudokuPad's own showMetaInfoUI, as a loaded puzzle gets them.
 const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.'
 
-const DIALOG = '#ui-tweaks-dialog'
+const DIALOG = UI_TWEAKS_DIALOG
 // The four steps by the percent each is saved as.
 const STEPS = { 80: 'Smaller', 100: 'Normal', 125: 'Larger', 150: 'Largest' }
 const PAD = `${DIALOG} select[data-option="digitPad"]`

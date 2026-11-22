@@ -1,6 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
+import { TEXT_ANYWHERE_STYLE } from '../scripts.mjs'
 import { readUntil } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { clickAt, finishNote, gridPoint, typeText } from '../board.mjs'
@@ -46,7 +47,7 @@ describe('Text Anywhere\'s Size and Opacity sliders', { concurrency: false }, ()
 
   it('the tracks are drawn as Pen Tool Extras\' are: the Size one a wedge picture, the Opacity one a fade', async () => {
     // The browser gives no computed style for a track's pseudo-element, so the panel's own rules are read.
-    const rule = (selector) => p.evaluate((s) => document.getElementById('text-anywhere-style').textContent.split('\n').find((line) => line.startsWith(`${s}::-webkit-slider-runnable-track`)) ?? '', selector)
+    const rule = (selector) => p.evaluate(([s, style]) => document.querySelector(style).textContent.split('\n').find((line) => line.startsWith(`${s}::-webkit-slider-runnable-track`)) ?? '', [selector, TEXT_ANYWHERE_STYLE])
     assert.match(await rule(SIZE_SLIDER), /background: url\("data:image\/svg\+xml/)
     assert.match(await rule(OPACITY_SLIDER), /background: linear-gradient\(/)
   })

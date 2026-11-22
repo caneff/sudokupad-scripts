@@ -881,12 +881,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('at the default the grid matches SudokuPad\'s own per-stroke opacity to within a few levels per channel, where marks do not overlap', async () => {
       // The white outline (on by default) is a filter on the layer, which fading the layer as one picture and fading each stroke do not agree on; it is left out of both pictures.
-      const dropLines = (drop) => read((source) => {
-        const style = document.getElementById('pen-tool-extras-style')
+      const dropLines = (drop) => read(([source, selector]) => {
+        const style = document.querySelector(selector)
         const before = style.textContent.length
         style.textContent = style.textContent.split('\n').filter((line) => !new RegExp(source).test(line)).join('\n')
         return [before, style.textContent.length]
-      }, drop.source)
+      }, [drop.source, extras.STYLE])
       const [filterBefore, filterAfter] = await dropLines(/filter: url/)
       assert.equal(filterAfter < filterBefore, true, `the outline filter line was in the style: ${filterBefore} then ${filterAfter}`)
       const withRule = await grid()
