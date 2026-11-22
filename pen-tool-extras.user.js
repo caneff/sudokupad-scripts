@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.56
+// @version      1.32.57
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
-// @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
-// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/pen-tool-extras.html
+// @supportURL   https://github.com/chinstrap45/sudokupad-scripts/issues
 // @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -13,8 +13,8 @@
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
 // @run-at       document-idle
-// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js
-// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js
+// @updateURL    https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/pen-tool-extras.user.js
+// @downloadURL  https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/pen-tool-extras.user.js
 // ==/UserScript==
 
 /* global ToolPen */
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.56'
+  const VERSION = '1.32.57'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'pen-tool-extras'
   const SCRIPT_NAME = 'Pen Tool Extras'
@@ -199,7 +199,7 @@
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
   // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
-  const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
+  const REPORT_URL = 'https://github.com/chinstrap45/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
   const INTERNAL_KINDS = {

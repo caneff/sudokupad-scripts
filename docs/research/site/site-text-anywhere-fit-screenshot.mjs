@@ -6,7 +6,7 @@ import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
+import { RAW } from '../../../tag-pictures.js'
 const here = new URL('../../../', import.meta.url)
 const before = process.argv[2] && pathToFileURL(resolve(process.argv[2]) + '/')
 const browser = await chromium.launch()

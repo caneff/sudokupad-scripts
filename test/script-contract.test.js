@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 require('./fake-page-storage.js')
-const { scriptFiles, guardId } = require('../sync-lib.js')
+const { scriptFiles, publishedScriptFiles, guardId } = require('../sync-lib.js')
 const { pageStandIn } = require('./page-stand-in.js')
 const { startScript, withScript } = require('./unit-start.js')
 const { headerVersion, headerField } = require('../userscript-header.js')
@@ -13,6 +13,21 @@ const { headerVersion, headerField } = require('../userscript-header.js')
 // which internal holds back which feature; this file holds what is the same for all of them.
 // Starts the script on that page with `framework` (undefined: no Framework at all) and returns what it warned.
 const startOnPage = (file, framework) => startScript(path.join(__dirname, '..', file), { ...pageStandIn(), Framework: framework }).warnings
+
+// The repo moved to chinstrap45 (#1055). @namespace is half of Tampermonkey's script identity, and the frozen handover
+// (draw-tool.user.js) carries the old one, so it stays: a new namespace would install a second copy beside the first.
+for (const file of publishedScriptFiles()) {
+  test(`${file}: the header updates from its own file in the chinstrap45 repo`, () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
+    for (const field of ['updateURL', 'downloadURL']) assert.equal(headerField(source, field), `https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/${file}`, field)
+  })
+}
+
+for (const file of scriptFiles()) {
+  test(`${file}: @namespace is the one installed copies were given`, () => {
+    assert.equal(headerField(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), 'namespace'), 'https://github.com/caneff/sudokupad-scripts')
+  })
+}
 
 for (const file of scriptFiles()) {
   const id = file.replace(/\.user\.js$/, '')
@@ -29,8 +44,8 @@ for (const file of scriptFiles()) {
 
   test(`${id}: the header gives a home page, the repo's issues as the support link and the MIT license, and no @sandbox`, () => {
     const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
-    assert.match(headerField(source, 'homepageURL'), /^https:\/\/caneff\.github\.io\/sudokupad-scripts\/(?:[a-z-]+\.html)?$/)
-    assert.equal(headerField(source, 'supportURL'), 'https://github.com/caneff/sudokupad-scripts/issues')
+    assert.match(headerField(source, 'homepageURL'), /^https:\/\/chinstrap45\.github\.io\/sudokupad-scripts\/(?:[a-z-]+\.html)?$/)
+    assert.equal(headerField(source, 'supportURL'), 'https://github.com/chinstrap45/sudokupad-scripts/issues')
     assert.equal(headerField(source, 'license'), 'MIT')
     assert.doesNotMatch(source.split('// ==/UserScript==')[0], /@sandbox/)
   })

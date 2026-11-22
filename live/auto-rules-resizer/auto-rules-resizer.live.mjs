@@ -1106,7 +1106,7 @@ for (const kase of MISSING) {
     it('the bar names the feature with a Report link, and goes when dismissed', async () => {
       const bar = p.locator('#sudokupad-scripts-notices [data-script="auto-rules-resizer"]')
       assert.match(await bar.textContent(), new RegExp(`^Auto Rules Resizer: ${kase.off} is off because SudokuPad changed\\.Report`))
-      assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
+      assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/chinstrap45\/sudokupad-scripts\/issues\/new\?title=/)
       await bar.locator('button[aria-label="Dismiss"]').click()
       assert.equal(await bar.count(), 0)
     })

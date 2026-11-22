@@ -12,7 +12,7 @@ const SCRIPT_SUFFIX = '.user.js'
 const ROOT = path.join(__dirname, '..')
 const SITE_DIR = path.join(ROOT, 'site')
 // The two places the site is served from; a link to either by its full address breaks on the other.
-const SITE_ADDRESS = /^https?:\/\/(caneff\.github\.io\/sudokupad-scripts|[^/]*netlify)/i
+const SITE_ADDRESS = /^https?:\/\/(chinstrap45\.github\.io\/sudokupad-scripts|[^/]*netlify)/i
 const HOME = 'index.html'
 const DETAILS = 'pen-tool-extras.html'
 const DRAW = 'text-anywhere.html'
@@ -153,7 +153,7 @@ for (const { page: file, script, name } of DETAIL_PAGES) {
     const footer = /<(p|footer)>((?:(?!<\/\1>)[\s\S])*)<\/\1>\s*(?:<script src="slides\.js"><\/script>\s*)?<\/body>/.exec(page)
     assert.ok(footer, `site/${file} ends with no footer`)
     assert.ok(footer[2].includes('href="index.html"'), `site/${file}'s footer has no link back to ${HOME}`)
-    assert.ok(footer[2].includes('href="https://github.com/caneff/sudokupad-scripts"'), `site/${file}'s footer has no link to the source`)
+    assert.ok(footer[2].includes('href="https://github.com/chinstrap45/sudokupad-scripts"'), `site/${file}'s footer has no link to the source`)
   })
 }
 
@@ -587,7 +587,7 @@ test(`${DRAW} good to know says the notes stay in this browser, and what clears 
 
 test('the README has a Text Anywhere row with a Details link, and the Settings sentence is kept', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
-  assert.match(readme, /^\| Text Anywhere \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/text-anywhere\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/text-anywhere\.user\.js\)/m)
+  assert.match(readme, /^\| Text Anywhere \| .*\[Details\]\(https:\/\/chinstrap45\.github\.io\/sudokupad-scripts\/text-anywhere\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/chinstrap45\/sudokupad-scripts\/main\/text-anywhere\.user\.js\)/m)
   assert.match(readme, /Each script adds an entry to SudokuPad's settings/)
 })
 
@@ -671,7 +671,7 @@ test("the README's table and its script notes follow the homepage's order", () =
 })
 
 test("Pen Tool Extras' README Details link goes to its site page", () => {
-  assert.match(README, /^\| Pen Tool Extras \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/pen-tool-extras\.html\)/m)
+  assert.match(README, /^\| Pen Tool Extras \| .*\[Details\]\(https:\/\/chinstrap45\.github\.io\/sudokupad-scripts\/pen-tool-extras\.html\)/m)
 })
 
 const SETTINGS_SENTENCE = "Each script's settings are in SudokuPad's settings, in the Experimental group, and every dialog has Restore defaults."
@@ -703,7 +703,7 @@ test('every details page ends with the homepage\'s contact line, and the README 
     assert.ok(footer.includes(`href="${DISCORD}"`), `site/${details}'s footer does not link Discord`)
   }
   assert.ok(README.includes(DISCORD), 'the README has no Discord link')
-  assert.match(README, /github\.com\/caneff\/sudokupad-scripts\/issues/)
+  assert.match(README, /github\.com\/chinstrap45\/sudokupad-scripts\/issues/)
 })
 
 test('the README Settings section holds the notice-bar paragraph, with the Copy error log and Clear row, and UI Tweaks notes do not', () => {
@@ -717,7 +717,7 @@ test('the README Settings section holds the notice-bar paragraph, with the Copy 
 
 test("Color by Digit's long notes are a reference page of their own, linked from a More detail line on its details page", () => {
   assert.ok(fs.existsSync(path.join(ROOT, 'docs', 'color-by-digit.md')))
-  assert.match(read(CBD), /<p>More detail: <a href="https:\/\/github\.com\/caneff\/sudokupad-scripts\/blob\/main\/docs\/color-by-digit\.md">the full reference<\/a>\.<\/p>/)
+  assert.match(read(CBD), /<p>More detail: <a href="https:\/\/github\.com\/chinstrap45\/sudokupad-scripts\/blob\/main\/docs\/color-by-digit\.md">the full reference<\/a>\.<\/p>/)
   const notes = README.match(/### Color by Digit\n([\s\S]*?)\n### /)[1]
   assert.ok(notes.length < 1500, `the README's Color by Digit notes are ${notes.length} characters`)
   assert.match(notes, /docs\/color-by-digit\.md/)

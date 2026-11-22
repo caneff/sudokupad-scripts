@@ -1267,7 +1267,7 @@ const headerField = (name) => (new RegExp(`^// @${name}\\s+(.+)$`, 'm').exec(HEA
 
 test('the header describes the script in Chris\'s approved intro and links its details page', () => {
   assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
-  assert.equal(headerField('homepageURL'), 'https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html')
+  assert.equal(headerField('homepageURL'), 'https://chinstrap45.github.io/sudokupad-scripts/pen-tool-extras.html')
 })
 
 test('a page 3 pen\'s two characters are the 18 from j to z and 0, two to a pen, the first for the way a line is stored', () => {

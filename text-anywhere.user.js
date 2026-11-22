@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.58
+// @version      0.46.59
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
-// @homepageURL  https://caneff.github.io/sudokupad-scripts/text-anywhere.html
-// @supportURL   https://github.com/caneff/sudokupad-scripts/issues
+// @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
+// @supportURL   https://github.com/chinstrap45/sudokupad-scripts/issues
 // @license      MIT
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -13,14 +13,14 @@
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
 // @run-at       document-idle
-// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js
-// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/text-anywhere.user.js
+// @updateURL    https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/text-anywhere.user.js
+// @downloadURL  https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/text-anywhere.user.js
 // ==/UserScript==
 
 (function () {
   'use strict'
 
-  const VERSION = '0.46.58'
+  const VERSION = '0.46.59'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -1886,7 +1886,7 @@
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
   // SudokuPad's own button purple, as its icons draw it: the one purple of every script's bar, panel and focus ring.
   const SUDOKUPAD_PURPLE = '#6a1b9a'
-  const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
+  const REPORT_URL = 'https://github.com/chinstrap45/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
   const INTERNAL_KINDS = {

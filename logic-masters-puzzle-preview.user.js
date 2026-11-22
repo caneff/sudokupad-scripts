@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         Logic Masters Puzzle Preview
 // @namespace    http://tampermonkey.net/
-// @version      1.3.1
+// @version      1.3.2
 // @description  Show puzzle preview images inline on Logic Masters portal pages, cached between visits
 // @author       Juggler (first version); caching and request limits by ChinStrap
 // @match        https://logic-masters.de/Raetselportal/*
 // @exclude      https://logic-masters.de/Raetselportal/Raetsel/*
 // @grant        none
-// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js
-// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js
+// @updateURL    https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js
+// @downloadURL  https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js
 // ==/UserScript==
 
 /* eslint-env browser */

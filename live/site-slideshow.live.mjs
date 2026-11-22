@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { useBrowser } from './session.mjs'
 
-const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
+import { RAW } from '../tag-pictures.js'
 const ROOT = new URL('../', import.meta.url)
 // The slideshows: the homepage row heading and its place among the rows (none for a slideshow the homepage does not show), the details page, the
 // slideshow's place on it (the main one follows the Install button), and its id in site/slideshows.json, which holds the slide count and each picture and caption.

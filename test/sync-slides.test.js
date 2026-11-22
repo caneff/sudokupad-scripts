@@ -8,7 +8,7 @@ const { renderShow, syncText, syncDir } = require('../sync-slides.js')
 
 const show = { name: 'The X show', dir: 'docs/research/x/', width: 10, height: 5, slides: [{ picture: 'a.png', alt: 'A "one" & <more>', caption: 'First' }, { picture: 'b.png', alt: 'Two', caption: 'Second' }] }
 const hashOf = file => file === 'docs/research/x/a.png' ? 'aaaaaaa' : 'bbbbbbb'
-const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
+const { RAW } = require('../tag-pictures.js')
 
 test('a rendered show makes the first slide and caption current, tags each picture and escapes text', () => {
   const html = renderShow(show, 2, hashOf)

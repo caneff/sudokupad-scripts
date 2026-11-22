@@ -5,7 +5,7 @@ script is one `*.user.js` file with no build step for users. Shared code lives i
 script between `// <lib:name>` and `// </lib:name>` markers, so an installed script is still one file.
 
 - **Pages**: `site/` is the static homepage and its Pen Tool Extras details page. GitHub Pages serves it from `main`
-  (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
+  (`.github/workflows/pages.yml`, at `https://chinstrap45.github.io/sudokupad-scripts/`).
 - **Netlify**: serves `site/` from the `release` branch (`netlify.toml`). `git push origin main:release` publishes it and
   spends 15 of the plan's 300 credits a month (`docs/research/netlify-credits.md`). It is pushed very rarely, so it lags
   `main` by design: Chris kept Netlify on 2026-11-05. It will not be pushed for a long time, so no report, PR or ticket mentions
@@ -59,7 +59,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 
 ### Issue tracker
 
-GitHub issues at `caneff/sudokupad-scripts`, through `gh`. See `docs/agents/issue-tracker.md`.
+GitHub issues at `chinstrap45/sudokupad-scripts`, through `gh`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

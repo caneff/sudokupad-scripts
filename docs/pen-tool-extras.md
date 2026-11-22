@@ -3,7 +3,7 @@
 > [!WARNING]
 > **This script can break at any time, and there are no guarantees.** It relies on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break it without notice. See [If SudokuPad changes](#if-sudokupad-changes).
 
-The full reference. For a quick look, see the [details page](https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html).
+The full reference. For a quick look, see the [details page](https://chinstrap45.github.io/sudokupad-scripts/pen-tool-extras.html).
 
 Turn the pen tool on in SudokuPad's settings first.
 

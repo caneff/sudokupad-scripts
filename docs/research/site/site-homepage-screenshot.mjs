@@ -9,7 +9,7 @@
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 
-const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
+import { RAW } from '../../../tag-pictures.js'
 const root = new URL('../../../', import.meta.url)
 const browser = await chromium.launch()
 for (const [name, width] of [['desktop', 1280]]) {
