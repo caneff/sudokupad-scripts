@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.51
+// @version      1.32.53
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.51'
+  const VERSION = '1.32.53'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1153,7 +1153,7 @@
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
 
-  // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
+  // A color set (lib/color-set.js) without its `fromPreset`.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
 
   // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so color N lines up with cell color button N.
@@ -1258,11 +1258,6 @@
   const SAVED_PRESETS = [...PAGE_PRESETS, SUDOKUPAD_PRESET]
   const UNSAVED = 'unsaved'
 
-  // `fromPreset` is the page the set's missing pens came from, which the dialog's note names; the set carries it, so a hand edit (Custom) still names that page.
-  const presetColorSet = (preset, pages, readCell) => ({ ...paletteColors(preset, pages, readCell), fromPreset: preset })
-  // SudokuPad's own colors read no page, so their set needs no color tool.
-  const SUDOKUPAD_COLOR_SET = presetColorSet(SUDOKUPAD_PRESET, [], () => undefined)
-
   // null means the install save is still owed.
   const readPenColors = (data) => savedColorSet(data, SAVED_PRESETS)
 
@@ -1270,13 +1265,7 @@
     ...pasteReaders(SETTING_ROWS),
     [COLORS_KEY]: (data) => pastedColorSet(data, SAVED_PRESETS)
   }
-  // Every setting at the value in force, defaults included, so a paste can put one back to its default; the pen colors only once they are saved.
-  function copiedSettings (store) {
-    const copied = copiedTable(SETTING_ROWS, store)
-    const colors = copiedColorSet(store.getData(COLORS_KEY), SAVED_PRESETS)
-    if (colors) copied[COLORS_KEY] = colors
-    return JSON.stringify(copied)
-  }
+  const copiedSettings = (store) => copiedSettingsWithColors(SETTING_ROWS, store, COLORS_KEY, SAVED_PRESETS)
 
   // Only the install save (`wait`, then page 1 darkened, or `save` with no color tool at all) changes the colors without the user.
   function startupPenColors (data, hasColorTool) {
@@ -1593,7 +1582,7 @@
   // <lib:color-set>
   // Generated from lib/color-set.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global parseColor, toHex, savedHex, isPlainObject, SUDOKUPAD_PEN_COLORS, PEN_COLOR_NUMBERS */ // eslint-disable-line no-redeclare
+  /* global parseColor, toHex, savedHex, isPlainObject, SUDOKUPAD_PEN_COLORS, PEN_COLOR_NUMBERS, paletteColors, copiedTable */ // eslint-disable-line no-redeclare
   // A color set is `{ colors, preset, missing, fromPreset }`: the nine #rrggbb colors, the preset they came from, the pens a page preset left with SudokuPad's own,
   // and the preset the dialog's note names them for. A hand edit keeps the last two, so the note still names the page. Every change makes a whole new record.
   // `presets` is the list of preset ids a script saves beside its colors; any other is Custom.
@@ -1636,10 +1625,27 @@
     return set ? storedColorSet(set) : undefined
   }
 
+  // The set a preset gives, `fromPreset` naming it, with its own copy of the colors.
+  function presetColorSet (preset, pages, readCell) {
+    const { colors, missing } = paletteColors(preset, pages, readCell)
+    return { colors: { ...colors }, preset, missing, fromPreset: preset }
+  }
+
+  // Copy's text: every row of the settings table at the value in force, defaults included, so a paste can put one back to its default; the colors only once they are saved.
+  function copiedSettingsWithColors (rows, store, colorsKey, presets) {
+    const copied = copiedTable(rows, store)
+    const colors = copiedColorSet(store.getData(colorsKey), presets)
+    if (colors) copied[colorsKey] = colors
+    return JSON.stringify(copied)
+  }
+
   // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
   const colorSetCss = (colors, varOf) => [':root:root {', ...PEN_COLOR_NUMBERS.map((n) => `  ${varOf(n)}: ${colors[n]};`), '}'].join('\n')
   /* eslint-enable no-unused-vars */
   // </lib:color-set>
+
+  // SudokuPad's own colors read no page, so their set needs no color tool.
+  const SUDOKUPAD_COLOR_SET = presetColorSet(SUDOKUPAD_PRESET, [], () => undefined)
 
   const PRESET_LABELS = {
     ...PALETTE_PRESET_LABELS,
