@@ -1,0 +1,19 @@
+name: Set up the repository
+description: Node from .nvmrc, the npm packages and, when asked, Playwright's Chromium. The workflow checks the repository out first, since a local action exists only once its files do.
+inputs:
+  playwright:
+    description: "'true' installs Chromium and its system packages, for a workflow that runs a browser."
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v6
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+    - run: npm ci
+      shell: bash
+    - run: npx playwright install --with-deps chromium
+      shell: bash
+      if: ${{ inputs.playwright == 'true' }}
