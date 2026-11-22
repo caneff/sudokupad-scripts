@@ -28,6 +28,11 @@
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
   const VERSION = '0.7.39'
+  const SCRIPT_NAME = 'Auto Rules Resizer'
+  // Every class starts with CLASS_PREFIX, and every id but the dialog's with ID; live tests and Dark Page name both.
+  const CLASS_PREFIX = 'rules-resizer-'
+  const ID = 'auto-rules-resizer'
+  const FONT_BAR_ID = `${ID}-font`
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -1327,7 +1332,7 @@
       }
     }
   }
-  const guard = createGuard({ script: 'auto-rules-resizer', name: 'Auto Rules Resizer', version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: 'auto-rules-resizer', name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { fit: rulesFit, refit: rulesRefit, sizing: savedSizing, settings: maxSizeSettings } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -1337,7 +1342,6 @@
       MAX_WIDTH_KEY,
       copiedSettings,
       pastedSettings,
-      pasteReport,
       MAX_HEIGHT_KEY,
       LIMIT_FLOORS,
       limitFromBox,
@@ -1366,7 +1370,8 @@
       makeTrailing,
       watchCornerDrag,
       lackingInternals,
-      FEATURES
+      FEATURES,
+      FONT_BAR_ID
     }
   }
   if (typeof document === 'undefined') return
@@ -1374,11 +1379,9 @@
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
 
-  const ID = 'auto-rules-resizer'
-  const FONT_BAR_ID = `${ID}-font`
-  const CORNER_CLASS = `${ID}-corner`
-  const SHOWN_CLASS = `${ID}-shown`
-  const DRAG_CLASS = `${ID}-dragging`
+  const CORNER_CLASS = `${CLASS_PREFIX}corner`
+  const SHOWN_CLASS = `${CLASS_PREFIX}shown`
+  const DRAG_CLASS = `${CLASS_PREFIX}dragging`
   const MAX_WIDTH_INPUT_ID = `${ID}-max-width`
   const MAX_HEIGHT_INPUT_ID = `${ID}-max-height`
   // SudokuPad's rules pane pads its text by 16px: a corner this size sits wholly in the padding, and so does the font bar's height.
@@ -1393,7 +1396,7 @@
   const COPY_ICON = '.rules-copy'
   // On the pane while it is fitted, so the fit measures the text as it will be set. A stylesheet rule, not inline, leaves a
   // reader's own text-spacing override the last word.
-  const TEXT_CLASS = `${ID}-text`
+  const TEXT_CLASS = `${CLASS_PREFIX}text`
 
   // The corners and the font bar show while the pointer is over the pane, a corner or the bar, or a drag is under
   // way. They sit in the pane's padding, so the pointer never leaves the pane on its way to them.
@@ -1618,12 +1621,11 @@
     return fitted
   }
 
-  const CLASS_PREFIX = 'rules-resizer-'
-  const DIALOG_ID = 'rules-resizer-dialog'
+  const DIALOG_ID = `${CLASS_PREFIX}dialog`
   const dialogs = guard.dialogsFor(maxSizeSettings)
   // The limits are written only from the dialog, so a write that fails reaches its status line with the max size settings still on.
   const savedLimits = guard.storeFor(maxSizeSettings)
-  const snapshotLimits = () => snapshotStore(savedLimits, tableKeys(LIMIT_ROWS), () => {
+  const snapshotSave = () => snapshotStore(savedLimits, tableKeys(LIMIT_ROWS), () => {
     const was = limits
     return () => { limits = was }
   })
@@ -1643,12 +1645,12 @@
     })
     const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'Auto Rules Resizer',
+      name: SCRIPT_NAME,
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
       changed: () => changedRows(LIMIT_ROWS, typedLimits(), limits).length > 0,
-      snapshot: snapshotLimits,
+      snapshot: snapshotSave,
       feature: maxSizeSettings,
       // Restore defaults edits the draft like the other scripts'; resetting this puzzle's size is its own button, and acts at once.
       restore: () => restoreDefaults(),
@@ -1702,7 +1704,7 @@
     maxSizeSettings.run(() => {
       limits = readLimits(Framework)
     })
-    addSettingsEntry(dialogs, maxSizeSettings, { name: 'rulesresizer', content: 'Auto Rules Resizer', open: openDialog })
+    addSettingsEntry(dialogs, maxSizeSettings, { name: 'rulesresizer', content: SCRIPT_NAME, open: openDialog })
     writeStyle(`${ID}-style`, STYLE)
     addFontBar()
     for (const corner of CORNERS) addCorner(corner)

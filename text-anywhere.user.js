@@ -21,8 +21,11 @@
   'use strict'
 
   const VERSION = '0.46.54'
+  const SCRIPT_NAME = 'Text Anywhere'
   const TOOL_NAME = 'textanywhere'
-  const LAYER_ID = 'text-anywhere-layer'
+  // Every class and id the script makes starts with this.
+  const CLASS_PREFIX = 'text-anywhere-'
+  const LAYER_ID = `${CLASS_PREFIX}layer`
   const DIALOG_BLUR_PX = 8
   const MIN_WIDTH = 1
   const MAX_WIDTH = 16
@@ -174,9 +177,10 @@
   /* eslint-enable no-unused-vars */
   // </lib:palette>
   // The page's own color, as SudokuPad's buttons use it behind their icons. Dark Page leaves it on the board's box and paints the page around it its own color, which it puts in
-  // `--dark-page-color`: a note off the board takes that.
+  // DARK_PAGE_COLOR_VAR (Dark Page's name; test/cross-script-names.test.js holds them equal): a note off the board takes that.
   const PAGE_COLOR = 'var(--body-bg, #fff)'
-  const MARGIN_COLOR = `var(--dark-page-color, ${PAGE_COLOR})`
+  const DARK_PAGE_COLOR_VAR = '--dark-page-color'
+  const MARGIN_COLOR = `var(${DARK_PAGE_COLOR_VAR}, ${PAGE_COLOR})`
   const PEN_PRESET = 'pen'
   // The next note's size is saved as a width; a text size is 2 x the width + 8.
   const WIDTH_KEY = KEY_PREFIX + 'width'
@@ -199,20 +203,20 @@
   // In screen pixels.
   const CLICK_SLOP = 4
   const RECTANGLE_CLICK_PX = 8
-  const TEXT_BOX_CLASS = 'text-anywhere-textbox'
-  const CLEAR_CLASS = 'text-anywhere-clear'
-  const SETTINGS_CLASS = 'text-anywhere-settings'
-  const BACKGROUND_CLASS = 'text-anywhere-background'
-  const BACKGROUND_FILL_CLASS = 'text-anywhere-background-fill'
-  const TEXT_CLASS = 'text-anywhere-text'
-  const TEXT_BACKGROUND_CLASS = 'text-anywhere-text-bg'
-  const SELECTED_CLASS = 'text-anywhere-selected'
-  const CHECK_CLASS = 'text-anywhere-check'
-  const CHECK_DONE_CLASS = 'text-anywhere-check-done'
-  const CODE_CLASS = 'text-anywhere-code'
-  const STRIKE_CLASS = 'text-anywhere-strike'
-  const STRIKE_PIECE_CLASS = 'text-anywhere-strike-piece'
-  const CODE_BLOCK_CLASS = 'text-anywhere-code-block'
+  const TEXT_BOX_CLASS = `${CLASS_PREFIX}textbox`
+  const CLEAR_CLASS = `${CLASS_PREFIX}clear`
+  const SETTINGS_CLASS = `${CLASS_PREFIX}settings`
+  const BACKGROUND_CLASS = `${CLASS_PREFIX}background`
+  const BACKGROUND_FILL_CLASS = `${CLASS_PREFIX}background-fill`
+  const TEXT_CLASS = `${CLASS_PREFIX}text`
+  const TEXT_BACKGROUND_CLASS = `${CLASS_PREFIX}text-bg`
+  const SELECTED_CLASS = `${CLASS_PREFIX}selected`
+  const CHECK_CLASS = `${CLASS_PREFIX}check`
+  const CHECK_DONE_CLASS = `${CLASS_PREFIX}check-done`
+  const CODE_CLASS = `${CLASS_PREFIX}code`
+  const STRIKE_CLASS = `${CLASS_PREFIX}strike`
+  const STRIKE_PIECE_CLASS = `${CLASS_PREFIX}strike-piece`
+  const CODE_BLOCK_CLASS = `${CLASS_PREFIX}code-block`
   const DONE_OPACITY = 0.6
   // A note being moved is drawn at this share of its own opacity, so the board shows through.
   const MOVING_OPACITY = 0.6
@@ -220,46 +224,45 @@
   const FADE_IN_MS = 80
   const FADE_IN_EASE = 'cubic-bezier(0, 0, 0, 1)'
   const MOTION_OK = '(prefers-reduced-motion: no-preference)'
-  const EMPTY_CLASS = 'text-anywhere-empty'
+  const EMPTY_CLASS = `${CLASS_PREFIX}empty`
   // A handle is made with this class and loses it a frame later, which is what starts its fade in.
-  const ENTERING_CLASS = 'text-anywhere-entering'
-  const HELD_CURSOR_CLASS = 'text-anywhere-holding-cursor'
+  const ENTERING_CLASS = `${CLASS_PREFIX}entering`
+  const HELD_CURSOR_CLASS = `${CLASS_PREFIX}holding-cursor`
   const HELD_CURSOR_VAR = '--text-anywhere-held-cursor'
   // The notes' two groups in the layer: the notes on the board, in board units under the board's own transform, and the fixed notes, in screen pixels,
   // drawn above them.
-  const BOARD_NOTES_CLASS = 'text-anywhere-board'
-  const SCREEN_NOTES_CLASS = 'text-anywhere-screen'
+  const BOARD_NOTES_CLASS = `${CLASS_PREFIX}board`
+  const SCREEN_NOTES_CLASS = `${CLASS_PREFIX}screen`
   // One screen pixel in the units of a note's group, so a note's frame is as thin on the board as off it.
   const PIXEL_VAR = '--text-anywhere-px'
-  const SCROLLS_CLASS = 'text-anywhere-scrolls'
-  const ACTIVE_CLASS = 'text-anywhere-active'
-  const HANDLE_CLASS = 'text-anywhere-resize'
-  const SELECTION_CLASS = 'text-anywhere-selection'
-  const NUDGING_CLASS = 'text-anywhere-nudging'
-  const HOVERED_CLASS = 'text-anywhere-hovered'
-  const GUIDE_CLASS = 'text-anywhere-snap-guide'
+  const SCROLLS_CLASS = `${CLASS_PREFIX}scrolls`
+  const ACTIVE_CLASS = `${CLASS_PREFIX}active`
+  const HANDLE_CLASS = `${CLASS_PREFIX}resize`
+  const SELECTION_CLASS = `${CLASS_PREFIX}selection`
+  const NUDGING_CLASS = `${CLASS_PREFIX}nudging`
+  const HOVERED_CLASS = `${CLASS_PREFIX}hovered`
+  const GUIDE_CLASS = `${CLASS_PREFIX}snap-guide`
   const GUIDE_PX = 1
   const SELECTION_OUTLINE_PX = 2
   const SELECTION_OFFSET_PX = 2
-  const OPEN_OUTLINE_CLASS = 'text-anywhere-open-outline'
+  const OPEN_OUTLINE_CLASS = `${CLASS_PREFIX}open-outline`
   const HANDLE_PX = 11
   // A note's own opacity, as a number, for the hover look: it draws on the note and the note's opacity multiplies into it.
   const NOTE_OPACITY_VAR = '--text-anywhere-note-opacity'
   const NOTE_COLOR_VAR = '--text-anywhere-note-color'
-  const RECTANGLE_CLASS = 'text-anywhere-selection-rectangle'
-  const TRAY_CLASS = 'text-anywhere-tray'
-  const SLIDERS_CLASS = 'text-anywhere-sliders'
-  const SLIDER_ROW_CLASS = 'text-anywhere-slider'
-  const SLIDER_ROWS_CLASS = 'text-anywhere-slider-rows'
-  const HIDE_ALL_CLASS = 'text-anywhere-hide-all'
-  const HIDDEN_CLASS = 'text-anywhere-hidden'
-  const SIZE_SLIDER = 'text-anywhere-size'
-  const OPACITY_SLIDER = 'text-anywhere-opacity'
+  const RECTANGLE_CLASS = `${CLASS_PREFIX}selection-rectangle`
+  const TRAY_CLASS = `${CLASS_PREFIX}tray`
+  const SLIDERS_CLASS = `${CLASS_PREFIX}sliders`
+  const SLIDER_ROW_CLASS = `${CLASS_PREFIX}slider`
+  const SLIDER_ROWS_CLASS = `${CLASS_PREFIX}slider-rows`
+  const HIDE_ALL_CLASS = `${CLASS_PREFIX}hide-all`
+  const HIDDEN_CLASS = `${CLASS_PREFIX}hidden`
+  const SIZE_SLIDER = `${CLASS_PREFIX}size`
+  const OPACITY_SLIDER = `${CLASS_PREFIX}opacity`
   const SIZE_LABEL = 'Size'
   const OPACITY_LABEL = 'Opacity'
-  const CLASS_PREFIX = 'text-anywhere-'
-  const COLORS_STYLE_ID = 'text-anywhere-colors'
-  const PANEL_STYLE_ID = 'text-anywhere-style'
+  const COLORS_STYLE_ID = `${CLASS_PREFIX}colors`
+  const PANEL_STYLE_ID = `${CLASS_PREFIX}style`
   // Clear all with no notes asks nothing; with one it speaks of the one.
   const clearAsk = (count) => count === 0
     ? null
@@ -2412,14 +2415,14 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, noteColorSet, dialogPalette, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, noteColorSet, dialogPalette, copiedSettings, pastedSettings, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook, TRAY_CLASS, DARK_PAGE_COLOR_VAR }
   }
   if (typeof document === 'undefined') return
 
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
 
-  const guard = createGuard({ script: 'text-anywhere', name: 'Text Anywhere', version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: 'text-anywhere', name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets, undoRestart } = guard.features
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const savedData = guard.storeFor(storage)
@@ -2852,8 +2855,8 @@
     if (row.dialog) showBoxes()
   }
 
-  const DIALOG_ID = 'text-anywhere-dialog'
-  const DIALOG_STYLE_ID = 'text-anywhere-dialog-style'
+  const DIALOG_ID = `${CLASS_PREFIX}dialog`
+  const DIALOG_STYLE_ID = `${DIALOG_ID}-style`
   const DIALOG_CSS = [
     `#${DIALOG_ID} .${CLASS_PREFIX}section-title { font-weight: 600; margin: 4px 0 0; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}pick-note { display: inline; margin: 0 0 0 8px; font-weight: 400; font-size: 0.85em; opacity: 0.8; }`,
@@ -2890,7 +2893,7 @@
     const editedLooks = () => changedDialogLooks(LOOKS, draftLooks, look)
     const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'Text Anywhere',
+      name: SCRIPT_NAME,
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
@@ -4489,7 +4492,7 @@
       writeStyle(PANEL_STYLE_ID, PANEL_CSS)
       textTool.wrap(app, 'getToolNames', function (stock) { return toolNamesFor(stock(), this.currentEvent) })
       Framework.addTool({
-        button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
+        button: { name: TOOL_NAME, title: SCRIPT_NAME, content: `<div class="icon">${BUTTON_ICON}</div>Text` },
         tool
       })
       window.addEventListener('contextmenu', textTool.bind(suppressMenu))
@@ -4526,7 +4529,7 @@
         saveOpenNote()
       }))
     })
-    addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: 'Text Anywhere', open: openDialog })
+    addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: SCRIPT_NAME, open: openDialog })
     boardNotes.run(() => {
       app.puzzle.on('loaded', boardNotes.bind(showSavedNotes))
       app.on('restarted', boardNotes.bind(restartNotes))
