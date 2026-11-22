@@ -138,7 +138,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
   })
 
   it('a reload after a Restart and Undo back to the start under Color by Digit changes nothing the player sees (#1032)', async () => {
-    // Seed 951434741's shrink: four givens came back colored 6 after the reload, though every cell was empty before it.
+    // Four givens came back colored 6 after the reload, though every cell was empty before it.
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['restart', false], ['undo all', null], ['reload', null]] })
   })
 

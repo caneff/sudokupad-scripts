@@ -2016,6 +2016,49 @@ test('with cell coloring off, the icon and the digit shades are drawn once the p
     loaded[0].fn()
     assert.match(icon.outerHTML, /^<div class="icon"/, 'the icon is drawn again')
     assert.equal(appended.some((el) => el.id === 'color-by-digit-digits'), true, 'the digit shades are added')
+    assert.equal(listeners.filter(({ type }) => type === 'progressloaded').length, 0, 'the listener is gone once it has run, since SudokuPad ignores { once: true }')
+  })
+})
+
+test('a Restart before the first load ends the startup coloring wait, so the board an Undo loads is not colored in a group of its own', async () => {
+  const listeners = []
+  const restarted = []
+  const cells = []
+  const app = {
+    puzzle: {
+      cells,
+      selectedCells: [],
+      undoStack: [],
+      redoStack: [],
+      replayStack: [],
+      saveProgress: () => {},
+      addEventListener: (type, fn) => listeners.push({ type, fn }),
+      removeEventListener: (type, fn) => { const i = listeners.findIndex((l) => l.type === type && l.fn === fn); if (i >= 0) listeners.splice(i, 1) },
+      on: () => {}
+    },
+    act () {},
+    deselect: () => {},
+    select: () => {},
+    on: (type, fn) => { if (type === 'restarted') restarted.push(fn) },
+    refreshControls: () => {}
+  }
+  const Framework = {
+    getApp: () => Promise.resolve(app),
+    getData: (key) => (key === 'ColorByDigit_mode' ? 'cell' : null),
+    setData () {},
+    removeData () {},
+    addControlButton () {},
+    addSetting () {},
+    showDialog () {},
+    closeDialog () {},
+    app: { tools: { colour: {} } }
+  }
+  await withScript('../color-by-digit.user.js', { document: pageDocument(), window: pageWindow(), Framework }, async () => {
+    await new Promise((resolve) => setImmediate(resolve))
+    const waiting = () => listeners.filter(({ type }) => type === 'progressloaded').length
+    assert.equal(waiting(), 2, 'the redraw and the startup coloring wait for the first load')
+    restarted.forEach((fn) => fn())
+    assert.equal(waiting(), 1, 'only the redraw still waits')
   })
 })
 

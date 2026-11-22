@@ -157,7 +157,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
     assert.equal(await p.evaluate((key) => Framework.getData(key), MODE_KEY), 'cell')
   })
 
-  it('the replay holds the same groups as the undo stack after the first Undo, so a reload takes the same Undos back (#1032)', async () => {
+  it('the replay holds as many groups as the undo stack after the first Undo (#1032)', async () => {
     const groups = (entries) => entries.filter((entry) => /^gs[/]|^gs$/.test(entry)).length
     const { stack, replay } = await p.evaluate(() => ({ stack: Framework.app.puzzle.undoStack.slice(), replay: Framework.app.puzzle.replayStack.slice() }))
     assert.equal(groups(replay), groups(stack))
