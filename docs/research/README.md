@@ -124,6 +124,9 @@ The script was Draw Tool, then Text Annotation (`GLOSSARY.md`).
   formatting follows.
 - `docs/research/text-anywhere/gdc-notes-vs-text-anywhere.md` — gdc's Puzzle Notes versus Text Anywhere (2026-11-08). What else
   would replace gdc's notes extension.
+- `docs/research/text-anywhere/clear-all-live-timeouts.md` — Clear all's live tests timing out under load (#1087, 2026-11-22). The wait
+  that times out follows a missed press at the point `buttonOverBoard` read; with `stable` the file passed 13 of 13 under load, not
+  checked at load 50.
 - `docs/research/text-anywhere/drag-feedback-other-apps.md` — How other editors show a text box being dragged (2026-11-08). Asked
   after Chris disliked a lift on a dragged note.
 - `docs/research/text-anywhere/halo-text-shadow-ring.md` — The halo as a `text-shadow` ring (#423, 2026-11-07). Cause of the odd
@@ -186,6 +189,7 @@ Every path:
 - `docs/research/color-by-digit/color-by-digit-slide-8-menu.png`
 - `docs/research/color-by-digit/color-by-digit-slide-9-modular.png`
 - `docs/research/dark-page/dark-page.png`
+- `docs/research/logic-masters-puzzle-preview/logic-masters-puzzle-preview.png`
 - `docs/research/pen-tool-extras/pen-tool-extras-panel-annotated.png`
 - `docs/research/pen-tool-extras/pen-tool-extras-slide-1-color.png`
 - `docs/research/pen-tool-extras/pen-tool-extras-slide-1-color.webp`
