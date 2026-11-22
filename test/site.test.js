@@ -656,7 +656,6 @@ for (const { name, details } of [...SUMMARY_SCRIPTS, { name: 'Logic Masters Puzz
   test(`${name}'s README row says its @description`, () => {
     assert.equal(readmeRow(name), descriptionOf(name))
   })
-  if (name === 'Logic Masters Puzzle Preview') continue
   test(`${name}'s homepage card opens with its @description`, () => {
     assert.ok(cardOf(name).startsWith(descriptionOf(name)), `the card says: ${cardOf(name)}`)
   })
