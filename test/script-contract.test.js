@@ -14,11 +14,17 @@ const { headerVersion, headerField } = require('../userscript-header.js')
 // Starts the script on that page with `framework` (undefined: no Framework at all) and returns what it warned.
 const startOnPage = (file, framework) => startScript(path.join(__dirname, '..', file), { ...pageStandIn(), Framework: framework }).warnings
 
-// The address is a literal, not tag-pictures.js's RAW, so a wrong RAW fails here.
+// A literal, not tag-pictures.js's RAW, so the headers and RAW are each checked against it rather than against each other.
+const LIVE_RAW = 'https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/'
+
+test('RAW, the address the site and tests build on, is the chinstrap45 repo\'s', () => {
+  assert.equal(require('../tag-pictures.js').RAW, LIVE_RAW)
+})
+
 for (const file of publishedScriptFiles()) {
   test(`${file}: the header updates from its own file in the chinstrap45 repo`, () => {
     const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
-    for (const field of ['updateURL', 'downloadURL']) assert.equal(headerField(source, field), `https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/${file}`, field)
+    for (const field of ['updateURL', 'downloadURL']) assert.equal(headerField(source, field), LIVE_RAW + file, field)
   })
 }
 
