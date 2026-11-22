@@ -133,7 +133,7 @@ const readLib = (name) => {
 const libNamesOnDisk = () => fs.readdirSync(LIB_DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.test.js')).map((f) => f.slice(0, -3)).sort()
 // A script's old install address, which every copy installed from it still checks for updates, to its new one. The old file stays
 // frozen at one handover version whose @updateURL and @downloadURL name the new file, so those copies' next update leads there (#711;
-// docs/research/tampermonkey-in-playwright.md § Driving an update check has what is known of how).
+// docs/research/tooling/tampermonkey-in-playwright.md § Driving an update check has what is known of how).
 const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
 // Scripts for another site than SudokuPad: published like the others (install link on the homepage, @version raised on a change) but
 // with no Framework, guard, lib blocks or settings dialog, so every loop over SudokuPad's scripts (scriptFiles) leaves them out.

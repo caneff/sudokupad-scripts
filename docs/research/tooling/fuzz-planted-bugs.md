@@ -281,7 +281,7 @@ the rate.
 
 ### Why the missed mutants are missed (#927)
 
-Question: do the deleted saves and boundary flips of the #723 run need a longer hunt, a reload drawn more often, or a new rule? Measured on 2026-11-16 on commit 4d1aef6. The scratch is in `docs/research/fuzz-missed-mutants/`
+Question: do the deleted saves and boundary flips of the #723 run need a longer hunt, a reload drawn more often, or a new rule? Measured on 2026-11-16 on commit 4d1aef6. The scratch is in `docs/research/tooling/fuzz-missed-mutants/`
 (`measure.mjs`, the two samples, the four `runs-*.jsonl` files of one line per hunt).
 
 **Method.** The mutants were drawn fresh from `mutantsOf` on the scripts as they are, among those the 40-list coverage hunt (seed 723) ran: 52 `setData` statement deletions of which 25 were reached, and

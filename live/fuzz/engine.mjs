@@ -43,7 +43,7 @@ const DRAGGED_NOTE = 'drag a note off a button'
 export const strokeSinceReload = ({ kind, stroke }, earlier) => kind !== 'reload' && (earlier?.strokeSinceReload || stroke)
 
 // Runs one generated list on a page of its own. A page is never reused between runs: Restart empties the replay but leaves the earlier digits
-// behind Undo, which would make a run depend on the runs before it and break replay (docs/research/ui-fuzz-tools.md). The step at index `settledStep` waits
+// behind Undo, which would make a run depend on the runs before it and break replay (docs/research/tooling/ui-fuzz-tools.md). The step at index `settledStep` waits
 // at least the fixed wait, whatever `settleMs` is (`blameLate`).
 async function runList (openTarget, actions, landMs, settleMs, settledStep = -1) {
   const target = await openTarget()

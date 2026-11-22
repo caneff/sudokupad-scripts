@@ -7,7 +7,8 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 - **Site and hosting**: before you change `site/`, a picture, a slideshow or the hosting: read `docs/agents/site.md`. `site/` is the static homepage and one details page per script that has one.
 - **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
   Each script's notes and pictures are in its own folder (`docs/research/<script name>/`), pictures of a whole site page in `docs/research/site/`,
-  and notes about SudokuPad itself at the top.
+  notes about the repo's own tooling (fuzz, Tampermonkey, shared code, hosting) in `docs/research/tooling/`, and notes about SudokuPad itself at the top.
+  `docs/research/README.md` indexes every note, and `test/doc-paths.test.js` fails when a path named there or in this file is missing.
 - **Tests**: unit tests are in `test/` (`test/<script name>.test.js`), each shared module's in `lib/<name>.test.js`, and live tests in
   `live/<script name>/`. Every `*.user.js` stays at the root: every installed copy checks that address for updates. Never edit `draw-tool.user.js`:
   it is Text Anywhere's handover, frozen at 0.45.1 (`GLOSSARY.md`), and a change to Text Anywhere never touches it; `test/text-anywhere.test.js` fails when its bytes change (Chris, 2026-11-10).
