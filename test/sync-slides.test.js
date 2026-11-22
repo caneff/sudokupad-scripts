@@ -6,7 +6,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { renderShow, syncText, syncDir } = require('../sync-slides.js')
 
-const show = { dir: 'docs/research/x/', width: 10, height: 5, slides: [{ picture: 'a.png', alt: 'A "one" & <more>', caption: 'First' }, { picture: 'b.png', alt: 'Two', caption: 'Second' }] }
+const show = { name: 'The X show', dir: 'docs/research/x/', width: 10, height: 5, slides: [{ picture: 'a.png', alt: 'A "one" & <more>', caption: 'First' }, { picture: 'b.png', alt: 'Two', caption: 'Second' }] }
 const hashOf = file => file === 'docs/research/x/a.png' ? 'aaaaaaa' : 'bbbbbbb'
 const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 
@@ -18,7 +18,7 @@ test('a rendered show makes the first slide and caption current, tags each pictu
     `      <img class="slide current" src="${RAW}docs/research/x/a.png?v=aaaaaaa" alt="A &quot;one&quot; &amp; &lt;more&gt;" width="10" height="5">`,
     `      <img class="slide" src="${RAW}docs/research/x/b.png?v=bbbbbbb" alt="Two" width="10" height="5">`,
     '    </div>',
-    '    <div class="slide-bar">',
+    '    <div class="slide-bar" data-name="The X show">',
     '      <div class="slide-captions">',
     '        <p class="slide-caption current">First</p>',
     '        <p class="slide-caption">Second</p>',

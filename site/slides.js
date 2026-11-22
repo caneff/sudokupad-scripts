@@ -7,12 +7,15 @@ for (const show of document.querySelectorAll('.slideshow')) {
   const captions = [...show.querySelectorAll('.slide-caption')]
   // A step announces its caption, which carries its meaning, as well as the counter.
   show.querySelector('.slide-captions').setAttribute('aria-live', 'polite')
+  const bar = show.querySelector('.slide-bar')
+  // Each button's accessible name carries the slideshow's name, so the buttons of a page's slideshows differ.
+  const name = bar.dataset.name
   const pager = document.createElement('div')
   pager.className = 'slide-pager'
-  pager.innerHTML = `<button type="button" class="prev" aria-label="Previous">${ARROW_ICON('M15 5l-7 7 7 7')}</button>` +
+  pager.innerHTML = `<button type="button" class="prev" aria-label="Previous: ${name}">${ARROW_ICON('M15 5l-7 7 7 7')}</button>` +
     '<span class="slide-count" aria-live="polite"></span>' +
-    `<button type="button" class="next" aria-label="Next">${ARROW_ICON('M9 5l7 7-7 7')}</button>`
-  show.querySelector('.slide-bar').appendChild(pager)
+    `<button type="button" class="next" aria-label="Next: ${name}">${ARROW_ICON('M9 5l7 7-7 7')}</button>`
+  bar.appendChild(pager)
   let at = 0
   const go = (to) => {
     at = (to + slides.length) % slides.length
