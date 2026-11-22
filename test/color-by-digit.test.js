@@ -970,7 +970,7 @@ const pageWindow = () => ({ getComputedStyle: () => ({ getPropertyValue: () => '
 test('entry point: wires the settings entry, the button, refreshControls, and a press on the button steps the mode', async () => {
   const calls = []
   const app = {
-    puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [], undoStack: [], redoStack: [], addEventListener: () => {} },
+    puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [], undoStack: [], redoStack: [], replayStack: [], saveProgress: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     act: (a) => calls.push(['act', a.type]),
     deselect: () => {},
     select: () => {},
@@ -1024,7 +1024,7 @@ function mockApp (cellDefs, { single = false } = {}) {
     cell.propGet = () => [...(def.centre || [])]
     return cell
   })
-  const puzzle = { cells, selectedCells: [], undoStack: [], redoStack: [], inGroup: false, addEventListener: () => {}, on: () => {} }
+  const puzzle = { cells, selectedCells: [], undoStack: [], redoStack: [], inGroup: false, replayStack: [], saveProgress: () => {}, addEventListener: () => {}, removeEventListener: () => {}, on: () => {} }
   const app = {
     puzzle,
     calls,
@@ -1950,7 +1950,7 @@ test('shownChips: Both with unsynced profiles lists its chips in ascending digit
 })
 
 const completeRoots = () => {
-  const app = { act () {}, select () {}, deselect () {}, on () {}, refreshControls () {}, puzzle: { cells: [], selectedCells: [], undoStack: [], redoStack: [], addEventListener () {} } }
+  const app = { act () {}, select () {}, deselect () {}, on () {}, refreshControls () {}, puzzle: { cells: [], selectedCells: [], undoStack: [], redoStack: [], replayStack: [], saveProgress () {}, addEventListener () {}, removeEventListener () {} } }
   return { Framework: { getApp () {}, getData () {}, setData () {}, removeData () {}, addControlButton () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }, app }
 }
 
@@ -1961,7 +1961,8 @@ test('Color by Digit declares each SudokuPad internal it calls, and a complete S
 test('without one internal, only the features that need it are lacking', () => {
   const cases = [
     ['app.act', ['cells']], ['app.select', ['cells']], ['app.deselect', ['cells']], ['app.on', ['cells']],
-    ['app.puzzle.cells', ['cells', 'loading']], ['app.puzzle.selectedCells', ['cells']], ['app.puzzle.undoStack', ['cells']], ['app.puzzle.redoStack', ['cells']], ['app.puzzle.addEventListener', ['loading']],
+    ['app.puzzle.cells', ['cells', 'loading']], ['app.puzzle.selectedCells', ['cells']], ['app.puzzle.undoStack', ['cells']], ['app.puzzle.redoStack', ['cells']], ['app.puzzle.replayStack', ['cells']], ['app.puzzle.saveProgress', ['cells']],
+    ['app.puzzle.addEventListener', ['cells', 'loading']], ['app.puzzle.removeEventListener', ['cells', 'loading']],
     ['app.refreshControls', ['button']], ['Framework.addControlButton', ['button']],
     ['Framework.getApp', ['cells', 'button', 'loading']],
     ['Framework.getData', ['saved', 'editor']], ['Framework.setData', ['saved', 'editor']], ['Framework.removeData', ['saved']],
@@ -1989,7 +1990,7 @@ test('with cell coloring off, the icon and the digit shades are drawn once the p
   const icon = { outerHTML: 'old icon' }
   const appended = []
   // No `act`: SudokuPad has no cell coloring to wait for, so only the icon and the digit shades wait on the load.
-  const app = { puzzle: { cells, selectedCells: [], undoStack: [], redoStack: [], addEventListener: (type, fn) => listeners.push({ type, fn }), on: () => {} }, deselect: () => {}, select: () => {}, on: () => {}, refreshControls: () => {} }
+  const app = { puzzle: { cells, selectedCells: [], undoStack: [], redoStack: [], replayStack: [], saveProgress: () => {}, addEventListener: (type, fn) => listeners.push({ type, fn }), removeEventListener: (type, fn) => { const i = listeners.findIndex((l) => l.type === type && l.fn === fn); if (i >= 0) listeners.splice(i, 1) }, on: () => {} }, deselect: () => {}, select: () => {}, on: () => {}, refreshControls: () => {} }
   const document = pageDocument({
     querySelector: (selector) => (selector === '#control-colorbydigit .icon' ? icon : null),
     head: { appendChild: (el) => appended.push(el) }

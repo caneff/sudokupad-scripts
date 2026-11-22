@@ -2305,7 +2305,11 @@
         'app.puzzle.cells': 'array',
         'app.puzzle.selectedCells': 'array',
         'app.puzzle.undoStack': 'array',
-        'app.puzzle.redoStack': 'array'
+        'app.puzzle.redoStack': 'array',
+        'app.puzzle.replayStack': 'array',
+        'app.puzzle.saveProgress': 'function',
+        'app.puzzle.addEventListener': 'function',
+        'app.puzzle.removeEventListener': 'function'
       }
     },
     button: {
@@ -2340,7 +2344,7 @@
     // Without it they are drawn at once, before the puzzle's own palette is in force.
     loading: {
       label: 'redraw after the puzzle loads',
-      needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function' }
+      needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function', 'app.puzzle.removeEventListener': 'function' }
     }
   }
   const BUTTON = '#control-colorbydigit'
@@ -2485,13 +2489,14 @@
 
   let mode = 'off'
 
-  // SudokuPad's events ignore `{ once: true }` (docs/research/sudokupad-custom-tool.md), so a one-shot handler removes itself. Returns what cancels the wait.
-  function onProgressLoadedOnce (app, fn) {
-    const handler = (...args) => {
+  // SudokuPad's events ignore `{ once: true }` (docs/research/sudokupad-custom-tool.md), so a one-shot handler removes itself, under `feature`'s guard as SudokuPad calls it.
+  // Returns what cancels the wait.
+  function onProgressLoadedOnce (app, feature, fn) {
+    const cancel = () => app.puzzle.removeEventListener('progressloaded', handler)
+    const handler = feature.bind((...args) => {
       cancel()
       return fn(...args)
-    }
-    const cancel = () => app.puzzle.removeEventListener('progressloaded', handler)
+    })
     app.puzzle.addEventListener('progressloaded', handler)
     return cancel
   }
@@ -2503,7 +2508,7 @@
       fn()
       return () => {}
     }
-    return loading.run(() => onProgressLoadedOnce(app, fn), () => { fn(); return () => {} })
+    return loading.run(() => onProgressLoadedOnce(app, loading, fn), () => { fn(); return () => {} })
   }
 
   const DIGIT_STYLE_ID = 'color-by-digit-digits'
@@ -2746,7 +2751,7 @@
           const loadsBeforeRestart = action.type === 'undo' && restartUndo.loadsBoard()
           if (loadsBeforeRestart) {
             // The board it loads ends in the Restart's clears, and arrives after `act` returns.
-            onProgressLoadedOnce(app, () => colorLoadedBoard(app, dropRestartColoring))
+            onProgressLoadedOnce(app, coloring, () => colorLoadedBoard(app, dropRestartColoring))
             coloring.run(() => { app.puzzle.undoStack.length = 0 })
           }
           const result = stock(action)
@@ -3181,7 +3186,10 @@
     digitColors.run(watchBoard)
     whenProgressLoaded(app, redraw)
     // A Restart colors the board itself, so a startup pass still waiting would color the board an Undo loads in a group of its own.
-    if (colorsCells(mode)) app.on('restarted', loading.bind(whenProgressLoaded(app, () => colorEnteredCells(app))))
+    if (colorsCells(mode)) {
+      const cancelStartupPass = whenProgressLoaded(app, () => colorEnteredCells(app))
+      coloring.run(() => app.on('restarted', coloring.bind(cancelStartupPass)))
+    }
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
   else start(undefined)
