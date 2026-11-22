@@ -182,7 +182,7 @@
   guard warns once in the console, puts up a plain bar, and the feature keeps saving once space frees.
 - **Paste settings** — a settings dialog's paste button (Copy settings is its twin, and carries the saved settings only): it saves the pasted keys at once and puts only those into the dialog's draft, so an unsaved edit of any setting the pasted text lacks stays there for Save or Cancel. In Color by Digit the pasted profiles replace the draft's profiles, and the draft's mode stays unless one was pasted, a mode the draft's profiles do not allow (Digit or Both with Digit set to None) falling back to the one they do.
 - **notice bar** — the guard's bar at the bottom of the page, in the one purple every script's bar uses (Pen Tool Extras' and the site's
-  accent): "<script>: <features> is/are off — SudokuPad changed.", a Report link to a new issue filled in with the script, each feature,
+  accent): "<script>: <features> is/are off because SudokuPad changed.", a Report link to a new issue filled in with the script, each feature,
   its missing internal or error, and SudokuPad's version, and a × that dismisses it. A dismissal is saved per SudokuPad version, so a new
   version shows the bar again; until dismissed it shows on every page load. Where it cannot be saved (a page with no SudokuPad version, or a
   Framework whose saved data is missing or throws) a dismissal holds for the page load only. A **refused write** puts up a second, plain bar in the same
