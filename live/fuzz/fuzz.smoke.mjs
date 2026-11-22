@@ -525,7 +525,8 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.ok(restored === null || restored === added - 1, `Restore defaults then Save took the new profile away (${restored})`)
       assert.equal(await afterSteps(puzzle, [['profile editor', [[['new']], true, false]], ['color by digit defaults', false]], profileCount), added, 'Cancel kept it')
       const frame = [paste('text anywhere', '{"TextAnywhere_frame":true}')]
-      assert.deepEqual(await afterSteps(puzzle, [...frame, ['text anywhere defaults', true]], data('TextAnywhere_frame')), [false], 'the frame is off again')
+      // Off is the frame's default, which Text Anywhere saves as no key (#1131).
+      assert.deepEqual(await afterSteps(puzzle, [...frame, ['text anywhere defaults', true]], data('TextAnywhere_frame')), [null], 'the frame is off again')
       assert.deepEqual(await afterSteps(puzzle, [...frame, ['text anywhere defaults', false]], data('TextAnywhere_frame')), [true], 'Cancel after Restore defaults keeps the pasted frame')
     })
 
