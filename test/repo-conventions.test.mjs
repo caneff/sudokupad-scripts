@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { SETTINGS_SCRIPTS } from '../live/scripts.mjs'
 import { filesUnder, read, ROOT } from './repo-files.mjs'
 
-// The repo's conventions, each a rule that guarded later work in the closing tests of specs 334, 449, 685, 688, 834 and 835 (retired in #1029), read off the
+// The repo's conventions, each a rule that guarded later work in the closing tests of specs 334, 449, 685, 688, 834 and 835 (retired in #1029) and of spec 1074, read off the
 // tree as text. Blind to real SudokuPad: that the suites and scripts still work there is `npm run test:live`'s to show.
 const require = createRequire(import.meta.url)
 const { fakeStore } = require('./fake-store.js')
@@ -102,4 +102,45 @@ test('no tracked text names the caneff repo or Pages host, but the lines that mu
     return !kept.test(read(file).split('\n')[line - 1].trim())
   })
   assert.deepEqual(named, [])
+})
+
+// A Markdown list's items, each with its wrapped continuation lines joined on.
+const listItems = (text) => text.split('\n').reduce((items, line) => {
+  if (line.startsWith('- ')) items.push(line)
+  else if (items.length && /^\s+\S/.test(line)) items[items.length - 1] += ` ${line.trim()}`
+  else if (line.trim() === '' || line.startsWith('#')) items.push(null)
+  return items
+}, []).filter(Boolean)
+
+test('the research index gives every note under docs/research/ a line of its own', () => {
+  const ownLines = new Set(listItems(read('docs/research/README.md')).map((item) => item.match(/^- `([^`]+)`/)?.[1]))
+  const notes = filesUnder('docs/research', /\.md$/).filter((file) => file !== 'docs/research/README.md')
+  assert.ok(notes.length > 50, `${notes.length} notes are read`)
+  assert.deepEqual(notes.filter((note) => !ownLines.has(note)), [])
+})
+
+// Each glossary entry is a definition of one or two sentences (spec #1074), with behavior on the reference pages; 600 characters is the ceiling such an entry stays under.
+test('GLOSSARY.md opens with Shared and SudokuPad, each section is in alphabetical order, and no entry runs past 600 characters', () => {
+  const sections = read('GLOSSARY.md').split(/^## /m).slice(1).map((text) => {
+    const [title, ...lines] = text.split('\n')
+    const entries = listItems(lines.join('\n')).filter((item) => item.startsWith('- **'))
+    return { title, entries, terms: entries.map((entry) => entry.match(/^- \*\*(.+?)\*\*/)[1].toLowerCase()) }
+  })
+  assert.deepEqual(sections.slice(0, 2).map((section) => section.title), ['Shared', 'SudokuPad'])
+  for (const { title, terms } of sections) assert.deepEqual(terms, [...terms].sort((a, b) => a.localeCompare(b)), `${title} is alphabetical`)
+  assert.deepEqual(sections.flatMap((section) => section.entries).filter((entry) => entry.length > 600), [])
+})
+
+test('.audit-ignore.md cites a test by its title, never a line number', () => {
+  assert.deepEqual(hits(['.audit-ignore.md'], /\.m?js:\d+/), [])
+})
+
+test('the research index\'s do-not-move list is exactly the research pictures the site and the README link', () => {
+  const pages = ['README.md', ...filesUnder('site', /\.(html|json|css|js)$/)]
+  const linked = new Set(pages.flatMap((file) => read(file).match(/docs\/research\/[\w./-]+?\.(?:png|webp|jpg|gif|svg)/g) ?? []))
+  const section = read('docs/research/README.md').split('## Published pictures: do not move')[1].split(/^## /m)[0]
+  const listed = new Set(listItems(section).map((item) => item.match(/^- `([^`]+)`/)?.[1]).filter(Boolean))
+  assert.ok(linked.size > 30, `${linked.size} linked pictures are read`)
+  assert.deepEqual([...linked].filter((picture) => !listed.has(picture)), [], 'linked but not listed')
+  assert.deepEqual([...listed].filter((picture) => !linked.has(picture)), [], 'listed but not linked')
 })

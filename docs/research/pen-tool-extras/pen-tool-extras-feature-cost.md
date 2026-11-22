@@ -7,7 +7,7 @@ Read at `main` 410c1f0 (just after spec #130). Nothing in the code was changed.
 
 ## Where "4,225" came from
 
-4,225 is the line count of **all five userscripts** at 49c3405, from `docs/research/tampermonkey-shared-code.md`. Pen
+4,225 is the line count of **all five userscripts** at 49c3405, from `docs/research/tooling/tampermonkey-shared-code.md`. Pen
 Tool Extras was 2,492 of it. Today the five come to 4,163, and Pen Tool Extras to 2,406.
 
 Pen Tool Extras today, by `wc -l`:

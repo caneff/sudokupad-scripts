@@ -41,7 +41,7 @@ Read from the live tests' recording of sudokupad.app (`~/.cache/sudokupad-script
   the toggles. The scripts save with `Framework.setData`, a separate key per value, so their data is not in that file.
   Each script's own Copy settings and Paste settings are still the only way to move it.
 - The pen tool binds `0`-`9` with a handler that only returns whether the pen tool is current (`tool-pen.js`
-  `keyHandlers`), so a digit key does nothing there (also in `puzzle-ui-pen-tools.md`).
+  `keyHandlers`), so a digit key does nothing there (also in `docs/research/pen-tool-extras/puzzle-ui-pen-tools.md`).
 - Screenshot builds its SVG's styles from the page's stylesheets, keeping a rule only when an element matches it and
   its text matches `PuzzleTools.reSvgCssRule` (`.pencolor-…`, `:root…`, `#svgrenderer…` and others) or starts with a
   board layer's id (`puzzletools.js` `getSvgCSS`). Pen Tool Extras' page and outline rules start with `.pencolor-` or

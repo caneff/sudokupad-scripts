@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.51
+// @version      0.7.52
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.51'
+  const VERSION = '0.7.52'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'dark-page'
   const SCRIPT_NAME = 'Dark Page'
@@ -140,7 +140,7 @@
   const readSaved = (store) => readTable(SETTING_ROWS, store).color
 
   // Framework keeps its saved data in localStorage under `<Framework.LocalDataPrefix>_<name>` (`makeDataKey`), a color as
-  // the plain string: the live checks in § at document-start fail if SudokuPad changes either.
+  // the plain string: the live checks in the `at document-start` block of `live/dark-page/dark-page.live.mjs` fail if SudokuPad changes either.
   const LOCAL_DATA_KEY = `svencodes_${DATA_KEY}`
   // The saved color read straight from storage, for when Framework does not exist yet. Throws when storage is blocked.
   const earlyColor = (storage) => savedHex(storage.getItem(LOCAL_DATA_KEY)) ?? null

@@ -1,8 +1,8 @@
 # Raising the fuzz's hit rate
 
 Read 2026-11-09. The question: which changes to the fuzz (`live/fuzz/`, fast-check 4.10.2 driving real SudokuPad in Playwright Chromium with the six scripts
-injected) raise the rate at which it finds bugs, ranked by expected gain per unit of effort. Builds on `docs/research/ui-fuzz-tools.md` (tool survey, the #592
-proof) and `docs/research/fuzz-planted-bugs.md` (9 of 10 hand plants caught, the miss an action gap). Already done or filed, so not proposed again: hunting on after a
+injected) raise the rate at which it finds bugs, ranked by expected gain per unit of effort. Builds on `docs/research/tooling/ui-fuzz-tools.md` (tool survey, the #592
+proof) and `docs/research/tooling/fuzz-planted-bugs.md` (9 of 10 hand plants caught, the miss an action gap). Already done or filed, so not proposed again: hunting on after a
 failure (#676), self-check rules (#677), planted bugs (#678), many puzzles per run (#679), slider actions (#713). Nothing was run for this note: no fuzz, no live
 test. The fast-check facts marked "source" were read from `node_modules/fast-check/lib/fast-check.js` (4.10.2) in this checkout.
 

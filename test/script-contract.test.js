@@ -28,7 +28,7 @@ for (const file of publishedScriptFiles()) {
   })
 }
 
-// A new @namespace installs a second copy beside the old (docs/research/tampermonkey-in-playwright.md), so each script keeps the one
+// A new @namespace installs a second copy beside the old (docs/research/tooling/tampermonkey-in-playwright.md), so each script keeps the one
 // its installed copies have, which the frozen handover (draw-tool.user.js) carries too.
 for (const file of scriptFiles()) {
   test(`${file}: @namespace is the one installed copies were given`, () => {

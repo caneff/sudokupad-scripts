@@ -133,7 +133,7 @@ const readLib = (name) => {
 const libNamesOnDisk = () => fs.readdirSync(LIB_DIR).filter((f) => f.endsWith('.js') && !f.endsWith('.test.js')).map((f) => f.slice(0, -3)).sort()
 // A script's old install address, which every copy installed from it still checks for updates, to its new one. The old file stays
 // frozen at one handover version whose @updateURL and @downloadURL name the new file, so those copies' next update leads there (#711;
-// docs/research/tampermonkey-in-playwright.md § Driving an update check has what is known of how).
+// docs/research/tooling/tampermonkey-in-playwright.md § Driving an update check has what is known of how).
 const HANDOVERS = { 'draw-tool.user.js': 'text-anywhere.user.js' }
 // The repo's raw address under its first owner. raw.githubusercontent.com still serves it, and the frozen handover and every
 // copy installed from it check it for updates, so no repo of that owner and name may ever be made again.
