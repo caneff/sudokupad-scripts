@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.58
+// @version      0.46.59
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.58'
+  const VERSION = '0.46.59'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -642,7 +642,7 @@
     yellow: () => BOX_YELLOW,
     tint: (noteColor) => `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${PAGE_COLOR})`
   }
-  // `backdrop` is the color behind the note (noteBackdrop): only Page follows it. White, Yellow and Tint stay light off the board under Dark Page, where 15% of a color on black would be near black.
+  // `backdrop` is the color behind the note (noteBackdrop). Tint ignores it: 15% of a color on Dark Page's black would be near black.
   const boxFill = (setting, noteColor, backdrop = PAGE_COLOR) => BOX_FILLS[setting]?.(noteColor, backdrop) ?? setting
   // The frame is one screen pixel: PIXEL_VAR is that in the units of a note's group, and a fixed note's group, in screen pixels, sets none.
   const FRAME_COLOR = '#c4c4c4'
