@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Color by Digit: SudokuPad scripts</title>
-<meta name="description" content="Adds a button to SudokuPad that colors cells, or the digits in them, by which group each digit is in, and keeps the colors up to date as you solve.">
+<meta name="description" content="Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Color by Digit: SudokuPad scripts">
-<meta property="og:description" content="Adds a button to SudokuPad that colors cells, or the digits in them, by which group each digit is in, and keeps the colors up to date as you solve.">
+<meta property="og:description" content="Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.">
 <meta property="og:image" content="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-1-start.png?v=f302c47">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" href="Fredoka.woff2" as="font" type="font/woff2" crossorigin>
@@ -18,7 +18,7 @@
   <p class="back"><a href="index.html">&larr; All SudokuPad scripts</a></p>
   <h1>Color by Digit</h1>
   <p class="warning">This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad. When an update breaks one part, only that part turns off, and a bar at the bottom of the page names it with a link to report it.</p>
-  <p class="lede">Adds a button to <a href="https://sudokupad.app">SudokuPad</a> that colors cells, or the digits in them, by which group each digit is in, and keeps the colors up to date as you solve.</p>
+  <p class="lede">Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.</p>
   <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install Color by Digit</a></p>
 
   <!-- slideshow:color-by-digit -->
@@ -75,7 +75,8 @@
     <li>With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.</li>
     <li>The button sits in the bottom row with Undo, Redo, Check and Select. That row holds five buttons, and any more, from this script or another, wrap onto a second row under it.</li>
   </ul>
-  <footer><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
+  <p>More detail: <a href="https://github.com/caneff/sudokupad-scripts/blob/main/docs/color-by-digit.md">the full reference</a>.</p>
+  <footer><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a><br>Questions, bugs or suggestions? Message me on Discord: <a href="https://discord.com/users/184770560356646923">@ChinStrap</a></footer>
   <script src="slides.js"></script>
 </body>
 </html>
