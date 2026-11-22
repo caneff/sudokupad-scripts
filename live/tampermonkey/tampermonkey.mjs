@@ -1,5 +1,5 @@
 // Shared by `npm run test:tampermonkey`: a real Tampermonkey in Playwright's Chromium, the way a user installs a
-// script (open its URL, click Install). Not a check itself. docs/research/tampermonkey-in-playwright.md has the recipe
+// script (open its URL, click Install). Not a check itself. docs/research/tooling/tampermonkey-in-playwright.md has the recipe
 // and its caveats.
 //
 // Tampermonkey is closed-source freeware with no redistribution grant, so its CRX is fetched from Google's update
