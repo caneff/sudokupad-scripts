@@ -116,6 +116,33 @@ test('every page has a favicon that exists, a meta description and Open Graph ti
   }
 })
 
+// #1142: Discord shows a small thumbnail beside the text unless the card is summary_large_image; it also reads the site name, the
+// picture's size and alt text, and the accent color from the head.
+test('every page asks for a large link preview: card, site name, picture size and alt, accent color', () => {
+  const slides = Object.values(JSON.parse(fs.readFileSync(path.join(SITE_DIR, 'slideshows.json'), 'utf8'))).flatMap(show =>
+    show.slides.map(slide => ({ file: show.dir + slide.picture, alt: slide.alt })))
+  const escapeAttr = text => text.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  const siteName = read(HOME).match(/<title>([^<]*)<\/title>/)[1]
+  const accent = fs.readFileSync(path.join(SITE_DIR, 'style.css'), 'utf8').match(/--accent:\s*(#[0-9a-f]{6})/i)[1]
+  for (const name of PAGES) {
+    const head = read(name).split('</head>')[0]
+    const meta = key => (head.match(new RegExp(`<meta (?:name|property)="${key}" content="([^"]+)"`)) || [])[1]
+    const where = `site/${name}`
+    assert.equal(meta('twitter:card'), 'summary_large_image', `${where}: twitter:card is not summary_large_image`)
+    assert.equal(meta('og:site_name'), siteName, `${where}: og:site_name is not the homepage title`)
+    assert.equal(meta('theme-color'), accent, `${where}: theme-color is not the --accent of style.css`)
+    const file = meta('og:image').slice(RAW.length).replace(/\?.*$/, '')
+    const png = fs.readFileSync(path.join(ROOT, file))
+    assert.equal(png.toString('latin1', 12, 16), 'IHDR', `${file} is not a PNG`)
+    assert.equal(meta('og:image:width'), String(png.readUInt32BE(16)), `${where}: og:image:width is not ${file}'s width`)
+    assert.equal(meta('og:image:height'), String(png.readUInt32BE(20)), `${where}: og:image:height is not ${file}'s height`)
+    assert.ok(head.indexOf('og:image:width') > head.indexOf('"og:image"'), `${where}: og:image:width comes before og:image`)
+    const slide = slides.find(s => s.file === file)
+    assert.ok(slide, `${file} is no slide of slideshows.json`)
+    assert.equal(meta('og:image:alt'), escapeAttr(slide.alt), `${where}: og:image:alt is not the alt of ${file}`)
+  }
+})
+
 test('each details page is named for its h1: lower-case words joined by hyphens', () => {
   for (const name of PAGES.filter(f => f !== HOME)) {
     const h1 = read(name).match(/<h1>([^<]*)<\/h1>/)
