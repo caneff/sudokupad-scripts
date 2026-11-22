@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.47
+// @version      0.7.46
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.47'
+  const VERSION = '0.7.46'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.

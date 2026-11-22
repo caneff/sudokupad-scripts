@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.40
+// @version      0.7.39
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -27,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.40'
+  const VERSION = '0.7.39'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.43
+// @version      0.1.42
 // @author       ChinStrap
 // @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -23,7 +23,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.43'
+  const VERSION = '0.1.42'
   const STYLE_ID = 'ui-tweaks-style'
   // Each option's saved boolean is kept under its own key, which is also its name in Copy settings.
   const OPTIONS = [
