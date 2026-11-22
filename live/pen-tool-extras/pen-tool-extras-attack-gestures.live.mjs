@@ -10,7 +10,7 @@ import { openPenTool, penEntries } from '../pen.mjs'
 import { FLOOR_MS, settle, STABLE_MS } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { assertSliderDragEndsOnHotkey } from '../slider.mjs'
-import { OTHER_TOOL, OTHER_TOOL_KEY } from '../attacks.mjs'
+import { OTHER_TOOL, OTHER_TOOL_KEY } from '../all-scripts.mjs'
 
 const { HOLD_TO_EDIT_MS, HOLD_WAIT_MS } = extras
 

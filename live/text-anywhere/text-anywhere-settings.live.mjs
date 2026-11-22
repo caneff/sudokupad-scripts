@@ -1,8 +1,9 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { actButton, closeDialogWith, dialogButton, headerVersion, openScriptDialog, savedValue, STATUS } from '../settings.mjs'
+import { actButton, closeDialogWith, dialogButton, openScriptDialog, savedValue, STATUS } from '../settings.mjs'
 import { useBrowser } from '../session.mjs'
+import { headerVersion } from '../../userscript-header.js'
 
 const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, KEYPAD, OPACITY_KEY, OUTLINE_KEY, PICKER, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SIZE_SLIDER, WIDTH_KEY, holdForPickers, pickTextAnywhere, script, valueOf } = textAnywhere
 const PRESET = `${EDITOR} select[data-role="color-choice"]`

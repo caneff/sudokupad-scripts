@@ -9,4 +9,4 @@ its `.dialog-overlay`. Both are running (`document.getAnimations()`) when the di
   a touch drag measured right after the dialog opened started away from its handle and moved nothing; a drag read
   400 ms later landed (scratch probe, not kept).
 - `live/settings.mjs`'s `openScriptDialog` therefore waits on both animations' `finished` promises before it returns,
-  and `live/settings.live.mjs` checks it.
+  and `live/harness-settings-dialog.live.mjs` checks it.

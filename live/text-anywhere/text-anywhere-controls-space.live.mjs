@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
-import { openWithAllScripts, rulesWidth, setLongRules } from '../attacks.mjs'
+import { openWithAllScripts, rulesWidth, setLongRules } from '../all-scripts.mjs'
 import { useBrowser } from '../session.mjs'
 import { boxOpen } from '../board.mjs'
 import { ARROW, MENU } from '../color-by-digit/color-by-digit-fixtures.mjs'

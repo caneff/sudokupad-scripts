@@ -3,12 +3,12 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
-import { captureConsoleErrors } from '../page.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
+import { captureConsoleErrors, collectWarnings } from '../page.mjs'
 import { gridPoint, undoAll } from '../board.mjs'
 import { drag, openPenTool, PAGE_BUTTON, padValues, penEntries } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../scripts.mjs'
 
 const { script } = extras
 
@@ -137,9 +137,7 @@ async function dialogLineOf (p) {
 const withBreak = (kase) => `;Framework.getApp().then(() => { ${kase.breaks || ''} });\n${kase.source || script}`
 
 const watchWarnings = (warned) => (page, errors) => {
-  page.on('console', (m) => {
-    if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())
-  })
+  collectWarnings(page, warned, WARNING)
   captureConsoleErrors(page, errors)
 }
 

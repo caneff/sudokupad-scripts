@@ -3,6 +3,7 @@
 // Each lib/<name>.js is copied into every *.user.js between `// <lib:name>` and `// </lib:name>`, because an installed script is one file.
 const fs = require('node:fs')
 const path = require('node:path')
+const { VERSION_LINE } = require('./userscript-header.js')
 
 const LIB_NAME = '[a-z][a-z0-9-]*'
 const OPEN = new RegExp(`^(\\s*)\\/\\/ <lib:(${LIB_NAME})>\\s*$`)
@@ -11,7 +12,6 @@ const CLOSE = new RegExp(`^\\s*\\/\\/ <\\/lib:(${LIB_NAME})>\\s*$`)
 const BLOCK = new RegExp(`\\/\\/ <lib:(${LIB_NAME})>[\\s\\S]*?\\/\\/ <\\/lib:\\1>`, 'g')
 const MARKER_WORD = /<\/?lib:/
 const RUN = 'node sync-lib.js'
-const SCRIPT_VERSION = /^(\/\/ @version\s+)(\d+)\.(\d+)\.(\d+)(\s*)$/m
 const CONST_VERSION = /^(\s*const VERSION = ')(\d+)\.(\d+)\.(\d+)(')$/m
 
 // A lib file's first line may silence the linter for names only the scripts use. A script may use only part of a module, so the copy
@@ -35,8 +35,8 @@ const blockLines = (name, module, indent) => {
 const ANY_CONST_VERSION = /^\s*const VERSION =/m
 
 function bumpPatch (source) {
-  if (!SCRIPT_VERSION.test(source) || (ANY_CONST_VERSION.test(source) && !CONST_VERSION.test(source))) return null
-  return [SCRIPT_VERSION, CONST_VERSION].reduce(
+  if (!VERSION_LINE.test(source) || (ANY_CONST_VERSION.test(source) && !CONST_VERSION.test(source))) return null
+  return [VERSION_LINE, CONST_VERSION].reduce(
     (text, pattern) => text.replace(pattern, (_, head, major, minor, patch, tail) => `${head}${major}.${minor}.${Number(patch) + 1}${tail}`),
     source)
 }

@@ -7,7 +7,7 @@ const path = require('node:path')
 
 const { RAW, pictureTags, tagOf } = require('../tag-pictures.js')
 const { scriptFiles, publishedScriptFiles } = require('../sync-lib.js')
-const { headerField } = require('./header-version.js')
+const { headerField } = require('../userscript-header.js')
 const SCRIPT_SUFFIX = '.user.js'
 const ROOT = path.join(__dirname, '..')
 const SITE_DIR = path.join(ROOT, 'site')

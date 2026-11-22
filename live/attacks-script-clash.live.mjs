@@ -1,18 +1,18 @@
 // Live attacks on clashes between the scripts (#590, attacks 57-61).
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { attack, noteCount, NOTES, rulesScroll, rulesWidth, setLongRules } from './attacks.mjs'
-import { DIGITS, BLACK, LETTER_MODE_KEY } from './scripts.mjs'
+import { attack, noteCount, NOTES, rulesScroll, rulesWidth, setLongRules } from './all-scripts.mjs'
+import { BLACK, DIGITS, EXTRAS_EDITOR, LETTER_MODE_KEY, openExtrasEditor, scriptRecord } from './scripts.mjs'
 import { gridPoint, mouseDrag, placeNote } from './board.mjs'
 import { openPenTool, penEntries } from './pen.mjs'
 import { keydownDefaults, setInputValue } from './input.mjs'
 import { settle, stable } from './settle.mjs'
-import { closeDialogWith, dialogButton, EXTRAS_EDITOR, openExtrasEditor, openScriptDialog, openSettings } from './settings.mjs'
+import { closeDialogWith, dialogButton, openScriptDialog, openSettings } from './settings.mjs'
 import { EDITOR as CBD_EDITOR } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { pickTextAnywhere, SETTINGS_EDITOR as TEXT_EDITOR } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { useBrowser } from './session.mjs'
 
-const DARK_STYLE = '#dark-page-style'
+const DARK_STYLE = scriptRecord('dark-page.user.js').style
 const DARK_EDITOR = '#dark-page-input'
 const RULES_EDITOR = '#auto-rules-resizer-max-width'
 const WHITE = 'rgb(255, 255, 255)'

@@ -2,7 +2,7 @@
 /* global Framework */
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { assertNoCrash, openWithAllScripts } from './attacks.mjs'
+import { assertNoCrash, openWithAllScripts } from './all-scripts.mjs'
 import { boardState, cellCentre, cellState, clickCell, emptyCell, finishNote, gridPoint, mouseDrag, pickTool, typeText, undoDepth } from './board.mjs'
 import { penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'

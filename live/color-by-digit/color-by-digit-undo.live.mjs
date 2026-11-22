@@ -6,7 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { POLL_MS, settle } from '../settle.mjs'
 import * as textAnywhere from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { finishNote, gridPoint, selectCell, undoDepth } from '../board.mjs'
-import { flushSave } from '../attacks.mjs'
+import { flushSave } from '../all-scripts.mjs'
 import { reloadWith, scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')

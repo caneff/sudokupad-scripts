@@ -135,11 +135,11 @@ test('every form of the global comment is read, and a name with a regex characte
   assert.equal(syncText(script(needyBlock), (name) => dollar[name], libNames).problems.length, 1)
 })
 
-// The command run on a copy of itself, beside its own lib/ and scripts, so the repo's files are not touched.
+// The command run on a copy of itself and the header reader it loads, beside its own lib/ and scripts, so the repo's files are not touched.
 function runCommand (scripts, libFiles = { plain: modules.plain }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-lib-'))
   try {
-    fs.copyFileSync(path.join(__dirname, '..', 'sync-lib.js'), path.join(dir, 'sync-lib.js'))
+    for (const tool of ['sync-lib.js', 'userscript-header.js']) fs.copyFileSync(path.join(__dirname, '..', tool), path.join(dir, tool))
     fs.mkdirSync(path.join(dir, 'lib'))
     for (const [name, text] of Object.entries(libFiles)) fs.writeFileSync(path.join(dir, 'lib', `${name}.js`), text)
     for (const [file, text] of Object.entries(scripts)) fs.writeFileSync(path.join(dir, file), text)

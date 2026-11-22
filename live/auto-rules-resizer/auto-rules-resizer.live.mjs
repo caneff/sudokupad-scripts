@@ -9,8 +9,10 @@ import { loadInPlace } from '../puzzles.mjs'
 import { RULES_TEXT } from '../fuzz/puzzle-set.mjs'
 import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
-import { closeDialogWith, dialogButton, headerVersion, openScriptDialog, openSettings, STATUS } from '../settings.mjs'
+import { closeDialogWith, dialogButton, openScriptDialog, openSettings, STATUS } from '../settings.mjs'
 import { CORNER, FONT_BAR, MAX_HEIGHT_INPUT, MAX_WIDTH_INPUT, STYLE } from './auto-rules-resizer-fixtures.mjs'
+import { headerVersion } from '../../userscript-header.js'
+import { collectWarnings } from '../page.mjs'
 
 const SCRIPT_FILE = 'auto-rules-resizer.user.js'
 const script = scriptSource(SCRIPT_FILE)
@@ -1086,7 +1088,7 @@ for (const kase of MISSING) {
 
     before(async () => {
       ;({ context, p, errors } = await rulesPage(LANDSCAPE, (page) => {
-        page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })
+        collectWarnings(page, warned, WARNING)
       }, RULES, { expectedSkips: [WARNING] }))
       const breaks = `const owner = ${kase.internal.replace(/\.[^.]+$/, '')}
         const original = owner.${kase.name}

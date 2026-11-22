@@ -1,4 +1,4 @@
-// Live attacks 62, 63, 64 and 66. Attack 65, the replay tool, is `live/replay-playback.live.mjs`.
+// Live attacks 62, 63, 64 and 66. Attack 65, the replay tool, is `live/attacks-replay.live.mjs`.
 // Under SudokuPad's solved dialog the overlay swallows the mouse and a press on it dismisses the dialog, so attack 64's draw, notes and dialogs come after the dismissal and under the dialog only keys and a pen drag are tried.
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -7,10 +7,11 @@ import { EDITOR as COLOR_BY_DIGIT_EDITOR } from './color-by-digit/color-by-digit
 import { SETTINGS_EDITOR, tool } from './text-anywhere/text-anywhere-fixtures.mjs'
 import { clickCell, mouseDrag, pickTool, placeNote } from './board.mjs'
 import { draw, penEntries } from './pen.mjs'
-import { closeDialogWith, EXTRAS_EDITOR, openScriptDialog } from './settings.mjs'
+import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { boardOf, CLASSIC_GIVENS, CLASSIC_SOLUTION, closePauseDialog, dialogAtRest, dialogWith, installAll, NOTE_POINT, openPuzzleId, OVERLAY_DRAG, PAUSED, pauseGame, puzzleData, puzzleIdFor, resumeAfterHistory } from './puzzles.mjs'
 import { readUntil, settle } from './settle.mjs'
 import { useBrowser } from './session.mjs'
+import { EXTRAS_EDITOR } from './scripts.mjs'
 
 const CONGRATS = 'Congrats'
 const OK = /^\s*OK\s*$/

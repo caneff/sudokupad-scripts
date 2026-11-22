@@ -5,6 +5,7 @@ import { startPuzzle, START } from './page.mjs'
 import { texts } from './board.mjs'
 import { installAtIdle, SCRIPT_FILES, scriptSource } from './session.mjs'
 import { animationsDone } from './settings.mjs'
+import { SCRIPTS } from './scripts.mjs'
 
 const SUDOKUPAD = 'https://sudokupad.app/'
 
@@ -32,8 +33,7 @@ async function enableTools (p) {
   await p.evaluate(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolreplay', true) })
   await p.locator('#control-pen').waitFor({ state: 'visible' })
   await p.locator('#control-replay').waitFor({ state: 'visible' })
-  await p.locator('#control-textanywhere').waitFor({ state: 'visible' })
-  await p.locator('#control-colorbydigit').waitFor({ state: 'visible' })
+  for (const script of SCRIPTS.filter((s) => s.button)) await p.locator(script.button).waitFor({ state: 'visible' })
 }
 
 export const CLASSIC_SOLUTION = '534678912672195348198342567859761423426853791713924856961537284287419635345286179'

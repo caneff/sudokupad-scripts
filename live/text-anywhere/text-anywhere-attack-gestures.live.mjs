@@ -9,7 +9,7 @@ import { settle, stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 import { finishNote, gridPoint, mouseDrag, typeText, undoDepth } from '../board.mjs'
 import { assertSliderDragEndsOnHotkey } from '../slider.mjs'
-import { OTHER_TOOL, OTHER_TOOL_KEY } from '../attacks.mjs'
+import { OTHER_TOOL, OTHER_TOOL_KEY } from '../all-scripts.mjs'
 import { middleOf } from '../input.mjs'
 
 const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = textAnywhere
