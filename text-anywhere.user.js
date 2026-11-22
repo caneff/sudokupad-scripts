@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.52
+// @version      0.46.58
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,9 +20,14 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.52'
+  const VERSION = '0.46.58'
+  // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
+  const SCRIPT_ID = 'text-anywhere'
+  const SCRIPT_NAME = 'Text Anywhere'
   const TOOL_NAME = 'textanywhere'
-  const LAYER_ID = 'text-anywhere-layer'
+  // Every class and id the script makes starts with this.
+  const CLASS_PREFIX = 'text-anywhere-'
+  const LAYER_ID = `${CLASS_PREFIX}layer`
   const DIALOG_BLUR_PX = 8
   const MIN_WIDTH = 1
   const MAX_WIDTH = 16
@@ -78,7 +83,7 @@
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
 
-  // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
+  // A color set (lib/color-set.js) without its `fromPreset`.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
 
   // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so color N lines up with cell color button N.
@@ -129,20 +134,34 @@
 
   const colorTool = () => Framework.app?.tools?.colour
 
-  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
-  // values for them exist earlier and say nothing about a custom palette).
-  function readyColorTool () {
-    const tool = colorTool()
-    const pages = tool?.palette?.pages
-    return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
-  }
+  const BAD_PALETTE = 'SudokuPad\'s color palette has no pages of color keys'
 
+  // The one reader of the palette's pages: none while SudokuPad has no palette, and a throw for a palette of a shape the script does not know.
   function palettePages () {
     const palette = colorTool()?.palette
     if (!palette) return []
-    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error(BAD_PALETTE)
     return palette.pages
   }
+
+  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
+  // values for them exist earlier and say nothing about a custom palette).
+  const readyColorTool = () => palettePages().length > 0 ? colorTool() : null
+
+  // A bad palette is a warning under the script's id and no pages, so a dialog still opens; `note` is the warning's text, for the dialog to show.
+  function readPalettePages (scriptId) {
+    try {
+      return { pages: palettePages(), note: '' }
+    } catch (error) {
+      console.warn(`${scriptId}: ${error.message}`)
+      return { pages: [], note: error.message }
+    }
+  }
+
+  // What a script with the Darker page presets loses to a bad palette, for paletteNoteHtml.
+  const PRESETS_LEFT_OUT = 'the Darker page presets are left out'
+  // A dialog's line for a bad palette: readPalettePages' `note`, then `outcome`, what the script does without the palette's pages. '' with no note.
+  const paletteNoteHtml = (note, outcome, className = '') => note ? `<div${className ? ` class="${className}"` : ''} data-role="palette-note">${note}, so ${outcome}.</div>` : ''
 
   // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
   // '' for a value it rejects or a variable with none.
@@ -165,9 +184,10 @@
   /* eslint-enable no-unused-vars */
   // </lib:palette>
   // The page's own color, as SudokuPad's buttons use it behind their icons. Dark Page leaves it on the board's box and paints the page around it its own color, which it puts in
-  // `--dark-page-color`: a note off the board takes that.
+  // DARK_PAGE_COLOR_VAR (Dark Page's name; test/cross-script-names.test.js checks it against Dark Page's CSS): a note off the board takes that.
   const PAGE_COLOR = 'var(--body-bg, #fff)'
-  const MARGIN_COLOR = `var(--dark-page-color, ${PAGE_COLOR})`
+  const DARK_PAGE_COLOR_VAR = '--dark-page-color'
+  const MARGIN_COLOR = `var(${DARK_PAGE_COLOR_VAR}, ${PAGE_COLOR})`
   const PEN_PRESET = 'pen'
   // The next note's size is saved as a width; a text size is 2 x the width + 8.
   const WIDTH_KEY = KEY_PREFIX + 'width'
@@ -190,20 +210,20 @@
   // In screen pixels.
   const CLICK_SLOP = 4
   const RECTANGLE_CLICK_PX = 8
-  const TEXT_BOX_CLASS = 'text-anywhere-textbox'
-  const CLEAR_CLASS = 'text-anywhere-clear'
-  const SETTINGS_CLASS = 'text-anywhere-settings'
-  const BACKGROUND_CLASS = 'text-anywhere-background'
-  const BACKGROUND_FILL_CLASS = 'text-anywhere-background-fill'
-  const TEXT_CLASS = 'text-anywhere-text'
-  const TEXT_BACKGROUND_CLASS = 'text-anywhere-text-bg'
-  const SELECTED_CLASS = 'text-anywhere-selected'
-  const CHECK_CLASS = 'text-anywhere-check'
-  const CHECK_DONE_CLASS = 'text-anywhere-check-done'
-  const CODE_CLASS = 'text-anywhere-code'
-  const STRIKE_CLASS = 'text-anywhere-strike'
-  const STRIKE_PIECE_CLASS = 'text-anywhere-strike-piece'
-  const CODE_BLOCK_CLASS = 'text-anywhere-code-block'
+  const TEXT_BOX_CLASS = `${CLASS_PREFIX}textbox`
+  const CLEAR_CLASS = `${CLASS_PREFIX}clear`
+  const SETTINGS_CLASS = `${CLASS_PREFIX}settings`
+  const BACKGROUND_CLASS = `${CLASS_PREFIX}background`
+  const BACKGROUND_FILL_CLASS = `${CLASS_PREFIX}background-fill`
+  const TEXT_CLASS = `${CLASS_PREFIX}text`
+  const TEXT_BACKGROUND_CLASS = `${CLASS_PREFIX}text-bg`
+  const SELECTED_CLASS = `${CLASS_PREFIX}selected`
+  const CHECK_CLASS = `${CLASS_PREFIX}check`
+  const CHECK_DONE_CLASS = `${CLASS_PREFIX}check-done`
+  const CODE_CLASS = `${CLASS_PREFIX}code`
+  const STRIKE_CLASS = `${CLASS_PREFIX}strike`
+  const STRIKE_PIECE_CLASS = `${CLASS_PREFIX}strike-piece`
+  const CODE_BLOCK_CLASS = `${CLASS_PREFIX}code-block`
   const DONE_OPACITY = 0.6
   // A note being moved is drawn at this share of its own opacity, so the board shows through.
   const MOVING_OPACITY = 0.6
@@ -211,46 +231,45 @@
   const FADE_IN_MS = 80
   const FADE_IN_EASE = 'cubic-bezier(0, 0, 0, 1)'
   const MOTION_OK = '(prefers-reduced-motion: no-preference)'
-  const EMPTY_CLASS = 'text-anywhere-empty'
+  const EMPTY_CLASS = `${CLASS_PREFIX}empty`
   // A handle is made with this class and loses it a frame later, which is what starts its fade in.
-  const ENTERING_CLASS = 'text-anywhere-entering'
-  const HELD_CURSOR_CLASS = 'text-anywhere-holding-cursor'
+  const ENTERING_CLASS = `${CLASS_PREFIX}entering`
+  const HELD_CURSOR_CLASS = `${CLASS_PREFIX}holding-cursor`
   const HELD_CURSOR_VAR = '--text-anywhere-held-cursor'
   // The notes' two groups in the layer: the notes on the board, in board units under the board's own transform, and the fixed notes, in screen pixels,
   // drawn above them.
-  const BOARD_NOTES_CLASS = 'text-anywhere-board'
-  const SCREEN_NOTES_CLASS = 'text-anywhere-screen'
+  const BOARD_NOTES_CLASS = `${CLASS_PREFIX}board`
+  const SCREEN_NOTES_CLASS = `${CLASS_PREFIX}screen`
   // One screen pixel in the units of a note's group, so a note's frame is as thin on the board as off it.
   const PIXEL_VAR = '--text-anywhere-px'
-  const SCROLLS_CLASS = 'text-anywhere-scrolls'
-  const ACTIVE_CLASS = 'text-anywhere-active'
-  const HANDLE_CLASS = 'text-anywhere-resize'
-  const SELECTION_CLASS = 'text-anywhere-selection'
-  const NUDGING_CLASS = 'text-anywhere-nudging'
-  const HOVERED_CLASS = 'text-anywhere-hovered'
-  const GUIDE_CLASS = 'text-anywhere-snap-guide'
+  const SCROLLS_CLASS = `${CLASS_PREFIX}scrolls`
+  const ACTIVE_CLASS = `${CLASS_PREFIX}active`
+  const HANDLE_CLASS = `${CLASS_PREFIX}resize`
+  const SELECTION_CLASS = `${CLASS_PREFIX}selection`
+  const NUDGING_CLASS = `${CLASS_PREFIX}nudging`
+  const HOVERED_CLASS = `${CLASS_PREFIX}hovered`
+  const GUIDE_CLASS = `${CLASS_PREFIX}snap-guide`
   const GUIDE_PX = 1
   const SELECTION_OUTLINE_PX = 2
   const SELECTION_OFFSET_PX = 2
-  const OPEN_OUTLINE_CLASS = 'text-anywhere-open-outline'
+  const OPEN_OUTLINE_CLASS = `${CLASS_PREFIX}open-outline`
   const HANDLE_PX = 11
   // A note's own opacity, as a number, for the hover look: it draws on the note and the note's opacity multiplies into it.
   const NOTE_OPACITY_VAR = '--text-anywhere-note-opacity'
   const NOTE_COLOR_VAR = '--text-anywhere-note-color'
-  const RECTANGLE_CLASS = 'text-anywhere-selection-rectangle'
-  const TRAY_CLASS = 'text-anywhere-tray'
-  const SLIDERS_CLASS = 'text-anywhere-sliders'
-  const SLIDER_ROW_CLASS = 'text-anywhere-slider'
-  const SLIDER_ROWS_CLASS = 'text-anywhere-slider-rows'
-  const HIDE_ALL_CLASS = 'text-anywhere-hide-all'
-  const HIDDEN_CLASS = 'text-anywhere-hidden'
-  const SIZE_SLIDER = 'text-anywhere-size'
-  const OPACITY_SLIDER = 'text-anywhere-opacity'
+  const RECTANGLE_CLASS = `${CLASS_PREFIX}selection-rectangle`
+  const TRAY_CLASS = `${CLASS_PREFIX}tray`
+  const SLIDERS_CLASS = `${CLASS_PREFIX}sliders`
+  const SLIDER_ROW_CLASS = `${CLASS_PREFIX}slider`
+  const SLIDER_ROWS_CLASS = `${CLASS_PREFIX}slider-rows`
+  const HIDE_ALL_CLASS = `${CLASS_PREFIX}hide-all`
+  const HIDDEN_CLASS = `${CLASS_PREFIX}hidden`
+  const SIZE_SLIDER = `${CLASS_PREFIX}size`
+  const OPACITY_SLIDER = `${CLASS_PREFIX}opacity`
   const SIZE_LABEL = 'Size'
   const OPACITY_LABEL = 'Opacity'
-  const CLASS_PREFIX = 'text-anywhere-'
-  const COLORS_STYLE_ID = 'text-anywhere-colors'
-  const PANEL_STYLE_ID = 'text-anywhere-style'
+  const COLORS_STYLE_ID = `${CLASS_PREFIX}colors`
+  const PANEL_STYLE_ID = `${CLASS_PREFIX}style`
   // Clear all with no notes asks nothing; with one it speaks of the one.
   const clearAsk = (count) => count === 0
     ? null
@@ -265,8 +284,6 @@
   const RESTARTED_PREFIX = KEY_PREFIX + 'restarted_'
   const KEPT_PUZZLES = 50
   const HIT_MARGIN_PX = 4
-  const PRIMARY_BUTTON = 0
-  const SECONDARY_BUTTON = 2
   const TEXT_KIND = 'text'
   // Kinds an earlier version saved; they are kept with the entries no note check passes, stay in storage and are never drawn.
   const OLD_KINDS = ['stroke', 'shape']
@@ -602,14 +619,12 @@
   }
 
   // A keypad button's data-value is text, and Framework.getData parses a saved number back as a number.
-  function noteColorNumber (value) {
+  function savedColorNumber (value) {
     const n = typeof value === 'string' && /^[0-9]$/.test(value) ? Number(value) : value
     return Number.isInteger(n) && n >= 1 && n <= NOTE_COLOR_COUNT ? n : undefined
   }
-  const readColor = (saved) => noteColorNumber(saved) ?? DEFAULT_COLOR
-  const isWidth = (value) => onSliderStep(WIDTH_RANGE, value)
-  const isOpacity = (value) => onSliderStep(OPACITY_RANGE, value)
-  const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
+  const readColor = (saved) => savedColorNumber(saved) ?? DEFAULT_COLOR
+  const readWidth = (saved) => savedSliderValue(WIDTH_RANGE, saved) ?? DEFAULT_WIDTH
   const readFlag = (saved) => saved === true
   const readBackground = readFlag
   const BOX_PRESETS = { page: 'Page', white: 'White', yellow: 'Yellow', tint: 'Tint' }
@@ -681,7 +696,7 @@
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
   const noteOpacity = (item) => itemOpacity(item) / 100
-  const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
+  const readOpacity = (saved) => savedSliderValue(OPACITY_RANGE, saved) ?? DEFAULT_OPACITY
 
   // A color or background the notes do not share is null; a slider must show one value, so it shows the first note's (the oldest).
   function panelLooks (items) {
@@ -733,6 +748,15 @@
 
   // Text into HTML markup or an attribute value: the four characters that would end one or open another.
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // A mouse event's `button` numbers the button that changed; its `buttons` has one bit per button held.
+  const PRIMARY_BUTTON = 0
+  const SECONDARY_BUTTON = 2
+  const PRIMARY_HELD = 1
+  const SECONDARY_HELD = 2
+
+  // The settings dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
+  const DIALOG_PURPLE = '#6b3fa0'
   /* eslint-enable no-unused-vars */
   // </lib:plain>
 
@@ -743,6 +767,7 @@
   const steppedSlider = ({ min, max, step }, value, direction) => Math.min(max, Math.max(min, value + direction * step))
   // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
   const onSliderStep = ({ min, max, step }, value) => typeof value === 'number' && value >= min && value <= max && Number.isInteger((value - min) / step)
+  const savedSliderValue = (range, data) => (onSliderStep(range, data) ? data : undefined)
   // SudokuPad drops every keydown with `event.repeat` before a tool sees it, so a script times a held key itself: nothing until the pause, then a tick of steps that ramps up.
   const HELD_REPEAT_MS = 300
   const HELD_RAMP_MS = 1500
@@ -803,7 +828,7 @@
 
   // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
   // anything can save over it, through the store's `keep` when it has one: a copy the browser refuses must stop saving, not be forgotten.
-  function load (store, { key, read }) {
+  function loadEnveloped (store, { key, read }) {
     const raw = store.getData(key)
     if (raw === null) return { value: undefined }
     try {
@@ -833,7 +858,7 @@
   const puzzleKey = (puzzleId, href) => String(puzzleId || href)
 
   // A value already saved as it is writes nothing: a write is a storage round trip.
-  function save (store, key, data) {
+  function saveEnveloped (store, key, data) {
     const envelope = { v: STORE_VERSION, data }
     if (JSON.stringify(store.getData(key)) === JSON.stringify(envelope)) return
     store.setData(key, envelope)
@@ -847,8 +872,11 @@
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // (the store module's `{ load: loadEnveloped, save: saveEnveloped }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `loadEnveloped`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
+  // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
+  const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
+
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -1012,7 +1040,8 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global PEN_COLOR_NUMBERS, escapeHtml */
+  // A script that copies in settings-dialog as well has a second `global` naming DIALOG_PURPLE, which the linter calls a redeclaration.
+  /* global PEN_COLOR_NUMBERS, escapeHtml, DIALOG_PURPLE, PRIMARY_BUTTON */ // eslint-disable-line no-redeclare
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   const SWATCH_PX = 34
@@ -1024,7 +1053,7 @@
   const PICKER_ENTRY_SCALE = 0.95
   const PICKER_ENTRY_MS = 150
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
-  const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
+  const CHOICE_ARROW = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${encodeURIComponent(DIALOG_PURPLE)}'/%3E%3C/svg%3E")`
 
   // A preset in force that is not among the pickable `presets` (Custom, a page the palette no longer has) is shown first, selected and disabled, so the pulldown says what is in force and
   // every preset stays pickable: picking the option already shown fires no `change`. `labels` names each id.
@@ -1155,7 +1184,7 @@
       if (editPanel && !editPanel.contains(event.target)) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        if (event.button === 0) document.addEventListener('click', swallowClick, true)
+        if (event.button === PRIMARY_BUTTON) document.addEventListener('click', swallowClick, true)
         endEditMode()
         return
       }
@@ -1192,7 +1221,7 @@
   // <lib:color-set>
   // Generated from lib/color-set.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  /* global parseColor, toHex, savedHex, isPlainObject, SUDOKUPAD_PEN_COLORS, PEN_COLOR_NUMBERS */ // eslint-disable-line no-redeclare
+  /* global parseColor, toHex, savedHex, isPlainObject, SUDOKUPAD_PEN_COLORS, PEN_COLOR_NUMBERS, paletteColors, copiedTable */ // eslint-disable-line no-redeclare
   // A color set is `{ colors, preset, missing, fromPreset }`: the nine #rrggbb colors, the preset they came from, the pens a page preset left with SudokuPad's own,
   // and the preset the dialog's note names them for. A hand edit keeps the last two, so the note still names the page. Every change makes a whole new record.
   // `presets` is the list of preset ids a script saves beside its colors; any other is Custom.
@@ -1235,6 +1264,20 @@
     return set ? storedColorSet(set) : undefined
   }
 
+  // The set a preset gives, `fromPreset` naming it, with its own copy of the colors.
+  function presetColorSet (preset, pages, readCell) {
+    const { colors, missing } = paletteColors(preset, pages, readCell)
+    return { colors: { ...colors }, preset, missing, fromPreset: preset }
+  }
+
+  // Copy's text: every row of the settings table at the value in force, defaults included, so a paste can put one back to its default; the colors only once they are saved.
+  function copiedSettingsWithColors (rows, store, colorsKey, presets) {
+    const copied = copiedTable(rows, store)
+    const colors = copiedColorSet(store.getData(colorsKey), presets)
+    if (colors) copied[colorsKey] = colors
+    return JSON.stringify(copied)
+  }
+
   // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
   const colorSetCss = (colors, varOf) => [':root:root {', ...PEN_COLOR_NUMBERS.map((n) => `  ${varOf(n)}: ${colors[n]};`), '}'].join('\n')
   /* eslint-enable no-unused-vars */
@@ -1253,18 +1296,15 @@
 
   // The dialog names a set's missing pens until the page reloads: a saved set has none.
   const penColorSet = (readPen) => ({ colors: copiedPenColors(readPen), preset: PEN_PRESET, missing: [], fromPreset: null })
-  const presetColorSet = (preset, pages, readCell, readPen) => ({ ...presetColors(preset, pages, readCell, readPen), preset, fromPreset: preset })
   // null when nothing usable is saved, which means the first-use copy of the pen colors is still owed.
   const readNoteColorSet = (saved) => savedColorSet(saved, NOTE_PRESETS)
 
+  // A palette of a shape the script does not know is the dialog's own note, and does not turn the presets off.
+  const dialogPalette = (presetsOff) => presetsOff ? { pages: [], note: '' } : readPalettePages(SCRIPT_ID)
   const presetOptions = (pageCount) => [PEN_PRESET, ...paletteOptions(pageCount)]
 
   // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
-  function presetColors (preset, pages, readCell, readPen) {
-    if (preset === PEN_PRESET) return { colors: copiedPenColors(readPen), missing: [] }
-    const { colors, missing } = paletteColors(preset, pages, readCell)
-    return { colors: { ...colors }, missing }
-  }
+  const noteColorSet = (preset, pages, readCell, readPen) => preset === PEN_PRESET ? { ...penColorSet(readPen), fromPreset: PEN_PRESET } : presetColorSet(preset, pages, readCell)
 
   // Each look setting is one row: its stored `key`, `read` (the one reader, saved or pasted; undefined refuses the value, and the row's fallback stands for a saved one).
   // A reader that never refuses reads a bad paste as a value on purpose.
@@ -1272,14 +1312,19 @@
   // An invalid pasted outline reads as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
   const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })
   const LOOKS = [
-    lookRowOf('width', WIDTH_KEY, (data) => (isWidth(data) ? data : undefined), { fallback: DEFAULT_WIDTH }),
-    lookRowOf('opacity', OPACITY_KEY, (data) => (isOpacity(data) ? data : undefined), { fallback: DEFAULT_OPACITY }),
+    lookRowOf('width', WIDTH_KEY, (data) => savedSliderValue(WIDTH_RANGE, data), { fallback: DEFAULT_WIDTH }),
+    lookRowOf('opacity', OPACITY_KEY, (data) => savedSliderValue(OPACITY_RANGE, data), { fallback: DEFAULT_OPACITY }),
     lookRowOf('outline', OUTLINE_KEY, readOutline, { dialog: true }),
     lookRowOf('boxColor', BOX_KEY, readBoxColor, { dialog: true }),
     lookRowOf('frame', FRAME_KEY, readFrame, { dialog: true }),
     lookRowOf('noteFont', FONT_KEY, readFont, { dialog: true })
   ]
   const lookRow = (name) => LOOKS.find((row) => row.name === name)
+  // A look at its fallback removes its key, except while its pre-0.45 twin holds a value: copyOldKeys would copy that back at the next start, so the fallback is saved instead.
+  function saveLook (store, row, value) {
+    if (sameValue(value, row.fallback) && store.getData(oldKey(row.key)) !== null) store.setData(row.key, value)
+    else saveRow(store, row, value)
+  }
   const readLooks = (store, looks = LOOKS) => readTable(looks, store)
   const dialogLooks = (looks) => looks.filter((row) => row.dialog)
   const changedDialogLooks = (looks, draft, now) => changedRows(dialogLooks(looks), draft, now)
@@ -1288,13 +1333,7 @@
   // Copy and Paste carry the colors, size, opacity, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const READERS = { [COLORS_KEY]: (data) => pastedColorSet(data, NOTE_PRESETS), ...pasteReaders(LOOKS) }
 
-  // The looks in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
-  function copiedSettings (store, looks = LOOKS) {
-    const copied = copiedTable(looks, store)
-    const colors = copiedColorSet(store.getData(COLORS_KEY), NOTE_PRESETS)
-    if (colors) copied[COLORS_KEY] = colors
-    return JSON.stringify(copied)
-  }
+  const copiedSettings = (store, looks = LOOKS) => copiedSettingsWithColors(looks, store, COLORS_KEY, NOTE_PRESETS)
 
   const textItem = ([x, y], text, color, size, background, opacity = DEFAULT_OPACITY) => ({ kind: TEXT_KIND, color, size, opacity, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
 
@@ -1303,7 +1342,7 @@
   const isStoredSize = (value) => Number.isInteger(value) && value > 0
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
   const isBox = (box) => isPoint(box) && box.every((side) => side > 0)
-  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && noteColorNumber(item.color) !== undefined && isStoredOpacity(item.opacity) &&
+  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && savedColorNumber(item.color) !== undefined && isStoredOpacity(item.opacity) &&
     (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isStoredSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
   const isOldEntry = (item) => isPlainObject(item) && OLD_KINDS.includes(item.kind)
@@ -1318,9 +1357,9 @@
     return read
   }
 
-  // `unreadable` is the reason when the whole saved value could not be read, and is then copied aside by `load`.
+  // `unreadable` is the reason when the whole saved value could not be read, and is then copied aside by `loadEnveloped`.
   function loadNotes (store, key) {
-    const { value, unreadable } = load(store, { key: notesKey(key), read: readNotes })
+    const { value, unreadable } = loadEnveloped(store, { key: notesKey(key), read: readNotes })
     return { ...(value ?? { items: [], kept: [] }), unreadable }
   }
 
@@ -1367,7 +1406,7 @@
     const notes = items.concat(kept)
     const index = readIndex(store.getData(INDEX_KEY))
     if (notes.length > 0) {
-      writeIndexed(store, index, key, notesKey(key), notes, (k, v) => save(store, k, v))
+      writeIndexed(store, index, key, notesKey(key), notes, (k, v) => saveEnveloped(store, k, v))
       return
     }
     store.removeData(notesKey(key))
@@ -1511,14 +1550,20 @@
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle */ // eslint-disable-line no-redeclare
+  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle, DIALOG_PURPLE */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
-  const SAVE_FILL = '#6b3fa0'
+  // The options row's rule, the buttons' face, ink and border, the Save button's border, and the title tools' hover.
+  const DIALOG_RULE = '#e3dff0'
+  const DIALOG_BUTTON_FACE = '#f1eff5'
+  const DIALOG_BUTTON_INK = '#333'
+  const DIALOG_BUTTON_BORDER = '#cfc9db'
+  const DIALOG_SAVE_BORDER = '#5a3489'
+  const DIALOG_TOOLS_HOVER = '#f0edf5'
   // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
@@ -1595,6 +1640,7 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  // `Framework.getApp` is not among them, so a SudokuPad without it still gets the entry.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -1739,7 +1785,7 @@
       `.${prefix}off-note:empty { display: none; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
-      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} button:hover { background: ${DIALOG_TOOLS_HOVER} !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
@@ -1757,11 +1803,11 @@
       // Inherited by every checkbox, slider and other form control in the dialog, in place of the browser's blue.
       `${dialog} { accent-color: ${SUDOKUPAD_PURPLE}; }`,
       // The row sits on the text parts' box, so their side padding as its margin puts its edges, the top line's included, on the content column's.
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
-      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
-      `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${DIALOG_RULE}; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
+      `${row} button { background: ${DIALOG_BUTTON_FACE} !important; color: ${DIALOG_BUTTON_INK} !important; border: 1px solid ${DIALOG_BUTTON_BORDER} !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
+      `${row} button[data-role="save"] { background: ${DIALOG_PURPLE} !important; color: #fff !important; border: 1px solid ${DIALOG_SAVE_BORDER} !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
-      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
+      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${DIALOG_PURPLE} !important; }`,
       `${row} button:active { ${PRESS_LAYER} !important; }`,
       `${row} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px; }`
     ].join('\n')
@@ -1948,7 +1994,7 @@
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  // exists; `store`, SudokuPad's Framework unless given, holds a dismissal under `<script>-notice`.
   function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
@@ -2126,7 +2172,7 @@
 
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
-    function probe ({ roots, store, doc = document }) {
+    function probe ({ roots, store = Framework, doc = document }) {
       sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
@@ -2134,6 +2180,29 @@
       })
       page = { store, doc, sudokupad }
       showNotice()
+    }
+
+    // A failure outside every feature turns off this one, named for the script, instead of an unhandled rejection naming nothing.
+    const startup = createFeature('startup', { label: 'startup' })
+    const startupFailed = (error) => startup.skip(error)
+    // `fn` as a function whose throw, or the rejection of the promise it returns, is reported as the startup's. A throw is reported at once.
+    const catchStartup = (fn) => (...args) => {
+      try {
+        return Promise.resolve(fn(...args)).catch(startupFailed)
+      } catch (error) {
+        startupFailed(error)
+        return Promise.resolve()
+      }
+    }
+
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
+    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    function start (begin, { roots = () => ({}) } = {}) {
+      const run = catchStartup((app) => {
+        probe({ roots: { Framework, app, ...roots() } })
+        return begin(app)
+      })
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
@@ -2180,7 +2249,7 @@
       closeDialog: () => feature.run(() => Framework.closeDialog())
     })
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, start, catchStartup, storeFor, dialogsFor }
   }
 
   // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
@@ -2361,14 +2430,14 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, noteColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, presetColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, savedColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, noteColorSet, dialogPalette, copiedSettings, pastedSettings, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook, TRAY_CLASS }
   }
   if (typeof document === 'undefined') return
 
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
 
-  const guard = createGuard({ script: 'text-anywhere', name: 'Text Anywhere', version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: SCRIPT_ID, name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets, undoRestart } = guard.features
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const savedData = guard.storeFor(storage)
@@ -2631,6 +2700,7 @@
   // hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
+  const SETTINGS_ICON_SVG = `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg>`
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   const COLOR_LABEL_REM = 1.7
@@ -2718,7 +2788,7 @@
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
   const SETTINGS_LABEL = 'Text Anywhere settings'
-  const controlIcon = (paths, viewBox = '0 0 24 24') => `<svg viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
+  const controlIcon = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
   const CLEAR_LABEL = 'Clear all'
   const DELETE_SELECTED_LABEL = 'Delete the selected notes'
   const HIDE_LABEL = 'Hide all notes'
@@ -2797,12 +2867,12 @@
   function setLook (name, value) {
     const row = lookRow(name)
     look[name] = value
-    savedData.setData(row.key, value)
+    saveLook(savedData, row, value)
     if (row.dialog) showBoxes()
   }
 
-  const DIALOG_ID = 'text-anywhere-dialog'
-  const DIALOG_STYLE_ID = 'text-anywhere-dialog-style'
+  const DIALOG_ID = `${CLASS_PREFIX}dialog`
+  const DIALOG_STYLE_ID = `${DIALOG_ID}-style`
   const DIALOG_CSS = [
     `#${DIALOG_ID} .${CLASS_PREFIX}section-title { font-weight: 600; margin: 4px 0 0; }`,
     `#${DIALOG_ID} .${CLASS_PREFIX}pick-note { display: inline; margin: 0 0 0 8px; font-weight: 400; font-size: 0.85em; opacity: 0.8; }`,
@@ -2835,21 +2905,11 @@
     let colorsEdited = false
     let draftLooks = { ...look }
     let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
-    let pages = []
-    let paletteNote = ''
-    // A palette of a shape the script does not know is the dialog's own note, and does not turn the presets off.
-    if (!presets.off) {
-      try {
-        pages = palettePages()
-      } catch (error) {
-        console.warn(`text-anywhere: ${error.message}`)
-        paletteNote = error.message
-      }
-    }
+    const { pages, note: paletteNote } = dialogPalette(presets.off)
     const editedLooks = () => changedDialogLooks(LOOKS, draftLooks, look)
     const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'Text Anywhere',
+      name: SCRIPT_NAME,
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
@@ -2893,7 +2953,7 @@
       const options = presetChoices(draft.preset, presetOptions(pages.length), PRESET_LABELS)
       box.innerHTML = `<div class="${CLASS_PREFIX}section-title">Colors</div>` +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft.colors[n], label: `Text color ${n}` })) }) +
-        (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
+        paletteNoteHtml(paletteNote, PRESETS_LEFT_OUT) +
         (draft.missing.length ? `<div data-role="missing-note">${missingColorsText(draft.missing, draft.fromPreset)}</div>` : '') +
         `<div class="${CLASS_PREFIX}font-row"><span class="${CLASS_PREFIX}section-title">Font</span>${renderFontChoice(draftLooks.noteFont)}</div>` +
         renderSamplePicks({ outline: draftLooks.outline, box: draftLooks.boxColor, custom: draftCustom, frame: draftLooks.frame, textColor: draft.colors[color] })
@@ -2902,7 +2962,7 @@
     box.addEventListener('change', settingsUi.bind((event) => {
       const target = event.target
       if (target.matches('[data-role="color-choice"]')) {
-        draft = presetColorSet(target.value, pages, readCellColor, readPenColor)
+        draft = noteColorSet(target.value, pages, readCellColor, readPenColor)
         colorsEdited = true
         draw()
       } else if (target.matches('[data-role="font-choice"]')) {
@@ -3004,7 +3064,7 @@
     settings.className = SETTINGS_CLASS
     settings.title = SETTINGS_LABEL
     settings.setAttribute('aria-label', SETTINGS_LABEL)
-    settings.innerHTML = controlIcon(SETTINGS_ICON, SETTINGS_ICON_VIEWBOX)
+    settings.innerHTML = SETTINGS_ICON_SVG
     settings.addEventListener('click', settingsUi.bind(openDialog))
     const backgroundButton = document.createElement('button')
     backgroundButton.className = BACKGROUND_CLASS
@@ -4285,10 +4345,6 @@
     }))
   }
 
-  // The mouse button each gesture is held by, as a bit of a MouseEvent's `buttons`.
-  const PRIMARY_HELD = 1
-  const SECONDARY_HELD = 2
-
   const toolHandlers = {
     name: TOOL_NAME,
     isTool: true,
@@ -4376,7 +4432,7 @@
     // A digit key or keypad button gets the button's data-value. With Text Anywhere current it picks a color, and no key
     // or button enters anything in a cell.
     handleToolButton (value) {
-      const picked = noteColorNumber(value)
+      const picked = savedColorNumber(value)
       // A held erase keeps the notes it touched as they were at the press, and a color pick would replace them.
       if (picked !== undefined && !erasing) pickColor(picked)
       return true
@@ -4436,9 +4492,7 @@
   // SudokuPad calls these. A throw from one turns the Text Anywhere tool off, and the event goes on to SudokuPad's own tools.
   const tool = Object.fromEntries(Object.entries(toolHandlers).map(([name, handler]) => [name, typeof handler === 'function' ? (...args) => textTool.run(() => handler(...args), () => false) : handler]))
 
-  // Without getApp there is no app: the features that need one are off, and the rest start without it.
   const start = (app) => {
-    guard.probe({ roots: { Framework, app }, store: Framework })
     if (!storage.off) copyOldKeys(savedData)
     color = readColor(savedData.getData(COLOR_KEY))
     Object.assign(look, readLooks(savedData))
@@ -4450,7 +4504,7 @@
       writeStyle(PANEL_STYLE_ID, PANEL_CSS)
       textTool.wrap(app, 'getToolNames', function (stock) { return toolNamesFor(stock(), this.currentEvent) })
       Framework.addTool({
-        button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
+        button: { name: TOOL_NAME, title: SCRIPT_NAME, content: `<div class="icon">${BUTTON_ICON}</div>Text` },
         tool
       })
       window.addEventListener('contextmenu', textTool.bind(suppressMenu))
@@ -4487,7 +4541,7 @@
         saveOpenNote()
       }))
     })
-    addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: 'Text Anywhere', open: openDialog })
+    addSettingsEntry(dialogs, settingsUi, { name: 'textanywhere', content: SCRIPT_NAME, open: openDialog })
     boardNotes.run(() => {
       app.puzzle.on('loaded', boardNotes.bind(showSavedNotes))
       app.on('restarted', boardNotes.bind(restartNotes))
@@ -4497,6 +4551,5 @@
     // Undo after the Restart, past any selection made since, still brings the notes back.
     undoRestart.run(() => trackRestartUndo(app, undoRestart.bind).onRestartUndo(restoreRestarted))
   }
-  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
-  else start(undefined)
+  guard.start(start)
 })()

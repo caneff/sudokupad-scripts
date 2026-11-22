@@ -87,7 +87,7 @@ export const UI_TWEAKS_TEXTS = [null, '{"UiTweaks_hideSelect":true}', '{"UiTweak
 export const DARK_PAGE_TEXTS = [null, '{"DarkPage_color":"#101030"}', '{"DarkPage_color":"#002010"}', '{"DarkPage_color":"#000000","Other_key":1}', '{"DarkPage_color":"blue"}', '{"Other_key":1}', '[]', 'not json', '']
 // The texts of the other four dialogs (#928), each a Copy press (null), settings its own reader takes (the shapes its Copy writes) and texts it takes none from;
 // `actions.test.mjs` checks each against the script's `pastedSettings`. Color by Digit's `ColorByDigit_auto` is the legacy on/off the mode replaced (`withModeFromAuto`),
-// a preload mark pasted at its default removes the key (the store's `removeData`), and a limit of null is no limit (`readLimit`).
+// a preload mark pasted at its default removes the key (the store's `removeData`), and a limit of null is no limit (`savedLimit`).
 const PROFILES_TEXT = '{"ColorByDigit_profiles":{"profiles":[{"name":"Mine","groups":[{"key":"1","digits":["1","3","5","7","9"]},{"key":"2","digits":["0","2","4","6","8"]}]}],"active":0}}'
 const NOTE_COLORS_TEXT = `{"TextAnywhere_colors":{${Array.from({ length: 9 }, (_, i) => `"${i + 1}":"#${String(i + 1).repeat(2)}33aa"`).join(',')}}}`
 export const COLOR_BY_DIGIT_TEXTS = [null, '{"ColorByDigit_mode":"digit"}', '{"ColorByDigit_mode":"off","ColorByDigit_addedPreloads":true}', '{"ColorByDigit_addedPreloads":false,"ColorByDigit_addedEachDigit":false}', '{"ColorByDigit_auto":true}', PROFILES_TEXT, '{"ColorByDigit_mode":"sideways"}', '{"Other_key":1}', '[]', 'not json', '']
@@ -100,7 +100,7 @@ export const ERROR_LOG_SCRIPTS = SETTINGS_SCRIPTS.map(({ entry }) => entry.toLow
 const dialogEntry = (words) => SETTINGS_SCRIPTS.find(({ entry }) => entry.toLowerCase() === words).entry
 const settingsTextLabel = (name, text, save) => `${name} dialog: ${text === null ? 'Copy settings' : `Paste settings ${jsonWords(text)}`} ${save ? 'Save' : 'Cancel'}`
 
-// The rules box's two drag corners (`CORNERS` of auto-rules-resizer.user.js, which does not export it; the fake-page test checks them against `dragRulesBox`), and how far a drag goes either way:
+// The rules box's two drag corners (`RULES_CORNERS` of auto-rules-resizer.user.js, which does not export it; the fake-page test checks them against `dragRulesBox`), and how far a drag goes either way:
 // far enough to grow the box past the window and to shrink it to its floor, so the script's clamps get reached.
 export const RULES_CORNERS = ['ur', 'dl']
 export const RULES_DRAG_REACH_PX = 500

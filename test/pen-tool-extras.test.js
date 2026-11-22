@@ -892,6 +892,12 @@ test('the Pen colors section has a preset pulldown above the grid, its options i
   assert.doesNotMatch(html, /<button|data-sudokupad-colors/)
 })
 
+test('a bad palette\'s note shows under the pen colors, as Text Anywhere shows it, and a good palette shows none', () => {
+  const note = 'SudokuPad\'s color palette has no pages of color keys'
+  assert.match(renderEditor(editorState({ presets: ['sudokupad'], paletteNote: note })), new RegExp(`data-role="palette-note">${note}, so the Darker page presets are left out\\.<`))
+  assert.doesNotMatch(renderEditor(editorState()), /palette-note/)
+})
+
 test('the pulldown lists only the pages the palette has', () => {
   assert.deepEqual(presetMenu(renderEditor(editorState({ presets: ['page-1', 'sudokupad'] }))).map((o) => o.value), ['page-1', 'sudokupad'])
 })

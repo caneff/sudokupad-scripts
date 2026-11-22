@@ -36,8 +36,8 @@ test('Text Anywhere\'s Size slider range and text size, a missing opacity read a
 
   // Presets: "Pen colors" and "SudokuPad colors" always, with a "Darker page" per palette page between them.
   assert.deepEqual(textAnywhere.presetOptions(3).map((id) => textAnywhere.PRESET_LABELS[id]), ['Pen colors', 'Darker page 1', 'Darker page 2', 'Darker page 3', 'SudokuPad colors'])
-  assert.deepEqual(textAnywhere.presetColors('sudokupad', [], null, readPen).colors, SUDOKUPAD)
-  assert.deepEqual(textAnywhere.presetColors('pen', [], null, readPen).colors, PEN)
+  assert.deepEqual(textAnywhere.noteColorSet('sudokupad', [], null, readPen).colors, SUDOKUPAD)
+  assert.deepEqual(textAnywhere.noteColorSet('pen', [], null, readPen).colors, PEN)
 
   // Copy carries the colors, the size, opacity, outline, box color, frame and font (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad outline, box color, frame or font reads as its default).
   const copied = JSON.parse(textAnywhere.copiedSettings(fakeStore({ TextAnywhere_colors: PEN, TextAnywhere_width: 3.5, TextAnywhere_notes_x: [text] })))

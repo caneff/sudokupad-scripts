@@ -5,7 +5,7 @@ const assert = require('node:assert/strict')
 const path = require('node:path')
 const { loadLib } = require('./load-lib.js')
 const { SUDOKUPAD_PURPLE } = loadLib(['sudokupad'], ['SUDOKUPAD_PURPLE'])
-const { save } = loadLib(['plain', 'store'], ['save'])
+const { saveEnveloped } = loadLib(['plain', 'store'], ['saveEnveloped'])
 const { failEachListener } = require('./broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { withScript, withoutPath } = require('./unit-start.js')
@@ -195,7 +195,7 @@ test('garbage under the profiles key gives the preloads, and is still in _unread
   const store = fakeStore({ [PROFILES]: 'garbage from a newer version' })
   const { result: state } = quietly(() => stateFromStored(store))
   assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
-  save(store, PROFILES, state)
+  saveEnveloped(store, PROFILES, state)
   assert.equal(store.data[`${PROFILES}_unreadable`], 'garbage from a newer version')
   assert.deepEqual(stateFromStored(store), state)
 })
@@ -980,7 +980,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
   const Framework = {
     getApp: () => Promise.resolve(app),
     getData: () => null,
-    setData: (key, value) => calls.push(['save', key, value]),
+    setData: (key, value) => calls.push(['setData', key, value]),
     removeData () {},
     addControlButton: () => calls.push(['button']),
     addSetting: () => calls.push(['setting']),
@@ -993,7 +993,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     const order = calls.map((c) => c[0])
     assert.ok(order.includes('setting'), `no setting in ${order}`)
     assert.ok(order.indexOf('refresh') > order.indexOf('button'), `refresh before button in ${order}`)
-    const savedModes = () => calls.filter((c) => c[0] === 'save' && c[1] === 'ColorByDigit_mode').map((c) => c[2])
+    const savedModes = () => calls.filter((c) => c[0] === 'setData' && c[1] === 'ColorByDigit_mode').map((c) => c[2])
     assert.deepEqual(savedModes(), [])
     press()
     assert.deepEqual(savedModes(), ['digit'])
@@ -1280,14 +1280,14 @@ test('readPalette reports a bad palette page as a warning and no pages, so the d
   const red = () => 'rgb(255, 0, 0)'
   try {
     global.Framework = { app: { tools: { colour: { palette: { pages: [['a', 'b'], 'oops'] }, currentPage: 0 } } } }
-    assert.deepEqual(readPalette(red), [])
-    assert.deepEqual(warnings, ['color-by-digit: SudokuPad\'s color palette has no pages of color keys, so digits cannot be painted'])
+    assert.deepEqual(readPalette(red).pages, [])
+    assert.deepEqual(warnings, ['color-by-digit: SudokuPad\'s color palette has no pages of color keys'])
     warnings.length = 0
     global.Framework = { app: { tools: { colour: { palette: { pages: [['a', 'b']] }, currentPage: 0 } } } }
-    const [page] = readPalette(red)
+    const { pages: [page] } = readPalette(red)
     assert.deepEqual([page.current, page.zero, page.rows[0][0]], [true, { key: 'a', value: 'rgb(255, 0, 0)' }, { key: 'b', value: 'rgb(255, 0, 0)' }])
     global.Framework = { app: { tools: { colour: {} } } }
-    assert.deepEqual(readPalette(red), [])
+    assert.deepEqual(readPalette(red), { pages: [], note: '' })
     assert.deepEqual(warnings, [])
   } finally {
     global.Framework = was
@@ -1512,6 +1512,12 @@ test('renderEditor keeps the "No palette colors found" note, and draws no pulldo
   assert.equal(count(editor([], twoPages(), 0), /No palette colors found/g), 0)
 })
 
+test('renderEditor shows a bad palette\'s note in place of "No palette colors found", as Text Anywhere and Pen Tool Extras show theirs', () => {
+  const html = renderEditor({ groups: [g('a', ['1'])], pages: [], page: 0, brush: 'a', paletteNote: 'SudokuPad\'s color palette has no pages of color keys' })
+  assert.match(html, /<div class="cbd-note" data-role="palette-note">SudokuPad's color palette has no pages of color keys, so digits cannot be painted\.<\/div>/)
+  assert.doesNotMatch(html, /No palette colors found/)
+})
+
 test('the paint area stops touch scrolling and text selection, and the name box stays selectable', () => {
   assert.match(STYLE_CSS, /#color-by-digit-editor \[data-role="paint"\] \{[^}]*touch-action: none/)
   assert.match(STYLE_CSS, /#color-by-digit-editor \{[^}]*user-select: none/)
@@ -1611,7 +1617,7 @@ function oklch (hex) {
   return { L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, C: Math.hypot(A, B), h: (Math.atan2(B, A) * 180 / Math.PI + 360) % 360 }
 }
 
-// The palette the puzzle shows, as readColor resolves it: key b unreadable.
+// The palette the puzzle shows, as paletteKeyColor resolves it: key b unreadable.
 const SHOWN = { a: 'rgb(61, 153, 245)', c: 'rgb(245, 58, 55)', b: '' }
 const shownColor = (key) => SHOWN[key] ?? ''
 const digitsNamed = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m[1]))]

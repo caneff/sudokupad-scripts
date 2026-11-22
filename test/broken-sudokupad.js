@@ -112,7 +112,8 @@ function sudokupadStandIn (features, record, broken) {
 
 // Starts `file` (a script) on the working stand-in page. Returns `escaped`, each throw that left the script so far, as
 // `{ where, on, error }`; `added`, every way back into the script not yet taken, as `{ where, on, fn, listener }`; `take`, which takes one
-// of them with the event given and counts its throw; `warnings`, what the script warned in the console from then on; `broken`, whose
+// of them with the event given and counts its throw; `warnings`, what the script warned in the console from then on; `startupWarnings`, what
+// it warned before then, where the guard's startup catch reports a throw that would otherwise have left the script; `broken`, whose
 // `now` changes SudokuPad; and `roots`, SudokuPad's roots the script declares (`Framework`, `ToolPen`), on which a test may set a member.
 function startOnStandInPage (file, features) {
   const broken = { now: false }
@@ -158,15 +159,16 @@ function startOnStandInPage (file, features) {
   }
   takeAll('startup')
   takeAll('timer')
-  warnings.splice(0)
-  return { escaped, added, take, warnings, broken, roots }
+  const startupWarnings = warnings.splice(0)
+  return { escaped, added, take, warnings, startupWarnings, broken, roots }
 }
 
 // Starts `file` and then changes SudokuPad, and takes every way back into the script, and what each one adds, a few rounds deep.
 // Returns `startupEscaped` and `escaped`, each throw that left the script before and after the change, as `{ where, on, error }`;
+// `startupWarnings`, what the script warned before the change;
 // `taken`, how many ways back in were taken; and `warnings`, what the script warned in the console after the change.
 function runOnBrokenSudokuPad (file, features) {
-  const { escaped, added, take, warnings, broken } = startOnStandInPage(file, features)
+  const { escaped, added, take, warnings, startupWarnings, broken } = startOnStandInPage(file, features)
   const startupEscaped = escaped.splice(0)
   broken.now = true
   let taken = 0
@@ -175,7 +177,7 @@ function runOnBrokenSudokuPad (file, features) {
     taken += now.length
     now.forEach((entry) => take(entry))
   }
-  return { startupEscaped, escaped, taken, warnings }
+  return { startupEscaped, startupWarnings, escaped, taken, warnings }
 }
 
 // Starts `file`, and hands the listeners it added to `on` (`window` or `document`) at startup, each on a fresh start, an event that

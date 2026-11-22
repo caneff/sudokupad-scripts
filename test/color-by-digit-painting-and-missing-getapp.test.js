@@ -12,7 +12,7 @@ function warningWithoutGetApp (name) {
 }
 
 // Blind to real SudokuPad: the Framework calls, rendering and undo are `npm run test:live`'s.
-test('painting a digit moves it between groups, a page layout drops a rejected key, and a page with no getApp warns once per script', () => {
+test('painting a digit moves it between groups, a page layout drops a rejected key, and a page with no getApp names it once in Color by Digit and never in Dark Page, whose settings do not need it', () => {
   const { paintDigit, rowAfterKey, layoutPages } = colorByDigit
   // Painting a digit moves it, and a group left with no digits is gone.
   let groups = paintDigit([{ key: 'a', digits: ['5'] }], '2', 'b')
@@ -26,11 +26,11 @@ test('painting a digit moves it between groups, a page layout drops a rejected k
   const [{ rows }] = layoutPages([page], 0, (key) => (key === 'rejected' ? '' : `#${key}`))
   assert.deepEqual(rows[0].slice(0, 2).map((slot) => slot && slot.key), ['a1', null])
 
-  for (const name of ['color-by-digit', 'dark-page']) {
+  for (const [name, namingGetApp] of [['color-by-digit', 1], ['dark-page', 0]]) {
     const warnings = warningWithoutGetApp(name)
-    // Each script's other features lack Framework's data calls too, in warnings of their own; one names getApp.
+    // Each script's features lack Framework's data calls too, in warnings of their own.
     const named = warnings.filter((warning) => warning.includes('getApp'))
-    assert.equal(named.length, 1, name)
+    assert.equal(named.length, namingGetApp, name)
     for (const warning of warnings) assert.ok(warning.startsWith(`${name}: `), warning)
   }
 })

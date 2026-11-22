@@ -64,8 +64,8 @@ export const PLANTS = [
     file: 'text-anywhere.user.js',
     kind: 'rule',
     bug: 'Text Anywhere saves a changed box color but keeps drawing boxes in the old one',
-    find: '    look[name] = value\n    savedData.setData(row.key, value)',
-    replace: '    look[name] = name === \'boxColor\' ? look[name] : value\n    savedData.setData(row.key, value)',
+    find: '    look[name] = value\n    saveLook(savedData, row, value)',
+    replace: '    look[name] = name === \'boxColor\' ? look[name] : value\n    saveLook(savedData, row, value)',
     expect: /note-box-color/
   },
   {
@@ -73,8 +73,8 @@ export const PLANTS = [
     file: 'dark-page.user.js',
     kind: 'rule',
     bug: 'Dark Page paints a saved color as a light gray',
-    find: '    pageColor = color\n    style.textContent = buildCss(pageColor)\n  }\n\n  const CLASS_PREFIX',
-    replace: '    pageColor = color === DEFAULT_COLOR ? color : \'#f4f4f4\'\n    style.textContent = buildCss(pageColor)\n  }\n\n  const CLASS_PREFIX',
+    find: '    pageColor = color\n    style.textContent = buildCss(pageColor)\n  }\n\n  const DIALOG_ID',
+    replace: '    pageColor = color === DEFAULT_COLOR ? color : \'#f4f4f4\'\n    style.textContent = buildCss(pageColor)\n  }\n\n  const DIALOG_ID',
     expect: /page-stays-dark/
   },
   {

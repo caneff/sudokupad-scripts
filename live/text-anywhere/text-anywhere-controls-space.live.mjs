@@ -49,7 +49,7 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
   after(async () => { await context.close() })
 
   it('the rules pane is widened', async () => {
-    await p.locator('.puzzle-rules.auto-rules-resizer-text').waitFor({ state: 'attached' })
+    await p.locator('.puzzle-rules.rules-resizer-text').waitFor({ state: 'attached' })
     assert.ok((await rulesWidth(p)) > SUDOKUPAD_RULES_PX, 'Auto Rules Resizer widened the pane')
   })
 

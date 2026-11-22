@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.44
+// @version      0.7.50
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/
@@ -21,8 +21,13 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.44'
-  const STYLE_ID = 'dark-page-style'
+  const VERSION = '0.7.50'
+  // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
+  const SCRIPT_ID = 'dark-page'
+  const SCRIPT_NAME = 'Dark Page'
+  // Every class and id the script makes starts with this.
+  const CLASS_PREFIX = 'dark-page-'
+  const STYLE_ID = `${CLASS_PREFIX}style`
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
   const PAGE = `body:has(#${BOARD_ID})`
@@ -35,11 +40,15 @@
   const BUTTON_BORDER = '#4a4a4a'
   const BUTTON_GROUPS = ['.controls-app', '.controls-tool', '.controls-aux']
   // Pen Tool Extras' and Text Anywhere's trays, light purple boxes behind their panels' control buttons. Each panel's color buttons carry a `data-key`; every other button in it sits on the tray.
-  const TRAYS = ['.pen-tool-extras-tray', '.text-anywhere-tray']
+  // These names are the other scripts'; test/cross-script-names.test.js holds them equal.
+  const PEN_TOOL_EXTRAS_TRAY_CLASS = 'pen-tool-extras-tray'
+  const TEXT_ANYWHERE_TRAY_CLASS = 'text-anywhere-tray'
+  const TRAYS = [PEN_TOOL_EXTRAS_TRAY_CLASS, TEXT_ANYWHERE_TRAY_CLASS].map((tray) => `.${tray}`)
   const TRAY_PANELS = TRAYS.map((tray) => `.controls-input:has(${tray})`)
   const TRAY_BUTTON = 'button:not([data-key])'
   // Auto Rules Resizer's f+ and f- bar, on the page's body beside the rules pane, wears SudokuPad's button face, so it goes dark with SudokuPad's buttons.
-  const SCRIPT_BUTTONS = ['#auto-rules-resizer-font button']
+  const RULES_FONT_BAR_ID = 'auto-rules-resizer-font'
+  const SCRIPT_BUTTONS = [`#${RULES_FONT_BAR_ID} button`]
   // A step above a black page and below BUTTON_BG, as the light tray sits between SudokuPad's white page and its white buttons.
   const TRAY_BG = '#1d1a20'
   // SudokuPad's own overlay is rgba(60, 60, 60, .7), which lightens any page darker than #3c3c3c.
@@ -67,6 +76,15 @@
 
   // Text into HTML markup or an attribute value: the four characters that would end one or open another.
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // A mouse event's `button` numbers the button that changed; its `buttons` has one bit per button held.
+  const PRIMARY_BUTTON = 0
+  const SECONDARY_BUTTON = 2
+  const PRIMARY_HELD = 1
+  const SECONDARY_HELD = 2
+
+  // The settings dialog's one purple: the Save fill and the color pulldown's arrow. It is a shade lighter than SUDOKUPAD_PURPLE, which the focus rings keep.
+  const DIALOG_PURPLE = '#6b3fa0'
   /* eslint-enable no-unused-vars */
   // </lib:plain>
   // <lib:settings-table>
@@ -76,8 +94,11 @@
   /* global isPlainObject */ // eslint-disable-line no-redeclare
   // A settings table is a list of rows: `name`, `key` (where it is stored), `read` (the one reader, for a saved value and a pasted one: undefined refuses the value),
   // `fallback` (what a refused saved value reads as), and optionally `dialog` (the settings dialog sets it) and `envelope`
-  // (the store module's `{ load, save }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `load`).
+  // (the store module's `{ load: loadEnveloped, save: saveEnveloped }`, for a value kept as `{ v, data }`; `read` is then the strict reader of `loadEnveloped`).
   // A row that takes any value as a setting, a bad paste included, has a `read` that never refuses.
+  // A strict reader's name starts `saved`: it gives the value it takes and undefined for one it refuses.
+  const savedBoolean = (data) => (typeof data === 'boolean' ? data : undefined)
+
   function sameValue (a, b) {
     return a === b || (isPlainObject(a) && isPlainObject(b) && Object.keys(a).every((name) => a[name] === b[name]))
   }
@@ -312,14 +333,20 @@
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
   // A script that copies in panel as well has a second `global` naming SUDOKUPAD_PURPLE, which the linter calls a redeclaration.
-  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle */ // eslint-disable-line no-redeclare
+  /* global readErrorLog, clearErrorLog, formatErrorLog, SUDOKUPAD_PURPLE, writeStyle, DIALOG_PURPLE */ // eslint-disable-line no-redeclare
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
   const CONTROL_HOVER = '#f3e5f5'
-  const SAVE_FILL = '#6b3fa0'
+  // The options row's rule, the buttons' face, ink and border, the Save button's border, and the title tools' hover.
+  const DIALOG_RULE = '#e3dff0'
+  const DIALOG_BUTTON_FACE = '#f1eff5'
+  const DIALOG_BUTTON_INK = '#333'
+  const DIALOG_BUTTON_BORDER = '#cfc9db'
+  const DIALOG_SAVE_BORDER = '#5a3489'
+  const DIALOG_TOOLS_HOVER = '#f0edf5'
   // 6.6:1 on the dialog's white, so an error reads apart from the muted gray of a plain message.
   const STATUS_ERROR_COLOR = '#b3261e'
   // SudokuPad pads each text part of a dialog 0 16px, which sets the content column's edges.
@@ -396,6 +423,7 @@
   }
 
   // The SudokuPad internals this module calls, for a script to spread into the needs of the feature its settings entry and dialog run under.
+  // `Framework.getApp` is not among them, so a SudokuPad without it still gets the entry.
   const SETTINGS_DIALOG_NEEDS = { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
@@ -540,7 +568,7 @@
       `.${prefix}off-note:empty { display: none; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
-      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} button:hover { background: ${DIALOG_TOOLS_HOVER} !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
@@ -558,11 +586,11 @@
       // Inherited by every checkbox, slider and other form control in the dialog, in place of the browser's blue.
       `${dialog} { accent-color: ${SUDOKUPAD_PURPLE}; }`,
       // The row sits on the text parts' box, so their side padding as its margin puts its edges, the top line's included, on the content column's.
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
-      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
-      `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${DIALOG_RULE}; margin: 8px ${CONTENT_INSET} 0; padding: 14px 0 2px; box-sizing: border-box; }`,
+      `${row} button { background: ${DIALOG_BUTTON_FACE} !important; color: ${DIALOG_BUTTON_INK} !important; border: 1px solid ${DIALOG_BUTTON_BORDER} !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
+      `${row} button[data-role="save"] { background: ${DIALOG_PURPLE} !important; color: #fff !important; border: 1px solid ${DIALOG_SAVE_BORDER} !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
-      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
+      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${DIALOG_PURPLE} !important; }`,
       `${row} button:active { ${PRESS_LAYER} !important; }`,
       `${row} button:focus-visible { outline: 2px solid ${SUDOKUPAD_PURPLE}; outline-offset: 2px; }`
     ].join('\n')
@@ -749,7 +777,7 @@
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  // exists; `store`, SudokuPad's Framework unless given, holds a dismissal under `<script>-notice`.
   function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
@@ -927,7 +955,7 @@
 
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
-    function probe ({ roots, store, doc = document }) {
+    function probe ({ roots, store = Framework, doc = document }) {
       sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
@@ -935,6 +963,29 @@
       })
       page = { store, doc, sudokupad }
       showNotice()
+    }
+
+    // A failure outside every feature turns off this one, named for the script, instead of an unhandled rejection naming nothing.
+    const startup = createFeature('startup', { label: 'startup' })
+    const startupFailed = (error) => startup.skip(error)
+    // `fn` as a function whose throw, or the rejection of the promise it returns, is reported as the startup's. A throw is reported at once.
+    const catchStartup = (fn) => (...args) => {
+      try {
+        return Promise.resolve(fn(...args)).catch(startupFailed)
+      } catch (error) {
+        startupFailed(error)
+        return Promise.resolve()
+      }
+    }
+
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
+    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    function start (begin, { roots = () => ({}) } = {}) {
+      const run = catchStartup((app) => {
+        probe({ roots: { Framework, app, ...roots() } })
+        return begin(app)
+      })
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.
@@ -981,7 +1032,7 @@
       closeDialog: () => feature.run(() => Framework.closeDialog())
     })
 
-    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, storeFor, dialogsFor }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe, start, catchStartup, storeFor, dialogsFor }
   }
 
   // Which Undo SudokuPad gives to a Restart. Its Undo on an empty undo stack loads the board kept from before the last Restart,
@@ -1016,18 +1067,17 @@
     settings: {
       label: 'settings',
       needs: {
-        'Framework.getApp': 'function',
         ...SETTINGS_DIALOG_NEEDS,
         'Framework.setData': 'function',
         'Framework.removeData': 'function'
       }
     }
   }
-  const guard = createGuard({ script: 'dark-page', name: 'Dark Page', version: VERSION, features: FEATURES })
+  const guard = createGuard({ script: SCRIPT_ID, name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { savedPageColor, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, earlyColor, LOCAL_DATA_KEY, buildCss, PAGE, BOARD_ID, STYLE_ID, PAGE_COLOR_VAR, lackingInternals, FEATURES }
+    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, DEFAULT_COLOR, readSaved, earlyColor, LOCAL_DATA_KEY, buildCss, PAGE, BOARD_ID, STYLE_ID, PAGE_COLOR_VAR, PEN_TOOL_EXTRAS_TRAY_CLASS, TEXT_ANYWHERE_TRAY_CLASS, RULES_FONT_BAR_ID, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -1054,43 +1104,41 @@
     }).observe(document, { childList: true })
   }
 
-  // The color is written only from the dialog, so a write that fails reaches its status line with the settings entry still on.
-  const savedSettings = guard.storeFor(settingsEntry)
-  // Copy reads under the feature that reads the color at startup.
+  // Save and Copy go through the store of the feature that reads the color at startup (lib/settings-dialog.js).
   const savedColorStore = guard.storeFor(savedPageColor)
 
   function saveColor (color) {
-    saveTable(savedSettings, SETTING_ROWS, { color })
+    saveTable(savedColorStore, SETTING_ROWS, { color })
     pageColor = color
     style.textContent = buildCss(pageColor)
   }
 
-  const CLASS_PREFIX = 'dark-page-'
-  const DIALOG_ID = 'dark-page-dialog'
-  const INPUT_ID = 'dark-page-input'
-  const SWATCH_ID = 'dark-page-swatch'
+  const DIALOG_ID = `${CLASS_PREFIX}dialog`
+  const DIALOG_STYLE_ID = `${DIALOG_ID}-style`
+  const INPUT_ID = `${CLASS_PREFIX}input`
+  const SWATCH_ID = `${CLASS_PREFIX}swatch`
   // SudokuPad's overlay covers the page while the dialog is open, so the swatch shows the picked color: the page around a white square for the board.
   const DIALOG_CSS = [
     `.${CLASS_PREFIX}color-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }`,
-    `#${SWATCH_ID} { display: flex; align-items: center; justify-content: center; height: 64px; margin: 6px 0; border: 1px solid #cfc9db; border-radius: 8px; }`,
+    `#${SWATCH_ID} { display: flex; align-items: center; justify-content: center; height: 64px; margin: 6px 0; border: 1px solid ${DIALOG_BUTTON_BORDER}; border-radius: 8px; }`,
     `#${SWATCH_ID}::after { content: ""; width: 32px; height: 32px; background: #fff; }`
   ].join('\n')
   const dialogs = guard.dialogsFor(settingsEntry)
   // `pageColor` is set only after the write, so the stored color is all a failed Save or Paste can leave changed.
-  const snapshotColor = () => snapshotStore(savedSettings, tableKeys(SETTING_ROWS))
+  const snapshotSave = () => snapshotStore(savedColorStore, tableKeys(SETTING_ROWS))
 
   function openDialog () {
     let picked = pageColor
     const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
-      name: 'Dark Page',
+      name: SCRIPT_NAME,
       version: VERSION,
       off: guard.off,
       bodyId: DIALOG_ID,
-      styleId: `${DIALOG_ID}-style`,
+      styleId: DIALOG_STYLE_ID,
       css: DIALOG_CSS,
       changed: () => picked !== pageColor,
-      snapshot: snapshotColor,
+      snapshot: snapshotSave,
       feature: settingsEntry,
       save: () => saveColor(picked),
       copyPaste: {
@@ -1134,16 +1182,18 @@
   function start () {
     // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the default color.
     if (typeof Framework === 'undefined') return
-    guard.probe({ roots: { Framework }, store: Framework })
+    guard.probe({ roots: { Framework } })
     const saved = savedPageColor.run(() => readSaved(Framework), () => pageColor)
     if (saved !== pageColor) {
       pageColor = saved
       style.textContent = buildCss(pageColor)
     }
-    settingsEntry.run(() => Framework.getApp().then(() => {
-      addSettingsEntry(dialogs, settingsEntry, { name: 'darkpage', content: 'Dark Page', open: openDialog })
-    }))
+    // The entry waits for the app, as every other script's does; with no getApp it goes in now, as theirs do.
+    const addEntry = () => addSettingsEntry(dialogs, settingsEntry, { name: 'darkpage', content: SCRIPT_NAME, open: openDialog })
+    if (typeof Framework.getApp !== 'function') return addEntry()
+    return Framework.getApp().then(addEntry)
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
-  else start()
+  const startPage = guard.catchStartup(start)
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startPage)
+  else startPage()
 })()

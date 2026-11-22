@@ -14,7 +14,7 @@ const SCRIPTS = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'pen-tool-
 const scripts = Object.fromEntries(SCRIPTS.map((name) => [name, require(join(ROOT, `${name}.user.js`))]))
 const lib = loadLib(
   ['plain', 'sudokupad', 'color-math', 'slider-keys', 'panel', 'write-style', 'store', 'settings-table'],
-  ['savedHex', 'onSliderStep', 'sliderRowMarkup', 'writeStyle', 'save', 'sameValue']
+  ['savedHex', 'onSliderStep', 'sliderRowMarkup', 'writeStyle', 'saveEnveloped', 'sameValue']
 )
 
 test('each of the six scripts copies its settings through its table, and every key it copies has a paste reader that takes the copied value', () => {
@@ -26,14 +26,14 @@ test('each of the six scripts copies its settings through its table, and every k
 })
 
 test('UI Tweaks saves an option at its default by removing its key, so a later change of the default reaches it', () => {
-  const { OPTIONS, DEFAULT_OPTIONS, saveOptions, savedOptions } = scripts['ui-tweaks']
+  const { OPTIONS, DEFAULT_OPTIONS, saveOptions, readOptions } = scripts['ui-tweaks']
   const option = OPTIONS[0]
   const store = fakeStore({ [option.key]: !option.default })
   saveOptions(store, { ...DEFAULT_OPTIONS, [option.id]: !option.default })
   assert.equal(store.getData(option.key), !option.default, 'a value off its default is kept')
   saveOptions(store, DEFAULT_OPTIONS)
   assert.equal(store.getData(option.key), null, 'a value at its default leaves no key')
-  assert.deepEqual(savedOptions(store), DEFAULT_OPTIONS)
+  assert.deepEqual(readOptions(store), DEFAULT_OPTIONS)
 })
 
 test('a paste puts only the pasted rows into a draft, from the pasted values themselves', () => {
@@ -86,10 +86,10 @@ test('the store writes nothing for a value already saved as it is', () => {
   const writes = []
   const base = fakeStore({})
   const store = { ...base, getData: (key) => base.getData(key), setData: (key, value) => { writes.push(key); base.setData(key, value) } }
-  lib.save(store, 'K', { a: 1 })
-  lib.save(store, 'K', { a: 1 })
+  lib.saveEnveloped(store, 'K', { a: 1 })
+  lib.saveEnveloped(store, 'K', { a: 1 })
   assert.deepEqual(writes, ['K'])
-  lib.save(store, 'K', { a: 2 })
+  lib.saveEnveloped(store, 'K', { a: 2 })
   assert.deepEqual(writes, ['K', 'K'])
 })
 
