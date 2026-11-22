@@ -22,7 +22,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   cover it (`publishedScriptFiles()`). It is off the homepage for now (Chris, 2026-11-21); the README still lists it. No test, check or screenshot requests logic-masters.de, which answered a few requests with a 503: `live/logic-masters-puzzle-preview/` serves synthetic pages.
   Debugging a bug by hand may query it, a few requests at a time and never in bulk (Chris, 2026-11-21): it answers 503 after a few dozen requests in a minute or two.
 - **`GLOSSARY.md`**: the vocabulary.
-- **A change to what a script shows** (its panel, buttons, dialog or what it draws) updates that script's text in `site/`, in Pen Tool Extras' reference page (`docs/pen-tool-extras.md`) and in the README's script notes, and retakes its pictures, in the same PR (Chris, 2026-11-06). The picture and slideshow commands are in `docs/agents/site.md`.
+- **A change to what a script shows** (its panel, buttons, dialog or what it draws) updates that script's text in `site/`, in its reference page where it has one (`docs/<script name>.md`, as `docs/pen-tool-extras.md`) and in the README's script notes, and retakes its pictures, in the same PR (Chris, 2026-11-06). The picture and slideshow commands are in `docs/agents/site.md`.
 - **Shared code**: never edit inside a marked block; `lib/*.test.js` tests each module. After editing `lib/<name>.js`, run `node sync-lib.js`, as `node tag-pictures.js` is run after a picture: it rewrites each
   marked block in the `*.user.js` and raises the version of every script it changed. `test/sync-lib.test.js` fails until you do.
 - **No feature relies on a right-button drag** (Chris, 2026-11-07): SudokuPad's Test Large Puzzle UI setting pans the board on it and no

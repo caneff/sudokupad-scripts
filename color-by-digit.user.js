@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.83
+// @version      0.25.84
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.83'
+  const VERSION = '0.25.84'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'color-by-digit'
   const SCRIPT_NAME = 'Color by Digit'
@@ -572,7 +572,7 @@
   const shownGroups = (groups, max) => groups.slice(0, max).map((g) => ({ key: g.key, digit: shownDigit(g.digits) }))
 
   // The chips a profile pair draws in `mode`: each a digit with the cell group and the digit group it falls in (undefined when a profile does not cover it).
-  // Both takes the set of digits that reaches the most groups of the two profiles; see GLOSSARY.md, Cell strip.
+  // Both takes the set of digits that reaches the most groups of the two profiles; see docs/color-by-digit.md, The Cell and Digit pulldowns.
   function shownChips (mode, cellGroups, digitGroups) {
     const cellKeyOf = keyOfDigitMap(cellGroups)
     const digitProfileKeyOf = keyOfDigitMap(digitGroups)

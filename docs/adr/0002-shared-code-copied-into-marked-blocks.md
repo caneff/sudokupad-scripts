@@ -19,8 +19,8 @@ Why not `@require` (`docs/research/tooling/tampermonkey-shared-code.md`, read 20
 
 The first pass of that research (60 duplicated lines, about 30 saved net) recommended staying fully standalone. The inventory
 (`docs/research/tooling/shared-code-inventory.md`) then found more shared code than the first count (copy and paste of settings,
-the OKLab darken, hold-to-edit pickers, the settings entry and dialog title). Chris ruled on 2026-11-07 for copies kept in sync by
-a command and checked by a test, over `@require`. That kept the single-file install and replaced "scripts share no code"
+the OKLab darken, hold-to-edit pickers, the settings entry and dialog title). The ruling was for copies kept in sync by
+a command and checked by a test, over `@require` (Chris, 2026-11-07). That kept the single-file install and replaced "scripts share no code"
 (`CODING_STANDARDS.md` rule 9, before `lib/`) with "a helper two scripts need goes in `lib/`".
 
 Cost accepted: two PRs that both change `lib/` conflict on the scripts' version lines, settled by hand

@@ -1,7 +1,8 @@
 # Research index
 
 One line per note: title, date, the question and the verdict. A note sits in the folder of what it is about: SudokuPad itself at the top of `docs/research/`,
-one script's notes in that script's folder, the repo's own tooling (fuzz, Tampermonkey, shared code, hosting) in `docs/research/tooling/`. Paths below are from the repo root;
+one script's notes in that script's folder, the repo's own tooling (fuzz, Tampermonkey, shared code, hosting) in `docs/research/tooling/`, and the site's own mockups in `docs/research/site/`.
+Paths below are from the repo root;
 `test/doc-paths.test.js` fails when one is missing. A note that is `see`-linked to another chains or overlaps with it.
 
 ## SudokuPad itself
@@ -20,7 +21,7 @@ one script's notes in that script's folder, the repo's own tooling (fuzz, Tamper
 - `docs/research/sudokupad-replay-files.md` — Replay files under every script (#98). What breaks when a saved replay plays with the scripts. Verdict: one script breakage (Dark Page's readout, #100), one SudokuPad limitation (#101). Files in `docs/research/replay-files/`. See `docs/research/sudokupad-replay-tool.md`.
 - `docs/research/sudokupad-replay-tool.md` — SudokuPad's replay tool (#313). How it is turned on, its button, its key and how it plays. Covers the tool, `docs/research/sudokupad-replay-files.md` covers files.
 - `docs/research/sudokupad-theme-colors.md` — SudokuPad theme colors (2026-11-03). The CSS variables that hold the theme. Basis of Dark Page.
-- `docs/research/sudokupad-version-signal.md` — SudokuPad's version signal (#140). What names the served version with one plain request. Verdict: the `?v=` of the assets in the puzzle page's HTML.
+- `docs/research/sudokupad-version-signal.md` — SudokuPad's version signal (2026-11-05, #140). What names the served version with one plain request. Verdict: the `?v=` of the assets in the puzzle page's HTML.
 - `docs/research/large-puzzle-ui-right-drag.md` — SudokuPad's "Test Large Puzzle UI" takes the right-button drag (2026-11-07). Why no feature relies on a right-drag (ruled; `AGENTS.md`).
 - `docs/research/pen-reload-color.md` — A quick reload brings pen strokes back in color 1 (#681). Verdict: SudokuPad does it alone; no script changes the color.
 - `docs/research/sudokubank-to-sudokupad.md` — SudokuBank to SudokuPad: is a translator feasible? (2026-11-03). Dropped by Chris's ruling after SudokuBank's terms; reopening starts from those terms.
@@ -30,6 +31,8 @@ one script's notes in that script's folder, the repo's own tooling (fuzz, Tamper
 Loose probe scripts at this level: `docs/research/sudokupad-pen-alphabet-probe.mjs`, `docs/research/sudokupad-replay-files.mjs` and `docs/research/settings-dialog-version-screenshot.mjs`.
 
 ## Per script
+
+The six micro-interaction polish notes (No Tab Letters' under UI Tweaks) are one pass of 2026-11-08 over every script: read them together.
 
 ### Auto Rules Resizer
 
@@ -96,7 +99,7 @@ Includes No Tab Letters, once its own script.
 - `docs/research/tooling/tampermonkey-in-playwright.md` — Can a test install the scripts into a real Tampermonkey? (2026-11-07). Yes; the recipe behind `npm run test:tampermonkey`.
 - `docs/research/tooling/ui-fuzz-tools.md` — Tools for randomized UI break-it tests (2026-11-08). Which tool drives the fuzz (fast-check). Chains to `docs/research/tooling/fuzz-hit-rate.md`, then `docs/research/tooling/fuzz-planted-bugs.md`.
 - `docs/research/tooling/fuzz-hit-rate.md` — Raising the fuzz's hit rate (2026-11-09). Ranked changes by gain per effort.
-- `docs/research/tooling/fuzz-planted-bugs.md` — What the fuzz catches: planted bugs (#678). Run-by-run record; the baseline for `npm run fuzz:plants`.
+- `docs/research/tooling/fuzz-planted-bugs.md` — What the fuzz catches: planted bugs (2026-11-09, #678). Run-by-run record; the baseline for `npm run fuzz:plants`.
 - `docs/research/tooling/fuzz-missed-mutants/reload-settings-935.md` — Reload rules read the saved pen and note settings (#935). The rule added after the missed mutants; the folder holds the measure script and runs.
 - `docs/research/tooling/netlify-credits.md` — Netlify credits (2026-11-03). What Netlify charges on the Free plan and what this repo spends. See `docs/agents/site.md`.
 

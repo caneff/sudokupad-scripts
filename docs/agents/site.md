@@ -8,14 +8,13 @@ Read this before you change `site/`, retake a picture, edit a slideshow or touch
   (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
 - **Netlify**: serves `site/` from the `release` branch (`netlify.toml`). `git push origin main:release` publishes it and
   spends 15 of the plan's 300 credits a month (`docs/research/tooling/netlify-credits.md`). It is pushed very rarely, so it lags
-  `main` by design: Chris kept Netlify on 2026-11-05. It will not be pushed for a long time, so no report, PR or ticket mentions
+  `main` by design, and Netlify is kept (Chris, 2026-11-05). It will not be pushed for a long time, so no report, PR or ticket mentions
   Netlify or what it lacks (Chris, 2026-11-21).
 
 ## A change to what a script shows
 
-A change to what a script shows (its panel, buttons, dialog or what it draws) updates that script's text in `site/`, in Pen Tool Extras' reference page
-(`docs/pen-tool-extras.md`) and in the README's script notes, and retakes the site pictures that show it, with their scripts
-(`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
+The rule is `AGENTS.md`'s (Chris, 2026-11-06). The pictures it retakes are the site pictures that show the change, with their scripts
+(`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links).
 
 - After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
   and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.

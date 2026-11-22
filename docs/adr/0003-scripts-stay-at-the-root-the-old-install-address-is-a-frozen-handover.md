@@ -11,7 +11,7 @@ Text Anywhere was installed from `draw-tool.user.js`. #711 moved its install add
 same `@name` and `@namespace`. `npm run test:tampermonkey` installs the old copy and checks that it reaches the new address.
 
 #800 found the file had drifted: it differed from `text-anywhere.user.js` only in its two version lines, because each Text
-Anywhere ticket was rewriting it too. Chris ruled that nobody installs from it, so it is frozen: restored to its 0.45.1 content, and
+Anywhere ticket was rewriting it too. Nobody installs from it, so it is frozen (Chris, 2026-11-10): restored to its 0.45.1 content, and
 `test/text-anywhere.test.js` fails when its bytes change. A change to Text Anywhere never touches it. A finding raised inside it is
 acted on in `text-anywhere.user.js` or `lib/`, never in the handover.
 

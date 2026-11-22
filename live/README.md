@@ -2,7 +2,7 @@
 
 `npm run test:live` runs every `live/**/*.live.mjs` on sudokupad.app in headless Chromium, with the
 script under test injected. `AGENTS.md` § End-to-end seam says when to run it; this file is what
-you need to write or debug one.
+you need to write or debug one. It needs a Playwright Chromium: `npx playwright install chromium` once per Playwright version.
 `npm run test:live` and `npm run test:live:files -- <files>` (a run of some files) give every test a time limit (`--test-timeout` in `package.json`):
 a test that hangs on a promise that never settles fails there, and the watch reports it as a failed check. The limit is per test, so a hang that holds the
 process open (a timer, a hook that never returns) still needs a kill. Run live files through these scripts, never `node --test` directly.
@@ -373,3 +373,4 @@ served from the recording, and its representative action from `live/scripts.mjs`
   the checkout's `text-anywhere.user.js`. Each copy is served from `127.0.0.1` with its raw GitHub addresses pointed
   there, so the updates fetch the checkout's files; `test/text-anywhere.test.js` holds the handover's real addresses.
 - It does not cover the Chrome Web Store install, the browser's own prompts or Tampermonkey's scheduled update check.
+- It does not cover Logic Masters Puzzle Preview, whose install and update from the root address stay owed to a person.

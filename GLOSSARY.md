@@ -61,8 +61,8 @@ Behavior: `docs/color-by-digit.md`.
 - **digit profile** — the profile whose groups give the **digit colors**: the active profile while the Digit pulldown says Same as cell, else a second pick.
 - **group** — the digits that share one palette color in a profile. A digit is in at most one group.
 - **mode** — Color by Digit's saved setting, Cell, Digit, Both or Off: what it colors, cells, digits, both or nothing.
-- **preload** — one of the five ready-made profiles: Low/5/High, Odd/Even, Entropic, Modular and Each digit.
-- **profile** — a named list of **groups**, one to six of them, of which exactly one is active, the cell profile.
+- **preload** — one of the five ready-made **profiles**: Low/5/High, Odd/Even, Entropic, Modular and Each digit.
+- **profile** — a named list of **groups**, one to six of them, of which exactly one is active, the cell profile. A fresh install has the five **preloads**.
 - **profile menu** — the menu above the Color by Digit button, one row per profile, where a pick makes that profile active.
 - **pure cell** — a cell that belongs to exactly one group: its digit is in that group or, with no digit, all its centre marks are.
 - **selected profile** — the profile the settings dialog is editing. Selecting one changes no color.

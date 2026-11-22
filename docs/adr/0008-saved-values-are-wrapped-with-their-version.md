@@ -1,6 +1,6 @@
 # Saved values are wrapped with their version, and unreadable copies are kept
 
-Status: accepted, 2026-11-07 (#487; Chris ruled "i want all 10 suggestions" on the reliability review, 2026-11-07)
+Status: accepted, 2026-11-07 (#487: "i want all 10 suggestions" on the reliability review (Chris, 2026-11-07))
 
 A script's saved value is stored as `{ v, data }` (`lib/store.js`). A later change to a value's shape has a version to migrate from. A
 value saved before the wrapper, which is every shape saved so far, reads as version 0. A version above the script's own, as after a
