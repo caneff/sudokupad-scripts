@@ -47,7 +47,8 @@ seam. These come from `twitch-rules-scroller` and
 8. **A comment or test name claims no more than the code delivers.** A test named
    for a case it never builds tells the reviewer the gap is covered.
 
-Markdown in the repo wraps at about 130 columns, and a ruling is attributed in one form, "(Chris, YYYY-MM-DD)", so a search finds every one.
+Markdown in the repo wraps at about 130 columns, and a ruling is attributed in one form, "(Chris, YYYY-MM-DD)", so a search finds
+every one.
 
 ## Style
 

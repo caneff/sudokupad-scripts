@@ -7,9 +7,9 @@ value saved before the wrapper, which is every shape saved so far, reads as vers
 downgrade, is unreadable.
 
 Reading goes through the guard's store (ADR 0006), with one reader per key used for both loading and pasting settings. A value its
-reader refuses is an **unreadable value**: the script goes on with its defaults, and the value as it was is copied under the same key with
-`_unreadable` added (`_unreadable2` and on for a second, never replacing a kept copy) before anything can save over it. A copy the
-browser refuses to store stops saving instead of being forgotten.
+reader refuses is an **unreadable value**: the script goes on with its defaults, and the value as it was is copied under the same
+key with `_unreadable` added (`_unreadable2` and on for a second, never replacing a kept copy) before anything can save over it. A
+copy the browser refuses to store stops saving instead of being forgotten.
 
 Why: #487 found that if Color by Digit could not read its saved profiles (after a downgrade, say), it showed the presets and the next
 save threw the solver's profiles away. Loading and pasting also disagreed on what a value is (Auto Rules Resizer accepted a stored

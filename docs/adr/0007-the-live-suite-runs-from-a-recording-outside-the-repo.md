@@ -6,8 +6,9 @@ The live tests do not load sudokupad.app on every page load. `live/cache.mjs` se
 aborts the trackers (consent, analytics, the solve counter) and aborts any request the recording lacks. The process then exits 1
 naming each missing URL, so a recording with gaps cannot pass.
 
-- **Outside the repo.** The recording is SudokuPad's own code, not ours, so it lives in `${XDG_CACHE_HOME:-~/.cache}/sudokupad-scripts/live/`,
-  shared by every worktree. It is never committed, never an artifact and never in the Actions cache.
+- **Outside the repo.** The recording is SudokuPad's own code, not ours, so it lives in
+  `${XDG_CACHE_HOME:-~/.cache}/sudokupad-scripts/live/`, shared by every worktree. It is never committed, never an artifact and
+  never in the Actions cache.
 - **Re-recorded when SudokuPad changes, not on a clock.** #129 replaced re-recording on a fixed age. A recording older than a day is
   checked with one plain request that reads SudokuPad's version (`?v=` on its assets,
   `docs/research/sudokupad-version-signal.md`); the same version keeps it and restamps it, a new version records. A failed check

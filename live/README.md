@@ -181,9 +181,13 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **`--config <name>`**, **`--plant <id>`** and **`--plant-escape-error`** are for replaying and measuring: `--config` picks a configuration of `live/fuzz/configs.mjs` (below), `--plant` puts a
   planted bug or a mutant in (§ Measuring the fuzz: planted bugs), and `--plant-escape-error` plants the page error on Escape during a drag that the smoke test catches.
 
-- **`--coverage`** (#729) tags each injected script with `//# sourceURL=<file>` (V8 leaves an inline script with no URL out of coverage), turns on `page.coverage.startJSCoverage` on every page and, at the end of the run,
-  prints per script the functions that no list made run, merged over every page (`live/fuzz/coverage.mjs`, tested in `npm test`). A page's coverage is read before a reload and at the end, since V8 keeps it per
-  script load. A function inside a never-run one is not listed (V8 never compiles it). Off by default; the nightly passes it (`NIGHTLY_CONFIG`'s command in `nightly.mjs`), since the measured cost is small and the verdict's parser ignores the list after it. `docs/research/tooling/fuzz-hit-rate.md` § The first never-run list has the cost and the list.
+- **`--coverage`** (#729) tags each injected script with `//# sourceURL=<file>` (V8 leaves an inline script with no URL out of
+  coverage), turns on `page.coverage.startJSCoverage` on every page and, at the end of the run, prints per script the functions
+  that no list made run, merged over every page (`live/fuzz/coverage.mjs`, tested in `npm test`). A page's coverage is read before
+  a reload and at the end, since V8 keeps it per script load. A function inside a never-run one is not listed (V8 never compiles
+  it). Off by default; the nightly passes it (`NIGHTLY_CONFIG`'s command in `nightly.mjs`), since the measured cost is small and
+  the verdict's parser ignores the list after it. `docs/research/tooling/fuzz-hit-rate.md` § The first never-run list has the cost
+  and the list.
 
 - **`--focus <script>`** (#724) raises the weight of the actions that exercise that script, by `FOCUS_FACTOR` (4), so a run spends its time where a change is. It takes a script's name
   without `.user.js` (`pen-tool-extras`); another name stops the run before the browser starts and repeats for several. Every other action keeps its weight, so every action still comes up. Which script an action exercises is
@@ -243,7 +247,8 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **A failure** is shrunk (for 10 minutes at most) and printed with the seed, the shortest list that still fails as numbered steps, the one command that
   replays it (`npm run test:fuzz -- --seed <n> --path <path>`, which runs that one list and does not shrink) and the newest records of the shared error log
   (kept in the page's `localStorage` by the scripts' guard), or a line saying the log could not be read. The exit is 1.
-- **A page is never reused between lists**: Restart empties the board but leaves the earlier digits behind Undo (`docs/research/tooling/ui-fuzz-tools.md`).
+- **A page is never reused between lists**: Restart empties the board but leaves the earlier digits behind Undo
+  (`docs/research/tooling/ui-fuzz-tools.md`).
 - **The tests**: `actions.test.mjs`, `signals.test.mjs`, `rules.test.mjs` (hand-built snapshots) and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
   seed gives the same actions, every kind is generated and runs, and a planted page error is caught, shrunk to one step and replayed.
   `puzzle-set.test.mjs` tests the puzzle set, and `actions.test.mjs` and `engine.test.mjs` that every puzzle is generated and a list's puzzle replays from its path.
@@ -272,16 +277,19 @@ npm run fuzz:plants -- [--seeds <k>] [--budget <seconds per hunt>] [--seed <firs
   from disk and injected by `installAll`, so the root `*.user.js` never hold a bug. A `find` that matches anywhere but once fails the run before any page opens
   (`plants.test.mjs` checks every plant against the shipped scripts in `npm test`). `kind` is `rule` or `crash`; `expect` matches the failure message that counts as a catch (a crash plant names its own error text), so a
   failure the real scripts already have (it prints as "other failure") is not scored.
-- **The budget** is 60 seconds a plant on each of 5 seeds, each hunt over the whole puzzle set (#679), plus a short shrink of each catch for the replay check. A hunt ends at its first failure, so the
-  12 plants take about 45 minutes per configuration on one core and one Chromium (the third run in `docs/research/tooling/fuzz-planted-bugs.md` took 2 h 08 min for three).
+- **The budget** is 60 seconds a plant on each of 5 seeds, each hunt over the whole puzzle set (#679), plus a short shrink of each
+  catch for the replay check. A hunt ends at its first failure, so the 12 plants take about 45 minutes per configuration on one
+  core and one Chromium (the third run in `docs/research/tooling/fuzz-planted-bugs.md` took 2 h 08 min for three).
 - **A miss** is read for its likely reason: no rule sees it, no action reaches it, the board is too empty, or timing. Add a plant by adding an entry to `plants.mjs`.
 - **Replaying a catch**: the per-run line's `replay:` command, `npm run test:fuzz -- --seed <n> --path <path> --plant <id> [--config <name>]`, replays that one list with the plant in.
 
 ## The nightly fuzz
 
-`npm run fuzz:nightly` (`live/fuzz/nightly.mjs`, #595) runs `live/fuzz/run.mjs` with a fresh random seed and the `busy-start` configuration (`NIGHTLY_CONFIG`, chosen over the other seven measured in `docs/research/tooling/fuzz-planted-bugs.md`) and files what it finds, on GitHub Actions
-in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch; `workflow_dispatch` runs it by hand). It is a workflow of its own, not a job of
-`watch.yml`, so 30 minutes of fuzzing never holds up the watch and the two keep separate concurrency groups.
+`npm run fuzz:nightly` (`live/fuzz/nightly.mjs`, #595) runs `live/fuzz/run.mjs` with a fresh random seed and the `busy-start`
+configuration (`NIGHTLY_CONFIG`, chosen over the other seven measured in `docs/research/tooling/fuzz-planted-bugs.md`) and files
+what it finds, on GitHub Actions in its own workflow (`.github/workflows/fuzz.yml`, 07:47 UTC, after the watch;
+`workflow_dispatch` runs it by hand). It is a workflow of its own, not a job of `watch.yml`, so 30 minutes of fuzzing never holds
+up the watch and the two keep separate concurrency groups.
 
 - **One issue per distinct failure.** A failure files one `bug` and `needs-info` issue (a finding can be the fuzz's own rule bug, and is diagnosed before an agent builds it, #805) titled by what failed: `Fuzz: rule broken: <rule names>` for a broken rule, or
   `Fuzz: crash: <first signal>` (numbers folded to `N`) for a crash signal. The body has the seed, the puzzle, the shrunk steps, the replay command, the shared
@@ -310,9 +318,12 @@ the first full result is in `docs/research/tooling/fuzz-planted-bugs.md`.
 npm run fuzz:mutants -- [--per-script <n>] [--seeds <k>] [--budget <seconds per hunt>] [--seed <first seed>] [--sample-seed <n>] [--coverage-runs <k>] [--shrink-minutes <m>] [--file <script> ...] [--config <name>]
 ```
 
-- **The generator** (`mutants.mjs`, on `acorn`, a direct `devDependency`; Stryker was ruled out in `docs/research/tooling/fuzz-hit-rate.md` row 7) finds, on each script's AST, the relational (`<` to `<=`, `===` to `!==`, ...),
-  conditional (a tested condition negated, `&&` and `||` swapped) and statement-deletion (a call, assignment or update dropped) mutants. A mutant is an edit of the script's text in memory, so the root `*.user.js` never change. Its id,
-  `mutant:<file>:<start>-<end>:<family>`, works as `--plant <id>` of `npm run test:fuzz`, so a catch replays like a plant's; it names an offset, so it stops matching when the script changes.
+- **The generator** (`mutants.mjs`, on `acorn`, a direct `devDependency`; Stryker was ruled out in
+  `docs/research/tooling/fuzz-hit-rate.md` row 7) finds, on each script's AST, the relational (`<` to `<=`, `===` to `!==`, ...),
+  conditional (a tested condition negated, `&&` and `||` swapped) and statement-deletion (a call, assignment or update dropped)
+  mutants. A mutant is an edit of the script's text in memory, so the root `*.user.js` never change. Its id,
+  `mutant:<file>:<start>-<end>:<family>`, works as `--plant <id>` of `npm run test:fuzz`, so a catch replays like a plant's; it
+  names an offset, so it stops matching when the script changes.
 - **Only code a fuzz run reached.** The run first fuzzes the shipped scripts with coverage for `--coverage-runs` (40) action lists, and samples only mutants whose code ran: the edit, or for an `&&` / `||` swap the whole expression, since V8 counts the operator with its right-hand side. The sample is `--per-script` (30) mutants per script (the ticket's "30-50" read per script, so 180 in all; `--file` takes a script's short name, as `--focus` does), seeded
   by `--sample-seed` (723) and drawn from the code that coverage hunt ran, each family in turn so no family fills it.
 - **Each mutant** is opened once first: one that crashes the page when it loads is a *load error*. Then it is fuzzed on `--seeds` (2) seeds for `--budget` (30) seconds each, over the whole puzzle set. Any failure catches it,
@@ -354,12 +365,13 @@ back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow
 
 ## The Tampermonkey test
 
-`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every SudokuPad script (`scriptFiles()` of `sync-lib.js`, so not Logic Masters Puzzle Preview, which runs on another site) into a real
-Tampermonkey in Playwright's Chromium, the way a user does: open the script's URL, click Install. Each script's copy on
-main goes in first, from `raw.githubusercontent.com`, then the checkout's copy, served from `127.0.0.1`, over it.
-Tampermonkey must offer the second as an update and its dashboard must list each script once, at the checkout's
-`@version`, which is what a changed `@name` or `@namespace` breaks. Then each script must start on the puzzle page,
-served from the recording, and its representative action from `live/scripts.mjs` must work. The recipe and its caveats are `docs/research/tooling/tampermonkey-in-playwright.md`.
+`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every SudokuPad script (`scriptFiles()` of
+`sync-lib.js`, so not Logic Masters Puzzle Preview, which runs on another site) into a real Tampermonkey in Playwright's Chromium,
+the way a user does: open the script's URL, click Install. Each script's copy on main goes in first, from
+`raw.githubusercontent.com`, then the checkout's copy, served from `127.0.0.1`, over it. Tampermonkey must offer the second as an
+update and its dashboard must list each script once, at the checkout's `@version`, which is what a changed `@name` or `@namespace`
+breaks. Then each script must start on the puzzle page, served from the recording, and its representative action from
+`live/scripts.mjs` must work. The recipe and its caveats are `docs/research/tooling/tampermonkey-in-playwright.md`.
 
 - Tampermonkey is closed-source freeware: its CRX is fetched at run time from Google's update endpoint into
   `tampermonkey/` beside the recording, again once it is a day old, and never committed.
