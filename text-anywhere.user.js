@@ -640,9 +640,9 @@
     page: (noteColor, backdrop) => backdrop,
     white: () => BOX_WHITE,
     yellow: () => BOX_YELLOW,
-    tint: (noteColor, backdrop) => `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${backdrop})`
+    tint: (noteColor) => `color-mix(in srgb, ${noteColor} ${BOX_TINT_PERCENT}%, ${PAGE_COLOR})`
   }
-  // `backdrop` is the color behind the note (noteBackdrop).
+  // `backdrop` is the color behind the note (noteBackdrop). Tint ignores it: 15% of a color on Dark Page's black would be near black.
   const boxFill = (setting, noteColor, backdrop = PAGE_COLOR) => BOX_FILLS[setting]?.(noteColor, backdrop) ?? setting
   // The frame is one screen pixel: PIXEL_VAR is that in the units of a note's group, and a fixed note's group, in screen pixels, sets none.
   const FRAME_COLOR = '#c4c4c4'
