@@ -1077,7 +1077,7 @@ describe('beside twitch-rules-scroller\'s sync script', { concurrency: false }, 
 // puts the internal back after it, so SudokuPad's own layout, which calls resize, still runs.
 const MISSING = [
   { name: 'resize', internal: 'Framework.app.resize', off: 'rules refit', entry: true },
-  { name: 'addSetting', internal: 'Framework.addSetting', off: 'max size settings', entry: false }
+  { name: 'addSetting', internal: 'Framework.addSetting', off: 'settings', entry: false }
 ]
 for (const kase of MISSING) {
   describe(`SudokuPad has no ${kase.internal}`, { concurrency: false }, () => {
@@ -1103,7 +1103,7 @@ for (const kase of MISSING) {
 
     it('the bar names the feature with a Report link, and goes when dismissed', async () => {
       const bar = p.locator('#sudokupad-scripts-notices [data-script="auto-rules-resizer"]')
-      assert.match(await bar.textContent(), new RegExp(`^Auto Rules Resizer: ${kase.off} is off — SudokuPad changed\\.Report`))
+      assert.match(await bar.textContent(), new RegExp(`^Auto Rules Resizer: ${kase.off} is off because SudokuPad changed\\.Report`))
       assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
       await bar.locator('button[aria-label="Dismiss"]').click()
       assert.equal(await bar.count(), 0)

@@ -102,5 +102,5 @@ test('the store names the slot it kept an unreadable value in, the next slot for
 
 test('escapeHtml is in the shared basics, and Pen Tool Extras\' line-mode label goes through it', () => {
   assert.equal(escapeHtml('a & <b> "c"'), 'a &amp; &lt;b&gt; &quot;c&quot;')
-  assert.match(penToolExtras.renderLineModeButton('both'), /title="Center &amp; Edge" aria-label="Center &amp; Edge"/)
+  assert.match(penToolExtras.renderLineModeButton('both'), /title="Center and edge" aria-label="Center and edge"/)
 })

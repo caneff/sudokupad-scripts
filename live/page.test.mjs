@@ -41,7 +41,7 @@ describe('captureConsoleErrors', () => {
     captureConsoleErrors(page, errors)
     page.say('error', 'boom')
     page.say('error', 'Failed to load resource: net::ERR_FAILED')
-    page.say('warning', 'dark-page: settings entry skipped because SudokuPad has no Framework.addSetting')
+    page.say('warning', 'dark-page: settings skipped because SudokuPad has no Framework.addSetting')
     assert.deepEqual(errors, ['console.error: boom'])
   })
 })
@@ -52,9 +52,9 @@ describe('captureConsoleErrors and collectSkipLines together', () => {
     const errors = []
     captureConsoleErrors(page, errors)
     collectSkipLines(page, errors, [/^text-anywhere: /])
-    page.say('error', 'dark-page: settings entry skipped because SudokuPad has no Framework.addSetting')
+    page.say('error', 'dark-page: settings skipped because SudokuPad has no Framework.addSetting')
     page.say('error', 'text-anywhere: marks skipped because SudokuPad has no grid.rows')
-    assert.deepEqual(errors, ['console.error: dark-page: settings entry skipped because SudokuPad has no Framework.addSetting'])
+    assert.deepEqual(errors, ['console.error: dark-page: settings skipped because SudokuPad has no Framework.addSetting'])
   })
 })
 

@@ -145,7 +145,7 @@ describe('the pen panel layout', { concurrency: false }, () => {
   }
 
   it('the line mode icon is 34 px on its longest side and centred on its ink, in each of the three modes', async () => {
-    assert.equal(await p.locator('.pen-tool-extras-mode').getAttribute('title'), 'Center & Edge')
+    assert.equal(await p.locator('.pen-tool-extras-mode').getAttribute('title'), 'Center and edge')
     for (let n = 0; n < 3; n++) {
       await checkInk('.pen-tool-extras-mode', `mode ${await p.locator('.pen-tool-extras-mode').getAttribute('title')}`)
       await p.locator('.pen-tool-extras-mode').click()

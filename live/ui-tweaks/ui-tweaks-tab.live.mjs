@@ -130,7 +130,7 @@ describe('the Tab binding is not found', () => {
       assert.deepEqual(handlers, ['/', 'fn'])
       assert.equal(warnings.filter((w) => WARNING.test(w)).length, 1, JSON.stringify(warnings))
       await p.locator(BAR).waitFor({ state: 'attached' })
-      assert.match(await p.locator(BAR).textContent(), /^UI Tweaks: Tab key is off — SudokuPad changed\.Report/)
+      assert.match(await p.locator(BAR).textContent(), /^UI Tweaks: Tab key is off because SudokuPad changed\.Report/)
     } finally {
       await context.close()
     }
@@ -164,7 +164,7 @@ describe('SudokuPad has no ToolLetter.tool.keyHandlers', { concurrency: false },
 
   it('the bar names the feature with a Report link, and goes when dismissed', async () => {
     const bar = p.locator(BAR)
-    assert.match(await bar.textContent(), /^UI Tweaks: Tab key is off — SudokuPad changed\.Report/)
+    assert.match(await bar.textContent(), /^UI Tweaks: Tab key is off because SudokuPad changed\.Report/)
     assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
     await bar.locator('button[aria-label="Dismiss"]').click()
     assert.equal(await bar.count(), 0)
@@ -203,7 +203,7 @@ describe('SudokuPad has no Framework.getData', { concurrency: false }, () => {
   it('one console warning names the saved options, and the bar says they are off', async () => {
     assert.equal(await settle(async () => warned.length, 1), 1, warned.join('\n'))
     assert.equal(warned[0], 'ui-tweaks: saved options skipped because SudokuPad has no Framework.getData')
-    assert.match(await p.locator(BAR).textContent(), /^UI Tweaks: saved options is off — SudokuPad changed\.Report/)
+    assert.match(await p.locator(BAR).textContent(), /^UI Tweaks: saved options is off because SudokuPad changed\.Report/)
   })
 
   it('the Tab option still works with its default, and the settings entry is still there', async () => {
@@ -236,6 +236,6 @@ describe('SudokuPad loses Framework.app.tools after startup', { concurrency: fal
     await p.keyboard.down('Tab')
     await p.keyboard.up('Tab')
     await p.locator(BAR).waitFor({ state: 'attached' })
-    assert.match(await p.locator(BAR).textContent(), /^UI Tweaks: Tab key is off — SudokuPad changed\.Report/)
+    assert.match(await p.locator(BAR).textContent(), /^UI Tweaks: Tab key is off because SudokuPad changed\.Report/)
   })
 })

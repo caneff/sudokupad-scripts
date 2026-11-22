@@ -123,7 +123,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
       await mouseDrag(p, points)
       assert.equal(await settle(async () => (await penEntries(p)).length > before, true), true, `a line is drawn in mode ${await lineMode()}`)
     }
-    // A fresh page has no mode set yet, which draws as Center & Edge.
+    // A fresh page has no mode set yet, which draws as Center and edge.
     assert.equal(await lineMode(), null, 'a fresh page has no line mode set')
     await drawIn(lines.both)
     for (const want of ['centeronly', 'edgeonly']) {
@@ -132,7 +132,7 @@ describe('attacks on Pen Tool Extras', { concurrency: false }, () => {
       await drawIn(lines[want])
     }
     await p.click(LINE_MODE_BUTTON)
-    assert.equal(await settle(lineMode, 'both'), 'both', 'the button steps back to Center & Edge')
+    assert.equal(await settle(lineMode, 'both'), 'both', 'the button steps back to Center and edge')
     await drawIn([[6.5, 0.5], [6.5, 2.5]])
   })
 
