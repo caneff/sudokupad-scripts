@@ -5,7 +5,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { SETTINGS_SCRIPTS } from '../live/scripts.mjs'
 import { filesUnder, read, ROOT } from './repo-files.mjs'
 
-// The repo's conventions, each a rule that guarded later work in the closing tests of specs 334, 449, 685, 688, 834 and 835 (retired in #1029), read off the
+// The repo's conventions, each a rule that guarded later work in the closing tests of specs 334, 449, 685, 688, 834 and 835 (retired in #1029) and of spec 1074, read off the
 // tree as text. Blind to real SudokuPad: that the suites and scripts still work there is `npm run test:live`'s to show.
 const require = createRequire(import.meta.url)
 const { fakeStore } = require('./fake-store.js')
@@ -87,4 +87,20 @@ test('the helpers for a broken SudokuPad sit in the unit tests\' folder, not a s
   assert.ok(existsSync(new URL('test/broken-sudokupad.js', ROOT)))
   assert.equal(existsSync(new URL('test/specs/', ROOT)), false)
   assert.deepEqual(hits(filesUnder('test', /\.m?js$/).filter((file) => file !== 'test/repo-conventions.test.mjs'), /specs\/broken-sudokupad/), [])
+})
+
+test('the research index lists every note under docs/research/', () => {
+  const index = read('docs/research/README.md')
+  const notes = filesUnder('docs/research', /\.md$/).filter((file) => file !== 'docs/research/README.md')
+  assert.ok(notes.length > 50, `${notes.length} notes are read`)
+  assert.deepEqual(notes.filter((note) => !index.includes(`\`${note}\``)), [])
+})
+
+test('GLOSSARY.md opens with Shared and SudokuPad, and each section is in alphabetical order', () => {
+  const sections = read('GLOSSARY.md').split(/^## /m).slice(1).map((text) => {
+    const [title, ...lines] = text.split('\n')
+    return { title, terms: lines.flatMap((line) => line.match(/^- \*\*(.+?)\*\*/)?.[1].toLowerCase() ?? []) }
+  })
+  assert.deepEqual(sections.slice(0, 2).map((section) => section.title), ['Shared', 'SudokuPad'])
+  for (const { title, terms } of sections) assert.deepEqual(terms, [...terms].sort((a, b) => a.localeCompare(b)), `${title} is alphabetical`)
 })
