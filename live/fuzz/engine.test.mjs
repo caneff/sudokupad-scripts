@@ -109,6 +109,18 @@ describe('the buttons a note covers', () => {
   })
 })
 
+describe('SudokuPad\'s solved dialog (#1062)', () => {
+  it('is dismissed before every action, as a player presses its overlay, ahead of the action\'s own calls', async () => {
+    const puzzle = FUZZ_PUZZLES[0]
+    const target = await fakeTargets().openTarget(puzzle)
+    const seenBefore = []
+    target.env.dismissSolvedDialog = async () => { seenBefore.push(target.log.length) }
+    await runScript({ openTarget: async () => target, puzzle, actions: scriptedList(puzzle, [['click cell', 0], ['click cell', 1]]) })
+    assert.equal(seenBefore.length, 2, 'once per action')
+    assert.equal(seenBefore[0], 0, 'before the first action made a call')
+  })
+})
+
 describe('a note moved off a button the step presses (#1006)', () => {
   // A finished note covers a button: the page drags it off before the step presses the button, as a player would, and the note stays where it was dropped.
   // `dragAt` is the clear that finds it covered (1 is the undo's, 2 the redo's).

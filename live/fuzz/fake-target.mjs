@@ -72,6 +72,7 @@ export function fakeTargets ({ plantEscapeError = false, withNote = true, whiten
       usePen: rec('usePen'),
       // The real one moves a covering note off a button; the fake page has no notes on any.
       clearControls: async () => {},
+      dismissSolvedDialog: async () => {},
       useNotes: rec('useNotes'),
       noteHandle: rec('noteHandle', [300, 320]),
       visibleHandlePoint: rec('visibleHandlePoint', [300, 320]),

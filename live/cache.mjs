@@ -35,9 +35,17 @@ const RUN_MARKER_MAX_AGE_MS = 60 * 60 * 1000
 export const LOAD_MS = 60000
 
 const SUDOKUPAD_ORIGIN = 'https://sudokupad.app'
-// Hosts and paths the live checks never want: consent and analytics, and the solve counter, whose URL is
-// named after the puzzle and so cannot be replayed.
-const TRACKERS = /cookiebot|googletagmanager|plausible|api\.sudokupad\.com\/counter/
+// Hosts the live checks never want: consent and analytics, aborted.
+const TRACKERS = /cookiebot|googletagmanager|plausible/
+// The solve counter, whose URL is named after the puzzle and so cannot be replayed. It is answered, never aborted: an
+// aborted fetch rejects, and SudokuPad's solved counter logs that as a console error the fuzz reads as a crash (#1062).
+// Answering it also keeps a test's solve out of SudokuPad's counts.
+const SOLVE_COUNTER = /api\.sudokupad\.com\/counter/
+const answerSolveCounter = (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+// The list of puzzle ids SudokuPad fetches when a puzzle is solved. The recorder never solves one, so the recording lacks it;
+// the server's own answer is this empty list (#1062).
+const REPLAY_TEST_LIST = /^https:\/\/sudokupad\.app\/assets\/replaytest\.config\.json(\?|$)/
+const answerReplayTestList = (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"puzzleids":[]}' })
 // SudokuPad serves its fonts as text/html, which Playwright would store as UTF-8 text and so corrupt.
 const FONT_FILE = /^https:\/\/sudokupad\.app\/.*\.(ttf|otf|woff2?)(\?|$)/
 export const START = /Start Puzzle|Continue|Resume/i
@@ -198,6 +206,8 @@ async function record (file) {
       await route.fulfill({ response, headers: { ...response.headers(), 'content-type': 'application/octet-stream' } })
     })
     await context.route(TRACKERS, (r) => r.abort())
+    await context.route(SOLVE_COUNTER, answerSolveCounter)
+    await context.route(REPLAY_TEST_LIST, answerReplayTestList)
     const p = await context.newPage()
     const stylesheet = p.waitForResponse(/fonts\.googleapis\.com\/css/)
     await p.goto(puzzleUrl(), { waitUntil: 'load', timeout: LOAD_MS })
@@ -288,7 +298,7 @@ process.on('exit', () => {
 let ready
 // Aborts the trackers and serves everything else a page makes from the recording. `target` is a page or a
 // context. Playwright runs the most recently registered matching route first, so the order below is the
-// reverse of the order a request meets them: trackers, then any sudokupad.app document rewritten to the
+// reverse of the order a request meets them: trackers and the solve counter, then any sudokupad.app document rewritten to the
 // recorded puzzle's URL (one page document serves every path; the page keeps its own location), then the
 // recording, then the abort of whatever it lacks.
 export async function routeSudokuPad (target) {
@@ -303,4 +313,6 @@ export async function routeSudokuPad (target) {
     ? route.fallback({ url: puzzleUrl() })
     : route.fallback())
   await target.route(TRACKERS, (r) => r.abort())
+  await target.route(SOLVE_COUNTER, answerSolveCounter)
+  await target.route(REPLAY_TEST_LIST, answerReplayTestList)
 }
