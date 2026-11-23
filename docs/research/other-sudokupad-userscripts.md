@@ -57,3 +57,28 @@ Read from the live tests' recording of sudokupad.app (`~/.cache/sudokupad-script
   solution code (Copy Cells Button), selecting a clue's cells (smart select) and pausing on tab switch (above).
 
 Not found in the settings list: a way to fade every digit but one, per-puzzle notes, and an undo checkpoint.
+
+## Userscripts for Logic Masters and Penpa+, and what solvers ask for (2026-11-23)
+
+Found by two web searches and by reading the open issues of `swaroopg92/penpa-edit`; pages were read as search extracts, no
+script was installed or run.
+
+| Name | Where | What it does (from its page) |
+|---|---|---|
+| Aran-Fey's Logic Masters userscript | https://forum.logic-masters.de/archive/index.php?thread-2235.html= | Builds and submits the solution code on a SudokuPad solve when the instruction is simple ("row X"), flips the portal's icon to solved in a background tab, makes URLs in comments links, Ctrl+C copies a selected row or column in SudokuPad |
+| Logic Masters Puzzle Watcher | https://greasyfork.org/ckb/scripts/543482-logic-masters-puzzle-watcher/code | Watches chosen authors and saved searches for unsolved puzzles, one request per watch each hour |
+| Hide beauty ratings on LMD | https://greasyfork.org/ckb/scripts/by-site/logic-masters.de | Hides the beauty ratings |
+| Penpa Answer Checking | https://greasyfork.org/en/scripts/561742-penpa-answer-checking/code | A Check button that counts wrong entries against the puzzle's stored solution |
+| Penpa Streaming Layout | https://greasyfork.org/en/scripts/443081-penpa-streaming-layout/code | A layout for streaming: bigger title, rules shown as selectable text |
+
+- **Logic Masters' board objects to userscripts.** In the thread above, a board member of Logic Masters e.V. (Joe Average,
+  2025-02-21) asked Aran-Fey to take the install link down: "we would like you to not encourage other site vistors to install
+  userscripts that might potentially tamper with the website."
+- Penpa+ requests still open on `swaroopg92/penpa-edit`: user key bindings, size buttons and line thickness (#188), row and
+  column coordinates (#99), setter modes for the solver (#96), rule-conflict checking while solving (#86, part done), composite
+  mode fixes (#40).
+- A repeated Penpa+ complaint: a puzzle opens on the wrong tool (Surface in a sudoku) and the right one is deep in the menus
+  (Realshaggy, https://logicmastersindia.com/forum/forums/thread-view.asp?pid=31726).
+- A SudokuPad complaint: its conflict checker turns on knight's-move checking when the rules contain the word "knight", so a
+  puzzle with a partial knight rule shows false conflicts and the only fixes are Off or Classic Sudoku
+  (https://forum.logic-masters.de/showthread.php?tid=2203).
