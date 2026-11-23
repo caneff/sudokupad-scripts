@@ -4,6 +4,7 @@ import { TEXT_ANYWHERE_BUTTON, UI_TWEAKS_DIALOG } from '../scripts.mjs'
 import { middleOf } from '../input.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
+import { buttonIds } from '../text-anywhere/text-anywhere-fixtures.mjs'
 import { openWith, useBrowser } from '../session.mjs'
 
 const DIALOG = UI_TWEAKS_DIALOG
@@ -14,12 +15,11 @@ const NOTCH = 100
 
 const browser = useBrowser()
 
-// The tool names in the order the buttons are drawn: the bar fills a column down, then the next one.
-const toolsOnScreen = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-tool > button')]
-  .filter((b) => b.getClientRects().length > 0)
-  .map((b) => ({ id: b.id, ...b.getBoundingClientRect().toJSON() }))
-  .sort((a, b) => Math.round(a.left) - Math.round(b.left) || a.top - b.top)
-  .map((b) => b.id.replace('control-', '')))
+// A button in the tool bar that selects no tool, as another script's replay button is.
+const NON_TOOL = 'control-replaybutton'
+const BAR_TEXT = '#sudokupad-scripts-notices [data-script="ui-tweaks"]'
+// The tool names in the order the buttons are drawn, without the button that is no tool.
+const toolsOnScreen = async (p) => (await buttonIds(p)).filter((id) => id !== NON_TOOL).map((id) => id.replace('control-', ''))
 const tool = (p) => p.evaluate(() => Framework.app.tool)
 const zoomLevel = (p) => p.evaluate(() => Framework.features.largepuzzle.zoomLevel)
 // The feature's own `reset` also sets its base scale to 1, which leaves no room to zoom, so only the zoom and pan go back.
@@ -44,6 +44,8 @@ describe('the mouse wheel changes mode', { concurrency: false }, () => {
     await p.evaluate(() => { Framework.setSetting('toolpen', true); Framework.setSetting('largepuzzle', true) })
     await p.locator('#control-pen').waitFor({ state: 'visible' })
     await p.locator(TEXT_ANYWHERE_BUTTON).waitFor({ state: 'visible' })
+    await p.evaluate((name) => Framework.addToolButton({ name: name.replace('control-', ''), title: 'replay', content: '<div class="icon">R</div>', onClick () {} }), NON_TOOL)
+    await p.locator(`#${NON_TOOL}`).waitFor({ state: 'visible' })
     order = await settle(() => toolsOnScreen(p), ['normal', 'corner', 'centre', 'colour', 'pen', 'textanywhere'])
     await p.click('#control-normal')
   })
@@ -72,12 +74,17 @@ describe('the mouse wheel changes mode', { concurrency: false }, () => {
   })
 
   it('a plain wheel over the board never zooms, even with Large Puzzle UI on', async () => {
+    const before = await tool(p)
+    await turn(p, '#board', 1)
+    assert.notEqual(await settle(() => tool(p), order[(order.indexOf(before) + 1) % order.length]), before, 'the wheel did step')
     assert.equal(await zoomLevel(p), 1)
   })
 
   it('the wheel over the column of tool buttons steps too', async () => {
+    const was = await tool(p)
+    const next = order[(order.indexOf(was) + 1) % order.length]
     await turn(p, `#control-${order[0]}`, 1)
-    assert.equal(await settle(() => tool(p), order[2]), order[2])
+    assert.equal(await settle(() => tool(p), next), next)
   })
 
   it('past the last button the wheel wraps round to the first, and up from the first to the last', async () => {
@@ -89,6 +96,33 @@ describe('the mouse wheel changes mode', { concurrency: false }, () => {
     assert.equal(await tool(p), order[0])
     await turn(p, '#board', -1)
     assert.equal(await settle(() => tool(p), order.at(-1)), order.at(-1))
+  })
+
+  it('a button of the bar that selects no tool is stepped past, never stopped on', async () => {
+    assert.equal(await p.locator(`#${NON_TOOL}`).isVisible(), true)
+    const stops = []
+    for (let i = 0; i < order.length + 1; i++) {
+      const was = await tool(p)
+      await turn(p, '#board', 1)
+      stops.push(await settle(() => tool(p), order[(order.indexOf(was) + 1) % order.length]))
+    }
+    assert.deepEqual(stops.slice(0, order.length).sort(), [...order].sort(), 'one lap visits every tool once')
+  })
+
+  it('a wheel over something that scrolls in the board keeps the wheel and steps no mode', async () => {
+    const before = await tool(p)
+    await p.evaluate(() => {
+      const box = document.createElement('div')
+      box.id = 'scrolling-test-box'
+      box.style.cssText = 'position:fixed;left:300px;top:300px;width:100px;height:100px;overflow:auto;z-index:99999;background:#fff'
+      box.innerHTML = '<div style="height:400px">text</div>'
+      document.querySelector('#board').append(box)
+    })
+    await turn(p, '#scrolling-test-box', 1)
+    // Nothing happens in 300 ms: a wait for a negative.
+    await p.waitForTimeout(300)
+    assert.equal(await tool(p), before)
+    await p.evaluate(() => document.querySelector('#scrolling-test-box').remove())
   })
 
   it('a wheel over another button, such as Undo, steps no mode', async () => {
@@ -120,5 +154,23 @@ describe('the mouse wheel changes mode', { concurrency: false }, () => {
 
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
+  })
+})
+
+describe('a SudokuPad with no current tool name', { concurrency: false }, () => {
+  let context, p, errors
+
+  before(async () => {
+    ;({ context, p, errors } = await openWith(browser(), SCRIPTS, { expectedSkips: [/ui-tweaks.*mouse wheel/] }))
+    await chooseWheel(p, true)
+  })
+  after(async () => { await context.close() })
+
+  it('the wheel feature turns itself off with a notice, instead of sticking on a button', async () => {
+    await p.evaluate(() => { Framework.app.tool = undefined })
+    await turn(p, '#board', 1)
+    await p.locator(BAR_TEXT).waitFor({ state: 'visible' })
+    assert.match(await p.locator(BAR_TEXT).textContent(), /mouse wheel/)
+    assert.equal(errors.some((line) => /mouse wheel/.test(line)), false, 'only the planted skip line was logged, and it is expected')
   })
 })

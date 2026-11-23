@@ -197,9 +197,9 @@
   // A trackpad stream is added up until a notch is full; a pause this long, or a turn the other way, drops what was left over.
   const WHEEL_PAUSE_MS = 400
 
-  // Shift+wheel arrives as a sideways scroll (`deltaY` 0, `deltaX` set), so the delta is whichever one is set.
+  // Shift+wheel arrives as a sideways scroll (`deltaY` 0, `deltaX` set), so with Shift the delta is whichever one is set; a sideways swipe without Shift is no step.
   function wheelDelta (event) {
-    const delta = event.deltaY || event.deltaX
+    const delta = event.deltaY || (event.shiftKey ? event.deltaX : 0)
     return event.deltaMode === 1 ? delta * WHEEL_LINE : event.deltaMode === 2 ? Math.sign(delta) * WHEEL_NOTCH : delta
   }
 
@@ -1103,11 +1103,12 @@
   }
 
   const BOARD = '#board'
-  const TOOL_BUTTONS = '.controls-tool > button'
+  const TOOL_BAR = '.controls-tool'
   // The buttons in the order they are drawn: the bar fills a column down, then the next one, and another script's button can sit out of page order.
+  // A button of the bar that selects no tool (another script's replay button) is left out: pressing it changes no tool, so stepping would stop on it.
   function toolButtonsOnScreen () {
-    return [...document.querySelectorAll(TOOL_BUTTONS)]
-      .filter((button) => button.getClientRects().length > 0)
+    return [...document.querySelectorAll(`${TOOL_BAR} > button`)]
+      .filter((button) => Object.hasOwn(Framework.app.tools, button.dataset.control) && button.getClientRects().length > 0)
       .map((button) => ({ button, box: button.getBoundingClientRect() }))
       .sort((a, b) => Math.round(a.box.left) - Math.round(b.box.left) || a.box.top - b.box.top)
       .map(({ button }) => button)
@@ -1116,11 +1117,22 @@
   function stepTool (steps) {
     const buttons = toolButtonsOnScreen()
     if (buttons.length === 0) return
+    // A SudokuPad without a current tool name would read as "on no button" and stick on the first or last one, so the feature turns off instead.
+    if (typeof Framework.app.tool !== 'string') throw new Error('SudokuPad\'s app has no current tool name')
     const current = buttons.findIndex((button) => button.id === `control-${Framework.app.tool}`)
     const button = buttons[steppedIndex(current, buttons.length, steps)]
     const { left, top, width, height } = button.getBoundingClientRect()
     // SudokuPad acts on a button's press, not its click, and ignores a press at (0, 0) as a keyboard's simulated click.
     button.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window, clientX: left + width / 2, clientY: top + height / 2 }))
+  }
+
+  // Something that scrolls under the pointer (a Text Anywhere note with text past its box) keeps the wheel, whichever script's listener runs first.
+  function scrollsUnder (target, boundary) {
+    for (let element = target; element && element !== boundary; element = element.parentElement) {
+      const { overflowY } = window.getComputedStyle(element)
+      if ((overflowY === 'auto' || overflowY === 'scroll') && element.scrollHeight > element.clientHeight) return true
+    }
+    return false
   }
 
   // SudokuPad's Large Puzzle UI zooms on `#board`'s own capture listener, which reads `deltaY` alone, so this window capture listener runs first: it
@@ -1130,7 +1142,8 @@
     window.addEventListener('wheel', (event) => wheel.run(() => {
       if (!options.wheelMode || !event.isTrusted || event.ctrlKey || event.altKey || event.metaKey) return
       const overBoard = event.target.closest?.(BOARD)
-      if (!overBoard && !event.target.closest?.('.controls-tool')) return
+      if (!overBoard && !event.target.closest?.(TOOL_BAR)) return
+      if (scrollsUnder(event.target, overBoard)) return
       const delta = wheelDelta(event)
       if (delta === 0) return
       if (event.shiftKey) {

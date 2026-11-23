@@ -214,5 +214,5 @@ Behavior: the README's script notes.
 
 - **Digit pad size** — see **UI Tweaks**.
 - **options** — see **UI Tweaks**.
-- **UI Tweaks** — the script `ui-tweaks.user.js`. Four **options** in one dialog: Tab never switches to letters, Hide the Select
-  button, Wrap buttons and the **Digit pad size**.
+- **UI Tweaks** — the script `ui-tweaks.user.js`. Five **options** in one dialog: Tab never switches to letters, Hide the Select
+  button, Wrap buttons, Mouse wheel changes mode and the **Digit pad size**.

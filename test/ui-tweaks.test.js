@@ -250,12 +250,15 @@ test('the mouse wheel option is off at first, and its hint says Shift+wheel zoom
   assert.match(option.hint, /Shift\+wheel/)
 })
 
-test('wheelDelta reads a notch as 100 in pixels, lines (3 to a notch) and pages, and a Shift+wheel from whichever delta is set', () => {
+test('wheelDelta reads a notch as 100 in pixels, lines (3 to a notch) and pages, and a Shift+wheel from whichever delta is set, a sideways swipe without Shift as none', () => {
   assert.equal(WHEEL_NOTCH, 100)
   assert.equal(wheelDelta({ deltaY: 100, deltaX: 0, deltaMode: 0 }), 100)
   assert.equal(wheelDelta({ deltaY: -3, deltaX: 0, deltaMode: 1 }), -100)
   assert.equal(wheelDelta({ deltaY: 1, deltaX: 0, deltaMode: 2 }), 100)
-  assert.equal(wheelDelta({ deltaY: 0, deltaX: 100, deltaMode: 0 }), 100)
+  assert.equal(wheelDelta({ deltaY: 3, deltaX: 0, deltaMode: 2 }), 100, 'a page is one notch however many it reports')
+  assert.equal(wheelDelta({ deltaY: -2, deltaX: 0, deltaMode: 2 }), -100)
+  assert.equal(wheelDelta({ deltaY: 0, deltaX: 100, deltaMode: 0, shiftKey: true }), 100)
+  assert.equal(wheelDelta({ deltaY: 0, deltaX: 100, deltaMode: 0, shiftKey: false }), 0, 'a sideways swipe is not a step')
   assert.equal(wheelDelta({ deltaY: 0, deltaX: 0, deltaMode: 0 }), 0)
 })
 
