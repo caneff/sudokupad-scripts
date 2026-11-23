@@ -48,7 +48,9 @@ const REPLAY_TEST_LIST = /^https:\/\/sudokupad\.app\/assets\/replaytest\.config\
 const answerReplayTestList = (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"puzzleids":[]}' })
 // What the recorder and the replay both route, so a stub added to one is added to the other.
 const routeStubs = async (target) => {
-  await routeStubs(target)
+  await target.route(TRACKERS, (r) => r.abort())
+  await target.route(SOLVE_COUNTER, answerSolveCounter)
+  await target.route(REPLAY_TEST_LIST, answerReplayTestList)
 }
 // SudokuPad serves its fonts as text/html, which Playwright would store as UTF-8 text and so corrupt.
 const FONT_FILE = /^https:\/\/sudokupad\.app\/.*\.(ttf|otf|woff2?)(\?|$)/
