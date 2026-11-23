@@ -148,6 +148,16 @@ Includes No Tab Letters, once its own script.
 - `docs/research/ui-tweaks/no-tab-letters-micro-interaction-polish.md` — No Tab Letters: small touches (2026-11-08). Research
   only, against 0.1.4. See `docs/research/sudokupad-letter-tool.md`.
 
+## Setter hints
+
+Research for the setter hints map (#1167): a setter writes hints for the hard steps of their own puzzle and a script shows them.
+
+- `docs/research/setter-hints/what-a-puzzle-link-can-carry.md` — What a SudokuPad puzzle link can carry besides the puzzle
+  (2026-11-23, #1170). Which keys survive loading, the rules text, link length and the short link, what setting tools fill in.
+  Verdict: a custom `metadata` key survives `scl` and `fpuz` and is readable by a script but drawn nowhere. Any `scl` or `fpuz`
+  body of 1000 or more characters becomes a short link that anyone can read back. Read from 0.616.0, some run; the probe is
+  `docs/research/setter-hints/what-a-puzzle-link-can-carry-probe.mjs`.
+
 ## Tooling
 
 - `docs/research/tooling/tampermonkey-shared-code.md` — Can the userscripts share code? (2026-11-05). What Tampermonkey offers for
