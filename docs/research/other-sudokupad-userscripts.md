@@ -47,4 +47,13 @@ Read from the live tests' recording of sudokupad.app (`~/.cache/sudokupad-script
   board layer's id (`puzzletools.js` `getSvgCSS`). Pen Tool Extras' page and outline rules start with `.pencolor-` or
   `:root:root`, so they should pass. Not run.
 
+- Smart select (`script.js` `smartSelectCell`, `C.SmartSelectToolOrder`, `C.makeSelector`; read 2026-11-23): a double click selects
+  every cell matching the clicked one, trying in order (for the digit tool) its digit, color, centre marks, corner marks, then
+  its cage, thermo, arrow-sum and cell cosmetics. So "select the whole cage or thermo under the cursor" exists. Read, not run.
+- The timer stops while the page is hidden and resumes when it shows again (`script.js` `handleVisibilityChange`; read
+  2026-11-23). There is no pause after idle time on a visible page.
+- Ideas ruled out on 2026-11-23 as already in SudokuPad: row and column labels (Show Row/Col Labels), a sum readout for the
+  selection (Calculate Cell Sums), a blank-board picture to the clipboard (Screenshot, Blank Puzzle), clicking cells to copy a
+  solution code (Copy Cells Button), selecting a clue's cells (smart select) and pausing on tab switch (above).
+
 Not found in the settings list: a way to fade every digit but one, per-puzzle notes, and an undo checkpoint.
