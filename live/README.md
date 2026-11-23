@@ -171,7 +171,7 @@ Manager with empty files. `loadInPlace(p, id)` loads a second puzzle in the same
 ## The solve requests (#1062)
 
 A solve makes SudokuPad send two requests the recording lacks: the solve counter (`api.sudokupad.com/counter/<puzzle>`) and the replay-test list
-(`assets/replaytest.config.json`). `routeSudokuPad` (`live/cache.mjs`) answers both with a 200 and never aborts them: an aborted fetch rejects,
+(the file `replaytest.config.json` on sudokupad.app). `routeSudokuPad` (`live/cache.mjs`) answers both with a 200 and never aborts them: an aborted fetch rejects,
 SudokuPad logs "Failed to fetch" as a console error, and the fuzz reads that as a crash. It also keeps a test's solve out of SudokuPad's counts.
 The fuzz presses away the solved dialog before each action (`env.dismissSolvedDialog`), as a player does, since the dialog blocks every later click.
 
