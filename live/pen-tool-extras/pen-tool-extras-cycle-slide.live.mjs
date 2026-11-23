@@ -3,7 +3,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as extras from './pen-tool-extras-fixtures.mjs'
 import { cellCentre, mouseDrag, undoAll } from '../board.mjs'
-import { penDrawnCount, penEntries, penValuesAt } from '../pen.mjs'
+import { penDrawnCount, penEntries, penValuesAt, penValuesNoColor } from '../pen.mjs'
 import { stable } from '../settle.mjs'
 import { useBrowser } from '../session.mjs'
 
@@ -68,17 +68,52 @@ describe('a press that slides past SudokuPad\'s click distance steps the cycle a
     })
   }
 
+  // Nothing is placed by the click that follows a release, so a negative check reads after the page has stopped changing.
+  const nothing = async () => assert.deepEqual(await stable(() => penEntries(p)), [])
+
   it('a real line drag still draws a line and no mark', async () => {
     await undoAll(p)
     await p.locator('.tool-pen button[data-key="1"]').click()
     await mouseDrag(p, [[4.5, 4.5], [4.5, 5.5]])
-    assert.deepEqual((await penEntries(p)).map((entry) => entry.split(':')[1][0]), ['1'], 'one line stroke and no mark')
+    assert.deepEqual((await stable(() => penEntries(p))).map((entry) => entry.split(':')[1][0]), ['1'], 'one line stroke and no mark')
   })
 
   it('a slide from a cell centre that ends on the edge beside it changes nothing', async () => {
     await undoAll(p)
     const [x, y, size] = await cellCentre(p, 4, 4)
     await slide([x, y], [size / 2, 0])
-    assert.deepEqual(await penEntries(p), [])
+    await nothing()
+  })
+
+  it('a press that leaves its cell centre and comes back changes nothing', async () => {
+    await undoAll(p)
+    const [x, y, size] = await cellCentre(p, 4, 4)
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.move(x + size / 2, y)
+    await p.mouse.move(x + SLIDE, y)
+    await p.mouse.up()
+    await nothing()
+  })
+
+  it('a slid press that a held Shift turns into another tool changes nothing', async () => {
+    await undoAll(p)
+    const [x, y] = await cellCentre(p, 4, 4)
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.keyboard.down('Shift')
+    await p.mouse.move(x + SLIDE, y, { steps: 2 })
+    await p.mouse.up()
+    await p.keyboard.up('Shift')
+    await nothing()
+  })
+
+  it('with the corner boxes unticked, a line along one cell side draws the line and no edge mark', async () => {
+    await p.evaluate(([key, boxes]) => Framework.setData(key, Object.fromEntries(boxes.map((box) => [box, false]))), [extras.MARKS_DATA_KEY, ['cornerX', 'cornerCircle']])
+    await extras.reload(p)
+    await undoAll(p)
+    await p.locator('.tool-pen button[data-key="1"]').click()
+    await mouseDrag(p, [[4.03, 5], [4.97, 5]])
+    assert.deepEqual(await stable(() => penValuesNoColor(p)), ['7'], 'the line `7` and no edge mark')
   })
 })

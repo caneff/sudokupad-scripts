@@ -2442,6 +2442,10 @@
     return queued
   }
 
+  // Any corner is taken while a corner mark is ticked, and none while both are unticked.
+  const cornerTicked = () => inForce.marks.cornerX || inForce.marks.cornerCircle
+  const pointerRc = (event) => Framework.app.xyToRCExact(event.clientX, event.clientY)
+
   function marksAtPointNow (point, takesCorner, stockActs) {
     return marksAtPoint(point, { grid: Framework.app.grid, radius: cornerRadiusNow(), takesCorner, stockActs })
   }
@@ -2454,9 +2458,7 @@
       if (isEraseButton(lastButton)) return stock(...args)
       // SudokuPad's own `clickCell` hit-tests `getInputRc()`, the pointer in cell units, and so does this.
       // Only SudokuPad's own call is inside `stock.sudokupad`, so the unsent-acts throw of `queuedActs` is the script's and switches marks off.
-      // Any corner is taken while a corner mark is ticked, and none while both are unticked, so the original hit test handles every click as it did before.
-      const tickedCorner = () => inForce.marks.cornerX || inForce.marks.cornerCircle
-      const { marks, corner, queued } = marksAtPointNow(this.getInputRc(), tickedCorner, () => queuedActs(this, () => stock.sudokupad(() => original.apply(this, args), false)))
+      const { marks, corner, queued } = marksAtPointNow(this.getInputRc(), cornerTicked, () => queuedActs(this, () => stock.sudokupad(() => original.apply(this, args), false)))
       if (marks === null) {
         if (queued !== null) stock.sudokupad(() => sendActs(this, queued))
         return
@@ -2471,26 +2473,28 @@
     })
   }
 
-  // SudokuPad calls `clickCell` only for a press that moved less than `App.DoubleInputDistance` (6 px), and a pen line needs about 0.7 of a cell, so a press between the two does nothing:
-  // a slid press meant to step a mark's cycle left the mark as it was (#1065). Such a press counts as a click when it never left the target it began on (a drawn line does) (as `marksAtPoint`
-  // finds it, tested at every move once the release is handled, since SudokuPad's own click would disturb a drag in progress) and ends on it. The click runs once SudokuPad has handled the release.
+  // SudokuPad calls `clickCell` only for a press that moved under `App.DoubleInputDistance` (6 px), and a pen line needs about 0.7 of a cell: a press between the two did nothing (#1065).
+  // It counts as a click when no line was sent and every point of it hits the same target; that is tested after the release, since SudokuPad's own click would disturb a drag in progress.
   function installSlidClick (app, tool, sudokupadClick) {
-    const tickedCorner = () => inForce.marks.cornerX || inForce.marks.cornerCircle
     const targetAt = (point) => {
-      const { marks, corner } = marksAtPointNow(point, tickedCorner, () => stockClickActsAt(tool, sudokupadClick, point))
+      const { marks, corner } = marksAtPointNow(point, cornerTicked, () => stockClickActsAt(tool, sudokupadClick, point))
       return marks === null ? null : `${corner}:${marks.cell.row},${marks.cell.col}:${marks.values.join()}`
     }
-    const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
     let press = null
+    // A line along one edge stays on one target, so a line sent is what ends the press as a click.
+    steps.marks.wrap(tool, 'actSend', (stock, ...args) => {
+      if (press) press.sent = true
+      return stock(...args)
+    })
     window.addEventListener('pointerdown', steps.marks.bind((event) => {
       press = null
       if (event.button !== 0 || !overGridInPenTool(app, event)) return
-      const point = pointOf(event)
-      const mine = { at: event, point, path: [point] }
+      const point = pointerRc(event)
+      const mine = { at: event, point, path: [point], sent: false }
       press = mine
       trackPointer(window, {
         move: steps.marks.bind((moveEvent) => {
-          if (press === mine) mine.path.push(pointOf(moveEvent))
+          if (press === mine) mine.path.push(pointerRc(moveEvent))
         }, () => { press = null }),
         end: steps.marks.bind((endEvent) => {
           // SudokuPad takes its click from the release's `mouseup`, which follows this `pointerup` in the same task.
@@ -2498,9 +2502,9 @@
             if (press !== mine) return
             press = null
             const moved = Math.hypot(endEvent.clientX - mine.at.clientX, endEvent.clientY - mine.at.clientY)
-            if (endEvent.type !== 'pointerup' || app.tool !== 'pen' || moved < app.constructor.DoubleInputDistance) return
-            const targets = new Set([...mine.path, pointOf(endEvent)].map(targetAt))
-            if (targets.size !== 1 || targets.has(null)) return
+            if (endEvent.type !== 'pointerup' || mine.sent || app.tool !== 'pen' || moved < app.constructor.DoubleInputDistance) return
+            const targets = new Set([...mine.path, pointerRc(endEvent)].map(targetAt))
+            if (targets.size !== 1) return
             withOwnProperty(tool, 'getInputRc', () => mine.point, () => tool.clickCell())
           }, () => { press = null }), 0)
         }, () => { press = null })
@@ -2655,13 +2659,12 @@
     // A press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
     steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => isEraseButton(lastButton) ? undefined : stock(...args))
     const erasePress = (event) => isEraseButton(event.button) && overGridInPenTool(app, event)
-    const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
     const resetErase = () => { erase = null; menuOwed = false }
     window.addEventListener('pointerdown', steps.lineErase.bind((event) => {
       resetErase()
       if (!erasePress(event)) return
       // The point is read before the default is prevented, so a failure leaves the press to SudokuPad.
-      const point = pointOf(event)
+      const point = pointerRc(event)
       event.preventDefault()
       const started = startErase(point)
       erase = started
@@ -2671,14 +2674,14 @@
       trackPointer(window, {
         move: steps.lineErase.bind((moveEvent) => {
           if (erase === started && (moveEvent.buttons & SECONDARY_HELD)) {
-            crossTo(marksAt, started, pointOf(moveEvent), cellPixels())
+            crossTo(marksAt, started, pointerRc(moveEvent), cellPixels())
           }
         }, resetErase),
         end: steps.lineErase.bind((endEvent) => {
           if (erase !== started) return
           erase = null
           if (endEvent.type === 'pointercancel') return
-          crossTo(marksAt, started, pointOf(endEvent), cellPixels())
+          crossTo(marksAt, started, pointerRc(endEvent), cellPixels())
           finishErase(tool, started)
         }, resetErase)
       })
