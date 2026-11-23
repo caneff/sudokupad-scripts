@@ -148,6 +148,15 @@ Includes No Tab Letters, once its own script.
 - `docs/research/ui-tweaks/no-tab-letters-micro-interaction-polish.md` — No Tab Letters: small touches (2026-11-08). Research
   only, against 0.1.4. See `docs/research/sudokupad-letter-tool.md`.
 
+## Co-op room
+
+The research tickets of the co-op room map (#1159), a planned script for one shared grid across machines.
+
+- `docs/research/co-op-room/sudokupad-streaming-tools.md` — What SudokuPad's Streaming Tools and CloneView already send (#1161,
+  2026-11-23). Verdict: a host-only WebSocket mirror to Sven's server, on SudokuCon puzzle ids only; nothing to reuse or collide with,
+  but its shape (act strings, a replay to catch up, a board-relative pointer) is the one to copy. Read from 0.616.0, partly run with
+  `docs/research/co-op-room/sudokupad-state-probe.mjs`.
+
 ## Tooling
 
 - `docs/research/tooling/tampermonkey-shared-code.md` — Can the userscripts share code? (2026-11-05). What Tampermonkey offers for
