@@ -2472,7 +2472,7 @@
   }
 
   // SudokuPad calls `clickCell` only for a press that moved less than `App.DoubleInputDistance` (6 px), and a pen line needs about 0.7 of a cell, so a press between the two does nothing:
-  // a slid press meant to step a mark's cycle left the mark as it was (#1065). Such a press counts as a click when it sent no line, never left the target it began on (as `marksAtPoint`
+  // a slid press meant to step a mark's cycle left the mark as it was (#1065). Such a press counts as a click when it never left the target it began on (a drawn line does) (as `marksAtPoint`
   // finds it, tested at every move once the release is handled, since SudokuPad's own click would disturb a drag in progress) and ends on it. The click runs once SudokuPad has handled the release.
   function installSlidClick (app, tool, sudokupadClick) {
     const tickedCorner = () => inForce.marks.cornerX || inForce.marks.cornerCircle
@@ -2482,15 +2482,11 @@
     }
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
     let press = null
-    steps.marks.wrap(tool, 'actSend', (stock, ...args) => {
-      if (press) press.sent = true
-      return stock(...args)
-    })
     window.addEventListener('pointerdown', steps.marks.bind((event) => {
       press = null
-      if (event.button !== 0 || isEraseButton(event.button) || !overGridInPenTool(app, event)) return
+      if (event.button !== 0 || !overGridInPenTool(app, event)) return
       const point = pointOf(event)
-      const mine = { at: event, point, target: targetAt(point), sent: false, path: [point] }
+      const mine = { at: event, point, path: [point] }
       press = mine
       trackPointer(window, {
         move: steps.marks.bind((moveEvent) => {
@@ -2502,8 +2498,9 @@
             if (press !== mine) return
             press = null
             const moved = Math.hypot(endEvent.clientX - mine.at.clientX, endEvent.clientY - mine.at.clientY)
-            if (endEvent.type !== 'pointerup' || mine.sent || mine.target === null || moved < app.constructor.DoubleInputDistance) return
-            if (app.tool !== 'pen' || [...mine.path, pointOf(endEvent)].some((point) => targetAt(point) !== mine.target)) return
+            if (endEvent.type !== 'pointerup' || app.tool !== 'pen' || moved < app.constructor.DoubleInputDistance) return
+            const targets = new Set([...mine.path, pointOf(endEvent)].map(targetAt))
+            if (targets.size !== 1 || targets.has(null)) return
             withOwnProperty(tool, 'getInputRc', () => mine.point, () => tool.clickCell())
           }, () => { press = null }), 0)
         }, () => { press = null })
