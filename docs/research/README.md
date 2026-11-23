@@ -54,6 +54,13 @@ hosting) in `docs/research/tooling/`, and the site's own mockups in `docs/resear
 Loose probe scripts at this level: `docs/research/sudokupad-pen-alphabet-probe.mjs`, `docs/research/sudokupad-replay-files.mjs`
 and `docs/research/settings-dialog-version-screenshot.mjs`.
 
+## The co-op room (#1159)
+
+- `docs/research/co-op-room/sudokupad-actions-for-co-op.md` — How SudokuPad applies an action, and what a remote action would
+  break (2026-11-23, #1160). Read from 0.616.0's source, not run. Verdict: through `act` a remote action keeps the replay, saved
+  progress and timer, but shares the one undo stack (Undo takes whoever acted last) and needs its cells selected; outside `act`
+  the next Undo wipes it. SudokuPad's own CloneView relays one host's actions.
+
 ## Per script
 
 The six micro-interaction polish notes (No Tab Letters' under UI Tweaks) are one pass of 2026-11-08 over every script: read them
