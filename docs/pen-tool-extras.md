@@ -204,6 +204,10 @@ before SudokuPad's own edge-or-cell test. These are not SudokuPad's own "corner 
   right and bottom left corners.
 - They're half the Thickness slider, like edge marks, and are saved with the edge mark settings.
 
+## A click that slides a little
+
+SudokuPad counts a press as a click only when the pointer moved under 6 px, and a pen line needs about 0.7 of a cell. A press between the two did nothing, so a click that slid slightly left an edge, corner or cell mark as it was. Since 1.32.58 such a press steps the cycle as a click does, as one undo step, when it drew no line, stayed on the edge, corner or cell middle it began on and ended there. A press that drew a line or ended on something else, a right click and every other tool are unchanged (#1065).
+
 ## Cell marks
 
 A click in a cell's middle cycles SudokuPad's own circle (pen value `5`), then its cross (`6`), then a dot, then empty.

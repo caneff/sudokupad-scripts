@@ -38,3 +38,9 @@ saved value, every `.cell-pen` and `.penhint` drawn over the cell, and the cell'
   later click was back on the dot, or a second cause is still unfound.
 - Not run, read from the code: stock SudokuPad drops the same press for its own circle and cross, since the cut is in its `handleInputup`, before
   `clickCell`. Pen Tool Extras inherits the miss; its cycle makes it visible, since the press was meant to erase.
+
+## Fixed (2026-11-23)
+
+Pen Tool Extras 1.32.58 counts a left press that moved 6 px or more, sent no line and began and ended on the same click target (every pointer move tested with `marksAtPoint`, after the release) as a click: it runs the wrapped `clickCell` with `getInputRc` put at the press point, once SudokuPad has handled the release.
+`live/pen-tool-extras/pen-tool-extras-cycle-slide.live.mjs` checks the cell centre, an edge and a corner. A hit test during the drag itself was tried first and broke real line drags (SudokuPad's own `clickCell` run mid-drag disturbs the drag), so the moves are only recorded then.
+The tester's "until I click a different cell" is still unexplained.
