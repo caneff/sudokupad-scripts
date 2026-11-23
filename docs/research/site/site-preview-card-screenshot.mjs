@@ -1,6 +1,6 @@
 // Takes docs/research/site/site-preview-card.png (1200x630), the homepage's link-preview card (og:image in
 // site/index.html, #1151): the title and the three biggest scripts side by side, each panel a tight crop of that
-// script's first slide. The site's own font and colors, read from site/style.css. Also writes a 400 px wide copy, about
+// script's first slide, and an "and more!" sticker in the bottom right corner. The site's own font and colors, read from site/style.css. Also writes a 400 px wide copy, about
 // what Discord shows, to $SHOTS (else /tmp) as site-preview-card-400.png, to check the labels still read.
 // Run from the repo root: node docs/research/site/site-preview-card-screenshot.mjs
 import { chromium } from 'playwright'
@@ -46,7 +46,8 @@ ${['pink', 'yellow', 'mint'].map((c) => `.${c} { --edge: ${token(c)}; --fill: ${
 .label { font: 600 38px/1.1 Fredoka, sans-serif; color: var(--accent); white-space: nowrap; }
 .crop { position: relative; overflow: hidden; background: #fff; border-radius: 10px; margin: auto 0; }
 .crop img { position: absolute; max-width: none; }
-</style><h1>Puzzle Scripts for SudokuPad</h1><div class="row">${PANELS.map(panel).join('')}</div>`
+.sticker { position: absolute; right: 16px; bottom: 16px; transform: rotate(-6deg); padding: 2px 22px 6px; font: 600 36px/1.1 Fredoka, sans-serif; color: var(--accent); background: var(--lavender-fill); border: 6px solid var(--lavender); border-radius: 999px; box-shadow: 0 0 0 4px #fff, 0 4px 10px rgba(0, 0, 0, 0.18); white-space: nowrap; }
+</style><h1>ChinStrap's Puzzle Scripts</h1><div class="row">${PANELS.map(panel).join('')}</div><div class="sticker">and more!</div>`
 
 const browser = await chromium.launch()
 const render = async (path, deviceScaleFactor) => {
