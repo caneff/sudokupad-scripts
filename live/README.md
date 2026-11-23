@@ -168,6 +168,12 @@ and SudokuPad then saves its progress under `progress_undefined`, shared by ever
 Manager with empty files. `loadInPlace(p, id)` loads a second puzzle in the same tab through the page's own loader, with no reload, and answers Tag Manager's second load, which leaves a page error otherwise. A history move (Back, Forward) or a second puzzle leaves the pen and replay tools off again, which `startWithTools` and
 `resumeAfterHistory` turn on.
 
+## The solve requests (#1062)
+
+A solve makes SudokuPad send two requests the recording lacks: the solve counter (`api.sudokupad.com/counter/<puzzle>`) and the replay-test list (`assets/replaytest.config.json`). `routeSudokuPad` (`live/cache.mjs`)
+answers both with a 200, never aborts them: an aborted fetch rejects, SudokuPad logs "Failed to fetch" as a console error, and the fuzz reads that as a crash. It also keeps a test's solve out of SudokuPad's counts. The fuzz dismisses the
+solved dialog before each action (`env.dismissSolvedDialog`), as a player presses its overlay, since the dialog blocks every later click.
+
 ## The fuzz run
 
 `npm run test:fuzz` (#593, from #590) tries to break the six scripts with random sequences of what a user does, on real SudokuPad
