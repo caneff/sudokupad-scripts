@@ -2022,13 +2022,16 @@ const completeSudokuPad = () => {
   renderer.renderPart = () => {}
   const tool = { _actList: [] }
   TOOL_FNS.forEach((name) => { tool[name] = () => {} })
-  const app = {
+  class App {
+    static DoubleInputDistance = 6
+  }
+  const app = Object.assign(new App(), {
     tools: { colour: {} },
     svgRenderer: renderer,
     grid: { rows: 9, cols: 9, getCell: () => {} },
     puzzle: { cells: [] },
     xyToRCExact: () => {}
-  }
+  })
   const framework = { app }
   for (const name of FRAMEWORK_FNS) framework[name] = () => {}
   return { Framework: framework, ToolPen: { tool } }
@@ -2049,6 +2052,7 @@ const LACKING_ALONE = [
   ['Framework.app.puzzle.cells', (s) => { delete s.Framework.app.puzzle.cells }, ['arrowLines', 'marks', 'lineErase']],
   ['Framework.app.grid.rows', (s) => { s.Framework.app.grid.rows = '9' }, ['marks', 'lineErase']],
   ['Framework.app.grid.cols', (s) => { s.Framework.app.grid.cols = 9.5 }, ['marks', 'lineErase']],
+  ['Framework.app.constructor.DoubleInputDistance', (s) => { delete s.Framework.app.constructor.DoubleInputDistance }, ['marks']],
   ['Framework.app.svgRenderer.constructor.CellSize', (s) => { delete s.Framework.app.svgRenderer.constructor.CellSize }, ['marks']],
   ['Framework.app.svgRenderer.constructor.rcToPathData', (s) => { delete s.Framework.app.svgRenderer.constructor.rcToPathData }, ['marks']],
   ['Framework.app.svgRenderer.renderPen', (s) => { delete Object.getPrototypeOf(s.Framework.app.svgRenderer).renderPen }, ['arrowLines', 'marks']],
