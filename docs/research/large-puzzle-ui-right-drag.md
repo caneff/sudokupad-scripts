@@ -24,7 +24,12 @@ Read from `feature-largepuzzle.js?v=0.611.0` on sudokupad.app.
     `deltaX` set), and `Math.sign(0)` is no zoom. A script that wants zoom on Shift+wheel stops the event in a `window`
     capture listener (which runs before `#board`'s) and dispatches its own `WheelEvent` on `#board` with `deltaY` set.
   - `detachElem` calls `addHandler` for the wheel where it means `remHandler`, so turning the setting off leaves
-    `handleWheel` attached; it still zooms only while `baseScale < C.MaxBaseScale`.
+    `handleWheel` attached.
+  - Zoom has room only while the board is drawn smaller than natural size: `maxZoomLevel` is `max(1, 2 - baseScale)`, so at a `baseScale`
+    of 1 or more a wheel does nothing. In the live harness the 1200x900 window gives 1.103 and an 800x520 one gives 0.735, where a wheel
+    notch raises `Framework.features.largepuzzle.zoomLevel` by about 0.22. Its `reset()` sets `baseScale` to 1, which ends the room to zoom.
+  - UI Tweaks' wheel option (#1153) is checked live with these (`live/ui-tweaks/ui-tweaks-wheel.live.mjs`, 2026-11-23): a plain wheel over
+    the board never zooms, and Shift+wheel does, through the dispatched `WheelEvent`.
 
 Consequence (Chris, 2026-11-07): no feature may rely on a right-button drag. A right click is still usable.
 

@@ -4,11 +4,11 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { fakeStore } = require('./fake-store.js')
-const { OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, limitRightDrag } = require('../ui-tweaks.user.js')
+const { OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, limitRightDrag, WHEEL_NOTCH, wheelDelta, accumulateWheel, steppedIndex } = require('../ui-tweaks.user.js')
 
-test('the defaults: Tab never switches to letters and Right-drag pans only when zoomed in are on, the other two are off, the digit pad is Normal', () => {
-  assert.deepEqual(DEFAULT_OPTIONS, { tab: true, hideSelect: false, wrapButtons: false, rightDrag: true, digitPad: 100 })
-  assert.deepEqual(OPTIONS.map((o) => o.id), ['tab', 'hideSelect', 'wrapButtons', 'rightDrag'])
+test('the defaults: Tab never switches to letters and Right-drag pans only when zoomed in are on, the other three are off, the digit pad is Normal', () => {
+  assert.deepEqual(DEFAULT_OPTIONS, { tab: true, hideSelect: false, wrapButtons: false, rightDrag: true, wheelMode: false, digitPad: 100 })
+  assert.deepEqual(OPTIONS.map((o) => o.id), ['tab', 'hideSelect', 'wrapButtons', 'rightDrag', 'wheelMode'])
 })
 
 test('readOptions: nothing saved reads as the defaults', () => {
@@ -20,18 +20,19 @@ test('readOptions: each saved boolean wins over its default, the others keep the
   assert.deepEqual(readOptions(fakeStore({ UiTweaks_hideSelect: true })), { ...DEFAULT_OPTIONS, hideSelect: true })
   assert.deepEqual(readOptions(fakeStore({ UiTweaks_wrapButtons: true })), { ...DEFAULT_OPTIONS, wrapButtons: true })
   assert.deepEqual(readOptions(fakeStore({ UiTweaks_rightDrag: false })), { ...DEFAULT_OPTIONS, rightDrag: false })
+  assert.deepEqual(readOptions(fakeStore({ UiTweaks_wheelMode: true })), { ...DEFAULT_OPTIONS, wheelMode: true })
 })
 
 test('readOptions: a saved value that is not a boolean reads as the default', () => {
-  const store = fakeStore({ UiTweaks_tab: 'no', UiTweaks_hideSelect: 1, UiTweaks_wrapButtons: null })
+  const store = fakeStore({ UiTweaks_tab: 'no', UiTweaks_hideSelect: 1, UiTweaks_wrapButtons: null, UiTweaks_wheelMode: 'on' })
   assert.deepEqual(readOptions(store), DEFAULT_OPTIONS)
 })
 
 test('saveOptions keeps every option under its own key, and readOptions reads them back', () => {
   const store = fakeStore()
-  const chosen = { tab: false, hideSelect: true, wrapButtons: true, rightDrag: false, digitPad: 125 }
+  const chosen = { tab: false, hideSelect: true, wrapButtons: true, rightDrag: false, wheelMode: true, digitPad: 125 }
   saveOptions(store, chosen)
-  assert.deepEqual(store.data, { UiTweaks_tab: false, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true, UiTweaks_rightDrag: false, UiTweaks_digitPad: 125 })
+  assert.deepEqual(store.data, { UiTweaks_tab: false, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true, UiTweaks_rightDrag: false, UiTweaks_wheelMode: true, UiTweaks_digitPad: 125 })
   assert.deepEqual(readOptions(store), chosen)
 })
 
@@ -48,11 +49,11 @@ test('readOptions reads a key saved at its default without removing it', () => {
 })
 
 test('the storage keys are UiTweaks_ names', () => {
-  assert.deepEqual(Object.fromEntries(OPTIONS.map((option) => [option.id, option.key])), { tab: 'UiTweaks_tab', hideSelect: 'UiTweaks_hideSelect', wrapButtons: 'UiTweaks_wrapButtons', rightDrag: 'UiTweaks_rightDrag' })
+  assert.deepEqual(Object.fromEntries(OPTIONS.map((option) => [option.id, option.key])), { tab: 'UiTweaks_tab', hideSelect: 'UiTweaks_hideSelect', wrapButtons: 'UiTweaks_wrapButtons', rightDrag: 'UiTweaks_rightDrag', wheelMode: 'UiTweaks_wheelMode' })
 })
 
 test('copiedSettings: the options in force, defaults included', () => {
-  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ UiTweaks_hideSelect: true, Other_key: 1 }))), { UiTweaks_tab: true, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: false, UiTweaks_rightDrag: true, UiTweaks_digitPad: 100 })
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ UiTweaks_hideSelect: true, Other_key: 1 }))), { UiTweaks_tab: true, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: false, UiTweaks_rightDrag: true, UiTweaks_wheelMode: false, UiTweaks_digitPad: 100 })
 })
 
 test('a paste keeps booleans under this script\'s keys and skips the rest', () => {
@@ -160,7 +161,7 @@ test('a complete SudokuPad lacks nothing, and without one internal only the feat
     ...['addSetting', 'showDialog', 'closeDialog', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, ['settings']]),
     ['Framework.getData', (r) => { delete r.Framework.getData }, ['saved']],
     ['ToolLetter.tool.keyHandlers', (r) => { delete r.ToolLetter.tool.keyHandlers }, ['tab']],
-    ['Framework.app.tools', (r) => { delete r.Framework.app.tools }, ['tab']],
+    ['Framework.app.tools', (r) => { delete r.Framework.app.tools }, ['tab', 'wheel']],
     ...['handleMousemove', 'handleZoomInOut', 'updateTransform'].map((name) => [`Framework.features.largepuzzle.${name}`, (r) => { delete r.Framework.features.largepuzzle[name] }, ['rightDrag']])
   ]
   for (const [internal, remove, features] of removals) {
@@ -321,4 +322,57 @@ test('limitRightDrag\'s recentre leaves a feature that was never turned on alone
   delete feature.panPos
   limitRightDrag(feature, () => true)()
   assert.deepEqual(calls, [])
+})
+
+test('the mouse wheel option is off at first, and its hint says Shift+wheel zooms', () => {
+  const option = OPTIONS.find((o) => o.id === 'wheelMode')
+  assert.equal(option.label, 'Mouse wheel changes mode')
+  assert.equal(option.default, false)
+  assert.match(option.hint, /Shift\+wheel/)
+})
+
+test('wheelDelta reads a notch as 100 in pixels, lines (3 to a notch) and pages, and a Shift+wheel from whichever delta is set, a sideways swipe without Shift as none', () => {
+  assert.equal(WHEEL_NOTCH, 100)
+  assert.equal(wheelDelta({ deltaY: 100, deltaX: 0, deltaMode: 0 }), 100)
+  assert.equal(wheelDelta({ deltaY: -3, deltaX: 0, deltaMode: 1 }), -100)
+  assert.equal(wheelDelta({ deltaY: 1, deltaX: 0, deltaMode: 2 }), 100)
+  assert.equal(wheelDelta({ deltaY: 3, deltaX: 0, deltaMode: 2 }), 100, 'a page is one notch however many it reports')
+  assert.equal(wheelDelta({ deltaY: -2, deltaX: 0, deltaMode: 2 }), -100)
+  assert.equal(wheelDelta({ deltaY: 0, deltaX: 100, deltaMode: 0, shiftKey: true }), 100)
+  assert.equal(wheelDelta({ deltaY: 0, deltaX: 100, deltaMode: 0, shiftKey: false }), 0, 'a sideways swipe is not a step')
+  assert.equal(wheelDelta({ deltaY: 0, deltaX: 0, deltaMode: 0 }), 0)
+})
+
+test('accumulateWheel: one notch is one step, a trackpad stream steps once per 100 and keeps the remainder', () => {
+  assert.deepEqual(accumulateWheel({ rest: 0, at: 0 }, 100, 0), { steps: 1, state: { rest: 0, at: 0 } })
+  assert.deepEqual(accumulateWheel({ rest: 0, at: 0 }, -100, 0).steps, -1)
+  let state = { rest: 0, at: 0 }
+  const steps = []
+  for (let i = 1; i <= 25; i++) {
+    const result = accumulateWheel(state, 12, i * 10)
+    steps.push(result.steps)
+    state = result.state
+  }
+  assert.equal(steps.reduce((a, b) => a + b, 0), 3, '25 events of 12 is 300')
+  assert.deepEqual(accumulateWheel({ rest: 0, at: 0 }, 40, 10).steps, 0)
+})
+
+test('accumulateWheel: a turn of direction or a pause drops what was left over', () => {
+  assert.equal(accumulateWheel({ rest: 60, at: 0 }, -100, 10).steps, -1, 'a reversal starts from nothing, so a whole notch back steps')
+  assert.equal(accumulateWheel({ rest: 60, at: 0 }, 60, 10).steps, 1, 'the same direction adds up')
+  assert.equal(accumulateWheel({ rest: 60, at: 0 }, 60, 10000).steps, 0, 'a pause of seconds drops the 60')
+  assert.equal(accumulateWheel({ rest: -60, at: 0 }, -60, 10).steps, -1, 'and the same holds going up')
+})
+
+test('steppedIndex steps through the buttons and wraps past either end', () => {
+  assert.equal(steppedIndex(0, 5, 1), 1)
+  assert.equal(steppedIndex(4, 5, 1), 0)
+  assert.equal(steppedIndex(0, 5, -1), 4)
+  assert.equal(steppedIndex(2, 5, 7), 4)
+  assert.equal(steppedIndex(2, 5, -8), 4)
+})
+
+test('steppedIndex with the current tool on no button: down goes to the first, up to the last', () => {
+  assert.equal(steppedIndex(-1, 5, 1), 0)
+  assert.equal(steppedIndex(-1, 5, -1), 4)
 })
