@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.60
+// @version      0.46.61
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.60'
+  const VERSION = '0.46.61'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -3170,7 +3170,8 @@
   const layoutKey = (map) => JSON.stringify([map.matrix, map.box, window.innerWidth, window.innerHeight])
 
   // The board moves and scales with the window and SudokuPad's layout, which sets the styles of the board and the boxes round it, so the notes are
-  // placed again whenever those change, and the board or the window has moved.
+  // placed again whenever those change, and the board or the window has moved. A scroll of the page moves the board under the notes' layer, which stays on the window,
+  // and writes no attribute, so it is heard on its own.
   const watchedBoards = new WeakSet()
   const placeIfMoved = () => { if (layoutKey(boardMap()) !== lastLayout) renderNotes() }
   const placeSoon = () => inFrame('place', placeIfMoved, boardNotes)
@@ -3180,6 +3181,7 @@
     watchedBoards.add(svg)
     const mutations = new window.MutationObserver(placeSoon)
     for (let box = svg; box && box !== document.body; box = box.parentElement) mutations.observe(box, { attributes: true, attributeFilter: ['style', 'class', 'viewBox', 'width', 'height', 'transform'] })
+    window.addEventListener('scroll', placeSoon, { passive: true })
   }
 
   const notesOnBoard = (map) => puzzleNotes.map((item) => boardView(item, map.toBoard))
@@ -3239,7 +3241,7 @@
   const measuredFor = (item, map) => JSON.stringify([item.text, item.size, item.box, Boolean(item.bg), look.outline, layerFont, item.fixed ? map.scale : null])
 
   // Measures the notes whose size may have changed, every read before every write: whether its text runs past its box, then, with its scroll bar's
-  // room settled, its text's size in board units.
+  // room settled, its text's size in board units. Returns the notes it measured.
   function measureNotes (notes, map) {
     const stale = notes.filter(({ element, item }) => shownNotes.get(element).measured !== measuredFor(item, map))
     const rooms = stale.map(({ element }) => scrollRoom(element))
@@ -3249,6 +3251,7 @@
       item[DRAWN_SIZE] = [boxes[i].right - boxes[i].left, boxes[i].bottom - boxes[i].top].map((side) => side / map.scale)
       shownNotes.get(element).measured = measuredFor(item, map)
     })
+    return stale
   }
 
   // The open note's element, its outline, the selection outlines, the handles and the selection rectangle sit in the layer beside the two groups, where a redraw leaves them, so the note
@@ -3274,7 +3277,8 @@
       return [{ element, item, index }]
     })
     const inserted = orderNotes(notes)
-    measureNotes(notes, map)
+    // The color behind a note comes from where its middle is, which its drawn size sets, so a note is styled again once measured.
+    for (const { element, item } of measureNotes(notes, map)) showNote(element, item, map)
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
     if (!drag?.move && !resizing) showFixedReachable(notes, map)
     if (drag?.move) showMove(drag, map)

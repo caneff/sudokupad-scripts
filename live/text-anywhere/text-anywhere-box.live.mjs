@@ -2,6 +2,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as textAnywhere from './text-anywhere-fixtures.mjs'
 import { actButton, closeDialogWith, savedValue, STATUS } from '../settings.mjs'
+import { createRequire } from 'node:module'
 import { openWith, reloadWith, useBrowser } from '../session.mjs'
 
 const { BOX_CUSTOM_INPUT: CUSTOM, SCRIPT_FILE, TOOL_BUTTON, BOX_KEY, BOX_PICKS: PICKS, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, TEXTS, pickTextAnywhere } = textAnywhere
@@ -15,6 +16,7 @@ const ITEMS = [
 ]
 const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 
+const { noteBox, DEFAULT_OUTLINE } = createRequire(import.meta.url)('../../text-anywhere.user.js')
 const browser = useBrowser()
 
 const open = () => textAnywhere.open(browser(), { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
@@ -254,6 +256,48 @@ describe('Text Anywhere\'s Tint box with Dark Page on', { concurrency: false }, 
     for (const channel of [r, g, b]) assert.equal(channel > 0.8, true, `a light tint, not near black: ${off.fill}`)
     assert.equal(g > b && g > r, true, `leans toward the note's own green: ${off.fill}`)
     assert.equal(off.fill, on.fill)
+    assert.deepEqual(errors, [])
+  })
+
+  // A code block is drawn shorter than the script's guess from its text, and the script learns the drawn size only after the first draw: a note drawn on
+  // the board's bottom edge, between the two middles, is the page color on the board and Dark Page's color off it.
+  // Where the note is drawn from `at[1]` = 0, its middle's distance below its point in board units.
+  const drawnMiddleOf = async (note) => {
+    await textAnywhere.plantNotes(p, [note])
+    await reloadWith(p, SCRIPTS)
+    await pickTextAnywhere(p)
+    return p.evaluate((selector) => {
+      const ctm = Framework.app.svgRenderer.getElem().getScreenCTM()
+      const box = document.querySelector(selector).getBoundingClientRect()
+      return ((box.top + box.bottom) / 2 - ctm.f) / ctm.d
+    }, TEXTS)
+  }
+
+  it('a note whose drawn middle is on the board has the page color, though its text guesses a middle off the board', async () => {
+    const note = { kind: 'text', color: 1, size: 20, opacity: 100, bg: true, text: '```\nsum ->\n  x=1\n```', at: [30, 0] }
+    const guessed = noteBox(note, DEFAULT_OUTLINE)
+    const [drawnMiddle, guessedMiddle] = [await drawnMiddleOf(note), (guessed.top + guessed.bottom) / 2]
+    assert.equal(guessedMiddle - drawnMiddle > 10, true, `the guess ${guessedMiddle} is well below the drawn middle ${drawnMiddle}`)
+    const edge = await p.evaluate(() => {
+      const ctm = Framework.app.svgRenderer.getElem().getScreenCTM()
+      return (Framework.app.svgRenderer.getElem().getBoundingClientRect().bottom - ctm.f) / ctm.d
+    })
+    await p.evaluate((key) => Framework.removeData(key), BOX_KEY)
+    await textAnywhere.plantNotes(p, [{ ...note, at: [30, edge - (drawnMiddle + guessedMiddle) / 2] }])
+    await reloadWith(p, SCRIPTS)
+    await pickTextAnywhere(p)
+    const { page, margin } = await p.evaluate(() => {
+      const colorOf = (value) => {
+        const probe = Object.assign(document.createElement('div'), { style: `background: ${value}` })
+        document.body.appendChild(probe)
+        const color = window.getComputedStyle(probe).backgroundColor
+        probe.remove()
+        return color
+      }
+      return { page: colorOf('var(--body-bg, #fff)'), margin: colorOf('var(--dark-page-color)') }
+    })
+    assert.notEqual(page, margin, 'the board and its margin differ')
+    assert.deepEqual(Object.values(await looks(p)).map(({ fill }) => fill), [page])
     assert.deepEqual(errors, [])
   })
 })
