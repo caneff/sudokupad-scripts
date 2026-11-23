@@ -120,6 +120,9 @@ the first version.
 
 The script was Draw Tool, then Text Annotation (`GLOSSARY.md`).
 
+- `docs/research/text-anywhere/penpa-plus-text-anywhere.md` — Text Anywhere on Penpa+ (#1057, 2026-11-23). A userscript or support in
+  the penpa-edit fork? Verdict: build it into the fork; first version about 1,300 lines over four or five tickets. One headless
+  run, the rest read from source.
 - `docs/research/text-anywhere/discord-markdown.md` — Discord's text formatting (2026-11-08). The syntax table the notes'
   formatting follows.
 - `docs/research/text-anywhere/gdc-notes-vs-text-anywhere.md` — gdc's Puzzle Notes versus Text Anywhere (2026-11-08). What else
