@@ -114,6 +114,9 @@ the first version.
   ticket proposed; 1.5x cannot be crisp without breaking the icon's ink size.
 - `docs/research/pen-tool-extras/cycle-erase-not-reproduced-1065.md` — A last-shape click that leaves the mark shown (#1065,
   2026-11-21). Not reproduced.
+- `docs/research/pen-tool-extras/delete-key-erases-pen-marks-1063.md` — What the Delete key erases in highlighted cells (#1063,
+  2026-11-23). Stock SudokuPad clears one layer per press (the pen layer first in the Pen tool, last in the
+  others), Pen Tool Extras' marks too; the script changes nothing. No code change.
 - `docs/research/pen-tool-extras/pen-tool-extras-dialog/README.md` — 1.13.0 the settings dialog (#107). Screenshots.
 
 ### Text Anywhere
