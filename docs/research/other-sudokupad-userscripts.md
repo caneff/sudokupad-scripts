@@ -82,3 +82,16 @@ script was installed or run.
 - A SudokuPad complaint: its conflict checker turns on knight's-move checking when the rules contain the word "knight", so a
   puzzle with a partial knight rule shows false conflicts and the only fixes are Off or Classic Sudoku
   (https://forum.logic-masters.de/showthread.php?tid=2203).
+
+## Tools beyond userscripts: what exists (2026-11-23)
+
+Five web searches, one per idea; pages read as search extracts only, nothing installed or run. "Not found" means that one search.
+
+| Idea | What exists | What was not found |
+|---|---|---|
+| Review of a finished solve | `Mikochi-Gake/sudokupad-replay-tools` (https://github.com/Mikochi-Gake/sudokupad-replay-tools): local parser, CLI, MCP server and a drag-and-drop page for `.replay` files, with errors, rollbacks and long gaps; experimental 0.1.0, no SCL or Penpa-encoded puzzles, no technique labels | A hosted page; a label for the step each stall was waiting on |
+| Solving one puzzle together | Classic-only rooms (https://sudoku.logge.top/, https://www.sudokufriends.io/, https://meliogames.com/multiplayer-sudoku); Sudoku Studio on Steam has 2-8 player co-op on its own 36 variants | A shared room on a SudokuPad, f-puzzles or SudokuMaker link |
+| Set equivalence explorer | Explanations only (https://logic-wiz.com/strategies/set-equivalence/); a 2025 forum post asks whether any software does it (http://forum.enjoysudoku.com/good-set-equivalence-theory-explanations-t45864.html) | A page where the solver picks houses and sees the two equal sets |
+| Clue calculators | https://sudokustreak.com/en/tools/ has sandwich, X-sums, little killer and whispers pages beside killer | One inside SudokuPad that reads the selection and its marks |
+| Penpa+ to puzz.link | `puzzlekit` (https://github.com/SmilingWayne/PuzzleSolver): a Python library converting both ways for 19 genres; Penpa+ has a bookmarklet for the puzz.link to Penpa+ direction | A one-click browser tool for Penpa+ to puzz.link |
+| Hints and grading | `pencilmark` (https://pypi.org/project/pencilmark/): grades and solves variants step by step, reads SudokuPad, f-puzzles, Penpa+ and Logic Masters links; https://variantsudoku.com/ plays a pasted SudokuPad link and has stepped hints | Either one working inside SudokuPad |
