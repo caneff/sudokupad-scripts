@@ -494,6 +494,9 @@ const pictureSize = (file) => {
 
 // #1142: Discord shows a small thumbnail beside the text unless the card is summary_large_image; it also reads the site name, the
 // picture's size and alt text, and the accent color from the head.
+// The homepage's picture is the card of the three biggest scripts (#1151); every details page shows its own slide.
+const HOME_CARD = 'docs/research/site/site-preview-card.png'
+
 test('every page asks for a large link preview: card, site name, picture size and alt, accent color', () => {
   const slides = Object.values(SOURCE).flatMap(show => show.slides.map(slide => ({ file: show.dir + slide.picture, alt: slide.alt })))
   const siteName = read(HOME).match(/<title>([^<]*)<\/title>/)[1]
@@ -511,6 +514,11 @@ test('every page asks for a large link preview: card, site name, picture size an
     assert.equal(meta('og:image:height'), String(height), `${where}: og:image:height is not ${file}'s height`)
     for (const key of ['og:image:width', 'og:image:height', 'og:image:alt']) {
       assert.ok(head.indexOf(`"${key}"`) > head.indexOf('"og:image"'), `${where}: ${key} comes before og:image`)
+    }
+    if (name === HOME) {
+      assert.equal(file, HOME_CARD, `${where}: og:image is not the preview card`)
+      assert.ok(meta('og:image:alt').length > 0, `${where}: og:image:alt is empty`)
+      continue
     }
     const slide = slides.find(s => s.file === file)
     assert.ok(slide, `${file} is no slide of slideshows.json`)
