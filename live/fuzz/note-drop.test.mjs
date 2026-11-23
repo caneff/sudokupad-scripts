@@ -58,9 +58,14 @@ describe('noteDrop', () => {
     })
   })
 
-  it('keeps a dropped note\'s middle off the page edge', () => {
-    const note = { size: [4000, 100], reach: 0, at: [600, 450] }
-    const [x, y] = noteDrop([600, 450], note, PAGE)
-    assert.ok(x >= 20 && y >= 20 && x <= PAGE[0] - 20 && y <= PAGE[1] - 20, `dropped at ${[x, y]}`)
+  it('prefers a place that holds the whole note over a nearer one that hangs off the page', () => {
+    // From a middle at the page's left side: straight up clears the button nearest but leaves the note's left edge off the page, a step right does not.
+    const note = { size: [200, 180], reach: 0, at: [60, 450] }
+    assert.deepEqual(noteDrop([60, 450], note, PAGE), [160, 450])
+  })
+
+  it('keeps a dropped note\'s middle off the page edge, the middle kept when only the edge clears the button', () => {
+    // 1200 wide: only a centre at x = 0 or 1200 clears a button at x = 600.
+    assert.deepEqual(noteDrop([600, 450], { size: [1200, 4000], reach: 0, at: [600, 450] }, PAGE), [600, 450])
   })
 })
