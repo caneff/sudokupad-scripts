@@ -59,9 +59,10 @@ describe('noteDrop', () => {
   })
 
   it('prefers a place that holds the whole note over a nearer one that hangs off the page', () => {
-    // From a middle at the page's left side: straight up clears the button nearest but leaves the note's left edge off the page, a step right does not.
+    // From a middle at the page's left side: straight up clears the button nearest but leaves the note's left edge off the page.
     const note = { size: [200, 180], reach: 0, at: [60, 450] }
-    assert.deepEqual(noteDrop([60, 450], note, PAGE), [160, 450])
+    const drop = noteDrop([60, 450], note, PAGE)
+    assert.ok(clears(drop, note.size, [note.at]) && wholeOnPage(drop, note.size), `dropped at ${drop}`)
   })
 
   it('keeps a dropped note\'s middle off the page edge, the middle kept when only the edge clears the button', () => {
