@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.47
+// @version      0.1.48
 // @author       ChinStrap
-// @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
+// @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger, and pan the board on a right-drag only when it is zoomed in.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
 // @supportURL   https://github.com/chinstrap45/sudokupad-scripts/issues
 // @license      MIT
@@ -23,7 +23,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.47'
+  const VERSION = '0.1.48'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'ui-tweaks'
   const SCRIPT_NAME = 'UI Tweaks'
@@ -34,7 +34,8 @@
   const OPTIONS = [
     { id: 'tab', key: 'UiTweaks_tab', label: 'Tab never switches to letters', hint: 'The letter button and the / key still switch.', default: true },
     { id: 'hideSelect', key: 'UiTweaks_hideSelect', label: 'Hide the Select button', hint: 'The other buttons in the row close up.', default: false },
-    { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after five. It has no effect with Color by Digit installed, which already wraps it.', default: false }
+    { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after five. It has no effect with Color by Digit installed, which already wraps it.', default: false },
+    { id: 'rightDrag', key: 'UiTweaks_rightDrag', label: 'Right-drag pans only when zoomed in', hint: 'With SudokuPad\'s Test Large Puzzle UI on, a right-drag pans the board only after you zoom in, and zooming back out centres it again.', default: true }
   ]
   // The digit pad's step, saved under its own key as the percent of SudokuPad's own size its rule uses.
   const DIGIT_PAD = 'digitPad'
@@ -944,9 +945,42 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
+  // SudokuPad's Large Puzzle UI pans on a right-drag at every zoom, because its size guard compares with a limit that is never reached
+  // (docs/research/large-puzzle-ui-right-drag.md). The feature binds its handlers as properties of itself and reads them off `this` each time
+  // it adds or removes one, so a wrapper put there before any pan starts is the one both calls see. Wrapping `handleMousemove` rather than
+  // listening on `window` leaves `mousedown` and `mouseup` alone, so a right click still reaches the scripts, and stops nothing on its way:
+  // at zoom 1 the move simply goes unpanned. `isOn` is read at each call, so the wrapper stays in place when the option is turned off.
+  const wrappedLargePuzzles = new WeakSet()
+  function limitRightDrag (feature, isOn) {
+    if (wrappedLargePuzzles.has(feature)) return
+    wrappedLargePuzzles.add(feature)
+    const { handleMousemove, handleZoomInOut } = feature
+    const limiting = () => isOn() && feature.zoomLevel <= 1
+    feature.handleMousemove = function (...args) {
+      if (!limiting()) return handleMousemove.apply(this, args)
+    }
+    // A zoom back to 1 puts the board at the centre, so a pan made while zoomed in never stays at zoom 1.
+    feature.handleZoomInOut = function (...args) {
+      const result = handleZoomInOut.apply(this, args)
+      if (limiting()) {
+        feature.panPos = [0, 0]
+        feature.updateTransform()
+      }
+      return result
+    }
+  }
+
   const FEATURES = {
     saved: { label: 'saved options', needs: { 'Framework.getData': 'function' } },
     tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array', 'Framework.app.tools': 'object' } },
+    rightDrag: {
+      label: 'right-drag limit',
+      needs: {
+        'Framework.features.largepuzzle.handleMousemove': 'function',
+        'Framework.features.largepuzzle.handleZoomInOut': 'function',
+        'Framework.features.largepuzzle.updateTransform': 'function'
+      }
+    },
     settings: {
       label: 'settings',
       needs: {
@@ -957,10 +991,10 @@
     }
   }
   const guard = createGuard({ script: SCRIPT_ID, name: SCRIPT_NAME, version: VERSION, features: FEATURES })
-  const { saved, tab, settings: settingsEntry } = guard.features
+  const { saved, tab, rightDrag, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
+    module.exports = { VERSION, OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, limitRightDrag }
   }
   if (typeof document === 'undefined') return
 
@@ -986,6 +1020,8 @@
       tool.keyHandlers = changed
     })
   }
+
+  const applyRightDrag = () => rightDrag.run(() => limitRightDrag(Framework.features.largepuzzle, () => options.rightDrag))
 
   function applyOptions (next) {
     const padChanged = next[DIGIT_PAD] !== options[DIGIT_PAD]
@@ -1081,6 +1117,7 @@
 
   const start = () => {
     applyOptions(saved.run(() => readOptions(Framework), () => DEFAULT_OPTIONS))
+    applyRightDrag()
     listenForHeldTab()
     addSettingsEntry(dialogs, settingsEntry, { name: 'uitweaks', content: SCRIPT_NAME, open: openDialog })
   }

@@ -27,3 +27,9 @@ Read from `feature-largepuzzle.js?v=0.611.0` on sudokupad.app.
     `handleWheel` attached; it still zooms only while `baseScale < C.MaxBaseScale`.
 
 Consequence (Chris, 2026-11-07): no feature may rely on a right-button drag. A right click is still usable.
+
+UI Tweaks' "Right-drag pans only when zoomed in" (#1154, on by default) wraps the feature's own `handleMousemove` and `handleZoomInOut`
+(own properties, bound by `bindHandlers`, which `addHandler` and `remHandler` read off `this` at each pan, so a wrapper put there before a pan
+starts is the one both see). The first returns at `zoomLevel <= 1`; the second sets `panPos` to `[0, 0]` after a zoom that ends at 1. Nothing
+stops `mousedown`, `mouseup` or `contextmenu`, so a right click still reaches scripts. `panPos` exists only after the setting has been turned
+on once (`reset()` sets it), so a script cannot probe it at startup.
