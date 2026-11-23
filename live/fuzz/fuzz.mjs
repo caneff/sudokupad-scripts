@@ -110,6 +110,11 @@ const LAYER = '#text-anywhere-layer'
 // Fractions of a button's box: its centre, and where `buttonPoint` presses (the Color by Digit hold, clear of the arrow).
 const PRESS_POINTS = [[0.5, 0.5], [0.3, 0.6]]
 const COVERED_BUTTON_NOTE = ([layer, notes, pressPoints]) => {
+  // Every button's press points, so a drop clears the next button a wide note would cover and not only this one (#1060).
+  const avoid = [...document.querySelectorAll('button, [id^="control-"]')].flatMap((button) => {
+    const box = button.getBoundingClientRect()
+    return box.width === 0 || box.height === 0 ? [] : pressPoints.map(([fx, fy]) => [box.x + box.width * fx, box.y + box.height * fy])
+  })
   for (const button of document.querySelectorAll('button, [id^="control-"]')) {
     const box = button.getBoundingClientRect()
     if (box.width === 0 || box.height === 0) continue
@@ -127,7 +132,7 @@ const COVERED_BUTTON_NOTE = ([layer, notes, pressPoints]) => {
     })
     if (!note) return { button: button.id || button.className, point: null }
     const b = note.getBoundingClientRect()
-    return { button: button.id || button.className, point: [b.x + b.width / 2, b.y + b.height / 2], size: [b.width, b.height], reach, at: [x, y] }
+    return { button: button.id || button.className, point: [b.x + b.width / 2, b.y + b.height / 2], size: [b.width, b.height], reach, at: [x, y], avoid }
   }
   return null
 }
