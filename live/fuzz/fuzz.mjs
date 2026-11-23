@@ -223,6 +223,14 @@ function envFor (p, puzzle, { beforeReload, reads }) {
   }
   const pickPenColor = (color) => clickIn(p, `.tool-pen button[data-key="${color}"]`)
   const windowSize = () => p.evaluate(() => [window.innerWidth, window.innerHeight])
+  // SudokuPad's solved dialog sits over the whole page until a press on its overlay, which a player makes before the next move. The press goes to the page's corner, clear of the dialog and the board.
+  // Only that dialog is pressed away: a script's dialog left open stays what blocks the next click, and the run fails on it.
+  const dismissSolvedDialog = async () => {
+    const dialog = p.locator('.dialog-overlay .dialog', { hasText: 'Congrats' })
+    if (await dialog.count() === 0) return
+    await p.mouse.click(2, 2)
+    await dialog.waitFor({ state: 'detached', timeout: BOX_TIMEOUT_MS })
+  }
   const clearControls = async () => {
     for (let i = 0; i <= CLEAR_TRIES; i++) {
       const covered = await p.evaluate(COVERED_BUTTON_NOTE, [LAYER, TEXTS, PRESS_POINTS])
@@ -269,6 +277,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       return !onLink ? point : (await cellCentre(p, Math.min(Math.max(row, 0), puzzle.rows - 1), Math.min(Math.max(col, 0), puzzle.cols - 1))).slice(0, 2)
     },
     clearControls,
+    dismissSolvedDialog,
     async usePen (color) {
       await openPen()
       await pickPenColor(color)

@@ -458,7 +458,7 @@ describe('routeSudokuPad', () => {
             return handlers[i].handler({
               request: () => ({ url: () => current, resourceType: () => resourceType }),
               abort: async () => { outcome.aborted = true },
-              fulfill: async () => { outcome.fulfilled = current },
+              fulfill: async (answer) => { outcome.fulfilled = current; if (answer) outcome.answer = answer },
               fallback: async (override) => next(override?.url ?? current)
             })
           }
@@ -504,7 +504,24 @@ describe('routeSudokuPad', () => {
     const t = stubTarget()
     await routeSudokuPad(t)
     assert.deepEqual(await t.request('https://consent.cookiebot.com/uc.js'), { aborted: true })
-    assert.deepEqual(await t.request('https://api.sudokupad.com/counter/abc'), { aborted: true })
+    assert.deepEqual([...misses], [])
+  })
+
+  // An aborted fetch rejects with "Failed to fetch", which SudokuPad's solved counter logs as a console error the fuzz reads as a crash (#1062).
+  it('answers the solve counter with a response, so a solve logs no error, and lists no miss', async () => {
+    const t = stubTarget()
+    await routeSudokuPad(t)
+    const url = 'https://api.sudokupad.com/counter/abc'
+    assert.deepEqual(await t.request(url, 'fetch'), { fulfilled: url, answer: { status: 200, contentType: 'application/json', body: '{}' } })
+    assert.deepEqual([...misses], [])
+  })
+
+  // Solving a puzzle makes SudokuPad fetch this list of puzzle ids; the recorder never solves one, so the recording lacks it (#1062).
+  it('answers the replay-test list a solve fetches, and lists no miss', async () => {
+    const t = stubTarget()
+    await routeSudokuPad(t)
+    const url = 'https://sudokupad.app/assets/replaytest.config.json'
+    assert.deepEqual(await t.request(url, 'fetch'), { fulfilled: url, answer: { status: 200, contentType: 'application/json', body: '{"puzzleids":[]}' } })
     assert.deepEqual([...misses], [])
   })
 

@@ -3,7 +3,7 @@
 Status: accepted, 2026-11-05 (spec #129; the daily watch #245, #436)
 
 The live tests do not load sudokupad.app on every page load. `live/cache.mjs` serves SudokuPad's own code from a **recording** (a HAR),
-aborts the trackers (consent, analytics, the solve counter) and aborts any request the recording lacks. The process then exits 1
+aborts the trackers (consent, analytics), answers the solve counter and the replay-test list with a 200 (an aborted fetch is a console error the fuzz reads as a crash, #1062) and aborts any other request the recording lacks. The process then exits 1
 naming each missing URL, so a recording with gaps cannot pass.
 
 - **Outside the repo.** The recording is SudokuPad's own code, not ours, so it lives in

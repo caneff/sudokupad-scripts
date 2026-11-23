@@ -1,7 +1,7 @@
 // Shared by the live checks: SudokuPad served from a recording (a HAR) instead of sudokupad.app on every
 // page load. Test code only; no userscript reads it, and it is not a check, so `live/**/*.live.mjs` skips it.
 //
-// `routeSudokuPad(page or context)` aborts the trackers and serves everything else from a recording of
+// `routeSudokuPad(page or context)` aborts the trackers, answers the solve counter and the replay-test list, and serves everything else from a recording of
 // SudokuPad's app. The first call with no recording or with `LIVE_REFRESH=1` records it from sudokupad.app,
 // once per run, under a lock; every other call replays it. A recording older than 24 hours is checked first:
 // one plain request for the puzzle page reads SudokuPad's version (`?v=` on its assets, see
@@ -35,9 +35,23 @@ const RUN_MARKER_MAX_AGE_MS = 60 * 60 * 1000
 export const LOAD_MS = 60000
 
 const SUDOKUPAD_ORIGIN = 'https://sudokupad.app'
-// Hosts and paths the live checks never want: consent and analytics, and the solve counter, whose URL is
-// named after the puzzle and so cannot be replayed.
-const TRACKERS = /cookiebot|googletagmanager|plausible|api\.sudokupad\.com\/counter/
+// Hosts the live checks never want: consent and analytics, aborted.
+const TRACKERS = /cookiebot|googletagmanager|plausible/
+// The solve counter, whose URL is named after the puzzle and so cannot be replayed. It is answered, never aborted: an
+// aborted fetch rejects, and SudokuPad's solved counter logs that as a console error the fuzz reads as a crash (#1062).
+// Answering it also keeps a test's solve out of SudokuPad's counts.
+const SOLVE_COUNTER = /api\.sudokupad\.com\/counter/
+const answerSolveCounter = (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+// The list of puzzle ids SudokuPad fetches when a puzzle is solved. The recorder never solves one, so the recording lacks it;
+// the server's own answer is this empty list (#1062).
+const REPLAY_TEST_LIST = /^https:\/\/sudokupad\.app\/assets\/replaytest\.config\.json(\?|$)/
+const answerReplayTestList = (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"puzzleids":[]}' })
+// What the recorder and the replay both route, so a stub added to one is added to the other.
+const routeStubs = async (target) => {
+  await target.route(TRACKERS, (r) => r.abort())
+  await target.route(SOLVE_COUNTER, answerSolveCounter)
+  await target.route(REPLAY_TEST_LIST, answerReplayTestList)
+}
 // SudokuPad serves its fonts as text/html, which Playwright would store as UTF-8 text and so corrupt.
 const FONT_FILE = /^https:\/\/sudokupad\.app\/.*\.(ttf|otf|woff2?)(\?|$)/
 export const START = /Start Puzzle|Continue|Resume/i
@@ -197,7 +211,7 @@ async function record (file) {
       const response = await route.fetch()
       await route.fulfill({ response, headers: { ...response.headers(), 'content-type': 'application/octet-stream' } })
     })
-    await context.route(TRACKERS, (r) => r.abort())
+    await routeStubs(context)
     const p = await context.newPage()
     const stylesheet = p.waitForResponse(/fonts\.googleapis\.com\/css/)
     await p.goto(puzzleUrl(), { waitUntil: 'load', timeout: LOAD_MS })
@@ -286,9 +300,10 @@ process.on('exit', () => {
 })
 
 let ready
-// Aborts the trackers and serves everything else a page makes from the recording. `target` is a page or a
-// context. Playwright runs the most recently registered matching route first, so the order below is the
-// reverse of the order a request meets them: trackers, then any sudokupad.app document rewritten to the
+// Aborts the trackers, answers the solve counter and the replay-test list (#1062), and serves everything else a page makes
+// from the recording. `target` is a page or a context. Playwright runs the most recently registered matching route first,
+// so the order below is the reverse of the order a request meets them: trackers, solve counter and replay-test list (they
+// match different URLs), then any sudokupad.app document rewritten to the
 // recorded puzzle's URL (one page document serves every path; the page keeps its own location), then the
 // recording, then the abort of whatever it lacks.
 export async function routeSudokuPad (target) {
@@ -302,5 +317,5 @@ export async function routeSudokuPad (target) {
   await target.route((u) => u.origin === SUDOKUPAD_ORIGIN, (route) => route.request().resourceType() === 'document'
     ? route.fallback({ url: puzzleUrl() })
     : route.fallback())
-  await target.route(TRACKERS, (r) => r.abort())
+  await routeStubs(target)
 }

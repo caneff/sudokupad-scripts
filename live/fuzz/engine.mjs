@@ -62,6 +62,8 @@ async function runList (openTarget, actions, landMs, settleMs, settledStep = -1)
       check: (model) => action.check(model),
       toString: () => action.toString(),
       async run (model, real) {
+        // A solved puzzle's dialog covers the page until a player presses its overlay, so a player does that before the next move (#1062).
+        await target.env.dismissSolvedDialog()
         // A note dragged off a button is the player's own move before the action (#1006): the snapshot is read after it, and a redo after it no longer follows its undo straight.
         if (await target.env.clearControls()) {
           before = await target.snapshot()
