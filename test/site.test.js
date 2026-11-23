@@ -189,12 +189,12 @@ for (const [name, text] of Object.entries(WARNINGS)) {
   })
 }
 
-test(`${HOME} opens with the title sticker: the title, Puzzle Scripts, then the intro as its subtitle`, () => {
+test(`${HOME} opens with the title sticker: the title, ChinStrap's Puzzle Scripts, then the intro as its subtitle`, () => {
   const m = read(HOME).match(/<body>\s*<header class="banner">\s*<h1>([^<]*)<\/h1>\s*<p class="lede">([\s\S]*?)<\/p>\s*<\/header>/)
   assert.ok(m, `site/${HOME} does not open with a <header class="banner"> holding the <h1> and then the lede`)
-  assert.equal(m[1], 'Puzzle Scripts')
+  assert.equal(m[1], "ChinStrap's Puzzle Scripts")
   assert.equal(plain(m[2]), "Small userscripts for SudokuPad and for other puzzle sites. Install Tampermonkey, click a script's Install button, and Tampermonkey asks if you want it. Each script's settings are in SudokuPad's settings, in the Experimental group, and every dialog has Restore defaults.")
-  assert.match(read(HOME), /<title>Puzzle Scripts<\/title>/)
+  assert.match(read(HOME), /<title>ChinStrap's Puzzle Scripts<\/title>/)
 })
 
 // Chris ruled dark mode out of the site (#808): it is light only, whatever the browser asks for.
