@@ -156,6 +156,29 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     assert.deepEqual(await stable(() => noteInCells('G')), cells)
   })
 
+  // A scroll writes no attribute of the board or its parents, and the notes' layer stays on the window.
+  it('after the page scrolls, with no resize and no style written, an on-board note stays over its cells', async () => {
+    const cells = await noteInCells('G')
+    // A tall block past the page's end, added to the body (a child, so no attribute of the board's parents is written).
+    await read(() => {
+      const tall = Object.assign(document.createElement('div'), { id: 'tall-page' })
+      tall.style.cssText = 'position: absolute; top: 0; left: 0; width: 1px; height: 2000px; visibility: hidden'
+      document.body.appendChild(tall)
+    })
+    await stable(() => noteInCells('G'))
+    try {
+      await read(() => window.scrollTo(0, 300))
+      assert.equal(await read(() => window.scrollY), 300, 'the page scrolled')
+      assert.deepEqual(await stable(() => noteInCells('G')), cells)
+    } finally {
+      await read(() => {
+        window.scrollTo(0, 0)
+        document.getElementById('tall-page').remove()
+      })
+    }
+    assert.deepEqual(await stable(() => noteInCells('G')), cells)
+  })
+
   it('a note dragged off the board is fixed where it was dropped, and dragged back it is pinned to the cells it was dropped on, each over a reload', async () => {
     const { right } = await blankPoints()
     await dragFromTo(await gridPoint(p, ON_AT), right)
