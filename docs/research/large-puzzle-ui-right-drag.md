@@ -12,8 +12,14 @@ Read from `feature-largepuzzle.js?v=0.611.0` on sudokupad.app.
   Its `contextmenu` handler only calls `preventDefault()`.
 - The wheel zooms the board under this setting. Read from `feature-largepuzzle.js?v=0.616.0` (2026-11-23):
   - `attachElem` adds `handleWheel` on `#board` in the capture phase; it is the only wheel listener the feature adds.
-  - `handleWheel` returns early when `baseScale >= C.MaxBaseScale` (the puzzle already fits), else zooms by
-    `-Math.sign(event.deltaY)` about the pointer. It reads no modifier key and not `isTrusted`, and does not call `preventDefault`.
+  - `handleWheel` zooms by `-Math.sign(event.deltaY)` about the pointer. It reads no modifier key and not `isTrusted`, and does
+    not call `preventDefault`. Its early return on `baseScale >= C.MaxBaseScale` never fires: `C.MaxBaseScale = 9999` (the
+    line `C.MaxBaseScale = 0.8` is commented out). What limits zoom is `maxZoomLevel = Math.max(1, 2 - baseScale)`, where
+    `baseScale` is the board's own CSS scale (`handleResize`): a puzzle drawn at full size or larger (`baseScale >= 1`) has a
+    maximum zoom of 1, so the wheel does nothing visible; only a puzzle scaled down to fit zooms.
+  - The right-button pan has the same dead guard (`handleStartPanCapture`) and no clamp, so a right-drag pans the board on
+    every puzzle, one that fits included, even at zoom 1. The zoom state is on `Framework.features.largepuzzle` (`zoomLevel`,
+    `baseScale`, `panPos`).
   - So Shift+wheel does not zoom on its own: Chrome on Windows turns a Shift+wheel into a sideways scroll (`deltaY` 0,
     `deltaX` set), and `Math.sign(0)` is no zoom. A script that wants zoom on Shift+wheel stops the event in a `window`
     capture listener (which runs before `#board`'s) and dispatches its own `WheelEvent` on `#board` with `deltaY` set.
