@@ -46,7 +46,7 @@ ${['pink', 'yellow', 'mint'].map((c) => `.${c} { --edge: ${token(c)}; --fill: ${
 .label { font: 600 38px/1.1 Fredoka, sans-serif; color: var(--accent); white-space: nowrap; }
 .crop { position: relative; overflow: hidden; background: #fff; border-radius: 10px; margin: auto 0; }
 .crop img { position: absolute; max-width: none; }
-.sticker { position: absolute; right: 16px; bottom: 16px; transform: rotate(-6deg); padding: 2px 22px 6px; font: 600 34px/1.1 Fredoka, sans-serif; color: var(--accent); background: var(--lavender-fill); border: 6px solid var(--lavender); border-radius: 999px; box-shadow: 0 0 0 4px #fff, 0 4px 10px rgba(0, 0, 0, 0.18); white-space: nowrap; }
+.sticker { position: absolute; right: 16px; bottom: 16px; transform: rotate(-6deg); padding: 2px 22px 6px; font: 600 36px/1.1 Fredoka, sans-serif; color: var(--accent); background: var(--lavender-fill); border: 6px solid var(--lavender); border-radius: 999px; box-shadow: 0 0 0 4px #fff, 0 4px 10px rgba(0, 0, 0, 0.18); white-space: nowrap; }
 </style><h1>Puzzle Scripts for SudokuPad</h1><div class="row">${PANELS.map(panel).join('')}</div><div class="sticker">and more!</div>`
 
 const browser = await chromium.launch()
