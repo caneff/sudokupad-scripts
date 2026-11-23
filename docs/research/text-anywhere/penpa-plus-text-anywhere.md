@@ -1,6 +1,6 @@
 # Text Anywhere on Penpa+: a userscript, or built into the penpa-edit fork
 
-Question (#1057, Chris 2026-11-19): can Text Anywhere come to Penpa+, as a userscript like the SudokuPad one or as support built
+Question (#1057, Chris, 2026-11-19): can Text Anywhere come to Penpa+, as a userscript like the SudokuPad one or as support built
 into his penpa-edit fork? Read 2026-11-23.
 
 ## Verdict
@@ -12,8 +12,8 @@ SudokuPad tool, keypad and dialog it hangs on; the fork's solve page has its own
 
 Why the fork and not a script, in one line each:
 
-- No tool registry for a script to join was found in Penpa+'s source, and the fork's solve page is rebuilt as its own UI (ADR 0001), so a script
-  would bolt a second UI onto the first.
+- No tool registry for a script to join was found in Penpa+'s source, and the fork's solve page is rebuilt as its own UI
+  (ADR 0001), so a script would bolt a second UI onto the first.
 - A script reads `window.engine`, which the fork's own notes say is the MVP bridge and is "reworked into the engine API" at the
   split (`adr/0001-split-engine-from-ui.md` § Sequencing), and `pu`, whose home `class_p.js` is cut in two. Each step of the split
   can break an installed script, and no test of the fork would say so.
@@ -22,7 +22,7 @@ Why the fork and not a script, in one line each:
 
 ## Sources
 
-- Penpa+ fork, `caneff/penpa-edit` at `91c567dc` (2026-11-23, `~/src/penpa-edit`, upstream `34e3fe97`): `AGENTS.md`,
+- Penpa+ fork, `chinstrap45/penpa-edit` at `91c567dc` (2026-11-23, `~/src/penpa-edit`, upstream `34e3fe97`): `AGENTS.md`,
   `adr/0001-split-engine-from-ui.md`, `research/bridge-inventory.md`, `research/penpa-modes-and-script-ideas.md`,
   `research/penpa-solve-mode-text.md`, `docs/js/engine_bridge.js`, `docs/js/progress.js`, `docs/js/progress_autosave.js`,
   `docs/js/penpa_layer.js`, `docs/ui/desk.js`, `userscript/penpa-redirect.user.js`.
@@ -40,17 +40,25 @@ Text Anywhere needs five things from its host. Each is answered for Penpa+ as th
 |---|---|---|
 | The board's drawing surface, and a map from a cell to a screen point | One `<canvas id="canvas">`, drawn by `pu.redraw()`; no SVG. RUN: the canvas is 680 CSS px wide with a 1700 px bitmap (`pu.resol` 2.5), `pu.size` 68, and `pu.point[id].x/.y` are CSS px from the canvas's top left (the first cell reads 68.5, 68.5). The bridge already maps a cell to the page that way: `origin.left + pu.point[id].x` (`getGridAxes`, `engine_bridge.js:1413`), and the board coordinates layer sits over the canvas in the Board card (`docs/ui/desk.js:1206`). | Yes. An HTML layer over the canvas works; it is the pattern the fork already uses. |
 | Add a note and redraw | Nothing to call: a note is HTML of ours, not canvas content, so Penpa+ never draws it. Penpa+ has no change event, but `engine.on('change', ...)` (one call a frame, `engine_bridge.js:1025`) fires after a redraw, a zoom or a Change size, and `engine.ignoreChangesIn(node)` keeps our own writes from waking it. | Yes. |
-| Undo and redo | Penpa+ keeps two `Stack`s (`pu.pu_a.command_undo`, `command_redo`) and feeds the replay log and the saved link from them. **Not needed:** Text Anywhere's notes stay off Undo and Redo by ruling (`AGENTS.md`, Chris 2026-11-10), so the question has no Penpa+ half. Restart (`reset_board`) is the one hook worth a probe, since Text Anywhere clears notes on SudokuPad's Restart and brings them back on the Undo after it (`undoRestart`). | Not required. |
+| Undo and redo | Penpa+ keeps two `Stack`s (`pu.pu_a.command_undo`, `command_redo`) and feeds the replay log and the saved link from them. **Not needed:** Text Anywhere's notes stay off Undo and Redo by ruling (`AGENTS.md`, Chris, 2026-11-10), so the question has no Penpa+ half. Restart (`reset_board`) is the one hook worth a probe, since Text Anywhere clears notes on SudokuPad's Restart and brings them back on the Undo after it (`undoRestart`). | Not required. |
 | Per-puzzle saved state | Penpa+ saves progress with `localforage` under `penpa_<md5 of pu.url>` and the saved text is the duplicate link (`progress.js` `save`). RUN: `PenpaProgress.getHash(pu.url)` gave `penpa_4caffaf1...`. Notes must not go in that text or any link: "fork-only state never goes in a link" (ADR 0001 § The split, charted), and links are upstream's format in both directions. The fork already has the key notes need: `engine.getOriginalPuzzleId()`, "the id the puzzle had before any Change size: this browser keys everything it keeps per puzzle on it" (`engine_bridge.js:1552`). | Yes, in a store of its own beside Penpa+'s save, keyed by that id. Cost: Penpa+'s own "clear this puzzle's saved progress" would not clear the notes unless the fork wires it. |
-| A way to take board presses and keys before Penpa+ | Penpa+'s handlers sit on `document` and the canvas; the bridge's own Tab, Escape and key shield use one capture-phase `window` listener (`bridge-inventory.md` Note 3), the technique Text Anywhere already uses (`window.addEventListener(..., { capture: true })`, `text-anywhere.user.js:4506-4545`). Penpa+'s key handler skips only `input` text/number fields and seven listed ids, so a typed `contenteditable` or `textarea` key reaches the board unless a shield stops it (`bridge-inventory.md`, "Keep keys from the board while a UI dialog is open"). | Yes, with the key shield. Text Anywhere's `keepBoxKeys` is the same job. |
+| A way to take board presses and keys before Penpa+ | Penpa+'s handlers sit on `document` and the canvas. The fork built the front door as `engine.onKey(handler)` (`engine_bridge.js:1134`): one handler, run before Penpa+'s own for every keydown and keyup, answering `'ui'`, `'browser'` or nothing; a second call throws, and `docs/ui/keys.js:143` already holds it. (`bridge-inventory.md` Note 3 proposed a `window` capture listener; the fork did not build that one.) Pointer presses on the board have no such door in the notes read. Penpa+'s key handler skips only `input` text/number fields and seven listed ids, so a typed `contenteditable` or `textarea` key reaches the board unless the handler answers `'ui'` (`bridge-inventory.md`, "Keep keys from the board while a UI dialog is open"). | Yes for keys, inside `keys.js`'s handler, not as a listener of the note tool's own; Text Anywhere's `keepBoxKeys` job moves there. Presses on the canvas: not determined, a probe-ticket item. |
 
 What this means for a note placed "on the board": Text Anywhere pins an on-board note in board units under SudokuPad's SVG
-transform (`boardMap`, `getScreenCTM`). Penpa+ has no transform to ask; the note must store a point in cell units (px divided by
-`pu.size`, from the grid's first cell) and map it back through the canvas's box. **Not determined:** how that holds under
+transform (`boardMap`, `getScreenCTM`). Penpa+ has no transform to ask; the note must store a point in cell units (px
+divided by `pu.size`, from the grid's first cell) and map it back through the canvas's box. 
+
+**Replay and Share:** a note
+lives outside Penpa+'s replay and its share link. The replay plays `pu.pu_a.command_replay`, the log `record()` writes, and a share link is
+`maketext_*` of the same stacks; a note writes to neither, so a replay shows the board without notes and a shared link
+carries none (READ: `class_p.js` `maketext_replay`, `maketext_duplicate`). A solver who wants notes in a shared solve cannot
+have them.
+
+**Not determined:** how that holds under
 `rotate_grid` and the reflect flips (`pu.theta`, `pu.reflect`), under Change size (which moves point ids;
-`engine.getSizeChanges` reports it) and on the non-square grids (hex, triangle, pyramid), where `pu.size` is a cell's width "on some grid types
-only" (`getGridArea` comment). A first version should pin on square grids and fix everywhere else, and a probe ticket should
-settle the rest before notes pin on any other grid.
+`engine.getSizeChanges` reports it) and on the non-square grids (hex, triangle, pyramid), where `pu.size` is a cell's width
+"on some grid types only" (`getGridArea` comment). A first version should pin on square grids and fix everywhere else, and a
+probe ticket should settle the rest before notes pin on any other grid.
 
 A note beside the board (Text Anywhere's "fixed" notes, in screen px) needs the card layout, not the canvas: in the fork's desk
 the board is a movable card inside a scrolling box, so "beside the board" means inside the Board card or on the desk, and the
@@ -64,14 +72,14 @@ free position and no formatting, and is part of the solve state and its undo. It
 
 ## 2. What of `text-anywhere.user.js` carries over
 
-The script is 4,555 lines: 1,503 inside the marked `lib/` blocks and 3,040 its own. Only 36 of its own lines name the host
-(`Framework`, `app`, the SVG, the keypad) beyond the `lib/sudokupad.js` block.
+The script is 4,555 lines: 1,491 inside the marked `lib/` blocks and 3,040 its own (the markers' 24 lines make up the rest).
+Only 36 of its own lines name the host (`Framework`, `app`, the SVG, the keypad) beyond the `lib/sudokupad.js` block.
 
 **Carries over as it is** (pure functions, no host name; the module's own tests move with it):
 
 - The note model and its text: the markdown parser and the line kinds (bullets, checklists, headers, code), the `->` to `→`
-  symbols, the note's box, size and hit-test geometry, the move, resize and erase arithmetic (script lines about 274-760; 1,000 to 1,400 lines of
-  its own code in all, a rough count of the function list, not measured).
+  symbols, the note's box, size and hit-test geometry, the move, resize and erase arithmetic (script lines about 274-760;
+  1,000 to 1,400 lines of its own code in all, a rough count of the function list, not measured).
 - `lib/store.js` (65 lines, the versioned envelope and unreadable-slot rules), `lib/settings-table.js`, `lib/color-math.js`,
   `lib/color-picker.js`, `lib/color-set.js`, `lib/plain.js`, `lib/slider-keys.js`, `lib/write-style.js`, `lib/pointer-session.js`,
   `lib/wrap-index.js`. These are generic by their contents.
@@ -87,7 +95,7 @@ The script is 4,555 lines: 1,503 inside the marked `lib/` blocks and 3,040 its o
 | `Framework.addSetting`, `showDialog`, `closeDialog` (`lib/settings-dialog.js`, 329 lines) | the settings dialog | The fork's Settings card or dialog; its own `confirmDialog` and settings code replace the module. |
 | `lib/sudokupad.js` (396 lines): the guard, the probe of SudokuPad internals, the notice bar, the error log | "this script can break at any time" | Not needed in the fork, which tests its own UI; the guard's idea (name the internals a feature needs, turn the feature off with a notice if they are gone) is what a *userscript* would keep. |
 | `svgRenderer.getElem()`, `getScreenCTM`, `app.puzzle.on('loaded')`, `app.on('restarted')`, `app.puzzle.rows/cols` | `boardMap`, `gridSize`, load and restart | `engine.on('change')`, `getGridAxes`, `getGridArea`, `getSizeChanges`; Restart through the engine's `restart`. |
-| `ABOVE_NOTES`, `CONTROLS`, `overControl` (SudokuPad's `.topbar`, `#appmenu`, `#controls`) | which presses a note ignores | The fork's own classes (`ui-root`, cards). |
+| `ABOVE_NOTES`, `CONTROLS`, `overControl` (SudokuPad's `.topbar`, `#appmenu`, `[role="menu"]`, `.dialog-overlay` and the `#controls` box) | which presses a note ignores | The fork's own classes (`ui-root`, cards). |
 | 50 live test files (`live/text-anywhere/`) | behavior against sudokupad.app | Rewritten against the fork's pages; the fork's live harness is Playwright over `file://` like this repo's. |
 
 The carry-over is by copy: this repo's `sync-lib.js` copies `lib/` into SudokuPad userscripts, and the fork has no such step and
@@ -98,20 +106,23 @@ more than the copy saves, the later option is a shared package, not now.
 
 **A userscript** (Tampermonkey, `@match https://chinstrap45.github.io/penpa-edit/*`):
 
-- *Cost:* the carried-over modules go in by this repo's `sync-lib.js` unchanged, so the first version is the cheapest to ship, about
-  the same lines as in the fork but with no card, tool or Settings work, only a button of its own. About 800 to 1,200 lines.
+- *Cost:* the carried-over modules go in by this repo's `sync-lib.js` unchanged, so the first version is the cheapest to
+  ship, about the same lines as in the fork but with no card, tool or Settings work, only a button of its own. About 800 to
+  1,200 lines.
 - *Who maintains it:* this repo, at SudokuPad's release pace.
 - *Penpa+ updates:* the weak point. RUN: `pu` is a `window` property, but `Puzzle` and `UserSettings` are not (a class and a
   `const`), so a page-context script reaches them by bare name only, and `window.engine` is the MVP bridge, which
-  only `solve.html` loads (READ; not run on `index.html`). The fork's AGENTS says the nightly upstream merge reports each upstream commit that touches an
-  owned file, and the split moves `class_p.js` into engine and UI files "step by step". No fork test names a script, and the
-  existing redirect script reads only the URL. A script that reads `engine` or `pu` breaks on a fork release and is found by a
-  solver, or by a nightly run of ours that loads the live page (as `watch.yml` does for SudokuPad).
+  only `solve.html` loads (READ; not run on `index.html`). The fork's AGENTS says the nightly upstream merge reports each
+  upstream commit that touches an owned file, and the split moves `class_p.js` into engine and UI files "step by step". No
+  fork test names a script, and the existing redirect script reads only the URL. A script that reads `engine` or `pu` breaks
+  on a fork release and is found by a solver, or by a nightly run of ours that loads the live page (as `watch.yml` does for
+  SudokuPad).
 - *Reach:* a script also runs on the fork's old `index.html` and on upstream's Penpa+ (`swaroopg92.github.io`), but the Redirect
   script already sends every upstream link to the fork, so that reach is mostly unused. A solver who has not installed Text
   Anywhere sees no notes; one who has gets the same page as before.
-- *Collision:* a second script's UI would sit over the fork's desk layout and its key routing (the fork's capture-phase front
-  door, `bridge-inventory.md` Note 3), so the script would have to learn those rules, and the fork would have to keep them.
+- *Collision:* a second script's UI would sit over the fork's desk layout and its key routing (`engine.onKey` takes one
+  handler, and `keys.js` holds it), so a script's own key listener would race the fork's, and the fork would have to keep
+  the rules the script learned.
 
 **Built into the fork:**
 
@@ -122,8 +133,8 @@ more than the copy saves, the later option is a shared package, not now.
 - *Penpa+ updates:* a bridge rename fails the fork's own tests in the PR that makes it, and the split moves the notes' calls with
   the bridge, which is how every other UI feature moves.
 - *The ruled constraint it must keep:* the fork's phone and tablet rule (nothing is checked at a phone size) and this repo's
-  (`AGENTS.md`): both say the same, so neither blocks a note tool. No feature relies on a right-button drag (this repo's ruling,
-  Chris 2026-11-07); Text Anywhere's erase is a right click, which is fine.
+  (`AGENTS.md`): both say the same, so neither blocks a note tool. No feature relies on a right-button drag (this repo's
+  ruling, Chris, 2026-11-07); Text Anywhere's erase is a right click, which is fine.
 
 ## 4. Recommendation
 
@@ -158,6 +169,6 @@ Text Anywhere's own history says what the rest costs: its 0.46.60 is the result 
 
 ## Decisions for Chris
 
-None this note cannot make by its recommendation. If he takes it, the next step is `/grill-me` in `caneff/penpa-edit` on three
-open points: where a note beside the board lives in the desk (card or desk), whether a note carries into Penpa+'s Replay or
-Share, and whether the notes' colors are the surface colors or their own nine.
+None this note cannot make by its recommendation. If he takes it, the next step is `/grill-me` in `chinstrap45/penpa-edit`
+on two open points: where a note beside the board lives in the desk (card or desk), whether the notes' colors are the
+surface colors or their own nine.
