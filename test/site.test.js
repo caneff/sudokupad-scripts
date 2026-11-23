@@ -296,11 +296,11 @@ test(`${HOME} has the ${PENPA_REDIRECT_NAME} entry under id="penpa-redirect", in
   assert.doesNotMatch(entry[1], /<img\b/, 'no picture yet')
 })
 
-test(`${HOME}'s Logic Masters Puzzle Preview row credits Juggler and says it is gentle on the site`, () => {
+test(`${HOME}'s Logic Masters Puzzle Preview row credits juggler and says it is gentle on the site`, () => {
   const row = rowsOf(read(HOME)).find(r => r.includes('<h2>Logic Masters Puzzle Preview</h2>'))
   assert.ok(row, `site/${HOME} has no Logic Masters Puzzle Preview row`)
   const text = plain(row)
-  assert.match(text, /first version was written by Juggler/)
+  assert.match(text, /first version was written by juggler/)
   assert.match(text, /gentle on the server/)
 })
 
