@@ -148,6 +148,14 @@ Includes No Tab Letters, once its own script.
 - `docs/research/ui-tweaks/no-tab-letters-micro-interaction-polish.md` — No Tab Letters: small touches (2026-11-08). Research
   only, against 0.1.4. See `docs/research/sudokupad-letter-tool.md`.
 
+## Co-op room
+
+The map #1159: a shared grid for two or more people on any SudokuPad link.
+
+- `docs/research/co-op-room/transports-for-co-op.md` — What can carry actions between browsers, and what each costs (#1162,
+  2026-11-23). sudokupad.app sends no CSP and no `X-Frame-Options`; an owner-run relay on Cloudflare Durable Objects or Fly.io
+  is single dollars a month at 1,000 rooms a day, hosted services tens to thousands. Facts only; the pick is a later ticket.
+
 ## Tooling
 
 - `docs/research/tooling/tampermonkey-shared-code.md` — Can the userscripts share code? (2026-11-05). What Tampermonkey offers for
