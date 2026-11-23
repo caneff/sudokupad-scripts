@@ -166,13 +166,16 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
       document.body.appendChild(tall)
     })
     await stable(() => noteInCells('G'))
-    await read(() => window.scrollTo(0, 300))
-    assert.equal(await read(() => window.scrollY), 300, 'the page scrolled')
-    assert.deepEqual(await stable(() => noteInCells('G')), cells)
-    await read(() => {
-      window.scrollTo(0, 0)
-      document.getElementById('tall-page').remove()
-    })
+    try {
+      await read(() => window.scrollTo(0, 300))
+      assert.equal(await read(() => window.scrollY), 300, 'the page scrolled')
+      assert.deepEqual(await stable(() => noteInCells('G')), cells)
+    } finally {
+      await read(() => {
+        window.scrollTo(0, 0)
+        document.getElementById('tall-page').remove()
+      })
+    }
     assert.deepEqual(await stable(() => noteInCells('G')), cells)
   })
 

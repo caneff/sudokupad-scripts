@@ -3241,7 +3241,7 @@
   const measuredFor = (item, map) => JSON.stringify([item.text, item.size, item.box, Boolean(item.bg), look.outline, layerFont, item.fixed ? map.scale : null])
 
   // Measures the notes whose size may have changed, every read before every write: whether its text runs past its box, then, with its scroll bar's
-  // room settled, its text's size in board units. Returns the notes it measured.
+  // room settled, its text's size in board units.
   function measureNotes (notes, map) {
     const stale = notes.filter(({ element, item }) => shownNotes.get(element).measured !== measuredFor(item, map))
     const rooms = stale.map(({ element }) => scrollRoom(element))

@@ -24,13 +24,14 @@ const looks = (p) => p.evaluate((selector) => Object.fromEntries([...document.qu
   const style = window.getComputedStyle(e)
   return [e.textContent, { fill: style.backgroundColor, shadow: style.boxShadow }]
 })), TEXTS)
-const pageColor = (p) => p.evaluate(() => {
-  const probe = Object.assign(document.createElement('div'), { style: 'background: var(--body-bg, #fff)' })
+const colorOf = (p, value) => p.evaluate((css) => {
+  const probe = Object.assign(document.createElement('div'), { style: `background: ${css}` })
   document.body.appendChild(probe)
   const color = window.getComputedStyle(probe).backgroundColor
   probe.remove()
   return color
-})
+}, value)
+const pageColor = (p) => colorOf(p, 'var(--body-bg, #fff)')
 const dialog = async (p, work, close = 'Save') => {
   await p.click(SETTINGS_BUTTON)
   await p.locator(EDITOR).waitFor({ state: 'visible' })
@@ -286,16 +287,7 @@ describe('Text Anywhere\'s Tint box with Dark Page on', { concurrency: false }, 
     await textAnywhere.plantNotes(p, [{ ...note, at: [30, edge - (drawnMiddle + guessedMiddle) / 2] }])
     await reloadWith(p, SCRIPTS)
     await pickTextAnywhere(p)
-    const { page, margin } = await p.evaluate(() => {
-      const colorOf = (value) => {
-        const probe = Object.assign(document.createElement('div'), { style: `background: ${value}` })
-        document.body.appendChild(probe)
-        const color = window.getComputedStyle(probe).backgroundColor
-        probe.remove()
-        return color
-      }
-      return { page: colorOf('var(--body-bg, #fff)'), margin: colorOf('var(--dark-page-color)') }
-    })
+    const [page, margin] = [await pageColor(p), await colorOf(p, 'var(--dark-page-color)')]
     assert.notEqual(page, margin, 'the board and its margin differ')
     assert.deepEqual(Object.values(await looks(p)).map(({ fill }) => fill), [page])
     assert.deepEqual(errors, [])
