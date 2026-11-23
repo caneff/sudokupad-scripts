@@ -24,7 +24,7 @@ Read from `feature-largepuzzle.js?v=0.611.0` on sudokupad.app.
     `deltaX` set), and `Math.sign(0)` is no zoom. A script that wants zoom on Shift+wheel stops the event in a `window`
     capture listener (which runs before `#board`'s) and dispatches its own `WheelEvent` on `#board` with `deltaY` set.
   - `detachElem` calls `addHandler` for the wheel where it means `remHandler`, so turning the setting off leaves
-    `handleWheel` attached; it still zooms only while `baseScale < C.MaxBaseScale`.
+    `handleWheel` attached.
   - Zoom has room only while the board is drawn smaller than natural size: `maxZoomLevel` is `max(1, 2 - baseScale)`, so at a `baseScale`
     of 1 or more a wheel does nothing. In the live harness the 1200x900 window gives 1.103 and an 800x520 one gives 0.735, where a wheel
     notch raises `Framework.features.largepuzzle.zoomLevel` by about 0.22. Its `reset()` sets `baseScale` to 1, which ends the room to zoom.
@@ -32,3 +32,12 @@ Read from `feature-largepuzzle.js?v=0.611.0` on sudokupad.app.
     the board never zooms, and Shift+wheel does, through the dispatched `WheelEvent`.
 
 Consequence (Chris, 2026-11-07): no feature may rely on a right-button drag. A right click is still usable.
+
+UI Tweaks' "Right-drag pans only when zoomed in" (#1154, on by default) wraps the feature's own `handleMousemove` and `handleZoomInOut`
+(own properties, bound by `bindHandlers`, which `addHandler` and `remHandler` read off `this` at each pan, so a wrapper put there before a pan
+starts is the one both see). The first returns at `zoomLevel <= 1`; the second sets `panPos` to `[0, 0]` after a zoom that ends at 1. Nothing
+stops `mousedown`, `mouseup` or `contextmenu`, so a right click still reaches scripts. The feature's own `handleMousemove` is what stops every
+right-button move (`preventDefault`, `stopPropagation`), so with the option on, at zoom 1 a right-drag's moves reach the page and every script;
+the earlier bullet's "no script sees a right-drag's moves" holds only while zoomed in or with the option off. The option turned on at zoom 1 also puts a board
+panned with it off back at the centre. `panPos` exists only after the setting has been turned
+on once (`reset()` sets it), so a script cannot probe it at startup.

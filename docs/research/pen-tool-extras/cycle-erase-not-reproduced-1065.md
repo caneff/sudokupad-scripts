@@ -17,6 +17,24 @@ Cases that all stayed consistent (about 60):
 
 Read from the page: SudokuPad's own `handleInputup` calls `clickCell` only when `!didInputMove() && currentPath.length <= 1 && linePart === undefined`.
 A press that moves a little, or that follows a drag that left `linePart` set, never reaches `clickCell`, so Pen Tool Extras never sees it and the mark stays as it was.
-That would look like the report, but it is a guess: no case showed a click that never reached `clickCell`. The test checked state against drawing, not that each click stepped the cycle.
+That would look like the report, but it is a guess: no case showed a click that never reached `clickCell`. No case slid the press past 6 px (the 2 px jitter is under the cut).
 
 Not tried: a touch or pen-tablet pointer, a puzzle with a different grid size, a real Windows mouse, Tampermonkey.
+
+## Reproduced: a press that slides 6 px (2026-11-23)
+
+A second probe (`cycle-erase-1065-probe.mjs` beside this note, frozen scratch, run by hand with `node --test` from the repo root; `CFG=all`
+loads all six scripts at `document-idle`) drove the cell-centre cycle on cell (4, 4) of the default puzzle, pen color 1, Pen Tool Extras alone. After each case it read the
+saved value, every `.cell-pen` and `.penhint` drawn over the cell, and the cell's pixels against a blank screenshot.
+
+- Three clean clicks (circle, cross, dot) and then a press that slides **6, 7 or 9 px** before release: the dot stays, saved (`z`) and drawn, and
+  the pixels show it. Slid 2 to 5 px it erases. 6 px is SudokuPad's `App.DoubleInputDistance`: past it `didInputMove()` is true, `handleInputup`
+  never calls `clickCell`, and Pen Tool Extras never sees a click. The 7 px case was red in both runs; 6 and 9 px ran once.
+- On an empty cell, a 7 px press places nothing. Other steps of the cycle were not tried with a slide.
+- Four clicks 0, 40, 120, 250 or 400 ms apart, clicks after a pen drag elsewhere, after a drag that ends on the cell and is undone, and from four
+  points in the cell: all erase.
+- After the stuck dot, a plain click on it erases it. A click on a different empty cell, (6, 6), does **not**: it leaves the dot saved and drawn.
+  So the slide explains "it doesn't disappear", but not the tester's "unless I later click on a different cell without a mark". Either the tester's
+  later click was back on the dot, or a second cause is still unfound.
+- Not run, read from the code: stock SudokuPad drops the same press for its own circle and cross, since the cut is in its `handleInputup`, before
+  `clickCell`. Pen Tool Extras inherits the miss; its cycle makes it visible, since the press was meant to erase.

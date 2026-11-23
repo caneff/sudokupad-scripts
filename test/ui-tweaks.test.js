@@ -4,11 +4,11 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { fakeStore } = require('./fake-store.js')
-const { OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, WHEEL_NOTCH, wheelDelta, accumulateWheel, steppedIndex } = require('../ui-tweaks.user.js')
+const { OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, READERS, copiedSettings, pastedSettings, buildCss, pastedOptions, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, limitRightDrag, WHEEL_NOTCH, wheelDelta, accumulateWheel, steppedIndex } = require('../ui-tweaks.user.js')
 
-test('the defaults: Tab never switches to letters is on, the other three are off, the digit pad is Normal', () => {
-  assert.deepEqual(DEFAULT_OPTIONS, { tab: true, hideSelect: false, wrapButtons: false, wheelMode: false, digitPad: 100 })
-  assert.deepEqual(OPTIONS.map((o) => o.id), ['tab', 'hideSelect', 'wrapButtons', 'wheelMode'])
+test('the defaults: Tab never switches to letters and Right-drag pans only when zoomed in are on, the other three are off, the digit pad is Normal', () => {
+  assert.deepEqual(DEFAULT_OPTIONS, { tab: true, hideSelect: false, wrapButtons: false, rightDrag: true, wheelMode: false, digitPad: 100 })
+  assert.deepEqual(OPTIONS.map((o) => o.id), ['tab', 'hideSelect', 'wrapButtons', 'rightDrag', 'wheelMode'])
 })
 
 test('readOptions: nothing saved reads as the defaults', () => {
@@ -19,6 +19,7 @@ test('readOptions: each saved boolean wins over its default, the others keep the
   assert.deepEqual(readOptions(fakeStore({ UiTweaks_tab: false })), { ...DEFAULT_OPTIONS, tab: false })
   assert.deepEqual(readOptions(fakeStore({ UiTweaks_hideSelect: true })), { ...DEFAULT_OPTIONS, hideSelect: true })
   assert.deepEqual(readOptions(fakeStore({ UiTweaks_wrapButtons: true })), { ...DEFAULT_OPTIONS, wrapButtons: true })
+  assert.deepEqual(readOptions(fakeStore({ UiTweaks_rightDrag: false })), { ...DEFAULT_OPTIONS, rightDrag: false })
   assert.deepEqual(readOptions(fakeStore({ UiTweaks_wheelMode: true })), { ...DEFAULT_OPTIONS, wheelMode: true })
 })
 
@@ -29,9 +30,9 @@ test('readOptions: a saved value that is not a boolean reads as the default', ()
 
 test('saveOptions keeps every option under its own key, and readOptions reads them back', () => {
   const store = fakeStore()
-  const chosen = { tab: false, hideSelect: true, wrapButtons: true, wheelMode: true, digitPad: 125 }
+  const chosen = { tab: false, hideSelect: true, wrapButtons: true, rightDrag: false, wheelMode: true, digitPad: 125 }
   saveOptions(store, chosen)
-  assert.deepEqual(store.data, { UiTweaks_tab: false, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true, UiTweaks_wheelMode: true, UiTweaks_digitPad: 125 })
+  assert.deepEqual(store.data, { UiTweaks_tab: false, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: true, UiTweaks_rightDrag: false, UiTweaks_wheelMode: true, UiTweaks_digitPad: 125 })
   assert.deepEqual(readOptions(store), chosen)
 })
 
@@ -48,11 +49,11 @@ test('readOptions reads a key saved at its default without removing it', () => {
 })
 
 test('the storage keys are UiTweaks_ names', () => {
-  assert.deepEqual(Object.fromEntries(OPTIONS.map((option) => [option.id, option.key])), { tab: 'UiTweaks_tab', hideSelect: 'UiTweaks_hideSelect', wrapButtons: 'UiTweaks_wrapButtons', wheelMode: 'UiTweaks_wheelMode' })
+  assert.deepEqual(Object.fromEntries(OPTIONS.map((option) => [option.id, option.key])), { tab: 'UiTweaks_tab', hideSelect: 'UiTweaks_hideSelect', wrapButtons: 'UiTweaks_wrapButtons', rightDrag: 'UiTweaks_rightDrag', wheelMode: 'UiTweaks_wheelMode' })
 })
 
 test('copiedSettings: the options in force, defaults included', () => {
-  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ UiTweaks_hideSelect: true, Other_key: 1 }))), { UiTweaks_tab: true, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: false, UiTweaks_wheelMode: false, UiTweaks_digitPad: 100 })
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ UiTweaks_hideSelect: true, Other_key: 1 }))), { UiTweaks_tab: true, UiTweaks_hideSelect: true, UiTweaks_wrapButtons: false, UiTweaks_rightDrag: true, UiTweaks_wheelMode: false, UiTweaks_digitPad: 100 })
 })
 
 test('a paste keeps booleans under this script\'s keys and skips the rest', () => {
@@ -150,7 +151,7 @@ test('isHeldTabToStop stops only a repeated Tab, while the letter tool is on and
 })
 
 const completeSudokuPad = () => ({
-  Framework: { getApp () {}, app: { tools: {} }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} },
+  Framework: { getApp () {}, app: { tools: {} }, features: { largepuzzle: { handleMousemove () {}, handleZoomInOut () {}, updateTransform () {} } }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} },
   ToolLetter: { tool: { keyHandlers: [] } }
 })
 
@@ -160,7 +161,8 @@ test('a complete SudokuPad lacks nothing, and without one internal only the feat
     ...['addSetting', 'showDialog', 'closeDialog', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, ['settings']]),
     ['Framework.getData', (r) => { delete r.Framework.getData }, ['saved']],
     ['ToolLetter.tool.keyHandlers', (r) => { delete r.ToolLetter.tool.keyHandlers }, ['tab']],
-    ['Framework.app.tools', (r) => { delete r.Framework.app.tools }, ['tab', 'wheel']]
+    ['Framework.app.tools', (r) => { delete r.Framework.app.tools }, ['tab', 'wheel']],
+    ...['handleMousemove', 'handleZoomInOut', 'updateTransform'].map((name) => [`Framework.features.largepuzzle.${name}`, (r) => { delete r.Framework.features.largepuzzle[name] }, ['rightDrag']])
   ]
   for (const [internal, remove, features] of removals) {
     const roots = completeSudokuPad()
@@ -241,6 +243,85 @@ test('buildCss: the corner and centre tools get the digit font scaled from 1.4re
 test('buildCss: the Delete key is as tall as a digit and spans two digit columns, as SudokuPad\'s 8.3rem does at 4rem', () => {
   assert.match(buildCss({ ...DEFAULT_OPTIONS, digitPad: 150 }), /button\[data-control="delete"\] \{ flex: 0 0 12\.3rem !important; width: 12\.3rem !important; height: 6rem !important; \}/)
   assert.match(buildCss({ ...DEFAULT_OPTIONS, digitPad: 80 }), /button\[data-control="delete"\] \{ flex: 0 0 6\.7rem !important; width: 6\.7rem !important; height: 3\.2rem !important; \}/)
+})
+
+// SudokuPad's Large Puzzle UI feature as far as the wrap reads it: its bound handlers are own properties, `zoomLevel` and `panPos` its state.
+function fakeLargePuzzle (zoomLevel, zoomsTo = zoomLevel) {
+  const calls = []
+  const feature = {
+    zoomLevel,
+    panPos: [30, -20],
+    handleMousemove (event) { calls.push(['pan', event]) },
+    handleZoomInOut (inOut) { feature.zoomLevel = zoomsTo; calls.push(['zoom', inOut]) },
+    updateTransform () { calls.push(['transform', [...feature.panPos]]) }
+  }
+  return { feature, calls }
+}
+
+test('limitRightDrag: with the option on, a mousemove at zoom 1 never reaches the feature, so a right-drag does not pan', () => {
+  const { feature, calls } = fakeLargePuzzle(1)
+  limitRightDrag(feature, () => true)
+  feature.handleMousemove({ buttons: 2 })
+  assert.deepEqual(calls, [])
+})
+
+test('limitRightDrag: with the option on, a mousemove zoomed in reaches the feature, which pans', () => {
+  const { feature, calls } = fakeLargePuzzle(1.4)
+  const event = { buttons: 2 }
+  limitRightDrag(feature, () => true)
+  feature.handleMousemove(event)
+  assert.deepEqual(calls, [['pan', event]])
+})
+
+test('limitRightDrag: with the option off, a mousemove at zoom 1 still reaches the feature, and the option is read at each move', () => {
+  const { feature, calls } = fakeLargePuzzle(1)
+  let on = false
+  limitRightDrag(feature, () => on)
+  feature.handleMousemove({})
+  on = true
+  feature.handleMousemove({})
+  assert.deepEqual(calls.map(([name]) => name), ['pan'])
+})
+
+test('limitRightDrag: a zoom that ends at 1 puts the board back to the centre, after the feature has zoomed', () => {
+  const { feature, calls } = fakeLargePuzzle(1.4, 1)
+  limitRightDrag(feature, () => true)
+  feature.handleZoomInOut(-1)
+  assert.deepEqual(feature.panPos, [0, 0])
+  assert.deepEqual(calls, [['zoom', -1], ['transform', [0, 0]]])
+})
+
+test('limitRightDrag: a zoom that stays above 1 leaves the pan, and with the option off a zoom to 1 leaves it too', () => {
+  const zoomed = fakeLargePuzzle(1.4)
+  limitRightDrag(zoomed.feature, () => true)
+  zoomed.feature.handleZoomInOut(1)
+  assert.deepEqual(zoomed.feature.panPos, [30, -20])
+  assert.deepEqual(zoomed.calls, [['zoom', 1]])
+  const off = fakeLargePuzzle(1.4, 1)
+  limitRightDrag(off.feature, () => false)
+  off.feature.handleZoomInOut(-1)
+  assert.deepEqual(off.feature.panPos, [30, -20])
+  assert.deepEqual(off.calls, [['zoom', -1]])
+})
+
+test('limitRightDrag returns a recentre that puts a board panned at zoom 1 back at the centre, only while the option is on', () => {
+  const on = fakeLargePuzzle(1)
+  limitRightDrag(on.feature, () => true)()
+  assert.deepEqual(on.feature.panPos, [0, 0])
+  assert.deepEqual(on.calls, [['transform', [0, 0]]])
+  const off = fakeLargePuzzle(1)
+  limitRightDrag(off.feature, () => false)()
+  assert.deepEqual(off.feature.panPos, [30, -20])
+  const zoomed = fakeLargePuzzle(1.4)
+  limitRightDrag(zoomed.feature, () => true)()
+  assert.deepEqual(zoomed.feature.panPos, [30, -20], 'a board zoomed in is left where it is')
+})
+
+test('limitRightDrag\'s recentre leaves a feature that was never turned on alone: it has no pan yet', () => {
+  const { feature, calls } = fakeLargePuzzle(1)
+  delete feature.panPos
+  limitRightDrag(feature, () => true)()
+  assert.deepEqual(calls, [])
 })
 
 test('the mouse wheel option is off at first, and its hint says Shift+wheel zooms', () => {
