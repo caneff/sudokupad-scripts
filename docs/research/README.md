@@ -168,8 +168,9 @@ Includes No Tab Letters, once its own script.
 
 ## The site
 
-- `docs/research/site/site-preview-card-screenshot.mjs` — The homepage's link-preview card (2026-11-23, #1151). Takes `docs/research/site/site-preview-card.png`
-  (1200×630): the title and the first slides of Pen Tool Extras, Text Anywhere and Color by Digit, cropped tight; also a 400 px copy to check it.
+- `docs/research/site/site-preview-card-screenshot.mjs` — The homepage's link-preview card (2026-11-23, #1151). Takes
+  `docs/research/site/site-preview-card.png` (1200×630): the title and the first slides of Pen Tool Extras, Text Anywhere
+  and Color by Digit, cropped tight; also a 400 px copy to check it.
 - `docs/research/site/chinstrap-theme/README.md` — The ChinStrap theme mockup (2026-11-10). The site restyled in the look of
   Chris's stream, as approved in round 14 of the mockup loop; `theme.css` is the spec the build folded into `site/style.css`.
 
