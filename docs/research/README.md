@@ -93,7 +93,7 @@ together.
 
 ### Logic Masters Puzzle Preview
 
-No note. `docs/research/logic-masters-puzzle-preview/juggler-original-1.0.user.js` is Juggler's original, kept as the source of
+No note. `docs/research/logic-masters-puzzle-preview/juggler-original-1.0.user.js` is juggler's original, kept as the source of
 the first version.
 
 ### Pen Tool Extras
