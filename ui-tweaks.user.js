@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.47
+// @version      0.1.48
 // @author       ChinStrap
-// @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger.
+// @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, make the digit buttons smaller or larger, and change mode with the mouse wheel.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
 // @supportURL   https://github.com/chinstrap45/sudokupad-scripts/issues
 // @license      MIT
@@ -23,7 +23,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.47'
+  const VERSION = '0.1.48'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'ui-tweaks'
   const SCRIPT_NAME = 'UI Tweaks'
@@ -34,7 +34,8 @@
   const OPTIONS = [
     { id: 'tab', key: 'UiTweaks_tab', label: 'Tab never switches to letters', hint: 'The letter button and the / key still switch.', default: true },
     { id: 'hideSelect', key: 'UiTweaks_hideSelect', label: 'Hide the Select button', hint: 'The other buttons in the row close up.', default: false },
-    { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after five. It has no effect with Color by Digit installed, which already wraps it.', default: false }
+    { id: 'wrapButtons', key: 'UiTweaks_wrapButtons', label: 'Wrap buttons', hint: 'The bottom row of tool buttons wraps onto a second line after five. It has no effect with Color by Digit installed, which already wraps it.', default: false },
+    { id: 'wheelMode', key: 'UiTweaks_wheelMode', label: 'Mouse wheel changes mode', hint: 'Over the board or the tool buttons, the wheel selects the next or previous tool button, wrapping round. With Large Puzzle UI on, Shift+wheel zooms the board instead.', default: false }
   ]
   // The digit pad's step, saved under its own key as the percent of SudokuPad's own size its rule uses.
   const DIGIT_PAD = 'digitPad'
@@ -190,6 +191,27 @@
       `.tool-corner .controls-input button.digit, .tool-centre .controls-input button.digit { font-size: ${scaled(DIGIT_FONT_SMALL_REM)}rem !important; }`
     ].join('\n')
   }
+  // One notch of Chrome's wheel in pixel mode, and what a line of Firefox's wheel (three to a notch) or a page counts as.
+  const WHEEL_NOTCH = 100
+  const WHEEL_LINE = WHEEL_NOTCH / 3
+  // A trackpad stream is added up until a notch is full; a pause this long, or a turn the other way, drops what was left over.
+  const WHEEL_PAUSE_MS = 400
+
+  // Shift+wheel arrives as a sideways scroll (`deltaY` 0, `deltaX` set), so the delta is whichever one is set.
+  function wheelDelta (event) {
+    const delta = event.deltaY || event.deltaX
+    return event.deltaMode === 1 ? delta * WHEEL_LINE : event.deltaMode === 2 ? Math.sign(delta) * WHEEL_NOTCH : delta
+  }
+
+  function accumulateWheel ({ rest, at }, delta, now) {
+    const kept = now - at > WHEEL_PAUSE_MS || Math.sign(rest) === -Math.sign(delta) ? 0 : rest
+    const total = kept + delta
+    const steps = Math.trunc(total / WHEEL_NOTCH) || 0
+    return { steps, state: { rest: total - steps * WHEEL_NOTCH, at: now } }
+  }
+
+  // `index` is -1 when the current tool is on no button: down then goes to the first, up to the last.
+  const steppedIndex = (index, count, steps) => ((((index < 0 && steps < 0 ? 0 : index) + steps) % count) + count) % count
   const HIDE_SELECT_CSS = `${BOTTOM_ROW} [data-control="select"] { display: none !important; }`
 
   // Tab adds no rule: it works on the letter tool's key list.
@@ -947,6 +969,7 @@
   const FEATURES = {
     saved: { label: 'saved options', needs: { 'Framework.getData': 'function' } },
     tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array', 'Framework.app.tools': 'object' } },
+    wheel: { label: 'mouse wheel', needs: { 'Framework.app.tools': 'object' } },
     settings: {
       label: 'settings',
       needs: {
@@ -957,10 +980,10 @@
     }
   }
   const guard = createGuard({ script: SCRIPT_ID, name: SCRIPT_NAME, version: VERSION, features: FEATURES })
-  const { saved, tab, settings: settingsEntry } = guard.features
+  const { saved, tab, wheel, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
+    module.exports = { VERSION, OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, WHEEL_NOTCH, wheelDelta, accumulateWheel, steppedIndex, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
@@ -1079,7 +1102,55 @@
     }, true)
   }
 
+  const BOARD = '#board'
+  const TOOL_BUTTONS = '.controls-tool > button'
+  // The buttons in the order they are drawn: the bar fills a column down, then the next one, and another script's button can sit out of page order.
+  function toolButtonsOnScreen () {
+    return [...document.querySelectorAll(TOOL_BUTTONS)]
+      .filter((button) => button.getClientRects().length > 0)
+      .map((button) => ({ button, box: button.getBoundingClientRect() }))
+      .sort((a, b) => Math.round(a.box.left) - Math.round(b.box.left) || a.box.top - b.box.top)
+      .map(({ button }) => button)
+  }
+
+  function stepTool (steps) {
+    const buttons = toolButtonsOnScreen()
+    if (buttons.length === 0) return
+    const current = buttons.findIndex((button) => button.id === `control-${Framework.app.tool}`)
+    const button = buttons[steppedIndex(current, buttons.length, steps)]
+    const { left, top, width, height } = button.getBoundingClientRect()
+    // SudokuPad acts on a button's press, not its click, and ignores a press at (0, 0) as a keyboard's simulated click.
+    button.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window, clientX: left + width / 2, clientY: top + height / 2 }))
+  }
+
+  // SudokuPad's Large Puzzle UI zooms on `#board`'s own capture listener, which reads `deltaY` alone, so this window capture listener runs first: it
+  // keeps a plain wheel from reaching the board and passes a Shift+wheel on as a wheel event of its own (docs/research/large-puzzle-ui-right-drag.md).
+  function listenForWheel () {
+    let state = { rest: 0, at: 0 }
+    window.addEventListener('wheel', (event) => wheel.run(() => {
+      if (!options.wheelMode || !event.isTrusted || event.ctrlKey || event.altKey || event.metaKey) return
+      const overBoard = event.target.closest?.(BOARD)
+      if (!overBoard && !event.target.closest?.('.controls-tool')) return
+      const delta = wheelDelta(event)
+      if (delta === 0) return
+      if (event.shiftKey) {
+        if (!overBoard) return
+        event.preventDefault()
+        event.stopPropagation()
+        const { clientX, clientY, deltaMode } = event
+        document.querySelector(BOARD).dispatchEvent(new window.WheelEvent('wheel', { bubbles: true, cancelable: true, view: window, clientX, clientY, deltaMode, deltaY: delta }))
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      const next = accumulateWheel(state, delta, performance.now())
+      state = next.state
+      if (next.steps !== 0) stepTool(next.steps)
+    }), { capture: true, passive: false })
+  }
+
   const start = () => {
+    listenForWheel()
     applyOptions(saved.run(() => readOptions(Framework), () => DEFAULT_OPTIONS))
     listenForHeldTab()
     addSettingsEntry(dialogs, settingsEntry, { name: 'uitweaks', content: SCRIPT_NAME, open: openDialog })
