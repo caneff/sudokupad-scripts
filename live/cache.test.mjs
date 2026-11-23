@@ -458,7 +458,7 @@ describe('routeSudokuPad', () => {
             return handlers[i].handler({
               request: () => ({ url: () => current, resourceType: () => resourceType }),
               abort: async () => { outcome.aborted = true },
-              fulfill: async () => { outcome.fulfilled = current },
+              fulfill: async (answer) => { outcome.fulfilled = current; if (answer) outcome.answer = answer },
               fallback: async (override) => next(override?.url ?? current)
             })
           }
@@ -512,7 +512,7 @@ describe('routeSudokuPad', () => {
     const t = stubTarget()
     await routeSudokuPad(t)
     const url = 'https://api.sudokupad.com/counter/abc'
-    assert.deepEqual(await t.request(url, 'fetch'), { fulfilled: url })
+    assert.deepEqual(await t.request(url, 'fetch'), { fulfilled: url, answer: { status: 200, contentType: 'application/json', body: '{}' } })
     assert.deepEqual([...misses], [])
   })
 
@@ -521,7 +521,7 @@ describe('routeSudokuPad', () => {
     const t = stubTarget()
     await routeSudokuPad(t)
     const url = 'https://sudokupad.app/assets/replaytest.config.json'
-    assert.deepEqual(await t.request(url, 'fetch'), { fulfilled: url })
+    assert.deepEqual(await t.request(url, 'fetch'), { fulfilled: url, answer: { status: 200, contentType: 'application/json', body: '{"puzzleids":[]}' } })
     assert.deepEqual([...misses], [])
   })
 
