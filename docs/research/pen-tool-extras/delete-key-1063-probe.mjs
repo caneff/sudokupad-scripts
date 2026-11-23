@@ -49,15 +49,19 @@ for (const withExtras of [false, true]) {
             for (const act of more) a.act(act)
           }, [PEN, acts])
           const before = await stable(p)
-          await p.click(`#control-${tool === 'normal' ? 'normal' : tool}`)
+          await p.click(`#control-${tool}`)
           assert.equal(await p.evaluate(() => Framework.app.tool), tool)
+          const depth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
+          const depthBefore = await depth()
           const afterPress = []
           for (let i = 0; i < 2; i++) { await p.keyboard.press(key); afterPress.push((await stable(p))[0]) }
-          await p.click('#control-undo'); await p.click('#control-undo')
+          // a press that finds nothing left to clear adds no undo step, so undo and redo as many steps as the presses made
+          const steps = (await depth()) - depthBefore
+          for (let i = 0; i < steps; i++) await p.click('#control-undo')
           const undone = await stable(p)
-          await p.click('#control-redo'); await p.click('#control-redo')
+          for (let i = 0; i < steps; i++) await p.click('#control-redo')
           const redone = await stable(p)
-          results.push({ withExtras, key, tool, setup, before: before[0], afterPress, undoneToBefore: JSON.stringify(undone) === JSON.stringify(before), redoneToAfter: JSON.stringify(redone[0]) === JSON.stringify(afterPress[1]) })
+          results.push({ withExtras, key, tool, setup, before: before[0], afterPress, steps, undoneToBefore: JSON.stringify(undone) === JSON.stringify(before), redoneToAfter: JSON.stringify(redone[0]) === JSON.stringify(afterPress[1]) })
         } finally { await context.close() }
       })
     }
