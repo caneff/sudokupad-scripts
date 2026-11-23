@@ -104,17 +104,21 @@ async function clickIn (p, selector) {
   await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
 }
 
-// What a player does when a Text Anywhere note (or its handle) covers a button: drags the note off, onto the board's middle or, for a note that would still cover the button there, to the nearest place that clears it (`note-drop.mjs`).
+// What a player does when a Text Anywhere note (or its handle) covers a button: drags the note off, onto the board's middle or, for a note that would still cover the button there, to the nearest place that clears every button (`note-drop.mjs`).
 const CLEAR_TRIES = 4
 const LAYER = '#text-anywhere-layer'
 // Fractions of a button's box: its centre, and where `buttonPoint` presses (the Color by Digit hold, clear of the arrow).
 const PRESS_POINTS = [[0.5, 0.5], [0.3, 0.6]]
 const COVERED_BUTTON_NOTE = ([layer, notes, pressPoints]) => {
-  for (const button of document.querySelectorAll('button, [id^="control-"]')) {
+  // The points an action presses on each button: its centre, and the Color by Digit hold's (`buttonPoint`), which a note over it only takes (#1015).
+  const buttons = [...document.querySelectorAll('button, [id^="control-"]')].flatMap((button) => {
     const box = button.getBoundingClientRect()
-    if (box.width === 0 || box.height === 0) continue
-    // The points an action presses on a button: its centre, and the Color by Digit hold's (`buttonPoint`), which a note over it only takes (#1015).
-    const [x, y, top] = pressPoints.map(([fx, fy]) => [box.x + box.width * fx, box.y + box.height * fy])
+    return box.width === 0 || box.height === 0 ? [] : [{ button, points: pressPoints.map(([fx, fy]) => [box.x + box.width * fx, box.y + box.height * fy]) }]
+  })
+  // Every button's points, so a drop clears the next button a wide note would cover and not only this one (#1060).
+  const avoid = buttons.flatMap(({ points }) => points)
+  for (const { button, points } of buttons) {
+    const [x, y, top] = points
       .map(([px, py]) => [px, py, document.elementFromPoint(px, py)])
       .find(([, , hit]) => hit && hit !== button && !button.contains(hit) && hit.closest(layer)) ?? []
     if (!top) continue
@@ -127,7 +131,7 @@ const COVERED_BUTTON_NOTE = ([layer, notes, pressPoints]) => {
     })
     if (!note) return { button: button.id || button.className, point: null }
     const b = note.getBoundingClientRect()
-    return { button: button.id || button.className, point: [b.x + b.width / 2, b.y + b.height / 2], size: [b.width, b.height], reach, at: [x, y] }
+    return { button: button.id || button.className, point: [b.x + b.width / 2, b.y + b.height / 2], size: [b.width, b.height], reach, at: [x, y], avoid }
   }
   return null
 }
