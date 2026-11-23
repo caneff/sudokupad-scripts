@@ -22,7 +22,7 @@ Browse them with pictures at <https://chinstrap45.github.io/sudokupad-scripts/>.
 | UI Tweaks | Small changes to SudokuPad, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, make the digit buttons smaller or larger, pan a large puzzle on a right-drag only when it is zoomed in, and change mode with the mouse wheel. | [Install](https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/ui-tweaks.user.js) |
 | Logic Masters Puzzle Preview | Show puzzle preview images inline on Logic Masters portal pages, cached between visits | [Install](https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js) |
 
-Logic Masters Puzzle Preview's first version is by Juggler, published here with their permission.
+Logic Masters Puzzle Preview's first version is by juggler, published here with their permission.
 
 ## Settings
 

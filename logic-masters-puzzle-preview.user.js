@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Logic Masters Puzzle Preview
 // @namespace    http://tampermonkey.net/
-// @version      1.3.2
+// @version      1.3.3
 // @description  Show puzzle preview images inline on Logic Masters portal pages, cached between visits
-// @author       Juggler (first version); caching and request limits by ChinStrap
+// @author       juggler (first version); caching and request limits by ChinStrap
 // @match        https://logic-masters.de/Raetselportal/*
 // @exclude      https://logic-masters.de/Raetselportal/Raetsel/*
 // @grant        none

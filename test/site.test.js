@@ -280,11 +280,11 @@ test(`${HOME}'s other rows show one picture and no pager`, () => {
   }
 })
 
-test(`${HOME}'s Logic Masters Puzzle Preview row credits Juggler and says it is gentle on the site`, () => {
+test(`${HOME}'s Logic Masters Puzzle Preview row credits juggler and says it is gentle on the site`, () => {
   const row = rowsOf(read(HOME)).find(r => r.includes('<h2>Logic Masters Puzzle Preview</h2>'))
   assert.ok(row, `site/${HOME} has no Logic Masters Puzzle Preview row`)
   const text = plain(row)
-  assert.match(text, /first version was written by Juggler/)
+  assert.match(text, /first version was written by juggler/)
   assert.match(text, /gentle on the server/)
 })
 
