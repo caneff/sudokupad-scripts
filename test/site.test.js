@@ -9,6 +9,9 @@ const { RAW, pictureTags, tagOf } = require('../tag-pictures.js')
 const { scriptFiles, publishedScriptFiles } = require('../sync-lib.js')
 const { headerField } = require('../userscript-header.js')
 const SCRIPT_SUFFIX = '.user.js'
+// penpa-edit's Redirect script lives in chinstrap45/penpa-edit, not here (#1174): its entry links out and no file of this repo backs it.
+const PENPA_REDIRECT_RAW = 'https://raw.githubusercontent.com/chinstrap45/penpa-edit/master/userscript/penpa-redirect.user.js'
+const PENPA_REDIRECT_SOURCE = 'https://github.com/chinstrap45/penpa-edit/blob/master/userscript/penpa-redirect.user.js'
 const ROOT = path.join(__dirname, '..')
 const SITE_DIR = path.join(ROOT, 'site')
 // The two places the site is served from; a link to either by its full address breaks on the other.
@@ -17,6 +20,17 @@ const HOME = 'index.html'
 const DETAILS = 'pen-tool-extras.html'
 const DRAW = 'text-anywhere.html'
 // The page's address before it was renamed, kept so links already shared still reach it.
+test('the homepage has a Penpa+ Redirect entry that installs and links the script from chinstrap45/penpa-edit (#1174)', () => {
+  const home = read(HOME)
+  assert.equal((home.match(/id="penpa-redirect"/g) || []).length, 1, 'one element carries id="penpa-redirect"')
+  const rows = rowsOf(home).filter(r => /<h2>Penpa\+ Redirect<\/h2>/.test(r))
+  assert.equal(rows.length, 1, 'one entry named Penpa+ Redirect')
+  assert.match(home, /<section class="row[^"]*" id="penpa-redirect">/, 'the entry is the section with that id')
+  assert.ok(rows[0].includes(`<a class="install" href="${PENPA_REDIRECT_RAW}">Install<span class="visually-hidden"> Penpa+ Redirect</span></a>`), 'the Install link')
+  assert.ok(targets(rows[0]).includes(PENPA_REDIRECT_SOURCE), 'a link to the script source on GitHub')
+  assert.doesNotMatch(rows[0], /<img\b/, 'no picture yet')
+})
+
 const REDIRECT = 'draw-tool.html'
 const CBD = 'color-by-digit.html'
 const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html') && f !== REDIRECT)
@@ -28,7 +42,7 @@ const headOf = name => read(name).split('</head>')[0]
 const metaOf = (head, key) => (head.match(new RegExp(`<meta (?:name|property)="${key}" content="([^"]+)"`)) || [])[1]
 const plain = html => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 const targets = page => [...page.matchAll(/\b(?:href|src|srcset)="([^"]*)"/g)].map(m => m[1])
-const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX))
+const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX) && t !== PENPA_REDIRECT_RAW && t !== PENPA_REDIRECT_SOURCE)
 const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(t => t.slice(RAW.length).replace(/\?.*$/, ''))
 // A link into the site itself: not a URL with a scheme and not a fragment. The site is served from a
 // subpath on GitHub Pages and from the root on Netlify, so these must be relative.
@@ -248,15 +262,16 @@ test(`${DETAILS} good to know says others need the script to see dashed and arro
 
 // One row per script, in this order, each script's file named for its shown name; Details only where a details page exists.
 const ROWS = [
-  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined], ['Logic Masters Puzzle Preview', undefined]
+  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined], ['Logic Masters Puzzle Preview', undefined], ['Penpa+ Redirect', undefined]
 ]
-const rowsOf = html => html.split(/<section class="row(?: row-plain)?">/).slice(1)
+const rowsOf = html => html.split(/<section class="row(?: row-plain)?"(?: id="[^"]*")?>/).slice(1)
 
 test(`${HOME} has one row per script in order, each with an Install button beside its Details link where there is one`, () => {
   const rows = rowsOf(read(HOME))
   assert.deepEqual(rows.map(r => (r.match(/<h2>([^<]*)<\/h2>/) || [])[1]), ROWS.map(([n]) => n))
   rows.forEach((row, i) => {
     const [name, details] = ROWS[i]
+    if (name === 'Penpa+ Redirect') return // checked by its own test: the script is not in this repo
     const script = name.toLowerCase().replace(/ /g, '-') + SCRIPT_SUFFIX
     assert.match(row, new RegExp(`<p class="actions"><a class="install" href="${RAW.replace(/\./g, '\\.')}${script}">Install<span class="visually-hidden"> ${name}</span></a>${details ? `<a href="${details}">Details &rarr;</a>` : ''}</p>`), name)
   })
@@ -274,7 +289,7 @@ test('the Install button is styled once, in style.css, and shared by every page'
 })
 
 test(`${HOME}'s other rows show one picture and no pager`, () => {
-  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Anywhere</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>'))) {
+  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Anywhere</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>') && !r.includes('<h2>Penpa+ Redirect</h2>'))) {
     assert.equal(imgs(row).length, 1)
     assert.doesNotMatch(row, /slide-caption|slideshow/)
   }
@@ -288,12 +303,12 @@ test(`${HOME}'s Logic Masters Puzzle Preview row credits Juggler and says it is 
   assert.match(text, /gentle on the server/)
 })
 
-test(`${HOME} splits its rows into a SudokuPad group (the six SudokuPad scripts) and an Other group (Logic Masters Puzzle Preview)`, () => {
+test(`${HOME} splits its rows into a SudokuPad group (the six SudokuPad scripts) and an Other group (Logic Masters Puzzle Preview, Penpa+ Redirect)`, () => {
   const html = read(HOME)
   const groups = [...html.matchAll(/<h2 class="group">([^<]*)<\/h2>([\s\S]*?)(?=<h2 class="group">|<footer>)/g)].map(m => [m[1], rowsOf(m[2]).map(r => r.match(/<h2>([^<]*)<\/h2>/)[1])])
   assert.deepEqual(groups, [
     ['SudokuPad', ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer', 'UI Tweaks']],
-    ['Other', ['Logic Masters Puzzle Preview']]
+    ['Other', ['Logic Masters Puzzle Preview', 'Penpa+ Redirect']]
   ])
 })
 
@@ -710,7 +725,8 @@ for (const { name, details } of [...SUMMARY_SCRIPTS, { name: 'Logic Masters Puzz
   })
 }
 
-const homeOrder = () => rowsOf(read(HOME)).map(r => r.match(/<h2>([^<]*)<\/h2>/)[1])
+// Penpa+ Redirect is not a script of this repo, so the README (this repo's scripts) does not list it.
+const homeOrder = () => rowsOf(read(HOME)).map(r => r.match(/<h2>([^<]*)<\/h2>/)[1]).filter(n => n !== 'Penpa+ Redirect')
 test("the README's table and its script notes follow the homepage's order", () => {
   const table = [...README.matchAll(/^\| ([^|]*?) \| .* \| \[Install\]\(/gm)].map(m => m[1]).filter(n => n !== 'Script')
   assert.deepEqual(table.filter(n => homeOrder().includes(n)), homeOrder())
