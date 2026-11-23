@@ -213,6 +213,8 @@ Behavior: `docs/text-anywhere.md`.
 Behavior: the README's script notes.
 
 - **Digit pad size** — see **UI Tweaks**.
+- **Large Puzzle UI** — SudokuPad's experimental setting "Test Large Puzzle UI" (`Framework.features.largepuzzle`): the wheel zooms a puzzle scaled down to fit and a
+  right-drag pans it (`docs/research/large-puzzle-ui-right-drag.md`).
 - **options** — see **UI Tweaks**.
-- **UI Tweaks** — the script `ui-tweaks.user.js`. Four **options** in one dialog: Tab never switches to letters, Hide the Select
-  button, Wrap buttons and the **Digit pad size**.
+- **UI Tweaks** — the script `ui-tweaks.user.js`. Five **options** in one dialog: Tab never switches to letters, Hide the Select
+  button, Wrap buttons, Right-drag pans only when zoomed in (about **Large Puzzle UI**) and the **Digit pad size**.

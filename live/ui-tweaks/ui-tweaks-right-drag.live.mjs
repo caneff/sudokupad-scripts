@@ -2,7 +2,7 @@ import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { UI_TWEAKS_DIALOG } from '../scripts.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
-import { openWith, useBrowser } from '../session.mjs'
+import { addScripts, openWith, useBrowser } from '../session.mjs'
 import { settle } from '../settle.mjs'
 
 const SCRIPT_FILE = 'ui-tweaks.user.js'
@@ -14,6 +14,8 @@ const SCALED_DOWN = { width: 700, height: 500 }
 const DRAG = [60, 30]
 // Zoom is capped at 2 less the board's own scale and floored at 1, so this many notches in reach the cap and this many out come back to 1.
 const NOTCHES = 8
+// A pause after a drag that should do nothing: the feature pans on the next frame, so a board still at rest after this was not moved by it.
+const NOTHING_HAPPENS_MS = 100
 
 const browser = useBrowser()
 
@@ -53,7 +55,7 @@ describe('on a puzzle that fits, with Large Puzzle UI on', { concurrency: false 
   it('a right-drag leaves the board where it was', async () => {
     const before = await state(p)
     await rightDrag(p)
-    await p.waitForTimeout(100)
+    await p.waitForTimeout(NOTHING_HAPPENS_MS)
     assert.deepEqual(await state(p), before)
     assert.deepEqual(before.panPos, [0, 0])
   })
@@ -67,7 +69,7 @@ describe('on a puzzle scaled down to fit, with Large Puzzle UI on', { concurrenc
   it('at zoom 1 a right-drag leaves the board where it was', async () => {
     const before = await state(p)
     await rightDrag(p)
-    await p.waitForTimeout(100)
+    await p.waitForTimeout(NOTHING_HAPPENS_MS)
     assert.deepEqual(await state(p), before)
   })
 
@@ -96,6 +98,26 @@ describe('on a puzzle scaled down to fit, with Large Puzzle UI on', { concurrenc
   })
 })
 
+describe('turning the option on again', { concurrency: false }, () => {
+  let context, p
+  before(async () => {
+    ;({ context, p } = await open(FITS))
+    await openScriptDialog(p, 'UI Tweaks', DIALOG)
+    await p.locator(OPTION).setChecked(false)
+    await closeDialogWith(p, 'Save', DIALOG)
+  })
+  after(async () => { await context.close() })
+
+  it('puts a board panned at zoom 1 back at the centre', async () => {
+    await rightDrag(p)
+    assert.ok((await settle(async () => (await state(p)).panPos[0] === -DRAG[0], true)), 'the board panned with the option off')
+    await openScriptDialog(p, 'UI Tweaks', DIALOG)
+    await p.locator(OPTION).setChecked(true)
+    await closeDialogWith(p, 'Save', DIALOG)
+    assert.deepEqual((await state(p)).panPos, [0, 0])
+  })
+})
+
 describe('with the option off', { concurrency: false }, () => {
   let context, p
   before(async () => {
@@ -110,6 +132,22 @@ describe('with the option off', { concurrency: false }, () => {
     await rightDrag(p)
     const moved = await settle(async () => (await state(p)).panPos[0] === -DRAG[0], true)
     assert.ok(moved, JSON.stringify(await state(p)))
+  })
+})
+
+describe('on a SudokuPad with no Large Puzzle UI', { concurrency: false }, () => {
+  let context, p
+  before(async () => {
+    ;({ context, p } = await openWith(browser(), []))
+    await p.evaluate(() => { delete Framework.features.largepuzzle })
+    await addScripts(p, [SCRIPT_FILE])
+  })
+  after(async () => { await context.close() })
+
+  it('only the right-drag limit is off: the settings entry still opens the dialog', async () => {
+    await openScriptDialog(p, 'UI Tweaks', DIALOG)
+    assert.equal(await p.locator(OPTION).isChecked(), true)
+    await closeDialogWith(p, 'Cancel', DIALOG)
   })
 })
 

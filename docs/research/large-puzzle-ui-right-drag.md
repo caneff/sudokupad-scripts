@@ -31,5 +31,8 @@ Consequence (Chris, 2026-11-07): no feature may rely on a right-button drag. A r
 UI Tweaks' "Right-drag pans only when zoomed in" (#1154, on by default) wraps the feature's own `handleMousemove` and `handleZoomInOut`
 (own properties, bound by `bindHandlers`, which `addHandler` and `remHandler` read off `this` at each pan, so a wrapper put there before a pan
 starts is the one both see). The first returns at `zoomLevel <= 1`; the second sets `panPos` to `[0, 0]` after a zoom that ends at 1. Nothing
-stops `mousedown`, `mouseup` or `contextmenu`, so a right click still reaches scripts. `panPos` exists only after the setting has been turned
+stops `mousedown`, `mouseup` or `contextmenu`, so a right click still reaches scripts. The feature's own `handleMousemove` is what stops every
+right-button move (`preventDefault`, `stopPropagation`), so with the option on, at zoom 1 a right-drag's moves reach the page and every script;
+the earlier bullet's "no script sees a right-drag's moves" holds only while zoomed in or with the option off. The option turned on at zoom 1 also puts a board
+panned with it off back at the centre. `panPos` exists only after the setting has been turned
 on once (`reset()` sets it), so a script cannot probe it at startup.

@@ -3,7 +3,7 @@
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      0.1.48
 // @author       ChinStrap
-// @description  Small changes to SudokuPad's buttons, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, and make the digit buttons smaller or larger, and pan the board on a right-drag only when it is zoomed in.
+// @description  Small changes to SudokuPad, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, make the digit buttons smaller or larger, and pan a large puzzle on a right-drag only when it is zoomed in.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
 // @supportURL   https://github.com/chinstrap45/sudokupad-scripts/issues
 // @license      MIT
@@ -948,26 +948,28 @@
   // SudokuPad's Large Puzzle UI pans on a right-drag at every zoom, because its size guard compares with a limit that is never reached
   // (docs/research/large-puzzle-ui-right-drag.md). The feature binds its handlers as properties of itself and reads them off `this` each time
   // it adds or removes one, so a wrapper put there before any pan starts is the one both calls see. Wrapping `handleMousemove` rather than
-  // listening on `window` leaves `mousedown` and `mouseup` alone, so a right click still reaches the scripts, and stops nothing on its way:
-  // at zoom 1 the move simply goes unpanned. `isOn` is read at each call, so the wrapper stays in place when the option is turned off.
-  const wrappedLargePuzzles = new WeakSet()
+  // listening on `window` leaves `mousedown` and `mouseup` alone, so a right click still reaches the scripts. The feature's own handler stops
+  // every right-button move it handles, so at zoom 1 those moves now reach the page and the scripts too. `isOn` is read at each call, so the
+  // wrapper stays in place when the option is turned off. Returns `recentre`, which puts the board at the centre when the limit is in force.
   function limitRightDrag (feature, isOn) {
-    if (wrappedLargePuzzles.has(feature)) return
-    wrappedLargePuzzles.add(feature)
     const { handleMousemove, handleZoomInOut } = feature
-    const limiting = () => isOn() && feature.zoomLevel <= 1
+    const atZoom1 = () => isOn() && feature.zoomLevel <= 1
+    // `panPos` exists only once the setting has been turned on (docs/research/large-puzzle-ui-right-drag.md).
+    const recentre = () => {
+      if (!atZoom1() || !feature.panPos) return
+      feature.panPos = [0, 0]
+      feature.updateTransform()
+    }
     feature.handleMousemove = function (...args) {
-      if (!limiting()) return handleMousemove.apply(this, args)
+      if (!atZoom1()) return handleMousemove.apply(this, args)
     }
     // A zoom back to 1 puts the board at the centre, so a pan made while zoomed in never stays at zoom 1.
     feature.handleZoomInOut = function (...args) {
       const result = handleZoomInOut.apply(this, args)
-      if (limiting()) {
-        feature.panPos = [0, 0]
-        feature.updateTransform()
-      }
+      recentre()
       return result
     }
+    return recentre
   }
 
   const FEATURES = {
@@ -1021,11 +1023,14 @@
     })
   }
 
-  const applyRightDrag = () => rightDrag.run(() => limitRightDrag(Framework.features.largepuzzle, () => options.rightDrag))
+  // The board is put at the centre when the option comes on with Large Puzzle UI at zoom 1, since no right-drag can then do it.
+  let recentreBoard = () => {}
 
   function applyOptions (next) {
     const padChanged = next[DIGIT_PAD] !== options[DIGIT_PAD]
+    const rightDragTurnedOn = next.rightDrag && !options.rightDrag
     options = next
+    if (rightDragTurnedOn) recentreBoard()
     writeStyle(STYLE_ID, buildCss(next))
     applyTab(next.tab)
     if (padChanged) window.dispatchEvent(new Event('resize'))
@@ -1117,7 +1122,7 @@
 
   const start = () => {
     applyOptions(saved.run(() => readOptions(Framework), () => DEFAULT_OPTIONS))
-    applyRightDrag()
+    rightDrag.run(() => { recentreBoard = limitRightDrag(Framework.features.largepuzzle, () => options.rightDrag) })
     listenForHeldTab()
     addSettingsEntry(dialogs, settingsEntry, { name: 'uitweaks', content: SCRIPT_NAME, open: openDialog })
   }

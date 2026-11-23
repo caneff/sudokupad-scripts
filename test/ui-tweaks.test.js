@@ -150,17 +150,12 @@ test('isHeldTabToStop stops only a repeated Tab, while the letter tool is on and
 })
 
 const completeSudokuPad = () => ({
-  Framework: { getApp () {}, app: { tools: {} }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} },
+  Framework: { getApp () {}, app: { tools: {} }, features: { largepuzzle: { handleMousemove () {}, handleZoomInOut () {}, updateTransform () {} } }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} },
   ToolLetter: { tool: { keyHandlers: [] } }
 })
-completeSudokuPad.withLargePuzzle = () => {
-  const roots = completeSudokuPad()
-  roots.Framework.features = { largepuzzle: { handleMousemove () {}, handleZoomInOut () {}, updateTransform () {} } }
-  return roots
-}
 
 test('a complete SudokuPad lacks nothing, and without one internal only the features that need it are lacking', () => {
-  assert.deepEqual(lackingInternals(FEATURES, completeSudokuPad.withLargePuzzle()), new Map())
+  assert.deepEqual(lackingInternals(FEATURES, completeSudokuPad()), new Map())
   const removals = [
     ...['addSetting', 'showDialog', 'closeDialog', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, ['settings']]),
     ['Framework.getData', (r) => { delete r.Framework.getData }, ['saved']],
@@ -169,11 +164,11 @@ test('a complete SudokuPad lacks nothing, and without one internal only the feat
     ...['handleMousemove', 'handleZoomInOut', 'updateTransform'].map((name) => [`Framework.features.largepuzzle.${name}`, (r) => { delete r.Framework.features.largepuzzle[name] }, ['rightDrag']])
   ]
   for (const [internal, remove, features] of removals) {
-    const roots = completeSudokuPad.withLargePuzzle()
+    const roots = completeSudokuPad()
     remove(roots)
     assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[internal, features]]), internal)
   }
-  const roots = completeSudokuPad.withLargePuzzle()
+  const roots = completeSudokuPad()
   delete roots.Framework.getApp
   assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['tab']]]))
 })
@@ -308,13 +303,22 @@ test('limitRightDrag: a zoom that stays above 1 leaves the pan, and with the opt
   assert.deepEqual(off.calls, [['zoom', -1]])
 })
 
-test('limitRightDrag wraps a feature once: a second call changes nothing', () => {
+test('limitRightDrag returns a recentre that puts a board panned at zoom 1 back at the centre, only while the option is on', () => {
+  const on = fakeLargePuzzle(1)
+  limitRightDrag(on.feature, () => true)()
+  assert.deepEqual(on.feature.panPos, [0, 0])
+  assert.deepEqual(on.calls, [['transform', [0, 0]]])
+  const off = fakeLargePuzzle(1)
+  limitRightDrag(off.feature, () => false)()
+  assert.deepEqual(off.feature.panPos, [30, -20])
+  const zoomed = fakeLargePuzzle(1.4)
+  limitRightDrag(zoomed.feature, () => true)()
+  assert.deepEqual(zoomed.feature.panPos, [30, -20], 'a board zoomed in is left where it is')
+})
+
+test('limitRightDrag\'s recentre leaves a feature that was never turned on alone: it has no pan yet', () => {
   const { feature, calls } = fakeLargePuzzle(1)
-  limitRightDrag(feature, () => true)
-  const [move, zoom] = [feature.handleMousemove, feature.handleZoomInOut]
-  limitRightDrag(feature, () => false)
-  assert.equal(feature.handleMousemove, move)
-  assert.equal(feature.handleZoomInOut, zoom)
-  feature.handleMousemove({})
-  assert.deepEqual(calls, [], 'the first call\'s option still rules')
+  delete feature.panPos
+  limitRightDrag(feature, () => true)()
+  assert.deepEqual(calls, [])
 })
