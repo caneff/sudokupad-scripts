@@ -976,7 +976,7 @@
     saved: { label: 'saved options', needs: { 'Framework.getData': 'function' } },
     tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array', 'Framework.app.tools': 'object' } },
     rightDrag: {
-      label: 'right-drag limit',
+      label: 'right drag limit',
       needs: {
         'Framework.features.largepuzzle.handleMousemove': 'function',
         'Framework.features.largepuzzle.handleZoomInOut': 'function',
