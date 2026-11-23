@@ -2,7 +2,8 @@
 
 One line per note: title, date, the question and the verdict. A note sits in the folder of what it is about: SudokuPad itself at
 the top of `docs/research/`, one script's notes in that script's folder, the repo's own tooling (fuzz, Tampermonkey, shared code,
-hosting) in `docs/research/tooling/`, and the site's own mockups in `docs/research/site/`. Paths below are from the repo root;
+hosting) in `docs/research/tooling/`, the site's own mockups in `docs/research/site/`, and a planned feature's research in its own
+folder (`docs/research/setter-hints/`). Paths below are from the repo root;
 `test/doc-paths.test.js` fails when one is missing. A note that is `see`-linked to another chains or overlaps with it.
 
 ## SudokuPad itself
@@ -147,6 +148,14 @@ Includes No Tab Letters, once its own script.
   `Framework.app.resize`.
 - `docs/research/ui-tweaks/no-tab-letters-micro-interaction-polish.md` — No Tab Letters: small touches (2026-11-08). Research
   only, against 0.1.4. See `docs/research/sudokupad-letter-tool.md`.
+
+## Setter hints
+
+Research for the setter-hints map (#1167): a format for a setter's own progressive hints and a script that shows them.
+
+- `docs/research/setter-hints/how-hints-are-given-today.md` — How setters give hints today, and the progressive-hint formats that
+  exist (#1169, 2026-11-23). Setters hide numbered hint lists in Logic Masters descriptions and Discord spoilers; no sudoku tool
+  has a hint field. Systems elsewhere reach the right hint by order, by a question list, by a human, or by reading progress.
 
 ## Tooling
 
