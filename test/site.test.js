@@ -464,13 +464,13 @@ test('netlify.toml publishes only site/', () => {
   assert.match(toml, /^\s*publish\s*=\s*"site"\s*$/m)
 })
 
+const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'pages.yml'), 'utf8')
+
 test('the Pages workflow publishes only site/', () => {
-  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'pages.yml'), 'utf8')
   assert.match(workflow, /uses:\s*actions\/upload-pages-artifact@\S+\s+with:\s+path:\s*['"]?site\/?['"]?\s*$/m)
 })
 
 test('the Pages workflow uploads in a build job and deploys in a second job that needs it (#1202)', () => {
-  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'pages.yml'), 'utf8')
   const job = (name) => (workflow.match(new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  \\S|(?![\\s\\S]))`, 'm')) || [])[1]
   const build = job('build')
   const deploy = job('deploy')
