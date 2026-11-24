@@ -681,11 +681,17 @@ for (const { heading, page: file } of SHOWS) {
   })
 }
 
-test('the homepage words UI Tweaks\' options as its settings dialog does', () => {
+// Chris (2026-11-23, #1180): the homepage names only the top three options, and the settings dialog has the rest.
+const UI_TWEAKS_ON_HOME = ['tab', 'wheelMode']
+test('the homepage words the UI Tweaks options it names as its settings dialog does', () => {
   const { OPTIONS } = require('../ui-tweaks.user.js')
   const home = plain(read(HOME))
-  for (const option of OPTIONS) assert.ok(home.includes(option.label), `the homepage names "${option.label}"`)
-  assert.ok(home.includes('no effect with Color by Digit installed'))
+  for (const id of UI_TWEAKS_ON_HOME) {
+    const option = OPTIONS.find(o => o.id === id)
+    assert.ok(option, `ui-tweaks has no option ${id}`)
+    assert.ok(home.includes(option.label), `the homepage names "${option.label}"`)
+  }
+  assert.ok(home.includes('Digit pad size'), 'the homepage names "Digit pad size"')
 })
 
 // #1108: one summary per script, the same in the README row, the script's @description, the homepage card and the details page.
