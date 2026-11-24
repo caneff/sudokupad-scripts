@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.49
+// @version      0.1.50
 // @author       ChinStrap
-// @description  Small changes to SudokuPad, each chosen in a settings dialog: Tab never switches to letters, hide the Select button, wrap the bottom row of buttons after five, make the digit buttons smaller or larger, pan a large puzzle on a right-drag only when it is zoomed in, and change mode with the mouse wheel.
+// @description  Small changes to SudokuPad, each chosen in a settings dialog.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
 // @supportURL   https://github.com/chinstrap45/sudokupad-scripts/issues
 // @license      MIT
@@ -23,7 +23,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.49'
+  const VERSION = '0.1.50'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'ui-tweaks'
   const SCRIPT_NAME = 'UI Tweaks'
@@ -40,6 +40,7 @@
   ]
   // The digit pad's step, saved under its own key as the percent of SudokuPad's own size its rule uses.
   const DIGIT_PAD = 'digitPad'
+  const DIGIT_PAD_LABEL = 'Digit pad size'
   const DIGIT_PAD_STEPS = [{ label: 'Smaller', percent: 80 }, { label: 'Normal', percent: 100 }, { label: 'Larger', percent: 125 }, { label: 'Largest', percent: 150 }]
   const DIGIT_PAD_SIZES = DIGIT_PAD_STEPS.map((step) => step.percent)
   const DIGIT_PAD_DEFAULT = 100
@@ -1019,7 +1020,7 @@
   const { saved, tab, rightDrag, wheel, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, OPTIONS, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, limitRightDrag, WHEEL_NOTCH, wheelDelta, accumulateWheel, steppedIndex }
+    module.exports = { VERSION, OPTIONS, DIGIT_PAD_LABEL, DIGIT_PAD_STEPS, DEFAULT_OPTIONS, readOptions, saveOptions, pastedOptions, READERS, copiedSettings, pastedSettings, buildCss, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES, limitRightDrag, WHEEL_NOTCH, wheelDelta, accumulateWheel, steppedIndex }
   }
   if (typeof document === 'undefined') return
 
@@ -1080,7 +1081,7 @@
     `<label class="${CLASS_PREFIX}option"><input type="checkbox" data-option="${option.id}"><span>${option.label}<small>${option.hint}</small></span></label>`
 
   // SudokuPad fits #controls to its box only on a resize, so a size change is not seen until one.
-  const DIGIT_PAD_ROW = `<label class="${CLASS_PREFIX}option"><select data-option="${DIGIT_PAD}">${DIGIT_PAD_STEPS.map((step) => `<option value="${step.percent}">${step.label}</option>`).join('')}</select><span>Digit pad size<small>Smaller or larger digit buttons. SudokuPad fits the whole controls column to the window, so the digits grow most on a large screen, and on a laptop the other buttons shrink to make room.</small></span></label>`
+  const DIGIT_PAD_ROW = `<label class="${CLASS_PREFIX}option"><select data-option="${DIGIT_PAD}">${DIGIT_PAD_STEPS.map((step) => `<option value="${step.percent}">${step.label}</option>`).join('')}</select><span>${DIGIT_PAD_LABEL}<small>Smaller or larger digit buttons. SudokuPad fits the whole controls column to the window, so the digits grow most on a large screen, and on a laptop the other buttons shrink to make room.</small></span></label>`
 
   function openDialog () {
     const draft = { ...options }
