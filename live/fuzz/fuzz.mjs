@@ -76,13 +76,42 @@ const isSettingsObject = (text) => {
     return false
   }
 }
-// The pointer's way onto the rules pane, so the corners and the bar show; false when the page shows no rules (a puzzle with no rules text).
+// The pane's box, or null when the page shows no rules (a puzzle with no rules text).
+async function rulesBox (p) {
+  return await p.locator(RULES_PANE).isVisible() ? p.locator(RULES_PANE).boundingBox() : null
+}
+// The pointer's way onto the rules pane, so the corners and the bar show; false when the page shows no rules.
 async function hoverRules (p) {
-  if (!await p.locator(RULES_PANE).isVisible()) return false
-  const box = await p.locator(RULES_PANE).boundingBox()
+  const box = await rulesBox(p)
+  if (!box) return false
   await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   return true
 }
+
+// An act on a target (a hover, a press) whose result `shown` waits for, made again where the target is now when it moved since the act's read of its box: a Restart or a
+// settings change moves the rules pane, and a panel can settle after its box was read (#1067, #1068), so the act lands beside the target, as it does for a player, who tries again.
+// A target that did not move and showed nothing is the script's failure, and waits out the full time as it always did. `boxOf` reads the target's box (null: nothing to act on).
+// A hover (`holds`) also counts only while the target stays where the pointer went, since a corner shows for a moment before the page works out that the pointer is no longer over its pane; a press is never made twice on a success.
+const MOVE_TRIES = 4
+const MOVE_LOOK_MS = 500
+// Long enough for the page to recompute what the pointer is over after a layout change.
+const MOVE_SETTLE_MS = 150
+async function actWhereItIs (shown, boxOf, act, { holds = false } = {}) {
+  for (let tries = 0; tries < MOVE_TRIES; tries++) {
+    const box = await boxOf()
+    if (!box) return false
+    await act(box)
+    const showed = await shown.waitFor({ state: 'visible', timeout: MOVE_LOOK_MS }).then(() => true, () => false)
+    if (holds && showed) await sleep(MOVE_SETTLE_MS)
+    const stays = JSON.stringify(await boxOf()) === JSON.stringify(box)
+    if (showed && (stays || !holds)) return true
+    if (stays) break
+  }
+  await shown.waitFor({ state: 'visible', timeout: BOX_TIMEOUT_MS })
+  return true
+}
+// Hovers the rules pane until `target` (a corner, a font button) shows; false when the page shows no rules.
+const hoverRulesFor = (p, target) => actWhereItIs(target, () => rulesBox(p), (box) => p.mouse.move(box.x + box.width / 2, box.y + box.height / 2), { holds: true })
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
@@ -438,8 +467,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       await showRules(p, puzzle)
     },
     async dragRules (corner, dx, dy) {
-      if (!await hoverRules(p)) return
-      await p.locator(CORNER(corner)).waitFor({ state: 'visible', timeout: BOX_TIMEOUT_MS })
+      if (!await hoverRulesFor(p, p.locator(CORNER(corner)))) return
       const box = await p.locator(CORNER(corner)).boundingBox()
       const x = box.x + box.width / 2
       const y = box.y + box.height / 2
@@ -451,8 +479,9 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     async rulesFont (step, times) {
       for (let i = 0; i < times; i++) {
         // Each press refits the pane and moves the bar, so the pointer goes back over the pane first: the bar shows only while it is there.
-        if (!await hoverRules(p)) return
-        await p.locator(`${FONT_BAR} button`).filter({ hasText: step > 0 ? 'f+' : 'f-' }).click({ timeout: BOX_TIMEOUT_MS })
+        const button = p.locator(`${FONT_BAR} button`).filter({ hasText: step > 0 ? 'f+' : 'f-' })
+        if (!await hoverRulesFor(p, button)) return
+        await button.click({ timeout: BOX_TIMEOUT_MS })
       }
     },
     async scrollRules (dy) {
@@ -527,8 +556,8 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     },
     async penDialogFromSettingsButton (save) {
       await openPen()
-      await clickIn(p, PEN_SETTINGS_BUTTON)
-      await p.locator(EXTRAS_EDITOR).waitFor({ state: 'visible' })
+      const button = p.locator(PEN_SETTINGS_BUTTON).first()
+      await actWhereItIs(p.locator(EXTRAS_EDITOR), () => button.boundingBox({ timeout: BOX_TIMEOUT_MS }), (box) => p.mouse.click(box.x + box.width / 2, box.y + box.height / 2))
       await animationsDone(p.locator(EXTRAS_EDITOR))
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },

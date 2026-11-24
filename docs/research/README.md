@@ -169,6 +169,8 @@ Includes No Tab Letters, once its own script.
   baseline for `npm run fuzz:plants`.
 - `docs/research/tooling/fuzz-missed-mutants/reload-settings-935.md` — Reload rules read the saved pen and note settings (#935).
   The rule added after the missed mutants; the folder holds the measure script and runs.
+- `docs/research/tooling/fuzz-timeouts-1067-1068.md` — Two nightly fuzz timeouts no replay repeats (2026-11-23, #1067, #1068). What
+  was run, the cause not found, and the harness change that presses again where a moved target is.
 - `docs/research/tooling/netlify-credits.md` — Netlify credits (2026-11-03). What Netlify charges on the Free plan and what this
   repo spends. See `docs/agents/site.md`.
 
