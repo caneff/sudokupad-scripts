@@ -25,7 +25,8 @@
   .banner h1 { margin: 0 0 .25rem; }
   .banner .lede { margin: 0; font-size: 1.05rem; }
   .footnote-ref { color: inherit; font-weight: 700; padding: 0 .15rem; }
-  .footnote { max-width: 46rem; margin: calc(var(--ring-gap) + var(--card-ring-width)) 0 0 .5rem; font-size: .9rem; color: #555; }
+  /* A plain white card, so the small text never sits on the stripes. */
+  .footnote { max-width: 46rem; margin: calc(var(--ring-gap) + var(--card-ring-width)) 0 0 .5rem; padding: .5rem 1rem; background: #fff; border-radius: 14px; box-shadow: 0 4px 10px rgba(0,0,0,.12); font-size: .9rem; color: #555; }
   .warning { position: relative; z-index: 1; margin: 0 0 calc(var(--ring-gap) + var(--warn-ring-width) + var(--card-ring-width)); padding-top: .9rem; }
   .rows { display: flex; flex-direction: column; gap: calc(var(--ring-gap) + 2 * var(--card-ring-width)); }
   .row { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.2rem 1.4rem; background: #fff; border: 12px solid var(--card); border-radius: 30px; box-shadow: var(--card-ring); }
