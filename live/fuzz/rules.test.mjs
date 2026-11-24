@@ -307,7 +307,7 @@ describe('the rules', () => {
     it('leaves a color taken off by hand alone when an undo or redo changed the groups, since the board it brings back is the player\'s (#1143)', () => {
       const now = colorByDigit('Cell', [['7', []]])
       const switchedBack = { ...now, groups: [{ key: '5', digits: ['7'] }] }
-      for (const action of ['undo', 'undo all', 'redo', 'pen drag, undo', 'note drag, undo']) {
+      for (const action of UNDOING_KINDS) {
         assert.deepEqual(check('digit-cells-colored', { colorByDigit: switchedBack }, { before: { colorByDigit: now }, action }), [], action)
       }
     })

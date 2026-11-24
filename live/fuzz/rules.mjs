@@ -197,8 +197,8 @@ export const RULES = [
   {
     name: 'digit-cells-colored',
     // Color by Digit: in Cell or Both mode a cell that has an entered digit holds its group's color. Checked on the cells whose digit just changed and, when the
-    // mode or the groups (a profile switch, a saved dialog) just changed, on every cell: a color taken off by hand with the color tool is the player's, and stays.
-    // An Undo or Redo that changes the mode or the groups brings back a board as it was, hand-colored cells included, so only the digits it changed are read (#1143).
+    // mode or the groups (a profile switch, a saved dialog) just changed, on every cell, except after an Undo or Redo: it brings back a board as it was, hand-colored cells
+    // included (#1143). A color taken off by hand with the color tool is the player's, and stays.
     check: ({ now, before, action }) => {
       const { mode, groups, cells } = now.page.colorByDigit
       if (!colorsCells(mode)) return []
