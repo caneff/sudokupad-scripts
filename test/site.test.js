@@ -413,7 +413,7 @@ const DETAIL_CONTENT = [
     file: DRAW,
     sections: ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>One note, every style</h2>', '<h2>The Text Anywhere panel</h2>', '<h2>Good to know</h2>'],
     features: [
-      'Typed notes anywhere Click to type; Esc or Ctrl+Enter finishes; Ctrl+Z and Ctrl+Y undo and redo the typing; double-click a note to edit.',
+      'Typed notes anywhere Click to type; Esc or Ctrl+Enter finishes; Ctrl+Z and Ctrl+Y undo and redo the typing; double-click a note to edit, in any mode; closing it takes you back to the mode you were in.',
       'Formatting Discord-style bold, italic, underline, strikethrough, headers, subtext, bullets, numbered and checklist items, and code, and ->, != or sum typed as → ≠ Σ. One note below shows every style, and the text that made it.',
       'Long notes Wraps and scrolls; drag a corner to resize.',
       'Readable over digits A halo round the letters, and an optional box behind them.',

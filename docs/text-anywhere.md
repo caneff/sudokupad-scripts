@@ -18,7 +18,7 @@ set them; a saved note keeps its own), starting at the point clicked: its stored
 - **The text box**: a text is typed in place, in the note's own element, open for typing. A click anywhere on the page but
   SudokuPad's controls (what is drawn in the control panel, the top bar, the menu and an open dialog; the panel's empty space
   opens one) or any script's popup menu, such as Color by Digit's profile menu, opens one while nothing is selected, and a
-  double-click on a text reopens it.
+  double-click on a text reopens it, and so does one in any other SudokuPad mode: it switches to the Text Anywhere tool for the box and goes back to that mode when the box closes. The note's drawn text takes the double click, so SudokuPad's select-matching-digits double click does not happen there; a double-click on the rest of the cell is SudokuPad's.
 - **Pinned and fixed**: a text put on the board is pinned to its cells (stored in board units under `at`); one put off the board
   is fixed on the screen (stored in screen pixels under `fixed`, which no version before 0.18.0 reads). When the window puts a
   fixed text's box partly past its edge, the text is drawn at the nearest point wholly inside the window, and its saved point
