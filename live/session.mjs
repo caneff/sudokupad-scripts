@@ -6,11 +6,19 @@ import { readFileSync } from 'node:fs'
 import { after, before } from 'node:test'
 import { chromium } from 'playwright'
 import { gotoPuzzle, MODES, newPage, startPuzzle, VIEWPORT } from './page.mjs'
-import { scriptFiles } from '../sync-lib.js'
+import { publishedScriptFiles, scriptFiles } from '../sync-lib.js'
 
 const ROOT = new URL('../', import.meta.url)
 // The scripts at the repo root, by file name; a handover (sync-lib.js) is none.
 export const SCRIPT_FILES = scriptFiles()
+// Every script a user installs: SudokuPad's and the other sites' (Logic Masters Puzzle Preview), so a check of the install
+// and update path reads this, and a check that runs a script on SudokuPad reads SCRIPT_FILES.
+export const PUBLISHED_FILES = publishedScriptFiles()
+
+export function publishedSource (file) {
+  assert.ok(PUBLISHED_FILES.includes(file), `no published script ${file}`)
+  return readFileSync(new URL(file, ROOT), 'utf8')
+}
 
 export function scriptSource (file) {
   assert.ok(SCRIPT_FILES.includes(file), `no script ${file}`)
