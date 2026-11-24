@@ -48,6 +48,7 @@ test('every picture of a repo file on every page carries a ?v= tag matching its 
 
 // #342: docs/research/ has one folder per script, and site/ for pictures of a whole page.
 // A script's folder is named for the script, from its @name less any SudokuPad prefix (Logic Masters Puzzle Preview has none).
+// Penpa+ Redirect's folder is listed by hand: its script lives in chinstrap45/penpa-edit, so no file of this repo names it.
 const folderOf = file => fs.readFileSync(path.join(ROOT, file), 'utf8').match(/^\/\/ @name\s+(?:SudokuPad )?(.+)$/m)[1].toLowerCase().replace(/ /g, '-')
 const RESEARCH_FOLDERS = [...publishedScriptFiles().map(folderOf), 'penpa-redirect', 'site']
 
