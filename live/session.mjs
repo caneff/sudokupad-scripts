@@ -11,18 +11,19 @@ import { publishedScriptFiles, scriptFiles } from '../sync-lib.js'
 const ROOT = new URL('../', import.meta.url)
 // The scripts at the repo root, by file name; a handover (sync-lib.js) is none.
 export const SCRIPT_FILES = scriptFiles()
-// Every script a user installs: SudokuPad's and the other sites' (Logic Masters Puzzle Preview), so a check of the install
-// and update path reads this, and a check that runs a script on SudokuPad reads SCRIPT_FILES.
+// Every published script, SudokuPad's and other sites' (SCRIPT_FILES is SudokuPad's alone).
 export const PUBLISHED_FILES = publishedScriptFiles()
+
+const readRoot = (file) => readFileSync(new URL(file, ROOT), 'utf8')
 
 export function publishedSource (file) {
   assert.ok(PUBLISHED_FILES.includes(file), `no published script ${file}`)
-  return readFileSync(new URL(file, ROOT), 'utf8')
+  return readRoot(file)
 }
 
 export function scriptSource (file) {
   assert.ok(SCRIPT_FILES.includes(file), `no script ${file}`)
-  return readFileSync(new URL(file, ROOT), 'utf8')
+  return readRoot(file)
 }
 
 // Launches one Chromium before the file's tests and closes it after them; call it at the top of a test file. Returns a

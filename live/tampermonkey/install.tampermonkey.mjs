@@ -8,7 +8,7 @@ import { RAW } from '../../tag-pictures.js'
 import { CANEFF_RAW } from '../../sync-lib.js'
 import { newPage, gotoPuzzle, startPuzzle } from '../page.mjs'
 import { SCRIPTS } from '../scripts.mjs'
-import { PUBLISHED_FILES, publishedSource, SCRIPT_FILES } from '../session.mjs'
+import { PUBLISHED_FILES, publishedSource, SCRIPT_FILES, scriptSource } from '../session.mjs'
 import { settle } from '../settle.mjs'
 import { checkForUpdate, installedScripts, installScript, launchTampermonkey, serveFiles } from './tampermonkey.mjs'
 
@@ -33,7 +33,7 @@ const onMain = (file) => {
 }
 const updated = []
 
-it('every *.user.js has a check that it ran', () => {
+it('every SudokuPad script has a check that it ran', () => {
   assert.deepEqual(SCRIPTS.map((s) => s.file).sort(), SCRIPT_FILES)
 })
 
@@ -111,7 +111,7 @@ describe(`${OLD_FILE} hands over to ${NEW_FILE}`, { concurrency: false }, () => 
     const files = {}
     served = await serveFiles(files)
     const local = (text) => text.replaceAll(CANEFF_RAW, served.url).replaceAll(RAW, served.url)
-    Object.assign(files, { [`old/${OLD_FILE}`]: local(old), [OLD_FILE]: local(readFile(OLD_FILE)), [NEW_FILE]: local(publishedSource(NEW_FILE)) })
+    Object.assign(files, { [`old/${OLD_FILE}`]: local(old), [OLD_FILE]: local(readFile(OLD_FILE)), [NEW_FILE]: local(scriptSource(NEW_FILE)) })
     tm = await launchTampermonkey()
     const name = headerField(old, 'name')
     const installed = (version) => settle(() => installedScripts(tm), [{ name, version }], UPDATE_MS, Infinity)

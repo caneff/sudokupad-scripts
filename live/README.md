@@ -379,7 +379,8 @@ the way a user does: open the script's URL, click Install. Each script's copy on
 `raw.githubusercontent.com`, then the checkout's copy, served from `127.0.0.1`, over it. Tampermonkey must offer the second as an
 update and its dashboard must list each script once, at the checkout's `@version`, which is what a changed `@name` or `@namespace`
 breaks. Then each SudokuPad script must start on the puzzle page, served from the recording, and its representative action from
-`live/scripts.mjs` must work. Logic Masters Puzzle Preview only installs and updates (#1079): it runs on logic-masters.de, which no check requests, so it never starts. The recipe and its caveats are `docs/research/tooling/tampermonkey-in-playwright.md`.
+`live/scripts.mjs` must work. Logic Masters Puzzle Preview only installs and updates (#1079): it runs on logic-masters.de, which no check requests,
+so it never starts. The recipe and its caveats are `docs/research/tooling/tampermonkey-in-playwright.md`.
 
 - Tampermonkey is closed-source freeware: its CRX is fetched at run time from Google's update endpoint into
   `tampermonkey/` beside the recording, again once it is a day old, and never committed.
