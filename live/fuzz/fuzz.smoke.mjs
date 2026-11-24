@@ -86,6 +86,27 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['rich note', [4, 1]], ['pen page', null]] })
   })
 
+  // #1068: the page moves a button between the harness's read of its box and its press; the press is made again where the button is now.
+  const moveOnFirstMouseMove = (page, selector, style) => page.evaluate(([sel, css]) => {
+    const move = () => {
+      const el = document.querySelector(sel)
+      if (!el) return
+      window.removeEventListener('mousemove', move, true)
+      Object.assign(el.style, css)
+    }
+    window.addEventListener('mousemove', move, true)
+  }, [selector, style])
+
+  it('a press on the pen panel\'s settings button is made again where the button moved to (#1068)', async () => {
+    const target = await openTarget(browser(), puzzleByName('recorded 9x9'), {})
+    try {
+      await moveOnFirstMouseMove(target.env.page, '.pen-tool-extras-settings', { position: 'relative', left: '-400px' })
+      await target.env.penDialogFromSettingsButton(false)
+    } finally {
+      await target.close()
+    }
+  })
+
   it('a page that does not show the puzzle set\'s free cells is refused, not fuzzed on the wrong cells', async () => {
     const wrong = { ...puzzleByName('4x4'), free: [[0, 1]] }
     await assert.rejects(openTarget(browser(), wrong, {}), /opened with \d+ free cells that are not the 1 of puzzle-set\.mjs/)

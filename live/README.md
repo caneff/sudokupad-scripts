@@ -254,6 +254,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **A failure** is shrunk (for 10 minutes at most) and printed with the seed, the shortest list that still fails as numbered steps, the one command that
   replays it (`npm run test:fuzz -- --seed <n> --path <path>`, which runs that one list and does not shrink) and the newest records of the shared error log
   (kept in the page's `localStorage` by the scripts' guard), or a line saying the log could not be read. The exit is 1.
+- **A hover or a press that lands where its target no longer is** (#1067, #1068) is made again where the target is now, once its box has changed since the read, for the rules box's corners and f+ and f- and the pen panel's settings button (`act-where-it-is.mjs`). A target that did not move and showed nothing still fails after the full wait. `docs/research/tooling/fuzz-timeouts-1067-1068.md` has the evidence.
 - **A page is never reused between lists**: Restart empties the board but leaves the earlier digits behind Undo
   (`docs/research/tooling/ui-fuzz-tools.md`).
 - **The tests**: `actions.test.mjs`, `signals.test.mjs`, `rules.test.mjs` (hand-built snapshots) and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
