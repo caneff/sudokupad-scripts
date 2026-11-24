@@ -45,11 +45,11 @@ test('pictureTags lists each repo picture\'s file and tag, undefined for an unta
   ])
 })
 
-test('pictureAddress and pictureFile are inverse, and pictureFile reads an old untagged or ?v= address too', () => {
+test('pictureFile gives back the file a pictureAddress was made from, and reads an untagged address too', () => {
   const address = pictureAddress('docs/research/a.png', hashOf)
   assert.equal(address, at('docs/research/a.png', 'aaaaaaa'))
   assert.equal(pictureFile(address), 'docs/research/a.png')
-  assert.equal(pictureFile(`${RAW}docs/research/a.png?v=1234567`), 'docs/research/a.png')
+  assert.equal(pictureFile(`${RAW}docs/research/a.png`), 'docs/research/a.png')
 })
 
 const ANIMATED = [

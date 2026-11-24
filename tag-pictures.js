@@ -17,8 +17,8 @@ const TAGGED_PATH = new RegExp(`^${PICTURES}[0-9a-f]{${TAG_LENGTH}}/`)
 
 const tagOf = (file, root = __dirname) => execFileSync('git', ['hash-object', file], { cwd: root, encoding: 'utf8' }).trim().slice(0, TAG_LENGTH)
 const pictureAddress = (file, hashOf = tagOf) => `${RAW}${PICTURES}${hashOf(file)}/${file}`
-// The repo file an address names, whether it is tagged, carries an old ?v= query or neither.
-const pictureFile = url => url.slice(RAW.length).replace(/\?.*$/, '').replace(TAGGED_PATH, '')
+// The repo file a picture's address names.
+const pictureFile = url => url.slice(RAW.length).replace(TAGGED_PATH, '')
 
 const pictureTags = html => html.split(COMMENT).filter((_, i) => i % 2 === 0).flatMap(part =>
   [...part.matchAll(PICTURE_SRC)].map(m => ({ file: m[3], tag: m[2] })))
@@ -38,6 +38,7 @@ const copyPictures = (root, files, hashOf = file => tagOf(file, root)) => {
     fs.mkdirSync(path.dirname(copy), { recursive: true })
     fs.copyFileSync(path.join(root, file), copy)
   }
+  // Deepest paths first, so a folder is empty by the time it is looked at.
   for (const entry of fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true }).sort().reverse() : []) {
     const folder = path.join(dir, entry)
     if (fs.statSync(folder).isDirectory() && !fs.readdirSync(folder).length) fs.rmdirSync(folder)
@@ -48,7 +49,7 @@ const copyPictures = (root, files, hashOf = file => tagOf(file, root)) => {
 const sitePictures = () => fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))
   .flatMap(name => pictureTags(fs.readFileSync(path.join(SITE_DIR, name), 'utf8')).map(({ file }) => file))
 
-// The command line of this tool and of sync-slides.js: make pictures/ match what the pages now show.
+// Makes pictures/ match what the pages now show.
 const syncPictureCopies = () => copyPictures(__dirname, sitePictures())
 
 if (require.main === module) {
@@ -56,4 +57,4 @@ if (require.main === module) {
   syncPictureCopies()
 }
 
-module.exports = { tagPictures, pictureTags, pictureAddress, pictureFile, copyPictures, syncPictureCopies, tagOf, RAW, PICTURES }
+module.exports = { TAG_LENGTH, TAGGED_PATH, tagPictures, pictureTags, pictureAddress, pictureFile, copyPictures, syncPictureCopies, tagOf, RAW, PICTURES }

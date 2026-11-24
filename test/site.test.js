@@ -5,7 +5,7 @@ const { execFileSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const { RAW, PICTURES, pictureTags, pictureAddress, pictureFile, tagOf } = require('../tag-pictures.js')
+const { RAW, PICTURES, TAG_LENGTH, TAGGED_PATH, pictureTags, pictureAddress, pictureFile, tagOf } = require('../tag-pictures.js')
 const { scriptFiles, publishedScriptFiles } = require('../sync-lib.js')
 const { headerField } = require('../userscript-header.js')
 const SCRIPT_SUFFIX = '.user.js'
@@ -45,7 +45,7 @@ test('every picture of a repo file on every page is addressed under a tag folder
       assert.equal(tag, tagOf(file), `site/${name}: ${file} has tag ${tag}, its file hashes to ${tagOf(file)}; run: node tag-pictures.js`)
       const copy = `${PICTURES}${tag}/${file}`
       wanted.add(copy)
-      assert.ok(fs.existsSync(path.join(ROOT, copy)) && fs.readFileSync(path.join(ROOT, copy)).equals(fs.readFileSync(path.join(ROOT, file))), `site/${name}: ${copy} is missing or differs from ${file}; run: node tag-pictures.js`)
+      assert.equal(fs.existsSync(path.join(ROOT, copy)) && fs.readFileSync(path.join(ROOT, copy)).equals(fs.readFileSync(path.join(ROOT, file))), true, `site/${name}: ${copy} is missing or differs from ${file}; run: node tag-pictures.js`)
     }
   }
   const held = fs.readdirSync(path.join(ROOT, PICTURES), { recursive: true }).map(f => PICTURES + f.split(path.sep).join('/')).filter(f => fs.statSync(path.join(ROOT, f)).isFile())
@@ -244,7 +244,7 @@ const leadIns = page => items(page).map(leadIn).filter(Boolean)
 
 const altOf = img => (img.match(/alt="([^"]*)"/) || [])[1] || ''
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
-const withoutTag = img => img.replace(/pictures\/[0-9a-f]{7}\//, '')
+const withoutTag = img => img.replace(new RegExp(TAGGED_PATH.source.slice(1)), '')
 
 test(`${DETAILS} has no picture inside its feature grid, and no figure but the pen panel`, () => {
   const page = read(DETAILS)
@@ -373,7 +373,7 @@ for (const { heading, page: file, id } of SHOWS) {
         }
       }
       for (const [page, raw] of pages) {
-        assert.equal(raw.split(`srcset="${RAW}${PICTURES}`).slice(1).filter(part => part.slice(8).startsWith(dir)).length, animated.length, `${page} has one WebP <source> per animated slide`)
+        assert.equal(raw.split(`srcset="${RAW}${PICTURES}`).slice(1).filter(part => part.slice(TAG_LENGTH + 1).startsWith(dir)).length, animated.length, `${page} has one WebP <source> per animated slide`)
       }
     })
   }

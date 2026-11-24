@@ -3,12 +3,12 @@
 // Run from the repo root: node docs/research/site/site-text-anywhere-details-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
-import { RAW } from '../../../tag-pictures.js'
+import { RAW, pictureFile } from '../../../tag-pictures.js'
 const root = new URL('../../../', import.meta.url)
 const browser = await chromium.launch()
 for (const [width, file] of [[900, 'site-text-anywhere-details.png']]) {
   const page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage()
-  await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(r.request().url().slice(RAW.length), root)), contentType: r.request().url().includes('.gif') ? 'image/gif' : 'image/png' }))
+  await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(pictureFile(r.request().url()), root)), contentType: r.request().url().includes('.gif') ? 'image/gif' : 'image/png' }))
   await page.goto(new URL('site/text-anywhere.html', root).href, { waitUntil: 'load' })
   await page.screenshot({ path: new URL('docs/research/site/' + file, root).pathname, fullPage: true })
   await page.close()

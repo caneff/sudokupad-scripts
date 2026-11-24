@@ -21,8 +21,11 @@ The rule is `AGENTS.md`'s (Chris, 2026-11-06). The pictures it retakes are the s
   `pictures/<tag>/<file>` (the old copy goes). `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
   Why a path and not `?v=<tag>`: raw.githubusercontent.com ignores the query when it caches, serving the old bytes under the new
   address for up to 5 minutes after a push (#1183), and Discord kept the old link-preview card. A path nobody has asked for yet
-  cannot be stale. Pinning to a commit sha was weighed and dropped: the tag is written before the commit exists, and a squash merge
-  makes the PR branch's sha unreachable from `main`. Never edit `pictures/`: it is generated, and git stores each picture once.
+  has no cached copy. Two costs follow. raw caches a 404 too, so open the new addresses in a real browser only after the merge
+  lands, never from the PR's branch. And a retake deletes the old `pictures/<old tag>/` copy, so an address already handed out
+  (a cached page, a posted preview card) stops serving once it is fetched again. Pinning to a commit sha was weighed and dropped:
+  the tag is written before the commit exists, and the squash merge's own sha is not known until after it. Never edit `pictures/`:
+  it is generated, and git stores each picture once.
 - A small touch a user would not look for (a hover state, a fade, a snap feel, a cursor) gets no line in `site/`, on any script's
   page; only a feature a user would look up gets one (Chris, 2026-11-08). Pictures are still retaken when a change alters what
   they show.
