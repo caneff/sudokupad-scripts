@@ -373,13 +373,14 @@ back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow
 
 ## The Tampermonkey test
 
-`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every SudokuPad script (`scriptFiles()` of
-`sync-lib.js`, so not Logic Masters Puzzle Preview, which runs on another site) into a real Tampermonkey in Playwright's Chromium,
+`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every published script (`publishedScriptFiles()` of
+`sync-lib.js`, so Logic Masters Puzzle Preview too) into a real Tampermonkey in Playwright's Chromium,
 the way a user does: open the script's URL, click Install. Each script's copy on main goes in first, from
 `raw.githubusercontent.com`, then the checkout's copy, served from `127.0.0.1`, over it. Tampermonkey must offer the second as an
 update and its dashboard must list each script once, at the checkout's `@version`, which is what a changed `@name` or `@namespace`
-breaks. Then each script must start on the puzzle page, served from the recording, and its representative action from
-`live/scripts.mjs` must work. The recipe and its caveats are `docs/research/tooling/tampermonkey-in-playwright.md`.
+breaks. Then each SudokuPad script must start on the puzzle page, served from the recording, and its representative action from
+`live/scripts.mjs` must work. Logic Masters Puzzle Preview only installs and updates (#1079): it runs on logic-masters.de, which no check requests,
+so it never starts. The recipe and its caveats are `docs/research/tooling/tampermonkey-in-playwright.md`.
 
 - Tampermonkey is closed-source freeware: its CRX is fetched at run time from Google's update endpoint into
   `tampermonkey/` beside the recording, again once it is a day old, and never committed.
@@ -393,4 +394,3 @@ breaks. Then each script must start on the puzzle page, served from the recordin
   the checkout's `text-anywhere.user.js`. Each copy is served from `127.0.0.1` with its raw GitHub addresses pointed
   there, so the updates fetch the checkout's files; `test/text-anywhere.test.js` holds the handover's real addresses.
 - It does not cover the Chrome Web Store install, the browser's own prompts or Tampermonkey's scheduled update check.
-- It does not cover Logic Masters Puzzle Preview, whose install and update from the root address stay owed to a person.

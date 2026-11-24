@@ -8,7 +8,7 @@ import { RAW } from '../../tag-pictures.js'
 import { CANEFF_RAW } from '../../sync-lib.js'
 import { newPage, gotoPuzzle, startPuzzle } from '../page.mjs'
 import { SCRIPTS } from '../scripts.mjs'
-import { SCRIPT_FILES, scriptSource } from '../session.mjs'
+import { PUBLISHED_FILES, publishedSource, SCRIPT_FILES, scriptSource } from '../session.mjs'
 import { settle } from '../settle.mjs'
 import { checkForUpdate, installedScripts, installScript, launchTampermonkey, serveFiles } from './tampermonkey.mjs'
 
@@ -33,7 +33,7 @@ const onMain = (file) => {
 }
 const updated = []
 
-it('every *.user.js has a check that it ran', () => {
+it('every SudokuPad script has a check that it ran', () => {
   assert.deepEqual(SCRIPTS.map((s) => s.file).sort(), SCRIPT_FILES)
 })
 
@@ -42,14 +42,14 @@ describe('Tampermonkey', { concurrency: false }, () => {
 
   before(async () => {
     tm = await launchTampermonkey()
-    served = await serveFiles(Object.fromEntries(SCRIPT_FILES.map((f) => [f, scriptSource(f)])))
+    served = await serveFiles(Object.fromEntries(PUBLISHED_FILES.map((f) => [f, publishedSource(f)])))
   })
   after(async () => {
     await served?.close()
     await tm?.close()
   })
 
-  for (const file of SCRIPT_FILES) {
+  for (const file of PUBLISHED_FILES) {
     it(`${file}: main's copy installs, and the checkout's installs over it as an update; with no copy on main, the checkout's installs fresh`, async () => {
       const main = await fetch(RAW + file, { method: 'HEAD' })
       // A script this branch adds has no copy on main: its first install is the checkout's own.
@@ -71,7 +71,7 @@ describe('Tampermonkey', { concurrency: false }, () => {
 
   it('the dashboard lists each script once, at the checkout\'s @version', async () => {
     const byName = (a, b) => a.name.localeCompare(b.name)
-    const expected = SCRIPT_FILES.map((f) => ({ name: headerField(scriptSource(f), 'name'), version: headerVersion(scriptSource(f)) })).sort(byName)
+    const expected = PUBLISHED_FILES.map((f) => ({ name: headerField(publishedSource(f), 'name'), version: headerVersion(publishedSource(f)) })).sort(byName)
     assert.deepEqual((await installedScripts(tm)).sort(byName), expected)
   })
 
