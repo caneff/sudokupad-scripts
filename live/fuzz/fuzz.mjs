@@ -91,27 +91,21 @@ async function hoverRules (p) {
 // An act on a target (a hover, a press) whose result `shown` waits for, made again where the target is now when it moved since the act's read of its box: a Restart or a
 // settings change moves the rules pane, and a panel can settle after its box was read (#1067, #1068), so the act lands beside the target, as it does for a player, who tries again.
 // A target that did not move and showed nothing is the script's failure, and waits out the full time as it always did. `boxOf` reads the target's box (null: nothing to act on).
-// A hover (`holds`) also counts only while the target stays where the pointer went, since a corner shows for a moment before the page works out that the pointer is no longer over its pane; a press is never made twice on a success.
 const MOVE_TRIES = 4
 const MOVE_LOOK_MS = 500
-// Long enough for the page to recompute what the pointer is over after a layout change.
-const MOVE_SETTLE_MS = 150
-async function actWhereItIs (shown, boxOf, act, { holds = false } = {}) {
+async function actWhereItIs (shown, boxOf, act) {
   for (let tries = 0; tries < MOVE_TRIES; tries++) {
     const box = await boxOf()
     if (!box) return false
     await act(box)
-    const showed = await shown.waitFor({ state: 'visible', timeout: MOVE_LOOK_MS }).then(() => true, () => false)
-    if (holds && showed) await sleep(MOVE_SETTLE_MS)
-    const stays = JSON.stringify(await boxOf()) === JSON.stringify(box)
-    if (showed && (stays || !holds)) return true
-    if (stays) break
+    if (await shown.waitFor({ state: 'visible', timeout: MOVE_LOOK_MS }).then(() => true, () => false)) return true
+    if (JSON.stringify(await boxOf()) === JSON.stringify(box)) break
   }
   await shown.waitFor({ state: 'visible', timeout: BOX_TIMEOUT_MS })
   return true
 }
 // Hovers the rules pane until `target` (a corner, a font button) shows; false when the page shows no rules.
-const hoverRulesFor = (p, target) => actWhereItIs(target, () => rulesBox(p), (box) => p.mouse.move(box.x + box.width / 2, box.y + box.height / 2), { holds: true })
+const hoverRulesFor = (p, target) => actWhereItIs(target, () => rulesBox(p), (box) => p.mouse.move(box.x + box.width / 2, box.y + box.height / 2))
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`

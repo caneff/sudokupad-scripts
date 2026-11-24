@@ -33,7 +33,7 @@ button on the first mouse move, and #1067's by shrinking the pane the same way. 
 
 `live/fuzz/fuzz.mjs`, `actWhereItIs`: a hover or a press whose result does not show is made again where the target is now, but only
 when its box changed since the act's read. A target that stayed put and showed nothing waits out the full time as before, so a real
-bug in a script still fails the run. A hover also counts only while the pane stays where the pointer went. Used for the rules-box
+bug in a script still fails the run. Used for the rules-box
 corner drag, the f+ and f- presses and the pen panel's settings button. The two regression tests are in `fuzz.smoke.mjs`.
 
 If the nightly hits either message again, this note's hypothesis is wrong: reopen with that run's seed.
