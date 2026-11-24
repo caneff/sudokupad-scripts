@@ -200,8 +200,19 @@ test(`${HOME} opens with the title sticker: the title, ChinStrap's Puzzle Script
   const m = read(HOME).match(/<body>\s*<header class="banner">\s*<h1>([^<]*)<\/h1>\s*<p class="lede">([\s\S]*?)<\/p>\s*<\/header>/)
   assert.ok(m, `site/${HOME} does not open with a <header class="banner"> holding the <h1> and then the lede`)
   assert.equal(m[1], "ChinStrap's Puzzle Scripts")
-  assert.equal(plain(m[2]), 'Small userscripts for SudokuPad and for other puzzle sites. Install Tampermonkey, click a script\'s Install button, and Tampermonkey asks if you want it. If Tampermonkey stops on its "Script installation" page instead, check that Tampermonkey is switched on in its toolbar menu; if it is, copy the Install link and paste it into Tampermonkey\'s dashboard → Utilities → Import from URL. Each script\'s settings are in SudokuPad\'s settings, in the Experimental group, and every dialog has Restore defaults.')
-  assert.match(read(HOME), /<title>ChinStrap's Puzzle Scripts<\/title>/)
+  assert.equal(plain(m[2]), 'Small userscripts for SudokuPad and for other puzzle sites. Install Tampermonkey, click a script\'s Install button, and Tampermonkey asks if you want it.*')
+  assert.match(m[2], /<a href="https:\/\/sudokupad\.app">SudokuPad<\/a>/)
+  assert.match(m[2], /<a href="https:\/\/www\.tampermonkey\.net\/">Tampermonkey<\/a>/)
+  assert.match(m[2], /<a class="footnote-ref" id="install-note-ref" href="#install-note">\*<\/a><\/sup>\s*$/)
+  // The install help is a footnote above the Discord sticker and the footer, linking back to the marker.
+  const home = read(HOME)
+  const note = home.match(/<p class="footnote" id="install-note">([\s\S]*?)<\/p>\s*<p class="sticker">/)
+  assert.ok(note, `site/${HOME} has no <p class="footnote" id="install-note"> right above the Discord sticker`)
+  assert.ok(home.indexOf('id="install-note"') < home.indexOf('<footer>'), `site/${HOME}'s footnote is below its footer`)
+  const backLink = /<a href="#install-note-ref"[^>]*>[^<]+<\/a>\s*$/
+  assert.match(note[1], backLink)
+  assert.equal(plain(note[1].replace(backLink, '')), '* If Tampermonkey stops on its "Script installation" page instead, check that Tampermonkey is switched on in its toolbar menu; if it is, copy the Install link and paste it into Tampermonkey\'s dashboard → Utilities → Import from URL. Each script\'s settings are in SudokuPad\'s settings, in the Experimental group, and every dialog has Restore defaults.')
+  assert.match(home, /<title>ChinStrap's Puzzle Scripts<\/title>/)
 })
 
 // Chris ruled dark mode out of the site (#808): it is light only, whatever the browser asks for.

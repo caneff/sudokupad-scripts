@@ -24,6 +24,8 @@
   .banner { position: relative; z-index: 2; display: inline-block; max-width: 46rem; margin: .5rem 0 14px calc(var(--title-ring-width) - var(--warn-ring-width)); padding: .7rem 1.4rem .8rem; transform: rotate(-1deg); }
   .banner h1 { margin: 0 0 .25rem; }
   .banner .lede { margin: 0; font-size: 1.05rem; }
+  .footnote-ref { color: inherit; font-weight: 700; padding: 0 .15rem; }
+  .footnote { max-width: 46rem; margin: calc(var(--ring-gap) + var(--card-ring-width)) 0 0 .5rem; font-size: .9rem; color: #555; }
   .warning { position: relative; z-index: 1; margin: 0 0 calc(var(--ring-gap) + var(--warn-ring-width) + var(--card-ring-width)); padding-top: .9rem; }
   .rows { display: flex; flex-direction: column; gap: calc(var(--ring-gap) + 2 * var(--card-ring-width)); }
   .row { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.2rem 1.4rem; background: #fff; border: 12px solid var(--card); border-radius: 30px; box-shadow: var(--card-ring); }
@@ -47,7 +49,7 @@
 <body>
   <header class="banner">
     <h1>ChinStrap's Puzzle Scripts</h1>
-    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a> and for other puzzle sites. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it. If Tampermonkey stops on its "Script installation" page instead, check that Tampermonkey is switched on in its toolbar menu; if it is, copy the Install link and paste it into Tampermonkey's dashboard → Utilities → Import from URL. Each script's settings are in SudokuPad's settings, in the Experimental group, and every dialog has Restore defaults.</p>
+    <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a> and for other puzzle sites. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's Install button, and Tampermonkey asks if you want it.<sup><a class="footnote-ref" id="install-note-ref" href="#install-note">*</a></sup></p>
   </header>
   <p class="warning">These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.</p>
   <div class="rows">
@@ -253,6 +255,7 @@
     </div>
   </section>
   </div>
+  <p class="footnote" id="install-note">* If Tampermonkey stops on its "Script installation" page instead, check that Tampermonkey is switched on in its toolbar menu; if it is, copy the Install link and paste it into Tampermonkey's dashboard → Utilities → Import from URL. Each script's settings are in SudokuPad's settings, in the Experimental group, and every dialog has Restore defaults. <a href="#install-note-ref" aria-label="Back to the intro">&#8617;</a></p>
   <p class="sticker">Questions, bugs or suggestions? Message me on Discord: <a href="https://discord.com/users/184770560356646923">@ChinStrap</a></p>
   <footer><a href="https://github.com/chinstrap45/sudokupad-scripts">Source on GitHub</a></footer>
   <script src="slides.js"></script>
