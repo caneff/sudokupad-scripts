@@ -34,7 +34,6 @@
   .row:nth-of-type(6n+5) { --card: var(--lavender); }
   .row:nth-of-type(6n+6) { --card: var(--peach); }
   .rows > h2.group { margin: .6rem 0 0 .4rem; font-size: 1.6rem; }
-  .row-plain { grid-template-columns: 1fr; }
   .row-text { max-width: 36rem; }
   .row h2 { font-size: 1.25rem; margin-bottom: .35rem; }
   .row-text p { margin-bottom: .75rem; }
@@ -243,7 +242,10 @@
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/logic-masters-puzzle-preview.user.js">Install<span class="visually-hidden"> Logic Masters Puzzle Preview</span></a></p>
     </div>
   </section>
-  <section class="row row-plain" id="penpa-redirect">
+  <section class="row" id="penpa-redirect">
+    <div>
+      <div class="slide-frame"><img src="https://raw.githubusercontent.com/chinstrap45/sudokupad-scripts/main/docs/research/penpa-redirect/penpa-redirect.png?v=92032b0" alt="The new Penpa+ solve page, showing a 9x9 Sudoku with its controls" width="760" height="456"></div>
+    </div>
     <div class="row-text">
       <h2>Penpa+ Redirect</h2>
       <p>Sends every Penpa+ link (<code>swaroopg92.github.io/penpa-edit/</code>) to ChinStrap's version at <code>chinstrap45.github.io/penpa-edit/</code>, keeping the link's query and # data, so shared puzzle links open there. A solve link opens on the new solve page. It runs on Penpa+, not SudokuPad.</p>

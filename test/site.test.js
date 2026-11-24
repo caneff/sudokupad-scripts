@@ -49,7 +49,7 @@ test('every picture of a repo file on every page carries a ?v= tag matching its 
 // #342: docs/research/ has one folder per script, and site/ for pictures of a whole page.
 // A script's folder is named for the script, from its @name less any SudokuPad prefix (Logic Masters Puzzle Preview has none).
 const folderOf = file => fs.readFileSync(path.join(ROOT, file), 'utf8').match(/^\/\/ @name\s+(?:SudokuPad )?(.+)$/m)[1].toLowerCase().replace(/ /g, '-')
-const RESEARCH_FOLDERS = [...publishedScriptFiles().map(folderOf), 'site']
+const RESEARCH_FOLDERS = [...publishedScriptFiles().map(folderOf), 'penpa-redirect', 'site']
 
 test('every picture the site loads is in a script folder of docs/research/ or in docs/research/site/, and one named for a script is in its folder', () => {
   for (const name of PAGES) {
@@ -254,7 +254,7 @@ test(`${DETAILS} good to know says others need the script to see dashed and arro
 const ROWS = [
   ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined], ['Logic Masters Puzzle Preview', undefined], [PENPA_REDIRECT_NAME, undefined]
 ]
-const rowsOf = html => html.split(/<section class="row(?: row-plain)?"(?: id="[^"]*")?>/).slice(1)
+const rowsOf = html => html.split(/<section class="row"(?: id="[^"]*")?>/).slice(1)
 
 test(`${HOME} has one row per script in order, each with an Install button beside its Details link where there is one`, () => {
   const rows = rowsOf(read(HOME))
@@ -279,7 +279,7 @@ test('the Install button is styled once, in style.css, and shared by every page'
 })
 
 test(`${HOME}'s other rows show one picture and no pager`, () => {
-  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Anywhere</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>') && !r.includes(`<h2>${PENPA_REDIRECT_NAME}</h2>`))) {
+  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Anywhere</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>'))) {
     assert.equal(imgs(row).length, 1)
     assert.doesNotMatch(row, /slide-caption|slideshow/)
   }
@@ -293,7 +293,9 @@ test(`${HOME} has the ${PENPA_REDIRECT_NAME} entry under id="penpa-redirect", in
   assert.match(entry[1], new RegExp(`<h2>${PENPA_REDIRECT_NAME.replace('+', '\\+')}</h2>`), 'that section is the Penpa+ Redirect entry')
   assert.match(entry[1], new RegExp(`<a class="install" href="${PENPA_REDIRECT_RAW.replace(/\./g, '\\.')}">Install<span class="visually-hidden"> ${PENPA_REDIRECT_NAME.replace('+', '\\+')}</span></a>`), 'the Install link')
   assert.ok(targets(entry[1]).includes(PENPA_REDIRECT_SOURCE), 'a link to the script source on GitHub')
-  assert.doesNotMatch(entry[1], /<img\b/, 'no picture yet')
+  assert.equal(imgs(entry[1]).length, 1, 'one picture of the solve page')
+  assert.match(entry[1], /<img\b[^>]*alt="[^"]*solve page/i, 'alt text describes the solve page')
+  assert.deepEqual(screenshots(entry[1]), ['docs/research/penpa-redirect/penpa-redirect.png'])
 })
 
 test(`${HOME}'s Logic Masters Puzzle Preview row credits juggler and says it is gentle on the site`, () => {
