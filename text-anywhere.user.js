@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.62
+// @version      0.46.63
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.62'
+  const VERSION = '0.46.63'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -3543,6 +3543,9 @@
     return onTop[noteAtPoint(onTop.map((item) => noteScreenBox(item, map, look.outline)), point, margin)]?.[NOTE_ELEMENT] ?? null
   }
 
+  // The index of the note drawn as `note`, or -1 for none (or null).
+  const indexOfNote = (note) => note ? puzzleNotes.findIndex((item) => item[NOTE_ELEMENT] === note) : -1
+
   const pressedNote = (event) => noteOf(event) ?? noteAt(eventPoint(event), HIT_MARGIN_PX)
 
   // A note within the hit margin of the pointer but not under it shows its hover look from a class, since :hover needs the pointer on the element.
@@ -3850,11 +3853,12 @@
     if (!(event.target instanceof window.Element) || event.target.closest(ABOVE_NOTES) || document.querySelector('.dialog')) return
     const point = eventPoint(event)
     const note = noteAt(point, 0)
-    const index = note ? puzzleNotes.findIndex((item) => item[NOTE_ELEMENT] === note) : -1
+    const index = indexOfNote(note)
     if (index === -1) return
     event.preventDefault()
     event.stopImmediatePropagation()
-    const before = Framework.app.tool
+    // The tool the solver is in, not the one a held Shift or Ctrl has switched to for as long as it is held.
+    const before = Framework.app.prevTool || Framework.app.tool
     Framework.app.changeTool(TOOL_NAME)
     openText(index, point)
     returnTool = before
@@ -3889,7 +3893,8 @@
       if (resizing && !resizing.cancelled) return cancelResize()
       endedByEnter = event.key === 'Enter'
       const left = finishText()
-      if (left !== -1) select([left])
+      // A box a double click opened in another mode closes back into that mode, where nothing is selected.
+      if (left !== -1 && Framework.app.tool === TOOL_NAME) select([left])
     }
   }
 
@@ -3949,7 +3954,7 @@
   }
 
   function tickCheck (note, box) {
-    const index = puzzleNotes.findIndex((item) => item[NOTE_ELEMENT] === note)
+    const index = indexOfNote(note)
     if (index === -1) return
     puzzleNotes[index] = { ...puzzleNotes[index], text: toggledCheck(puzzleNotes[index].text, Number(box.dataset.line)) }
     saveNotes()
@@ -4401,7 +4406,7 @@
         tickCheck(note, box)
         return true
       }
-      const start = note ? puzzleNotes.findIndex((item) => item[NOTE_ELEMENT] === note) : -1
+      const start = indexOfNote(note)
       const shift = event.shiftKey
       if (start !== -1 && !shift && !selected.includes(start)) select([start])
       const move = start === -1 || shift ? null : selected.map((index) => ({ index, item: puzzleNotes[index] }))
