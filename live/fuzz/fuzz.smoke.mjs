@@ -86,8 +86,8 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['rich note', [4, 1]], ['pen page', null]] })
   })
 
-  // #1067 and #1068: two nightly timeouts (a rules-box corner hidden, a dialog that never showed) that no replay repeats, even on the commit they failed on. The page moves a target
-  // between the harness's read of its box and its press; a player presses again where it is now, and the harness does the same, but only for a target that moved.
+  // #1068: a nightly timeout (a dialog that never showed) that no replay repeats, even on the commit it failed on. The page moves a target between the harness's read of its box and its
+  // press; a player presses again where it is now, and the harness does the same, but only for a target that moved (`act-where-it-is.test.mjs` has the rule alone, for the rules pane's hover too, #1067).
   const moveOnFirstMouseMove = (page, selector, style) => page.evaluate(([sel, css]) => {
     const move = () => {
       const el = document.querySelector(sel)
@@ -97,16 +97,6 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     }
     window.addEventListener('mousemove', move, true)
   }, [selector, style])
-
-  it('an f+ press on the rules box hovers the pane again when the pane shrank from under the pointer (#1067)', async () => {
-    const target = await openTarget(browser(), puzzleByName('12x12'), {})
-    try {
-      await moveOnFirstMouseMove(target.env.page, '.puzzle-rules', { height: '40px', minHeight: '0', maxHeight: '40px', overflow: 'hidden' })
-      await target.env.rulesFont(1, 1)
-    } finally {
-      await target.close()
-    }
-  })
 
   it('a press on the pen panel\'s settings button is made again where the button moved to (#1068)', async () => {
     const target = await openTarget(browser(), puzzleByName('recorded 9x9'), {})

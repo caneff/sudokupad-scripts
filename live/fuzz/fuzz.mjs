@@ -20,6 +20,7 @@ import { DIGIT_KEYS, DIGITS, KINDS, MARK_BOXES, PROFILE_NAMES, ROW_KEYS, scripte
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
+import { actWhereItIs } from './act-where-it-is.mjs'
 import { noteDrop } from './note-drop.mjs'
 import { visiblePoint } from './visible-point.mjs'
 import { replayCommand } from './replay-command.mjs'
@@ -88,24 +89,8 @@ async function hoverRules (p) {
   return true
 }
 
-// An act on a target (a hover, a press) whose result `shown` waits for, made again where the target is now when it moved since the act's read of its box: a Restart or a
-// settings change moves the rules pane, and a panel can settle after its box was read (#1067, #1068), so the act lands beside the target, as it does for a player, who tries again.
-// A target that did not move and showed nothing is the script's failure, and waits out the full time as it always did. `boxOf` reads the target's box (null: nothing to act on).
-const MOVE_TRIES = 4
-const MOVE_LOOK_MS = 500
-async function actWhereItIs (shown, boxOf, act) {
-  for (let tries = 0; tries < MOVE_TRIES; tries++) {
-    const box = await boxOf()
-    if (!box) return false
-    await act(box)
-    if (await shown.waitFor({ state: 'visible', timeout: MOVE_LOOK_MS }).then(() => true, () => false)) return true
-    if (JSON.stringify(await boxOf()) === JSON.stringify(box)) break
-  }
-  await shown.waitFor({ state: 'visible', timeout: BOX_TIMEOUT_MS })
-  return true
-}
 // Hovers the rules pane until `target` (a corner, a font button) shows; false when the page shows no rules.
-const hoverRulesFor = (p, target) => actWhereItIs(target, () => rulesBox(p), (box) => p.mouse.move(box.x + box.width / 2, box.y + box.height / 2))
+const hoverRulesFor = (p, target) => actWhereItIs(target, () => rulesBox(p), (box) => p.mouse.move(box.x + box.width / 2, box.y + box.height / 2), { finalMs: BOX_TIMEOUT_MS })
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
@@ -551,7 +536,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     async penDialogFromSettingsButton (save) {
       await openPen()
       const button = p.locator(PEN_SETTINGS_BUTTON).first()
-      await actWhereItIs(p.locator(EXTRAS_EDITOR), () => button.boundingBox({ timeout: BOX_TIMEOUT_MS }), (box) => p.mouse.click(box.x + box.width / 2, box.y + box.height / 2))
+      await actWhereItIs(p.locator(EXTRAS_EDITOR), () => button.boundingBox({ timeout: BOX_TIMEOUT_MS }), (box) => p.mouse.click(box.x + box.width / 2, box.y + box.height / 2), { finalMs: BOX_TIMEOUT_MS })
       await animationsDone(p.locator(EXTRAS_EDITOR))
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
