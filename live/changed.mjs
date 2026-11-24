@@ -16,7 +16,7 @@ const SITE_CHECK = 'live/site-slideshow.live.mjs'
 // What runs every live file, so a change to it runs one live file through it.
 const RUNNER_FILES = ['package.json', 'node-test.js']
 const RUNNER_CHECK = 'live/startup.live.mjs'
-const NO_LIVE_EFFECT = [/^(docs|test|\.github|lib)\//, /\.md$/, /^live\//, /^(LICENSE|netlify\.toml|\.gitignore|sync-slides\.js|tag-pictures\.js)$/]
+const NO_LIVE_EFFECT = [/^(docs|test|pictures|\.github|lib)\//, /\.md$/, /^live\//, /^(LICENSE|netlify\.toml|\.gitignore|sync-slides\.js|tag-pictures\.js)$/]
 const sorted = (files) => [...new Set(files)].sort()
 
 // Every relative path written as a string, and every bare `*.user.js` name (a suite that injects another script loads it from the repo root by that name).

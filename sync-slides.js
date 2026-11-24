@@ -2,10 +2,10 @@
 // Run after editing site/slideshows.json: node sync-slides.js
 // site/slideshows.json is the one source of every slideshow's pictures, alt text and captions. This rewrites each
 // `<!-- slideshow:id -->` ... `<!-- /slideshow:id -->` block in the pages of site/ from it, so the first slide and its caption
-// show with scripting off. The picture tags are written here too, so tag-pictures.js has nothing left to do for them.
+// show with scripting off. The picture tags and the copies under pictures/ are written here too, so tag-pictures.js has nothing left to do for them.
 const fs = require('node:fs')
 const path = require('node:path')
-const { RAW, tagOf } = require('./tag-pictures.js')
+const { pictureAddress, syncPictureCopies, tagOf } = require('./tag-pictures.js')
 const { SITE_DIR, rewritePages, runOnSite } = require('./site-pages.js')
 
 const SHOWS = JSON.parse(fs.readFileSync(path.join(SITE_DIR, 'slideshows.json'), 'utf8'))
@@ -21,10 +21,10 @@ const renderShow = ({ name, dir, width, height, slides }, indent, hashOf = tagOf
     `${at(0)}<div class="slideshow">`,
     `${at(2)}<div class="slide-frame">`,
     ...slides.flatMap(({ picture, animation, alt }, i) => {
-      const still = n => `${at(n)}<img class="slide${current(i)}" src="${RAW}${dir}${picture}?v=${hashOf(dir + picture)}" alt="${escape(alt)}" width="${width}" height="${height}">`
+      const still = n => `${at(n)}<img class="slide${current(i)}" src="${pictureAddress(dir + picture, hashOf)}" alt="${escape(alt)}" width="${width}" height="${height}">`
       // A visitor who prefers reduced motion gets the still picture alone; the animation is only a <source> for everyone else.
       return animation
-        ? [`${at(4)}<picture>`, `${at(6)}<source media="(prefers-reduced-motion: no-preference)" srcset="${RAW}${dir}${animation}?v=${hashOf(dir + animation)}">`, still(6), `${at(4)}</picture>`]
+        ? [`${at(4)}<picture>`, `${at(6)}<source media="(prefers-reduced-motion: no-preference)" srcset="${pictureAddress(dir + animation, hashOf)}">`, still(6), `${at(4)}</picture>`]
         : [still(4)]
     }),
     `${at(2)}</div>`,
@@ -55,6 +55,9 @@ const syncText = (text, shows = SHOWS, hashOf = tagOf) => {
 
 const syncDir = (dir, shows = SHOWS, hashOf = tagOf) => rewritePages(dir, html => syncText(html, shows, hashOf))
 
-if (require.main === module) runOnSite(html => syncText(html))
+if (require.main === module) {
+  runOnSite(html => syncText(html))
+  syncPictureCopies()
+}
 
 module.exports = { renderShow, syncText, syncDir, SHOWS, escape }

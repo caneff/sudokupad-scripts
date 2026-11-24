@@ -5,7 +5,7 @@ const { execFileSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const { RAW, pictureTags, tagOf } = require('../tag-pictures.js')
+const { RAW, PICTURES, pictureTags, pictureAddress, pictureFile, tagOf } = require('../tag-pictures.js')
 const { scriptFiles, publishedScriptFiles } = require('../sync-lib.js')
 const { headerField } = require('../userscript-header.js')
 const SCRIPT_SUFFIX = '.user.js'
@@ -33,17 +33,23 @@ const metaOf = (head, key) => (head.match(new RegExp(`<meta (?:name|property)="$
 const plain = html => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 const targets = page => [...page.matchAll(/\b(?:href|src|srcset)="([^"]*)"/g)].map(m => m[1])
 const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX) && t !== PENPA_REDIRECT_RAW && t !== PENPA_REDIRECT_SOURCE)
-const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(t => t.slice(RAW.length).replace(/\?.*$/, ''))
+const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(pictureFile)
 // A link into the site itself: not a URL with a scheme and not a fragment. The site is served from a
 // subpath on GitHub Pages and from the root on Netlify, so these must be relative.
 const siteLinks = page => targets(page).filter(t => !/^([a-z][a-z0-9+.-]*:|#)/i.test(t))
 
-test('every picture of a repo file on every page carries a ?v= tag matching its file', () => {
+test('every picture of a repo file on every page is addressed under a tag folder matching its file, and pictures/ holds that copy', () => {
+  const wanted = new Set()
   for (const name of PAGES) {
     for (const { file, tag } of pictureTags(read(name))) {
       assert.equal(tag, tagOf(file), `site/${name}: ${file} has tag ${tag}, its file hashes to ${tagOf(file)}; run: node tag-pictures.js`)
+      const copy = `${PICTURES}${tag}/${file}`
+      wanted.add(copy)
+      assert.ok(fs.existsSync(path.join(ROOT, copy)) && fs.readFileSync(path.join(ROOT, copy)).equals(fs.readFileSync(path.join(ROOT, file))), `site/${name}: ${copy} is missing or differs from ${file}; run: node tag-pictures.js`)
     }
   }
+  const held = fs.readdirSync(path.join(ROOT, PICTURES), { recursive: true }).map(f => PICTURES + f.split(path.sep).join('/')).filter(f => fs.statSync(path.join(ROOT, f)).isFile())
+  assert.deepEqual(held.filter(f => !wanted.has(f)), [], 'pictures/ holds copies no page shows; run: node tag-pictures.js')
 })
 
 // #342: docs/research/ has one folder per script, and site/ for pictures of a whole page.
@@ -238,7 +244,7 @@ const leadIns = page => items(page).map(leadIn).filter(Boolean)
 
 const altOf = img => (img.match(/alt="([^"]*)"/) || [])[1] || ''
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
-const withoutTag = img => img.replace(/\?v=[0-9a-f]{7}"/, '"')
+const withoutTag = img => img.replace(/pictures\/[0-9a-f]{7}\//, '')
 
 test(`${DETAILS} has no picture inside its feature grid, and no figure but the pen panel`, () => {
   const page = read(DETAILS)
@@ -362,12 +368,12 @@ for (const { heading, page: file, id } of SHOWS) {
         const tracked = execFileSync('git', ['ls-files', '--', dir + animation, dir + picture], { cwd: ROOT, encoding: 'utf8' }).split('\n')
         assert.deepEqual(tracked.filter(Boolean).sort(), [dir + animation, dir + picture].sort(), `${animation} and ${picture} must both be tracked`)
         for (const [page, raw] of pages) {
-          assert.ok(raw.includes(`srcset="${RAW}${dir}${animation}?v=${tagOf(dir + animation)}"`), `${page} has no tagged <source> for ${animation}`)
-          assert.ok(raw.includes(`src="${RAW}${dir}${picture}?v=${tagOf(dir + picture)}"`), `${page} has no tagged still ${picture}`)
+          assert.ok(raw.includes(`srcset="${pictureAddress(dir + animation)}"`), `${page} has no tagged <source> for ${animation}`)
+          assert.ok(raw.includes(`src="${pictureAddress(dir + picture)}"`), `${page} has no tagged still ${picture}`)
         }
       }
       for (const [page, raw] of pages) {
-        assert.equal(raw.split(`srcset="${RAW}${dir}`).length - 1, animated.length, `${page} has one WebP <source> per animated slide`)
+        assert.equal(raw.split(`srcset="${RAW}${PICTURES}`).slice(1).filter(part => part.slice(8).startsWith(dir)).length, animated.length, `${page} has one WebP <source> per animated slide`)
       }
     })
   }
@@ -533,7 +539,7 @@ test('every page asks for a large link preview: card, site name, picture size an
     assert.equal(meta('twitter:card'), 'summary_large_image', `${where}: twitter:card is not summary_large_image`)
     assert.equal(meta('og:site_name'), siteName, `${where}: og:site_name is not the homepage title`)
     assert.equal(meta('theme-color'), accent, `${where}: theme-color is not the --accent of style.css`)
-    const file = meta('og:image').slice(RAW.length).replace(/\?.*$/, '')
+    const file = pictureFile(meta('og:image'))
     const [width, height] = pictureSize(file)
     assert.equal(meta('og:image:width'), String(width), `${where}: og:image:width is not ${file}'s width`)
     assert.equal(meta('og:image:height'), String(height), `${where}: og:image:height is not ${file}'s height`)

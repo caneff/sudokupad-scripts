@@ -15,8 +15,8 @@ test('a rendered show makes the first slide and caption current, tags each pictu
   assert.equal(html, [
     '  <div class="slideshow">',
     '    <div class="slide-frame">',
-    `      <img class="slide current" src="${RAW}docs/research/x/a.png?v=aaaaaaa" alt="A &quot;one&quot; &amp; &lt;more&gt;" width="10" height="5">`,
-    `      <img class="slide" src="${RAW}docs/research/x/b.png?v=bbbbbbb" alt="Two" width="10" height="5">`,
+    `      <img class="slide current" src="${RAW}pictures/aaaaaaa/docs/research/x/a.png" alt="A &quot;one&quot; &amp; &lt;more&gt;" width="10" height="5">`,
+    `      <img class="slide" src="${RAW}pictures/bbbbbbb/docs/research/x/b.png" alt="Two" width="10" height="5">`,
     '    </div>',
     '    <div class="slide-bar" data-name="The X show">',
     '      <div class="slide-captions">',
@@ -35,10 +35,10 @@ test('a slide with an animation is a picture: the WebP for motion, the still PNG
   const lines = renderShow(animated, 2, hashOfAnimated).split('\n')
   assert.deepEqual(lines.slice(2, 7), [
     '      <picture>',
-    `        <source media="(prefers-reduced-motion: no-preference)" srcset="${RAW}docs/research/x/a.webp?v=ccccccc">`,
-    `        <img class="slide current" src="${RAW}docs/research/x/a.png?v=aaaaaaa" alt="A &quot;one&quot; &amp; &lt;more&gt;" width="10" height="5">`,
+    `        <source media="(prefers-reduced-motion: no-preference)" srcset="${RAW}pictures/ccccccc/docs/research/x/a.webp">`,
+    `        <img class="slide current" src="${RAW}pictures/aaaaaaa/docs/research/x/a.png" alt="A &quot;one&quot; &amp; &lt;more&gt;" width="10" height="5">`,
     '      </picture>',
-    `      <img class="slide" src="${RAW}docs/research/x/b.png?v=bbbbbbb" alt="Two" width="10" height="5">`
+    `      <img class="slide" src="${RAW}pictures/bbbbbbb/docs/research/x/b.png" alt="Two" width="10" height="5">`
   ])
 })
 

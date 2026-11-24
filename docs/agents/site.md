@@ -16,8 +16,13 @@ Read this before you change `site/`, retake a picture, edit a slideshow or touch
 The rule is `AGENTS.md`'s (Chris, 2026-11-06). The pictures it retakes are the site pictures that show the change, with their scripts
 (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links).
 
-- After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so
-  browsers fetch the new file, and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
+- After retaking a picture, run `node tag-pictures.js`: it rewrites every picture's address in `site/` to
+  `raw.githubusercontent.com/.../main/pictures/<tag>/<file>`, `<tag>` being the file's blob hash, and writes the copy at
+  `pictures/<tag>/<file>` (the old copy goes). `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
+  Why a path and not `?v=<tag>`: raw.githubusercontent.com ignores the query when it caches, serving the old bytes under the new
+  address for up to 5 minutes after a push (#1183), and Discord kept the old link-preview card. A path nobody has asked for yet
+  cannot be stale. Pinning to a commit sha was weighed and dropped: the tag is written before the commit exists, and a squash merge
+  makes the PR branch's sha unreachable from `main`. Never edit `pictures/`: it is generated, and git stores each picture once.
 - A small touch a user would not look for (a hover state, a fade, a snap feel, a cursor) gets no line in `site/`, on any script's
   page; only a feature a user would look up gets one (Chris, 2026-11-08). Pictures are still retaken when a change alters what
   they show.
