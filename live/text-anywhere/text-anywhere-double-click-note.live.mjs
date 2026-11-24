@@ -70,8 +70,12 @@ describe('Text Anywhere: a double click on a note opens it from any mode', { con
 
   it('a double click on a note under an open dialog opens nothing', async () => {
     await pickTool(p, 'normal')
-    await p.evaluate(() => Framework.showDialog({ parts: [{ tag: 'text', content: 'x' }, { tag: 'options', options: [{ tag: 'button', content: 'OK' }] }], centerOverBoard: true }))
+    await p.evaluate(() => Framework.showDialog({ parts: [{ tag: 'text', content: 'A dialog with no button to press, so a click on it leaves it open.' }], centerOverBoard: true }))
+    // SudokuPad adds the dialog a moment after showDialog returns and slides it in over 0.2 s (docs/research/sudokupad-dialog-slide-in.md); a click before it settles lands on the overlay, which closes the dialog. Its text, with no button, is what the click lands on, and it stays open.
+    await p.locator(textAnywhere.DIALOG).waitFor({ state: 'attached' })
+    await p.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))))
     await p.mouse.click(...await textAnywhere.middleAt(p, await gridPoint(p, NOTE_CELL)), { clickCount: 2, delay: 0 })
+    assert.equal(await p.locator(textAnywhere.DIALOG).count(), 1, 'the dialog is still open, so the click landed on it')
     assert.equal(await boxOpen(p), false)
     assert.equal(await currentTool(p), 'normal')
     await p.evaluate(() => Framework.closeDialog())
