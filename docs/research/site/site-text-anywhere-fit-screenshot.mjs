@@ -6,7 +6,7 @@ import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { RAW } from '../../../tag-pictures.js'
+import { RAW, pictureFile } from '../../../tag-pictures.js'
 const here = new URL('../../../', import.meta.url)
 const before = process.argv[2] && pathToFileURL(resolve(process.argv[2]) + '/')
 const browser = await chromium.launch()
@@ -14,7 +14,7 @@ const browser = await chromium.launch()
 for (const [root, file, details] of [[before, 'site-text-anywhere-fit-before.png', 'draw-tool.html'], [here, 'site-text-anywhere-fit-after.png', 'text-anywhere.html']]) {
   if (!root) continue
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage()
-  await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(r.request().url().slice(RAW.length).replace(/\?.*$/, ''), here)), contentType: 'image/png' }))
+  await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(pictureFile(r.request().url()), here)), contentType: 'image/png' }))
   await page.goto(new URL('site/' + details, root).href, { waitUntil: 'load' })
   await page.locator('.slide-frame').screenshot({ path: fileURLToPath(new URL('docs/research/site/' + file, here)) })
   await page.close()

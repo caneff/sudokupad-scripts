@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { useBrowser } from './session.mjs'
 
-import { RAW } from '../tag-pictures.js'
+import { RAW, pictureFile } from '../tag-pictures.js'
 const ROOT = new URL('../', import.meta.url)
 // The slideshows: the homepage row heading and its place among the rows (none for a slideshow the homepage does not show), the details page, the
 // slideshow's place on it (the main one follows the Install button), and its id in site/slideshows.json, which holds the slide count and each picture and caption.
@@ -30,7 +30,7 @@ let page, made
 // useBrowser's: node:test starts a file's top-level hooks together, and the browser would not exist yet.
 const sitePage = () => (made ??= (async () => {
   page = await (await browser().newContext()).newPage()
-  await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(r.request().url().slice(RAW.length).replace(/\?.*$/, ''), ROOT)), contentType: 'image/png' }))
+  await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(pictureFile(r.request().url()), ROOT)), contentType: 'image/png' }))
 })())
 
 const shown = (root) => page.evaluate((root) => {

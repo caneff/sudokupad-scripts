@@ -7,13 +7,13 @@
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 
-import { RAW } from '../../../tag-pictures.js'
+import { RAW, pictureFile } from '../../../tag-pictures.js'
 const root = new URL('../../../', import.meta.url)
 const browser = await chromium.launch()
 for (const [name, width] of [['desktop', 1280]]) {
   for (const scheme of ['light', 'dark']) {
     const page = await (await browser.newContext({ viewport: { width, height: 900 }, colorScheme: scheme })).newPage()
-    await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(r.request().url().slice(RAW.length), root)), contentType: 'image/png' }))
+    await page.route(RAW + '**', (r) => r.fulfill({ body: readFileSync(new URL(pictureFile(r.request().url()), root)), contentType: 'image/png' }))
     await page.goto(new URL('site/index.html', root).href, { waitUntil: 'load' })
     const m = await page.evaluate(() => {
       const installOffsets = (sel) => [...new Set([...document.querySelectorAll(sel + ' .install')].map((a) => a.getBoundingClientRect().left - a.closest('section').getBoundingClientRect().left))]
