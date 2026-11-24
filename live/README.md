@@ -232,7 +232,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **The rules** (`rules.mjs`, #594) say what "working" means for each script, as pure functions over a snapshot of the page (`page-state.mjs` reads it) checked after
   every action, and once more after the last. They are: after undoing back to the start (an empty undo stack, which a new action `undo back to the start`
   reaches) SudokuPad's state holds nothing; Pen Tool Extras: every pen entry in the state is drawn and nothing else is; Text Anywhere: the saved notes are the
-  drawn ones, and a reload keeps them; Color by Digit: in Cell or Both mode a cell whose digit just changed (every cell when the mode just changed) has its
+  drawn ones, and a reload keeps them; Color by Digit: in Cell or Both mode a cell whose digit just changed (every cell when the mode just changed, except after an Undo or Redo, which brings back the board as the player left it, #1143) has its
   group's color; Dark Page: the page color stays dark; Auto Rules Resizer: the rules fit their pane, unless the text is already at 70% of SudokuPad's font; UI
   Tweaks: Tab never turns the number pad to letters; Text Anywhere (`note-box-color`, #713): every note with a box is filled with the box color the script has saved (`boxFill` of the stored value and the note's own color, resolved by the page). Each fuzz page therefore has the letter tool on, and a puzzle with rules text shows it (the long text on most puzzles). A broken rule fails the run like a
   crash signal, named `rule broken after "<step>": <rule>: <what>`. The resizer and Tab rules are read from the scripts, not from the ticket's wording: the resizer
