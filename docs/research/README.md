@@ -201,6 +201,7 @@ Every path:
 - `docs/research/color-by-digit/color-by-digit-slide-9-modular.png`
 - `docs/research/dark-page/dark-page.png`
 - `docs/research/logic-masters-puzzle-preview/logic-masters-puzzle-preview.png`
+- `docs/research/penpa-redirect/penpa-redirect.png`
 - `docs/research/pen-tool-extras/pen-tool-extras-panel-annotated.png`
 - `docs/research/pen-tool-extras/pen-tool-extras-slide-1-color.png`
 - `docs/research/pen-tool-extras/pen-tool-extras-slide-1-color.webp`
