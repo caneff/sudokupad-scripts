@@ -1,7 +1,9 @@
 // `actWhereItIs` on a fake target: a hover or a press that shows nothing is made again where the target now is, and only then.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { actWhereItIs } from './act-where-it-is.mjs'
+import { actWhereItIs, MOVE_TRIES } from './act-where-it-is.mjs'
+
+const FINAL_MS = 999
 
 // `shows[i]` is whether the target shows after the i-th act; `boxes` are what the box reads, in order, the last one repeated.
 function fake (shows, boxes) {
@@ -10,7 +12,7 @@ function fake (shows, boxes) {
   let finalWaits = 0
   const shown = {
     waitFor: async ({ timeout }) => {
-      if (timeout === 999) {
+      if (timeout === FINAL_MS) {
         finalWaits++
         if (!shows[acts.length - 1]) throw new Error('never shown')
         return
@@ -21,7 +23,7 @@ function fake (shows, boxes) {
   const boxOf = async () => boxes[Math.min(reads++, boxes.length - 1)]
   return { shown, boxOf, act: async (box) => { acts.push(box) }, acts, finalWaits: () => finalWaits }
 }
-const run = (t) => actWhereItIs(t.shown, t.boxOf, t.act, { lookMs: 1, finalMs: 999 })
+const run = (t) => actWhereItIs(t.shown, t.boxOf, t.act, { lookMs: 1, finalMs: FINAL_MS })
 
 describe('actWhereItIs', () => {
   it('acts once when the target shows', async () => {
@@ -49,7 +51,14 @@ describe('actWhereItIs', () => {
     const t = fake([false, false, false, false, false], [])
     t.boxOf = async () => ({ x: n++ })
     await assert.rejects(run(t), /never shown/)
-    assert.equal(t.acts.length, 4)
+    assert.equal(t.acts.length, MOVE_TRIES)
+  })
+
+  it('waits out the full time for a target that stayed put and shows late, and answers true', async () => {
+    const t = fake([true], [{ x: 1 }])
+    t.shown.waitFor = async ({ timeout }) => { if (timeout !== FINAL_MS) throw new Error('not shown yet') }
+    assert.equal(await run(t), true)
+    assert.equal(t.acts.length, 1)
   })
 
   it('does nothing when there is no box to act on', async () => {

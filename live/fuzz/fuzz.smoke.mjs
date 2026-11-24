@@ -86,8 +86,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['rich note', [4, 1]], ['pen page', null]] })
   })
 
-  // #1068: a nightly timeout (a dialog that never showed) that no replay repeats, even on the commit it failed on. The page moves a target between the harness's read of its box and its
-  // press; a player presses again where it is now, and the harness does the same, but only for a target that moved (`act-where-it-is.test.mjs` has the rule alone, for the rules pane's hover too, #1067).
+  // #1068: the page moves a button between the harness's read of its box and its press; the press is made again where the button is now.
   const moveOnFirstMouseMove = (page, selector, style) => page.evaluate(([sel, css]) => {
     const move = () => {
       const el = document.querySelector(sel)

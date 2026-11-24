@@ -9,8 +9,9 @@
 
 ## What was run
 
-- The ticket's replay command, on `8e677b8` (main when the work started) and, for #1067, on `f677b42` too (a worktree at the failing
-  commit): all pass. So no later commit fixed either one, and a replay cannot tell a fixed bug from a flaky one.
+- The ticket's replay command, once for each ticket, on `8e677b8` (main when the work started), and once for #1067 on `f677b42` too (a
+  worktree at the failing commit): all three pass. The "3 more runs" of the tickets' done-means were not made, since a pass at `f677b42`
+  already shows that no commit fixed #1067; #1068 was not replayed at `f677b42`. A replay cannot tell a fixed bug from a flaky one.
 - The shrunk steps written out as a scripted list (`scriptedList`) and run on a fresh page each time: #1067's 23 steps 6 of 6
   passed, a bare Restart then the corner drag 8 of 8; #1068's 17 steps 4 of 4. Both lists match the shrink step for step, bar two
   `type` steps of #1067's start that cannot run with no cell selected.
@@ -27,13 +28,17 @@ What fits both messages is a target that moved between the harness's read of its
 - a press on the pen panel's settings button lands where the button was, and no dialog follows.
 
 Neither was seen on a real page. #1068's failure message was reproduced word for word (30 s waiting for the editor) by moving the
-button on the first mouse move, and #1067's by shrinking the pane the same way. That is the same shape, not the same cause.
+button on the first mouse move. #1067's was not: a pane moved or shrunk the same way still showed its corners, because the page
+works out what is under a still pointer late, so no live test pins that hover.
 
 ## The change
 
 `live/fuzz/act-where-it-is.mjs`: a hover or a press whose result does not show is made again where the target is now, but only
-when its box changed since the act's read. A target that stayed put and showed nothing waits out the full time as before, so a real
-bug in a script still fails the run. Used for the rules-box
-corner drag, the f+ and f- presses and the pen panel's settings button. Its rule is unit-tested in `act-where-it-is.test.mjs`, and `fuzz.smoke.mjs` has the pen button case on a real page; no live test catches the rules-pane hover (a real hover recomputes too late to pin), so #1067's side rests on the unit test.
+when its box changed since the act's read. A target that stayed put and showed nothing gets the full wait it had before (2 s for a
+rules-pane corner or f+ button, 30 s for the pen dialog), so a real bug in a script still fails the run. Used for the rules-box
+corner drag, the f+ and f- presses and the pen panel's settings button.
+
+Its rule is unit-tested in `act-where-it-is.test.mjs`, and `fuzz.smoke.mjs` has the pen button case on a real page. The rules-pane
+hover rests on the unit test alone.
 
 If the nightly hits either message again, this note's hypothesis is wrong: reopen with that run's seed.

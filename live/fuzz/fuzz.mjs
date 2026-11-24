@@ -56,6 +56,8 @@ for (const name of SLIDERS) if (!SLIDER_SELECTORS[name]) throw new Error(`action
 const TRACK_MARGIN_PX = 6
 
 const BOX_TIMEOUT_MS = 2000
+// How long a dialog is given to show after its button was pressed where the button was.
+const DIALOG_OPENS_MS = 30000
 // Longer than the button's hold, so a hold that drifted off had time to open a menu and did not.
 const COLOR_HOLD_DRIFT_WAIT_MS = 800
 const COLOR_HOLD_DRIFT_PX = 40
@@ -85,12 +87,11 @@ async function rulesBox (p) {
 async function hoverRules (p) {
   const box = await rulesBox(p)
   if (!box) return false
-  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await p.mouse.move(...middleOf(box))
   return true
 }
-
-// Hovers the rules pane until `target` (a corner, a font button) shows; false when the page shows no rules.
-const hoverRulesFor = (p, target) => actWhereItIs(target, () => rulesBox(p), (box) => p.mouse.move(box.x + box.width / 2, box.y + box.height / 2), { finalMs: BOX_TIMEOUT_MS })
+// The same, until `target` (a corner, a font button) shows; false when the page shows no rules.
+const hoverRulesFor = (p, target) => actWhereItIs(target, () => rulesBox(p), (box) => p.mouse.move(...middleOf(box)), { finalMs: BOX_TIMEOUT_MS })
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
@@ -109,7 +110,7 @@ async function pickPreset (p, selector, pick) {
 async function clickIn (p, selector) {
   const box = await p.locator(selector).first().boundingBox({ timeout: BOX_TIMEOUT_MS })
   if (!box) throw new Error(`no ${selector} on the page to click`)
-  await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await p.mouse.click(...middleOf(box))
 }
 
 // What a player does when a Text Anywhere note (or its handle) covers a button: drags the note off, onto the board's middle or, for a note that would still cover the button there, to the nearest place that clears every button (`note-drop.mjs`).
@@ -536,7 +537,8 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     async penDialogFromSettingsButton (save) {
       await openPen()
       const button = p.locator(PEN_SETTINGS_BUTTON).first()
-      await actWhereItIs(p.locator(EXTRAS_EDITOR), () => button.boundingBox({ timeout: BOX_TIMEOUT_MS }), (box) => p.mouse.click(box.x + box.width / 2, box.y + box.height / 2), { finalMs: BOX_TIMEOUT_MS })
+      const opened = await actWhereItIs(p.locator(EXTRAS_EDITOR), () => button.boundingBox({ timeout: BOX_TIMEOUT_MS }), (box) => p.mouse.click(...middleOf(box)), { finalMs: DIALOG_OPENS_MS })
+      if (!opened) throw new Error(`no ${PEN_SETTINGS_BUTTON} on the page to click`)
       await animationsDone(p.locator(EXTRAS_EDITOR))
       await closeExtrasEditorWith(p, save ? 'Save' : 'Cancel')
     },
