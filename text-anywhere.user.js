@@ -3822,6 +3822,8 @@
   // The index of the note it leaves, or -1 when it was empty.
   function finishText () {
     const open = closeTextBox()
+    const back = returnTool
+    returnTool = null
     const { index, item, saved } = open
     const text = closingText(open)
     const resized = index !== -1 && String(item.box) !== String(puzzleNotes[index].box)
@@ -3834,7 +3836,28 @@
     if (changed) saveNotes()
     else if (saved) writeNotes()
     showPanelValues()
+    if (back && Framework.app.tool === TOOL_NAME) Framework.app.changeTool(back)
     return left
+  }
+
+  // The tool a double click on a note switched from, which the box's closing goes back to; null when the solver is in the tool on their own.
+  let returnTool = null
+
+  // A double click on a note's drawn text opens the note from any other tool, and is SudokuPad's no more: SudokuPad's own double click selects the cells like the one pressed. The first
+  // press of the double click went to SudokuPad as a single click; its second is taken here, in the capture phase before SudokuPad's listeners.
+  function openNoteOnDoubleClick (event) {
+    if (event.button !== PRIMARY_BUTTON || event.detail < 2 || textBox || Framework.app.tool === TOOL_NAME || !notesLayer() || overControl(event)) return
+    if (!(event.target instanceof window.Element) || event.target.closest(ABOVE_NOTES) || document.querySelector('.dialog')) return
+    const point = eventPoint(event)
+    const note = noteAt(point, 0)
+    const index = note ? puzzleNotes.findIndex((item) => item[NOTE_ELEMENT] === note) : -1
+    if (index === -1) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    const before = Framework.app.tool
+    Framework.app.changeTool(TOOL_NAME)
+    openText(index, point)
+    returnTool = before
   }
 
   // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
@@ -3898,6 +3921,8 @@
     const left = event.button === PRIMARY_BUTTON
     const onEdge = left && onOpenEdge(eventPoint(event))
     const onOther = left && !onEdge && pressedNote(event)
+    // A press that goes on to select or move a note is the tool's own work, so the box's closing no longer goes back to the tool before.
+    if (onEdge || onOther) returnTool = null
     const closed = finishText()
     edgeNote = onEdge && closed !== -1 ? puzzleNotes[closed][NOTE_ELEMENT] : null
     pressFinishedText = !(onOther || edgeNote)
@@ -4422,6 +4447,7 @@
       showPanel()
     },
     handleToolExit () {
+      returnTool = null
       notesLayer().classList.remove(ACTIVE_CLASS)
       hoverPoint = null
       showHover()
@@ -4516,6 +4542,7 @@
       window.addEventListener('blur', textTool.bind(endGesture))
       installSliderGuards(`.${SLIDERS_CLASS}`)
       window.addEventListener('pointerdown', textTool.bind(finishTextOnPress), { capture: true })
+      window.addEventListener('mousedown', textTool.bind(openNoteOnDoubleClick), { capture: true })
       window.addEventListener('mousedown', textTool.bind(keepNoteFocus), { capture: true })
       // After the slider guards' own release handler, which takes the focus off the slider.
       window.addEventListener('pointerup', textTool.bind(returnFocusToNote), { capture: true })
