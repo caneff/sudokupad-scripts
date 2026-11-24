@@ -681,17 +681,16 @@ for (const { heading, page: file } of SHOWS) {
   })
 }
 
-// Chris (2026-11-23, #1180): the homepage names only the top three options, and the settings dialog has the rest.
+// (Chris, 2026-11-23): the homepage names only Tab never switches to letters, Digit pad size and Mouse wheel changes mode, and the settings dialog has the rest (#1180).
 const UI_TWEAKS_ON_HOME = ['tab', 'wheelMode']
-test('the homepage words the UI Tweaks options it names as its settings dialog does', () => {
-  const { OPTIONS } = require('../ui-tweaks.user.js')
-  const home = plain(read(HOME))
-  for (const id of UI_TWEAKS_ON_HOME) {
-    const option = OPTIONS.find(o => o.id === id)
-    assert.ok(option, `ui-tweaks has no option ${id}`)
-    assert.ok(home.includes(option.label), `the homepage names "${option.label}"`)
-  }
-  assert.ok(home.includes('Digit pad size'), 'the homepage names "Digit pad size"')
+test('the homepage names only the top three UI Tweaks options, worded as its settings dialog does', () => {
+  const { OPTIONS, DIGIT_PAD_LABEL } = require('../ui-tweaks.user.js')
+  const section = plain(rowsOf(read(HOME)).find(r => r.includes('<h2>UI Tweaks</h2>')))
+  const named = [DIGIT_PAD_LABEL, ...OPTIONS.filter(o => UI_TWEAKS_ON_HOME.includes(o.id)).map(o => o.label)]
+  assert.equal(named.length, 3)
+  for (const label of named) assert.ok(section.includes(label), `the homepage names "${label}"`)
+  for (const option of OPTIONS.filter(o => !UI_TWEAKS_ON_HOME.includes(o.id))) assert.ok(!section.includes(option.label), `the homepage leaves out "${option.label}"`)
+  assert.ok(section.includes('And more in its settings dialog.'))
 })
 
 // #1108: one summary per script, the same in the README row, the script's @description, the homepage card and the details page.
