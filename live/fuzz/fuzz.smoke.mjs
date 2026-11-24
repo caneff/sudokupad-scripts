@@ -47,6 +47,11 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('4x4'), steps: [['note background', false], ['profile switch', 1], ['boxed note', [0, 1]]] })
   })
 
+  it('an undo that takes back a profile switch leaves a color the player took off by hand off (#1143)', async () => {
+    const steps = [['enter digit', [1, '1']], ['tool key', 'v'], ['type digit', '6'], ['profile switch', 4], ['pen drag, undo', [10, 38, 1, null]]]
+    await fuzzScripted({ browser: browser(), puzzle: puzzleByName('cages 9x9, long rules'), steps })
+  })
+
   it('a click on a button that a moved, resized note covers moves the note off it first, as a player does (#880)', async () => {
     // Seed 270472555's shrink: the corner drag and the move put the note's handle over Dark Page's settings button.
     const steps = [['note resize', [[1, 2], 2, 0, 50]], ['move note', null], ['dark page', ['#002010', false]]]

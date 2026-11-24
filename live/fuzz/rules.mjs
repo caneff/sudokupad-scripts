@@ -52,6 +52,9 @@ function without (a, b) {
   })
 }
 
+// The kinds that press Undo or Redo, alone or in the middle of a drag.
+export const UNDOING_KINDS = ['undo', 'undo all', 'redo', 'pen drag, undo', 'note drag, undo']
+
 const digitsChanged = (now, before) => now.cells.flatMap((cell, i) => (cell.digit === before.cells[i]?.digit ? [] : [i]))
 
 // What a rule that compares two snapshots reads, leaving out `rulesPane`, which is a measure of the layout and is checked by its own rule.
@@ -194,13 +197,14 @@ export const RULES = [
   {
     name: 'digit-cells-colored',
     // Color by Digit: in Cell or Both mode a cell that has an entered digit holds its group's color. Checked on the cells whose digit just changed and, when the
-    // mode or the groups (a profile switch, a saved dialog) just changed, on every cell: a color taken off by hand with the color tool is the player's, and stays.
-    check: ({ now, before }) => {
+    // mode or the groups (a profile switch, a saved dialog) just changed, on every cell, except after an Undo or Redo: it brings back a board as it was, hand-colored cells
+    // included (#1143). A color taken off by hand with the color tool is the player's, and stays.
+    check: ({ now, before, action }) => {
       const { mode, groups, cells } = now.page.colorByDigit
       if (!colorsCells(mode)) return []
       const keyOf = (digit) => groups.find((g) => g.digits.includes(digit))?.key
       const sameView = mode === before.page.colorByDigit.mode && JSON.stringify(groups) === JSON.stringify(before.page.colorByDigit.groups)
-      const checked = sameView ? digitsChanged(now.page.colorByDigit, before.page.colorByDigit) : cells.map((_, i) => i)
+      const checked = sameView || UNDOING_KINDS.includes(action) ? digitsChanged(now.page.colorByDigit, before.page.colorByDigit) : cells.map((_, i) => i)
       return checked.flatMap((i) => {
         const { digit, given, colours } = cells[i]
         const key = keyOf(digit)

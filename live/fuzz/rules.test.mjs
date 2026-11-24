@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { quietPage } from './fake-target.mjs'
-import { RULES, ruleViolations } from './rules.mjs'
+import { KINDS } from './actions.mjs'
+import { RULES, ruleViolations, UNDOING_KINDS } from './rules.mjs'
 
 const rule = (name) => RULES.find((r) => r.name === name)
 // `earlier` is the step before `before` as overrides of its page: `{ action, page, strokeSinceReload }`, with its own `earlier` the same way.
@@ -302,6 +303,19 @@ describe('the rules', () => {
       const switched = { ...now, groups: [{ key: '5', digits: ['7'] }] }
       assert.equal(check('digit-cells-colored', { colorByDigit: switched }, { before: { colorByDigit: now } }).length, 1)
       assert.deepEqual(check('digit-cells-colored', { colorByDigit: now }, { before: { colorByDigit: now } }), [])
+    })
+    it('leaves a color taken off by hand alone when an undo or redo changed the groups, since the board it brings back is the player\'s (#1143)', () => {
+      const now = colorByDigit('Cell', [['7', []]])
+      const switchedBack = { ...now, groups: [{ key: '5', digits: ['7'] }] }
+      for (const action of UNDOING_KINDS) {
+        assert.deepEqual(check('digit-cells-colored', { colorByDigit: switchedBack }, { before: { colorByDigit: now }, action }), [], action)
+      }
+    })
+    it('names only action kinds that exist', () => {
+      assert.deepEqual(UNDOING_KINDS.filter((kind) => !KINDS.some((k) => k.kind === kind)), [])
+    })
+    it('still checks the digits an undo changed', () => {
+      assert.equal(check('digit-cells-colored', { colorByDigit: colorByDigit('Cell', [['7', []]]) }, { before: { colorByDigit: colorByDigit('Cell', [['']]) }, action: 'undo' }).length, 1)
     })
     it('leaves a given and a digit no group holds alone', () => {
       assert.deepEqual(check('digit-cells-colored', { colorByDigit: colorByDigit('Cell', [['7', [], true], ['1', []]]) }, { before: { colorByDigit: colorByDigit('Cell', [[''], ['']]) } }), [])
