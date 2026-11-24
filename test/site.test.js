@@ -464,9 +464,24 @@ test('netlify.toml publishes only site/', () => {
   assert.match(toml, /^\s*publish\s*=\s*"site"\s*$/m)
 })
 
+const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'pages.yml'), 'utf8')
+
 test('the Pages workflow publishes only site/', () => {
-  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'pages.yml'), 'utf8')
   assert.match(workflow, /uses:\s*actions\/upload-pages-artifact@\S+\s+with:\s+path:\s*['"]?site\/?['"]?\s*$/m)
+})
+
+test('the Pages workflow uploads in a build job and deploys in a second job that needs it (#1202)', () => {
+  const job = (name) => (workflow.match(new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  \\S|(?![\\s\\S]))`, 'm')) || [])[1]
+  const build = job('build')
+  const deploy = job('deploy')
+  assert.ok(build, 'pages.yml has no build job')
+  assert.ok(deploy, 'pages.yml has no deploy job')
+  assert.match(build, /actions\/upload-pages-artifact@/)
+  assert.doesNotMatch(build, /actions\/deploy-pages@/)
+  assert.match(deploy, /^ {4}needs:\s*build\s*$/m)
+  assert.match(deploy, /actions\/deploy-pages@/)
+  assert.doesNotMatch(deploy, /actions\/upload-pages-artifact@/)
+  assert.match(deploy, /name:\s*github-pages/)
 })
 
 test(`${DETAILS} shows the pen panel as one annotated picture whose alt text names every label`, () => {
