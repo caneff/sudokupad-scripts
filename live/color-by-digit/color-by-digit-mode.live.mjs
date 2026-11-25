@@ -562,7 +562,8 @@ for (const mode of MODES) {
       await p.keyboard.press('4')
       // SudokuPad saves progress a moment after a change.
       await p.waitForFunction(() => Object.keys(window.localStorage).some((k) => /progress/i.test(k)), null, { timeout: SETTLE_MS })
-      await p.evaluate(([key]) => Framework.setData(key, true), [AUTO_KEY])
+      // The first load saved the ticks; without them, the reload reads auto mode again.
+      await p.evaluate(([key, ticks]) => { Framework.setData(key, true); Framework.removeData(ticks) }, [AUTO_KEY, MODE_KEY])
       await reloadSession(p, script, mode)
     })
     after(async () => { await context.close() })
