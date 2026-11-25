@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.85
+// @version      0.26.0
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.85'
+  const VERSION = '0.26.0'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'color-by-digit'
   const SCRIPT_NAME = 'Color by Digit'
