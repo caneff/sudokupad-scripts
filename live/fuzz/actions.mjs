@@ -87,7 +87,7 @@ const textOrCopy = (texts) => fc.oneof({ weight: COPY_WEIGHT, arbitrary: fc.cons
 export const UI_TWEAKS_TEXTS = [null, '{"UiTweaks_hideSelect":true}', '{"UiTweaks_wrapButtons":true,"UiTweaks_hideSelect":false}', '{"UiTweaks_tab":true,"UiTweaks_hideSelect":true,"UiTweaks_wrapButtons":true}', '{"UiTweaks_hideSelect":"yes"}', '{"Other_key":1}', '[]', 'not json', '']
 export const DARK_PAGE_TEXTS = [null, '{"DarkPage_color":"#101030"}', '{"DarkPage_color":"#002010"}', '{"DarkPage_color":"#000000","Other_key":1}', '{"DarkPage_color":"blue"}', '{"Other_key":1}', '[]', 'not json', '']
 // The texts of the other four dialogs (#928), each a Copy press (null), settings its own reader takes (the shapes its Copy writes) and texts it takes none from;
-// `actions.test.mjs` checks each against the script's `pastedSettings`. Color by Digit's `ColorByDigit_auto` is the legacy on/off the mode replaced (`withModeFromAuto`),
+// `actions.test.mjs` checks each against the script's `pastedSettings`. Color by Digit's `ColorByDigit_mode` and `ColorByDigit_auto` are the mode word and the on/off the ticks replaced (`withUpgradedMode`),
 // a preload mark pasted at its default removes the key (the store's `removeData`), and a limit of null is no limit (`savedLimit`).
 const PROFILES_TEXT = '{"ColorByDigit_profiles":{"profiles":[{"name":"Mine","groups":[{"key":"1","digits":["1","3","5","7","9"]},{"key":"2","digits":["0","2","4","6","8"]}]}],"active":0}}'
 const NOTE_COLORS_TEXT = `{"TextAnywhere_colors":{${Array.from({ length: 9 }, (_, i) => `"${i + 1}":"#${String(i + 1).repeat(2)}33aa"`).join(',')}}}`

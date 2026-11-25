@@ -17,23 +17,23 @@ const count = (html, re) => (html.match(re) || []).length
 // Blind to real SudokuPad: the Framework calls, the dialog's rendering at 1200 px, Save reaching the puzzle and undo are
 // `npm run test:live`'s (live/color-by-digit/*.live.mjs).
 test('the Color by Digit settings dialog edits a selected profile in two columns, by painting digits', () => {
-  const { renderEditor, renderProfiles, renderMenu, setSync, setActive, setDigitActive, copyProfile, renameProfile, setUseDigitColors } = byDigit
+  const { renderEditor, renderProfiles, renderMenu, setSync, setActive, setDigitActive, copyProfile, renameProfile } = byDigit
 
-  // Top row: the Mode pulldown offers four modes, or Cell and Off without digit colors.
-  const modes = (html) => [...html.match(/<select class="cbd-color-choice" data-role="mode-draft">(.*?)<\/select>/s)[1].matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1])
-  assert.deepEqual(modes(byDigit.renderPulldowns(STATE, 'both')), ['cell', 'digit', 'both', 'off'])
-  assert.deepEqual(modes(byDigit.renderPulldowns(setUseDigitColors(STATE, false), 'cell')), ['cell', 'off'])
+  // Top row: the mode's On, Cell and Digit checkboxes, ticked as the mode says.
+  const ticked = (html) => [...html.matchAll(/data-role="mode-tick" data-box="(\w+)"( checked)?/g)].filter((m) => m[2]).map((m) => m[1])
+  assert.deepEqual(ticked(byDigit.renderPulldowns(STATE, { on: true, cell: true, digit: true })), ['on', 'cell', 'digit'])
+  assert.deepEqual(ticked(byDigit.renderPulldowns(STATE, { on: false, cell: true, digit: false })), ['cell'])
   const css = byDigit.STYLE_CSS.replace(/\s+/g, ' ')
   // Two columns where 640 px allows, one on a phone.
   assert.match(css, /width: 640px; max-width: calc\(100vw - 16px\)/)
   assert.match(css, /grid-template-columns: repeat\(auto-fit, minmax\(270px, 1fr\)\)/)
 
   // The selected row is apart from the cell profile, and no row has a tag.
-  const list = renderProfiles(setUseDigitColors(STATE, true), colorOf, 2)
+  const list = renderProfiles(STATE, colorOf, 2)
   assert.match(list, /data-index="2" role="radio" aria-checked="true"/)
   assert.match(list, /data-index="0" role="radio" aria-checked="false"/)
   assert.doesNotMatch(list, /tag-cells|tag-digits/)
-  const tagged = setDigitActive(setActive(setSync(setUseDigitColors(STATE, true), false), 1), 2)
+  const tagged = setDigitActive(setActive(setSync(STATE, false), 1), 2)
   assert.deepEqual(byDigit.digitGroups(tagged), EACH)
   assert.deepEqual(byDigit.activeGroups(tagged), LOW_HIGH)
 

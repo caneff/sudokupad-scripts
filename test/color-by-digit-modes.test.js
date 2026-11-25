@@ -15,26 +15,25 @@ const colorOf = (key) => PALETTE[key] ?? ''
 const digitsIn = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m[1]))].sort()
 
 // Blind to real SudokuPad: the Framework calls, the rendering of cells, digits and circles, and undo are `npm run test:live`'s.
-test('Color by Digit\'s modes: the press cycle, labels, starting mode, copy and paste of the mode, leaving cell coloring, the digit stylesheet, Each digit, the digit profile sync and Use digit colors', () => {
-  const { nextMode, allowedMode, startingMode, buttonLabel, copiedSettings, pastedSettings } = byDigit
+test('Color by Digit\'s modes: the press, labels, starting mode, copy and paste of the mode, leaving cell coloring, the digit stylesheet, Each digit and the digit profile sync', () => {
+  const { pressedMode, modeWord, startingMode, buttonLabel, copiedSettings, pastedSettings } = byDigit
+  const BOTH = { on: true, cell: true, digit: true }
 
-  // A press steps Cell, Digit, Both, Off and round; the button's label names the mode (#354: its word and chips show it, its title says it).
-  const cycle = ['cell']
-  for (let i = 0; i < 4; i++) cycle.push(nextMode(cycle[i], true))
-  assert.deepEqual(cycle, ['cell', 'digit', 'both', 'off', 'cell'])
-  assert.deepEqual(cycle.slice(0, 4).map(buttonLabel), ['Color by Digit: Cell', 'Color by Digit: Digit', 'Color by Digit: Both', 'Color by Digit: Off'])
+  // A press turns coloring off and on and keeps the ticks; the button's label names the word the ticks give (#354: its word and chips show it, its title says it).
+  assert.deepEqual(pressedMode(BOTH), { on: false, cell: true, digit: true })
+  assert.deepEqual(pressedMode(pressedMode(BOTH)), BOTH)
+  assert.deepEqual([BOTH, { on: true, cell: false, digit: true }, pressedMode(BOTH)].map((m) => buttonLabel(modeWord(m))), ['Color by Digit: Both', 'Color by Digit: Digit', 'Color by Digit: Off'])
   assert.doesNotMatch(byDigit.iconHtml('cell', byDigit.shownChips('cell', ODD_EVEN, ODD_EVEN), colorOf), /AUTO/)
 
-  // Starting mode: the saved one, else Cell, or Off when auto mode was saved off.
-  assert.equal(startingMode(null, null), 'cell')
-  assert.equal(startingMode(null, true), 'cell')
-  assert.equal(startingMode(null, false), 'off')
-  assert.equal(startingMode('both', false), 'both')
+  // Starting mode: the saved one, else the word saved before it, else on with Cell, or Off when auto mode was saved off.
+  assert.deepEqual(startingMode(null, null, null), { on: true, cell: true, digit: false })
+  assert.deepEqual(startingMode(null, null, false), { on: false, cell: true, digit: false })
+  assert.deepEqual(startingMode(null, 'both', false), BOTH)
 
-  // Copy carries the mode; a paste from before the mode turns auto mode into Cell or Off.
-  assert.equal(JSON.parse(copiedSettings(fakeStore({ ColorByDigit_mode: 'digit' }))).ColorByDigit_mode, 'digit')
-  assert.equal(pastedSettings(JSON.stringify({ ColorByDigit_auto: true }), byDigit.READERS, byDigit.withModeFromAuto).values.ColorByDigit_mode, 'cell')
-  assert.equal(pastedSettings(JSON.stringify({ ColorByDigit_auto: false }), byDigit.READERS, byDigit.withModeFromAuto).values.ColorByDigit_mode, 'off')
+  // Copy carries the mode; a paste from before the ticks turns the word, or auto mode, into on/off and ticks.
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ ColorByDigit_ticks: BOTH }))).ColorByDigit_ticks, BOTH)
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_mode: 'digit' }), byDigit.READERS, byDigit.withUpgradedMode).values.ColorByDigit_ticks, { on: true, cell: false, digit: true })
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: false }), byDigit.READERS, byDigit.withUpgradedMode).values.ColorByDigit_ticks, { on: false, cell: true, digit: false })
 
   // Leaving cell coloring takes every group color off and keeps a hand color in no group, with the same SudokuPad actions
   // whether Multi-color is on or off.
@@ -71,10 +70,4 @@ test('Color by Digit\'s modes: the press cycle, labels, starting mode, copy and 
   assert.deepEqual(byDigit.activeGroups(apart), SPLIT)
   assert.match(byDigit.renderMenu(apart, colorOf), />Cell<[\s\S]*>Digit<[\s\S]*data-target="digits"/)
   assert.doesNotMatch(byDigit.renderMenu(two, colorOf), />Cell<|>Digit<|data-target="digits"/)
-
-  // "Use digit colors" off: the cycle is Cell and Off, Digit falls back to Off and Both to Cell, and the menu is one list.
-  const off = byDigit.setUseDigitColors(apart, false)
-  assert.deepEqual([nextMode('cell', false), nextMode('off', false)], ['off', 'cell'])
-  assert.deepEqual([allowedMode('digit', false), allowedMode('both', false)], ['off', 'cell'])
-  assert.doesNotMatch(byDigit.renderMenu(off, colorOf), />Digit<|data-target="digits"/)
 })

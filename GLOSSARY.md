@@ -89,17 +89,20 @@ Behavior: `docs/color-by-digit.md`.
 - **digit profile** — the profile whose groups give the **digit colors**: the active profile while the Digit pulldown says Same as
   cell, else a second pick.
 - **group** — the digits that share one palette color in a profile. A digit is in at most one group.
-- **mode** — Color by Digit's saved setting, Cell, Digit, Both or Off: what it colors, cells, digits, both or nothing.
+- **mode** — Color by Digit's saved setting: on or off, and the **Cell** and **Digit** ticks, at least one ticked, which say what it
+  colors while on. Its word, above the button's chips, is Cell, Digit or Both from the ticks while on, and Off while off. The button's
+  press turns it on or off; the settings dialog's On, Cell and Digit checkboxes set all three.
 - **preload** — one of the five ready-made **profiles**: Low/5/High, Odd/Even, Entropic, Modular and Each digit.
 - **profile** — a named list of **groups**, one to six of them, of which exactly one is active, the cell profile. A fresh install
   has the five **preloads**.
 - **profile menu** — the menu above the Color by Digit button, one row per profile, where a pick makes that profile active.
 - **pure cell** — a cell that belongs to exactly one group: its digit is in that group or, with no digit, all its centre marks are.
 - **selected profile** — the profile the settings dialog is editing. Selecting one changes no color.
-- **settings pulldowns** — the three drafts at the top of the settings dialog: **Mode**, **Cell** (the cell profile) and **Digit**
-  (the **digit profile**, Same as cell or None).
+- **settings pulldowns** — the two drafts at the top of the settings dialog, under the **mode**'s On, Cell and Digit checkboxes:
+  **Cell** (the cell profile) and **Digit** (the **digit profile**, Same as cell or a profile).
 - **shown digit** — the one digit that stands for a group on its cell of the **chips**.
-- **Use digit colors** — whether Color by Digit colors digits at all, set off by the Digit pulldown's None.
+- **Use digit colors** — the Digit pulldown's None before the **mode**'s Digit tick replaced it, saved as `useDigitColors: false`;
+  read once, as an unticked Digit, by the update that brought the ticks.
 
 ## Dark Page
 

@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, ODD_EVEN, openSession, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, shadeReaders, watch, wordOn, cellsStateOn, wrongColorCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, MODE_WORD_STORAGE_KEY, modeTick, modeTicksOn, modeTo, ODD_EVEN, openSession, paletteColorOn, pressTo, PROFILES_KEY, PROFILES_STORAGE_KEY, SAVED_MODE, SEED, SEEDED_OFF, savedProfiles, tickMode, shadeReaders, watch, wordOn, cellsStateOn, wrongColorCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { MODES } from '../page.mjs'
 import { colorCell, restart, selectCell } from '../board.mjs'
 import { closeDialogWith, savedState } from '../settings.mjs'
@@ -56,9 +56,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   }
   const chipLook = () => chipLookOn(p)
   const assertLook = async (mode) => { const want = await lookOf(mode); assert.deepEqual(await settle(chipLook, want), want) }
-  const MODE_SELECT = `${EDITOR} select[data-role="mode-draft"]`
-  const chooseMode = (mode) => p.selectOption(MODE_SELECT, mode)
-  const modeIsChosen = async (mode) => (await p.locator(MODE_SELECT).inputValue()) === mode
+  const chooseMode = (word) => tickMode(p, word)
   const paint = (r, c, key) => colorCell(p, [r, c], key)
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
@@ -86,13 +84,13 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     await read(() => { window.__replay = Framework.app.getReplay() })
   })
 
-  it('a press steps to Cell, showing the chips filled with blue digits, saves it, and colors the givens, the entered digits and centre marks', async () => {
+  it('a press turns coloring on with Cell ticked, showing the chips filled with blue digits, saves it, and colors the givens, the entered digits and centre marks', async () => {
     await selectCell(p, 8, 5); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3'); await p.click('#control-normal')
     assert.equal(await settle(() => marks(8, 5), '13'), '13')
     assert.equal(await coloredCount(), 0)
     await pressTo(p, 'Cell')
     await assertLook('cell')
-    assert.equal(await settle(getMode, 'cell'), 'cell')
+    assert.deepEqual(await settle(getMode, SAVED_MODE.Cell), SAVED_MODE.Cell)
     assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
     assert.deepEqual(await settle(() => colorsAt(0, 2), ['2']), ['2'])
     assert.deepEqual(await settle(() => colorsAt(0, 3), ['1']), ['1'])
@@ -116,16 +114,16 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.equal(await settle(coloredCount, GIVEN_COUNT + 3), GIVEN_COUNT + 3)
   })
 
-  it('a press steps to Digit, showing the chips white with shaded digits, and takes every group color off every cell in one undo step; a hand-placed color in no group stays', async () => {
+  it('Save with only Digit ticked shows the chips white with shaded digits, and takes every group color off every cell in one undo step; a hand-placed color in no group stays', async () => {
     await paint(0, 0, NO_GROUP_KEY) // on a given that holds its group color
     await paint(1, 1, NO_GROUP_KEY) // on an empty cell
     await paint(1, 2, '2') // a group color by hand on an empty cell
     assert.deepEqual(await settle(() => sortedColorsAt(0, 0), ['1', NO_GROUP_KEY]), ['1', NO_GROUP_KEY])
     assert.deepEqual(await settle(() => colorsAt(1, 2), ['2']), ['2'])
     const before = await allColors()
-    await pressTo(p, 'Digit')
+    await modeTo(p, 'Digit')
     await assertLook('digit')
-    assert.equal(await settle(getMode, 'digit'), 'digit')
+    assert.deepEqual(await settle(getMode, SAVED_MODE.Digit), SAVED_MODE.Digit)
     assert.equal(await settle(coloredCount, 2), 2)
     assert.deepEqual(await colorsAt(0, 0), [NO_GROUP_KEY])
     assert.deepEqual(await colorsAt(1, 1), [NO_GROUP_KEY])
@@ -147,12 +145,12 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.equal(await settle(() => valueAt(0, 6), ''), '')
   })
 
-  it('a press steps to Both, showing the chips filled with shaded digits, which colors cells as Cell does and leaves a group color painted by hand on an empty cell with no marks', async () => {
+  it('Save with Cell and Digit ticked shows the chips filled with shaded digits, colors cells as Cell does and leaves a group color painted by hand on an empty cell with no marks', async () => {
     await paint(1, 1, '2')
     assert.deepEqual(await settle(() => colorsAt(1, 1), ['2']), ['2'])
-    await pressTo(p, 'Both')
+    await modeTo(p, 'Both')
     await assertLook('both')
-    assert.equal(await settle(getMode, 'both'), 'both')
+    assert.deepEqual(await settle(getMode, SAVED_MODE.Both), SAVED_MODE.Both)
     assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
     assert.deepEqual(await watch(() => colorsAt(1, 1)), [['2']])
     await paint(1, 1, '2')
@@ -166,7 +164,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await settle(async () => [await valueAt(0, 6), await colorsAt(0, 6)], ['', []]), ['', []])
   })
 
-  it('a press steps Both to Off, showing the chips white and grey, and takes every group color off in one undo step, keeping a hand color in no group with Multi-color off', async () => {
+  it('a press turns Both off, showing the chips white and grey, and takes every group color off in one undo step, keeping a hand color in no group with Multi-color off', async () => {
     await paint(0, 0, NO_GROUP_KEY) // beside the given's group color, while Multi-color is on
     assert.deepEqual(await settle(() => sortedColorsAt(0, 0), ['1', NO_GROUP_KEY]), ['1', NO_GROUP_KEY])
     await read(() => Framework.setSetting('multicolour', false))
@@ -187,6 +185,13 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await colorsAt(0, 0), [NO_GROUP_KEY])
     await paint(0, 0, NO_GROUP_KEY)
     assert.equal(await settle(coloredCount, 0), 0)
+  })
+
+  it('while off, unticking Digit and Save change nothing on the board, and the ticks stay for the next press', async () => {
+    const before = await allColors()
+    await modeTo(p, 'Off')
+    assert.deepEqual(await settle(getMode, SAVED_MODE.Off), SAVED_MODE.Off)
+    assert.deepEqual(await watch(allColors), [before])
   })
 
   it('the keyboard stays with the puzzle right after a press: a digit typed next lands and takes its color', async () => {
@@ -329,26 +334,41 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.equal(await givensColored(), GIVEN_COUNT)
   })
 
-  it('the dialog\'s Mode pulldown is the first of the three at the top, offers the four modes, opens on the mode in force, and Cancel leaves the mode as it was', async () => {
+  it('the dialog opens with the On, Cell and Digit checkboxes above the Cell and Digit pulldowns, ticked as the mode in force, the Digit pulldown has no None, and Cancel leaves the mode as it was', async () => {
     await openEditorOn(p)
-    const roles = await p.locator(`${EDITOR} select`).evaluateAll((es) => es.slice(0, 3).map((e) => e.dataset.role))
-    assert.deepEqual(roles, ['mode-draft', 'cell-profile', 'digit-profile'])
-    assert.equal(await p.locator(`${EDITOR} input[type=checkbox], ${EDITOR} button[data-role="mode-draft"]`).count(), 0)
-    assert.deepEqual(await p.locator(`${MODE_SELECT} option`).evaluateAll((es) => es.map((e) => e.value)), ['cell', 'digit', 'both', 'off'])
-    assert.equal(await modeIsChosen('cell'), true)
-    await chooseMode('off')
-    assert.equal(await modeIsChosen('off'), true)
+    const roles = await p.locator(`${EDITOR} select`).evaluateAll((es) => es.slice(0, 2).map((e) => e.dataset.role))
+    assert.deepEqual(roles, ['cell-profile', 'digit-profile'])
+    assert.equal(await p.locator(`${EDITOR} [data-role="mode-draft"]`).count(), 0)
+    assert.equal(await p.locator(`${EDITOR} select[data-role="digit-profile"] option[value="none"]`).count(), 0)
+    assert.deepEqual(await modeTicksOn(p), { on: true, cell: true, digit: false })
+    const above = await p.locator(modeTick('digit')).evaluate((box, sel) => box.getBoundingClientRect().bottom <= document.querySelector(sel).getBoundingClientRect().top, `${EDITOR} select[data-role="cell-profile"]`)
+    assert.equal(above, true, 'the checkboxes sit above the pulldowns')
+    await chooseMode('Off')
+    assert.deepEqual(await modeTicksOn(p), { on: false, cell: true, digit: false })
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.equal(await label(), 'Cell')
-    assert.equal(await getMode(), 'cell')
+    assert.deepEqual(await getMode(), SAVED_MODE.Cell)
   })
 
-  it('Save with Off chosen steps to Off as a press would: every group color comes off, in one undo step', async () => {
+  it('the dialog\'s last ticked box refuses to untick, and ticking the other lets it go', async () => {
     await openEditorOn(p)
-    await chooseMode('off')
+    await p.locator(modeTick('cell')).click()
+    assert.deepEqual(await watch(() => modeTicksOn(p)), [{ on: true, cell: true, digit: false }])
+    await p.locator(modeTick('digit')).check()
+    await p.locator(modeTick('cell')).uncheck()
+    assert.deepEqual(await modeTicksOn(p), { on: true, cell: false, digit: true })
+    await p.locator(modeTick('digit')).click()
+    assert.deepEqual(await watch(() => modeTicksOn(p)), [{ on: true, cell: false, digit: true }])
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    assert.deepEqual(await getMode(), SAVED_MODE.Cell)
+  })
+
+  it('Save with On unticked turns coloring off as a press would: every group color comes off, in one undo step', async () => {
+    await openEditorOn(p)
+    await chooseMode('Off')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'Off'), 'Off')
-    assert.equal(await getMode(), 'off')
+    assert.deepEqual(await getMode(), SAVED_MODE.Off)
     assert.equal(await settle(coloredCount, 0), 0)
     await undo()
     assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
@@ -364,12 +384,12 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await watch(coloredCount), [0])
   })
 
-  it('Save with Cell chosen steps to Cell and colors the givens', async () => {
+  it('Save with On ticked turns coloring on with Cell and colors the givens', async () => {
     await openEditorOn(p)
-    await chooseMode('cell')
+    await chooseMode('Cell')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'Cell'), 'Cell')
-    assert.equal(await settle(getMode, 'cell'), 'cell')
+    assert.deepEqual(await settle(getMode, SAVED_MODE.Cell), SAVED_MODE.Cell)
     // Every given is colored, and r1c1 holds 5, which is key 5 in Low/5/High.
     assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
     assert.deepEqual(await colorsAt(0, 0), ['5'])
@@ -394,37 +414,37 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await settle(getGroups, ODD_EVEN), ODD_EVEN, 'and the redo the new one')
   })
 
-  it('one Save that enters Cell and changes the groups recolors every pure cell, not only the givens', async () => {
-    await pressTo(p, 'Digit')
+  it('one Save that ticks Cell and changes the groups recolors every pure cell, not only the givens', async () => {
+    await modeTo(p, 'Digit')
     await selectCell(p, 0, 6); await p.keyboard.press('8')
     assert.equal(await settle(() => valueAt(0, 6), '8'), '8')
     assert.deepEqual(await watch(() => colorsAt(0, 6)), [[]])
     await openEditorOn(p)
     await chooseProfile(1)
-    await chooseMode('cell')
+    await chooseMode('Cell')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'Cell'), 'Cell')
     assert.deepEqual(await settle(() => colorsAt(0, 6), ['9']), ['9'])
   })
 
-  it('one Save that leaves Cell and changes the groups takes the old groups\' colors off too', async () => {
+  it('one Save that turns coloring off and changes the groups takes the old groups\' colors off too', async () => {
     // Low/5/High is active, with keys 1, 5 and 9 on the board; Odd/Even has only 1 and 2.
     assert.deepEqual(await colorsAt(0, 0), ['5'])
     await openEditorOn(p)
     await chooseProfile(0)
-    await chooseMode('off')
+    await chooseMode('Off')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'Off'), 'Off')
     assert.equal(await settle(coloredCount, 0), 0)
   })
 
-  it('Undo of a Save that leaves Cell and changes the profile brings the mode and the profile back, and Redo puts both again', async () => {
+  it('Undo of a Save that turns coloring off and changes the profile brings the mode and the profile back, and Redo puts both again', async () => {
     await pressTo(p, 'Cell')
     assert.equal(await settle(label, 'Cell'), 'Cell')
     const before = await getGroups()
     await openEditorOn(p)
     await chooseProfile(1)
-    await chooseMode('off')
+    await chooseMode('Off')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'Off'), 'Off')
     await undo()
@@ -435,10 +455,10 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await settle(getGroups, LOW_FIVE_HIGH), LOW_FIVE_HIGH)
   })
 
-  it('Undo of a Save that enters Cell and changes the profile ends in Off with the old profile, and Redo in Cell with the new one', async () => {
+  it('Undo of a Save that turns coloring on and changes the profile ends in Off with the old profile, and Redo in Cell with the new one', async () => {
     await openEditorOn(p)
     await chooseProfile(0)
-    await chooseMode('cell')
+    await chooseMode('Cell')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'Cell'), 'Cell')
     await undo()
@@ -459,19 +479,23 @@ describe('the mode word on the button, injected after Start Puzzle (#509)', { co
   before(async () => { ({ context, p } = await openSession(browser(), script, { saved: savedProfiles(SEED) })) })
   after(async () => { await context.close() })
 
-  it('shows the word of each mode as a press steps Cell, Digit, Both, Off', async () => {
+  it('shows the word the ticks give while on, and OFF while off: a press turns Both off and back on to Both', async () => {
     const words = [await wordOn(p)]
-    for (const want of ['Digit', 'Both', 'Off', 'Cell']) {
-      await pressTo(p, want)
+    for (const want of ['Digit', 'Both']) {
+      await modeTo(p, want)
       words.push(await wordOn(p))
     }
-    assert.deepEqual(words, ['CELL', 'DIGIT', 'BOTH', 'OFF', 'CELL'])
+    await pressTo(p, 'Off')
+    words.push(await wordOn(p))
+    await pressTo(p, 'Both')
+    words.push(await wordOn(p))
+    assert.deepEqual(words, ['CELL', 'DIGIT', 'BOTH', 'OFF', 'BOTH'])
   })
 
   it('keeps the word, the chips and the arrow box apart in every mode', async () => {
     const apart = (a, b) => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top
     for (const want of ['Digit', 'Both', 'Off', 'Cell']) {
-      await pressTo(p, want)
+      await modeTo(p, want)
       const { word, chips, arrow } = await buttonBoxesOn(p)
       assert.equal(word.right > word.left && word.bottom > word.top, true, `${want}: the word is drawn: ${JSON.stringify(word)}`)
       assert.equal(apart(word, chips), true, `${want}: word over chips ${JSON.stringify([word, chips])}`)
@@ -481,10 +505,13 @@ describe('the mode word on the button, injected after Start Puzzle (#509)', { co
   })
 })
 
-// The starting mode with no mode saved: Cell, unless auto mode was saved off.
+// The starting mode with no mode saved: the mode word saved before the ticks, else Cell unless auto mode was saved off.
+// Digit colors saved off (the Digit pulldown's None) load a saved Digit as Off.
 for (const [what, force, label, colored] of [
   ['nothing saved', {}, 'Cell', GIVEN_COUNT],
-  ['auto mode saved off', { [AUTO_STORAGE_KEY]: false }, 'Off', 0]
+  ['auto mode saved off', { [AUTO_STORAGE_KEY]: false }, 'Off', 0],
+  ['the mode word Digit saved', { [MODE_WORD_STORAGE_KEY]: 'digit' }, 'Digit', 0],
+  ['the mode word Digit saved with digit colors off', { [MODE_WORD_STORAGE_KEY]: 'digit', [PROFILES_STORAGE_KEY]: { ...SEED, useDigitColors: false } }, 'Off', 0]
 ]) {
   describe(`the starting mode with ${what}, injected after Start Puzzle`, { concurrency: false }, () => {
     let context, p, errors
@@ -535,7 +562,8 @@ for (const mode of MODES) {
       await p.keyboard.press('4')
       // SudokuPad saves progress a moment after a change.
       await p.waitForFunction(() => Object.keys(window.localStorage).some((k) => /progress/i.test(k)), null, { timeout: SETTLE_MS })
-      await p.evaluate(([key]) => Framework.setData(key, true), [AUTO_KEY])
+      // The first load saved the ticks; without them, the reload reads auto mode again.
+      await p.evaluate(([key, ticks]) => { Framework.setData(key, true); Framework.removeData(ticks) }, [AUTO_KEY, MODE_KEY])
       await reloadSession(p, script, mode)
     })
     after(async () => { await context.close() })
@@ -560,15 +588,51 @@ describe('the mode on a touch screen, injected after Start Puzzle', { concurrenc
   })
   after(async () => { await context.close() })
 
-  it('a tap on the button steps to Cell and colors the givens, and a second tap steps to Digit and takes them off', async () => {
+  it('a tap on the button turns coloring on with Cell and colors the givens, and a second tap turns it off and takes them off', async () => {
     const { x, y } = await buttonPoint(p)
     const tap = () => p.touchscreen.tap(x, y)
     await tap()
     assert.equal(await settle(() => labelOn(p), 'Cell'), 'Cell')
     assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
     await tap()
-    assert.equal(await settle(() => labelOn(p), 'Digit'), 'Digit')
+    assert.equal(await settle(() => labelOn(p), 'Off'), 'Off')
     assert.equal(await settle(() => coloredCountOn(p), 0), 0)
+  })
+
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('the solver\'s own colors and Digit alone, injected after Start Puzzle', { concurrency: false }, () => {
+  let context, p, errors
+  const cellColors = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => [...(c.colours || [])]))
+
+  before(async () => {
+    ({ context, p, errors } = await openSession(browser(), script, { saved: SEEDED_OFF }))
+  })
+  after(async () => { await context.close() })
+
+  it('with colors of the active profile\'s groups painted by hand and coloring off, Digit ticked alone and a press leave every one of them and shade the digits', async () => {
+    await selectCell(p, 0, 2); await p.keyboard.press('4')
+    assert.equal(await settle(() => p.evaluate(() => String(Framework.app.grid.getCell(0, 2).value)), '4'), '4')
+    // Odd/Even's keys 1 and 2, by hand: on a given, on the entered 4 (its own group's color), and on an empty cell.
+    await colorCell(p, [0, 0], '2')
+    await colorCell(p, [0, 2], '2')
+    await colorCell(p, [1, 1], '1')
+    const painted = await cellColors()
+    assert.equal(painted.filter((c) => c.length).length, 3)
+    await modeTo(p, 'Off')
+    await openEditorOn(p)
+    await p.locator(modeTick('digit')).check()
+    await p.locator(modeTick('cell')).uncheck()
+    await closeDialogWith(p, 'Save', EDITOR)
+    assert.deepEqual(await settle(() => p.evaluate((key) => Framework.getData(key), MODE_KEY), { on: false, cell: false, digit: true }), { on: false, cell: false, digit: true })
+    assert.deepEqual(await watch(cellColors), [painted])
+    await pressTo(p, 'Digit')
+    const shade = await shadeOn(p, '2')
+    assert.deepEqual(await settle(allFillsOn(p, 'entered', '4'), [shade]), [shade])
+    assert.deepEqual(await watch(cellColors), [painted])
   })
 
   it('no uncaught page errors', () => {

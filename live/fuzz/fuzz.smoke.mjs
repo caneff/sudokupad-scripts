@@ -534,7 +534,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
 
     it('a pasted text is applied on the spot in each of the four dialogs, and Copy settings changes nothing', async () => {
       const after = (script, text, ...keys) => afterSteps(puzzle, [paste(script, text)], data(...keys))
-      assert.deepEqual(await after('color by digit', '{"ColorByDigit_mode":"digit"}', 'ColorByDigit_mode'), ['digit'])
+      assert.deepEqual(await after('color by digit', '{"ColorByDigit_ticks":{"on":true,"cell":false,"digit":true}}', 'ColorByDigit_ticks'), [{ on: true, cell: false, digit: true }])
       assert.deepEqual(await after('text anywhere', '{"TextAnywhere_width":3.5,"TextAnywhere_frame":true}', 'TextAnywhere_width', 'TextAnywhere_frame'), [3.5, true])
       assert.deepEqual(await after('pen tool extras', '{"PenColor_thickness":9}', 'PenColor_thickness'), [9])
       assert.deepEqual((await after('auto rules resizer', '{"AutoRulesResizer_maxWidth":640,"AutoRulesResizer_maxHeight":480}', 'AutoRulesResizer_maxWidth', 'AutoRulesResizer_maxHeight')).map((v) => v.data), [640, 480])
@@ -663,7 +663,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     })
 
     it('a corner mark and a centre mark that conflict with a digit in their row each get a circle while digits are colored', async () => {
-      const digitMode = ['color by digit settings text', ['{"ColorByDigit_mode":"digit"}', true]]
+      const digitMode = ['color by digit settings text', ['{"ColorByDigit_ticks":{"on":true,"cell":false,"digit":true}}', true]]
       const CIRCLE = '#color-by-digit-circles circle'
       // A circle is drawn a moment after the mark; a page with no conflict draws none, which is read at once.
       const circles = (p) => p.locator(CIRCLE).count()

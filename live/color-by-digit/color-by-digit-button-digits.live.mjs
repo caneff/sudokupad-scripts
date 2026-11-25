@@ -1,7 +1,7 @@
 // #389.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { BUTTON, MODE_STORAGE_KEY, SEED, openSession, savedProfiles } from './color-by-digit-fixtures.mjs'
+import { BUTTON, MODE_STORAGE_KEY, savedModeOf, SEED, openSession, savedProfiles } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -14,7 +14,7 @@ const chips = (p) => p.locator(BUTTON).evaluate((button) => [...button.querySele
 
 const shownIn = (mode, digits) => describe(`with Low/5/High on the cells and Odd/Even on the digits, in ${mode} mode`, { concurrency: false }, () => {
   let context, p
-  before(async () => { ({ context, p } = await openSession(browser(), script, { saved: { ...savedProfiles(APART), [MODE_STORAGE_KEY]: mode } })) })
+  before(async () => { ({ context, p } = await openSession(browser(), script, { saved: { ...savedProfiles(APART), [MODE_STORAGE_KEY]: savedModeOf(mode) } })) })
   after(async () => { await context?.close() })
 
   it(`the button shows ${digits.join(' ')}`, async () => {

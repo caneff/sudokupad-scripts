@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { allFillsOn, BUTTON, DEFAULT_FILL, EDITOR, group, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, ROW_CORNER, savedProfiles, shadeReaders, watch, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, BUTTON, DEFAULT_FILL, EDITOR, group, MENU, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, openSession, modeTick, modeTo, pressTo, ROW_CORNER, savedProfiles, shadeReaders, watch, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { colorCell, selectCell, undoDepth } from '../board.mjs'
 import { closeDialogWith } from '../settings.mjs'
 import { settle } from '../settle.mjs'
@@ -56,8 +56,7 @@ const tools = (p) => {
     await p.selectOption(DIGIT_SELECT, value)
     assert.equal(await settle(() => p.locator(DIGIT_SELECT).inputValue(), value), value)
   }
-  const modeChoice = () => p.$$eval(`${EDITOR} select[data-role="mode-draft"] option`, (es) => es.map((e) => `${e.value}${e.selected ? '*' : ''}`))
-  return { read, label, cells, coloredCount, getState, icon, shownCircles, enter, undo, redo, menu, pick, save, chooseDigit, modeChoice }
+  return { read, label, cells, coloredCount, getState, icon, shownCircles, enter, undo, redo, menu, pick, save, chooseDigit }
 }
 
 describe('the digit profile unsynced, saved synced in Both, injected after Start Puzzle', { concurrency: false }, () => {
@@ -66,7 +65,7 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   const fill = (digit) => allFillsOn(p, 'entered', digit)
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: SAVED_MODE.Both } }))
     t = tools(p)
     for (const key of ['1', '2', '4']) SHADE[key] = await shadeOn(p, key)
     await t.enter(0, 2, '4')
@@ -154,9 +153,9 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   it('in Digit, the icon shows the digit profile, and in Cell and Off the cell profile', async () => {
     await pressTo(p, 'Off')
     assert.deepEqual(await t.icon(), SPLIT_ICON)
-    await pressTo(p, 'Cell')
+    await modeTo(p, 'Cell')
     assert.deepEqual(await t.icon(), SPLIT_ICON)
-    await pressTo(p, 'Digit')
+    await modeTo(p, 'Digit')
     assert.deepEqual(await t.icon(), ODD_EVEN_ICON)
     assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
     assert.equal(await settle(t.coloredCount, 0), 0)
@@ -192,7 +191,7 @@ describe('the dialog\'s Cell and Digit pulldowns, saved synced in Both, injected
   const ROW = (index) => `${EDITOR} [data-role=profile-row][data-index="${index}"]`
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: SAVED_MODE.Both } }))
     t = tools(p)
     for (const key of ['1', '2', '4']) SHADE[key] = await shadeOn(p, key)
     await t.enter(0, 2, '4')
@@ -232,13 +231,15 @@ describe('the dialog\'s Cell and Digit pulldowns, saved synced in Both, injected
     assert.deepEqual(await settle(t.cells, ODD_EVEN_CELLS), ODD_EVEN_CELLS)
   })
 
-  it('Cancel drops all three pulldowns', async () => {
+  it('Cancel drops both pulldowns and the mode\'s ticks', async () => {
+    const label = await t.label()
     await openEditorOn(p)
     await p.selectOption(CELL_SELECT, '0')
-    await p.selectOption(`${EDITOR} select[data-role="mode-draft"]`, 'off')
-    await t.chooseDigit('none')
+    await p.locator(modeTick('on')).setChecked(false)
+    await t.chooseDigit('same')
     await closeDialogWith(p, 'Cancel', EDITOR)
-    assert.deepEqual(await t.getState().then((s) => [s.active, s.digitActive, s.useDigitColors]), [1, 1, undefined])
+    assert.deepEqual(await t.getState().then((s) => [s.active, s.digitActive]), [1, 1])
+    assert.equal(await t.label(), label)
     assert.deepEqual(await settle(t.cells, ODD_EVEN_CELLS), ODD_EVEN_CELLS)
   })
 
@@ -247,13 +248,13 @@ describe('the dialog\'s Cell and Digit pulldowns, saved synced in Both, injected
   })
 })
 
-describe('the Digit pulldown on None and back, saved unsynced in Both, injected after Start Puzzle', { concurrency: false }, () => {
+describe('the Digit tick off and back, saved unsynced in Both, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors, t
   const SHADE = {}
   const fill = (digit) => allFillsOn(p, 'entered', digit)
 
   before(async () => {
-    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0, digitActive: 1 }), [MODE_STORAGE_KEY]: 'both' } }))
+    ;({ context, p, errors } = await openSession(browser(), script, { saved: { ...savedProfiles({ profiles: TWO, active: 0, digitActive: 1 }), [MODE_STORAGE_KEY]: SAVED_MODE.Both } }))
     t = tools(p)
     for (const key of ['1', '2']) SHADE[key] = await shadeOn(p, key)
     await t.enter(0, 2, '4')
@@ -269,67 +270,52 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
     assert.equal(await settle(t.shownCircles, 1), 1)
   })
 
-  it('the Digit pulldown opens on the saved digit profile and lists Same as cell, the profiles and None; on None the mode choice is Cell and Off, with Both fallen back to Cell', async () => {
+  it('the Digit pulldown opens on the saved digit profile and lists Same as cell and the profiles, with no None; Digit unticked is saved', async () => {
     await openEditorOn(p)
     assert.equal(await p.locator(DIGIT_SELECT).inputValue(), '1')
-    assert.deepEqual(await t.modeChoice(), ['cell', 'digit', 'both*', 'off'])
-    assert.deepEqual(await p.locator(`${DIGIT_SELECT} option`).evaluateAll((es) => es.map((e) => e.textContent)), ['Same as cell', 'Split', 'Odd/Even', 'None'])
-    await t.chooseDigit('none')
-    assert.deepEqual(await t.modeChoice(), ['cell*', 'off'])
-    // The draft mode moved with it: a digit profile picked again shows Cell, not the Both it fell back from.
-    await t.chooseDigit('1')
-    assert.deepEqual(await t.modeChoice(), ['cell*', 'digit', 'both', 'off'])
-    await t.chooseDigit('none')
+    assert.deepEqual(await p.locator(`${DIGIT_SELECT} option`).evaluateAll((es) => es.map((e) => e.textContent)), ['Same as cell', 'Split', 'Odd/Even'])
+    await p.locator(modeTick('digit')).uncheck()
     await t.save()
   })
 
-  it('saved off from Both: the mode is Cell, cells keep their colors, and no digit color or conflict circle shows', async () => {
+  it('Digit unticked from Both: the mode is Cell, cells keep their colors, and no digit color or conflict circle shows', async () => {
     assert.equal(await settle(t.label, 'Cell'), 'Cell')
     assert.deepEqual(await watch(t.cells), [SPLIT_CELLS])
     assert.deepEqual(await settle(fill('4'), [DEFAULT_FILL]), [DEFAULT_FILL])
     assert.equal(await settle(t.shownCircles, 0), 0)
   })
 
-  it('off, the menu is one list with no Cell and Digit dots', async () => {
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], heads: [] })
+  it('Digit unticked, the menu keeps the digit profile\'s dots, since the Digit pulldown still names a profile', async () => {
+    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], heads: ['Cell', 'Digit'] })
   })
 
-  it('off, a press steps Cell to Off and back to Cell', async () => {
-    await pressTo(p, 'Off')
-    await pressTo(p, 'Cell')
+  it('a press turns Cell off and back on', async () => {
     await pressTo(p, 'Off')
     await pressTo(p, 'Cell')
   })
 
-  it('a reload keeps it off', async () => {
+  it('a reload keeps Digit unticked', async () => {
     await reloadSession(p, script)
     assert.equal(await t.label(), 'Cell')
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], heads: [] })
     assert.deepEqual(await watch(fill('4')), [[DEFAULT_FILL]])
   })
 
-  it('a digit profile picked again: the four modes with Cell still chosen, and the cell profile as it was', async () => {
+  it('Digit ticked again brings the digit profile\'s shades and the circle back, with the cell profile as it was', async () => {
     await openEditorOn(p)
-    assert.equal(await p.locator(DIGIT_SELECT).inputValue(), 'none')
-    await t.chooseDigit('1')
-    assert.deepEqual(await t.modeChoice(), ['cell*', 'digit', 'both', 'off'])
+    assert.equal(await p.locator(DIGIT_SELECT).inputValue(), '1')
+    await p.locator(modeTick('digit')).check()
     assert.equal(await p.locator(CELL_SELECT).inputValue(), '0')
     await t.save()
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], heads: ['Cell', 'Digit'] })
-    await pressTo(p, 'Digit')
+    assert.equal(await settle(t.label, 'Both'), 'Both')
     assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
     assert.equal(await settle(t.shownCircles, 1), 1)
   })
 
-  it('None picked while in Digit, the mode falls back to Off and the digits lose their color', async () => {
-    await openEditorOn(p)
-    await t.chooseDigit('none')
-    assert.deepEqual(await t.modeChoice(), ['cell', 'off*'])
-    await t.save()
-    assert.equal(await settle(t.label, 'Off'), 'Off')
-    assert.deepEqual(await settle(fill('4'), [DEFAULT_FILL]), [DEFAULT_FILL])
-    assert.equal(await settle(t.shownCircles, 0), 0)
-    assert.equal(await t.coloredCount(), 0)
+  it('Cell unticked leaves Digit alone: the cells lose their colors and the digits keep their shades', async () => {
+    await modeTo(p, 'Digit')
+    assert.equal(await settle(t.coloredCount, 0), 0)
+    assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
+    assert.equal(await settle(t.shownCircles, 1), 1)
   })
 
   it('no uncaught page errors', () => {

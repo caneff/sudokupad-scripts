@@ -2,7 +2,7 @@
 // the real color-by-digit.user.js on the recorded puzzle, with the five preloaded profiles and Low/5/High selected:
 //   color-by-digit-dialog-annotated.png
 // Each part is labelled by one short phrase, all on the left of the dialog, with a short line from the label to the part, in the
-// style of pen-tool-extras-panel-annotated-screenshot.mjs: the settings icons, the three pulldowns, the profile list, the selected
+// style of pen-tool-extras-panel-annotated-screenshot.mjs: the settings icons, the mode's checkboxes and the two pulldowns, the profile list, the selected
 // profile's name, the palette with the digit keys, and the bottom row. Labels are laid out from the parts' own boxes. The script fails
 // when a part is missing, and writes the file only when the picture is taken.
 // Run from the repo root with Playwright's Chromium installed: node docs/research/color-by-digit/color-by-digit-dialog-annotated-screenshot.mjs
@@ -53,7 +53,7 @@ const E = '#color-by-digit-editor'
 const dialog = await box('.dialog')
 const parts = {
   icons: union(await Promise.all(['copy-settings', 'paste-settings'].map((a) => box(`.dialog button[data-act=${a}]`)))),
-  modeSelect: await box(`${E} select[data-role=mode-draft]`),
+  modeTicks: await box(`${E} .cbd-ticks`),
   cellSelect: await box(`${E} select[data-role=cell-profile]`),
   profiles: await box(`${E} .cbd-profile:nth-child(2)`),
   newProfile: await box(`${E} button[data-act=new-profile]`),
@@ -71,12 +71,12 @@ const r = Object.fromEntries(Object.entries(parts).map(([k, b]) => [k, rel(b)]))
 // and under the profile list for the palette and the digit keys.
 const iconGap = r.icons.y - 6
 const nameGap = r.name.y - 6
-// The pulldowns' line runs in the gap between the Mode and Cell rows, so it crosses no label.
-const pulldownGap = (r.modeSelect.y + r.modeSelect.h + r.cellSelect.y) / 2
+// The line runs in the gap between the Mode and Cell rows, so it crosses no label.
+const pulldownGap = (r.modeTicks.y + r.modeTicks.h + r.cellSelect.y) / 2
 const paletteY = r.newProfile.y + r.newProfile.h + 24
 const labels = [
   { text: 'Copy or paste all settings', y: iconGap, to: [[r.icons.cx, iconGap], [r.icons.cx, r.icons.y + 4]] },
-  { text: 'Mode, cell and digit profiles', y: pulldownGap, to: [[r.modeSelect.x - 6, pulldownGap]] },
+  { text: 'On, Cell, Digit; the two profiles', y: pulldownGap, to: [[r.modeTicks.x - 6, pulldownGap]] },
   { text: 'Rename the selected profile', y: nameGap, to: [[r.name.cx, nameGap], [r.name.cx, r.name.y + 6]] },
   { text: 'Click a profile to edit its colors', y: r.profiles.cy, to: [[r.profiles.x + 6, r.profiles.cy]] },
   { text: 'Pick a color, click digits to paint', y: paletteY, to: [[r.palette.cx, paletteY], [r.palette.cx, r.palette.y + r.palette.h - 4]] },

@@ -175,7 +175,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       await loadScripts(tabB)
       await tabA.bringToFront()
       await tabA.click(CBD_BUTTON)
-      assert.equal(await settle(() => labelOn(tabA), 'Digit'), 'Digit', 'tab A is in Digit mode')
+      assert.equal(await settle(() => labelOn(tabA), 'Off'), 'Off', 'tab A turned coloring off')
       await openPenTool(tabA)
       await setInputValue(tabA.locator('#pen-tool-extras-thickness'), 7)
       const thickness = await tabA.locator('#pen-tool-extras-thickness').inputValue()
@@ -183,7 +183,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       // Tab B reads the settings tab A saved, among them the pen tool being on.
       await tabA.evaluate(() => Framework.saveSettings())
       await reloadWithScripts(tabB)
-      assert.equal(await labelOn(tabB), 'Digit', 'tab B read the mode tab A saved')
+      assert.equal(await labelOn(tabB), 'Off', 'tab B read the mode tab A saved')
       await openPenTool(tabB)
       assert.equal(await tabB.locator('#pen-tool-extras-thickness').inputValue(), thickness, 'tab B read the Thickness tab A saved')
       await draw(tabB, 6)
@@ -231,7 +231,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       await placeNote(p, [2.5, 2.5], '4')
       assert.equal(await noteCount(p), 1, 'a note was placed')
       await p.click(CBD_BUTTON)
-      assert.equal(await settle(() => labelOn(p), 'Digit'), 'Digit', 'Color by Digit changed mode')
+      assert.equal(await settle(() => labelOn(p), 'Off'), 'Off', 'Color by Digit turned coloring off')
       assert.deepEqual(errors, [])
     } finally {
       await context.close()
