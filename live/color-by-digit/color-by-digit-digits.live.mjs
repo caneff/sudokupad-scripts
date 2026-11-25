@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, styleOn, watch, reloadSession } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, group, openSession, paletteColorOn, modeTo, pressTo, savedProfiles, shadeReaders, styleOn, watch, reloadSession } from './color-by-digit-fixtures.mjs'
 import { selectCell, undoDepth } from '../board.mjs'
 import { loadInPlace } from '../puzzles.mjs'
 import { PUZZLE_URL } from '../page.mjs'
@@ -18,7 +18,7 @@ const CONFLICT_RED = 'rgb(179, 58, 58)'
 // The active profile: 1 to 5 on palette key 4, 8 and 9 on key 6; 0, 6 and 7 in no group, so they keep SudokuPad's color.
 const SPLIT = [group('4', ['1', '2', '3', '4', '5']), group('6', ['8', '9'])]
 const GROUPED_GIVENS = [...GIVENS].filter((d) => SPLIT.some((g) => g.digits.includes(d))).length
-const SEEDED_DIGIT = { ...savedProfiles({ profiles: [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_EVEN }], active: 0 }), [MODE_STORAGE_KEY]: 'digit' }
+const SEEDED_DIGIT = { ...savedProfiles({ profiles: [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_EVEN }], active: 0 }), [MODE_STORAGE_KEY]: SAVED_MODE.Digit }
 // How far from a mark's box, in screen pixels, a circle may sit and still be that mark's circle. This
 // tells which circle belongs to which mark; INK_TOLERANCE is what judges the centring.
 const NEAR = 6
@@ -464,13 +464,13 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[4]]), [SHADE[4]])
   })
 
-  it('a press steps Digit to Both: cells take their group colors and the digits keep their shades and circles', async () => {
-    await pressTo(p, 'Both')
+  it('ticking Cell as well turns Digit into Both: cells take their group colors and the digits keep their shades and circles', async () => {
+    await modeTo(p, 'Both')
     assert.equal(await settle(givensColored, GROUPED_GIVENS), GROUPED_GIVENS)
     await expectShadesAfterEntry()
   })
 
-  it('a press steps Both to Off: the cells\' group colors come off, the digits take SudokuPad\'s color, and no circle shows', async () => {
+  it('a press turns Both off: the cells\' group colors come off, the digits take SudokuPad\'s color, and no circle shows', async () => {
     await pressTo(p, 'Off')
     assert.equal(await settle(coloredCount, 0), 0)
     assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
@@ -480,7 +480,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   })
 
   it('in Cell, cells are colored, the digits keep SudokuPad\'s color, and a conflict shows as SudokuPad draws it', async () => {
-    await pressTo(p, 'Cell')
+    await modeTo(p, 'Cell')
     assert.equal(await settle(givensColored, GROUPED_GIVENS), GROUPED_GIVENS)
     assert.deepEqual(await watch(allFills('entered', '4')), [[DEFAULT_FILL]])
     assert.deepEqual(await allFills('centre', '8')(), [DEFAULT_FILL])
@@ -488,8 +488,8 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     assert.deepEqual(await watch(shownCircles), [0])
   })
 
-  it('a press steps Cell to Digit: the group colors come off the cells and the shades and circles come back', async () => {
-    await pressTo(p, 'Digit')
+  it('Digit ticked in place of Cell: the group colors come off the cells and the shades and circles come back', async () => {
+    await modeTo(p, 'Digit')
     assert.equal(await settle(coloredCount, 0), 0)
     await expectShadesAfterEntry()
   })

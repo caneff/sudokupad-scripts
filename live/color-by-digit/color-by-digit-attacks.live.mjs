@@ -60,13 +60,13 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     }
   })
 
-  it('attack 42: cycle the mode button through Cell, Digit, Both and Off, ten clicks with no pause', async () => {
+  it('attack 42: press the button on and off, ten clicks with no pause', async () => {
     await enter(ROW, 0, '3')
     await enter(ROW, 1, '4')
-    assert.equal(await label(), 'Cell', 'the cycle starts at Cell')
+    assert.equal(await label(), 'Cell', 'the presses start at Cell')
     const { x, y } = await buttonPoint(p)
     for (let i = 0; i < 10; i++) await p.mouse.click(x, y)
-    assert.equal(await settle(label, 'Both'), 'Both', 'ten presses from Cell land on Both')
+    assert.equal(await settle(label, 'Cell'), 'Cell', 'ten presses from Cell land on Cell')
     assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'every digit has its group color')
   })
 
@@ -75,8 +75,8 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     await enter(ROW, 1, '4')
     assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0)
     assert.notEqual(await coloredCount(), 0, 'Cell colors the board')
-    await pressTo(p, 'Digit')
-    assert.equal(await settle(coloredCount, 0), 0, 'Digit takes the cell colors off')
+    await pressTo(p, 'Off')
+    assert.equal(await settle(coloredCount, 0), 0, 'Off takes the cell colors off')
     await undo()
     assert.equal(await settle(label, 'Cell'), 'Cell', 'one undo undoes the mode change')
     assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'the cell colors are back, digits included')
@@ -86,13 +86,13 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'the other cells keep their colors')
     await undoUntilGone(0)
     assert.deepEqual((await valuesInRow()).slice(0, 2), ['', ''])
-    for (let i = 0; i < 6 && (await label()) !== 'Digit'; i++) {
+    for (let i = 0; i < 6 && (await label()) !== 'Off'; i++) {
       await p.click('#control-redo')
-      await settle(label, 'Digit', 500)
+      await settle(label, 'Off', 500)
     }
-    assert.equal(await label(), 'Digit', 'redo reaches the mode change again')
+    assert.equal(await label(), 'Off', 'redo reaches the mode change again')
     assert.deepEqual((await valuesInRow()).slice(0, 2), ['3', '4'])
-    assert.equal(await settle(coloredCount, 0), 0, 'Digit leaves the cells bare')
+    assert.equal(await settle(coloredCount, 0), 0, 'Off leaves the cells bare')
   })
 
   it('attack 44: enter, delete and overwrite digits across a whole row with no pause', async () => {
@@ -237,6 +237,6 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     assert.deepEqual(Object.values(await painted()), Array(10).fill(''), 'Clear all leaves every digit with no color')
     await closeEditor('Save')
     assert.equal(await settle(coloredCount, 0), 0, 'with no digit colored the board shows none')
-    await pressTo(p, 'Digit')
+    await pressTo(p, 'Off')
   })
 })

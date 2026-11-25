@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, dragProfileRow, profileDragPoints, typeProfileName, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, EDITOR, group, groupCountOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, dragProfileRow, profileDragPoints, typeProfileName, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, EDITOR, group, groupCountOn, MENU, modeTo, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
@@ -22,7 +22,7 @@ const browser = useBrowser()
 
 // With no mode saved the page starts in Cell; `savedOff` saves the mode Off beside `saved`.
 const openProfiles = (saved, contextOptions = {}) => openSession(browser(), script, { saved, contextOptions })
-const savedOff = (saved) => ({ ...saved, [MODE_STORAGE_KEY]: 'off' })
+const savedOff = (saved) => ({ ...saved, [MODE_STORAGE_KEY]: SAVED_MODE.Off })
 
 const tools = (p) => {
   const { read, label, cellsState, coloredCount, getState, undo } = pageTools(p)
@@ -259,7 +259,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     await p.keyboard.press('Escape')
   })
 
-  it('a short press on the button steps to Cell, colors the grid and opens no menu', async () => {
+  it('a short press on the button turns coloring on with Cell, colors the grid and opens no menu', async () => {
     await pressTo(p, 'Cell')
     assert.equal(await settle(() => t.wrongCount(ODD_EVEN), 0), 0)
     assert.equal(await t.menu().count(), 0)
@@ -293,8 +293,8 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.equal((await t.getState()).active, 0)
   })
 
-  it('stepping to Digit takes off the active profile\'s colors, and a pick in Digit changes no cell\'s color', async () => {
-    await pressTo(p, 'Digit')
+  it('turning coloring off takes off the active profile\'s colors, and a pick while off changes no cell\'s color', async () => {
+    await pressTo(p, 'Off')
     assert.equal(await settle(t.coloredCount, 0), 0)
     const before = await t.coloursOf()
     await openMenuOn(p)
@@ -304,7 +304,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     await openMenuOn(p)
     await t.pick('Odd/Even')
     assert.equal((await t.getState()).active, 0)
-    await pressTo(p, 'Both')
+    await modeTo(p, 'Both')
     assert.equal(await settle(() => t.wrongCount(ODD_EVEN), 0), 0)
   })
 
@@ -353,9 +353,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
 
   it('the button\'s run of cells stays inside the button and clear of the arrow box, at most three cells, for profiles of 2, 3, 4 and 6 groups', async () => {
     assert.equal(await t.label(), 'Both')
-    await pressTo(p, 'Off')
-    await pressTo(p, 'Cell')
-    await pressTo(p, 'Digit')
+    await modeTo(p, 'Digit')
     const overlaps = () => p.evaluate(({ button, arrow }) => {
       const rect = (e) => e.getBoundingClientRect()
       const cells = [...document.querySelectorAll(`${button} [data-role=chip] rect`)].map(rect)

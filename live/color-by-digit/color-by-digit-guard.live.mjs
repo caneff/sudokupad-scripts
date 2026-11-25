@@ -1,7 +1,7 @@
 // The snippet runs ahead of the script's own startup check and puts the internal back after it, so SudokuPad's own code still runs.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { BUTTON, coloredCountOn, EDITOR, GIVEN_COUNT, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, savedProfiles, SEEDED_OFF, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { BUTTON, coloredCountOn, EDITOR, GIVEN_COUNT, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, openSession, pressTo, savedProfiles, SEEDED_OFF, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 import { collectWarnings } from '../page.mjs'
@@ -27,13 +27,13 @@ const CASES = [
     owner: 'Framework.app',
     name: 'act',
     off: 'cell coloring',
-    saved: { ...SEEDED_OFF },
+    // Off with Cell and Digit ticked, so one press turns on both.
+    saved: { ...SEEDED_OFF, [MODE_STORAGE_KEY]: { on: false, cell: true, digit: true } },
     buttonExpected: true,
-    // Cell coloring is off, so Cell mode colors nothing; the button still steps, digits take their colors, and the editor opens.
+    // Cell coloring is off, so Both colors no cell; the button still presses, digits take their colors, and the editor opens.
     works: async (p) => {
-      await pressTo(p, 'Cell')
-      assert.equal(await coloredCountOn(p), 0, 'Cell mode colors no cell')
-      await pressTo(p, 'Digit')
+      await pressTo(p, 'Both')
+      assert.equal(await coloredCountOn(p), 0, 'Both colors no cell')
       const css = () => p.evaluate((id) => document.getElementById(id)?.textContent ?? '', DIGIT_STYLE)
       assert.equal(await settle(async () => (await css()).length > 0, true), true, 'the digit colors are written')
       await openEditorOn(p)
@@ -45,7 +45,7 @@ const CASES = [
     owner: 'Framework',
     name: 'addControlButton',
     off: 'mode button',
-    saved: { ...savedProfiles({ profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }], active: 0 }), [MODE_STORAGE_KEY]: 'cell' },
+    saved: { ...savedProfiles({ profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }], active: 0 }), [MODE_STORAGE_KEY]: SAVED_MODE.Cell },
     buttonExpected: false,
     // There is no button, but the saved Cell mode still colors the givens, and the editor opens from the settings.
     works: async (p) => {

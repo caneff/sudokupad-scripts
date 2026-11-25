@@ -36,9 +36,9 @@ export const PLANTS = [
     id: 'mode-not-saved',
     file: 'color-by-digit.user.js',
     kind: 'rule',
-    bug: 'Color by Digit saves Cell as its mode whichever mode was picked, so a reload changes the mode',
+    bug: 'Color by Digit saves on with Cell as its mode whichever mode was picked, so a reload changes the mode',
     find: 'savedData.setData(MODE_KEY, next)',
-    replace: 'savedData.setData(MODE_KEY, \'cell\')',
+    replace: 'savedData.setData(MODE_KEY, DEFAULT_MODE)',
     expect: /reload-changes-nothing/
   },
   {

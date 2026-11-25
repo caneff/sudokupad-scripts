@@ -48,9 +48,9 @@ for (const viewport of VIEWPORTS) {
         assert.deepEqual(seen.boxes.filter((b) => !inside(b)).map((b) => b.id), [], JSON.stringify(seen.boxes))
       })
 
-      it('a press steps the mode, and the arrow box opens the menu', async () => {
+      it('a press turns coloring on or off, and the arrow box opens the menu', async () => {
         const start = await labelOn(p)
-        await pressTo(p, start === 'Cell' ? 'Digit' : 'Cell')
+        await pressTo(p, start === 'Off' ? 'Cell' : 'Off')
         await p.click(ARROW)
         await p.locator(MENU).waitFor({ state: 'visible' })
         assert.equal(await p.locator(BUTTON).count(), 1)

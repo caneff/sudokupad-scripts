@@ -103,9 +103,9 @@ const FAILED_PASTES = [
   },
   {
     file: 'color-by-digit.user.js',
-    pasted: { ColorByDigit_profiles: settingsScript('color-by-digit.user.js').saved, ColorByDigit_mode: 'digit' },
-    failing: 'ColorByDigit_mode',
-    shows: ['select[data-role="mode-draft"]']
+    pasted: { ColorByDigit_profiles: settingsScript('color-by-digit.user.js').saved, ColorByDigit_ticks: { on: true, cell: false, digit: true } },
+    failing: 'ColorByDigit_ticks',
+    shows: ['input[data-role="mode-tick"][data-box="digit"]']
   },
   {
     file: 'text-anywhere.user.js',
@@ -147,7 +147,7 @@ for (const failedPaste of FAILED_PASTES) {
 describe('color-by-digit.user.js: a Paste replaces only the pasted settings in the dialog\'s draft', { concurrency: false }, () => {
   const dialog = settingsScript('color-by-digit.user.js')
   const { editor, saved } = dialog
-  const MODE = `${editor} select[data-role="mode-draft"]`
+  const tick = (box) => p.locator(`${editor} input[data-role="mode-tick"][data-box="${box}"]`)
   const CELL_PROFILE = `${editor} select[data-role="cell-profile"]`
   let context, p, errors
   before(async () => {
@@ -160,17 +160,18 @@ describe('color-by-digit.user.js: a Paste replaces only the pasted settings in t
     const active = await p.locator(CELL_PROFILE).inputValue()
     const chosen = await p.locator(`${CELL_PROFILE} option`).evaluateAll((options, current) => options.find((o) => o.value !== current).value, active)
     await p.selectOption(CELL_PROFILE, chosen)
-    assert.equal(await paste(p, JSON.stringify({ ColorByDigit_mode: 'both' })), 'Pasted 1 setting.')
-    assert.equal(await p.locator(MODE).inputValue(), 'both', 'the pasted mode is in the draft')
+    assert.equal(await paste(p, JSON.stringify({ ColorByDigit_ticks: { on: true, cell: true, digit: true } })), 'Pasted 1 setting.')
+    assert.equal(await tick('digit').isChecked(), true, 'the pasted mode is in the draft')
     assert.equal(await p.locator(CELL_PROFILE).inputValue(), chosen, 'the unsaved profile choice is still in the draft')
     await closeDialogWith(p, 'Cancel', editor)
   })
 
   it('pasted profiles leave the draft\'s unsaved mode as it is', async () => {
     await dialog.open(p)
-    await p.selectOption(MODE, 'off')
+    await tick('on').setChecked(!await tick('on').isChecked())
+    const unsaved = await tick('on').isChecked()
     assert.equal(await paste(p, JSON.stringify({ ColorByDigit_profiles: saved })), 'Pasted 1 setting.')
-    assert.equal(await p.locator(MODE).inputValue(), 'off', 'the unsaved mode edit is still in the draft')
+    assert.equal(await tick('on').isChecked(), unsaved, 'the unsaved mode edit is still in the draft')
     assert.equal(await p.locator(`${editor} .cbd-profile`).count(), 1, 'the pasted profiles are in the draft')
     await closeDialogWith(p, 'Cancel', editor)
   })
