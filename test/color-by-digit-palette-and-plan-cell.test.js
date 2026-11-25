@@ -64,8 +64,8 @@ test('Color by Digit and Text Anywhere report a bad palette the same way: one wa
 
 test('Color by Digit\'s pulldowns take the lib\'s select rule and the editor holds no copy of it', () => {
   const state = colorByDigit.stateFromStored(fakeStore())
-  const selects = colorByDigit.renderPulldowns(state, 'cell').match(/<select [^>]*>/g)
-  assert.equal(selects.length, 3)
+  const selects = colorByDigit.renderPulldowns(state, { on: true, cell: true, digit: false }).match(/<select [^>]*>/g)
+  assert.equal(selects.length, 2)
   for (const select of selects) assert.match(select, /class="cbd-color-choice"/)
   assert.doesNotMatch(colorByDigit.STYLE_CSS, /\.cbd-pulldown select/)
 })

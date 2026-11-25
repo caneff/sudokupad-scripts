@@ -27,19 +27,21 @@
   const SCRIPT_NAME = 'Color by Digit'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
-  // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
-  // `digitActive` is saved only while digits are not synced with cells, and `useDigitColors` only while off, so a state saved before them reads as synced and on.
+  // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index }.
+  // `digitActive` is saved only while digits are not synced with cells, so a state saved before it reads as synced.
+  // Profiles saved before the Digit tick may hold `useDigitColors: false`, the Digit pulldown's None: read only to choose the starting mode when no mode is saved.
   const PROFILES_KEY = 'ColorByDigit_profiles'
   const MAX_PROFILES = 6
   const MAX_NAME_LENGTH = 24
   const CUSTOM_NAME = 'Custom'
-  const MODE_KEY = 'ColorByDigit_mode'
-  // Auto mode's on/off, saved before the mode existed: read only to choose the starting mode when no mode is saved.
+  // The mode: { on, cell, digit }, coloring on or off and the Cell and Digit ticks, at least one of them ticked.
+  const MODE_KEY = 'ColorByDigit_ticks'
+  // The mode word saved before the ticks, and auto mode's on/off saved before that: read only to choose the starting mode when no mode is saved.
+  const MODE_WORD_KEY = 'ColorByDigit_mode'
   const AUTO_KEY = 'ColorByDigit_auto'
-  const MODES = ['cell', 'digit', 'both', 'off']
-  const DEFAULT_MODE = 'cell'
-  const DIGITLESS_MODES = ['cell', 'off']
-  const DIGITLESS_FALLBACK = { digit: 'off', both: 'cell' }
+  const DEFAULT_MODE = { on: true, cell: true, digit: false }
+  const MODE_FROM_WORD = { cell: DEFAULT_MODE, digit: { on: true, cell: false, digit: true }, both: { on: true, cell: true, digit: true }, off: { on: false, cell: true, digit: false } }
+  // The word above the button's chips: what an on mode colors, or Off.
   const MODE_NAMES = { cell: 'Cell', digit: 'Digit', both: 'Both', off: 'Off' }
   // Each key is set once its preloads have been offered to an install that already had profiles, so deleting one keeps it deleted.
   const ADDED_PRELOADS = [
@@ -115,16 +117,30 @@
 
   const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
 
-  const modesFor = (useDigitColors) => (useDigitColors ? MODES : DIGITLESS_MODES)
-  const nextMode = (mode, useDigitColors) => {
-    const modes = modesFor(useDigitColors)
-    return modes[wrapIndex(modes.indexOf(mode), 1, modes.length)]
+  const colorsCells = (mode) => mode.on && mode.cell
+  const colorsDigits = (mode) => mode.on && mode.digit
+  const modeWord = (mode) => (!mode.on ? 'off' : mode.cell && mode.digit ? 'both' : mode.cell ? 'cell' : 'digit')
+  const sameMode = (a, b) => a.on === b.on && a.cell === b.cell && a.digit === b.digit
+  const pressedMode = (mode) => ({ ...mode, on: !mode.on })
+  // `box` is 'on', 'cell' or 'digit'. Unticking the last ticked box is refused, so an on mode always colors something.
+  function tickedMode (mode, box, ticked) {
+    const next = { ...mode, [box]: ticked }
+    return next.cell || next.digit ? next : mode
   }
-  const allowedMode = (mode, useDigitColors) => (useDigitColors ? mode : DIGITLESS_FALLBACK[mode] ?? mode)
-  const colorsCells = (mode) => mode === 'cell' || mode === 'both'
-  const colorsDigits = (mode) => mode === 'digit' || mode === 'both'
+  const savedMode = (data) => {
+    if (!isPlainObject(data) || ![data.on, data.cell, data.digit].every((b) => typeof b === 'boolean') || !(data.cell || data.digit)) return undefined
+    return { on: data.on, cell: data.cell, digit: data.digit }
+  }
   const modeFromAuto = (auto) => (typeof auto === 'boolean' ? (auto ? 'cell' : 'off') : undefined)
-  const startingMode = (savedMode, savedAuto) => (MODES.includes(savedMode) ? savedMode : modeFromAuto(savedAuto) ?? DEFAULT_MODE)
+  // The old mode word, else auto mode's on/off, else nothing saved. Digit colors saved off (the Digit pulldown's None) showed Digit as Off and Both as Cell,
+  // so they untick Digit and tick Cell in its place, and the board looks as it did.
+  function startingMode (saved, savedWord, savedAuto, usedDigitColors = true) {
+    const mode = savedMode(saved)
+    if (mode) return mode
+    const word = (typeof savedWord === 'string' && Object.hasOwn(MODE_FROM_WORD, savedWord) ? savedWord : modeFromAuto(savedAuto)) ?? 'cell'
+    if (usedDigitColors) return { ...MODE_FROM_WORD[word] }
+    return { ...MODE_FROM_WORD[{ digit: 'off', both: 'cell' }[word] ?? word] }
+  }
 
   // SudokuPad's action names: `value` (digit), `candidates` (centre mark), `pencilmarks` (corner mark).
   function isEntryAction (action) {
@@ -262,7 +278,7 @@
     const profiles = data.profiles.map(normalizeProfile)
     if (profiles.includes(null)) return undefined
     const isIndex = (index) => Number.isInteger(index) && index >= 0 && index < profiles.length
-    return makeState(profiles, isIndex(data.active) ? data.active : 0, isIndex(data.digitActive) ? data.digitActive : undefined, data.useDigitColors !== false)
+    return makeState(profiles, isIndex(data.active) ? data.active : 0, isIndex(data.digitActive) ? data.digitActive : undefined)
   }
 
   // <lib:plain>
@@ -405,16 +421,29 @@
   const saveTable = (store, rows, values) => rows.forEach((row) => saveRow(store, row, values[row.name]))
   /* eslint-enable no-unused-vars */
   // </lib:settings-table>
-  const savedMode = (data) => (MODES.includes(data) ? data : undefined)
   const MODE_ROW = { name: 'mode', key: MODE_KEY, fallback: DEFAULT_MODE, read: savedMode }
   const PRELOAD_ROWS = ADDED_PRELOADS.map(({ key }) => ({ name: key, key, fallback: false, read: savedBoolean }))
   const SETTING_ROWS = [MODE_ROW, ...PRELOAD_ROWS]
   // The profiles are no row: their fallback comes from the groups saved before them, and they are saved in the store's envelope, with their own read.
   const READERS = { [PROFILES_KEY]: savedProfiles, ...pasteReaders(SETTING_ROWS) }
-  // Settings copied before the mode existed carry auto mode's on/off in its place.
-  const withModeFromAuto = (data) => (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY) ? { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) } : data)
-  // A mode never saved reads as auto mode's saved on/off, which came before it.
-  const withLegacyMode = (store) => ({ getData: (key) => (key === MODE_KEY ? startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) : store.getData(key)) })
+  const usedDigitColors = (profiles) => !(isPlainObject(profiles) && profiles.useDigitColors === false)
+  // Settings copied before the ticks carry the mode word, or before that auto mode's on/off, in their place. A word that is no mode is kept for the reader to refuse.
+  // Digit colors copied off (the Digit pulldown's None) take the digit profile back to Same as cell, as the upgrade of saved settings does.
+  function withUpgradedMode (data) {
+    if (Object.hasOwn(data, MODE_KEY) || !(Object.hasOwn(data, MODE_WORD_KEY) || Object.hasOwn(data, AUTO_KEY))) return data
+    const word = Object.hasOwn(data, MODE_WORD_KEY) ? data[MODE_WORD_KEY] : modeFromAuto(data[AUTO_KEY])
+    const used = usedDigitColors(data[PROFILES_KEY])
+    const upgraded = { ...data, [MODE_KEY]: typeof word === 'string' && Object.hasOwn(MODE_FROM_WORD, word) ? startingMode(null, word, null, used) : word }
+    if (!used) upgraded[PROFILES_KEY] = { ...data[PROFILES_KEY], digitActive: undefined }
+    return upgraded
+  }
+  const storedProfilesData = (store) => {
+    const raw = store.getData(PROFILES_KEY)
+    return isEnvelope(raw) ? raw.data : raw
+  }
+  const storedMode = (store) => startingMode(store.getData(MODE_KEY), store.getData(MODE_WORD_KEY), store.getData(AUTO_KEY), usedDigitColors(storedProfilesData(store)))
+  // A mode never saved reads as the mode word or auto mode's on/off saved before it.
+  const withLegacyMode = (store) => ({ getData: (key) => (key === MODE_KEY ? storedMode(store) : store.getData(key)) })
   // The profiles in force, which carry groups saved before profiles existed, and the mode in force, so a paste can switch either.
   // An added-preload mark is copied only when set: an unset one copied as false would let a paste remove the target's mark, and addPreloadsOnce would add back preload profiles the user deleted.
   const copiedSettings = (store) => {
@@ -427,10 +456,9 @@
 
   const cloneProfile = (profile) => ({ name: profile.name, groups: cloneGroups(profile.groups) })
 
-  function makeState (profiles, active, digitActive, useDigitColors) {
+  function makeState (profiles, active, digitActive) {
     const state = { profiles, active }
     if (digitActive !== undefined) state.digitActive = digitActive
-    if (!useDigitColors) state.useDigitColors = false
     return state
   }
 
@@ -442,17 +470,16 @@
   ]
 
   const isSynced = (state) => state.digitActive === undefined
-  const usesDigitColors = (state) => state.useDigitColors !== false
-  // `changes` names the fields that change (profiles, active, digitActive, useDigitColors); the rest carry over, profiles as copies when `changes` has none.
+  // `changes` names the fields that change (profiles, active, digitActive); the rest carry over, profiles as copies when `changes` has none.
   // A `digitActive` of undefined is a change: it syncs the digit pick to the cell profile.
   function editState (state, changes) {
-    const next = { active: state.active, digitActive: state.digitActive, useDigitColors: usesDigitColors(state), ...changes }
+    const next = { active: state.active, digitActive: state.digitActive, ...changes }
     next.profiles ??= state.profiles.map(cloneProfile)
-    return makeState(next.profiles, next.active, next.digitActive, next.useDigitColors)
+    return makeState(next.profiles, next.active, next.digitActive)
   }
 
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
-  const preloadedState = () => makeState(preloadProfiles(), 0, undefined, true)
+  const preloadedState = () => makeState(preloadProfiles(), 0, undefined)
 
   const stateFromStored = (store) => loadEnveloped(store, { key: PROFILES_KEY, read: savedProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
 
@@ -527,15 +554,9 @@
   // Unticking starts the digit pick at the cell profile, so no color changes until another is picked.
   const setSync = (state, synced) => editState(state, { digitActive: synced ? undefined : (state.digitActive ?? state.active) })
 
-  const setUseDigitColors = (state, on) => editState(state, { useDigitColors: on })
+  const digitChoice = (state) => (isSynced(state) ? 'same' : String(state.digitActive))
 
-  const digitChoice = (state) => (!usesDigitColors(state) ? 'none' : isSynced(state) ? 'same' : String(state.digitActive))
-
-  function chooseDigit (state, choice) {
-    if (choice === 'none') return setUseDigitColors(state, false)
-    const colored = setUseDigitColors(state, true)
-    return choice === 'same' ? setSync(colored, true) : setDigitActive(colored, Number(choice))
-  }
+  const chooseDigit = (state, choice) => (choice === 'same' ? setSync(state, true) : setDigitActive(state, Number(choice)))
 
   function setProfileGroups (state, index, groups) {
     return editState(state, { profiles: state.profiles.map((p, i) => (i === index ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))) })
@@ -1650,15 +1671,10 @@
       }
       case 'key-paint': return brush === null ? draft : withGroups(paintDigit(groups, event.digit, brush))
       case 'choose':
-        if (event.role === 'mode-draft') return { ...draft, mode: event.value }
         if (event.role === 'cell-profile') return { ...draft, state: setActive(state, Number(event.value)) }
-        if (event.role === 'digit-profile') {
-          // None moves the draft mode at once, so the Mode pulldown never shows a mode the draft does not hold: a select fires no change
-          // for the option it already shows.
-          const next = chooseDigit(state, event.value)
-          return { ...draft, state: next, mode: allowedMode(draft.mode, usesDigitColors(next)) }
-        }
+        if (event.role === 'digit-profile') return { ...draft, state: chooseDigit(state, event.value) }
         throw new Error(`reduceDraft: no pulldown ${event.role}`)
+      case 'tick': return { ...draft, mode: tickedMode(draft.mode, event.box, event.ticked) }
       case 'new-profile': {
         const next = copyProfile(state, selected)
         return showing(next, next.profiles.length - 1)
@@ -1668,7 +1684,7 @@
       // A paste replaces only what it holds: the profiles (selecting the pasted active one) and the mode; every other edit stays.
       case 'paste': {
         const next = event.state ?? state
-        const pasted = { ...draft, mode: allowedMode(event.mode ?? draft.mode, usesDigitColors(next)) }
+        const pasted = { ...draft, mode: event.mode ?? draft.mode }
         return event.state ? showingProfile(pasted, next, next.active) : pasted
       }
     }
@@ -1782,7 +1798,7 @@
 
   // Two columns need this much room each; the dialog's 640 px gives them two.
   const COLUMN_MIN = 270
-  // Wide enough for the longest of Mode, Cell and Digit, so the three pulldowns start at one edge.
+  // Wide enough for the longest of Mode, Cell and Digit, so the mode's checkboxes and the two pulldowns start at one edge.
   const PULLDOWN_LABEL_WIDTH = 64
   const DIALOG_WIDTH = 640
   // <lib:settings-dialog>
@@ -2176,7 +2192,7 @@
 
   // Rows are not focusable, so the keyboard stays with the puzzle.
   function renderMenu (state, colorOf) {
-    const split = usesDigitColors(state) && !isSynced(state)
+    const split = !isSynced(state)
     const head = split
       ? `<div style="${MENU_ROW};height:auto;padding-bottom:2px"><span style="flex:1"></span>` +
         Object.values(TARGET_NAMES).map((word) => dotColumn('column-head', word, `text-align:center;font:600 11px/1 sans-serif;color:${MUTED}`)).join('') + '</div>'
@@ -2197,15 +2213,17 @@
   const optionHtml = (value, label, selected, index) =>
     `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`
 
+  const MODE_BOXES = { on: 'On', cell: 'Cell', digit: 'Digit' }
+
   function renderPulldowns (state, mode) {
-    const shownMode = allowedMode(mode, usesDigitColors(state))
     const digit = digitChoice(state)
     const named = (picked) => state.profiles.map((p, i) => optionHtml(i, p.name, picked === String(i), i)).join('')
     const pulldown = (role, label, options) => `<label class="${CLASS_PREFIX}pulldown"><span>${label}</span><select class="${CLASS_PREFIX}color-choice" data-role="${role}">${options}</select></label>`
     return `<div class="${CLASS_PREFIX}pulldowns">` +
-      pulldown('mode-draft', 'Mode', modesFor(usesDigitColors(state)).map((m) => optionHtml(m, MODE_NAMES[m], m === shownMode)).join('')) +
+      `<div class="${CLASS_PREFIX}pulldown" role="group" aria-label="Mode"><span>Mode</span><span class="${CLASS_PREFIX}ticks">` +
+      Object.entries(MODE_BOXES).map(([box, word]) => `<label><input type="checkbox" data-role="mode-tick" data-box="${box}"${mode[box] ? ' checked' : ''}>${word}</label>`).join('') + '</span></div>' +
       pulldown('cell-profile', 'Cell', named(String(state.active))) +
-      pulldown('digit-profile', 'Digit', optionHtml('same', 'Same as cell', digit === 'same') + named(digit) + optionHtml('none', 'None', digit === 'none')) +
+      pulldown('digit-profile', 'Digit', optionHtml('same', 'Same as cell', digit === 'same') + named(digit)) +
       '</div>'
   }
 
@@ -2257,6 +2275,9 @@
     [`${EDITOR} .${CLASS_PREFIX}confirm-buttons`, 'display: flex; gap: 8px; margin-top: 8px'],
     [`${EDITOR} .${CLASS_PREFIX}pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
     [`${EDITOR} .${CLASS_PREFIX}pulldown`, `display: grid; grid-template-columns: ${PULLDOWN_LABEL_WIDTH}px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left`],
+    [`${EDITOR} .${CLASS_PREFIX}ticks`, 'display: flex; flex-wrap: wrap; gap: 4px 18px; font-weight: 400'],
+    [`${EDITOR} .${CLASS_PREFIX}ticks label`, `display: inline-flex; align-items: center; gap: 6px; min-height: ${MIN_TARGET_PX}px; margin: 0; cursor: pointer`],
+    [`${EDITOR} .${CLASS_PREFIX}ticks input`, 'width: 16px; height: 16px; margin: 0; cursor: pointer'],
     [`${EDITOR} .${CLASS_PREFIX}columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
     [`${EDITOR} .${CLASS_PREFIX}column`, 'min-width: 0'],
     [`${EDITOR} .${CLASS_PREFIX}button`, `background: ${DIALOG_BUTTON_FACE}; color: ${DIALOG_BUTTON_INK}; border: 1px solid ${DIALOG_BUTTON_BORDER}; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer`],
@@ -2421,7 +2442,7 @@
   const guard = createGuard({ script: SCRIPT_ID, name: SCRIPT_NAME, version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, asideOf, isVisibleColor, layoutPages, layoutColors, palettePages, readPalette, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, withCellProfile, openingDraft, reduceDraft, READERS, withUpgradedMode, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, pressedMode, tickedMode, modeWord, startingMode, storedMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, setSync, setDigitActive, digitChoice, chooseDigit, dropIndex, asideOf, isVisibleColor, layoutPages, layoutColors, palettePages, readPalette, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2544,7 +2565,7 @@
     }
   }
 
-  let mode = 'off'
+  let mode = MODE_FROM_WORD.off
 
   // SudokuPad's events ignore `{ once: true }` (docs/research/sudokupad-custom-tool.md), so a one-shot handler removes itself, under `feature`'s guard as SudokuPad calls it.
   function onProgressLoadedOnce (app, feature, fn) {
@@ -2672,8 +2693,8 @@
   function labelButton () {
     const button = document.querySelector(BUTTON)
     if (!button) return
-    button.title = buttonLabel(mode)
-    button.setAttribute('aria-label', buttonLabel(mode))
+    button.title = buttonLabel(modeWord(mode))
+    button.setAttribute('aria-label', buttonLabel(modeWord(mode)))
   }
 
   // The palette can change after the button was drawn, so the icon and the digit shades are drawn from it again.
@@ -2681,7 +2702,8 @@
     modeButton.run(() => {
       const icon = document.querySelector(`${BUTTON} .icon`)
       const state = loadState()
-      if (icon) icon.outerHTML = iconHtml(mode, buttonChips(mode, state), paletteKeyColor)
+      const word = modeWord(mode)
+      if (icon) icon.outerHTML = iconHtml(word, buttonChips(word, state), paletteKeyColor)
       labelButton()
     })
     digitColors.run(showDigitColors)
@@ -2689,7 +2711,7 @@
 
   function showMode (next) {
     mode = next
-    // The default mode is written, not removed as saveRow would: with the key gone, startingMode reads a saved ColorByDigit_auto false from before the modes as Off.
+    // The default mode is written, not removed as saveRow would: with the key gone, storedMode reads the mode word or auto mode's on/off saved before it.
     savedData.setData(MODE_KEY, next)
     redraw()
   }
@@ -2725,12 +2747,12 @@
     const target = type === 'undo' ? modeHistory.undo(stackLength, cellProfile(loadState())) : modeHistory.redo(stackLength)
     if (target === undefined) return
     if (target.profile) saveState(withCellProfile(loadState(), target.profile))
-    showMode(allowedMode(target.mode, usesDigitColors(loadState())))
+    showMode(target.mode)
   }
 
-  // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
+  // The restart's own coloring is an undo step too; taking it back leaves the cells as a mode that colors none: Off with the same ticks, or on with Digit alone.
   function colorAfterRestart (app) {
-    if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
+    if (colorsCells(mode)) recordingModeStep(app, mode.digit ? MODE_FROM_WORD.digit : pressedMode(mode), mode, () => colorEnteredCells(app))
   }
 
   // The replay entries that are not inside a `gs`..`ge` group: what SudokuPad puts back after a Restart besides its coloring, a Keep Time Restart's `wait` among them.
@@ -2969,7 +2991,7 @@
         move: (e) => { if (moved(e)) { endHold(); setPressed(false) } },
         end: (e) => {
           setPressed(false)
-          modeButton.run(() => { if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode, usesDigitColors(loadState()))) })
+          modeButton.run(() => { if (hold !== null && e.type === 'pointerup') setMode(app, pressedMode(mode)) })
           endHold()
         }
       })
@@ -2983,9 +3005,8 @@
     window.addEventListener('resize', closeMenu)
   }
 
-  function saveDialog (app, oldState, draft, draftMode) {
+  function saveDialog (app, oldState, draft, next) {
     saveState(draft)
-    const next = allowedMode(draftMode, usesDigitColors(draft))
     const oldGroups = activeGroups(oldState)
     const groups = activeGroups(draft)
     const profiles = { from: cellProfile(oldState, true), to: cellProfile(draft, true) }
@@ -3017,7 +3038,7 @@
       bodyId: DIALOG_ID,
       styleId: DIALOG_STYLE_ID,
       css: STYLE_CSS,
-      changed: () => draft.mode !== mode || JSON.stringify(draft.state) !== JSON.stringify(savedState),
+      changed: () => !sameMode(draft.mode, mode) || JSON.stringify(draft.state) !== JSON.stringify(savedState),
       snapshot: snapshotSave,
       feature: editor,
       save: () => saveDialog(app, savedState, draft.state, draft.mode),
@@ -3025,7 +3046,7 @@
         // A copy with the saved settings off says so, rather than copy the defaults as if they were saved.
         copied: () => storage.runInDialog(() => copiedSettings(savedData)),
         readers: READERS,
-        upgrade: withModeFromAuto,
+        upgrade: withUpgradedMode,
         apply: (values) => {
           saveTable(savedData, PRELOAD_ROWS.filter((row) => row.key in values), values)
           saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
@@ -3091,6 +3112,12 @@
     })
     box.addEventListener('change', (event) => {
       if (event.target.matches('[data-role="profile-name"]')) { settleName(event.target); return }
+      // A refused untick puts the tick back; nothing else on the page shows the draft mode.
+      if (event.target.matches('[data-role="mode-tick"]')) {
+        edit({ type: 'tick', box: event.target.dataset.box, ticked: event.target.checked })
+        event.target.checked = draft.mode[event.target.dataset.box]
+        return
+      }
       const pulldown = event.target.closest('select[data-role]')
       if (!pulldown) return
       const role = pulldown.dataset.role
@@ -3238,13 +3265,20 @@
     })
     // The features are independent: one that fails to install costs the others nothing.
     addSettingsEntry(dialogs, editor, { name: 'colorbydigit', content: SCRIPT_NAME, open: () => openDialog(app) })
+    // The mode word and digit colors saved before the ticks are read this once and never written again: the mode goes under its own key,
+    // and digit colors saved off take the digit profile back to Same as cell, as the Digit pulldown's None showed it. Before the preloads,
+    // whose save would drop the digit colors' flag unread.
+    mode = storedMode(savedData)
+    if (savedMode(savedData.getData(MODE_KEY)) === undefined) {
+      savedData.setData(MODE_KEY, mode)
+      if (!usedDigitColors(storedProfilesData(savedData))) saveState(setSync(loadState(), true))
+    }
     addPreloadsOnce()
     const state = loadState()
-    mode = allowedMode(startingMode(savedData.getData(MODE_KEY), savedData.getData(AUTO_KEY)), usesDigitColors(state))
     writeStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
     writeStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {
-      installButton(Framework, app, mode, buttonChips(mode, state), paletteKeyColor)
+      installButton(Framework, app, modeWord(mode), buttonChips(modeWord(mode), state), paletteKeyColor)
       labelButton()
     })
     installCellColoring(app)
