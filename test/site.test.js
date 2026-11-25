@@ -442,11 +442,11 @@ const DETAIL_CONTENT = [
     file: CBD,
     sections: ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<h2>Good to know</h2>'],
     features: [
-      'On and off A press of the button turns coloring on or off. The Cell and Digit checkboxes in the settings dialog choose what it colors, cells, digits or both, and the word above the chips names it: Cell, Digit, Both, or Off. With only Digit ticked, a press leaves the colors you painted yourself alone.',
+      'On and off A press of the button turns coloring on or off. The Cell and Digit checkboxes at the top of the profile menu choose what it colors, cells, digits or both, and the word above the chips names it: Cell, Digit, Both, or Off. With only Digit ticked, a press leaves the colors you painted yourself alone.',
       'Updates as you solve A cell takes its group\'s color when its digit, or every one of its center marks, is in that group. The color goes when that stops being true.',
       'Colored digits In Digit and Both, digits and marks take a darker shade of their group\'s color. A mark that conflicts gets a red circle.',
       'Profiles A profile splits the digits into groups and gives each a color. Five come built in (Low/5/High, Odd/Even, Entropic, Modular and Each digit), and you can keep up to six.',
-      'Quick switching Click the arrow on the button, or right-click or hold the button, to open the profile list. A pick applies at once.',
+      'Quick switching Click the arrow on the button, or right-click or hold the button, to open the profile list. A pick applies at once, and the Cell and Digit checkboxes above it apply at once too and keep the list open.',
       'A separate digit profile Digits can follow the cell profile or use another profile.'
     ],
     leadIns: ['On and off', 'Updates as you solve', 'Colored digits', 'Profiles', 'Quick switching', 'A separate digit profile']

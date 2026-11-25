@@ -561,6 +561,7 @@ test('the stylesheet has no rule for the dialog title\'s Copy and Paste settings
   assert.doesNotMatch(STYLE_CSS, /copy-settings|paste-settings|cbd-tools/)
 })
 
+const CELL_ON = { on: true, cell: true, digit: false }
 const menuPicks = (html) => [...html.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`)
 
 const menuRows = (html) => html.split('data-role="menu-row"').slice(1).map((row) => ({
@@ -570,30 +571,62 @@ const menuRows = (html) => html.split('data-role="menu-row"').slice(1).map((row)
 }))
 
 test('sync: unsynced, the menu is one list whose rows each end in a Cell dot and a Digit dot, under the words Cell and Digit, each pick marked in its own column', () => {
-  const html = renderMenu(apart, colorFor)
+  const html = renderMenu(apart, colorFor, CELL_ON)
   assert.deepEqual(menuRows(html).map((r) => r.picks), [['cells0', 'digits0'], ['cells1*', 'digits1'], ['cells2', 'digits2*']])
   assert.deepEqual(menuRows(html).map((r) => r.name), ['A', 'B', 'C'])
   const head = html.slice(0, html.indexOf('data-role="menu-row"'))
-  assert.match(head, /data-role="column-head"[^>]*>Cell<\/span><span data-role="column-head"[^>]*>Digit</)
+  assert.match(head, /data-role="column-head"[^>]*>[\s\S]*?>Cell<[\s\S]*?data-role="column-head"[^>]*>[\s\S]*?>Digit</)
   assert.equal(count(html, />Cells?<|>Digits?</g), 2)
   assert.doesNotMatch(html, /data-role="menu-row"[^>]*data-act=/)
   assert.ok(html.indexOf('data-act="edit"') > html.lastIndexOf('data-act="pick"'))
 })
 
 test('sync: the menu\'s dot columns and their heads have one width, so each head sits centred over its dots', () => {
-  const html = renderMenu(apart, colorFor)
+  const html = renderMenu(apart, colorFor, CELL_ON)
   const widths = [...html.matchAll(/data-role="(?:column-head|dot-column)" style="[^"]*width:(\d+)px/g)].map((m) => m[1])
   assert.equal(widths.length, 2 + 2 * 3)
   assert.equal(new Set(widths).size, 1)
-  assert.match(html, /data-role="column-head" style="[^"]*text-align:center/)
+  assert.match(html, /data-role="column-head" style="[^"]*justify-content:center/)
   assert.match(html, /data-role="dot-column" style="[^"]*justify-content:center/)
 })
 
 test('sync: synced, the menu is one list of rows that each pick the profile, with no dots and no column heads', () => {
-  const html = renderMenu(synced, colorFor)
+  const html = renderMenu(synced, colorFor, CELL_ON)
   assert.deepEqual(menuPicks(html), ['cells0', 'cells1*', 'cells2'])
   assert.equal(count(html, /data-role="menu-row" data-act="pick"/g), 3)
-  assert.doesNotMatch(html, />Cells?<|>Digits?<|data-role="column-head"|data-role="dot-column"/)
+  assert.doesNotMatch(html, /data-role="column-head"|data-role="dot-column"/)
+  assert.doesNotMatch(html.slice(html.indexOf('data-role="menu-row"')), />Cells?<|>Digits?</)
+})
+
+// Each menu tick as `<box>`, with `*` on a ticked one, in order.
+const menuTicks = (html) => [...html.matchAll(/data-act="tick" data-box="(\w+)"[^>]*aria-checked="(\w+)"[^>]*><input type="checkbox"([^>]*)>/g)]
+  .map((m) => { assert.equal(m[2] === 'true', / checked/.test(m[3]), 'aria-checked and the box agree'); return `${m[1]}${m[2] === 'true' ? '*' : ''}` })
+
+test('ticks: the menu opens with a Cell and a Digit checkbox above the profile rows, ticked as the mode is, on or off', () => {
+  for (const state of [synced, apart]) {
+    for (const [mode, ticks] of [[modeOf(true, true, false), ['cell*', 'digit']], [modeOf(false, false, true), ['cell', 'digit*']], [modeOf(true, true, true), ['cell*', 'digit*']]]) {
+      const html = renderMenu(state, colorFor, mode)
+      assert.deepEqual(menuTicks(html), ticks)
+      assert.ok(html.lastIndexOf('data-act="tick"') < html.indexOf('data-role="menu-row"'), 'the ticks come before the first profile row')
+    }
+  }
+})
+
+test('ticks: unsynced, each checkbox is its dot column\'s head, in place of the word alone; synced, the row has no column heads', () => {
+  const apartHtml = renderMenu(apart, colorFor, modeOf(true, true, false))
+  assert.match(apartHtml, /data-role="column-head"[^>]*><label data-act="tick" data-box="cell"[\s\S]*?>Cell<[\s\S]*?data-role="column-head"[^>]*><label data-act="tick" data-box="digit"[\s\S]*?>Digit</)
+  assert.equal(count(apartHtml, />Cells?<|>Digits?</g), 2)
+  const syncedHtml = renderMenu(synced, colorFor, modeOf(true, true, false))
+  assert.doesNotMatch(syncedHtml, /data-role="column-head"|data-role="dot-column"/)
+  assert.match(syncedHtml, /data-role="tick-row"[\s\S]*>Cell<[\s\S]*>Digit</)
+})
+
+test('ticks: a menu checkbox takes no keyboard focus, so the keyboard stays with the puzzle', () => {
+  for (const state of [synced, apart]) {
+    const boxes = [...renderMenu(state, colorFor, modeOf(true, true, false)).matchAll(/<input type="checkbox"[^>]*>/g)].map((m) => m[0])
+    assert.equal(boxes.length, 2)
+    for (const box of boxes) assert.match(box, /tabindex="-1"/)
+  }
 })
 
 test('dropIndex gives the position the dragged row lands in, counting the rows above the pointer', () => {
@@ -909,21 +942,21 @@ test('renderProfiles has no Add button', () => {
 
 test('the button, renderProfiles and renderMenu all show a profile of six groups as a run of three cells', () => {
   const each = { profiles: [{ name: 'Each', groups: Array.from({ length: 6 }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1)] })) }], active: 0 }
-  for (const html of [renderProfiles(each, colorFor, 0), renderMenu(each, colorFor), iconHtml('cell', chipsOf(each.profiles[0].groups), colorFor)]) {
+  for (const html of [renderProfiles(each, colorFor, 0), renderMenu(each, colorFor, CELL_ON), iconHtml('cell', chipsOf(each.profiles[0].groups), colorFor)]) {
     assert.equal(count(html, /data-role="chip"/g), 3)
     assert.equal(count(html, /<line /g), 2)
   }
 })
 
-test('renderMenu has no heading: one dense row per profile in order with the active one marked and highlighted, then Edit profiles', () => {
-  const html = renderMenu(profileState, colorFor)
+test('renderMenu has no heading: the Cell and Digit ticks, then one dense row per profile in order with the active one marked and highlighted, then Edit profiles', () => {
+  const html = renderMenu(profileState, colorFor, CELL_ON)
   assert.doesNotMatch(html, /Color by digit profile/i)
-  assert.equal(html.indexOf('data-role="menu-row"') < html.indexOf('>'), true)
+  assert.equal(html.slice(0, html.indexOf('<div data-role="menu-row"')).replace(/<[^>]*>/g, ''), 'CellDigit')
   assert.match(html, /data-index="1" aria-checked="true" style="[^"]*height:26px[^"]*background:#f1ebfb/)
   assert.match(html, /data-index="0" aria-checked="false" style="[^"]*height:26px/)
   assert.doesNotMatch(html, /data-index="0" aria-checked="false" style="[^"]*background/)
   assert.deepEqual([...html.matchAll(/data-act="pick" data-target="cells" data-index="(\d)"/g)].map((m) => m[1]), ['0', '1'])
-  assert.equal(count(html, /aria-checked="true"/g), 1)
+  assert.equal(count(html.slice(html.indexOf('data-role="menu-row"')), /aria-checked="true"/g), 1)
   assert.match(html, /data-index="1"[^>]*aria-checked="true"/)
   assert.match(html, /Low &lt;b&gt;/)
   assert.match(html, /data-act="edit"[^>]*>[^<]*Edit profiles…/)
@@ -1887,11 +1920,11 @@ test('the button is titled and labelled with its mode in words', () => {
 
 test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a column of one fixed width, so the names line up', () => {
   for (const state of [synced, apart]) {
-    const rows = menuRows(renderMenu(state, colorFor))
+    const rows = menuRows(renderMenu(state, colorFor, CELL_ON))
     assert.equal(new Set(rows.map((r) => r.chipWidth)).size, 1)
     assert.match(rows[0].chipWidth, /width:\d+px/)
   }
-  const html = renderMenu(profileState, colorFor)
+  const html = renderMenu(profileState, colorFor, CELL_ON)
   assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]), runCells(renderChips(chipsOf(LOW), colorFor, { size: 16 })))
 })
 
@@ -2270,7 +2303,7 @@ test('the delete button and the drag handle are at least 24 px, and the dragging
 })
 
 test('the menu\'s Cell and Digit dots pick from the whole column, not the 16 px dot', () => {
-  const html = renderMenu({ ...profileState, active: 0, digitActive: 1, useDigitColors: true, sync: false }, colorFor)
+  const html = renderMenu({ ...profileState, active: 0, digitActive: 1, useDigitColors: true, sync: false }, colorFor, CELL_ON)
   assert.match(html, /data-role="dot-column"[^>]*data-act="pick" data-target="cells" data-index="0" aria-checked="true"/)
   assert.doesNotMatch(html, /<span data-act="pick"/)
 })
