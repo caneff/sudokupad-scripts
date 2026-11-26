@@ -79,7 +79,7 @@ const isSettingsObject = (text) => {
     return false
   }
 }
-// The point nearest the pane's middle where the pane is the topmost element, as `{ x, y }`; null when the page shows no rules, or a note covers all of the pane (#1187).
+// The point nearest the pane's middle where the pane is the topmost element, as `{ x, y }`; null when the page shows no rules, or every point tried of the pane is covered by something, a note most likely (#1187).
 // The pane shows its corners and font bar only while it is hovered, and a pointer over a note that spreads across the pane's middle is not over the pane.
 async function rulesPoint (p) {
   if (!await p.locator(RULES_PANE).isVisible()) return null
@@ -459,6 +459,8 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     },
     async dragRules (corner, dx, dy) {
       if (!await hoverRulesFor(p, p.locator(CORNER(corner)))) return
+      // A note over the corner (it sits outside the pane, at the board's right edge) takes the press, as it would a player's: nothing to drag.
+      if (!await p.locator(CORNER(corner)).evaluate((el) => { const r = el.getBoundingClientRect(); return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === el })) return
       const box = await p.locator(CORNER(corner)).boundingBox()
       const x = box.x + box.width / 2
       const y = box.y + box.height / 2
@@ -475,7 +477,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
         for (let tries = 1; ; tries++) {
           if (!await hoverRulesFor(p, button)) return
           const last = tries === MOVE_TRIES
-          if (await button.click({ timeout: last ? BOX_TIMEOUT_MS : PRESS_LOOK_MS }).then(() => true, (error) => { if (last) throw error })) break
+          if (await button.click({ timeout: last ? BOX_TIMEOUT_MS : PRESS_LOOK_MS }).then(() => true, (error) => { if (last || error.name !== 'TimeoutError') throw error })) break
         }
       }
     },

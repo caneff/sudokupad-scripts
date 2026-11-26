@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { useBrowser } from '../session.mjs'
 import { rulesWidth } from '../all-scripts.mjs'
+import { FONT_BAR } from '../auto-rules-resizer/auto-rules-resizer-fixtures.mjs'
 import { penDrawnCount } from '../pen.mjs'
 import { ERROR_LOG_SCRIPTS, MORE_TEXT, PROFILE_NAMES, scriptedList } from './actions.mjs'
 import { labelOn } from '../color-by-digit/color-by-digit-fixtures.mjs'
@@ -517,10 +518,10 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       const target = await openTarget(browser(), puzzle, {})
       try {
         const page = target.env.page
-        await page.evaluate(() => {
+        await page.evaluate((fontBar) => {
           const move = (event) => {
             window.removeEventListener('mousemove', move, true)
-            const shake = document.querySelector('#auto-rules-resizer-font').animate([{ transform: 'translateX(0)' }, { transform: 'translateX(6px)' }], { duration: 100 })
+            const shake = document.querySelector(fontBar).animate([{ transform: 'translateX(0)' }, { transform: 'translateX(6px)' }], { duration: 100 })
             shake.onfinish = () => {
               const cover = document.createElement('div')
               Object.assign(cover.style, { position: 'fixed', zIndex: 100000, width: '80px', height: '80px', left: `${event.clientX - 40}px`, top: `${event.clientY - 40}px` })
@@ -528,7 +529,7 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
             }
           }
           window.addEventListener('mousemove', move, true)
-        })
+        }, FONT_BAR)
         const [press] = scriptedList(puzzle, [['rules font', [1, 1]]])
         await press.run({ selected: true }, { env: target.env })
         assert.equal((await sizing(page)).nudgePx, 1)
