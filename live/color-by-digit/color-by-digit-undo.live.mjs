@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { coloredCountOn, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, MENU, MODE_KEY, modeTo, openEditorOn, openMenuOn, openSession, pressTo, SAVED_MODE, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
+import { coloredCountOn, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, MENU, MODE_KEY, menuTicksOn, modeTo, openEditorOn, openMenuOn, openSession, pressTo, SAVED_MODE, tickMenuOn, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith } from '../settings.mjs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { POLL_MS, settle } from '../settle.mjs'
@@ -113,6 +113,37 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
     await pressTo(p, 'Digit')
     assert.equal(await undoDepth(p), depth)
     assert.equal(await coloredCount(), colored)
+  })
+
+  it('a Cell tick in the menu while on colors the grid as one undo step; Undo takes the colors and the tick back, Redo puts them again, and a Digit tick makes no step', async () => {
+    await modeTo(p, 'Digit')
+    const colored = await coloredCount()
+    await openMenuOn(p)
+    const depth = await undoDepth(p)
+    await tickMenuOn(p, 'cell', { cell: true, digit: true })
+    assert.equal(await settle(label, 'Both'), 'Both')
+    assert.equal(await settle(async () => (await coloredCount()) > colored, true), true)
+    const filled = await coloredCount()
+    // The stack holds SudokuPad's actions; one undo step is one `gs`..`ge` group of them. SudokuPad deselects on the click first, as on a profile pick: no step.
+    const added = (await p.evaluate((depth) => Framework.app.puzzle.undoStack.slice(depth).map(String), depth)).filter((a, i, all) => !all.slice(0, i + 1).every((b) => b === 'ds'))
+    assert.deepEqual([added[0], added.at(-1), added.filter((a) => a === 'gs').length], ['gs', 'ge', 1], JSON.stringify(added))
+    const stepped = await undoDepth(p)
+    await p.keyboard.press('Escape')
+    await undo()
+    assert.equal(await settle(coloredCount, colored), colored)
+    assert.equal(await settle(label, 'Digit'), 'Digit')
+    await openMenuOn(p)
+    assert.deepEqual(await menuTicksOn(p), { cell: false, digit: true })
+    await p.keyboard.press('Escape')
+    await redo()
+    assert.equal(await settle(coloredCount, filled), filled)
+    assert.equal(await settle(label, 'Both'), 'Both')
+    await openMenuOn(p)
+    assert.deepEqual(await menuTicksOn(p), { cell: true, digit: true })
+    await tickMenuOn(p, 'digit', { cell: true, digit: false })
+    assert.equal(await settle(label, 'Cell'), 'Cell')
+    assert.equal(await undoDepth(p), stepped)
+    await p.keyboard.press('Escape')
   })
 })
 

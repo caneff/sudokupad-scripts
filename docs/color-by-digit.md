@@ -5,7 +5,7 @@
 
 The full reference. For a quick look, see the [details page](https://chinstrap45.github.io/sudokupad-scripts/color-by-digit.html).
 
-In Cell mode, every cell holding a digit, and every empty cell whose center marks all belong to one group, takes its group's color and keeps it in step as you solve. In Digit mode the digits themselves take it instead, in a darker shade, and Both does both. The button turns coloring on and off, and the Cell and Digit checkboxes in the settings dialog choose what it colors. You set the groups in the same dialog.
+In Cell mode, every cell holding a digit, and every empty cell whose center marks all belong to one group, takes its group's color and keeps it in step as you solve. In Digit mode the digits themselves take it instead, in a darker shade, and Both does both. The button turns coloring on and off, and the Cell and Digit checkboxes at the top of its profile menu, and in the settings dialog, choose what it colors. You set the groups in the settings dialog.
 
 - **Profiles** are named lists of groups, one to six of them, with exactly one active. A fresh install has five preloads:
   Low/5/High (active), Odd/Even, Entropic (0-3, 4-6, 7-9), Modular (1/4/7, 2/5/8, 0/3/6/9) and Each digit (1 to 9 each on its own
@@ -21,9 +21,13 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
   of only 0 shows 0. With a separate digit profile the button's chips in Digit and Both can show other digits (see the Cell and
   Digit pulldowns). Groups you saved before profiles existed become the active profile: the preload they match, else a new first
   profile named Custom, with the five preloads beside it.
-- **The profile menu** opens from the arrow box on the button, a right click on it, or a hold on it. Pick a profile and it becomes
-  active at once (with the Digit pulldown on a named profile, see below, each row instead ends in a Cell dot and a Digit dot,
-  under the words Cell and Digit). In Cell and Both the old profile's group colors come off every cell and every cell that holds
+- **The profile menu** opens from the arrow box on the button, a right click on it, or a hold on it. Its top row is the mode's
+  **Cell** and **Digit** checkboxes, the same ticks as the settings dialog's. A tick applies at once and keeps the menu open: while
+  coloring is on, ticking Cell colors the grid and unticking it takes the active profile's group colors off, each one undo step
+  that Undo and Redo move the ticks with; a Digit tick changes only the digit shades and makes no undo step. While coloring is
+  off, a tick changes only the saved ticks and nothing on the board until a press turns coloring on. The last ticked box refuses
+  to untick. Pick a profile and it becomes active at once and the menu closes (with the Digit pulldown on a named profile, see
+  below, each row instead ends in a Cell dot and a Digit dot, and the Cell and Digit checkboxes head those columns). In Cell and Both the old profile's group colors come off every cell and every cell that holds
   one group's digit (or has only that group's center marks) gets its new color, as one undo step, which Undo and Redo also take
   the active profile back and forward with; in Digit and Both the digits take their new shades. Edit profiles… opens the settings
   dialog, where you reorder profiles by dragging the handle, delete one with ×, and click a row to select it (a row's handle and ×
@@ -44,7 +48,7 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
   profile) and the one that colors the digits (Digit). Digit starts on **Same as cell** on a fresh install and after an update:
   one profile colors cells and digits, and a menu pick moves both. Pick a profile by name in Digit (saved as `digitActive`) and
   there are two picks from the one list, a cell profile for Cell and Both and a digit profile for Digit and Both, and the profile
-  menu shows them as two columns of dots, Cell and Digit; a Cell dot recolors only the cells (one undo step), and a Digit dot only
+  menu shows them as two columns of dots under the Cell and Digit checkboxes; a Cell dot recolors only the cells (one undo step), and a Digit dot only
   the digits. Picking a name in Digit while it says Same as cell starts the digit profile on the profile you pick; picking Same as
   cell again makes the digits take the cell profile. The button's chips show the cell profile's groups in Cell and Off and the
   digit profile's in Digit; in Both they show the digits that reach the most groups of the two profiles. In Both there are as many

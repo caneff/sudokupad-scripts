@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.26.0
+// @version      0.27.0
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.26.0'
+  const VERSION = '0.27.0'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'color-by-digit'
   const SCRIPT_NAME = 'Color by Digit'
@@ -2190,13 +2190,23 @@
       'display:flex;justify-content:center;align-self:stretch;align-items:center;cursor:pointer', picks)
   }
 
-  // Rows are not focusable, so the keyboard stays with the puzzle.
-  function renderMenu (state, colorOf) {
+  // The mode's Cell or Digit tick: the click on it is the menu's, which ticks or refuses and draws the menu again, so the box itself never toggles.
+  const TARGET_BOXES = { cells: 'cell', digits: 'digit' }
+  function menuTick (box, word, mode, stack) {
+    const ticked = Boolean(mode[box])
+    return `<label data-act="tick" data-box="${box}" role="menuitemcheckbox" aria-checked="${ticked}" style="display:inline-flex;align-items:center;gap:${stack ? 3 : 6}px;` +
+      `${stack ? 'flex-direction:column;' : ''}cursor:pointer;margin:0"><input type="checkbox" tabindex="-1"${ticked ? ' checked' : ''} style="width:14px;height:14px;margin:0;cursor:pointer;accent-color:${SUDOKUPAD_PURPLE}">` +
+      `<span>${word}</span></label>`
+  }
+
+  // Rows are not focusable, so the keyboard stays with the puzzle. Unsynced, each tick heads its own column of dots.
+  function renderMenu (state, colorOf, mode) {
     const split = !isSynced(state)
     const head = split
-      ? `<div style="${MENU_ROW};height:auto;padding-bottom:2px"><span style="flex:1"></span>` +
-        Object.values(TARGET_NAMES).map((word) => dotColumn('column-head', word, `text-align:center;font:600 11px/1 sans-serif;color:${MUTED}`)).join('') + '</div>'
-      : ''
+      ? `<div data-role="tick-row" style="${MENU_ROW};height:auto;padding-bottom:4px"><span style="flex:1"></span>` +
+        Object.entries(TARGET_NAMES).map(([target, word]) => dotColumn('column-head', menuTick(TARGET_BOXES[target], word, mode, true), `display:flex;justify-content:center;font:600 11px/1 sans-serif;color:${MUTED}`)).join('') + '</div>'
+      : `<div data-role="tick-row" style="${MENU_ROW};gap:16px;font:600 12px/1 sans-serif;color:${MUTED}">` +
+        Object.entries(TARGET_NAMES).map(([target, word]) => menuTick(TARGET_BOXES[target], word, mode, false)).join('') + '</div>'
     const rows = state.profiles.map((profile, i) => {
       const cells = chipColumn(profile.groups, colorOf) + menuName(profile.name)
       const picked = { cells: state.active, digits: state.digitActive }
@@ -2714,6 +2724,7 @@
     // The default mode is written, not removed as saveRow would: with the key gone, storedMode reads the mode word or auto mode's on/off saved before it.
     savedData.setData(MODE_KEY, next)
     redraw()
+    redrawMenu()
   }
 
   const modeHistory = createModeHistory()
@@ -2902,12 +2913,24 @@
     menu.setAttribute('role', 'menu')
     menu.style.cssText = 'position:fixed;z-index:10000;width:max-content;max-width:calc(100vw - 8px);box-sizing:border-box;padding:6px;border-radius:10px;background:#fff;color:#1d1b26;' +
       'box-shadow:0 10px 30px rgba(30,20,60,.28),0 0 0 1px rgba(0,0,0,.08);font:14px/1.2 sans-serif;text-align:left;user-select:none'
-    menu.innerHTML = renderMenu(loadState(), paletteKeyColor)
+    menu.innerHTML = renderMenu(loadState(), paletteKeyColor, mode)
     document.body.appendChild(menu)
     const rect = button.getBoundingClientRect()
     const left = Math.min(Math.max(rect.right - menu.offsetWidth + 8, 4), window.innerWidth - menu.offsetWidth - 4)
     menu.style.left = `${Math.max(left, 0)}px`
     menu.style.top = `${Math.max(rect.top - menu.offsetHeight - 12, 4)}px`
+  }
+
+  // An open menu shows the mode in force: after a tick, and after an Undo or Redo that moved the mode.
+  function redrawMenu () {
+    if (menu) menu.innerHTML = renderMenu(loadState(), paletteKeyColor, mode)
+  }
+
+  // A tick applies at once, as setMode does for a press, and keeps the menu open; unticking the last ticked box is refused and leaves it ticked.
+  function tickBox (app, box) {
+    const next = tickedMode(mode, box, !mode[box])
+    if (sameMode(next, mode)) redrawMenu()
+    else setMode(app, next)
   }
 
   // A digit pick changes only the digit stylesheet: it touches no cell and is never an undo step.
@@ -2957,6 +2980,8 @@
       if (row.dataset.act === 'edit') {
         closeMenu()
         openEditor()
+      } else if (row.dataset.act === 'tick') {
+        tickBox(app, row.dataset.box)
       } else {
         switchProfile(app, Number(row.dataset.index), row.dataset.target, row.closest('[data-role="menu-row"]'))
       }

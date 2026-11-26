@@ -163,6 +163,21 @@ export async function tickMode (p, word) {
   for (const box of ['cell', 'digit', 'on'].sort((a, b) => Number(want[b]) - Number(want[a]))) await p.locator(modeTick(box)).setChecked(want[box])
 }
 
+// The profile menu's Cell and Digit checkboxes, each read from its aria-checked and its box, which must agree.
+export const menuTick = (box) => `${MENU} [data-act="tick"][data-box="${box}"]`
+export const menuTicksOn = (p) => p.$$eval(`${MENU} [data-act="tick"]`, (es) => Object.fromEntries(es.map((e) => {
+  const ticked = e.getAttribute('aria-checked') === 'true'
+  if (ticked !== e.querySelector('input[type=checkbox]').checked) throw new Error(`${e.dataset.box}: aria-checked and the box disagree`)
+  return [e.dataset.box, ticked]
+})))
+
+// A click on the open menu's `box` checkbox; the menu stays open, ticked as `want` (`{ cell, digit }`) after it.
+export async function tickMenuOn (p, box, want) {
+  await p.click(menuTick(box))
+  assert.deepEqual(await settle(() => menuTicksOn(p), want), want)
+  assert.equal(await p.locator(MENU).isVisible(), true, 'the menu stays open after a tick')
+}
+
 // Sets the mode to the one the button shows as `word` through the dialog's checkboxes and Save, the way a press cannot reach every mode.
 export async function modeTo (p, word) {
   await openEditorOn(p)

@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, dragProfileRow, profileDragPoints, typeProfileName, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, EDITOR, group, groupCountOn, MENU, modeTo, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
-import { selectCell } from '../board.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, dragProfileRow, profileDragPoints, typeProfileName, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, EDITOR, group, groupCountOn, MENU, modeTo, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, MODE_KEY, menuTicksOn, tickMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { colorCell, selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -392,6 +392,87 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
 
 // A `touchEnd` carries no touch points.
 const touch = (cdp, type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
+
+describe('the menu\'s Cell and Digit ticks, injected after Start Puzzle', { concurrency: false }, () => {
+  let context, p, errors, t
+  const cellColors = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => [...(c.colours || [])]))
+  const savedMode = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
+
+  before(async () => {
+    ({ context, p, errors } = await openProfiles(savedOff(savedProfiles(SEED))))
+    t = tools(p)
+  })
+  after(async () => { await context.close() })
+
+  it('the menu\'s first row is the Cell and Digit checkboxes, above the profile rows, ticked as the mode saved Off has them', async () => {
+    await openMenuOn(p)
+    assert.deepEqual(await menuTicksOn(p), { cell: true, digit: false })
+    const [ticks, firstRow] = await Promise.all([p.locator(`${MENU} [data-role=tick-row]`).boundingBox(), p.locator(`${MENU} [data-role=menu-row]`).first().boundingBox()])
+    assert.equal(ticks.y + ticks.height <= firstRow.y, true, JSON.stringify({ ticks, firstRow }))
+    await p.keyboard.press('Escape')
+    await t.menu().waitFor({ state: 'detached' })
+  })
+
+  it('with the solver\'s own colors on cells, ticks made while off change only the saved ticks; Digit alone turned on leaves every color, and its tick refuses to come off', async () => {
+    await selectCell(p, 0, 2); await p.keyboard.press('4')
+    assert.equal(await settle(() => t.valueAt(0, 2), '4'), '4')
+    // Odd/Even's keys 1 and 2, by hand: on a given, on the entered 4 (its own group's color), and on an empty cell.
+    await colorCell(p, [0, 0], '2')
+    await colorCell(p, [0, 2], '2')
+    await colorCell(p, [1, 1], '1')
+    const painted = await cellColors()
+    assert.equal(painted.filter((c) => c.length).length, 3)
+    await openMenuOn(p)
+    await tickMenuOn(p, 'digit', { cell: true, digit: true })
+    await tickMenuOn(p, 'cell', { cell: false, digit: true })
+    assert.deepEqual(await settle(savedMode, { on: false, cell: false, digit: true }), { on: false, cell: false, digit: true })
+    assert.equal(await t.label(), 'Off')
+    assert.deepEqual(await watch(cellColors), [painted])
+    await p.keyboard.press('Escape')
+    await pressTo(p, 'Digit')
+    assert.deepEqual(await watch(cellColors), [painted])
+    await openMenuOn(p)
+    await tickMenuOn(p, 'digit', { cell: false, digit: true })
+    assert.deepEqual(await savedMode(), { on: true, cell: false, digit: true })
+    assert.equal(await t.label(), 'Digit')
+    assert.deepEqual(await watch(cellColors), [painted])
+  })
+
+  it('the menu a tick kept open closes on a profile pick', async () => {
+    assert.equal(await t.menu().isVisible(), true)
+    await t.pick('Low/5/High')
+    assert.equal((await t.getState()).active, 1)
+  })
+
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('the menu\'s ticks with a separate digit profile, injected after Start Puzzle', { concurrency: false }, () => {
+  let context, p, errors
+
+  before(async () => {
+    ({ context, p, errors } = await openProfiles(savedOff(savedProfiles({ ...SEED, digitActive: 1 }))))
+  })
+  after(async () => { await context.close() })
+
+  it('each checkbox heads its own column of dots, centred over them, with its word under it', async () => {
+    await openMenuOn(p)
+    const boxes = await p.$$eval(`${MENU} [data-role=column-head] [data-act=tick] input`, (es) => es.map((e) => { const r = e.getBoundingClientRect(); return { key: e.parentNode.dataset.box, x: r.x + r.width / 2 } }))
+    const dots = await p.$$eval(`${MENU} [data-role=dot-column]`, (es) => es.map((e) => { const r = e.getBoundingClientRect(); return { key: e.dataset.target, x: r.x + r.width / 2 } }))
+    assert.deepEqual(boxes.map((b) => b.key), ['cell', 'digit'])
+    assert.deepEqual(await p.$$eval(`${MENU} [data-role=column-head]`, (es) => es.map((e) => e.textContent)), ['Cell', 'Digit'])
+    for (const [box, target] of [['cell', 'cells'], ['digit', 'digits']]) {
+      const x = boxes.find((b) => b.key === box).x
+      for (const dot of dots.filter((d) => d.key === target)) assert.equal(Math.abs(dot.x - x) <= 1, true, `${box} over its dots: ${JSON.stringify([x, dot])}`)
+    }
+  })
+
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
+  })
+})
 
 describe('the menu on a touch screen, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors, t, cdp
