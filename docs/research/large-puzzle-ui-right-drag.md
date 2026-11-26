@@ -45,5 +45,6 @@ on once (`reset()` sets it), so a script cannot probe it at startup.
 ## It loads after `Framework.getApp` resolves (2026-11-26, #1179)
 
 `feature-largepuzzle.js` is a separate file, so on a slow load `Framework.features.largepuzzle` is not there when `getApp`
-resolves. The nightly Tampermonkey test caught UI Tweaks skipping its right drag limit once for it. A feature the shared guard declares `late` is left out of its probe, and its `whenPresent` waits a bounded time (`LATE_WAIT_MS` in
-`lib/sudokupad.js`) for the internals before it runs the feature or turns it off. The script's other features start at once.
+resolves. The nightly Tampermonkey test caught UI Tweaks skipping its right drag limit once for it. A feature the shared guard declares `late` is left out of its probe, and its `whenPresent` waits a bounded time
+(`LATE_WAIT_MS` in `lib/sudokupad.js`) for the internals before it runs the feature or turns it off. The script's other
+features start at once.
