@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.49
+// @version      0.7.50
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -27,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.49'
+  const VERSION = '0.7.50'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'auto-rules-resizer'
   const SCRIPT_NAME = 'Auto Rules Resizer'

@@ -53,6 +53,12 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('cages 9x9, long rules'), steps })
   })
 
+  it('a bottom-left rules drag after a top-right shrink and f+ keeps the Color by Digit arrow in the window, so the pad menu opens (#1189)', async () => {
+    // Seed 1446087884's shrink: the shrink moved the column down, f+ lifted it to the window's bottom, and the grow left it 27 px below the window.
+    const steps = [['rules drag', ['ur', 0, 27]], ['rules font', [1, 3]], ['rules drag', ['dl', 146, 44]], ['profile switch', 0]]
+    await fuzzScripted({ browser: browser(), puzzle: puzzleByName('recorded 9x9'), steps })
+  })
+
   it('a click on a button that a moved, resized note covers moves the note off it first, as a player does (#880)', async () => {
     // Seed 270472555's shrink: the corner drag and the move put the note's handle over Dark Page's settings button.
     const steps = [['note resize', [[1, 2], 2, 0, 50]], ['move note', null], ['dark page', ['#002010', false]]]
