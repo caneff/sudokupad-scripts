@@ -5,7 +5,10 @@
 
 The full reference. For a quick look, see the [details page](https://chinstrap45.github.io/sudokupad-scripts/color-by-digit.html).
 
-In Cell mode, every cell holding a digit, and every empty cell whose center marks all belong to one group, takes its group's color and keeps it in step as you solve. In Digit mode the digits themselves take it instead, in a darker shade, and Both does both. The button turns coloring on and off, and the Cell and Digit checkboxes at the top of its profile menu, and in the settings dialog, choose what it colors. You set the groups in the settings dialog.
+In Cell mode, every cell holding a digit, and every empty cell whose center marks all belong to one group, takes its group's color
+and keeps it in step as you solve. In Digit mode the digits themselves take it instead, in a darker shade, and Both does both. The
+button turns coloring on and off, and the Cell and Digit checkboxes at the top of its profile menu, and in the settings dialog,
+choose what it colors. You set the groups in the settings dialog.
 
 - **Profiles** are named lists of groups, one to six of them, with exactly one active. A fresh install has five preloads:
   Low/5/High (active), Odd/Even, Entropic (0-3, 4-6, 7-9), Modular (1/4/7, 2/5/8, 0/3/6/9) and Each digit (1 to 9 each on its own
@@ -22,40 +25,44 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
   Digit pulldowns). Groups you saved before profiles existed become the active profile: the preload they match, else a new first
   profile named Custom, with the five preloads beside it.
 - **The profile menu** opens from the arrow box on the button, a right click on it, or a hold on it. Its top row is the mode's
-  **Cell** and **Digit** checkboxes, the same ticks as the settings dialog's. A tick applies at once and keeps the menu open: while
-  coloring is on, ticking Cell colors the grid and unticking it takes the active profile's group colors off, each one undo step
-  that Undo and Redo move the ticks with; a Digit tick changes only the digit shades and makes no undo step. While coloring is
-  off, a tick changes only the saved ticks and nothing on the board until a press turns coloring on. The last ticked box refuses
-  to untick. Pick a profile and it becomes active at once and the menu closes (with the Digit pulldown on a named profile, see
-  below, each row instead ends in a Cell dot and a Digit dot, and the Cell and Digit checkboxes head those columns). In Cell and Both the old profile's group colors come off every cell and every cell that holds
-  one group's digit (or has only that group's center marks) gets its new color, as one undo step, which Undo and Redo also take
-  the active profile back and forward with; in Digit and Both the digits take their new shades. Edit profiles… opens the settings
-  dialog, where you reorder profiles by dragging the handle, delete one with ×, and click a row to select it (a row's handle and ×
-  show while the pointer is over it, and always on the selected row): the selected row's name is a field you can rename it in (an
-  empty box keeps the old name), and the right column edits its groups by painting. A page pulldown sits above one grid: the
-  palette's swatches on the left and a pad of ten digit keys (1 to 9, 0 under 7) on the right, each digit key filled with its
-  digit's color and blank when the digit is in no group. Click a swatch to make that color the brush (it starts as the color of
-  the selected profile's lowest group, else the first visible color of the current page), then click digit keys to paint them; a
-  click on a digit already in the brush color clears it. You can also press on a digit and drag across others to paint them all,
-  or start the drag on a digit already in the brush color to clear instead. A group is the digits that share a color, so a color
-  with no digits is no group, and the groups run in order of their lowest digit, with 0 after 9. Clear all clears every digit.
-  Groups saved with two entries in one color, which the old group editor allowed, are merged into one when the dialog opens.
-  Selecting a row changes no color and sets no profile: the list is only for editing, and the three pulldowns at the top of the
-  dialog do the picking. + New profile, under the list, adds a copy of the selected profile named after it with " copy", selects
-  it and puts the cursor in its name; it is disabled at six profiles. Save applies every change at once; Cancel drops them.
-- **Restore defaults**, in the settings dialog's button row, brings back the five preloads and the Cell and Digit pulldowns' starting picks (the mode and its checkboxes stay) as a draft that Cancel drops. It asks first when the profiles in the dialog include one of your own.
-- **The Cell and Digit pulldowns**, at the top of the settings dialog under the mode's checkboxes, pick the profile that colors the cells (Cell, the active
-  profile) and the one that colors the digits (Digit). Digit starts on **Same as cell** on a fresh install and after an update:
-  one profile colors cells and digits, and a menu pick moves both. Pick a profile by name in Digit (saved as `digitActive`) and
-  there are two picks from the one list, a cell profile for Cell and Both and a digit profile for Digit and Both, and the profile
-  menu shows them as two columns of dots under the Cell and Digit checkboxes; a Cell dot recolors only the cells (one undo step), and a Digit dot only
-  the digits. Picking a name in Digit while it says Same as cell starts the digit profile on the profile you pick; picking Same as
-  cell again makes the digits take the cell profile. The button's chips show the cell profile's groups in Cell and Off and the
-  digit profile's in Digit; in Both they show the digits that reach the most groups of the two profiles. In Both there are as many
-  chips as the larger of the two profiles has groups (three at most), on the set of digits that scores most (the cell groups plus
-  the digit groups its digits fall in); a tie goes to the set sharing most digits with the Cell strip (the chips Cell and Off
-  show), then to the lowest digits. The chips run in ascending digit order, except that Both with one profile on both shows the
-  Cell strip itself. Deleting the digit profile makes the digits follow the cell profile again (Same as cell).
+  **Cell** and **Digit** checkboxes, the same ticks as the settings dialog's. A tick applies at once and keeps the menu open:
+  while coloring is on, ticking Cell colors the grid and unticking it takes the active profile's group colors off, each one undo
+  step that Undo and Redo move the ticks with; a Digit tick changes only the digit shades and makes no undo step. While coloring
+  is off, a tick changes only the saved ticks and nothing on the board until a press turns coloring on. The last ticked box
+  refuses to untick. Pick a profile and it becomes active at once and the menu closes (with the Digit pulldown on a named profile,
+  see below, each row instead ends in a Cell dot and a Digit dot, and the Cell and Digit checkboxes head those columns). In Cell
+  and Both the old profile's group colors come off every cell and every cell that holds one group's digit (or has only that
+  group's center marks) gets its new color, as one undo step, which Undo and Redo also take the active profile back and forward
+  with; in Digit and Both the digits take their new shades. Edit profiles… opens the settings dialog, where you reorder profiles
+  by dragging the handle, delete one with ×, and click a row to select it (a row's handle and × show while the pointer is over it,
+  and always on the selected row): the selected row's name is a field you can rename it in (an empty box keeps the old name), and
+  the right column edits its groups by painting. A page pulldown sits above one grid: the palette's swatches on the left and a pad
+  of ten digit keys (1 to 9, 0 under 7) on the right, each digit key filled with its digit's color and blank when the digit is in
+  no group. Click a swatch to make that color the brush (it starts as the color of the selected profile's lowest group, else the
+  first visible color of the current page), then click digit keys to paint them; a click on a digit already in the brush color
+  clears it. You can also press on a digit and drag across others to paint them all, or start the drag on a digit already in the
+  brush color to clear instead. A group is the digits that share a color, so a color with no digits is no group, and the groups
+  run in order of their lowest digit, with 0 after 9. Clear all clears every digit. Groups saved with two entries in one color,
+  which the old group editor allowed, are merged into one when the dialog opens. Selecting a row changes no color and sets no
+  profile: the list is only for editing, and the mode's checkboxes and the two pulldowns at the top of the dialog do the
+  picking. + New profile, under the list, adds a copy of the selected profile named after it with " copy", selects it and puts
+  the cursor in its name; it is disabled at six profiles. Save applies every change at once; Cancel drops them.
+- **Restore defaults**, in the settings dialog's button row, brings back the five preloads and the Cell and Digit pulldowns'
+  starting picks (the mode and its checkboxes stay) as a draft that Cancel drops. It asks first when the profiles in the dialog
+  include one of your own.
+- **The Cell and Digit pulldowns**, at the top of the settings dialog under the mode's checkboxes, pick the profile that colors
+  the cells (Cell, the active profile) and the one that colors the digits (Digit). Digit starts on **Same as cell** on a fresh
+  install and after an update: one profile colors cells and digits, and a menu pick moves both. Pick a profile by name in Digit
+  (saved as `digitActive`) and there are two picks from the one list, a cell profile for Cell and Both and a digit profile for
+  Digit and Both, and the profile menu shows them as two columns of dots under the Cell and Digit checkboxes; a Cell dot recolors
+  only the cells (one undo step), and a Digit dot only the digits. Picking a name in Digit while it says Same as cell starts the
+  digit profile on the profile you pick; picking Same as cell again makes the digits take the cell profile. The button's chips
+  show the cell profile's groups in Cell and Off and the digit profile's in Digit; in Both they show the digits that reach the
+  most groups of the two profiles. In Both there are as many chips as the larger of the two profiles has groups (three at most),
+  on the set of digits that scores most (the cell groups plus the digit groups its digits fall in); a tie goes to the set sharing
+  most digits with the Cell strip (the chips Cell and Off show), then to the lowest digits. The chips run in ascending digit
+  order, except that Both with one profile on both shows the Cell strip itself. Deleting the digit profile makes the digits follow
+  the cell profile again (Same as cell).
 - **The pulldowns and the mode's checkboxes are drafts**: Save applies them, Cancel drops them. The Digit pulldown has no None:
   an unticked Digit box turns digit coloring off. Copy settings and Paste settings carry the mode and the digit profile; settings
   copied before them paste as coloring digits, and a mode word copied before the checkboxes pastes as the update below maps a
@@ -81,8 +88,12 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
 - A digit or center mark change and its color change are one undo step. Undo, redo and replays never trigger cell coloring.
   A press or a Save that colors or clears cells is one undo step, and Undo and Redo move on/off and the ticks back and forth with
   it. A change that only touches the digit shades makes no undo step.
-- Turning on with Cell ticked, ticking Cell while on, loading a puzzle with Cell on, and a restart with it on color the grid: every cell with a digit or center marks gets its colors, not only the givens, in one undo step. A cell with no digit and no center marks keeps whatever color it has. Saving changed groups in Cell or Both recolors the whole grid in one undo step.
-- Turning off with Cell ticked, or unticking Cell while on, takes every group color of the active profile off every cell, in one undo step; colors in no group stay. A group color you remove by hand in Cell stays off until that cell's digit or center marks change, or until turning Cell on, a restart, or a reload in Cell recolors the cell.
+- Turning on with Cell ticked, ticking Cell while on, loading a puzzle with Cell on, and a restart with it on color the grid:
+  every cell with a digit or center marks gets its colors, not only the givens, in one undo step. A cell with no digit and no
+  center marks keeps whatever color it has. Saving changed groups in Cell or Both recolors the whole grid in one undo step.
+- Turning off with Cell ticked, or unticking Cell while on, takes every group color of the active profile off every cell, in one
+  undo step; colors in no group stay. A group color you remove by hand in Cell stays off until that cell's digit or center marks
+  change, or until turning Cell on, a restart, or a reload in Cell recolors the cell.
 - With the Multi-color setting off, SudokuPad replaces a cell's color when a group color is added, so a color in no group stays only with Multi-color on.
 - In Digit and Both, entered digits, corner marks and center marks take a darker shade of their group's color, as the palette the
   puzzle shows has it, the way Pen Tool Extras darkens cell colors for its pens (the OKLCH lightness times 0.75), so a puzzle's
