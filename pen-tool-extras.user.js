@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.61
+// @version      1.32.62
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.61'
+  const VERSION = '1.32.62'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'pen-tool-extras'
   const SCRIPT_NAME = 'Pen Tool Extras'
@@ -309,10 +309,10 @@
   const LATE_WAIT_MS = 5000
   const LATE_POLL_MS = 50
 
-  // `features` maps a name to `{ label, needs, onSkip, late }`: `label` is what the bar and the console call it, `needs` maps each
-  // internal's path to its kind (a key of INTERNAL_KINDS), `onSkip` undoes what the feature left on the page, and `late` makes `start`
-  // wait up to LATE_WAIT_MS for its internals before the probe. `probe` runs once SudokuPad's app exists; `store`, SudokuPad's
-  // Framework unless given, holds a dismissal under `<script>-notice`.
+  // `features` maps a name to `{ label, needs, onSkip, late }`: `label` is what the bar and the console call it, `needs` maps each internal's
+  // path to its kind (a key of INTERNAL_KINDS), `onSkip` undoes what the feature left on the page, and a `late` feature's internals are
+  // probed by its `whenPresent` instead of by `probe`. `probe` runs once SudokuPad's app exists; `store`, SudokuPad's Framework unless
+  // given, holds a dismissal under `<script>-notice`.
   function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
@@ -409,7 +409,8 @@
     let dialogActions = 0
     const storeFailures = new WeakSet()
 
-    function createFeature (featureName, { label, onSkip }) {
+    function createFeature (featureName, declared) {
+      const { label, onSkip } = declared
       const feature = {
         label,
         off: false,
@@ -428,6 +429,17 @@
             }
           }
           if (page) showNotice()
+        },
+        // For a `late` feature: runs `fn` once its internals are there; if LATE_WAIT_MS passes without them, turns the feature off. Poll on a
+        // timer, since SudokuPad announces no event when a feature file has loaded.
+        async whenPresent (fn) {
+          const lacking = () => lackingInternals({ [featureName]: declared }, currentRoots())
+          for (let waited = 0; lacking().size > 0 && waited < LATE_WAIT_MS; waited += LATE_POLL_MS) {
+            await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
+          }
+          const [missing] = lacking().keys()
+          if (missing === undefined) return feature.run(fn)
+          reportMissing(missing, [featureName])
         },
         run (fn, fallback = () => {}) {
           if (feature.off) return fallback()
@@ -488,14 +500,19 @@
       return feature
     }
 
+    // What a `late` feature reads its internals from: the roots of the last `start`.
+    let currentRoots = () => ({ Framework })
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
+
+    function reportMissing (missing, names) {
+      names.forEach((featureName) => guarded[featureName].skip(missing, false))
+      console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
+    }
 
     function probe ({ roots, store = Framework, doc = document }) {
       sudokupad = sudokupadVersion(doc)
-      lackingInternals(features, roots).forEach((names, missing) => {
-        names.forEach((featureName) => guarded[featureName].skip(missing, false))
-        console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
-      })
+      const probed = Object.fromEntries(Object.entries(features).filter(([, { late }]) => !late))
+      lackingInternals(probed, roots).forEach((names, missing) => reportMissing(missing, names))
       page = { store, doc, sudokupad }
       showNotice()
     }
@@ -513,26 +530,15 @@
       }
     }
 
-    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe and after any `late` feature's internals have
-    // arrived or LATE_WAIT_MS has passed; with no getApp, at once and with no app, so the features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
+    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
     function start (begin, { roots = () => ({}) } = {}) {
-      const allRoots = (app) => ({ Framework, app, ...roots() })
-      const lateFeatures = Object.fromEntries(Object.entries(features).filter(([, { late }]) => late))
-      const lateLacking = (app) => lackingInternals(lateFeatures, allRoots(app)).size > 0
-      // Polls on a timer: SudokuPad announces no event when a feature file has loaded.
-      async function untilLateInternals (app) {
-        for (let waited = 0; lateLacking(app) && waited < LATE_WAIT_MS; waited += LATE_POLL_MS) {
-          await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
-        }
-      }
-      const runAfter = (waitForLate) => catchStartup((app) => {
-        const begun = () => {
-          probe({ roots: allRoots(app) })
-          return begin(app)
-        }
-        return waitForLate && lateLacking(app) ? untilLateInternals(app).then(begun) : begun()
+      const run = catchStartup((app) => {
+        currentRoots = () => ({ Framework, app, ...roots() })
+        probe({ roots: currentRoots() })
+        return begin(app)
       })
-      return typeof Framework.getApp === 'function' ? Framework.getApp().then(runAfter(true), startupFailed) : runAfter(false)(undefined)
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.

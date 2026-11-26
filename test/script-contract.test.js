@@ -96,8 +96,6 @@ for (const file of scriptFiles()) {
   test(`${id}: a start that throws is reported once under the script's name`, async () => {
     const framework = {
       getApp: () => Promise.resolve({}),
-      // A late feature (UI Tweaks' right drag) waits for this to appear before the probe runs.
-      features: { largepuzzle: { handleMousemove () {}, handleZoomInOut () {}, updateTransform () {} } },
       // Every script's probe reads it, so the throw comes from inside the script's start.
       get getData () { throw new Error('planted') }
     }
@@ -107,10 +105,11 @@ for (const file of scriptFiles()) {
     })
   })
 
-  // A feature that needs no internal (`needs: {}`) has none to lack: it turns itself off only when its own work fails.
+  // A feature that needs no internal (`needs: {}`) has none to lack: it turns itself off only when its own work fails. A `late` feature's
+  // internals are read by its `whenPresent` after a wait, not by the start's probe.
   test(`${id}: every feature that needs an internal can be lacking, so a Framework with nothing turns each one off`, () => {
     // A warning is `<id>: <label>, <label> skipped because ...`; a label counts only as a whole name in that list, so 'settings' is not found inside 'saved notes and settings'.
     const named = startOnPage(file, {}).flatMap((warning) => warning.slice(guard.length + 2).split(' skipped because ')[0].split(', '))
-    for (const [name, { label }] of Object.entries(FEATURES).filter(([, { needs }]) => Object.keys(needs).length > 0)) assert.ok(named.includes(label), `no warning turns ${name} (${label}) off`)
+    for (const [name, { label }] of Object.entries(FEATURES).filter(([, { needs, late }]) => Object.keys(needs).length > 0 && !late)) assert.ok(named.includes(label), `no warning turns ${name} (${label}) off`)
   })
 }
