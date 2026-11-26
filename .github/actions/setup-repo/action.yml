@@ -15,17 +15,26 @@ runs:
     - run: npm ci
       shell: bash
     - id: playwright-version
-      run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/playwright-core'].version")" >> "$GITHUB_OUTPUT"
+      # A plain assignment, so a lockfile with no playwright-core fails the step instead of caching under an empty version.
+      run: |
+        version=$(node -p "require('./package-lock.json').packages['node_modules/playwright-core'].version")
+        echo "version=$version" >> "$GITHUB_OUTPUT"
       shell: bash
       if: ${{ inputs.playwright == 'true' }}
+    # Restore and save are separate steps: actions/cache saves in a post step that runs only when the whole job succeeds, and the browser workflows often fail.
     - id: chromium-cache
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
       if: ${{ inputs.playwright == 'true' }}
     - run: npx playwright install chromium
       shell: bash
+      if: ${{ inputs.playwright == 'true' && steps.chromium-cache.outputs.cache-hit != 'true' }}
+    - uses: actions/cache/save@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
       if: ${{ inputs.playwright == 'true' && steps.chromium-cache.outputs.cache-hit != 'true' }}
     - run: npx playwright install-deps chromium
       shell: bash
