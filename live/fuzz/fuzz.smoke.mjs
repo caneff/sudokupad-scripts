@@ -504,6 +504,39 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
       assert.equal(await afterSteps(puzzleByName('4x4'), [['rules wheel', 400]], (p) => p.locator('.puzzle-rules').isVisible()), false, 'no rules box to turn')
     })
 
+    // #1187: a note at the board's right edge spreads over the pane, and the pane's middle is then the note; the pointer goes where the pane is the topmost element.
+    it('a corner drag after a note covers the middle of the rules pane hovers a part of the pane that shows (#1187)', async () => {
+      const jigsaw = puzzleByName('jigsaw 9x9')
+      const steps = [['rich note', [4, targetAt(jigsaw, 2, 8)]], ['rules drag', ['ur', 0, 0]]]
+      await fuzzScripted({ browser: browser(), puzzle: jigsaw, steps })
+    })
+
+    // #1188: after a restart the script's refit changes the pane a moment after the pointer reached it, and the pointer is then off the pane, so the bar hides. Here the bar shakes for 100 ms,
+    // then a square covers the pointer's spot; the press has to go back over the pane at a spot that is not covered.
+    it('f+ is pressed after a new hover when the pointer is taken off the pane before the press (#1188)', async () => {
+      const target = await openTarget(browser(), puzzle, {})
+      try {
+        const page = target.env.page
+        await page.evaluate(() => {
+          const move = (event) => {
+            window.removeEventListener('mousemove', move, true)
+            const shake = document.querySelector('#auto-rules-resizer-font').animate([{ transform: 'translateX(0)' }, { transform: 'translateX(6px)' }], { duration: 100 })
+            shake.onfinish = () => {
+              const cover = document.createElement('div')
+              Object.assign(cover.style, { position: 'fixed', zIndex: 100000, width: '80px', height: '80px', left: `${event.clientX - 40}px`, top: `${event.clientY - 40}px` })
+              document.body.appendChild(cover)
+            }
+          }
+          window.addEventListener('mousemove', move, true)
+        })
+        const [press] = scriptedList(puzzle, [['rules font', [1, 1]]])
+        await press.run({ selected: true }, { env: target.env })
+        assert.equal((await sizing(page)).nudgePx, 1)
+      } finally {
+        await target.close()
+      }
+    })
+
     it('Restore defaults leaves the puzzle\'s sizing saved', async () => {
       assert.notEqual(await afterSteps(puzzle, [['rules drag', ['dl', -150, 0]], ['rules font', [-1, 1]], ['rules dialog', ['', '', true, false]]], sizing), undefined)
     })
