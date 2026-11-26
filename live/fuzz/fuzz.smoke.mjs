@@ -59,9 +59,9 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('recorded 9x9'), steps })
   })
 
-  it('the same rules drags and f+ leave the pen panel\'s settings button where a click opens Pen Tool Extras\' editor (#1213)', async () => {
-    // Seed 510345747's list 134, shrunk by hand: before #1189's fix the grow left the controls column below the window, so the button's click opened nothing.
-    const steps = [['rules drag', ['ur', 496, 242]], ['rules font', [1, 3]], ['rules drag', ['dl', 279, 356]], ['pen dialog from settings button', true]]
+  it('a top-right shrink then a bottom-left grow of the rules box leave the pen panel\'s settings button where a click opens the settings dialog (#1213)', async () => {
+    // Seed 510345747's list 134, shrunk by hand: the same column below the window as #1189, which hid the button; no f+ is needed.
+    const steps = [['rules drag', ['ur', 496, 242]], ['rules drag', ['dl', 279, 356]], ['pen dialog from settings button', true]]
     await fuzzScripted({ browser: browser(), puzzle: puzzleByName('recorded 9x9'), steps })
   })
 
