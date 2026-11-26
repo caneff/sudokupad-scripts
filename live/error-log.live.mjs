@@ -7,8 +7,9 @@ import { openWith, reloadWith, scriptSource, useBrowser } from './session.mjs'
 const SCRIPT_FILE = 'dark-page.user.js'
 const EDITOR = '#dark-page-input'
 // Makes Framework.getData throw while the script starts, which is inside the script's saved color feature, so the guard turns it off on a
-// real throw, and puts it back once that task ends.
-const WITH_THROWING_GET_DATA = ';{ const original = Framework.getData; Framework.getData = () => { throw new TypeError(\'planted failure\') }; setTimeout(() => { Framework.getData = original }, 0) }\n'
+// real throw, and puts it back once that task ends. SudokuPad's own `F.saveSettings` frame still gets the real one (#1218): its save can
+// run inside that one task, and a throw it met was a page error the test did not plant.
+const WITH_THROWING_GET_DATA = ';{ const original = Framework.getData; Framework.getData = function (...args) { if (/\\bF\\.saveSettings \\(/.test(new Error().stack)) return original.apply(this, args); throw new TypeError(\'planted failure\') }; setTimeout(() => { Framework.getData = original }, 0) }\n'
 
 const browser = useBrowser()
 
@@ -61,6 +62,17 @@ describe('the error log', { concurrency: false }, () => {
   })
 
   it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('the planted getData throw (#1218)', { concurrency: false }, () => {
+  let context, p, errors
+  before(async () => { ({ context, p, errors } = await openWith(browser(), [])) })
+  after(async () => { await context?.close() })
+
+  it('is not met by SudokuPad\'s own saveSettings in the task it is live', async () => {
+    await p.evaluate(`${WITH_THROWING_GET_DATA.replace(/^;/, '')}; Framework.saveSettings()`)
     assert.deepEqual(errors, [])
   })
 })
