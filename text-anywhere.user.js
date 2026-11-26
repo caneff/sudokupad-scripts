@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.64
+// @version      0.46.69
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.64'
+  const VERSION = '0.46.69'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -1992,9 +1992,14 @@
     return dismiss
   }
 
-  // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
-  // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store`, SudokuPad's Framework unless given, holds a dismissal under `<script>-notice`.
+  // SudokuPad loads some features (`Framework.features.largepuzzle`) as separate files, which may arrive after `Framework.getApp` resolves.
+  const LATE_WAIT_MS = 5000
+  const LATE_POLL_MS = 50
+
+  // `features` maps a name to `{ label, needs, onSkip, late }`: `label` is what the bar and the console call it, `needs` maps each internal's
+  // path to its kind (a key of INTERNAL_KINDS), `onSkip` undoes what the feature left on the page, and a `late` feature's internals are
+  // probed by its `whenPresent` instead of by `probe`. `probe` runs once SudokuPad's app exists; `store`, SudokuPad's Framework unless
+  // given, holds a dismissal under `<script>-notice`.
   function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
@@ -2091,7 +2096,8 @@
     let dialogActions = 0
     const storeFailures = new WeakSet()
 
-    function createFeature (featureName, { label, onSkip }) {
+    function createFeature (featureName, declared) {
+      const { label, onSkip } = declared
       const feature = {
         label,
         off: false,
@@ -2110,6 +2116,19 @@
             }
           }
           if (page) showNotice()
+        },
+        // For a `late` feature: runs `fn` once its internals are there; if LATE_WAIT_MS passes without them, turns the feature off. Poll on a
+        // timer, since SudokuPad announces no event when a feature file has loaded.
+        async whenPresent (fn) {
+          const lacking = () => lackingInternals({ [featureName]: declared }, currentRoots())
+          // With no app (no `Framework.getApp`) SudokuPad is not the one this script knows, so there is nothing to wait for.
+          const patience = currentRoots().app === undefined ? 0 : LATE_WAIT_MS
+          for (let waited = 0; lacking().size > 0 && waited < patience; waited += LATE_POLL_MS) {
+            await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
+          }
+          const [missing] = lacking().keys()
+          if (missing === undefined) return feature.run(fn)
+          reportMissing(missing, [featureName])
         },
         run (fn, fallback = () => {}) {
           if (feature.off) return fallback()
@@ -2170,14 +2189,19 @@
       return feature
     }
 
+    // What a `late` feature reads its internals from: the roots of the last `start`.
+    let currentRoots = () => ({ Framework })
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
+
+    function reportMissing (missing, names) {
+      names.forEach((featureName) => guarded[featureName].skip(missing, false))
+      console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
+    }
 
     function probe ({ roots, store = Framework, doc = document }) {
       sudokupad = sudokupadVersion(doc)
-      lackingInternals(features, roots).forEach((names, missing) => {
-        names.forEach((featureName) => guarded[featureName].skip(missing, false))
-        console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
-      })
+      const probed = Object.fromEntries(Object.entries(features).filter(([, { late }]) => !late))
+      lackingInternals(probed, roots).forEach((names, missing) => reportMissing(missing, names))
       page = { store, doc, sudokupad }
       showNotice()
     }
@@ -2199,7 +2223,8 @@
     // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
     function start (begin, { roots = () => ({}) } = {}) {
       const run = catchStartup((app) => {
-        probe({ roots: { Framework, app, ...roots() } })
+        currentRoots = () => ({ Framework, app, ...roots() })
+        probe({ roots: currentRoots() })
         return begin(app)
       })
       return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
