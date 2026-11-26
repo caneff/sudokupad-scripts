@@ -116,13 +116,45 @@ describe('the setup action', () => {
     assert.doesNotMatch(action, /^\s+node-version: /m)
   })
 
-  it('installs the packages with npm ci, and Chromium only when asked, so the CI job stays browserless', () => {
+  const actionSteps = action.split(/\n(?= {4}- )/)
+  const gated = /if: \$\{\{ inputs\.playwright == 'true' \}\}/
+  const missGated = /if: \$\{\{ inputs\.playwright == 'true' && steps\.chromium-cache\.outputs\.cache-hit != 'true' \}\}/
+  const stepIndex = (re) => actionSteps.findIndex((s) => re.test(s))
+  const DOWNLOAD = /npx playwright install chromium$/m
+
+  it('installs the packages with npm ci, and Chromium only when asked and not cached, so the CI job stays browserless', () => {
     assert.match(action, /run: npm ci$/m)
     assert.match(action, /inputs:\n {2}playwright:\n(?: {4}.*\n)*? {4}default: 'false'/)
-    const chromium = action.split(/\n(?= {4}- )/).find((s) => s.includes('playwright install'))
-    assert.ok(chromium, 'a Playwright install step')
-    assert.match(chromium, /npx playwright install --with-deps chromium/)
-    assert.match(chromium, /if: \$\{\{ inputs\.playwright == 'true' \}\}/)
+    const download = actionSteps[stepIndex(DOWNLOAD)]
+    assert.ok(download, 'a Chromium download step')
+    assert.doesNotMatch(download, /--with-deps/)
+    assert.match(download, missGated)
+    const deps = actionSteps[stepIndex(/npx playwright install-deps chromium$/m)]
+    assert.ok(deps, 'a system-packages step')
+    assert.match(deps, gated)
+    assert.doesNotMatch(deps, /cache-hit/, 'the apt packages are not in the cache, so they install every run')
+  })
+
+  it('caches ~/.cache/ms-playwright keyed on the Playwright version in the lockfile, so a new Playwright is a new key (#1207)', () => {
+    const version = actionSteps.find((s) => s.includes('id: playwright-version'))
+    assert.ok(version, 'a step reading the version')
+    assert.match(version, /package-lock\.json/)
+    assert.match(version, /node_modules\/playwright-core/)
+    assert.match(version, /^\s+version=\$\(node -p /m, 'a plain assignment, which fails the step when the lockfile has no entry')
+    assert.match(version, /echo "version=\$version" >> "\$GITHUB_OUTPUT"/)
+    const restore = actionSteps.find((s) => s.includes('id: chromium-cache'))
+    assert.ok(restore, 'a restore step')
+    assert.match(restore, /uses: actions\/cache\/restore@v4/)
+    assert.match(restore, gated)
+    const save = actionSteps.find((s) => s.includes('uses: actions/cache/save@v4'))
+    assert.ok(save, 'a save step, so a later failure in the job does not lose the browser')
+    assert.match(save, missGated)
+    for (const step of [restore, save]) {
+      assert.match(step, /path: ~\/\.cache\/ms-playwright$/m)
+      assert.match(step, /key: .*runner\.os.*steps\.playwright-version\.outputs\.version/)
+    }
+    const order = [version, restore, actionSteps[stepIndex(DOWNLOAD)], save].map((s) => actionSteps.indexOf(s))
+    assert.deepEqual(order, [...order].sort((x, y) => x - y), 'version, restore, download, save, in that order')
   })
 
   const USERS = { 'ci.yml': false, 'fuzz-pr.yml': true, 'fuzz.yml': true, 'watch.yml': true }

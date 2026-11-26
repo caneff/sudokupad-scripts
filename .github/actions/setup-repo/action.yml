@@ -2,7 +2,7 @@ name: Set up the repository
 description: Node from .nvmrc, the npm packages and, when asked, Playwright's Chromium. The workflow checks the repository out first, since a local action exists only once its files do.
 inputs:
   playwright:
-    description: "'true' installs Chromium and its system packages, for a workflow that runs a browser."
+    description: "'true' installs Chromium (cached by Playwright version) and its system packages, for a workflow that runs a browser."
     required: false
     default: 'false'
 runs:
@@ -14,6 +14,28 @@ runs:
         cache: npm
     - run: npm ci
       shell: bash
-    - run: npx playwright install --with-deps chromium
+    - id: playwright-version
+      # A plain assignment, so a lockfile with no playwright-core fails the step instead of caching under an empty version.
+      run: |
+        version=$(node -p "require('./package-lock.json').packages['node_modules/playwright-core'].version")
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+      shell: bash
+      if: ${{ inputs.playwright == 'true' }}
+    # Restore and save are separate steps: actions/cache saves in a post step that runs only when the whole job succeeds, and the browser workflows often fail.
+    - id: chromium-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      if: ${{ inputs.playwright == 'true' }}
+    - run: npx playwright install chromium
+      shell: bash
+      if: ${{ inputs.playwright == 'true' && steps.chromium-cache.outputs.cache-hit != 'true' }}
+    - uses: actions/cache/save@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      if: ${{ inputs.playwright == 'true' && steps.chromium-cache.outputs.cache-hit != 'true' }}
+    - run: npx playwright install-deps chromium
       shell: bash
       if: ${{ inputs.playwright == 'true' }}
