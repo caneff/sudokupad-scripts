@@ -7,6 +7,9 @@ hosting) in `docs/research/tooling/`, and the site's own mockups in `docs/resear
 
 ## SudokuPad itself
 
+- `docs/research/sudokupad-already-solved-dialog.md` — What SudokuPad shows on a reload of a solved puzzle (2026-11-26): an
+  "already solved" dialog in place of the intro, so no Start Puzzle button (#1212). Picture:
+  `docs/research/sudokupad-already-solved-dialog.png`.
 - `docs/research/sudokupad-color-tool.md` — SudokuPad's color tool, for a script that colors cells (2026-11-02). What a cell
   stores and how the color tool paints it, read from 0.611.0's source. Read only; also see
   `docs/research/sudokupad-color-tool-paging.md`.

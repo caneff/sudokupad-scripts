@@ -2,7 +2,7 @@
 // DOMContentLoaded of every load, so a reload keeps them), gives the engine (`engine.mjs`) a page of its own for every action list, and reads the crash
 // signals (`signals.mjs`) from it. Each list names its puzzle (`puzzle-set.mjs`, #679). Not a check itself.
 import { setTimeout as sleep } from 'node:timers/promises'
-import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
+import { ERROR_LOG_KEY, captureConsoleErrors, openPage, restartPuzzle, startPuzzle, START } from '../page.mjs'
 import { NOTICE_BAR } from '../all-scripts.mjs'
 import { cellCentre, finishNote, gridPoint, undoAll } from '../board.mjs'
 import { goToPenPage, openPenTool, PAGE_BUTTON, PAGE_THREE } from '../pen.mjs'
@@ -237,6 +237,12 @@ async function pickProfileFromMenu (p, i) {
   await p.locator(PROFILE_MENU).waitFor({ state: 'detached' })
 }
 
+// A press on the page's corner, clear of the dialog and the board, which a player makes to close a dialog that covers the page; waits until `dialog` is gone.
+const pressOverlayAway = async (p, dialog) => {
+  await p.mouse.click(2, 2)
+  await dialog.waitFor({ state: 'detached', timeout: BOX_TIMEOUT_MS })
+}
+
 function envFor (p, puzzle, { beforeReload, reads }) {
   const openPen = async () => {
     if (!await openPenTool(p)) throw new Error('the pen tool could not be opened')
@@ -248,8 +254,7 @@ function envFor (p, puzzle, { beforeReload, reads }) {
   const dismissSolvedDialog = async () => {
     const dialog = p.locator('.dialog-overlay .dialog', { hasText: 'Congrats' })
     if (await dialog.count() === 0) return
-    await p.mouse.click(2, 2)
-    await dialog.waitFor({ state: 'detached', timeout: BOX_TIMEOUT_MS })
+    await pressOverlayAway(p, dialog)
   }
   const clearControls = async () => {
     for (let i = 0; i <= CLEAR_TRIES; i++) {
@@ -453,7 +458,11 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       await beforeReload()
       await p.reload({ waitUntil: 'load' })
       // The intro dialog (Resume Puzzle) can show after the board does, which `resumeAfterHistory` alone would not wait for.
-      await startPuzzle(p)
+      // A solved board shows SudokuPad's "You've already solved this puzzle" dialog instead of an intro (#1212): a player presses its overlay, as `dismissSolvedDialog` does.
+      const solved = p.locator('.dialog-overlay .dialog', { hasText: 'already solved' })
+      await p.getByRole('button', { name: START }).first().or(solved).waitFor({ state: 'visible' })
+      if (await solved.count() > 0) await pressOverlayAway(p, solved)
+      else await startPuzzle(p)
       await resumeAfterHistory(p)
       await showRules(p, puzzle)
     },

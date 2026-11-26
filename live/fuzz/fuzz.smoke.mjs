@@ -164,6 +164,23 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle, steps: [['place note', [0, at(0, 2)]], ['click cell', at(0, 3)], ['type digit', '1'], ['reload', null]] })
   })
 
+  it('a reload of a solved puzzle meets SudokuPad\'s already-solved dialog, which a player presses away (#1212)', async () => {
+    // Seed 1693052955's shrink: both free cells hold the solution, so the reload shows "You've already solved this puzzle" and no Start Puzzle button.
+    const puzzle = puzzleByName('nearly solved 9x9')
+    const steps = [['enter digit', [targetAt(puzzle, 0, 2), '4']], ['enter digit', [targetAt(puzzle, 4, 4), '5']], ['reload', null]]
+    const target = await openTarget(browser(), puzzle, {})
+    try {
+      // The reload passes through the Start Puzzle path too when the board is not solved, so the page notes whether the dialog showed after the reload.
+      await target.env.page.addInitScript(() => {
+        new window.MutationObserver(() => { if (document.body?.textContent.includes('already solved')) window.sessionStorage.setItem('sawSolvedDialog', '1') }).observe(document, { childList: true, subtree: true })
+      })
+      for (const step of scriptedList(puzzle, steps)) await step.run({ selected: true }, { env: target.env })
+      assert.equal(await target.env.page.evaluate(() => window.sessionStorage.getItem('sawSolvedDialog')), '1', 'the reload showed the already-solved dialog')
+    } finally {
+      await target.close()
+    }
+  })
+
   it('a reload after Color by Digit, a Restart and a UI Tweaks Cancel changes nothing the player sees (#943)', async () => {
     // Seed 2066036500's shrink: two cells showed a color before the reload and none after it.
     const steps = [['color mode', null], ['restart', false], ['ui tweaks dialog', [false, true, true, true, false]], ['reload', null]]
