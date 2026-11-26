@@ -3,7 +3,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { ARROW, BUTTON, DEFAULT_FILL, EDITOR, allFillsOn, paletteColorOn, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, openEditorOn, openMenuOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, BUTTON, DEFAULT_FILL, EDITOR, allFillsOn, paletteColorOn, MENU, MODE_STORAGE_KEY, savedModeOf, SAVED_MODE, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, openEditorOn, openMenuOn } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton, savedState } from '../settings.mjs'
 import { readUntil, settle } from '../settle.mjs'
@@ -200,7 +200,7 @@ describe('the dialog', { concurrency: false }, () => {
 describe('the mode button and its menu', { concurrency: false }, () => {
   let context, p
   before(async () => {
-    ({ context, p } = await openSession(browser(), script, { saved: { ...savedProfiles(APART), [MODE_STORAGE_KEY]: 'both' } }))
+    ({ context, p } = await openSession(browser(), script, { saved: { ...savedProfiles(APART), [MODE_STORAGE_KEY]: SAVED_MODE.Both } }))
   })
   after(async () => { await context?.close() })
 
@@ -260,7 +260,7 @@ const { contrastRatio } = createRequire(import.meta.url)('../../test/contrast.js
 
 describe('a fresh install\'s Low/5/High contrast', { concurrency: false }, () => {
   const withDigit = async (mode, digit, check) => {
-    const { context, p } = await openSession(browser(), script, { saved: { [MODE_STORAGE_KEY]: mode } })
+    const { context, p } = await openSession(browser(), script, { saved: { [MODE_STORAGE_KEY]: savedModeOf(mode) } })
     try {
       await selectCell(p, 0, 2)
       await p.keyboard.press(digit)
@@ -286,7 +286,7 @@ describe('the button with Dark Page installed', { concurrency: false }, () => {
 
   for (const mode of ['cell', 'digit', 'both', 'off']) {
     it(`${mode}: each chip digit reads at 3:1 or more against its chip as drawn over the dark button, and the mode word is 10 px or larger`, async () => {
-      const { context, p } = await openSession(browser(), script, { saved: { [MODE_STORAGE_KEY]: mode }, also: [darkPage] })
+      const { context, p } = await openSession(browser(), script, { saved: { [MODE_STORAGE_KEY]: savedModeOf(mode) }, also: [darkPage] })
       try {
         const look = await p.locator(BUTTON).evaluate((button) => {
           const read = (el) => { const s = getComputedStyle(el); return [s.fill, s.fillOpacity] }
@@ -376,13 +376,14 @@ describe('the dialog\'s layout, keyboard and messages', { concurrency: false }, 
       digits: [...document.querySelectorAll(`${editor} button[data-act=digit]`)].filter((b) => b.tabIndex >= 0).length
     }), EDITOR)
     assert.deepEqual(stops, { swatches: 1, digits: 1 })
-    await keyboardFocus(p, p.locator(`${EDITOR} select[data-role=mode-draft]`))
+    await keyboardFocus(p, p.locator(`${EDITOR} input[data-role=mode-tick][data-box=on]`))
     let presses = 0
     while (presses < 40 && await p.evaluate(() => document.activeElement.textContent.trim()) !== 'Cancel') {
       await p.keyboard.press('Tab')
       presses++
     }
-    assert.equal(presses <= 14, true, `${presses} presses`)
+    // The mode's On, Cell and Digit checkboxes are three of the stops.
+    assert.equal(presses <= 16, true, `${presses} presses`)
   })
 
   it('the Tab stop follows the arrow keys, so a grid is left and re-entered where it was', async () => {

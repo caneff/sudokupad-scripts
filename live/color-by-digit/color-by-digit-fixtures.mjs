@@ -8,7 +8,8 @@ import { CLASSIC_GRID } from '../puzzles.mjs'
 import { COLOR_BY_DIGIT_DIALOG, group, labelOn, modeLabel, ODD_EVEN, COLOR_BY_DIGIT_BUTTON } from '../scripts.mjs'
 import { POLL_MS, settle } from '../settle.mjs'
 import { middleOf } from '../input.mjs'
-import { savedState } from '../settings.mjs'
+import { closeDialogWith, savedState } from '../settings.mjs'
+import { colorCell, selectCell } from '../board.mjs'
 
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by puzzle-url.txt; the
 // 'the board holds the givens' test in color-by-digit.live.mjs checks it.
@@ -34,13 +35,25 @@ export const ADDED_PRELOADS_STORAGE_KEY = storedAt('ColorByDigit_addedPreloads')
 const ADDED_EACH_DIGIT_STORAGE_KEY = storedAt('ColorByDigit_addedEachDigit')
 // Saved profiles with the one-time adds (Entropic and Modular, then Each digit) already done, so a test sees exactly the profiles it seeded.
 export const savedProfiles = (state) => ({ [PROFILES_STORAGE_KEY]: state, [ADDED_PRELOADS_STORAGE_KEY]: true, [ADDED_EACH_DIGIT_STORAGE_KEY]: true })
-export const MODE_KEY = 'ColorByDigit_mode'
+// The mode: coloring on or off, and the Cell and Digit ticks.
+export const MODE_KEY = 'ColorByDigit_ticks'
 export const MODE_STORAGE_KEY = storedAt(MODE_KEY)
-// Auto mode's on/off from before the mode existed, read for the starting mode when no mode is saved.
+// The mode as the script saves it, by the word the button shows for it; Off with Cell ticked, as a fresh install turned off has it.
+export const SAVED_MODE = {
+  Cell: { on: true, cell: true, digit: false },
+  Digit: { on: true, cell: false, digit: true },
+  Both: { on: true, cell: true, digit: true },
+  Off: { on: false, cell: true, digit: false }
+}
+// The same by the mode's lower-case name, as the suites that loop over the modes name them.
+export const savedModeOf = (name) => SAVED_MODE[name[0].toUpperCase() + name.slice(1)]
+// The mode word saved before the ticks, and auto mode's on/off from before that: read for the starting mode when no mode is saved.
+export const MODE_WORD_KEY = 'ColorByDigit_mode'
+export const MODE_WORD_STORAGE_KEY = storedAt(MODE_WORD_KEY)
 export const AUTO_KEY = 'ColorByDigit_auto'
 export const AUTO_STORAGE_KEY = storedAt(AUTO_KEY)
 // The mode's value on an untouched board: SEED's profiles with the mode saved Off, so nothing is colored until a test says so.
-export const SEEDED_OFF = { ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'off' }
+export const SEEDED_OFF = { ...savedProfiles(SEED), [MODE_STORAGE_KEY]: SAVED_MODE.Off }
 
 export const BUTTON = COLOR_BY_DIGIT_BUTTON
 export const EDITOR = COLOR_BY_DIGIT_DIALOG.editor
@@ -134,14 +147,63 @@ export async function buttonPoint (p) {
   return { x: box.x + box.width * 0.3, y: box.y + box.height * 0.6 }
 }
 
+// One press on the button, which turns coloring on or off, and the word it should then show.
 export async function pressTo (p, want) {
   const { x, y } = await buttonPoint(p)
   await p.mouse.click(x, y)
   assert.equal(await settle(() => labelOn(p), want), want)
 }
 
+// The settings dialog's mode checkboxes: On, Cell and Digit.
+export const modeTick = (box) => `${EDITOR} input[data-role="mode-tick"][data-box="${box}"]`
+export const modeTicksOn = (p) => p.$$eval(`${EDITOR} input[data-role="mode-tick"]`, (es) => Object.fromEntries(es.map((e) => [e.dataset.box, e.checked])))
+
+// Ticks the open dialog's checkboxes as SAVED_MODE's `word` has them. Ticks go on before any comes off, since the last ticked box refuses to untick.
+export async function tickMode (p, word) {
+  const want = SAVED_MODE[word]
+  for (const box of ['cell', 'digit', 'on'].sort((a, b) => Number(want[b]) - Number(want[a]))) await p.locator(modeTick(box)).setChecked(want[box])
+}
+
+// The profile menu's Cell and Digit checkboxes, each read from its aria-checked and its box, which must agree.
+export const menuTick = (box) => `${MENU} [data-act="tick"][data-box="${box}"]`
+export const menuTicksOn = (p) => p.$$eval(`${MENU} [data-act="tick"]`, (es) => Object.fromEntries(es.map((e) => {
+  const ticked = e.getAttribute('aria-checked') === 'true'
+  if (ticked !== e.querySelector('input[type=checkbox]').checked) throw new Error(`${e.dataset.box}: aria-checked and the box disagree`)
+  return [e.dataset.box, ticked]
+})))
+
+// A click on the open menu's `box` checkbox; the menu stays open, ticked as `want` (`{ cell, digit }`) after it.
+export async function tickMenuOn (p, box, want) {
+  await p.click(menuTick(box))
+  assert.deepEqual(await settle(() => menuTicksOn(p), want), want)
+  assert.equal(await p.locator(MENU).isVisible(), true, 'the menu stays open after a tick')
+}
+
+// Sets the mode to the one the button shows as `word` through the dialog's checkboxes and Save, the way a press cannot reach every mode.
+export async function modeTo (p, word) {
+  await openEditorOn(p)
+  await tickMode(p, word)
+  await closeDialogWith(p, 'Save', EDITOR)
+  assert.equal(await settle(() => labelOn(p), word), word)
+}
+
 export const coloredCountOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).length).length)
 export const givensColoredOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
+export const cellColorsOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => [...(c.colours || [])]))
+export const savedModeOn = (p) => p.evaluate((key) => Framework.getData(key), MODE_KEY)
+
+// The solver's own colors: a 4 entered at r1c3, then Odd/Even's keys 1 and 2 by hand on a given, on that 4 (its own group's color)
+// and on an empty cell. Returns every cell's colors.
+export async function paintByHandOn (p) {
+  await selectCell(p, 0, 2); await p.keyboard.press('4')
+  assert.equal(await settle(() => p.evaluate(() => String(Framework.app.grid.getCell(0, 2).value)), '4'), '4')
+  await colorCell(p, [0, 0], '2')
+  await colorCell(p, [0, 2], '2')
+  await colorCell(p, [1, 1], '1')
+  const painted = await cellColorsOn(p)
+  assert.equal(painted.filter((c) => c.length).length, 3)
+  return painted
+}
 
 // SudokuPad's own color for an entered digit or a mark, read off the page with no script installed.
 export const DEFAULT_FILL = 'rgb(29, 106, 229)'
@@ -230,6 +292,6 @@ export async function typeProfileName (p, text) {
 
 // Saves the Odd/Even profile in Cell mode before the page loads, so odd digits take one color and even digits another.
 export const seedOddEvenCells = (p) => {
-  const entries = Object.entries({ ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'cell' }).map(([k, v]) => [k, JSON.stringify(v)])
+  const entries = Object.entries({ ...savedProfiles(SEED), [MODE_STORAGE_KEY]: SAVED_MODE.Cell }).map(([k, v]) => [k, JSON.stringify(v)])
   return p.addInitScript((list) => list.forEach(([k, v]) => window.localStorage.setItem(k, v)), entries)
 }

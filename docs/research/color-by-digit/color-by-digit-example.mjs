@@ -5,12 +5,11 @@
 // is cut at the grid lines, so no part of a third box shows.
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
-import { MODE_STORAGE_KEY, modeLabel, savedProfiles } from '../../../live/color-by-digit/color-by-digit-fixtures.mjs'
+import { MODE_STORAGE_KEY, modeLabel, modeTo, SAVED_MODE, savedProfiles } from '../../../live/color-by-digit/color-by-digit-fixtures.mjs'
 
 // The pixel density every picture is taken at.
 export const DEVICE_SCALE = 2
 export const BUTTON = '#control-colorbydigit'
-export const MODES = ['Cell', 'Digit', 'Both', 'Off']
 const script = readFileSync(new URL('../../../color-by-digit.user.js', import.meta.url), 'utf8')
 
 // The digit of the one given, at the top left.
@@ -27,7 +26,7 @@ const PROFILES = {
 }
 const SAVED = savedProfiles(PROFILES)
 // The saved settings of the picture with different groupings: Both mode, the cells on the demo profile (active 0) and the digits on Modular (digitActive 1).
-const SPLIT_SAVED = { ...savedProfiles({ ...PROFILES, digitActive: 1 }), [MODE_STORAGE_KEY]: 'both' }
+const SPLIT_SAVED = { ...savedProfiles({ ...PROFILES, digitActive: 1 }), [MODE_STORAGE_KEY]: SAVED_MODE.Both }
 
 // [row, column, digits], 0-based. The given 2 is at (0, 0): in the demo profile's red group, so the circles sit behind red marks.
 // Big digits: Color by Digit circles only marks, so none has a circle.
@@ -77,13 +76,17 @@ export async function typeInto (p, tool, row, col, keys) {
 // Color by Digit gives no signal that its styles are applied, so a change gets this long to show.
 export const SETTLE_MS = 500
 
-// Presses the button until its aria-label names mode `want`, then waits for the colors to settle.
-export async function pressTo (p, want) {
+// Shows mode `want` on the button, then waits for the colors to settle: a press turns coloring off, and the settings dialog's
+// checkboxes set any other mode, since a press only turns on what is ticked.
+export async function showMode (p, want) {
   const button = p.locator(BUTTON)
-  const label = () => button.getAttribute('aria-label')
-  for (let i = 0; i < MODES.length && await label() !== modeLabel(want); i++) {
-    const box = await button.boundingBox()
-    await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
+  if (await button.getAttribute('aria-label') !== modeLabel(want)) {
+    if (want === 'Off') {
+      const box = await button.boundingBox()
+      await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
+    } else {
+      await modeTo(p, want)
+    }
   }
   await p.waitForFunction(([selector, label]) => document.querySelector(selector).getAttribute('aria-label') === label, [BUTTON, modeLabel(want)])
   await p.waitForTimeout(SETTLE_MS)

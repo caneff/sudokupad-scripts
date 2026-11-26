@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { coloredCountOn, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, MENU, MODE_KEY, openEditorOn, openMenuOn, openSession, pressTo, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
+import { coloredCountOn, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, MENU, menuTicksOn, savedModeOn, modeTo, openEditorOn, openMenuOn, openSession, pressTo, SAVED_MODE, tickMenuOn, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith } from '../settings.mjs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { POLL_MS, settle } from '../settle.mjs'
@@ -38,9 +38,9 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
     assert.equal(await settle(label, 'Cell'), 'Cell')
   })
 
-  it('Cell to Digit clears the board; Undo returns to Cell, a second Undo to Off, and Redo twice to Digit', async () => {
+  it('a press from Cell to Off clears the board; Undo returns to Cell, a second Undo to Off, and Redo twice to Off', async () => {
     const count = await coloredCount()
-    await pressTo(p, 'Digit')
+    await pressTo(p, 'Off')
     assert.equal(await settle(coloredCount, 0), 0)
     await undo()
     assert.equal(await settle(coloredCount, count), count)
@@ -52,15 +52,24 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
     assert.equal(await settle(label, 'Cell'), 'Cell')
     await redo()
     assert.equal(await settle(coloredCount, 0), 0)
-    assert.equal(await settle(label, 'Digit'), 'Digit')
+    assert.equal(await settle(label, 'Off'), 'Off')
   })
 
-  it('Digit to Both fills the board; Undo empties it and the button returns to Digit', async () => {
-    await pressTo(p, 'Both')
+  it('a Save that turns coloring on with Cell and Digit ticked fills the board; Undo empties it and puts back Off with Cell alone ticked, and Redo puts back Both', async () => {
+    const saved = () => savedModeOn(p)
+    await modeTo(p, 'Both')
     assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
+    const count = await coloredCount()
     await undo()
     assert.equal(await settle(coloredCount, 0), 0)
-    assert.equal(await settle(label, 'Digit'), 'Digit')
+    assert.equal(await settle(label, 'Off'), 'Off')
+    assert.deepEqual(await saved(), SAVED_MODE.Off)
+    await redo()
+    assert.equal(await settle(coloredCount, count), count)
+    assert.equal(await settle(label, 'Both'), 'Both')
+    assert.deepEqual(await saved(), SAVED_MODE.Both)
+    await undo()
+    assert.equal(await settle(label, 'Off'), 'Off')
   })
 
   it('a new action after an Undo ends the Redo: a later Undo and Redo do not move the mode', async () => {
@@ -94,6 +103,47 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
     assert.equal(await settle(() => undoDepth(p), depth), depth, 'the Redo landed')
     await watch()
     assert.deepEqual([...seen], ['Off'])
+  })
+
+  it('a press with only Digit ticked colors no cell and makes no undo step, on or off', async () => {
+    await modeTo(p, 'Digit')
+    const depth = await undoDepth(p)
+    const colored = await coloredCount()
+    await pressTo(p, 'Off')
+    await pressTo(p, 'Digit')
+    assert.equal(await undoDepth(p), depth)
+    assert.equal(await coloredCount(), colored)
+  })
+
+  it('a Cell tick in the menu while on colors the grid as one undo step; Undo takes the colors and the tick back, Redo puts them again, and a Digit tick makes no step', async () => {
+    await modeTo(p, 'Digit')
+    const colored = await coloredCount()
+    await openMenuOn(p)
+    const depth = await undoDepth(p)
+    await tickMenuOn(p, 'cell', { cell: true, digit: true })
+    assert.equal(await settle(label, 'Both'), 'Both')
+    assert.equal(await settle(async () => (await coloredCount()) > colored, true), true)
+    const filled = await coloredCount()
+    // The stack holds SudokuPad's actions; one undo step is one `gs`..`ge` group of them. SudokuPad deselects on the click first, as on a profile pick: no step.
+    const added = (await p.evaluate((depth) => Framework.app.puzzle.undoStack.slice(depth).map(String), depth)).filter((a, i, all) => !all.slice(0, i + 1).every((b) => b === 'ds'))
+    assert.deepEqual([added[0], added.at(-1), added.filter((a) => a === 'gs').length], ['gs', 'ge', 1], JSON.stringify(added))
+    const stepped = await undoDepth(p)
+    await p.keyboard.press('Escape')
+    await undo()
+    assert.equal(await settle(coloredCount, colored), colored)
+    assert.equal(await settle(label, 'Digit'), 'Digit')
+    await openMenuOn(p)
+    assert.deepEqual(await menuTicksOn(p), { cell: false, digit: true })
+    await p.keyboard.press('Escape')
+    await redo()
+    assert.equal(await settle(coloredCount, filled), filled)
+    assert.equal(await settle(label, 'Both'), 'Both')
+    await openMenuOn(p)
+    assert.deepEqual(await menuTicksOn(p), { cell: true, digit: true })
+    await tickMenuOn(p, 'digit', { cell: true, digit: false })
+    assert.equal(await settle(label, 'Cell'), 'Cell')
+    assert.equal(await undoDepth(p), stepped)
+    await p.keyboard.press('Escape')
   })
 })
 
@@ -154,7 +204,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
     assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined && Framework.app.puzzle.undoStack.length > 0), true), true)
     assert.equal(await settle(label, 'Cell'), 'Cell')
     assert.equal(await settle(() => givensColoredOn(p), givens), givens)
-    assert.equal(await p.evaluate((key) => Framework.getData(key), MODE_KEY), 'cell')
+    assert.deepEqual(await savedModeOn(p), SAVED_MODE.Cell)
   })
 
   it('the replay holds as many groups as the undo stack after the first Undo (#1032)', async () => {
@@ -240,7 +290,7 @@ describe('The first Undo after a Restart, with Text Anywhere loaded', { concurre
   })
 })
 
-describe('Undo into Cell after a profile pick in Digit mode', { concurrency: false }, () => {
+describe('Undo into Cell after a profile pick with coloring off', { concurrency: false }, () => {
   let context, p, t
 
   const activeGroups = async () => { const state = await t.getState(); return state.profiles[state.active].groups }
@@ -254,12 +304,12 @@ describe('Undo into Cell after a profile pick in Digit mode', { concurrency: fal
   })
   after(async () => { await context.close() })
 
-  // The pick in Digit mode colors no cell and leaves no undo step, so the board the Undo brings back is colored by the profile before it (#1011).
-  it('the Undo of Cell to Digit brings back the profile the board was colored by, and the Redo the one picked', async () => {
+  // The pick with coloring off colors no cell and leaves no undo step, so the board the Undo brings back is colored by the profile before it (#1011).
+  it('the Undo of a press from Cell to Off brings back the profile the board was colored by, and the Redo the one picked', async () => {
     await pressTo(p, 'Cell')
     assert.equal(await activeName(), 'Odd/Even')
     assert.equal(await settle(offProfile, 0), 0, 'Cell colors the board by Odd/Even')
-    await pressTo(p, 'Digit')
+    await pressTo(p, 'Off')
     await openMenuOn(p)
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).click()
     assert.equal(await settle(activeName, 'Low/5/High'), 'Low/5/High')
@@ -268,13 +318,13 @@ describe('Undo into Cell after a profile pick in Digit mode', { concurrency: fal
     assert.equal(await settle(offProfile, 0), 0, `the cells follow the active profile, ${await activeName()}`)
     assert.equal(await activeName(), 'Odd/Even')
     await p.click('#control-redo')
-    assert.equal(await settle(t.label, 'Digit'), 'Digit')
+    assert.equal(await settle(t.label, 'Off'), 'Off')
     assert.equal(await settle(activeName, 'Low/5/High'), 'Low/5/High', 'the Redo keeps the pick')
     assert.equal(await coloredCountOn(p), 0)
   })
 })
 
-describe('Undo into Cell after a Save in Digit mode', { concurrency: false }, () => {
+describe('Undo into Cell after a Save with coloring off', { concurrency: false }, () => {
   let context, p, t
 
   const activeGroups = async () => { const state = await t.getState(); return state.profiles[state.active].groups }
@@ -285,10 +335,10 @@ describe('Undo into Cell after a Save in Digit mode', { concurrency: false }, ()
   })
   after(async () => { await context.close() })
 
-  // The Save in Digit mode colors no cell and leaves no undo step, so no Undo may take back what it saved.
-  it('the Undo of Cell to Digit keeps the groups the Save gave the active profile', async () => {
+  // The Save with coloring off colors no cell and leaves no undo step, so no Undo may take back what it saved.
+  it('the Undo of a press from Cell to Off keeps the groups the Save gave the active profile', async () => {
     await pressTo(p, 'Cell')
-    await pressTo(p, 'Digit')
+    await pressTo(p, 'Off')
     const before = await activeGroups()
     await openEditorOn(p)
     await p.locator(`${EDITOR} button[data-act=digit][data-digit="2"]`).click()

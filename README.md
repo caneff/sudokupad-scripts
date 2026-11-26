@@ -40,7 +40,7 @@ Message me on Discord, [@ChinStrap](https://discord.com/users/184770560356646923
 
 ### Color by Digit
 
-In Cell mode, every cell holding a digit, and every empty cell whose center marks all belong to one group, takes its group's color and keeps it in step as you solve. In Digit mode the digits themselves take it instead, in a darker shade, and Both does both. You set the groups in a settings dialog.
+In Cell mode, every cell holding a digit, and every empty cell whose center marks all belong to one group, takes its group's color and keeps it in step as you solve. In Digit mode the digits themselves take it instead, in a darker shade, and Both does both. The button turns coloring on and off, and the Cell and Digit checkboxes at the top of its profile menu, and in the settings dialog, choose what it colors. You set the groups in the same dialog.
 
 The full reference, with every profile, pulldown and mode, is [docs/color-by-digit.md](docs/color-by-digit.md).
 

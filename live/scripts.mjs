@@ -49,17 +49,17 @@ export const SCRIPTS = [
     name: 'Color by Digit',
     file: 'color-by-digit.user.js',
     button: COLOR_BY_DIGIT_BUTTON,
-    dialog: { owns: /^ColorByDigit_/, editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, enveloped: true, badKey: 'ColorByDigit_mode', bad: 'sideways' },
+    dialog: { owns: /^ColorByDigit_/, editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, enveloped: true, badKey: 'ColorByDigit_ticks', bad: 'sideways' },
     ready: (p) => p.locator(COLOR_BY_DIGIT_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(COLOR_BY_DIGIT_BUTTON).waitFor({ state: 'visible' }),
-    // A fresh install starts in Cell, which colors the board's givens, and a press steps it to Digit, which takes them off.
+    // A fresh install starts on with Cell ticked, which colors the board's givens, and a press turns coloring off, which takes them off.
     act: async (p) => {
       const colored = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).some((c) => (c.colours || []).length > 0))
       assert.equal(await settle(colored, true), true, 'Cell colored a cell')
       assert.equal(await labelOn(p), 'Cell')
       await p.click(COLOR_BY_DIGIT_BUTTON)
-      assert.equal(await settle(() => labelOn(p), 'Digit'), 'Digit')
-      assert.equal(await settle(colored, false), false, 'Digit took the colors off')
+      assert.equal(await settle(() => labelOn(p), 'Off'), 'Off')
+      assert.equal(await settle(colored, false), false, 'Off took the colors off')
     }
   },
   {

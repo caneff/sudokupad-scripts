@@ -442,14 +442,14 @@ const DETAIL_CONTENT = [
     file: CBD,
     sections: ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<h2>Good to know</h2>'],
     features: [
-      'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The word above the chips names the mode.',
+      'On and off A press of the button turns coloring on or off. The Cell and Digit checkboxes at the top of the profile menu choose what it colors, cells, digits or both, and the word above the chips names it: Cell, Digit, Both, or Off. With only Digit ticked, a press leaves the colors you painted yourself alone.',
       'Updates as you solve A cell takes its group\'s color when its digit, or every one of its center marks, is in that group. The color goes when that stops being true.',
       'Colored digits In Digit and Both, digits and marks take a darker shade of their group\'s color. A mark that conflicts gets a red circle.',
       'Profiles A profile splits the digits into groups and gives each a color. Five come built in (Low/5/High, Odd/Even, Entropic, Modular and Each digit), and you can keep up to six.',
-      'Quick switching Click the arrow on the button, or right-click or hold the button, to open the profile list. A pick applies at once.',
-      'A separate digit profile Digits can follow the cell profile, use another profile, or go uncolored.'
+      'Quick switching Click the arrow on the button, or right-click or hold the button, to open the profile list. A pick applies at once, and the Cell and Digit checkboxes above it apply at once too and keep the list open.',
+      'A separate digit profile Digits can follow the cell profile or use another profile.'
     ],
-    leadIns: ['Four modes', 'Updates as you solve', 'Colored digits', 'Profiles', 'Quick switching', 'A separate digit profile']
+    leadIns: ['On and off', 'Updates as you solve', 'Colored digits', 'Profiles', 'Quick switching', 'A separate digit profile']
   }
 ]
 
@@ -636,15 +636,15 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   assert.equal(found.length, 1, 'the settings dialog section is not one picture')
   assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/color-by-digit/color-by-digit-dialog-annotated.png"`))
   const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
-  for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
+  for (const label of ['Settings icons', 'Mode and pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. Restore defaults brings back the five preloaded profiles and the Cell and Digit pulldowns\' starting picks, after asking in the dialog when it would remove your own profiles. Save keeps them and Cancel drops them. From the keyboard, the colors and the digit keys are one Tab stop each, the arrow keys move within them, and typing 0 to 9 paints that digit.')
+  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. Restore defaults brings back the five preloaded profiles and the Cell and Digit pulldowns\' starting picks, leaving the On, Cell and Digit checkboxes as they are, after asking in the dialog when it would remove your own profiles. Save keeps them and Cancel drops them. From the keyboard, the colors and the digit keys are one Tab stop each, the arrow keys move within them, and typing 0 to 9 paints that digit.')
 })
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
   assert.deepEqual(section(CBD, 'Good to know'), [
-    'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color, but undoing or redoing a mode change that colored or cleared cells moves the button to the mode it had then, and undoing or redoing a profile switch or a Save that recolored the cells moves the active profile too, and the groups the Save changed.',
+    'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color, but undoing or redoing a press or a Save that colored or cleared cells moves the button and its checkboxes back to what they were then, and undoing or redoing a profile switch or a Save that recolored the cells moves the active profile too, and the groups the Save changed.',
     "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.",
     'The button sits in the bottom row with Undo, Redo, Check and Select. That row holds five buttons, and any more, from this script or another, wrap onto a second row under it.'
   ])

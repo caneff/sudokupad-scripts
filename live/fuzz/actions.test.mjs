@@ -851,7 +851,7 @@ describe('focusing the actions on a script (#724)', () => {
 
     // What each script takes is its own reader's say, so a "valid" text is one its `pastedSettings` takes a setting from, and a refused one is no text it takes any from.
     const taken = (script, text) => {
-      try { return Object.keys(script.pastedSettings(text, script.READERS, script.withModeFromAuto ?? script.withNewKeys).values).length } catch (error) {
+      try { return Object.keys(script.pastedSettings(text, script.READERS, script.withUpgradedMode ?? script.withNewKeys).values).length } catch (error) {
         if (!/^the clipboard text is not/.test(error.message)) throw error
         return 0
       }
@@ -1069,7 +1069,7 @@ describe('the settings dialogs\' Copy, Paste, Restore defaults and error log (#9
   })
 
   it('the texts reach what the ticket names: a legacy auto mode, a pasted limit of none, a pasted palette and a foreign key', () => {
-    assert.ok(COLOR_BY_DIGIT_TEXTS.some((t) => t && /ColorByDigit_auto/.test(t)), 'withModeFromAuto')
+    assert.ok(COLOR_BY_DIGIT_TEXTS.some((t) => t && /ColorByDigit_auto/.test(t)), 'withUpgradedMode')
     assert.ok(COLOR_BY_DIGIT_TEXTS.some((t) => t && /addedPreloads":false/.test(t)), 'a preload mark at its default')
     assert.ok(AUTO_RULES_RESIZER_TEXTS.some((t) => t && /maxWidth":null/.test(t)), 'savedLimit on none')
     assert.ok(TEXT_ANYWHERE_TEXTS.some((t) => t && /TextAnywhere_colors/.test(t)), 'readPastedColors')

@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, pressTo, PROFILES_KEY, reloadSession, SEED, watch, wrongColorCountOn, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { BUTTON, cellsStateOn, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, modeTo, pressTo, PROFILES_KEY, reloadSession, SEED, watch, wrongColorCountOn, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { colorCell, selectCell } from '../board.mjs'
 import { closeDialogWith, openSettings, savedState } from '../settings.mjs'
 import { settle, stable } from '../settle.mjs'
@@ -45,13 +45,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const wrongCount = (expected) => wrongColorCountOn(p, expected)
 
   const label = () => labelOn(p)
-  // Undo moves the mode back with the board, so a test that undid a mode step steps on from the mode it is at now.
-  const MODE_ORDER = ['Off', 'Cell', 'Digit', 'Both']
+  // Undo moves the mode back with the board, so a test that undid a mode step goes on from the mode it is at now, through the dialog's ticks.
   const stepTo = async (want) => {
-    for (let presses = 0; (await label()) !== want; presses++) {
-      assert.equal(presses < MODE_ORDER.length, true, `no way to ${want}`)
-      await pressTo(p, MODE_ORDER[(MODE_ORDER.indexOf(await label()) + 1) % MODE_ORDER.length])
-    }
+    if ((await label()) !== want) await modeTo(p, want)
   }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
@@ -122,7 +118,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   // The first press of the run, before any dialog has opened: a press the script never hears fails here.
-  it('a press steps to Cell and colors every given and entered digit by Odd/Even, nothing else', async () => {
+  it('a press turns coloring on with Cell and colors every given and entered digit by Odd/Even, nothing else', async () => {
     await pressTo(p, 'Cell')
     assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
     assert.equal(await coloredCount(), DIGIT_CELLS)
@@ -152,8 +148,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await settle(coloredCount, DIGIT_CELLS), DIGIT_CELLS)
   })
 
-  it('a second press steps to Digit and takes every color off the cells in one undo step', async () => {
-    await pressTo(p, 'Digit')
+  it('a second press turns coloring off and takes every color off the cells in one undo step', async () => {
+    await pressTo(p, 'Off')
     assert.equal(await settle(coloredCount, 0), 0)
     assert.equal(JSON.stringify(await digitsOnBoard()), baseline)
     await undo()
@@ -173,7 +169,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
       await stepTo('Digit')
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
-      await pressTo(p, 'Both')
+      await modeTo(p, 'Both')
       assert.deepEqual((await settle(async () => [...await colorsAt(0, 0)].sort(), ['1', '3'])), ['1', '3'])
       await undo()
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
@@ -182,13 +178,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
     })
 
-    it('off: the group color replaces the existing one, and stepping to Digit takes the cell\'s color off', async () => {
+    it('off: the group color replaces the existing one, and a press that turns coloring off takes the cell\'s color off', async () => {
       await setMultiColor(false)
       assert.equal(await getSetting(), false)
       await pressTo(p, 'Cell')
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['1']), ['1'])
       assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
-      await pressTo(p, 'Digit')
+      await pressTo(p, 'Off')
       assert.equal(await settle(coloredCount, 0), 0)
       await undo()
       assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
@@ -364,7 +360,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('a color and a digit painted are saved with the emptied group gone, and the cells recolor at once', async () => {
       // The earlier test left centre marks 6, 7 and 9 on r9c1, which key 9 colors, and 1 and 7 on r9c2, which no key does.
       const withMarks = (expected) => (x) => (x.r === 8 && x.c === 0 ? ['9'] : expected(x))
-      await pressTo(p, 'Both')
+      await modeTo(p, 'Both')
       assert.equal(await settle(() => wrongCount(withMarks(lowFiveHigh)), 0), 0)
       await openEditorOn(p)
       const free = await p.$$eval(`${EDITOR} button[data-role=swatch]`, (es) => es.map((e) => e.dataset.key).find((k) => !['1', '5', '9'].includes(k)))
@@ -374,8 +370,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await settle(async () => (await getGroups())[1].key, free), free)
       assert.deepEqual(await getGroups(), [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: free, digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }])
       assert.equal(await settle(() => wrongCount(withMarks(expectedColours((d) => (Number(d) < 5 ? '1' : d === '5' ? free : '9')))), 0), 0)
-      // Back to Digit through Off and Cell, which take the cell colors off again.
-      await stepTo('Off')
+      // Back to Digit alone, which takes the cell colors off again.
       await stepTo('Digit')
       assert.equal(await settle(coloredCount, 0), 0)
     })
@@ -395,7 +390,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await closeDialogWith(p, 'Save', EDITOR)
       assert.deepEqual(await settle(getGroups, []), [])
       assert.equal((await getData()).active, 1)
-      await pressTo(p, 'Both')
+      await modeTo(p, 'Both')
       assert.deepEqual(await watch(coloredCount), [0])
     })
   })

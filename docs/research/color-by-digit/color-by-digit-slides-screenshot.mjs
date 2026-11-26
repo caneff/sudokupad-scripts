@@ -20,7 +20,7 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { modeLabel } from '../../../live/color-by-digit/color-by-digit-fixtures.mjs'
-import { BUTTON, DEVICE_SCALE, exampleClip, openExample, pressTo, SETTLE_MS, typeInto, waitForCircles } from './color-by-digit-example.mjs'
+import { BUTTON, DEVICE_SCALE, exampleClip, openExample, showMode, SETTLE_MS, typeInto, waitForCircles } from './color-by-digit-example.mjs'
 
 const out = (name) => new URL(`./color-by-digit-slide-${name}.png`, import.meta.url).pathname
 // The slide's width in pixels: the page shows it at half that, at two pixels to one.
@@ -75,7 +75,7 @@ async function takeSlide (p, name, { scale, menuSize, menuOpen }) {
   const hideOthers = (on) => p.evaluate((on) => document.body.classList.toggle('hide-others', on), on)
   await hideOthers(true)
   const modular = p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Modular' })
-  await pressTo(p, 'Cell')
+  await showMode(p, 'Cell')
   // Measure the menu once, open and closed again, so every slide is laid out the same.
   await p.click(MENU_ARROW)
   await p.locator(MENU).waitFor({ state: 'visible' })
@@ -90,7 +90,7 @@ async function takeSlide (p, name, { scale, menuSize, menuOpen }) {
   await hideOthers(false)
   const slide = (name, open = false) => takeSlide(p, name, { scale, menuSize, menuOpen: open })
   const press = async (mode) => {
-    await pressTo(p, mode)
+    await showMode(p, mode)
     if (mode === 'Digit' || mode === 'Both') await waitForCircles(p)
   }
   await slide('1-start')

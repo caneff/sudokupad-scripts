@@ -9,10 +9,10 @@ const { saveEnveloped } = loadLib(['plain', 'store'], ['saveEnveloped'])
 const { failEachListener } = require('./broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
 const { withScript, withoutPath } = require('./unit-start.js')
-const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, asideOf, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, palettePages, readPalette, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
+const { createModeHistory, withCellProfile, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withUpgradedMode, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, pressedMode, tickedMode, modeWord, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitGroup, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, setSync, setDigitActive, digitChoice, chooseDigit, renderPulldowns, dropIndex, asideOf, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, palettePages, readPalette, PAGE_COLUMNS, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH } = require('../color-by-digit.user.js')
 
 const chipsOf = (groups, style = 'cell', digitGroups = groups) => shownChips(style, groups, digitGroups)
-const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
+const readPaste = (text) => pastedSettings(text, READERS, withUpgradedMode)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 // The planners take the one plan-cell shape `toPlanCell` builds; a test names only what it sets.
@@ -402,14 +402,12 @@ test('setProfileGroups replaces only the chosen profile\'s groups', () => {
 const synced = { profiles: [{ name: 'A', groups: LOW }, { name: 'B', groups: ODD }, { name: 'C', groups: ENTROPIC }], active: 1 }
 const apart = setDigitActive(setSync(synced, false), 2)
 
-test('sync: a state saved before the digit profile is synced and uses digit colors, and digits take the cell profile', () => {
+test('sync: a state saved before the digit profile is synced, and digits take the cell profile', () => {
   const state = fromStored(synced, null)
   assert.deepEqual(state, synced)
   assert.equal(isSynced(state), true)
-  assert.equal(usesDigitColors(state), true)
   assert.deepEqual(digitGroups(state), ODD)
   assert.equal(isSynced(fromStored(null, null)), true)
-  assert.equal(usesDigitColors(fromStored(null, null)), true)
 })
 
 test('sync: unticking starts the digit pick at the cell profile, so the digits keep their groups', () => {
@@ -467,25 +465,10 @@ test('sync: a saved digit pick is read like the active one, and a pick that is n
   for (const digitActive of [3, 9, -1, 1.5, '2', null]) assert.equal(isSynced(fromStored({ ...saved, digitActive }, null)), true, String(digitActive))
 })
 
-test('use digit colors: off is saved as false and kept through every edit; anything but false reads as on', () => {
-  const off = setUseDigitColors(apart, false)
-  assert.equal(usesDigitColors(off), false)
-  assert.equal(off.useDigitColors, false)
-  for (const next of [setActive(off, 0), setSync(off, true), deleteProfile(off, 0), moveProfile(off, 0, 1), copyProfile(off, 0), renameProfile(off, 0, 'Z'), setProfileGroups(off, 0, []), setDigitActive(off, 0), withAddedPreloads(off, ['Modular'])]) {
-    assert.equal(usesDigitColors(next), false)
-  }
-  assert.equal(usesDigitColors(fromStored(off, null)), false)
-  assert.equal(usesDigitColors(fromStored({ ...synced, useDigitColors: 'no' }, null)), true)
-  const on = setUseDigitColors(off, true)
-  assert.equal('useDigitColors' in on, false)
-  assert.deepEqual(on, apart)
-})
-
-test('use digit colors: off, a press steps Cell and Off only; Digit falls back to Off and Both to Cell', () => {
-  assert.equal(nextMode('cell', false), 'off')
-  assert.equal(nextMode('off', false), 'cell')
-  assert.deepEqual(['cell', 'digit', 'both', 'off'].map((m) => allowedMode(m, false)), ['cell', 'off', 'cell', 'off'])
-  assert.deepEqual(['cell', 'digit', 'both', 'off'].map((m) => allowedMode(m, true)), ['cell', 'digit', 'both', 'off'])
+test('profiles saved with digit colors off read as any other: the flag is dropped and never saved again', () => {
+  const read = fromStored({ ...apart, useDigitColors: false }, null)
+  assert.deepEqual(read, apart)
+  assert.equal('useDigitColors' in setActive(read, 0), false)
 })
 
 test('the right column has no name box: the digit keys come straight after the Digits heading', () => {
@@ -507,54 +490,44 @@ const hostileApart = setDigitActive(setSync(hostile, false), 0)
 const selectOf = (html, role) => html.match(new RegExp(`<select class="cbd-color-choice" data-role="${role}">(.*?)</select>`, 's'))[1]
 const optionsOf = (html, role) => [...selectOf(html, role).matchAll(/<option value="([^"]*)"([^>]*)>([^<]*)<\/option>/g)].map((m) => `${m[1]}|${m[3]}${m[2].includes(' selected') ? '*' : ''}`)
 
-test('digitChoice reads the digit pulldown off the state: same as cell, a profile index, or none', () => {
+test('digitChoice reads the digit pulldown off the state: same as cell or a profile index', () => {
   assert.equal(digitChoice(hostile), 'same')
   assert.equal(digitChoice(hostileApart), '0')
-  assert.equal(digitChoice({ ...hostileApart, useDigitColors: false }), 'none')
-  assert.equal(digitChoice({ ...hostile, useDigitColors: false }), 'none')
 })
 
-test('chooseDigit: Same as cell makes the digits follow the cells, a name makes them follow that profile, None turns digit colors off', () => {
+test('chooseDigit: Same as cell makes the digits follow the cells, a name makes them follow that profile', () => {
   assert.deepEqual(chooseDigit(hostileApart, 'same'), hostile)
-  assert.deepEqual(chooseDigit(hostile, '2'), setDigitActive(setUseDigitColors(hostile, true), 2))
+  assert.deepEqual(chooseDigit(hostile, '2'), setDigitActive(hostile, 2))
   assert.equal(chooseDigit(hostile, '2').digitActive, 2)
-  assert.equal('useDigitColors' in chooseDigit(hostile, '2'), false)
-  assert.deepEqual(chooseDigit(hostileApart, 'none'), setUseDigitColors(hostileApart, false))
-  assert.equal(chooseDigit(hostileApart, 'none').useDigitColors, false)
-  assert.equal(chooseDigit(chooseDigit(hostile, 'none'), '2').digitActive, 2)
-  assert.equal(usesDigitColors(chooseDigit(chooseDigit(hostile, 'none'), '2')), true)
-  assert.equal(isSynced(chooseDigit(chooseDigit(hostileApart, 'none'), 'same')), true)
-  assert.equal(usesDigitColors(chooseDigit(chooseDigit(hostileApart, 'none'), 'same')), true)
 })
 
-test('the three pulldowns: Mode, Cell and Digit, in that order, with no checkbox and no mode button', () => {
-  const html = renderPulldowns(hostile, 'both')
-  assert.deepEqual([...html.matchAll(/<select class="cbd-color-choice" data-role="([\w-]+)"/g)].map((m) => m[1]), ['mode-draft', 'cell-profile', 'digit-profile'])
-  assert.deepEqual([...html.matchAll(/<label class="cbd-pulldown"><span>(\w+)<\/span>/g)].map((m) => m[1]), ['Mode', 'Cell', 'Digit'])
-  assert.doesNotMatch(html, /type="checkbox"|<button|data-mode=/)
+test('the dialog\'s top rows: the mode\'s On, Cell and Digit checkboxes, then the Cell and Digit pulldowns, with no mode pulldown and no mode button', () => {
+  const html = renderPulldowns(hostile, modeOf(true, true, true))
+  assert.deepEqual([...html.matchAll(/<select class="cbd-color-choice" data-role="([\w-]+)"/g)].map((m) => m[1]), ['cell-profile', 'digit-profile'])
+  assert.deepEqual([...html.matchAll(/class="cbd-pulldown"[^>]*><span>(\w+)<\/span>/g)].map((m) => m[1]), ['Mode', 'Cell', 'Digit'])
+  assert.doesNotMatch(html, /mode-draft|<button|data-mode=/)
 })
 
-test('the Mode pulldown offers Cell, Digit, Both, Off, selects the draft mode, and offers only Cell and Off while Digit is None', () => {
-  assert.deepEqual(optionsOf(renderPulldowns(hostile, 'both'), 'mode-draft'), ['cell|Cell', 'digit|Digit', 'both|Both*', 'off|Off'])
-  const none = renderPulldowns({ ...hostile, useDigitColors: false }, 'digit')
-  assert.deepEqual(optionsOf(none, 'mode-draft'), ['cell|Cell', 'off|Off*'])
-  assert.deepEqual(optionsOf(renderPulldowns({ ...hostile, useDigitColors: false }, 'both'), 'mode-draft'), ['cell|Cell*', 'off|Off'])
+const ticksOf = (html) => [...html.matchAll(/<label><input type="checkbox" data-role="mode-tick" data-box="(\w+)"( checked)?>(\w+)<\/label>/g)].map((m) => `${m[1]}|${m[3]}${m[2] ? '*' : ''}`)
+
+test('the mode\'s checkboxes are On, Cell and Digit, each ticked as the draft mode says', () => {
+  assert.deepEqual(ticksOf(renderPulldowns(hostile, modeOf(true, true, true))), ['on|On*', 'cell|Cell*', 'digit|Digit*'])
+  assert.deepEqual(ticksOf(renderPulldowns(hostile, modeOf(false, false, true))), ['on|On', 'cell|Cell', 'digit|Digit*'])
 })
 
 test('the Cell pulldown lists every profile by name, escaped, selecting the cell profile', () => {
-  assert.deepEqual(optionsOf(renderPulldowns(hostile, 'cell'), 'cell-profile'), ['0|Low &lt;b&gt;', '1|B*', '2|C'])
+  assert.deepEqual(optionsOf(renderPulldowns(hostile, DEFAULT), 'cell-profile'), ['0|Low &lt;b&gt;', '1|B*', '2|C'])
 })
 
-test('the Digit pulldown lists Same as cell, every profile, then None, and selects what the state says', () => {
+test('the Digit pulldown lists Same as cell and every profile, with no None, and selects what the state says', () => {
   const names = ['0|Low &lt;b&gt;', '1|B', '2|C']
-  const all = (selected) => ['same|Same as cell', ...names, 'none|None'].map((o, i) => (i === selected ? `${o}*` : o))
-  assert.deepEqual(optionsOf(renderPulldowns(hostile, 'cell'), 'digit-profile'), all(0))
-  assert.deepEqual(optionsOf(renderPulldowns(hostileApart, 'cell'), 'digit-profile'), all(1))
-  assert.deepEqual(optionsOf(renderPulldowns({ ...hostileApart, useDigitColors: false }, 'cell'), 'digit-profile'), all(4))
+  const all = (selected) => ['same|Same as cell', ...names].map((o, i) => (i === selected ? `${o}*` : o))
+  assert.deepEqual(optionsOf(renderPulldowns(hostile, DEFAULT), 'digit-profile'), all(0))
+  assert.deepEqual(optionsOf(renderPulldowns(hostileApart, DEFAULT), 'digit-profile'), all(1))
 })
 
 test('each pulldown option that names a profile carries its index, so a rename can update the text in place', () => {
-  assert.equal(count(renderPulldowns(hostile, 'cell'), /<option value="\d" data-index="\d"/g), 6)
+  assert.equal(count(renderPulldowns(hostile, DEFAULT), /<option value="\d" data-index="\d"/g), 6)
 })
 
 test('the pulldowns sit above the profile list and the paint editor, one per row, each label in a fixed-width column left of its select', () => {
@@ -588,6 +561,7 @@ test('the stylesheet has no rule for the dialog title\'s Copy and Paste settings
   assert.doesNotMatch(STYLE_CSS, /copy-settings|paste-settings|cbd-tools/)
 })
 
+const CELL_ON = { on: true, cell: true, digit: false }
 const menuPicks = (html) => [...html.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`)
 
 const menuRows = (html) => html.split('data-role="menu-row"').slice(1).map((row) => ({
@@ -597,31 +571,61 @@ const menuRows = (html) => html.split('data-role="menu-row"').slice(1).map((row)
 }))
 
 test('sync: unsynced, the menu is one list whose rows each end in a Cell dot and a Digit dot, under the words Cell and Digit, each pick marked in its own column', () => {
-  const html = renderMenu(apart, colorFor)
+  const html = renderMenu(apart, colorFor, CELL_ON)
   assert.deepEqual(menuRows(html).map((r) => r.picks), [['cells0', 'digits0'], ['cells1*', 'digits1'], ['cells2', 'digits2*']])
   assert.deepEqual(menuRows(html).map((r) => r.name), ['A', 'B', 'C'])
   const head = html.slice(0, html.indexOf('data-role="menu-row"'))
-  assert.match(head, /data-role="column-head"[^>]*>Cell<\/span><span data-role="column-head"[^>]*>Digit</)
+  assert.match(head, /data-role="column-head"[^>]*>[\s\S]*?>Cell<[\s\S]*?data-role="column-head"[^>]*>[\s\S]*?>Digit</)
   assert.equal(count(html, />Cells?<|>Digits?</g), 2)
   assert.doesNotMatch(html, /data-role="menu-row"[^>]*data-act=/)
   assert.ok(html.indexOf('data-act="edit"') > html.lastIndexOf('data-act="pick"'))
 })
 
 test('sync: the menu\'s dot columns and their heads have one width, so each head sits centred over its dots', () => {
-  const html = renderMenu(apart, colorFor)
+  const html = renderMenu(apart, colorFor, CELL_ON)
   const widths = [...html.matchAll(/data-role="(?:column-head|dot-column)" style="[^"]*width:(\d+)px/g)].map((m) => m[1])
   assert.equal(widths.length, 2 + 2 * 3)
   assert.equal(new Set(widths).size, 1)
-  assert.match(html, /data-role="column-head" style="[^"]*text-align:center/)
+  assert.match(html, /data-role="column-head" style="[^"]*justify-content:center/)
   assert.match(html, /data-role="dot-column" style="[^"]*justify-content:center/)
 })
 
-test('sync: synced, or unsynced without digit colors, the menu is one list of rows that each pick the profile, with no dots and no column heads', () => {
-  for (const state of [synced, setUseDigitColors(apart, false)]) {
-    const html = renderMenu(state, colorFor)
-    assert.deepEqual(menuPicks(html), ['cells0', 'cells1*', 'cells2'])
-    assert.equal(count(html, /data-role="menu-row" data-act="pick"/g), 3)
-    assert.doesNotMatch(html, />Cells?<|>Digits?<|data-role="column-head"|data-role="dot-column"/)
+test('sync: synced, the menu is one list of rows that each pick the profile, with no dots and no column heads', () => {
+  const html = renderMenu(synced, colorFor, CELL_ON)
+  assert.deepEqual(menuPicks(html), ['cells0', 'cells1*', 'cells2'])
+  assert.equal(count(html, /data-role="menu-row" data-act="pick"/g), 3)
+  assert.doesNotMatch(html, /data-role="column-head"|data-role="dot-column"/)
+  assert.doesNotMatch(html.slice(html.indexOf('data-role="menu-row"')), />Cells?<|>Digits?</)
+})
+
+// Each menu tick as `<box>`, with `*` on a ticked one, in order.
+const menuTicks = (html) => [...html.matchAll(/data-act="tick" data-box="(\w+)"[^>]*aria-checked="(\w+)"[^>]*><input type="checkbox"([^>]*)>/g)]
+  .map((m) => { assert.equal(m[2] === 'true', / checked/.test(m[3]), 'aria-checked and the box agree'); return `${m[1]}${m[2] === 'true' ? '*' : ''}` })
+
+test('ticks: the menu opens with a Cell and a Digit checkbox above the profile rows, ticked as the mode is, on or off', () => {
+  for (const state of [synced, apart]) {
+    for (const [mode, ticks] of [[modeOf(true, true, false), ['cell*', 'digit']], [modeOf(false, false, true), ['cell', 'digit*']], [modeOf(true, true, true), ['cell*', 'digit*']]]) {
+      const html = renderMenu(state, colorFor, mode)
+      assert.deepEqual(menuTicks(html), ticks)
+      assert.ok(html.lastIndexOf('data-act="tick"') < html.indexOf('data-role="menu-row"'), 'the ticks come before the first profile row')
+    }
+  }
+})
+
+test('ticks: unsynced, each checkbox is its dot column\'s head, in place of the word alone; synced, the row has no column heads', () => {
+  const apartHtml = renderMenu(apart, colorFor, modeOf(true, true, false))
+  assert.match(apartHtml, /data-role="column-head"[^>]*><label data-act="tick" data-box="cell"[\s\S]*?>Cell<[\s\S]*?data-role="column-head"[^>]*><label data-act="tick" data-box="digit"[\s\S]*?>Digit</)
+  assert.equal(count(apartHtml, />Cells?<|>Digits?</g), 2)
+  const syncedHtml = renderMenu(synced, colorFor, modeOf(true, true, false))
+  assert.doesNotMatch(syncedHtml, /data-role="column-head"|data-role="dot-column"/)
+  assert.match(syncedHtml, /data-role="tick-row"[\s\S]*>Cell<[\s\S]*>Digit</)
+})
+
+test('ticks: a menu checkbox takes no keyboard focus, so the keyboard stays with the puzzle', () => {
+  for (const state of [synced, apart]) {
+    const boxes = [...renderMenu(state, colorFor, modeOf(true, true, false)).matchAll(/<input type="checkbox"[^>]*>/g)].map((m) => m[0])
+    assert.equal(boxes.length, 2)
+    for (const box of boxes) assert.match(box, /tabindex="-1"/)
   }
 })
 
@@ -797,23 +801,62 @@ test('cell coloring: changedIndices lists the positions whose signature differs'
 
 const colorFor = (key) => (key === 'a' ? 'rgb(10, 10, 10)' : 'rgb(240, 240, 240)')
 
-test('mode: a press steps Cell to Digit to Both to Off and back to Cell', () => {
-  assert.equal(nextMode('cell', true), 'digit')
-  assert.equal(nextMode('digit', true), 'both')
-  assert.equal(nextMode('both', true), 'off')
-  assert.equal(nextMode('off', true), 'cell')
+// A mode as the script saves it: on or off, and the Cell and Digit ticks.
+const modeOf = (on, cell, digit) => ({ on, cell, digit })
+const DEFAULT = modeOf(true, true, false)
+const BOTH = modeOf(true, true, true)
+const TICKS = [[true, false], [false, true], [true, true]]
+
+test('mode: a press turns coloring on and off and keeps the ticks, whichever are ticked', () => {
+  for (const [cell, digit] of TICKS) {
+    assert.deepEqual(pressedMode(modeOf(true, cell, digit)), modeOf(false, cell, digit))
+    assert.deepEqual(pressedMode(modeOf(false, cell, digit)), modeOf(true, cell, digit))
+  }
 })
 
-test('mode: the starting mode is the saved mode, else Cell unless auto mode was saved off', () => {
-  assert.equal(startingMode(null, null), 'cell')
-  assert.equal(startingMode(null, true), 'cell')
-  assert.equal(startingMode(null, false), 'off')
-  assert.equal(startingMode('off', true), 'off')
-  assert.equal(startingMode('cell', false), 'cell')
-  assert.equal(startingMode('digit', false), 'digit')
-  assert.equal(startingMode('both', false), 'both')
-  assert.equal(startingMode('sideways', false), 'off')
-  assert.equal(startingMode(null, 'yes'), 'cell')
+test('mode: a tick sets its box, on or off, and the last ticked box refuses to untick', () => {
+  for (const on of [true, false]) {
+    assert.deepEqual(tickedMode(modeOf(on, true, false), 'digit', true), modeOf(on, true, true))
+    assert.deepEqual(tickedMode(modeOf(on, false, true), 'cell', true), modeOf(on, true, true))
+    assert.deepEqual(tickedMode(modeOf(on, true, true), 'cell', false), modeOf(on, false, true))
+    assert.deepEqual(tickedMode(modeOf(on, true, true), 'digit', false), modeOf(on, true, false))
+    assert.deepEqual(tickedMode(modeOf(on, true, false), 'cell', false), modeOf(on, true, false))
+    assert.deepEqual(tickedMode(modeOf(on, false, true), 'digit', false), modeOf(on, false, true))
+    assert.deepEqual(tickedMode(modeOf(on, true, false), 'on', !on), modeOf(!on, true, false))
+  }
+})
+
+test('mode: the word reads from the ticks while on, and is Off while off whatever is ticked', () => {
+  assert.deepEqual(TICKS.map(([cell, digit]) => modeWord(modeOf(true, cell, digit))), ['cell', 'digit', 'both'])
+  assert.deepEqual(TICKS.map(([cell, digit]) => modeWord(modeOf(false, cell, digit))), ['off', 'off', 'off'])
+})
+
+test('mode: the starting mode is the saved one; with none saved, the mode word saved before the ticks, else auto mode\'s on/off, else on with Cell', () => {
+  assert.deepEqual(startingMode(modeOf(false, false, true), 'both', true), modeOf(false, false, true))
+  assert.deepEqual(startingMode(null, 'cell', false), modeOf(true, true, false))
+  assert.deepEqual(startingMode(null, 'digit', false), modeOf(true, false, true))
+  assert.deepEqual(startingMode(null, 'both', false), modeOf(true, true, true))
+  assert.deepEqual(startingMode(null, 'off', true), modeOf(false, true, false))
+  assert.deepEqual(startingMode(null, null, true), modeOf(true, true, false))
+  assert.deepEqual(startingMode(null, null, false), modeOf(false, true, false))
+  assert.deepEqual(startingMode(null, 'sideways', false), modeOf(false, true, false))
+  assert.deepEqual(startingMode(null, null, 'yes'), modeOf(true, true, false))
+  assert.deepEqual(startingMode(null, null, null), modeOf(true, true, false))
+})
+
+test('mode: a saved mode that ticks nothing, or is no mode, reads as never saved', () => {
+  for (const bad of [modeOf(true, false, false), { on: 'yes', cell: true, digit: false }, { on: true, cell: true }, 'cell', [true, true, false]]) {
+    assert.deepEqual(startingMode(bad, 'digit', null), modeOf(true, false, true), JSON.stringify(bad))
+  }
+})
+
+test('mode: digit colors saved off untick Digit, and Cell is ticked in its place, so the board looks as it did', () => {
+  assert.deepEqual(startingMode(null, 'cell', null, false), modeOf(true, true, false))
+  assert.deepEqual(startingMode(null, 'both', null, false), modeOf(true, true, false))
+  assert.deepEqual(startingMode(null, 'digit', null, false), modeOf(false, true, false))
+  assert.deepEqual(startingMode(null, 'off', null, false), modeOf(false, true, false))
+  assert.deepEqual(startingMode(null, null, null, false), modeOf(true, true, false))
+  assert.deepEqual(startingMode(modeOf(true, false, true), 'cell', null, false), modeOf(true, false, true))
 })
 
 test('mode: planClear takes every listed group color off every cell, digit or not, and leaves colors in no group', () => {
@@ -865,7 +908,7 @@ test('renderProfiles marks the selected row by aria-checked, not the active one,
 })
 
 test('renderProfiles rows have no Cells, Digits or Active tags, whatever the state', () => {
-  for (const state of [profileState, { ...profileState, digitActive: 0 }, { ...profileState, digitActive: 0, useDigitColors: false }]) {
+  for (const state of [profileState, { ...profileState, digitActive: 0 }]) {
     const html = renderProfiles(state, colorFor, 0)
     assert.doesNotMatch(html, /tag-cells|tag-digits|cbd-tag|aria-pressed|cbd-two-tags/)
     assert.doesNotMatch(html, />(Cells|Digits|Active)</)
@@ -899,21 +942,21 @@ test('renderProfiles has no Add button', () => {
 
 test('the button, renderProfiles and renderMenu all show a profile of six groups as a run of three cells', () => {
   const each = { profiles: [{ name: 'Each', groups: Array.from({ length: 6 }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1)] })) }], active: 0 }
-  for (const html of [renderProfiles(each, colorFor, 0), renderMenu(each, colorFor), iconHtml('cell', chipsOf(each.profiles[0].groups), colorFor)]) {
+  for (const html of [renderProfiles(each, colorFor, 0), renderMenu(each, colorFor, CELL_ON), iconHtml('cell', chipsOf(each.profiles[0].groups), colorFor)]) {
     assert.equal(count(html, /data-role="chip"/g), 3)
     assert.equal(count(html, /<line /g), 2)
   }
 })
 
-test('renderMenu has no heading: one dense row per profile in order with the active one marked and highlighted, then Edit profiles', () => {
-  const html = renderMenu(profileState, colorFor)
+test('renderMenu has no heading: the Cell and Digit ticks, then one dense row per profile in order with the active one marked and highlighted, then Edit profiles', () => {
+  const html = renderMenu(profileState, colorFor, CELL_ON)
   assert.doesNotMatch(html, /Color by digit profile/i)
-  assert.equal(html.indexOf('data-role="menu-row"') < html.indexOf('>'), true)
+  assert.equal(html.slice(0, html.indexOf('<div data-role="menu-row"')).replace(/<[^>]*>/g, ''), 'CellDigit')
   assert.match(html, /data-index="1" aria-checked="true" style="[^"]*height:26px[^"]*background:#f1ebfb/)
   assert.match(html, /data-index="0" aria-checked="false" style="[^"]*height:26px/)
   assert.doesNotMatch(html, /data-index="0" aria-checked="false" style="[^"]*background/)
   assert.deepEqual([...html.matchAll(/data-act="pick" data-target="cells" data-index="(\d)"/g)].map((m) => m[1]), ['0', '1'])
-  assert.equal(count(html, /aria-checked="true"/g), 1)
+  assert.equal(count(html.slice(html.indexOf('data-role="menu-row"')), /aria-checked="true"/g), 1)
   assert.match(html, /data-index="1"[^>]*aria-checked="true"/)
   assert.match(html, /Low &lt;b&gt;/)
   assert.match(html, /data-act="edit"[^>]*>[^<]*Edit profiles…/)
@@ -967,7 +1010,7 @@ const pickRow = (target, index) => {
 
 const pageWindow = () => ({ getComputedStyle: () => ({ getPropertyValue: () => '#3e63dd', color: 'rgb(62, 99, 221)' }), addEventListener: () => {}, MutationObserver: class { observe () {} } })
 
-test('entry point: wires the settings entry, the button, refreshControls, and a press on the button steps the mode', async () => {
+test('entry point: wires the settings entry, the button, refreshControls, saves no mode at load, and a press on the button turns coloring off and saves it', async () => {
   const calls = []
   const app = {
     puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [], undoStack: [], redoStack: [], replayStack: [], saveProgress: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
@@ -993,10 +1036,11 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     const order = calls.map((c) => c[0])
     assert.ok(order.includes('setting'), `no setting in ${order}`)
     assert.ok(order.indexOf('refresh') > order.indexOf('button'), `refresh before button in ${order}`)
-    const savedModes = () => calls.filter((c) => c[0] === 'setData' && c[1] === 'ColorByDigit_mode').map((c) => c[2])
-    assert.deepEqual(savedModes(), [])
+    const savedModes = () => calls.filter((c) => c[0] === 'setData' && c[1] === 'ColorByDigit_ticks').map((c) => c[2])
+    assert.deepEqual(savedModes(), [], 'a fresh install keeps the default unsaved')
     press()
-    assert.deepEqual(savedModes(), ['digit'])
+    assert.deepEqual(savedModes(), [modeOf(false, true, false)])
+    assert.deepEqual(calls.filter((c) => c[0] === 'setData' && /^ColorByDigit_(mode|auto)$/.test(c[1])), [])
   })
 })
 
@@ -1154,14 +1198,63 @@ test('mode: in Cell, nothing saved or auto mode saved on, loading colors the giv
   }
 })
 
-test('use digit colors: saved off, a saved Both loads as Cell and colors the givens, and a saved Digit loads as Off and colors nothing', async () => {
-  const profiles = { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0, useDigitColors: false }
-  for (const [savedMode, label, colours] of [['both', 'Cell', [['1'], ['2']]], ['digit', 'Off', [[], []]]]) {
+test('upgrade: digit colors saved off load Both as Cell, coloring the givens, and Digit as Off, coloring nothing; Digit is unticked and the digit profile Same as cell', async () => {
+  const profiles = { profiles: [{ name: 'Odd/Even', groups: ODD }, { name: 'Low/5/High', groups: LOW }], active: 0, digitActive: 1, useDigitColors: false }
+  for (const [savedWord, label, colours, ticks] of [['both', 'Cell', [['1'], ['2']], DEFAULT], ['digit', 'Off', [[], []], modeOf(false, true, false)]]) {
     await startedWith(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
-      assert.equal(app.buttonTitle, `Color by Digit: ${label}`, savedMode)
-      assert.deepEqual(app.puzzle.cells.map((c) => c.colours), colours, savedMode)
-    }, { ColorByDigit_profiles: profiles, ColorByDigit_mode: savedMode })
+      assert.equal(app.buttonTitle, `Color by Digit: ${label}`, savedWord)
+      assert.deepEqual(app.puzzle.cells.map((c) => c.colours), colours, savedWord)
+      assert.deepEqual(app.stored.ColorByDigit_ticks, ticks, savedWord)
+      assert.deepEqual(app.stored.ColorByDigit_profiles.data, { profiles: profiles.profiles, active: 0 }, savedWord)
+      assert.equal(app.stored.ColorByDigit_mode, savedWord, 'the old word is left as it was')
+    }, { ColorByDigit_profiles: profiles, ColorByDigit_mode: savedWord, ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true })
   }
+})
+
+test('upgrade: an old mode word, auto mode or digit colors saved off is read once, saved under the ticks, and a press saves over it', async () => {
+  for (const [saved, ticks] of [[{ ColorByDigit_mode: 'cell' }, DEFAULT], [{ ColorByDigit_auto: false }, modeOf(false, true, false)],
+    [{ ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0, useDigitColors: false } }, DEFAULT]]) {
+    await startedWith(mockApp([{ given: '1' }]), async (app) => {
+      assert.deepEqual(app.stored.ColorByDigit_ticks, ticks, JSON.stringify(saved))
+      press()
+      assert.deepEqual(app.stored.ColorByDigit_ticks, { ...ticks, on: !ticks.on }, JSON.stringify(saved))
+    }, saved)
+  }
+})
+
+test('upgrade: a mode saved under the ticks wins over an older word, and is not saved again at load', async () => {
+  const ticks = modeOf(true, false, true)
+  await startedWith(mockApp([{ given: '1' }]), async (app) => {
+    assert.equal(app.buttonTitle, 'Color by Digit: Digit')
+    assert.deepEqual(app.puzzle.cells[0].colours, [])
+    assert.equal(app.stored.ColorByDigit_ticks, ticks, 'the very object seeded, never written over')
+  }, { ColorByDigit_ticks: ticks, ColorByDigit_mode: 'cell' })
+})
+
+test('press: with only Digit ticked, turning on leaves every color the solver painted, group colors included, and makes no undo step', async () => {
+  await startedWith(mockApp([{ value: '1', colours: ['2'] }, { value: '4', colours: ['1'] }, { colours: ['1'] }]), async (app) => {
+    app.calls.length = 0
+    press()
+    assert.equal(app.buttonTitle, 'Color by Digit: Off', 'the title the button was added with')
+    assert.deepEqual(app.stored.ColorByDigit_ticks, modeOf(true, false, true))
+    assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['2'], ['1'], ['1']])
+    assert.deepEqual(app.calls, [])
+    press()
+    assert.deepEqual(app.stored.ColorByDigit_ticks, modeOf(false, false, true))
+    assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['2'], ['1'], ['1']])
+    assert.deepEqual(app.calls, [])
+  }, { ColorByDigit_ticks: modeOf(false, false, true) })
+})
+
+test('press: with Cell ticked, turning on colors the cells in one undo step', async () => {
+  await startedWith(mockApp([{ value: '1' }, { value: '4' }]), async (app) => {
+    assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [[], []])
+    app.calls.length = 0
+    press()
+    assert.deepEqual(app.stored.ColorByDigit_ticks, modeOf(true, true, true))
+    assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], ['2']])
+    assert.deepEqual(types(app).filter((t) => t.startsWith('group')), ['groupstart', 'groupend'])
+  }, { ColorByDigit_ticks: modeOf(false, true, true) })
 })
 
 test('cell coloring: a restart colors the givens again', async () => {
@@ -1203,7 +1296,7 @@ test('mode: leaving cell coloring keeps a hand color in no group on a cell that 
       app.puzzle.cells[0].colours = ['1', '9']
       app.calls.length = 0
       press()
-      assert.equal(app.stored.ColorByDigit_mode, 'off')
+      assert.deepEqual(app.stored.ColorByDigit_ticks, modeOf(false, true, true))
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['9'], []], `single ${single}`)
       assert.deepEqual(types(app).filter((t) => t.startsWith('group')), ['groupstart', 'groupend'], `single ${single}`)
       assert.equal(app.puzzle.inGroup, false)
@@ -1304,8 +1397,8 @@ test('PAGE_COLUMNS is the column count of the lib\'s swatch grid, and the paint 
 })
 
 test('the editor\'s pulldowns take the lib\'s select rule, and the editor keeps no copy of it', () => {
-  const selects = [...renderPulldowns(hostile, 'both').matchAll(/<select [^>]*>/g)].map((m) => m[0])
-  assert.equal(selects.length, 3)
+  const selects = [...renderPulldowns(hostile, modeOf(true, true, true)).matchAll(/<select [^>]*>/g)].map((m) => m[0])
+  assert.equal(selects.length, 2)
   for (const select of selects) assert.match(select, /class="cbd-color-choice"/)
   assert.match(STYLE_CSS, /#color-by-digit-editor \.cbd-color-choice \{[^}]*font-size: 1rem;/)
   assert.doesNotMatch(STYLE_CSS, /\.cbd-pulldown select/)
@@ -1553,48 +1646,70 @@ test('rowAfterKey: Enter and Space stay, the arrows step and wrap at both ends, 
   assert.equal(rowAfterKey('Tab', 1, 3), null)
 })
 
-test('copiedSettings: the profiles and the mode in force, groups saved before profiles included, and no auto mode', () => {
-  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups }], active: 0 }, ColorByDigit_mode: 'digit', ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, ColorByDigit_groups: [{ key: 'z', digits: ['1'] }], ColorByDigit_auto: true, Other_key: 1 }
-  const { ColorByDigit_groups: _legacy, ColorByDigit_auto: _auto, Other_key: _other, ...ours } = saved
+test('copiedSettings: the profiles and the mode in force, groups saved before profiles included, and no older mode', () => {
+  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups }], active: 0 }, ColorByDigit_ticks: modeOf(true, false, true), ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, ColorByDigit_groups: [{ key: 'z', digits: ['1'] }], ColorByDigit_mode: 'cell', ColorByDigit_auto: true, Other_key: 1 }
+  const { ColorByDigit_groups: _legacy, ColorByDigit_mode: _word, ColorByDigit_auto: _auto, Other_key: _other, ...ours } = saved
   assert.deepEqual(JSON.parse(copiedSettings(fakeStore(saved))), structuredClone(ours))
   const legacyOnly = { ColorByDigit_groups: [{ key: '3', digits: ['1', '2'] }] }
   const copied = JSON.parse(copiedSettings(fakeStore(legacyOnly)))
   assert.deepEqual(copied.ColorByDigit_profiles, structuredClone(fromStored(null, legacyOnly.ColorByDigit_groups)))
   assert.equal(copied.ColorByDigit_profiles.profiles[copied.ColorByDigit_profiles.active].groups[0].key, '3')
-  assert.equal(copied.ColorByDigit_mode, 'cell')
+  assert.deepEqual(copied.ColorByDigit_ticks, DEFAULT)
+  assert.equal('ColorByDigit_mode' in copied, false)
   assert.equal('ColorByDigit_auto' in copied, false)
   assert.equal('ColorByDigit_addedPreloads' in copied, false, 'a preload mark not set is left out, so a paste never removes the target\'s mark')
   assert.equal('ColorByDigit_addedEachDigit' in copied, false)
-  assert.equal(JSON.parse(copiedSettings({ getData: (key) => ({ ColorByDigit_auto: false }[key] ?? null) })).ColorByDigit_mode, 'off')
+  assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => ({ ColorByDigit_auto: false }[key] ?? null) })).ColorByDigit_ticks, modeOf(false, true, false))
+  assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => ({ ColorByDigit_mode: 'both' }[key] ?? null) })).ColorByDigit_ticks, BOTH)
 })
 
 test('pastedSettings: a state that keeps every profile is kept, one that loses a profile is skipped and counted, other keys are ignored', () => {
   const profiles = { profiles: [{ name: ' Odd/Even ', groups }], active: 0 }
-  const pasted = readPaste(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_mode: 'sideways', ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, DarkPage_color: '#ffffff' }))
+  const pasted = readPaste(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_ticks: modeOf(true, false, false), ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, DarkPage_color: '#ffffff' }))
   assert.deepEqual(pasted.values, { ColorByDigit_profiles: fromStored(profiles), ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true })
   assert.equal(pasted.skipped, 1)
   const oneBad = { profiles: [{ name: 'Odd/Even', groups }, { name: 'bad' }], active: 0 }
-  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_mode: 'both' })), { values: { ColorByDigit_mode: 'both' }, skipped: 1 })
+  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_ticks: BOTH })), { values: { ColorByDigit_ticks: BOTH }, skipped: 1 })
   assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_profiles: { profiles: [] } })), { values: {}, skipped: 1 })
 })
 
-test('pastedSettings: settings copied before the mode, with auto mode and no mode, give Cell for on and Off for off', () => {
-  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_auto: true })), { values: { ColorByDigit_mode: 'cell' }, skipped: 0 })
-  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'off' }, skipped: 0 })
-  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_auto: 'yes' })), { values: {}, skipped: 1 })
-  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_mode: 'cell', ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'cell' }, skipped: 0 })
+test('pastedSettings: a mode word copied before the ticks, or auto mode before it, maps as a saved one upgrades; a word that is no mode is skipped', () => {
+  const ticksOfPaste = (data) => readPaste(JSON.stringify(data))
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_mode: 'cell' }), { values: { ColorByDigit_ticks: DEFAULT }, skipped: 0 })
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_mode: 'digit' }), { values: { ColorByDigit_ticks: modeOf(true, false, true) }, skipped: 0 })
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_mode: 'both' }), { values: { ColorByDigit_ticks: BOTH }, skipped: 0 })
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_mode: 'off' }), { values: { ColorByDigit_ticks: modeOf(false, true, false) }, skipped: 0 })
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_auto: true }), { values: { ColorByDigit_ticks: DEFAULT }, skipped: 0 })
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_auto: false }), { values: { ColorByDigit_ticks: modeOf(false, true, false) }, skipped: 0 })
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_auto: 'yes' }), { values: {}, skipped: 1 })
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_mode: 'sideways' }), { values: {}, skipped: 1 })
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_mode: 'cell', ColorByDigit_auto: false }), { values: { ColorByDigit_ticks: DEFAULT }, skipped: 0 })
+  assert.deepEqual(ticksOfPaste({ ColorByDigit_ticks: modeOf(false, false, true), ColorByDigit_mode: 'cell' }), { values: { ColorByDigit_ticks: modeOf(false, false, true) }, skipped: 0 })
 })
 
-test('copiedSettings and pastedSettings carry the digit pick and "Use digit colors", and settings without them paste as synced and on', () => {
-  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'A', groups }, { name: 'B', groups: [] }], active: 0, digitActive: 1, useDigitColors: false } }
-  const copied = copiedSettings(fakeStore(saved))
-  assert.deepEqual(JSON.parse(copied).ColorByDigit_profiles, saved.ColorByDigit_profiles)
-  const pasted = readPaste(copied).values.ColorByDigit_profiles
-  assert.equal(pasted.digitActive, 1)
-  assert.equal(usesDigitColors(pasted), false)
+test('pastedSettings: digit colors copied off untick Digit and take the digit profile back to Same as cell; the digit pick otherwise pastes as copied', () => {
+  const two = { profiles: [{ name: 'A', groups }, { name: 'B', groups: [] }], active: 0, digitActive: 1 }
+  const upgraded = readPaste(JSON.stringify({ ColorByDigit_profiles: { ...two, useDigitColors: false }, ColorByDigit_mode: 'both' })).values
+  assert.deepEqual(upgraded.ColorByDigit_ticks, DEFAULT)
+  assert.equal(isSynced(upgraded.ColorByDigit_profiles), true)
+  assert.equal('useDigitColors' in upgraded.ColorByDigit_profiles, false)
+  const copied = copiedSettings(fakeStore({ ColorByDigit_profiles: two }))
+  assert.equal(readPaste(copied).values.ColorByDigit_profiles.digitActive, 1)
   const old = readPaste(JSON.stringify({ ColorByDigit_profiles: { profiles: [{ name: 'A', groups }], active: 0 } })).values.ColorByDigit_profiles
   assert.equal(isSynced(old), true)
-  assert.equal(usesDigitColors(old), true)
+})
+
+test('pastedSettings: digit colors copied off with no mode word upgrade the mode in force as the startup upgrade does, and take the digit profile back to Same as cell', () => {
+  const two = { profiles: [{ name: 'A', groups }, { name: 'B', groups: [] }], active: 0, digitActive: 1, useDigitColors: false }
+  const paste = (current) => pastedSettings(JSON.stringify({ ColorByDigit_profiles: two }), READERS, (data) => withUpgradedMode(data, current)).values
+  for (const [current, ticks] of [[modeOf(true, true, true), DEFAULT], [modeOf(true, false, true), modeOf(false, true, false)],
+    [modeOf(false, false, true), modeOf(false, true, false)], [DEFAULT, DEFAULT]]) {
+    const values = paste(current)
+    assert.deepEqual(values.ColorByDigit_ticks, ticks, JSON.stringify(current))
+    assert.equal(isSynced(values.ColorByDigit_profiles), true)
+    assert.equal('useDigitColors' in values.ColorByDigit_profiles, false)
+  }
+  assert.equal('ColorByDigit_ticks' in readPaste(JSON.stringify({ ColorByDigit_profiles: { ...two, useDigitColors: true } })).values, false, 'digit colors on leave the mode alone')
 })
 
 test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
@@ -1829,11 +1944,11 @@ test('the button is titled and labelled with its mode in words', () => {
 
 test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a column of one fixed width, so the names line up', () => {
   for (const state of [synced, apart]) {
-    const rows = menuRows(renderMenu(state, colorFor))
+    const rows = menuRows(renderMenu(state, colorFor, CELL_ON))
     assert.equal(new Set(rows.map((r) => r.chipWidth)).size, 1)
     assert.match(rows[0].chipWidth, /width:\d+px/)
   }
-  const html = renderMenu(profileState, colorFor)
+  const html = renderMenu(profileState, colorFor, CELL_ON)
   assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]), runCells(renderChips(chipsOf(LOW), colorFor, { size: 16 })))
 })
 
@@ -2069,13 +2184,13 @@ test('a Restart before the first load ends the startup coloring wait, so the boa
 })
 
 const dialogState = () => ({ profiles: [{ name: 'A', groups: [g('a2', ['1'])] }, { name: 'B', groups: [g('b3', ['2'])] }, { name: 'C', groups: [] }], active: 1 })
-const opened = (state = dialogState(), mode = 'cell') => openingDraft(state, mode, twoPages())
+const opened = (state = dialogState(), mode = DEFAULT) => openingDraft(state, mode, twoPages())
 const run = (draft, ...events) => events.reduce(reduceDraft, draft)
 const shownGroups = (draft) => draft.state.profiles[draft.selected].groups
 
 test('openingDraft selects the active profile, keeps its name, and starts the brush on its lowest group\'s color and page', () => {
-  const draft = opened(dialogState(), 'both')
-  assert.deepEqual({ selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page, mode: draft.mode }, { selected: 1, keptName: 'B', brush: 'b3', page: 1, mode: 'both' })
+  const draft = opened(dialogState(), BOTH)
+  assert.deepEqual({ selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page, mode: draft.mode }, { selected: 1, keptName: 'B', brush: 'b3', page: 1, mode: BOTH })
   assert.deepEqual(draft.state, dialogState())
 })
 
@@ -2120,12 +2235,11 @@ test('reduceDraft rename: the typed name renames the selected profile, and a bla
   assert.equal(run(typed, { type: 'rename', name: '   ' }).state.profiles[1].name, 'B')
 })
 
-test('reduceDraft choose: Mode sets the draft mode, Cell the active profile, and Digit None moves a digit mode to one without digit colors', () => {
-  assert.equal(run(opened(), { type: 'choose', role: 'mode-draft', value: 'both' }).mode, 'both')
+test('reduceDraft choose and tick: Cell sets the active profile, Digit the digit profile, and a tick the draft mode, refusing the last untick', () => {
   assert.equal(run(opened(), { type: 'choose', role: 'cell-profile', value: '2' }).state.active, 2)
-  const none = run(opened(dialogState(), 'both'), { type: 'choose', role: 'digit-profile', value: 'none' })
-  assert.equal(none.mode, 'cell')
-  assert.equal(usesDigitColors(none.state), false)
+  assert.equal(run(opened(), { type: 'choose', role: 'digit-profile', value: '0' }).state.digitActive, 0)
+  assert.deepEqual(run(opened(), { type: 'tick', box: 'digit', ticked: true }, { type: 'tick', box: 'cell', ticked: false }, { type: 'tick', box: 'on', ticked: false }).mode, modeOf(false, false, true))
+  assert.deepEqual(run(opened(), { type: 'tick', box: 'cell', ticked: false }).mode, DEFAULT)
   assert.throws(() => reduceDraft(opened(), { type: 'choose', role: 'color-choice', value: '0' }), /no pulldown color-choice/)
 })
 
@@ -2145,11 +2259,11 @@ test('reduceDraft delete: the row goes and the selection stays on the same profi
 })
 
 test('reduceDraft restore: the draft holds the preloaded profiles and the pulldowns\' starting picks with the first profile selected, the mode kept, and a draft already there is the same draft', () => {
-  const own = { ...dialogState(), digitActive: 1, useDigitColors: false }
-  const restored = run(opened(own, 'both'), { type: 'restore' })
+  const own = { ...dialogState(), digitActive: 1 }
+  const restored = run(opened(own, BOTH), { type: 'restore' })
   assert.deepEqual(restored.state.profiles.map((p) => p.name), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
   assert.deepEqual(restored.state.profiles.map((p) => p.groups), Object.values(PRELOADS))
-  assert.deepEqual({ selected: restored.selected, active: restored.state.active, digitActive: restored.state.digitActive, useDigitColors: usesDigitColors(restored.state), mode: restored.mode }, { selected: 0, active: 0, digitActive: undefined, useDigitColors: true, mode: 'both' })
+  assert.deepEqual({ selected: restored.selected, active: restored.state.active, digitActive: restored.state.digitActive, mode: restored.mode }, { selected: 0, active: 0, digitActive: undefined, mode: BOTH })
   assert.deepEqual(shownGroups(restored), PRELOADS['Low/5/High'])
   assert.equal(reduceDraft(restored, { type: 'restore' }), restored)
 })
@@ -2164,29 +2278,17 @@ test('reduceDraft move: a dragged row moves, the selection follows its profile, 
 
 test('reduceDraft paste: pasted profiles replace the draft\'s, selecting their active profile, and a draft mode edit stays when no mode was pasted', () => {
   const pasted = { profiles: [{ name: 'X', groups: [g('a5', ['9'])] }, { name: 'Y', groups: [] }], active: 0 }
-  const edited = run(opened(), { type: 'brush', key: 'b9' }, { type: 'choose', role: 'mode-draft', value: 'off' })
+  const edited = run(opened(), { type: 'brush', key: 'b9' }, { type: 'tick', box: 'on', ticked: false })
   const draft = reduceDraft(edited, { type: 'paste', state: pasted })
-  assert.deepEqual({ state: draft.state, mode: draft.mode, selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page }, { state: pasted, mode: 'off', selected: 0, keptName: 'X', brush: 'a5', page: 0 })
-  assert.equal(reduceDraft(edited, { type: 'paste', state: pasted, mode: 'both' }).mode, 'both', 'a pasted mode wins')
+  assert.deepEqual({ state: draft.state, mode: draft.mode, selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page }, { state: pasted, mode: modeOf(false, true, false), selected: 0, keptName: 'X', brush: 'a5', page: 0 })
+  assert.deepEqual(reduceDraft(edited, { type: 'paste', state: pasted, mode: BOTH }).mode, BOTH, 'a pasted mode wins')
 })
 
 test('reduceDraft paste: a pasted mode alone changes the mode and leaves the draft\'s unsaved profile edits', () => {
   const edited = run(opened(), { type: 'rename', name: 'Mine' }, { type: 'select', index: 2 })
   assert.notEqual(edited.selected, opened().selected, 'the draft selects a profile other than the active one')
-  const draft = reduceDraft(edited, { type: 'paste', mode: 'both' })
-  assert.deepEqual({ state: draft.state, selected: draft.selected, mode: draft.mode }, { state: edited.state, selected: 2, mode: 'both' })
-})
-
-test('reduceDraft paste: a draft mode the pasted profiles do not allow falls back to one they do', () => {
-  const none = { profiles: [{ name: 'X', groups: [] }], active: 0, useDigitColors: false }
-  const edited = reduceDraft(opened(), { type: 'choose', role: 'mode-draft', value: 'digit' })
-  assert.equal(reduceDraft(edited, { type: 'paste', state: none }).mode, 'off')
-})
-
-test('reduceDraft paste: a pasted mode is held to the draft\'s own profiles, not the saved ones', () => {
-  const noDigits = { ...dialogState(), useDigitColors: false }
-  assert.equal(reduceDraft(opened(noDigits), { type: 'paste', mode: 'digit' }).mode, 'off')
-  assert.equal(reduceDraft(opened(), { type: 'paste', mode: 'digit' }).mode, 'digit')
+  const draft = reduceDraft(edited, { type: 'paste', mode: BOTH })
+  assert.deepEqual({ state: draft.state, selected: draft.selected, mode: draft.mode }, { state: edited.state, selected: 2, mode: BOTH })
 })
 
 const RING = SUDOKUPAD_PURPLE
@@ -2225,7 +2327,7 @@ test('the delete button and the drag handle are at least 24 px, and the dragging
 })
 
 test('the menu\'s Cell and Digit dots pick from the whole column, not the 16 px dot', () => {
-  const html = renderMenu({ ...profileState, active: 0, digitActive: 1, useDigitColors: true, sync: false }, colorFor)
+  const html = renderMenu({ ...profileState, active: 0, digitActive: 1 }, colorFor, CELL_ON)
   assert.match(html, /data-role="dot-column"[^>]*data-act="pick" data-target="cells" data-index="0" aria-checked="true"/)
   assert.doesNotMatch(html, /<span data-act="pick"/)
 })

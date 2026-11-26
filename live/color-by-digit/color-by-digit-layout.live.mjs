@@ -3,7 +3,7 @@
 /* global document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ARROW, EDITOR, group, MENU, openSession, paintedKeys, savedProfiles, SEED, SEEDED_OFF, MODE_STORAGE_KEY, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, EDITOR, group, MENU, openSession, paintedKeys, savedProfiles, SEED, SEEDED_OFF, MODE_STORAGE_KEY, SAVED_MODE, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
 const script = scriptSource('color-by-digit.user.js')
@@ -22,13 +22,14 @@ describe(`the dialog at ${DESKTOP.width} px`, { concurrency: false }, () => {
   })
   after(async () => { await context?.close() })
 
-  it('lays the Mode, Cell and Digit pulldowns one per row, each label left of its select in one label column, with no checkbox and no mode button', async () => {
+  it('lays the Mode checkboxes and the Cell and Digit pulldowns one per row, each label left of its controls in one label column, with no mode pulldown and no mode button', async () => {
     const boxes = await p.locator(`${EDITOR} .cbd-pulldown`).evaluateAll((es) => es.map((e) => {
-      const label = e.querySelector('span').getBoundingClientRect(); const select = e.querySelector('select').getBoundingClientRect()
-      return { role: e.querySelector('select').dataset.role, labelX: Math.round(label.x), labelRight: Math.round(label.right), labelY: label.y + label.height / 2, selectX: Math.round(select.x), selectRight: Math.round(select.right), selectY: select.y + select.height / 2, top: Math.round(select.y) }
+      const control = e.querySelector('select, .cbd-ticks')
+      const label = e.querySelector('span').getBoundingClientRect(); const select = control.getBoundingClientRect()
+      return { role: control.dataset.role ?? [...control.querySelectorAll('input')].map((i) => i.dataset.box).join(' '), labelX: Math.round(label.x), labelRight: Math.round(label.right), labelY: label.y + label.height / 2, selectX: Math.round(select.x), selectRight: Math.round(select.right), selectY: select.y + select.height / 2, top: Math.round(select.y) }
     }))
-    assert.deepEqual(boxes.map((b) => b.role), ['mode-draft', 'cell-profile', 'digit-profile'])
-    assert.equal(await p.locator(`${EDITOR} input[type=checkbox], ${EDITOR} button[data-role="mode-draft"]`).count(), 0)
+    assert.deepEqual(boxes.map((b) => b.role), ['on cell digit', 'cell-profile', 'digit-profile'])
+    assert.equal(await p.locator(`${EDITOR} [data-role="mode-draft"]`).count(), 0)
     assert.equal(new Set(boxes.map((b) => b.top)).size, 3, `one row each: ${JSON.stringify(boxes)}`)
     assert.equal(new Set(boxes.map((b) => b.labelX)).size, 1, `labels share a left edge: ${JSON.stringify(boxes)}`)
     assert.equal(new Set(boxes.map((b) => b.selectX)).size, 1, `selects line up: ${JSON.stringify(boxes)}`)
@@ -94,7 +95,7 @@ describe(`the paint editor with Each digit's nine groups at ${DESKTOP.width} px`
   let context, p
   const heights = () => p.evaluate(() => ({ dialog: document.querySelector('.dialog').getBoundingClientRect().bottom, window: window.innerHeight }))
   before(async () => {
-    const saved = { ...SEEDED_OFF, ...savedProfiles({ profiles: [{ name: 'Each digit', groups: EACH_DIGIT }], active: 0 }), [MODE_STORAGE_KEY]: 'off' }
+    const saved = { ...SEEDED_OFF, ...savedProfiles({ profiles: [{ name: 'Each digit', groups: EACH_DIGIT }], active: 0 }), [MODE_STORAGE_KEY]: SAVED_MODE.Off }
     ;({ context, p } = await openSession(browser(), script, { saved }))
     await openEditorOn(p)
   })
