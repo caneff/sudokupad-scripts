@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.49
+// @version      0.7.50
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -27,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.49'
+  const VERSION = '0.7.50'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'auto-rules-resizer'
   const SCRIPT_NAME = 'Auto Rules Resizer'
@@ -331,12 +331,13 @@
   // the undragged pane's visual left and right at its fitted width, `column` the undragged controls column's
   // visual top and bottom.
   function clampDrag (box, { pane, column, boardRight, viewport }) {
-    // A move right or down comes only with a shrink of the same size, which keeps the column where it was; `fitRulesPane` gives back what passes the window's edge.
+    // A move right or down starts with a shrink of the same size, which keeps the column where it was; a later grow at the other corner breaks that pairing. `fitRulesPane` gives back what passes the window's edge on the right; the bottom is paid for here, below.
     const x = Math.max(box.x, boardRight - pane.left)
     const y = Math.max(box.y, -column.top)
     return {
       w: Math.min(box.w, Math.max(0, viewport.width - EDGE_PX - pane.right) - x),
-      h: Math.min(box.h, Math.max(0, viewport.height - column.bottom - y)),
+      // Room below the column, less its downward move (`y`, from a shrink): negative when the column has no room for that move, and the pane gives that much up (#1189).
+      h: Math.min(box.h, viewport.height - column.bottom - y),
       x,
       y
     }
