@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.51
+// @version      0.1.52
 // @author       ChinStrap
 // @description  Small changes to SudokuPad, each chosen in a settings dialog.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -23,7 +23,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.51'
+  const VERSION = '0.1.52'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'ui-tweaks'
   const SCRIPT_NAME = 'UI Tweaks'
@@ -682,13 +682,14 @@
   }
 
   // SudokuPad loads some features (`Framework.features.largepuzzle`) as separate files, which may arrive after `Framework.getApp` resolves.
-  const LATE_WAIT = { timeoutMs: 5000, intervalMs: 50 }
+  const LATE_WAIT_MS = 5000
+  const LATE_POLL_MS = 50
 
   // `features` maps a name to `{ label, needs, onSkip, late }`: `label` is what the bar and the console call it, `needs` maps each
   // internal's path to its kind (a key of INTERNAL_KINDS), `onSkip` undoes what the feature left on the page, and `late` makes `start`
-  // wait up to `lateWait.timeoutMs` for its internals before the probe. `probe` runs once SudokuPad's app exists; `store`, SudokuPad's
+  // wait up to LATE_WAIT_MS for its internals before the probe. `probe` runs once SudokuPad's app exists; `store`, SudokuPad's
   // Framework unless given, holds a dismissal under `<script>-notice`.
-  function createGuard ({ script, name, version, features, lateWait = LATE_WAIT }) {
+  function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
 
@@ -896,8 +897,8 @@
       const lateLacking = (app) => lackingInternals(lateFeatures, allRoots(app)).size > 0
       // Polls on a timer: SudokuPad announces no event when a feature file has loaded.
       async function untilLateInternals (app) {
-        for (let waited = 0; lateLacking(app) && waited < lateWait.timeoutMs; waited += lateWait.intervalMs) {
-          await new Promise((resolve) => setTimeout(resolve, lateWait.intervalMs))
+        for (let waited = 0; lateLacking(app) && waited < LATE_WAIT_MS; waited += LATE_POLL_MS) {
+          await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
         }
       }
       const run = catchStartup((app) => {

@@ -174,6 +174,10 @@ test('a complete SudokuPad lacks nothing, and without one internal only the feat
   assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['tab']]]))
 })
 
+test('the right drag limit waits for SudokuPad\'s Large Puzzle feature, which loads as a separate file after getApp resolves', () => {
+  assert.equal(FEATURES.rightDrag.late, true)
+})
+
 test('the header names the script and asks for no grant, so the settings entry is its one way in', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'ui-tweaks.user.js'), 'utf8')
   assert.match(source, /^\/\/ @name\s+SudokuPad UI Tweaks$/m)
