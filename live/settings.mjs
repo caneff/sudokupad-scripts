@@ -57,14 +57,18 @@ export async function paste (p, text) {
   return status.textContent()
 }
 
+// The stack frame of SudokuPad's own settings save: a getData stand-in lets a call from it through to the real one.
+export const SAVE_SETTINGS_FRAME = /\bF\.saveSettings \(/
+
 // An `afterStart` for `openWith` that hides `Framework.getData` from a script until a `console.warn` matching `warning` is logged
 // (never, with no `warning`). SudokuPad's own `F.saveSettings` frame still gets the real one: its throttled save runs on a timer.
-export const hideGetDataUntilWarn = (warning) => (p) => p.evaluate(({ source, flags }) => {
+export const hideGetDataUntilWarn = (warning) => (p) => p.evaluate(({ source, flags, frame }) => {
+  const saveFrame = new RegExp(frame)
   const getData = Framework.getData
   const warn = console.warn
   Object.defineProperty(Framework, 'getData', {
     configurable: true,
-    get: () => (/\bF\.saveSettings \(/.test(new Error().stack) ? getData : undefined)
+    get: () => (saveFrame.test(new Error().stack) ? getData : undefined)
   })
   console.warn = function (...args) {
     warn.apply(this, args)
@@ -73,4 +77,4 @@ export const hideGetDataUntilWarn = (warning) => (p) => p.evaluate(({ source, fl
       console.warn = warn
     }
   }
-}, { source: warning?.source, flags: warning?.flags })
+}, { source: warning?.source, flags: warning?.flags, frame: SAVE_SETTINGS_FRAME.source })

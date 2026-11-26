@@ -1,15 +1,17 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { ERROR_LOG_KEY as LOG_KEY } from './page.mjs'
-import { actButton, openScriptDialog, STATUS } from './settings.mjs'
+import { actButton, openScriptDialog, SAVE_SETTINGS_FRAME, STATUS } from './settings.mjs'
 import { openWith, reloadWith, scriptSource, useBrowser } from './session.mjs'
 
 const SCRIPT_FILE = 'dark-page.user.js'
 const EDITOR = '#dark-page-input'
-// Makes Framework.getData throw while the script starts, which is inside the script's saved color feature, so the guard turns it off on a
-// real throw, and puts it back once that task ends. SudokuPad's own `F.saveSettings` frame still gets the real one (#1218): its save can
-// run inside that one task, and a throw it met was a page error the test did not plant.
-const WITH_THROWING_GET_DATA = ';{ const original = Framework.getData; Framework.getData = function (...args) { if (/\\bF\\.saveSettings \\(/.test(new Error().stack)) return original.apply(this, args); throw new TypeError(\'planted failure\') }; setTimeout(() => { Framework.getData = original }, 0) }\n'
+// The planted failure: Framework.getData throws while the script starts, which is inside the script's saved color feature, so the guard
+// turns it off on a real throw, and it is put back once that task ends. A call from SudokuPad's own settings save gets the real one,
+// because that save can run inside the same task and would meet the throw as a page error nobody planted (#1218).
+const PLANT_THROWING_GET_DATA = `{ const original = Framework.getData; Framework.getData = function (...args) { if (new RegExp(${JSON.stringify(SAVE_SETTINGS_FRAME.source)}).test(new Error().stack)) return original.apply(this, args); throw new TypeError('planted failure') }; setTimeout(() => { Framework.getData = original }, 0) }`
+// In front of a script, so a `;` ends whatever precedes it.
+const WITH_THROWING_GET_DATA = `;${PLANT_THROWING_GET_DATA}\n`
 
 const browser = useBrowser()
 
@@ -72,7 +74,8 @@ describe('the planted getData throw (#1218)', { concurrency: false }, () => {
   after(async () => { await context?.close() })
 
   it('is not met by SudokuPad\'s own saveSettings in the task it is live', async () => {
-    await p.evaluate(`${WITH_THROWING_GET_DATA.replace(/^;/, '')}; Framework.saveSettings()`)
+    // A rejected evaluate is the throw coming back out of saveSettings.
+    await assert.doesNotReject(p.evaluate(`${PLANT_THROWING_GET_DATA}; Framework.saveSettings()`))
     assert.deepEqual(errors, [])
   })
 })
