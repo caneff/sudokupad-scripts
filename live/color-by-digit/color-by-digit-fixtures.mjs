@@ -9,6 +9,7 @@ import { COLOR_BY_DIGIT_DIALOG, group, labelOn, modeLabel, ODD_EVEN, COLOR_BY_DI
 import { POLL_MS, settle } from '../settle.mjs'
 import { middleOf } from '../input.mjs'
 import { closeDialogWith, savedState } from '../settings.mjs'
+import { colorCell, selectCell } from '../board.mjs'
 
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by puzzle-url.txt; the
 // 'the board holds the givens' test in color-by-digit.live.mjs checks it.
@@ -188,6 +189,21 @@ export async function modeTo (p, word) {
 
 export const coloredCountOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).length).length)
 export const givensColoredOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
+export const cellColorsOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => [...(c.colours || [])]))
+export const savedModeOn = (p) => p.evaluate((key) => Framework.getData(key), MODE_KEY)
+
+// The solver's own colors: a 4 entered at r1c3, then Odd/Even's keys 1 and 2 by hand on a given, on that 4 (its own group's color)
+// and on an empty cell. Returns every cell's colors.
+export async function paintByHandOn (p) {
+  await selectCell(p, 0, 2); await p.keyboard.press('4')
+  assert.equal(await settle(() => p.evaluate(() => String(Framework.app.grid.getCell(0, 2).value)), '4'), '4')
+  await colorCell(p, [0, 0], '2')
+  await colorCell(p, [0, 2], '2')
+  await colorCell(p, [1, 1], '1')
+  const painted = await cellColorsOn(p)
+  assert.equal(painted.filter((c) => c.length).length, 3)
+  return painted
+}
 
 // SudokuPad's own color for an entered digit or a mark, read off the page with no script installed.
 export const DEFAULT_FILL = 'rgb(29, 106, 229)'

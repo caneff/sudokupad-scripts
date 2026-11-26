@@ -118,7 +118,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   // The first press of the run, before any dialog has opened: a press the script never hears fails here.
-  it('a press steps to Cell and colors every given and entered digit by Odd/Even, nothing else', async () => {
+  it('a press turns coloring on with Cell and colors every given and entered digit by Odd/Even, nothing else', async () => {
     await pressTo(p, 'Cell')
     assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
     assert.equal(await coloredCount(), DIGIT_CELLS)

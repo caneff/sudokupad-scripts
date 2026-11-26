@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { captureConsoleErrors, restartPuzzle } from '../page.mjs'
 import { closeDialogWith, savedState } from '../settings.mjs'
 import { settle } from '../settle.mjs'
-import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, pressTo, ROW_CORNER, SEED, typeProfileName, wrongCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, buttonPoint, coloredCountOn, deleteProfileRow, dragProfileRow, EDITOR, group, labelOn, MENU, ODD_EVEN, openSession, paintedKeys, PROFILE_ROWS, PROFILES_KEY, MODE_KEY, pressTo, ROW_CORNER, SEED, typeProfileName, wrongCountOn, reloadSession, openEditorOn } from './color-by-digit-fixtures.mjs'
 import { selectCell, undoDepth } from '../board.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
 
@@ -64,9 +64,20 @@ describe('attacks on Color by Digit', { concurrency: false }, () => {
     await enter(ROW, 0, '3')
     await enter(ROW, 1, '4')
     assert.equal(await label(), 'Cell', 'the presses start at Cell')
+    // Every handled press saves the mode once; ten presses land where they started, so the saves are what show a dropped one.
+    await read((key) => {
+      const set = Framework.setData
+      window.savedOns = []
+      Framework.setData = function (k, value) {
+        if (k === key) window.savedOns.push(value.on)
+        return set.apply(this, arguments)
+      }
+    }, MODE_KEY)
     const { x, y } = await buttonPoint(p)
     for (let i = 0; i < 10; i++) await p.mouse.click(x, y)
-    assert.equal(await settle(label, 'Cell'), 'Cell', 'ten presses from Cell land on Cell')
+    const handled = Array.from({ length: 10 }, (_, i) => i % 2 === 1)
+    assert.deepEqual(await settle(() => read(() => window.savedOns), handled), handled, 'each of the ten presses turned coloring off or on')
+    assert.equal(await label(), 'Cell', 'ten presses from Cell land on Cell')
     assert.equal(await settle(() => wrongCount(ODD_EVEN), 0), 0, 'every digit has its group color')
   })
 

@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, dragProfileRow, profileDragPoints, typeProfileName, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, EDITOR, group, groupCountOn, MENU, modeTo, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, MODE_KEY, menuTicksOn, tickMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
-import { colorCell, selectCell } from '../board.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, dragProfileRow, profileDragPoints, typeProfileName, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, EDITOR, group, groupCountOn, MENU, modeTo, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, cellColorsOn, paintByHandOn, savedModeOn, menuTicksOn, tickMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 import { scriptSource, useBrowser } from '../session.mjs'
@@ -395,8 +395,8 @@ const touch = (cdp, type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, 
 
 describe('the menu\'s Cell and Digit ticks, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors, t
-  const cellColors = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => [...(c.colours || [])]))
-  const savedMode = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
+  const cellColors = () => cellColorsOn(p)
+  const savedMode = () => savedModeOn(p)
 
   before(async () => {
     ({ context, p, errors } = await openProfiles(savedOff(savedProfiles(SEED))))
@@ -414,14 +414,7 @@ describe('the menu\'s Cell and Digit ticks, injected after Start Puzzle', { conc
   })
 
   it('with the solver\'s own colors on cells, ticks made while off change only the saved ticks; Digit alone turned on leaves every color, and its tick refuses to come off', async () => {
-    await selectCell(p, 0, 2); await p.keyboard.press('4')
-    assert.equal(await settle(() => t.valueAt(0, 2), '4'), '4')
-    // Odd/Even's keys 1 and 2, by hand: on a given, on the entered 4 (its own group's color), and on an empty cell.
-    await colorCell(p, [0, 0], '2')
-    await colorCell(p, [0, 2], '2')
-    await colorCell(p, [1, 1], '1')
-    const painted = await cellColors()
-    assert.equal(painted.filter((c) => c.length).length, 3)
+    const painted = await paintByHandOn(p)
     await openMenuOn(p)
     await tickMenuOn(p, 'digit', { cell: true, digit: true })
     await tickMenuOn(p, 'cell', { cell: false, digit: true })
@@ -441,6 +434,7 @@ describe('the menu\'s Cell and Digit ticks, injected after Start Puzzle', { conc
   it('the menu a tick kept open closes on a profile pick', async () => {
     assert.equal(await t.menu().isVisible(), true)
     await t.pick('Low/5/High')
+    assert.equal(await t.menu().count(), 0, 'the menu closed')
     assert.equal((await t.getState()).active, 1)
   })
 
@@ -505,7 +499,7 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
     await t.menu().waitFor({ state: 'detached' })
   })
 
-  it('a short tap on the button steps to Cell and colors the grid', async () => {
+  it('a short tap on the button turns coloring on with Cell and colors the grid', async () => {
     const { x, y } = await buttonPoint(p)
     await touch(cdp, 'touchStart', x, y)
     await touch(cdp, 'touchEnd', x, y)

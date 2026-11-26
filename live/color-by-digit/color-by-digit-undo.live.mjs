@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { coloredCountOn, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, MENU, MODE_KEY, menuTicksOn, modeTo, openEditorOn, openMenuOn, openSession, pressTo, SAVED_MODE, tickMenuOn, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
+import { coloredCountOn, EDITOR, GIVEN_COUNT, givensColoredOn, labelOn, MENU, menuTicksOn, savedModeOn, modeTo, openEditorOn, openMenuOn, openSession, pressTo, SAVED_MODE, tickMenuOn, tools, wrongCountOn } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith } from '../settings.mjs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { POLL_MS, settle } from '../settle.mjs'
@@ -56,7 +56,7 @@ describe('Undo and Redo after a mode change', { concurrency: false }, () => {
   })
 
   it('a Save that turns coloring on with Cell and Digit ticked fills the board; Undo empties it and puts back Off with Cell alone ticked, and Redo puts back Both', async () => {
-    const saved = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
+    const saved = () => savedModeOn(p)
     await modeTo(p, 'Both')
     assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
     const count = await coloredCount()
@@ -204,7 +204,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
     assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined && Framework.app.puzzle.undoStack.length > 0), true), true)
     assert.equal(await settle(label, 'Cell'), 'Cell')
     assert.equal(await settle(() => givensColoredOn(p), givens), givens)
-    assert.deepEqual(await p.evaluate((key) => Framework.getData(key), MODE_KEY), SAVED_MODE.Cell)
+    assert.deepEqual(await savedModeOn(p), SAVED_MODE.Cell)
   })
 
   it('the replay holds as many groups as the undo stack after the first Undo (#1032)', async () => {

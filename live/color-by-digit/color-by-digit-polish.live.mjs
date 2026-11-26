@@ -382,7 +382,7 @@ describe('the dialog\'s layout, keyboard and messages', { concurrency: false }, 
       await p.keyboard.press('Tab')
       presses++
     }
-    // The mode's three checkboxes are three stops where its pulldown was one.
+    // The mode's On, Cell and Digit checkboxes are three of the stops.
     assert.equal(presses <= 16, true, `${presses} presses`)
   })
 
