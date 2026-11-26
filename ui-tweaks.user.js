@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad UI Tweaks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.50
+// @version      0.1.51
 // @author       ChinStrap
 // @description  Small changes to SudokuPad, each chosen in a settings dialog.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -23,7 +23,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.50'
+  const VERSION = '0.1.51'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'ui-tweaks'
   const SCRIPT_NAME = 'UI Tweaks'
@@ -681,10 +681,14 @@
     return dismiss
   }
 
-  // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
-  // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
-  // exists; `store`, SudokuPad's Framework unless given, holds a dismissal under `<script>-notice`.
-  function createGuard ({ script, name, version, features }) {
+  // SudokuPad loads some features (`Framework.features.largepuzzle`) as separate files, which may arrive after `Framework.getApp` resolves.
+  const LATE_WAIT = { timeoutMs: 5000, intervalMs: 50 }
+
+  // `features` maps a name to `{ label, needs, onSkip, late }`: `label` is what the bar and the console call it, `needs` maps each
+  // internal's path to its kind (a key of INTERNAL_KINDS), `onSkip` undoes what the feature left on the page, and `late` makes `start`
+  // wait up to `lateWait.timeoutMs` for its internals before the probe. `probe` runs once SudokuPad's app exists; `store`, SudokuPad's
+  // Framework unless given, holds a dismissal under `<script>-notice`.
+  function createGuard ({ script, name, version, features, lateWait = LATE_WAIT }) {
     const reasons = []
     let page = null
 
@@ -887,9 +891,21 @@
     // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
     // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
     function start (begin, { roots = () => ({}) } = {}) {
+      const allRoots = (app) => ({ Framework, app, ...roots() })
+      const lateFeatures = Object.fromEntries(Object.entries(features).filter(([, { late }]) => late))
+      const lateLacking = (app) => lackingInternals(lateFeatures, allRoots(app)).size > 0
+      // Polls on a timer: SudokuPad announces no event when a feature file has loaded.
+      async function untilLateInternals (app) {
+        for (let waited = 0; lateLacking(app) && waited < lateWait.timeoutMs; waited += lateWait.intervalMs) {
+          await new Promise((resolve) => setTimeout(resolve, lateWait.intervalMs))
+        }
+      }
       const run = catchStartup((app) => {
-        probe({ roots: { Framework, app, ...roots() } })
-        return begin(app)
+        const begun = () => {
+          probe({ roots: allRoots(app) })
+          return begin(app)
+        }
+        return lateLacking(app) ? untilLateInternals(app).then(begun) : begun()
       })
       return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
     }
@@ -1000,6 +1016,7 @@
     tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array', 'Framework.app.tools': 'object' } },
     rightDrag: {
       label: 'right drag limit',
+      late: true,
       needs: {
         'Framework.features.largepuzzle.handleMousemove': 'function',
         'Framework.features.largepuzzle.handleZoomInOut': 'function',
