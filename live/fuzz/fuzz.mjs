@@ -20,7 +20,7 @@ import { DIGIT_KEYS, DIGITS, KINDS, MARK_BOXES, PROFILE_NAMES, ROW_KEYS, scripte
 import { readPageState } from './page-state.mjs'
 import { tagSource, trackClosing } from './coverage.mjs'
 import { plantPatch } from './plants.mjs'
-import { actWhereItIs } from './act-where-it-is.mjs'
+import { actWhereItIs, MOVE_TRIES } from './act-where-it-is.mjs'
 import { noteDrop } from './note-drop.mjs'
 import { visiblePoint } from './visible-point.mjs'
 import { replayCommand } from './replay-command.mjs'
@@ -79,19 +79,30 @@ const isSettingsObject = (text) => {
     return false
   }
 }
-// The pane's box, or null when the page shows no rules (a puzzle with no rules text).
-async function rulesBox (p) {
-  return await p.locator(RULES_PANE).isVisible() ? p.locator(RULES_PANE).boundingBox() : null
+// The point nearest the pane's middle where the pane is the topmost element, as `{ x, y }`; null when the page shows no rules, or every point tried of the pane is covered by something, a note most likely (#1187).
+// The pane shows its corners and font bar only while it is hovered, and a pointer over a note that spreads across the pane's middle is not over the pane.
+async function rulesPoint (p) {
+  if (!await p.locator(RULES_PANE).isVisible()) return null
+  return p.locator(RULES_PANE).evaluate((pane) => {
+    const box = pane.getBoundingClientRect()
+    const fractions = [0.5, 0.35, 0.65, 0.2, 0.8, 0.08, 0.92]
+    const points = fractions.flatMap((fx) => fractions.map((fy) => ({ fx, fy })))
+      .sort((a, b) => Math.hypot(a.fx - 0.5, a.fy - 0.5) - Math.hypot(b.fx - 0.5, b.fy - 0.5))
+      .map(({ fx, fy }) => ({ x: box.x + box.width * fx, y: box.y + box.height * fy }))
+    return points.find(({ x, y }) => pane.contains(document.elementFromPoint(x, y))) || null
+  })
 }
-// The pointer's way onto the rules pane, so the corners and the bar show; false when the page shows no rules.
+// The pointer's way onto the rules pane, so the corners and the bar show; false when the page shows no rules or a note covers them.
 async function hoverRules (p) {
-  const box = await rulesBox(p)
-  if (!box) return false
-  await p.mouse.move(...middleOf(box))
+  const point = await rulesPoint(p)
+  if (!point) return false
+  await p.mouse.move(point.x, point.y)
   return true
 }
-// The same, until `target` (a corner, a font button) shows; false when the page shows no rules.
-const hoverRulesFor = (p, target) => actWhereItIs(target, () => rulesBox(p), (box) => p.mouse.move(...middleOf(box)), { finalMs: BOX_TIMEOUT_MS })
+// The same, until `target` (a corner, a font button) shows; false when the page shows no rules or a note covers them.
+const hoverRulesFor = (p, target) => actWhereItIs(target, () => rulesPoint(p), ({ x, y }) => p.mouse.move(x, y), { finalMs: BOX_TIMEOUT_MS })
+// How long a press of the font bar waits before the pointer goes back over the pane.
+const PRESS_LOOK_MS = 500
 const LINE_MODE_BUTTON = '[data-control="penlinemode-step"]'
 export const COLOR_PICKERS = '.pen-tool-extras-picker'
 const COLOR_CHOICE = `${EXTRAS_EDITOR} select[data-role="color-choice"]`
@@ -448,6 +459,8 @@ function envFor (p, puzzle, { beforeReload, reads }) {
     },
     async dragRules (corner, dx, dy) {
       if (!await hoverRulesFor(p, p.locator(CORNER(corner)))) return
+      // A note over the corner (it sits outside the pane, at the board's right edge) takes the press, as it would a player's: nothing to drag.
+      if (!await p.locator(CORNER(corner)).evaluate((el) => { const r = el.getBoundingClientRect(); return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === el })) return
       const box = await p.locator(CORNER(corner)).boundingBox()
       const x = box.x + box.width / 2
       const y = box.y + box.height / 2
@@ -460,8 +473,12 @@ function envFor (p, puzzle, { beforeReload, reads }) {
       for (let i = 0; i < times; i++) {
         // Each press refits the pane and moves the bar, so the pointer goes back over the pane first: the bar shows only while it is there.
         const button = p.locator(`${FONT_BAR} button`).filter({ hasText: step > 0 ? 'f+' : 'f-' })
-        if (!await hoverRulesFor(p, button)) return
-        await button.click({ timeout: BOX_TIMEOUT_MS })
+        // The script's own refit can move the pane a moment after the pointer reached it (after a restart, #1188): the bar then hides under a pointer that is off the pane, so a press that waits is made again after a new hover.
+        for (let tries = 1; ; tries++) {
+          if (!await hoverRulesFor(p, button)) return
+          const last = tries === MOVE_TRIES
+          if (await button.click({ timeout: last ? BOX_TIMEOUT_MS : PRESS_LOOK_MS }).then(() => true, (error) => { if (last || error.name !== 'TimeoutError') throw error })) break
+        }
       }
     },
     async scrollRules (dy) {
