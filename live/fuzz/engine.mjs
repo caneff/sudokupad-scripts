@@ -123,12 +123,12 @@ export async function runFuzz ({ openTarget, puzzles, kinds, seed, runs, minutes
     return runList(() => openTarget(puzzle), [...start.map(asStep), ...commands], landMs, waitMs ?? settleMs)
   })
   const replaying = path != null
-  // A path names its run by index, so a run limit one past it replays that run alone and a failure that does not repeat ends there.
+  // A path names its run by index, and fast-check counts the runs it executes, not the index it starts at: one run replays that list alone, and a failure that does not repeat ends there (#1213).
   const upTo = (p) => Number(p.split(':')[0]) + 1
   // The hunt stops at the first failure, so the time limit never cuts a shrink short. A time limit that fires before the first list has run is
   // reported by fast-check as a failure with no counterexample: that is a run that did not get to run, not a failure.
   const huntStarted = Date.now()
-  const hunt = await fc.check(property, { seed, numRuns: replaying ? upTo(path) : runs ?? UNBOUNDED, path, endOnFailure: true, interruptAfterTimeLimit: replaying ? undefined : minutes * 60000, verbose: 0 })
+  const hunt = await fc.check(property, { seed, numRuns: replaying ? 1 : runs ?? UNBOUNDED, path, endOnFailure: true, interruptAfterTimeLimit: replaying ? undefined : minutes * 60000, verbose: 0 })
   const huntMs = Date.now() - huntStarted
   const huntRuns = Object.fromEntries(puzzles.map((p) => [p.name, started.slice(0, hunt.numRuns).filter((n) => n === p.name).length]))
   if (!hunt.failed || hunt.counterexample === null) return { failed: false, seed: hunt.seed, runs: hunt.numRuns, huntMs, puzzleRuns: huntRuns }

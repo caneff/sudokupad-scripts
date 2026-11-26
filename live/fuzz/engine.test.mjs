@@ -260,11 +260,18 @@ describe('the fuzz engine on a fake page', () => {
       assert.equal(targets.length, 1)
     })
 
-    it('a replay of a failure that does not repeat ends after the lists its path names, and does not hunt', async () => {
+    it('a replay of a failure that does not repeat runs the one list its path names, and does not hunt on past it (#1213)', async () => {
       const { openTarget, targets } = fakeTargets()
       const again = await runFuzz({ openTarget, puzzles: PUZZLES, kinds: KINDS, seed: found.seed, path: found.path, replayPath: found.replayPath, ...FIXED_WAIT })
       assert.equal(again.failed, false)
-      assert.ok(targets.length <= 5, `${targets.length} pages opened`)
+      assert.equal(targets.length, 1)
+    })
+
+    it('a replay at a later index runs that list alone, not the lists after it (#1213)', async () => {
+      const { openTarget, targets } = fakeTargets()
+      const again = await runFuzz({ openTarget, puzzles: PUZZLES, kinds: KINDS, seed: found.seed, path: '6', replayPath: found.replayPath, ...FIXED_WAIT })
+      assert.equal(again.failed, false)
+      assert.equal(targets.length, 1)
     })
   })
 
