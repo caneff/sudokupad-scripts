@@ -331,12 +331,12 @@
   // the undragged pane's visual left and right at its fitted width, `column` the undragged controls column's
   // visual top and bottom.
   function clampDrag (box, { pane, column, boardRight, viewport }) {
-    // A move right or down comes only with a shrink of the same size, which keeps the column where it was; `fitRulesPane` gives back what passes the window's edge.
+    // A move right or down starts with a shrink of the same size, which keeps the column where it was; a later grow at the other corner breaks that pairing. `fitRulesPane` gives back what passes the window's edge on the right; the bottom is paid for here, below.
     const x = Math.max(box.x, boardRight - pane.left)
     const y = Math.max(box.y, -column.top)
     return {
       w: Math.min(box.w, Math.max(0, viewport.width - EDGE_PX - pane.right) - x),
-      // No floor at 0: a column already at the window's bottom with a downward move (`y`, from a shrink) has no room for it, and the pane gives that much up (#1189).
+      // Room below the column, less its downward move (`y`, from a shrink): negative when the column has no room for that move, and the pane gives that much up (#1189).
       h: Math.min(box.h, viewport.height - column.bottom - y),
       x,
       y
