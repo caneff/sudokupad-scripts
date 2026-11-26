@@ -174,7 +174,8 @@ A solve makes SudokuPad send two requests the recording lacks: the solve counter
 (the file `replaytest.config.json` on sudokupad.app). `routeSudokuPad` (`live/cache.mjs`) answers both with a 200 and never aborts them: an aborted fetch rejects,
 SudokuPad logs "Failed to fetch" as a console error, and the fuzz reads that as a crash. It also keeps a test's solve out of SudokuPad's counts.
 The fuzz presses away the solved dialog before each action (`env.dismissSolvedDialog`), as a player does, since the dialog blocks every later click.
-A reload of a solved puzzle shows SudokuPad's "already solved" dialog in place of the intro, so the fuzz's `reload` presses that overlay away instead of waiting for Start Puzzle (#1212, `docs/research/sudokupad-already-solved-dialog.md`).
+A reload of a solved puzzle shows SudokuPad's "already solved" dialog in place of the intro, so the fuzz's `reload` presses that overlay away
+instead of waiting for Start Puzzle (#1212, `docs/research/sudokupad-already-solved-dialog.md`).
 
 ## The fuzz run
 
