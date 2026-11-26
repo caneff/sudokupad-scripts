@@ -119,10 +119,31 @@ describe('the setup action', () => {
   it('installs the packages with npm ci, and Chromium only when asked, so the CI job stays browserless', () => {
     assert.match(action, /run: npm ci$/m)
     assert.match(action, /inputs:\n {2}playwright:\n(?: {4}.*\n)*? {4}default: 'false'/)
-    const chromium = action.split(/\n(?= {4}- )/).find((s) => s.includes('playwright install'))
-    assert.ok(chromium, 'a Playwright install step')
-    assert.match(chromium, /npx playwright install --with-deps chromium/)
-    assert.match(chromium, /if: \$\{\{ inputs\.playwright == 'true' \}\}/)
+    const steps = action.split(/\n(?= {4}- )/)
+    const gated = /if: \$\{\{ inputs\.playwright == 'true' \}\}/
+    const download = steps.find((s) => /npx playwright install chromium$/m.test(s))
+    assert.ok(download, 'a Chromium download step')
+    assert.doesNotMatch(download, /--with-deps/)
+    assert.match(download, /if: \$\{\{ inputs\.playwright == 'true' && steps\.chromium-cache\.outputs\.cache-hit != 'true' \}\}/)
+    const deps = steps.find((s) => /npx playwright install-deps chromium$/m.test(s))
+    assert.ok(deps, 'a system-packages step')
+    assert.match(deps, gated)
+    assert.doesNotMatch(deps, /cache-hit/, 'the apt packages are not in the cache, so they install every run')
+  })
+
+  it('caches ~/.cache/ms-playwright keyed on the Playwright version in the lockfile, so a new Playwright is a new key (#1207)', () => {
+    const steps = action.split(/\n(?= {4}- )/)
+    const version = steps.find((s) => s.includes('id: playwright-version'))
+    assert.ok(version, 'a step reading the version')
+    assert.match(version, /package-lock\.json/)
+    assert.match(version, /node_modules\/playwright-core/)
+    const cache = steps.find((s) => s.includes('id: chromium-cache'))
+    assert.ok(cache, 'a cache step')
+    assert.match(cache, /uses: actions\/cache@v4/)
+    assert.match(cache, /path: ~\/\.cache\/ms-playwright$/m)
+    assert.match(cache, /key: .*runner\.os.*steps\.playwright-version\.outputs\.version/)
+    assert.match(cache, /if: \$\{\{ inputs\.playwright == 'true' \}\}/)
+    assert.ok(steps.indexOf(version) < steps.indexOf(cache) && steps.indexOf(cache) < steps.findIndex((s) => /npx playwright install chromium$/m.test(s)))
   })
 
   const USERS = { 'ci.yml': false, 'fuzz-pr.yml': true, 'fuzz.yml': true, 'watch.yml': true }
