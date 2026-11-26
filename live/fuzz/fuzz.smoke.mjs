@@ -164,6 +164,13 @@ describe('the fuzz on SudokuPad', { concurrency: false }, () => {
     await fuzzScripted({ browser: browser(), puzzle, steps: [['place note', [0, at(0, 2)]], ['click cell', at(0, 3)], ['type digit', '1'], ['reload', null]] })
   })
 
+  it('a reload of a solved puzzle meets SudokuPad\'s already-solved dialog, which a player presses away (#1212)', async () => {
+    // Seed 1693052955's shrink: both free cells hold the solution, so the reload shows "You've already solved this puzzle" and no Start Puzzle button.
+    const puzzle = puzzleByName('nearly solved 9x9')
+    const index = (row, col) => puzzle.cells.findIndex(([r, c]) => r === row && c === col)
+    await fuzzScripted({ browser: browser(), puzzle, steps: [['enter digit', [index(0, 2), '4']], ['enter digit', [index(4, 4), '5']], ['reload', null]] })
+  })
+
   it('a reload after Color by Digit, a Restart and a UI Tweaks Cancel changes nothing the player sees (#943)', async () => {
     // Seed 2066036500's shrink: two cells showed a color before the reload and none after it.
     const steps = [['color mode', null], ['restart', false], ['ui tweaks dialog', [false, true, true, true, false]], ['reload', null]]
