@@ -546,6 +546,12 @@ test('clampDrag: a shrink, which moves the controls right or down by as much, is
   for (const box of [{ w: -60, h: 0, x: 60, y: 0 }, { w: 0, h: -40, x: 0, y: 40 }]) assert.deepEqual(clampDrag(box, LAYOUT), box)
 })
 
+test('clampDrag: a downward move the column has no room for is paid by a shrink of the pane, never left past the window\'s bottom (#1189)', () => {
+  // A top-right shrink moved the column down (y 27); a font step then lifted it to the window's bottom, and a bottom-left grow (h +7) left no room for that move.
+  const atBottom = { ...LAYOUT, column: { top: 300, bottom: 1000 } }
+  assert.deepEqual(clampDrag({ w: 0, h: 7, x: 0, y: 27 }, atBottom), { w: 0, h: -27, x: 0, y: 27 })
+})
+
 test('fitRulesPane: a shrink gives back what would run the controls column, wider than the pane, past 8 px from the window\'s edge (#899)', () => {
   const shrink = { w: -100, h: 0, x: 100, y: 0 }
   const { fit } = fakePane(140, 1, 0, 0, 1000)

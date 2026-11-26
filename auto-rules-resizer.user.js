@@ -336,7 +336,8 @@
     const y = Math.max(box.y, -column.top)
     return {
       w: Math.min(box.w, Math.max(0, viewport.width - EDGE_PX - pane.right) - x),
-      h: Math.min(box.h, Math.max(0, viewport.height - column.bottom - y)),
+      // No floor at 0: a column already at the window's bottom with a downward move (`y`, from a shrink) has no room for it, and the pane gives that much up (#1189).
+      h: Math.min(box.h, viewport.height - column.bottom - y),
       x,
       y
     }
