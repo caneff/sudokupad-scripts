@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.48
+// @version      0.7.49
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -27,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.48'
+  const VERSION = '0.7.49'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'auto-rules-resizer'
   const SCRIPT_NAME = 'Auto Rules Resizer'
@@ -1155,7 +1155,9 @@
         // timer, since SudokuPad announces no event when a feature file has loaded.
         async whenPresent (fn) {
           const lacking = () => lackingInternals({ [featureName]: declared }, currentRoots())
-          for (let waited = 0; lacking().size > 0 && waited < LATE_WAIT_MS; waited += LATE_POLL_MS) {
+          // With no app (no `Framework.getApp`) SudokuPad is not the one this script knows, so there is nothing to wait for.
+          const patience = currentRoots().app === undefined ? 0 : LATE_WAIT_MS
+          for (let waited = 0; lacking().size > 0 && waited < patience; waited += LATE_POLL_MS) {
             await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
           }
           const [missing] = lacking().keys()

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.68
+// @version      0.46.69
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.68'
+  const VERSION = '0.46.69'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -2121,7 +2121,9 @@
         // timer, since SudokuPad announces no event when a feature file has loaded.
         async whenPresent (fn) {
           const lacking = () => lackingInternals({ [featureName]: declared }, currentRoots())
-          for (let waited = 0; lacking().size > 0 && waited < LATE_WAIT_MS; waited += LATE_POLL_MS) {
+          // With no app (no `Framework.getApp`) SudokuPad is not the one this script knows, so there is nothing to wait for.
+          const patience = currentRoots().app === undefined ? 0 : LATE_WAIT_MS
+          for (let waited = 0; lacking().size > 0 && waited < patience; waited += LATE_POLL_MS) {
             await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
           }
           const [missing] = lacking().keys()

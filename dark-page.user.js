@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.56
+// @version      0.7.57
 // @author       ChinStrap
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. The control buttons, the two tool panels and the dialog's dimmed background go dark too, and puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.56'
+  const VERSION = '0.7.57'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'dark-page'
   const SCRIPT_NAME = 'Dark Page'
@@ -904,7 +904,9 @@
         // timer, since SudokuPad announces no event when a feature file has loaded.
         async whenPresent (fn) {
           const lacking = () => lackingInternals({ [featureName]: declared }, currentRoots())
-          for (let waited = 0; lacking().size > 0 && waited < LATE_WAIT_MS; waited += LATE_POLL_MS) {
+          // With no app (no `Framework.getApp`) SudokuPad is not the one this script knows, so there is nothing to wait for.
+          const patience = currentRoots().app === undefined ? 0 : LATE_WAIT_MS
+          for (let waited = 0; lacking().size > 0 && waited < patience; waited += LATE_POLL_MS) {
             await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
           }
           const [missing] = lacking().keys()

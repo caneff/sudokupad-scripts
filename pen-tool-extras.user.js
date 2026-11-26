@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.62
+// @version      1.32.63
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.62'
+  const VERSION = '1.32.63'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'pen-tool-extras'
   const SCRIPT_NAME = 'Pen Tool Extras'
@@ -434,7 +434,9 @@
         // timer, since SudokuPad announces no event when a feature file has loaded.
         async whenPresent (fn) {
           const lacking = () => lackingInternals({ [featureName]: declared }, currentRoots())
-          for (let waited = 0; lacking().size > 0 && waited < LATE_WAIT_MS; waited += LATE_POLL_MS) {
+          // With no app (no `Framework.getApp`) SudokuPad is not the one this script knows, so there is nothing to wait for.
+          const patience = currentRoots().app === undefined ? 0 : LATE_WAIT_MS
+          for (let waited = 0; lacking().size > 0 && waited < patience; waited += LATE_POLL_MS) {
             await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
           }
           const [missing] = lacking().keys()
