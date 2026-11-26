@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.46
+// @version      0.7.47
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -27,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.46'
+  const VERSION = '0.7.47'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'auto-rules-resizer'
   const SCRIPT_NAME = 'Auto Rules Resizer'
@@ -1234,8 +1234,8 @@
       }
     }
 
-    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
-    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe and after any `late` feature's internals have
+    // arrived or LATE_WAIT_MS has passed; with no getApp, at once and with no app, so the features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
     function start (begin, { roots = () => ({}) } = {}) {
       const allRoots = (app) => ({ Framework, app, ...roots() })
       const lateFeatures = Object.fromEntries(Object.entries(features).filter(([, { late }]) => late))
@@ -1246,14 +1246,14 @@
           await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
         }
       }
-      const run = catchStartup((app) => {
+      const runAfter = (waitForLate) => catchStartup((app) => {
         const begun = () => {
           probe({ roots: allRoots(app) })
           return begin(app)
         }
-        return lateLacking(app) ? untilLateInternals(app).then(begun) : begun()
+        return waitForLate && lateLacking(app) ? untilLateInternals(app).then(begun) : begun()
       })
-      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(runAfter(true), startupFailed) : runAfter(false)(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.

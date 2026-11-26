@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.66
+// @version      0.46.67
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.66'
+  const VERSION = '0.46.67'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -2200,8 +2200,8 @@
       }
     }
 
-    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe; with no getApp, at once and with no app, so the
-    // features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
+    // Runs `begin` with SudokuPad's app once `Framework.getApp` resolves, after the probe and after any `late` feature's internals have
+    // arrived or LATE_WAIT_MS has passed; with no getApp, at once and with no app, so the features that need one are off and the rest start. `roots` gives the probe's roots beyond Framework and the app, read at that time.
     function start (begin, { roots = () => ({}) } = {}) {
       const allRoots = (app) => ({ Framework, app, ...roots() })
       const lateFeatures = Object.fromEntries(Object.entries(features).filter(([, { late }]) => late))
@@ -2212,14 +2212,14 @@
           await new Promise((resolve) => setTimeout(resolve, LATE_POLL_MS))
         }
       }
-      const run = catchStartup((app) => {
+      const runAfter = (waitForLate) => catchStartup((app) => {
         const begun = () => {
           probe({ roots: allRoots(app) })
           return begin(app)
         }
-        return lateLacking(app) ? untilLateInternals(app).then(begun) : begun()
+        return waitForLate && lateLacking(app) ? untilLateInternals(app).then(begun) : begun()
       })
-      return typeof Framework.getApp === 'function' ? Framework.getApp().then(run, startupFailed) : run(undefined)
+      return typeof Framework.getApp === 'function' ? Framework.getApp().then(runAfter(true), startupFailed) : runAfter(false)(undefined)
     }
 
     // A feature's saved data in SudokuPad. A read with the feature off is null, as for a key with nothing saved, and a write is dropped.

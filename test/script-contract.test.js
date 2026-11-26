@@ -96,6 +96,8 @@ for (const file of scriptFiles()) {
   test(`${id}: a start that throws is reported once under the script's name`, async () => {
     const framework = {
       getApp: () => Promise.resolve({}),
+      // A late feature (UI Tweaks' right drag) waits for this to appear before the probe runs.
+      features: { largepuzzle: { handleMousemove () {}, handleZoomInOut () {}, updateTransform () {} } },
       // Every script's probe reads it, so the throw comes from inside the script's start.
       get getData () { throw new Error('planted') }
     }
