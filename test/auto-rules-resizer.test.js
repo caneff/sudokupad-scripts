@@ -268,7 +268,7 @@ test('readLimits: a saved limit that cannot be read is no limit, and is kept und
   assert.equal(store.data[`${MAX_WIDTH_KEY}_unreadable`], 'wide')
 })
 
-test('a saved limit loads exactly when the same value pastes, except a whole number below the floor, which a paste refuses', () => {
+test('a saved limit loads exactly when the same value pastes (a whole number below the floor differs on purpose, below)', () => {
   for (const value of [700, '500', 'wide', 640.5, true, [700], { px: 700 }]) {
     const loaded = quietly(() => readLimits(fakeStore({ [MAX_WIDTH_KEY]: value }))).result.maxWidth
     const pasted = readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: value })).values[MAX_WIDTH_KEY]

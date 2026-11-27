@@ -64,11 +64,13 @@
   const LIMIT_FLOORS = { maxWidth: RULES_MIN.width, maxHeight: RULES_MIN.height }
   const LIMIT_LABELS = { maxWidth: 'Max auto width', maxHeight: 'Max auto height' }
 
+  const isLimit = (name, px) => Number.isInteger(px) && px >= LIMIT_FLOORS[name]
+
   // A blank box is no limit; anything else that is not a whole number of px at or above the floor throws, so Save says so and stays open.
   function limitFromBox (text, name) {
     if (text.trim() === '') return null
     const px = Number(text)
-    if (!Number.isInteger(px) || px < LIMIT_FLOORS[name]) throw new Error(`${LIMIT_LABELS[name]} must be a whole number of pixels, ${LIMIT_FLOORS[name]} or more`)
+    if (!isLimit(name, px)) throw new Error(`${LIMIT_LABELS[name]} must be a whole number of pixels, ${LIMIT_FLOORS[name]} or more`)
     return px
   }
 
@@ -77,7 +79,7 @@
   const savedLimit = (name) => (data) => (data === null ? null : Number.isInteger(data) ? Math.max(data, LIMIT_FLOORS[name]) : undefined)
 
   // The reader of a pasted limit is strict, as the dialog is: one below its floor is refused (undefined), not raised to it.
-  const pastedLimit = (name) => (data) => (Number.isInteger(data) && data < LIMIT_FLOORS[name] ? undefined : savedLimit(name)(data))
+  const pastedLimit = (name) => (data) => (data === null || isLimit(name, data) ? data : undefined)
 
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
