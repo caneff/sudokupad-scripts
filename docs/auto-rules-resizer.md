@@ -22,5 +22,9 @@ shrank the pane, and moved the controls column).
 - Only f+, f-, a corner drag or Reset puzzle size changes it. A window too small for all of it, or an automatic size already at
   the cap, applies less of it and leaves what is saved alone.
 - A puzzle never resized has no key and starts at the default, no offset and no drag.
+- Sizings are kept for the last 50 puzzles only, as Text Anywhere keeps notes. `AutoRulesResizer_index` lists the puzzles with a
+  sizing, oldest first; saving or opening a puzzle's sizing moves it to the newest end, and a 51st puzzle removes the
+  sizing of the oldest. Sizings saved before the index existed are listed the first time the script runs, in no known age order,
+  and none is removed then: the next save trims the list to 50.
 - Reset puzzle size in the dialog clears the current puzzle's at once. The dialog's Restore defaults only empties the two limit
   boxes, for Save or Cancel to decide.
