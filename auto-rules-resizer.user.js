@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.53
+// @version      0.7.54
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -27,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.53'
+  const VERSION = '0.7.54'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'auto-rules-resizer'
   const SCRIPT_NAME = 'Auto Rules Resizer'
@@ -72,9 +72,12 @@
     return px
   }
 
-  // The one reader of a limit, saved or pasted: a whole number of pixels, or null for none; a string or boolean is not one. One below its floor,
-  // saved before the floor was raised, reads as the floor: only the dialog refuses a new one.
+  // The reader of a saved limit: a whole number of pixels, or null for none; a string or boolean is not one. One below its floor,
+  // saved before the floor was raised, reads as the floor.
   const savedLimit = (name) => (data) => (data === null ? null : Number.isInteger(data) ? Math.max(data, LIMIT_FLOORS[name]) : undefined)
+
+  // The reader of a pasted limit is strict, as the dialog is: one below its floor is refused (undefined), not raised to it.
+  const pastedLimit = (name) => (data) => (Number.isInteger(data) && data < LIMIT_FLOORS[name] ? undefined : savedLimit(name)(data))
 
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
@@ -261,7 +264,7 @@
 
   const saveLimits = (store, limits) => saveTable(store, LIMIT_ROWS, limits)
 
-  const READERS = pasteReaders(LIMIT_ROWS)
+  const READERS = pasteReaders(LIMIT_ROWS.map((row) => ({ ...row, read: pastedLimit(row.name) })))
 
   // null is no limit, so a paste can clear one.
   const copiedSettings = (store) => JSON.stringify(copiedTable(LIMIT_ROWS, store))
@@ -1556,7 +1559,7 @@
     return sizing
   }
 
-  // f+ and f-, a corner drag and Restore defaults are the only changes to a saved sizing. `change` takes the `part` the last fit applied
+  // f+ and f-, a corner drag and Reset puzzle size are the only changes to a saved sizing. `change` takes the `part` the last fit applied
   // (`fontOffsetPx` or `box`), so a step starts from what is on the page.
   function changeSizing (part, change) {
     const now = currentSizing()
