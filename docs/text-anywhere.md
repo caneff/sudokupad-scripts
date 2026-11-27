@@ -106,7 +106,10 @@ set them; a saved note keeps its own), starting at the point clicked: its stored
   merely selecting or opening a note changes nothing.
 - The + (also =) and - keys, and the keypad's, step each selected text one step from its own size (the slider and the next text
   take the first one's new size), or the next text's, while no note is open and no Ctrl, Alt or Meta is held; inside an open note
-  they type.
+  they type. A held key repeats as Pen Tool Extras' does (`docs/pen-tool-extras.md`): it stops when the key is let go, the window loses
+  focus or the tab is hidden, the tool changes, a note opens, or a drag or resize starts. A new press of a step key (+, = or -) takes
+  the hold over, so holding the plus key and then pressing the minus key ramps down until the minus key is let go. Pressing any
+  other key leaves it.
 - **Opacity**: the second slider (called Transparency until 0.45.6), under the Size slider, drawn as the fade (faint to solid),
   over the same range and steps as Pen Tool Extras' Opacity (20 to 100 percent in steps of 5, default 100). It sets a text's
   `opacity`, the next text's saved under `TextAnywhere_opacity`, by the same rules as the Size slider. The opacity is the note

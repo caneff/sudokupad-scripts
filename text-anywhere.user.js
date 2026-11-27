@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.70
+// @version      0.46.72
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.70'
+  const VERSION = '0.46.72'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -779,6 +779,23 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - HELD_REPEAT_MS) / HELD_RAMP_MS))
   }
   const heldSliderSteps = (heldMs) => heldRamp(heldMs, 1, HELD_SLIDER_MAX_STEPS)
+  // One held + or - key. Callers pass only fresh presses (a repeat would restart the ramp), and a fresh press takes the hold over, since a release the page never saw would otherwise hold on for ever.
+  // Only the held key's release ends it. The hold is the physical key's, so releasing Shift before = turns a held + into =.
+  function sliderKeyHold (onTick) {
+    let hold = null
+    const stop = () => {
+      clearInterval(hold?.timer)
+      hold = null
+    }
+    return {
+      stop,
+      press (code, direction) {
+        stop()
+        hold = { code, direction, start: Date.now(), timer: setInterval(() => onTick(hold), HELD_TICK_MS) }
+      },
+      release (code) { if (hold?.code === code) stop() }
+    }
+  }
   /* eslint-enable no-unused-vars */
   // </lib:slider-keys>
 
@@ -4032,7 +4049,7 @@
   // A press that never moved opens no text box. A lost pointer (a blur, a tool switch, a move with the button up) cancels an erase, so nothing goes that the release never confirmed.
   function endGesture () {
     stopHold()
-    stopSizeHold()
+    sizeHold.stop()
     flushFrame()
     erasing = null
     if (drag) endDrag()
@@ -4257,28 +4274,20 @@
     heldArrows.add(key)
   }
 
-  let sizeHold = null
-
-  function stopSizeHold () {
-    clearInterval(sizeHold?.timer)
-    sizeHold = null
-  }
-
   // With nothing selected a hold steps the next note's size.
-  function repeatSize () {
-    if (textBox || drag || resizing) return stopSizeHold()
-    const steps = heldSliderSteps(Date.now() - sizeHold.start)
-    if (steps > 0) stepSize(sizeHold.direction, steps)
-  }
+  const sizeHold = sliderKeyHold((hold) => {
+    if (textBox || drag || resizing) return sizeHold.stop()
+    const steps = heldSliderSteps(Date.now() - hold.start)
+    if (steps > 0) stepSize(hold.direction, steps)
+  })
 
-  // The hold is the physical key's: releasing Shift before = turns a held + into =.
   function pressSizeKey (code, direction) {
     stepSize(direction)
-    if (!sizeHold) sizeHold = { code, direction, start: Date.now(), timer: setInterval(repeatSize, HELD_TICK_MS) }
+    sizeHold.press(code, direction)
   }
 
   function releaseKey (event) {
-    if (sizeHold?.code === event.code) stopSizeHold()
+    sizeHold.release(event.code)
     heldArrows.delete(event.key)
     if (heldArrows.size > 0) return
     stopHold()
@@ -4598,7 +4607,7 @@
       window.addEventListener('pagehide', textTool.bind(saveOpenNote))
       document.addEventListener('visibilitychange', textTool.bind(() => {
         if (document.visibilityState !== 'hidden') return
-        stopSizeHold()
+        sizeHold.stop()
         saveOpenNote()
       }))
     })

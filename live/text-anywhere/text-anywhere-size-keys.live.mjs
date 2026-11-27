@@ -71,6 +71,24 @@ describe('Text Anywhere\'s + and - keys', { concurrency: false }, () => {
     assert.equal(await p.evaluate((k) => Framework.getData(k), WIDTH_KEY), stopped)
   })
 
+  it('pressing - while + is held takes the hold over: the next note\'s size ramps down, and the release of - stops it', async () => {
+    const width = () => p.evaluate((k) => Framework.getData(k), WIDTH_KEY)
+    await p.keyboard.down('+')
+    await p.waitForFunction((id) => Number(document.getElementById(id).value) > 7, SIZE_SLIDER.slice(1))
+    await p.keyboard.down('-')
+    try {
+      const peak = await p.evaluate((id) => Number(document.getElementById(id).value), SIZE_SLIDER.slice(1))
+      await p.waitForFunction(([id, from]) => Number(document.getElementById(id).value) < from - 1, [SIZE_SLIDER.slice(1), peak])
+    } finally {
+      await p.keyboard.up('-')
+    }
+    const stopped = await width()
+    // A "nothing happened in 400 ms" check: the release of the key that took the hold over must leave the size where it stopped, with + still down.
+    await p.waitForTimeout(400)
+    assert.equal(await width(), stopped)
+    await p.keyboard.up('+')
+  })
+
   it('a held + stops when Shift is let go before the key, which then comes up as =, and when the window loses focus', async () => {
     const width = () => p.evaluate((k) => Framework.getData(k), WIDTH_KEY)
     await p.keyboard.down('Shift')

@@ -53,6 +53,23 @@ describe('Pen Tool Extras\' + and - keys step Thickness', { concurrency: false }
     assert.equal(await slider(), stopped)
   })
 
+  it('pressing the other key while one is held takes the hold over: the slider ramps the new way, and the release of the new key stops it', async () => {
+    await setThickness(8)
+    await p.keyboard.down('Equal')
+    await readUntil(slider, (v) => v >= 8 + 3 * RANGE.step)
+    await p.keyboard.down('Minus')
+    try {
+      const peak = await slider()
+      await readUntil(slider, (v) => v <= peak - 2 * RANGE.step)
+    } finally {
+      await p.keyboard.up('Minus')
+    }
+    const stopped = await saved()
+    await p.waitForTimeout(300) // nothing happened: the release of the key that took over ended the hold, with Equal still down
+    assert.equal(await saved(), stopped)
+    await p.keyboard.up('Equal')
+  })
+
   // Each holds a key past the pause so a repeat is running, then ends the hold's conditions and expects the slider to stand still.
   const heldThenStopped = async (end) => {
     await setThickness(12)
