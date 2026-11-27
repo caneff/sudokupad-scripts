@@ -11,11 +11,14 @@ Page](dark-page.md). UI Tweaks' is the README's script notes. The words are defi
   opens the script's dialog (`addSettingsEntry` of `lib/settings-dialog.js`). The entry and the dialog run under one feature of
   the guard, so a SudokuPad without what they need leaves the entry out.
 - **Drafts**: while a dialog is open, an edit changes the draft only. Save writes every draft, and Cancel drops them. A Restore
-  defaults press and a Paste settings also fill the draft. A slider in a pen panel is no draft: it saves at once.
+  defaults press and a Paste settings also fill the draft. A slider in a pen panel is no draft: it saves at once. Dark Page alone
+  shows its draft on the page while the dialog is open, because a page color can only be judged on the page; Cancel or Escape
+  puts the saved color back. Every other dialog changes nothing on the page until Save.
 - **Restore defaults**, in the dialog's button row, sets the draft of every setting back to its default and saves nothing: Save or
   Cancel decides. What it leaves is each script's own: Text Anywhere's size and opacity, which its dialog does not set, and Auto
   Rules Resizer's saved sizings, its dialog only emptying the two limit boxes. An extra button of a dialog, such as Reset puzzle
-  size, is no Restore defaults.
+  size, is no Restore defaults. Restore defaults asks nothing first, since Cancel drops it, even where it drops Custom colors.
+  Color by Digit alone asks, before it removes profiles you made: a profile holds a name and its groups, more than a color picked again.
 - **Copy settings** carries the saved settings only. **Paste settings** saves the pasted keys at once and puts only those into the
   dialog's draft, so an unsaved edit of any setting the pasted text lacks stays there for Save or Cancel. Color by Digit's paste
   rule for profiles and mode is on its page.

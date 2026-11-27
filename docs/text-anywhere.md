@@ -85,7 +85,8 @@ set them; a saved note keeps its own), starting at the point clicked: its stored
   cell cursor. A nudge that would put a note out of reach moves none, and the move is saved when the key is released.
 - **Erase**: a right click or drag. The press and drag collect every text the pointer is near, and the release removes them whole,
   in one save. Escape, a lost pointer or a tool switch cancels it with nothing removed. Pen Tool Extras' pen erase is a different
-  feature.
+  feature. No setting turns it off, unlike Pen Tool Extras' Right click erase box: that box hands the right button back to
+  SudokuPad's own right click on the pen, and Text Anywhere's tool is the script's own, with no SudokuPad right click to hand back.
 - **Clear all** (the trash button) erases every note, after asking, while nothing is selected; while texts are selected it deletes
   only them, without asking, as the Delete and Backspace keys do.
 - **Hide all notes**: the eye button at the right end of the sliders block (class `text-anywhere-hide-all`), level with both
