@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.50
+// @version      0.7.53
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -27,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.50'
+  const VERSION = '0.7.53'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'auto-rules-resizer'
   const SCRIPT_NAME = 'Auto Rules Resizer'
@@ -170,6 +170,44 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:store>
+  // <lib:puzzle-index>
+  // Generated from lib/puzzle-index.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  /* global readSaved */
+  const KEPT_PUZZLES = 50
+
+  // The index lists puzzle keys least recently used first: the one a script last wrote or opened is at the end.
+  function readIndex (saved) {
+    if (saved === null || saved === undefined) return []
+    if (!Array.isArray(saved) || !saved.every((key) => typeof key === 'string')) throw new Error(`the saved index is not a list of puzzle keys: ${JSON.stringify(saved).slice(0, 200)}`)
+    return saved
+  }
+
+  function touchIndex (index, key) {
+    const next = index.filter((k) => k !== key).concat(key)
+    return { index: next.slice(-KEPT_PUZZLES), dropped: next.slice(0, Math.max(0, next.length - KEPT_PUZZLES)) }
+  }
+
+  // Whether `key` holds `value`, saved in an envelope or not: the guarded store drops a write the browser refuses (a full localStorage) instead of throwing.
+  const landed = (store, key, value) => {
+    const saved = store.getData(key)
+    return saved !== null && JSON.stringify(readSaved(saved, (data) => data)) === JSON.stringify(value)
+  }
+
+  // `store` has Framework's getData, setData and removeData; `kept` is `{ indexKey, forget(store, puzzleKey) }`. Writes `value` under `dataKey` and makes puzzle `key`
+  // the newest in `index`. The value is written before the index, and the dropped puzzles' data is removed last, each step only once the one before it landed,
+  // so a write that throws or is dropped loses nothing already saved.
+  function writeIndexed (store, kept, index, key, dataKey, value, write = (k, v) => store.setData(k, v)) {
+    const touched = touchIndex(index, key)
+    write(dataKey, value)
+    if (!landed(store, dataKey, value)) return
+    // An index already in this order writes nothing: a write is a storage round trip.
+    if (JSON.stringify(touched.index) !== JSON.stringify(index)) store.setData(kept.indexKey, touched.index)
+    if (!landed(store, kept.indexKey, touched.index)) return
+    for (const dropped of touched.dropped) kept.forget(store, dropped)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:puzzle-index>
   // <lib:settings-table>
   // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -362,15 +400,47 @@
     return [w, h, x, y].every(Number.isFinite) ? { fontOffsetPx: data.nudgePx, box: { w, h, x, y } } : undefined
   }
 
+  const SIZING_INDEX_KEY = 'AutoRulesResizer_index'
+  const SIZING_INDEX = { indexKey: SIZING_INDEX_KEY, forget: (store, puzzle) => store.removeData(SIZING_KEY_PREFIX + puzzle) }
+  const UNREADABLE_COPY = /_unreadable\d*$/
+
   const loadSizing = (store, puzzle) => loadEnveloped(store, { key: SIZING_KEY_PREFIX + puzzle, read: savedPuzzleSizing }).value ?? noSizing()
+
+  const readSizingIndex = (store) => readIndex(store.getData(SIZING_INDEX_KEY))
+
+  // Loads the sizing and, when the puzzle has one, makes it the newest in the index. A puzzle never resized writes nothing.
+  function openSizing (store, puzzle) {
+    const sizing = loadSizing(store, puzzle)
+    if (!isDefaultSizing(sizing)) writeSizing(store, puzzle, sizing)
+    return sizing
+  }
+
+  // The first run with an index: every sizing saved before it is listed, in the order `storageKeys` (the page's localStorage keys, whatever profile prefix
+  // SudokuPad puts on them) gave them, since nothing says which is oldest. Nothing is removed; the next save trims the list to the newest 50.
+  function adoptSizings (store, storageKeys) {
+    if (store.getData(SIZING_INDEX_KEY) !== null) return
+    const puzzles = storageKeys
+      .filter((key) => !UNREADABLE_COPY.test(key))
+      .map((key) => (key.includes(SIZING_KEY_PREFIX) ? key.slice(key.indexOf(SIZING_KEY_PREFIX) + SIZING_KEY_PREFIX.length) : ''))
+      .filter((puzzle) => puzzle !== '' && store.getData(SIZING_KEY_PREFIX + puzzle) !== null)
+    if (puzzles.length > 0) store.setData(SIZING_INDEX_KEY, [...new Set(puzzles)])
+  }
+
+  // saveEnveloped writes nothing for a value already saved, so this only moves the puzzle to the newest end of the index then.
+  function writeSizing (store, puzzle, sizing) {
+    const { w, h, x, y } = sizing.box
+    writeIndexed(store, SIZING_INDEX, readSizingIndex(store), puzzle, SIZING_KEY_PREFIX + puzzle, { nudgePx: sizing.fontOffsetPx, box: { w, h, x, y } }, (k, v) => saveEnveloped(store, k, v))
+  }
 
   function saveSizing (store, puzzle, sizing) {
     const key = SIZING_KEY_PREFIX + puzzle
-    const { w, h, x, y } = sizing.box
-    const data = isDefaultSizing(sizing) ? null : { nudgePx: sizing.fontOffsetPx, box: { w, h, x, y } }
-    if (data === null) {
-      if (store.getData(key) !== null) store.removeData(key)
-    } else saveEnveloped(store, key, data)
+    if (isDefaultSizing(sizing)) {
+      if (store.getData(key) === null) return
+      store.removeData(key)
+      store.setData(SIZING_INDEX_KEY, readSizingIndex(store).filter((k) => k !== puzzle))
+      return
+    }
+    writeSizing(store, puzzle, sizing)
   }
 
   // `part` is saved as the fit applied it, so a press the floor or cap cancelled, or a drag past the board, is not kept; a fit that bailed
@@ -1398,6 +1468,9 @@
       stepSizing,
       noSizing,
       SIZING_KEY_PREFIX,
+      SIZING_INDEX_KEY,
+      openSizing,
+      adoptSizings,
       noRulesDrag,
       isLandscape,
       makeTrailing,
@@ -1469,10 +1542,15 @@
   // The current puzzle's sizing: `wanted` is the user's own, as saved, and `applied` what the last fit could apply of it in this window. A
   // fit changes only `applied`, so a narrower window or a roomier automatic size never rewrites what is saved.
   let sizing = { puzzle: null, wanted: noSizing(), applied: noSizing() }
+  let adopted = false
   function currentSizing () {
     const puzzle = currentPuzzle()
     if (sizing.puzzle !== puzzle) {
-      const wanted = loadSizing(sizingStore, puzzle)
+      if (!adopted) {
+        adopted = true
+        adoptSizings(sizingStore, Object.keys(window.localStorage))
+      }
+      const wanted = openSizing(sizingStore, puzzle)
       sizing = { puzzle, wanted, applied: wanted }
     }
     return sizing

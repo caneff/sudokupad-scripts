@@ -9,7 +9,7 @@ const { startScript } = require('./unit-start.js')
 const {
   MAX_WIDTH_KEY, MAX_HEIGHT_KEY, limitFromBox, LIMIT_FLOORS, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, offsetFontPx, fitRulesPane, clearFit,
-  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, loadSizing, saveSizing, stepSizing, noSizing, SIZING_KEY_PREFIX, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
+  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, loadSizing, openSizing, adoptSizings, saveSizing, stepSizing, noSizing, SIZING_KEY_PREFIX, SIZING_INDEX_KEY, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
 } = require('../auto-rules-resizer.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -631,13 +631,13 @@ test('saveSizing and loadSizing: a puzzle never resized starts at the default, a
   saveSizing(store, 'puzzle-a', { fontOffsetPx: 2, box: { w: 40, h: 0, x: 0, y: 0 } })
   assert.deepEqual(loadSizing(store, 'puzzle-b'), noSizing())
   saveSizing(store, 'puzzle-b', noSizing())
-  assert.deepEqual(Object.keys(store.data), [`${SIZING_KEY_PREFIX}puzzle-a`], 'the untouched puzzle saves nothing')
+  assert.deepEqual(Object.keys(store.data).filter((k) => k !== SIZING_INDEX_KEY), [`${SIZING_KEY_PREFIX}puzzle-a`], 'the untouched puzzle saves nothing')
 })
 
 test('saveSizing: the stored shape is { nudgePx, box } in its envelope, so a sizing saved by 0.7.0 still reads', () => {
   const store = fakeStore()
   saveSizing(store, 'puzzle-a', { fontOffsetPx: -3, box: { w: 0, h: 25, x: 0, y: -25 } })
-  assert.deepEqual(store.data, { [`${SIZING_KEY_PREFIX}puzzle-a`]: { v: 0, data: { nudgePx: -3, box: { w: 0, h: 25, x: 0, y: -25 } } } })
+  assert.deepEqual(store.data, { [`${SIZING_KEY_PREFIX}puzzle-a`]: { v: 0, data: { nudgePx: -3, box: { w: 0, h: 25, x: 0, y: -25 } } }, [SIZING_INDEX_KEY]: ['puzzle-a'] })
   const reloaded = fakeStore(JSON.parse(JSON.stringify(store.data)))
   assert.deepEqual(loadSizing(reloaded, 'puzzle-a'), { fontOffsetPx: -3, box: { w: 0, h: 25, x: 0, y: -25 } }, 'a fresh store over the same data, as after a reload')
 })
@@ -648,9 +648,9 @@ test('saveSizing: a sizing already saved as it is, or a default with no key, wri
   saveSizing(store, 'puzzle-a', sizing)
   saveSizing(store, 'puzzle-a', { ...sizing, box: { ...sizing.box } })
   saveSizing(store, 'puzzle-b', noSizing())
-  assert.deepEqual(store.writes, [['setData', `${SIZING_KEY_PREFIX}puzzle-a`]])
+  assert.deepEqual(store.writes, [['setData', `${SIZING_KEY_PREFIX}puzzle-a`], ['setData', SIZING_INDEX_KEY]])
   saveSizing(store, 'puzzle-a', noSizing())
-  assert.deepEqual(store.writes.at(-1), ['removeData', `${SIZING_KEY_PREFIX}puzzle-a`], 'back to the default removes the key')
+  assert.deepEqual(store.writes.slice(-2), [['removeData', `${SIZING_KEY_PREFIX}puzzle-a`], ['setData', SIZING_INDEX_KEY]], 'back to the default removes the key and its index entry')
 })
 
 test('saveSizing and loadSizing: a font offset stopped at the floor or cap, a fraction of a px, survives a reload', () => {
@@ -828,4 +828,77 @@ test('credit: // comment lines right after the header name Nell Gwyn and SudokuP
   assert.doesNotMatch(source.slice(0, end), /Nell|ResizeRules/)
   assert.match(source, /^\/\/ @author\s+ChinStrap$/m)
   assert.doesNotMatch(source, /Gwyn{2}/)
+})
+
+const saveEnvelopedSizing = (saved, p) => { saved[SIZING_KEY_PREFIX + p] = { v: 0, data: { nudgePx: 1, box: { w: 0, h: 0, x: 0, y: 0 } } } }
+const sized = { fontOffsetPx: 1, box: noRulesDrag() }
+const pids = (n) => Array.from({ length: n }, (_, i) => `p${i + 1}`)
+const sizedStore = (n) => {
+  const saved = {}
+  const store = fakeStore(saved)
+  for (const puzzle of pids(n)) saveSizing(store, puzzle, sized)
+  return { saved, store }
+}
+
+test('saveSizing: the 51st puzzle\'s sizing removes the oldest puzzle\'s and keeps the other 50', () => {
+  const { saved, store } = sizedStore(50)
+  saveSizing(store, 'p51', sized)
+  assert.deepEqual(saved[SIZING_INDEX_KEY], pids(51).slice(1))
+  assert.deepEqual(Object.keys(saved).filter((k) => k !== SIZING_INDEX_KEY).sort(), pids(51).slice(1).map((p) => SIZING_KEY_PREFIX + p).sort())
+})
+
+test('openSizing: opening an old puzzle moves it to the newest end, so the next new puzzle removes the one after it', () => {
+  const { saved, store } = sizedStore(50)
+  assert.deepEqual(openSizing(store, 'p1'), sized)
+  assert.equal(saved[SIZING_INDEX_KEY].at(-1), 'p1')
+  saveSizing(store, 'p51', sized)
+  assert.equal(SIZING_KEY_PREFIX + 'p1' in saved, true)
+  assert.equal(SIZING_KEY_PREFIX + 'p2' in saved, false)
+})
+
+test('openSizing: a puzzle with no saved sizing writes nothing', () => {
+  const { saved, store } = sizedStore(2)
+  const before = structuredClone(saved)
+  assert.deepEqual(openSizing(store, 'other'), noSizing())
+  assert.deepEqual(saved, before)
+})
+
+test('saveSizing: a default sizing removes the puzzle from the index as well as its key', () => {
+  const { saved, store } = sizedStore(3)
+  saveSizing(store, 'p2', noSizing())
+  assert.deepEqual(saved[SIZING_INDEX_KEY], ['p1', 'p3'])
+  assert.equal(SIZING_KEY_PREFIX + 'p2' in saved, false)
+})
+
+test('adoptSizings: sizings saved before the index existed are indexed on the first run and keep their data', () => {
+  const saved = {}
+  const old = fakeStore(saved)
+  saveSizing(old, 'a', sized)
+  saveSizing(old, 'b', sized)
+  delete saved[SIZING_INDEX_KEY]
+  saveEnvelopedSizing(saved, 'a_unreadable')
+  const keys = ['unrelated', 'svencodes_' + SIZING_KEY_PREFIX + 'a', 'svencodes_' + SIZING_KEY_PREFIX + 'a', 'svencodes_' + SIZING_KEY_PREFIX + 'b', 'svencodes_' + SIZING_KEY_PREFIX + 'a_unreadable']
+  const before = structuredClone(saved)
+  adoptSizings(old, keys)
+  assert.deepEqual(saved[SIZING_INDEX_KEY], ['a', 'b'])
+  assert.deepEqual({ ...saved, [SIZING_INDEX_KEY]: undefined }, { ...before, [SIZING_INDEX_KEY]: undefined })
+  assert.deepEqual(openSizing(old, 'a'), sized)
+})
+
+test('adoptSizings: an existing index is left alone', () => {
+  const { saved, store } = sizedStore(2)
+  saveEnvelopedSizing(saved, 'zzz')
+  adoptSizings(store, [SIZING_KEY_PREFIX + 'zzz'])
+  assert.deepEqual(saved[SIZING_INDEX_KEY], ['p1', 'p2'])
+})
+
+test('adoptSizings: more than 50 adopted sizings are trimmed to 50 by the next save, none lost before it', () => {
+  const saved = {}
+  const store = fakeStore(saved)
+  for (const p of pids(52)) saveEnvelopedSizing(saved, p)
+  adoptSizings(store, pids(52).map((p) => SIZING_KEY_PREFIX + p))
+  assert.equal(saved[SIZING_INDEX_KEY].length, 52)
+  saveSizing(store, 'p53', sized)
+  assert.equal(saved[SIZING_INDEX_KEY].length, 50)
+  assert.equal(Object.keys(saved).filter((k) => k.startsWith(SIZING_KEY_PREFIX)).length, 50)
 })

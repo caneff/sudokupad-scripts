@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.72
+// @version      0.46.75
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.72'
+  const VERSION = '0.46.75'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -282,7 +282,6 @@
   const INDEX_KEY = KEY_PREFIX + 'index'
   // The notes a Restart cleared, kept until Undo straight after it brings them back.
   const RESTARTED_PREFIX = KEY_PREFIX + 'restarted_'
-  const KEPT_PUZZLES = 50
   const HIT_MARGIN_PX = 4
   const TEXT_KIND = 'text'
   // Kinds an earlier version saved; they are kept with the entries no note check passes, stay in storage and are never drawn.
@@ -882,6 +881,44 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:store>
+  // <lib:puzzle-index>
+  // Generated from lib/puzzle-index.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  /* global readSaved */
+  const KEPT_PUZZLES = 50
+
+  // The index lists puzzle keys least recently used first: the one a script last wrote or opened is at the end.
+  function readIndex (saved) {
+    if (saved === null || saved === undefined) return []
+    if (!Array.isArray(saved) || !saved.every((key) => typeof key === 'string')) throw new Error(`the saved index is not a list of puzzle keys: ${JSON.stringify(saved).slice(0, 200)}`)
+    return saved
+  }
+
+  function touchIndex (index, key) {
+    const next = index.filter((k) => k !== key).concat(key)
+    return { index: next.slice(-KEPT_PUZZLES), dropped: next.slice(0, Math.max(0, next.length - KEPT_PUZZLES)) }
+  }
+
+  // Whether `key` holds `value`, saved in an envelope or not: the guarded store drops a write the browser refuses (a full localStorage) instead of throwing.
+  const landed = (store, key, value) => {
+    const saved = store.getData(key)
+    return saved !== null && JSON.stringify(readSaved(saved, (data) => data)) === JSON.stringify(value)
+  }
+
+  // `store` has Framework's getData, setData and removeData; `kept` is `{ indexKey, forget(store, puzzleKey) }`. Writes `value` under `dataKey` and makes puzzle `key`
+  // the newest in `index`. The value is written before the index, and the dropped puzzles' data is removed last, each step only once the one before it landed,
+  // so a write that throws or is dropped loses nothing already saved.
+  function writeIndexed (store, kept, index, key, dataKey, value, write = (k, v) => store.setData(k, v)) {
+    const touched = touchIndex(index, key)
+    write(dataKey, value)
+    if (!landed(store, dataKey, value)) return
+    // An index already in this order writes nothing: a write is a storage round trip.
+    if (JSON.stringify(touched.index) !== JSON.stringify(index)) store.setData(kept.indexKey, touched.index)
+    if (!landed(store, kept.indexKey, touched.index)) return
+    for (const dropped of touched.dropped) kept.forget(store, dropped)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:puzzle-index>
   // <lib:settings-table>
   // Generated from lib/settings-table.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -1378,18 +1415,6 @@
     return { ...(value ?? { items: [], kept: [] }), unreadable }
   }
 
-  // The index lists puzzle keys oldest change first.
-  function readIndex (saved) {
-    if (saved === null || saved === undefined) return []
-    if (!Array.isArray(saved) || !saved.every((key) => typeof key === 'string')) throw new Error(`the saved index is not a list of puzzle keys: ${JSON.stringify(saved).slice(0, 200)}`)
-    return saved
-  }
-
-  function touchIndex (index, key) {
-    const next = index.filter((k) => k !== key).concat(key)
-    return { index: next.slice(-KEPT_PUZZLES), dropped: next.slice(0, Math.max(0, next.length - KEPT_PUZZLES)) }
-  }
-
   const notesKey = (key) => NOTES_PREFIX + key
   const restartedKey = (key) => RESTARTED_PREFIX + key
 
@@ -1398,30 +1423,14 @@
     store.removeData(restartedKey(key))
   }
 
-  // Whether `key` holds `value`, saved in an envelope or not: the guarded store drops a write the browser refuses (a full localStorage) instead of throwing.
-  const landed = (store, key, value) => {
-    const saved = store.getData(key)
-    return saved !== null && JSON.stringify(readSaved(saved, (data) => data)) === JSON.stringify(value)
-  }
-
-  // `store` has Framework's getData, setData and removeData. Writes `value` under `dataKey` and makes puzzle `key` the newest in `index`. The value is written
-  // before the index, and the dropped puzzles' data is removed last, each step only once the one before it landed, so a write that throws or is
-  // dropped loses nothing already saved.
-  function writeIndexed (store, index, key, dataKey, value, write = (k, v) => store.setData(k, v)) {
-    const touched = touchIndex(index, key)
-    write(dataKey, value)
-    if (!landed(store, dataKey, value)) return
-    store.setData(INDEX_KEY, touched.index)
-    if (!landed(store, INDEX_KEY, touched.index)) return
-    for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
-  }
+  const NOTES_INDEX = { indexKey: INDEX_KEY, forget: forgetPuzzle }
 
   // A puzzle is in the index while it has notes, saved or kept by its Restart. An index that cannot be read throws before anything is written.
   function saveNotesTo (store, key, items, kept = []) {
     const notes = items.concat(kept)
     const index = readIndex(store.getData(INDEX_KEY))
     if (notes.length > 0) {
-      writeIndexed(store, index, key, notesKey(key), notes, (k, v) => saveEnveloped(store, k, v))
+      writeIndexed(store, NOTES_INDEX, index, key, notesKey(key), notes, (k, v) => saveEnveloped(store, k, v))
       return
     }
     store.removeData(notesKey(key))
@@ -1429,7 +1438,7 @@
   }
 
   function keepRestartedTo (store, key, notes) {
-    if (notes.length > 0) writeIndexed(store, readIndex(store.getData(INDEX_KEY)), key, restartedKey(key), notes)
+    if (notes.length > 0) writeIndexed(store, NOTES_INDEX, readIndex(store.getData(INDEX_KEY)), key, restartedKey(key), notes)
     else store.removeData(restartedKey(key))
   }
 
