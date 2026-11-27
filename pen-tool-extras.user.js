@@ -2711,13 +2711,11 @@
         }, resetErase)
       })
     }, resetErase), true)
-    // The release then finds no erase and sends nothing; the menu is still owed its refusal.
-    window.addEventListener('keydown', steps.lineErase.bind((event) => {
-      if (event.key !== 'Escape' || erase === null) return
-      erase = null
-    }, resetErase), true)
-    // A lost window or the pen tool exiting (a tool key) drops the erase the same way: the release erases nothing.
+    // Escape, a lost window or the pen tool exiting (a tool key) each drop the erase: the release then finds none and sends nothing, and the menu is still owed its refusal.
     const dropErase = () => { erase = null }
+    window.addEventListener('keydown', steps.lineErase.bind((event) => {
+      if (event.key === 'Escape') dropErase()
+    }, resetErase), true)
     window.addEventListener('blur', steps.lineErase.bind(dropErase, resetErase))
     steps.lineErase.wrap(tool, 'handleToolExit', (stock, ...args) => {
       dropErase()
