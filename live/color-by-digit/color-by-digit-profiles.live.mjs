@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, dragProfileRow, profileDragPoints, typeProfileName, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, EDITOR, group, groupCountOn, MENU, modeTo, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, cellColorsOn, paintByHandOn, savedModeOn, menuTicksOn, tickMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, dragProfileRow, profileDragPoints, typeProfileName, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, EDITOR, group, groupCountOn, MENU, modeTo, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, PRELOADED_LOW_FIVE_HIGH, MODE_STORAGE_KEY, SAVED_MODE, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, watch, wrongCountOn, reloadSession, openEditorOn, openMenuOn, cellColorsOn, paintByHandOn, savedModeOn, modeTick, modeTicksOn, menuTicksOn, tickMenuOn, tools as pageTools } from './color-by-digit-fixtures.mjs'
 import { selectCell } from '../board.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
@@ -750,6 +750,10 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     const ask = p.locator(`${EDITOR} [data-role=restore-confirm]`)
     const answer = (name) => ask.getByRole('button', { name }).click()
     await openEditorOn(p)
+    await p.locator(modeTick('on')).uncheck()
+    await closeDialogWith(p, 'Save', EDITOR)
+    assert.deepEqual(await settle(() => savedModeOn(p), SAVED_MODE.Off), SAVED_MODE.Off, 'the saved mode is Off before Restore defaults')
+    await openEditorOn(p)
     await dialogButton(p, 'Restore defaults').click()
     assert.match(await ask.innerText(), /own profiles/)
     await answer('Keep my profiles')
@@ -758,12 +762,16 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await answer('Restore defaults')
     assert.deepEqual(await t.rowNames(), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
     assert.equal(await t.selectedRow(), 0)
+    assert.deepEqual(await modeTicksOn(p), { on: true, cell: true, digit: false }, 'the draft holds the default mode')
+    const savedMode = await savedModeOn(p)
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual(await t.names(), before, 'Restore defaults saves nothing by itself')
+    assert.deepEqual(await savedModeOn(p), savedMode, 'Cancel keeps the saved mode')
     await openEditorOn(p)
     await dialogButton(p, 'Restore defaults').click()
     await answer('Restore defaults')
     await closeDialogWith(p, 'Save', EDITOR)
+    assert.deepEqual(await settle(() => savedModeOn(p), SAVED_MODE.Cell), SAVED_MODE.Cell, 'Save writes the default mode')
     assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit']), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
     await openEditorOn(p)
     await dialogButton(p, 'Restore defaults').click()

@@ -5,7 +5,7 @@ import { actButton, closeDialogWith, dialogButton, openScriptDialog, savedValue,
 import { useBrowser } from '../session.mjs'
 import { headerVersion } from '../../userscript-header.js'
 
-const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, KEYPAD, OPACITY_KEY, OUTLINE_KEY, PICKER, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SIZE_SLIDER, WIDTH_KEY, holdForPickers, pickTextAnywhere, script, valueOf } = textAnywhere
+const { BOX_KEY, COLORS_KEY, FONT_KEY, FRAME_KEY, KEYPAD, OPACITY_KEY, OUTLINE_KEY, PICKER, OPACITY_SLIDER, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SIZE_SLIDER, WIDTH_KEY, holdForPickers, pickTextAnywhere, script, valueOf } = textAnywhere
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const SUDOKUPAD_COLORS = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000' }
 
@@ -265,7 +265,7 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
   })
 
   it('Restore defaults fills the draft with the pen colors and the default looks; Cancel keeps what was saved and Save puts the defaults back, keeping no key', async () => {
-    const changed = { [OUTLINE_KEY]: 'none', [BOX_KEY]: 'yellow', [FRAME_KEY]: true, [FONT_KEY]: 'fixed' }
+    const changed = { [OUTLINE_KEY]: 'none', [BOX_KEY]: 'yellow', [FRAME_KEY]: true, [FONT_KEY]: 'fixed', [WIDTH_KEY]: 10, [OPACITY_KEY]: 40 }
     await read(p, (values) => Object.entries(values).forEach(([key, value]) => Framework.setData(key, value)), changed)
     await textAnywhere.reload(p)
     await pickTextAnywhere(p)
@@ -284,13 +284,15 @@ describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
     assert.deepEqual(await savedKeys(p, keys), before, 'Restore defaults saves nothing by itself')
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual(await savedKeys(p, keys), before, 'Cancel keeps the saved settings')
+    assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [10, 40], 'and the sliders')
     await p.click(SETTINGS_BUTTON)
     await dialogButton(p, 'Restore defaults').click()
     await closeDialogWith(p, 'Save', EDITOR)
+    assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [6, 100], 'Save moves the sliders to the default size and opacity')
     assert.equal(await savedPreset(p), 'pen')
     assert.deepEqual(await savedColors(p), penColors, 'the saved colors are the pen colors')
     // Each look saved at its fallback keeps no key, so a later change of default reaches it.
-    assert.deepEqual(await savedKeys(p, Object.keys(changed)), { [OUTLINE_KEY]: null, [BOX_KEY]: null, [FRAME_KEY]: null, [FONT_KEY]: null })
+    assert.deepEqual(await savedKeys(p, Object.keys(changed)), { [OUTLINE_KEY]: null, [BOX_KEY]: null, [FRAME_KEY]: null, [FONT_KEY]: null, [WIDTH_KEY]: null, [OPACITY_KEY]: null })
   })
 
   it('a paste leaves an unsaved edit of a setting it does not hold in the draft, and replaces the ones it does', async () => {
