@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.27.5
+// @version      0.27.6
 // @author       ChinStrap
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/color-by-digit.html
@@ -21,7 +21,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.27.5'
+  const VERSION = '0.27.6'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'color-by-digit'
   const SCRIPT_NAME = 'Color by Digit'
@@ -1689,7 +1689,8 @@
       case 'clear': return withGroups([])
       case 'restore': {
         const preloaded = preloadedState()
-        return JSON.stringify(state) === JSON.stringify(preloaded) ? draft : showingProfile(draft, preloaded, 0)
+        const withMode = sameMode(draft.mode, DEFAULT_MODE) ? draft : { ...draft, mode: DEFAULT_MODE }
+        return JSON.stringify(state) === JSON.stringify(preloaded) ? withMode : showingProfile(withMode, preloaded, 0)
       }
       case 'press': return draft.paintKey === undefined ? draft : { ...draft, paintKey: undefined }
       case 'paint': {

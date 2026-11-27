@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.46.69
+// @version      0.46.70
 // @author       ChinStrap
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/text-anywhere.html
@@ -20,7 +20,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.46.69'
+  const VERSION = '0.46.70'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'text-anywhere'
   const SCRIPT_NAME = 'Text Anywhere'
@@ -1308,7 +1308,7 @@
 
   // Each look setting is one row: its stored `key`, `read` (the one reader, saved or pasted; undefined refuses the value, and the row's fallback stands for a saved one).
   // A reader that never refuses reads a bad paste as a value on purpose.
-  // `dialog` marks the looks the settings dialog sets and the notes are drawn again in; the others are the panel's sliders.
+  // `dialog` marks the looks whose change draws the notes again; the others are the panel's sliders, which Restore defaults and Save also reach.
   // An invalid pasted outline reads as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
   const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })
   const LOOKS = [
@@ -1326,9 +1326,8 @@
     else saveRow(store, row, value)
   }
   const readLooks = (store, looks = LOOKS) => readTable(looks, store)
-  const dialogLooks = (looks) => looks.filter((row) => row.dialog)
-  const changedDialogLooks = (looks, draft, now) => changedRows(dialogLooks(looks), draft, now)
-  const dialogDefaults = () => tableDefaults(dialogLooks(LOOKS))
+  const changedDialogLooks = changedRows
+  const dialogDefaults = () => tableDefaults(LOOKS)
 
   // Copy and Paste carry the colors, size, opacity, outline, box color, frame and font, and not the notes, the color picked or the background button.
   const READERS = { [COLORS_KEY]: (data) => pastedColorSet(data, NOTE_PRESETS), ...pasteReaders(LOOKS) }
@@ -2946,6 +2945,7 @@
       save: () => {
         if (colorsEdited) saveColors(draft)
         for (const { name } of editedLooks()) setLook(name, draftLooks[name])
+        showPanelValues()
       },
       copyPaste: {
         // A copy with the saved settings off says so, rather than copy the defaults as if they were saved.

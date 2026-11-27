@@ -158,7 +158,7 @@ set them; a saved note keeps its own), starting at the point clicked: its stored
   It applies to every note, existing and new, is saved as `TextAnywhere_font`, and travels with Copy settings and Paste settings;
   a value that is neither reads as Proportional.
 - **Restore defaults** fills the draft with the pen colors (Pen colors), Proportional, the default halo, box color and box border,
-  for Save or Cancel to decide; the size and opacity, which the dialog does not set, stay.
+  and the default Size and Opacity of the pen panel's sliders, for Save or Cancel to decide; Save moves the sliders to them.
 
 ## Saved notes
 

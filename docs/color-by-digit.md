@@ -48,8 +48,8 @@ choose what it colors. You set the groups in the settings dialog.
   picking. + New profile, under the list, adds a copy of the selected profile named after it with " copy", selects it and puts
   the cursor in its name; it is disabled at six profiles. Save applies every change at once; Cancel drops them.
 - **Restore defaults**, in the settings dialog's button row, brings back the five preloads and the Cell and Digit pulldowns'
-  starting picks (the mode and its checkboxes stay) as a draft that Cancel drops. It asks first when the profiles in the dialog
-  include one of your own.
+  starting picks, and ticks On and Cell and unticks Digit, as a draft that Cancel drops. It asks first when the profiles in the
+  dialog include one of your own.
 - **The Cell and Digit pulldowns**, at the top of the settings dialog under the mode's checkboxes, pick the profile that colors
   the cells (Cell, the active profile) and the one that colors the digits (Digit). Digit starts on **Same as cell** on a fresh
   install and after an update: one profile colors cells and digits, and a menu pick moves both. Pick a profile by name in Digit
@@ -77,7 +77,7 @@ choose what it colors. You set the groups in the settings dialog.
   you painted by hand stay. The settings dialog sets the mode with its **On**, **Cell** and **Digit** checkboxes, at the top
   above the pulldowns; the last ticked of Cell and Digit refuses to untick, so on always colors something. Save applies a
   changed mode as a press would, and a Save that ticks or unticks Cell while on colors or clears the grid the same way. Ticks
-  changed while off change nothing on the board until you turn coloring on. Restore defaults leaves the mode as it is.
+  changed while off change nothing on the board until you turn coloring on. Restore defaults puts the default mode, on with Cell ticked, in the draft.
 - **Saved**, the mode is `ColorByDigit_ticks`, `{ on, cell, digit }`. A fresh install starts on with Cell ticked. An update
   from before the checkboxes keeps its look, reading the old saved mode once and never writing it again: Cell is on with Cell;
   Digit, on with Digit; Both, on with both; Off, off with Cell. Digit set to None (the saved `useDigitColors: false`) unticks

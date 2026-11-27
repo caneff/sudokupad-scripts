@@ -642,7 +642,7 @@ test('changedDialogLooks lists the rows whose draft differs from the value in fo
   const now = readLooks(fakeStore({}))
   assert.deepEqual(changedDialogLooks(LOOKS, { ...now }, now), [])
   assert.deepEqual(changedDialogLooks(LOOKS, { ...now, frame: true, noteFont: 'fixed' }, now).map((row) => row.name), ['frame', 'noteFont'])
-  assert.deepEqual(changedDialogLooks(LOOKS, { ...now, width: 9 }, now), [], 'the sliders are not the dialog\'s')
+  assert.deepEqual(changedDialogLooks(LOOKS, { ...now, width: 9, opacity: 0.5 }, now).map((row) => row.name), ['width', 'opacity'], 'a restored size and opacity are Save\'s too')
 })
 
 test('the box color setting reads a preset or a #rrggbb color and anything else as Page', () => {
@@ -1913,8 +1913,20 @@ test('Copy settings carries the saved preset id with the colors, and Paste keeps
   assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [COLORS_KEY]: { ...colors, preset: 'nope' } })))[COLORS_KEY], hexes('#112233'), 'and so is one saved that way')
 })
 
-test('the dialog defaults are the default of every look the dialog sets, and no panel slider', () => {
-  assert.deepEqual(dialogDefaults(), { outline: 'medium', boxColor: 'page', frame: false, noteFont: 'proportional' })
+test('the dialog defaults are the default of every look, the panel sliders\' size and opacity included', () => {
+  assert.deepEqual(dialogDefaults(), { width: DEFAULT_WIDTH, opacity: DEFAULT_OPACITY, outline: 'medium', boxColor: 'page', frame: false, noteFont: 'proportional' })
+})
+
+test('Restore defaults then Save writes the default size and opacity, and then Cancel leaves the saved ones', () => {
+  const saved = fakeStore({ [WIDTH_KEY]: MAX_WIDTH, [OPACITY_KEY]: MIN_OPACITY })
+  const now = readLooks(saved)
+  assert.deepEqual([now.width, now.opacity], [MAX_WIDTH, MIN_OPACITY])
+  const restored = { ...now, ...dialogDefaults() }
+  assert.deepEqual(changedDialogLooks(LOOKS, restored, now).map((row) => row.name), ['width', 'opacity'])
+  assert.deepEqual([readLooks(saved).width, readLooks(saved).opacity], [MAX_WIDTH, MIN_OPACITY], 'Cancel writes nothing, so the saved ones stay')
+  for (const row of changedDialogLooks(LOOKS, restored, now)) saveLook(saved, row, restored[row.name])
+  const after = readLooks(saved)
+  assert.deepEqual([after.width, after.opacity], [DEFAULT_WIDTH, DEFAULT_OPACITY])
 })
 
 test('a paste changes only the pasted looks in the draft; the others keep their edits', () => {
