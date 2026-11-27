@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.63
+// @version      1.32.64
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.63'
+  const VERSION = '1.32.64'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'pen-tool-extras'
   const SCRIPT_NAME = 'Pen Tool Extras'
@@ -2711,11 +2711,19 @@
         }, resetErase)
       })
     }, resetErase), true)
-    // The release then finds no erase and sends nothing; the menu is still owed its refusal.
+    // Escape, a lost window or the pen tool exiting (a tool key) each drop the erase: the release then finds none and sends nothing, and the menu is still owed its refusal.
+    const dropErase = () => { erase = null }
     window.addEventListener('keydown', steps.lineErase.bind((event) => {
-      if (event.key !== 'Escape' || erase === null) return
-      erase = null
+      if (event.key === 'Escape') dropErase()
     }, resetErase), true)
+    window.addEventListener('blur', steps.lineErase.bind(dropErase, resetErase))
+    // Not one of the step's needs: without `handleToolExit` only this cancel is missing, and the erase still works.
+    if (typeof tool.handleToolExit === 'function') {
+      steps.lineErase.wrap(tool, 'handleToolExit', (stock, ...args) => {
+        dropErase()
+        return stock(...args)
+      })
+    }
     document.addEventListener('contextmenu', steps.lineErase.bind((event) => {
       const overGrid = inForce.eraseClicks && overGridInPenTool(app, event)
       if (overGrid || menuOwed) event.preventDefault()

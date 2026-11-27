@@ -164,15 +164,38 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
       await mouseDrag(p, LINE)
       assert.deepEqual(await settle(() => penEntries(p), whole), whole, 'the line is drawn')
       await p.mouse.move(...await onLine())
+      await p.evaluate(() => {
+        window.__menuLog = []
+        window.addEventListener('contextmenu', (e) => window.__menuLog.push(e.defaultPrevented))
+      })
       await p.mouse.down({ button: 'right' })
     })
+    // Linux raises the menu on the press and Windows on the release: either way every one that came was refused.
+    const assertMenuRefused = async (why) => {
+      const log = await settle(() => p.evaluate(() => window.__menuLog.length > 0), true)
+      assert.equal(log, true, `${why}: a context menu event came`)
+      assert.deepEqual(await p.evaluate(() => window.__menuLog.filter((prevented) => !prevented)), [], `${why}: every context menu was refused`)
+    }
 
-    it('8a: held, then Escape, then released leaves the line', async () => {
+    it('8a: held, then Escape, then released leaves the line and makes no undo step', async () => {
+      const depth = await undoDepth(p)
       await p.keyboard.press('Escape')
       await p.mouse.move(...await gridPoint(p, [2.5, 2.5]), { steps: 4 })
       await p.mouse.up({ button: 'right' })
       assert.deepEqual(await settle(() => penEntries(p), whole, FLOOR_MS, STABLE_MS), whole, 'the Escape cancelled the erase')
+      assert.equal(await undoDepth(p), depth, 'the Escape left the undo stack as it was')
       await assertRecovered('Escape in an erase')
+    })
+
+    it('8c: held, then the window blurred, then released leaves the line and makes no undo step', async () => {
+      const depth = await undoDepth(p)
+      await p.evaluate(() => window.dispatchEvent(new window.Event('blur')))
+      await p.mouse.move(...await gridPoint(p, [2.5, 2.5]), { steps: 4 })
+      await p.mouse.up({ button: 'right' })
+      assert.deepEqual(await settle(() => penEntries(p), whole, FLOOR_MS, STABLE_MS), whole, 'the blur cancelled the erase')
+      assert.equal(await undoDepth(p), depth, 'the blur left the undo stack as it was')
+      await assertMenuRefused('blur in an erase')
+      await assertRecovered('blur in an erase')
     })
 
     it('8b: held, then the left button pressed too, ends the erase at the last release and erases the line once', async () => {
@@ -185,12 +208,15 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
       await assertRecovered('second button in an erase')
     })
 
-    it('9: held, then a tool hotkey, then released leaves the new tool current and the line whole or erased, never half', async () => {
+    it('9: held, then a tool hotkey, then released leaves the new tool current, the line whole and no undo step', async () => {
+      const depth = await undoDepth(p)
       await p.keyboard.press(OTHER_TOOL_KEY)
       assert.equal(await tool(), OTHER_TOOL, 'the hotkey switched the tool')
       await p.mouse.up({ button: 'right' })
       assert.equal(await tool(), OTHER_TOOL, 'the release kept the new tool')
-      await assertWholeOrNone('tool switch in an erase')
+      assert.deepEqual(await settle(() => penEntries(p), whole, FLOOR_MS, STABLE_MS), whole, 'the tool switch cancelled the erase')
+      assert.equal(await undoDepth(p), depth, 'the tool switch left the undo stack as it was')
+      await assertMenuRefused('tool switch in an erase')
       await toTool()
       await assertRecovered('tool switch in an erase')
     })
