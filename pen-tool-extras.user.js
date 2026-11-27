@@ -1105,7 +1105,7 @@
     },
     lineErase: {
       label: 'line erase',
-      needs: { ...APP, ...PEN_ACTIONS, 'ToolPen.tool.getInputRc': 'function', 'ToolPen.tool.handleToolExit': 'function', 'Framework.app.xyToRCExact': 'function', ...GRID_SIZE, ...CELLS }
+      needs: { ...APP, ...PEN_ACTIONS, 'ToolPen.tool.getInputRc': 'function', 'Framework.app.xyToRCExact': 'function', ...GRID_SIZE, ...CELLS }
     }
   }
   const inForce = settingDefaults()
@@ -2717,10 +2717,13 @@
       if (event.key === 'Escape') dropErase()
     }, resetErase), true)
     window.addEventListener('blur', steps.lineErase.bind(dropErase, resetErase))
-    steps.lineErase.wrap(tool, 'handleToolExit', (stock, ...args) => {
-      dropErase()
-      return stock(...args)
-    })
+    // Not one of the step's needs: without `handleToolExit` only this cancel is missing, and the erase still works.
+    if (typeof tool.handleToolExit === 'function') {
+      steps.lineErase.wrap(tool, 'handleToolExit', (stock, ...args) => {
+        dropErase()
+        return stock(...args)
+      })
+    }
     document.addEventListener('contextmenu', steps.lineErase.bind((event) => {
       const overGrid = inForce.eraseClicks && overGridInPenTool(app, event)
       if (overGrid || menuOwed) event.preventDefault()
