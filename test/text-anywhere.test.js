@@ -9,7 +9,7 @@ const { quietly, fakeStore } = require('./fake-store.js')
 const { withoutPath } = require('./unit-start.js')
 const { failEachListener } = require('./broken-sudokupad.js')
 const { loadLib } = require('./load-lib.js')
-const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, savedColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, noteColorSet, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook } = require('../text-anywhere.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, savedColorNumber, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, copiedPenColors, presetOptions, noteColorSet, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX_COLOR, readBoxColor, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedRows, COLOR_KEY, BACKGROUND_KEY, copyOldKeys, withNewKeys, NOTICE_KEY, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook } = require('../text-anywhere.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withNewKeys)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -638,11 +638,11 @@ test('a pasted size or opacity that is off its slider is skipped, and a pasted o
   assert.equal(readers[FONT_KEY]('fixed'), 'fixed')
 })
 
-test('changedDialogLooks lists the rows whose draft differs from the value in force', () => {
+test('changedRows lists the rows whose draft differs from the value in force', () => {
   const now = readLooks(fakeStore({}))
-  assert.deepEqual(changedDialogLooks(LOOKS, { ...now }, now), [])
-  assert.deepEqual(changedDialogLooks(LOOKS, { ...now, frame: true, noteFont: 'fixed' }, now).map((row) => row.name), ['frame', 'noteFont'])
-  assert.deepEqual(changedDialogLooks(LOOKS, { ...now, width: 9, opacity: 0.5 }, now).map((row) => row.name), ['width', 'opacity'], 'a restored size and opacity are Save\'s too')
+  assert.deepEqual(changedRows(LOOKS, { ...now }, now), [])
+  assert.deepEqual(changedRows(LOOKS, { ...now, frame: true, noteFont: 'fixed' }, now).map((row) => row.name), ['frame', 'noteFont'])
+  assert.deepEqual(changedRows(LOOKS, { ...now, width: 9, opacity: 0.5 }, now).map((row) => row.name), ['width', 'opacity'], 'a restored size and opacity are Save\'s too')
 })
 
 test('the box color setting reads a preset or a #rrggbb color and anything else as Page', () => {
@@ -1917,14 +1917,15 @@ test('the dialog defaults are the default of every look, the panel sliders\' siz
   assert.deepEqual(dialogDefaults(), { width: DEFAULT_WIDTH, opacity: DEFAULT_OPACITY, outline: 'medium', boxColor: 'page', frame: false, noteFont: 'proportional' })
 })
 
-test('Restore defaults then Save writes the default size and opacity, and then Cancel leaves the saved ones', () => {
+test('saving the rows a restored draft changes writes the default size and opacity, and keeps no key for them', () => {
   const saved = fakeStore({ [WIDTH_KEY]: MAX_WIDTH, [OPACITY_KEY]: MIN_OPACITY })
   const now = readLooks(saved)
   assert.deepEqual([now.width, now.opacity], [MAX_WIDTH, MIN_OPACITY])
   const restored = { ...now, ...dialogDefaults() }
-  assert.deepEqual(changedDialogLooks(LOOKS, restored, now).map((row) => row.name), ['width', 'opacity'])
-  assert.deepEqual([readLooks(saved).width, readLooks(saved).opacity], [MAX_WIDTH, MIN_OPACITY], 'Cancel writes nothing, so the saved ones stay')
-  for (const row of changedDialogLooks(LOOKS, restored, now)) saveLook(saved, row, restored[row.name])
+  const changed = changedRows(LOOKS, restored, now)
+  assert.deepEqual(changed.map((row) => row.name), ['width', 'opacity'])
+  for (const row of changed) saveLook(saved, row, restored[row.name])
+  assert.deepEqual([saved.getData(WIDTH_KEY), saved.getData(OPACITY_KEY)], [null, null])
   const after = readLooks(saved)
   assert.deepEqual([after.width, after.opacity], [DEFAULT_WIDTH, DEFAULT_OPACITY])
 })

@@ -9,7 +9,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { fakeStore } = require('./fake-store.js')
 const {
-  LOOKS, READERS, tableKeys, pasteReaders, readLooks, changedDialogLooks, copiedSettings, pastedSettings, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BOX_KEY,
+  LOOKS, READERS, tableKeys, pasteReaders, readLooks, changedRows, copiedSettings, pastedSettings, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BOX_KEY,
   FRAME_KEY, FONT_KEY, lookTarget, indexAfterKeep, followKept, noteChanged, textItem, FEATURES
 } = require('../text-anywhere.user.js')
 
@@ -18,14 +18,14 @@ test('the looks table holds every saved look once, and a look added to it reache
   assert.deepEqual(Object.keys(READERS), [COLORS_KEY, ...tableKeys(LOOKS)], 'Paste reads the colors and every look')
   assert.deepEqual(Object.keys(JSON.parse(copiedSettings(fakeStore()))), tableKeys(LOOKS), 'Copy carries every look')
 
-  const spin = { name: 'spin', key: 'TextAnywhere_spin', read: (saved) => (saved === 'left' ? 'left' : 'none'), dialog: true }
+  const spin = { name: 'spin', key: 'TextAnywhere_spin', read: (saved) => (saved === 'left' ? 'left' : 'none'), redraws: true }
   const withSpin = [...LOOKS, spin]
   const store = fakeStore({ TextAnywhere_spin: 'left' })
   assert.equal(JSON.parse(copiedSettings(store, withSpin)).TextAnywhere_spin, 'left', 'Copy')
   assert.deepEqual(pastedSettings(JSON.stringify({ TextAnywhere_spin: 'left' }), pasteReaders(withSpin)).values, { TextAnywhere_spin: 'left' }, 'Paste')
   assert.equal(readLooks(store, withSpin).spin, 'left', 'the start load')
   const now = readLooks(fakeStore(), withSpin)
-  assert.deepEqual(changedDialogLooks(withSpin, { ...now, spin: 'left' }, now).map((row) => row.name), ['spin'], 'Save\'s changed rows')
+  assert.deepEqual(changedRows(withSpin, { ...now, spin: 'left' }, now).map((row) => row.name), ['spin'], 'Save\'s changed rows')
 })
 
 test('a look change reaches the open note, else the selected notes, else the next note', () => {

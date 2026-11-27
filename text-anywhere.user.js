@@ -1308,16 +1308,16 @@
 
   // Each look setting is one row: its stored `key`, `read` (the one reader, saved or pasted; undefined refuses the value, and the row's fallback stands for a saved one).
   // A reader that never refuses reads a bad paste as a value on purpose.
-  // `dialog` marks the looks whose change draws the notes again; the others are the panel's sliders, which Restore defaults and Save also reach.
+  // `redraws` marks the looks whose change draws the notes again; the others are the panel's sliders.
   // An invalid pasted outline reads as Thick, box color as Page and frame as off, so none is counted as skipped; a font is read the same way.
   const lookRowOf = (name, key, read, extra) => ({ name, key, read, fallback: read(undefined), ...extra })
   const LOOKS = [
     lookRowOf('width', WIDTH_KEY, (data) => savedSliderValue(WIDTH_RANGE, data), { fallback: DEFAULT_WIDTH }),
     lookRowOf('opacity', OPACITY_KEY, (data) => savedSliderValue(OPACITY_RANGE, data), { fallback: DEFAULT_OPACITY }),
-    lookRowOf('outline', OUTLINE_KEY, readOutline, { dialog: true }),
-    lookRowOf('boxColor', BOX_KEY, readBoxColor, { dialog: true }),
-    lookRowOf('frame', FRAME_KEY, readFrame, { dialog: true }),
-    lookRowOf('noteFont', FONT_KEY, readFont, { dialog: true })
+    lookRowOf('outline', OUTLINE_KEY, readOutline, { redraws: true }),
+    lookRowOf('boxColor', BOX_KEY, readBoxColor, { redraws: true }),
+    lookRowOf('frame', FRAME_KEY, readFrame, { redraws: true }),
+    lookRowOf('noteFont', FONT_KEY, readFont, { redraws: true })
   ]
   const lookRow = (name) => LOOKS.find((row) => row.name === name)
   // A look at its fallback removes its key, except while its pre-0.45 twin holds a value: copyOldKeys would copy that back at the next start, so the fallback is saved instead.
@@ -1326,7 +1326,6 @@
     else saveRow(store, row, value)
   }
   const readLooks = (store, looks = LOOKS) => readTable(looks, store)
-  const changedDialogLooks = changedRows
   const dialogDefaults = () => tableDefaults(LOOKS)
 
   // Copy and Paste carry the colors, size, opacity, outline, box color, frame and font, and not the notes, the color picked or the background button.
@@ -2454,7 +2453,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, savedColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, noteColorSet, dialogPalette, copiedSettings, pastedSettings, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedDialogLooks, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook, TRAY_CLASS }
+    module.exports = { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, HELD_REPEAT_MS, HELD_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, wantsTextTool, readNotes, loadNotes, noteSession, puzzleKey, touchIndex, readIndex, saveNotesTo, keepRestartedTo, NOTES_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, savedColorNumber, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textRect, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, lookTarget, noteChanged, notesAfterClose, indexAfterKeep, followKept, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, dialogDefaults, presetOptions, noteColorSet, dialogPalette, copiedSettings, pastedSettings, copyOldKeys, withNewKeys, NOTICE_KEY, COLOR_KEY, LOOKS, tableKeys, pasteReaders, withPasted, readLooks, changedRows, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, FONT_KEY, FONTS, DEFAULT_FONT, FIXED_FONT_STACK, readFont, noteFontFamily, renderFontChoice, sizeStep, steppedNote, heldSliderSteps, HELD_SLIDER_MAX_STEPS, newNoteWidth, nextNoteWidth, REFERENCE_GRID, clearAsk, BOX_PRESETS, DEFAULT_BOX_COLOR, BOX_YELLOW, readBoxColor, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, HOLD_TO_EDIT_MS, penColorSet, readNoteColorSet, noteBackdrop, noteStyle, flagStyle, pieceKinds, saveLook, TRAY_CLASS }
   }
   if (typeof document === 'undefined') return
 
@@ -2892,7 +2891,7 @@
     const row = lookRow(name)
     look[name] = value
     saveLook(savedData, row, value)
-    if (row.dialog) showBoxes()
+    if (row.redraws) showBoxes()
   }
 
   const DIALOG_ID = `${CLASS_PREFIX}dialog`
@@ -2927,10 +2926,11 @@
   function openDialog () {
     let draft = colorSet ?? penColorSet(readPenColor)
     let colorsEdited = false
-    let draftLooks = { ...look }
+    // The sliders are no draft until Restore defaults sets them, so a size or opacity changed while the dialog is open is not overwritten by Save.
+    let draftLooks = Object.fromEntries(LOOKS.filter((row) => row.redraws).map(({ name }) => [name, look[name]]))
     let draftCustom = savedHex(look.boxColor) ?? BOX_WHITE
     const { pages, note: paletteNote } = dialogPalette(presets.off)
-    const editedLooks = () => changedDialogLooks(LOOKS, draftLooks, look)
+    const editedLooks = () => changedRows(LOOKS.filter(({ name }) => name in draftLooks), draftLooks, look)
     const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: SCRIPT_NAME,

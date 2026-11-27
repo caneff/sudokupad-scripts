@@ -33,7 +33,7 @@ Behavior: `docs/shared.md`. The harness words: `live/README.md`.
 - **refused write** — a save the browser refuses because `localStorage` is full (`QuotaExceededError`). It is the browser's doing,
   not a SudokuPad change, so it turns no feature off.
 - **Restore defaults** — a settings dialog's button that sets the **draft** of every setting the dialog holds back to its default
-  and saves nothing.
+  and saves nothing. Text Anywhere's also takes the panel's Size and Opacity sliders, which Save then applies.
 - **settings entry** — the row a script adds to SudokuPad's own settings dialog, in the **settings group** Experimental, that
   opens the script's dialog.
 - **skip line** — the console line a script logs when a **feature** turns itself off:

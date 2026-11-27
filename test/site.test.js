@@ -639,7 +639,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   for (const label of ['Settings icons', 'Mode and pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. Restore defaults brings back the five preloaded profiles and the Cell and Digit pulldowns\' starting picks, leaving the On, Cell and Digit checkboxes as they are, after asking in the dialog when it would remove your own profiles. Save keeps them and Cancel drops them. From the keyboard, the colors and the digit keys are one Tab stop each, the arrow keys move within them, and typing 0 to 9 paints that digit.')
+  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. Restore defaults brings back the five preloaded profiles and the Cell and Digit pulldowns\' starting picks and ticks On and Cell and unticks Digit, after asking in the dialog when it would remove your own profiles. Save keeps them and Cancel drops them. From the keyboard, the colors and the digit keys are one Tab stop each, the arrow keys move within them, and typing 0 to 9 paints that digit.')
 })
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {

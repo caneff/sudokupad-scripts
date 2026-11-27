@@ -2266,7 +2266,7 @@
       '</div>'
   }
 
-  const RESTORE_ASK = 'Restore the preloaded profiles? Your own profiles and edits are removed when you Save.'
+  const RESTORE_ASK = 'Restore the preloaded profiles? Your own profiles and edits are removed, and the On, Cell and Digit ticks reset, when you Save.'
   const renderRestoreConfirm = () => `<div class="${CLASS_PREFIX}note ${CLASS_PREFIX}confirm" role="alertdialog" aria-label="Restore defaults" data-role="restore-confirm">` +
     `<div>${RESTORE_ASK}</div><div class="${CLASS_PREFIX}confirm-buttons"><button type="button" class="${CLASS_PREFIX}button" data-act="restore-keep">Keep my profiles</button>` +
     `<button type="button" class="${CLASS_PREFIX}button" data-act="restore-go">Restore defaults</button></div></div>`
