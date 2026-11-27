@@ -847,7 +847,7 @@ test('saveSizing: the 51st puzzle\'s sizing removes the oldest puzzle\'s and kee
   assert.deepEqual(Object.keys(saved).filter((k) => k !== SIZING_INDEX_KEY).sort(), pids(51).slice(1).map((p) => SIZING_KEY_PREFIX + p).sort())
 })
 
-test('openSizing: opening an old puzzle moves it to the front, so the next new puzzle removes the one after it', () => {
+test('openSizing: opening an old puzzle moves it to the newest end, so the next new puzzle removes the one after it', () => {
   const { saved, store } = sizedStore(50)
   assert.deepEqual(openSizing(store, 'p1'), sized)
   assert.equal(saved[SIZING_INDEX_KEY].at(-1), 'p1')
@@ -876,7 +876,8 @@ test('adoptSizings: sizings saved before the index existed are indexed on the fi
   saveSizing(old, 'a', sized)
   saveSizing(old, 'b', sized)
   delete saved[SIZING_INDEX_KEY]
-  const keys = ['unrelated', 'svencodes_' + SIZING_KEY_PREFIX + 'a', 'svencodes_' + SIZING_KEY_PREFIX + 'b', 'svencodes_' + SIZING_KEY_PREFIX + 'a_unreadable']
+  saveEnvelopedSizing(saved, 'a_unreadable')
+  const keys = ['unrelated', 'svencodes_' + SIZING_KEY_PREFIX + 'a', 'svencodes_' + SIZING_KEY_PREFIX + 'a', 'svencodes_' + SIZING_KEY_PREFIX + 'b', 'svencodes_' + SIZING_KEY_PREFIX + 'a_unreadable']
   const before = structuredClone(saved)
   adoptSizings(old, keys)
   assert.deepEqual(saved[SIZING_INDEX_KEY], ['a', 'b'])
@@ -886,6 +887,7 @@ test('adoptSizings: sizings saved before the index existed are indexed on the fi
 
 test('adoptSizings: an existing index is left alone', () => {
   const { saved, store } = sizedStore(2)
+  saveEnvelopedSizing(saved, 'zzz')
   adoptSizings(store, [SIZING_KEY_PREFIX + 'zzz'])
   assert.deepEqual(saved[SIZING_INDEX_KEY], ['p1', 'p2'])
 })

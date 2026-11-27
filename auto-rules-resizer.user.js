@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.52
+// @version      0.7.53
 // @author       ChinStrap
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane uses the room the page has to spare before it shrinks the text, and you can resize it by hand.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/
@@ -27,7 +27,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.52'
+  const VERSION = '0.7.53'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'auto-rules-resizer'
   const SCRIPT_NAME = 'Auto Rules Resizer'
@@ -176,7 +176,7 @@
   /* global readSaved */
   const KEPT_PUZZLES = 50
 
-  // The index lists puzzle keys oldest change first.
+  // The index lists puzzle keys least recently used first: the one a script last wrote or opened is at the end.
   function readIndex (saved) {
     if (saved === null || saved === undefined) return []
     if (!Array.isArray(saved) || !saved.every((key) => typeof key === 'string')) throw new Error(`the saved index is not a list of puzzle keys: ${JSON.stringify(saved).slice(0, 200)}`)
@@ -420,8 +420,8 @@
   function adoptSizings (store, storageKeys) {
     if (store.getData(SIZING_INDEX_KEY) !== null) return
     const puzzles = storageKeys
-      .map((key) => key.indexOf(SIZING_KEY_PREFIX))
-      .flatMap((at, i) => (at < 0 || UNREADABLE_COPY.test(storageKeys[i]) ? [] : [storageKeys[i].slice(at + SIZING_KEY_PREFIX.length)]))
+      .filter((key) => !UNREADABLE_COPY.test(key))
+      .map((key) => (key.includes(SIZING_KEY_PREFIX) ? key.slice(key.indexOf(SIZING_KEY_PREFIX) + SIZING_KEY_PREFIX.length) : ''))
       .filter((puzzle) => puzzle !== '' && store.getData(SIZING_KEY_PREFIX + puzzle) !== null)
     if (puzzles.length > 0) store.setData(SIZING_INDEX_KEY, [...new Set(puzzles)])
   }
