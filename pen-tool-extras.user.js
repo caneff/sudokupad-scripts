@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.64
+// @version      1.32.65
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.64'
+  const VERSION = '1.32.65'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'pen-tool-extras'
   const SCRIPT_NAME = 'Pen Tool Extras'
@@ -145,6 +145,24 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - HELD_REPEAT_MS) / HELD_RAMP_MS))
   }
   const heldSliderSteps = (heldMs) => heldRamp(heldMs, 1, HELD_SLIDER_MAX_STEPS)
+  // One held + or - key. A fresh press takes the hold over (a release the page never saw would otherwise hold on for ever), and only the held key's release ends it.
+  // `onTick(hold)` runs every tick with the live hold, `{ code, direction, start }`; the hold is the physical key's, so releasing Shift before = turns a held + into =.
+  function sliderKeyHold (onTick) {
+    let hold = null
+    const stop = () => {
+      clearInterval(hold?.timer)
+      hold = null
+    }
+    return {
+      get current () { return hold },
+      stop,
+      press (code, direction) {
+        stop()
+        hold = { code, direction, start: Date.now(), timer: setInterval(() => onTick(hold), HELD_TICK_MS) }
+      },
+      release (code) { if (hold?.code === code) stop() }
+    }
+  }
   /* eslint-enable no-unused-vars */
   // </lib:slider-keys>
 
@@ -3155,29 +3173,21 @@
     // The + of Shift+= arrives with Shift already held, which has switched the tool to Corner until Shift is released; `prevTool` is the pen tool then.
     const penToolKeyed = (shifted) => Framework.app.tool === 'pen' || (shifted && Framework.app.tool === 'corner' && Framework.app.prevTool === 'pen')
     const thicknessKeysLive = (shifted) => penToolKeyed(shifted) && inForce.show.thickness && !document.querySelector('.dialog')
-    let thicknessHold = null
-    const stopThicknessHold = () => {
-      clearInterval(thicknessHold?.timer)
-      thicknessHold = null
-    }
-    // The hold is the physical key's: releasing Shift before = turns a held + into =.
-    const repeatThickness = () => steps.penPanel.run(() => {
-      // The key of a + may still be held with Shift, which has switched the tool to Corner.
-      if (!thicknessKeysLive(true)) return stopThicknessHold()
-      const next = heldThicknessStep(thicknessHold.direction, Date.now() - thicknessHold.start, inForce.thickness)
+    // The key of a + may still be held with Shift, which has switched the tool to Corner.
+    const thicknessHold = sliderKeyHold((hold) => steps.penPanel.run(() => {
+      if (!thicknessKeysLive(true)) return thicknessHold.stop()
+      const next = heldThicknessStep(hold.direction, Date.now() - hold.start, inForce.thickness)
       if (next !== inForce.thickness) saveSettings({ ...inForce, thickness: next })
-    })
+    }))
     window.addEventListener('keydown', (event) => steps.penPanel.run(() => {
       if (!thicknessKeysLive(event.shiftKey)) return
       const next = thicknessKeyStep(event, inForce.thickness)
       if (next === null) return
-      // A release the page never saw would hold on for ever, so every fresh press (a repeat gets no step above) takes the hold over.
-      stopThicknessHold()
       saveSettings({ ...inForce, thickness: next })
-      if (!thicknessHold) thicknessHold = { code: event.code, direction: thicknessKeyDirection(event), start: Date.now(), timer: setInterval(repeatThickness, HELD_TICK_MS) }
+      thicknessHold.press(event.code, thicknessKeyDirection(event))
     }))
-    window.addEventListener('keyup', (event) => steps.penPanel.run(() => { if (thicknessHold?.code === event.code) stopThicknessHold() }))
-    window.addEventListener('blur', () => steps.penPanel.run(stopThicknessHold))
+    window.addEventListener('keyup', (event) => steps.penPanel.run(() => thicknessHold.release(event.code)))
+    window.addEventListener('blur', () => steps.penPanel.run(thicknessHold.stop))
     // SudokuPad cancels the touch events on its panel buttons, which keeps the browser from sending the click after a tap, so a tap acts at `touchstart`. The click a
     // browser may still send after that tap must not act a second time.
     let tappedAt = -Infinity
