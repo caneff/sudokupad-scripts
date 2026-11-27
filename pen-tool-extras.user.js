@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.32.65
+// @version      1.32.66
 // @author       ChinStrap
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks at cell centers, on cell edges and at grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://chinstrap45.github.io/sudokupad-scripts/pen-tool-extras.html
@@ -24,7 +24,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.32.65'
+  const VERSION = '1.32.66'
   // The script's id, which its notices, error log and palette warnings carry. sync-lib.js reads it from this line as written.
   const SCRIPT_ID = 'pen-tool-extras'
   const SCRIPT_NAME = 'Pen Tool Extras'
@@ -145,8 +145,8 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - HELD_REPEAT_MS) / HELD_RAMP_MS))
   }
   const heldSliderSteps = (heldMs) => heldRamp(heldMs, 1, HELD_SLIDER_MAX_STEPS)
-  // One held + or - key. A fresh press takes the hold over (a release the page never saw would otherwise hold on for ever), and only the held key's release ends it.
-  // `onTick(hold)` runs every tick with the live hold, `{ code, direction, start }`; the hold is the physical key's, so releasing Shift before = turns a held + into =.
+  // One held + or - key. Callers pass only fresh presses (a repeat would restart the ramp), and a fresh press takes the hold over, since a release the page never saw would otherwise hold on for ever.
+  // Only the held key's release ends it. The hold is the physical key's, so releasing Shift before = turns a held + into =.
   function sliderKeyHold (onTick) {
     let hold = null
     const stop = () => {
@@ -154,7 +154,6 @@
       hold = null
     }
     return {
-      get current () { return hold },
       stop,
       press (code, direction) {
         stop()
@@ -3173,8 +3172,8 @@
     // The + of Shift+= arrives with Shift already held, which has switched the tool to Corner until Shift is released; `prevTool` is the pen tool then.
     const penToolKeyed = (shifted) => Framework.app.tool === 'pen' || (shifted && Framework.app.tool === 'corner' && Framework.app.prevTool === 'pen')
     const thicknessKeysLive = (shifted) => penToolKeyed(shifted) && inForce.show.thickness && !document.querySelector('.dialog')
-    // The key of a + may still be held with Shift, which has switched the tool to Corner.
     const thicknessHold = sliderKeyHold((hold) => steps.penPanel.run(() => {
+      // The key of a + may still be held with Shift, which has switched the tool to Corner.
       if (!thicknessKeysLive(true)) return thicknessHold.stop()
       const next = heldThicknessStep(hold.direction, Date.now() - hold.start, inForce.thickness)
       if (next !== inForce.thickness) saveSettings({ ...inForce, thickness: next })
