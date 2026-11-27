@@ -268,8 +268,8 @@ test('readLimits: a saved limit that cannot be read is no limit, and is kept und
   assert.equal(store.data[`${MAX_WIDTH_KEY}_unreadable`], 'wide')
 })
 
-test('one reader per key: a saved limit loads exactly when the same value pastes', () => {
-  for (const value of [700, 1, '500', 'wide', 0, -5, 640.5, true, [700], { px: 700 }]) {
+test('a saved limit loads exactly when the same value pastes (a whole number below the floor differs on purpose, below)', () => {
+  for (const value of [700, '500', 'wide', 640.5, true, [700], { px: 700 }]) {
     const loaded = quietly(() => readLimits(fakeStore({ [MAX_WIDTH_KEY]: value }))).result.maxWidth
     const pasted = readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: value })).values[MAX_WIDTH_KEY]
     assert.deepEqual(loaded, pasted ?? null, JSON.stringify(value))
@@ -306,19 +306,27 @@ test('the floors are the drag floors', () => {
   assert.deepEqual(LIMIT_FLOORS, { maxWidth: 240, maxHeight: 112 })
 })
 
-test('readLimits and a paste read a limit below its floor as the floor, silently and with no copy kept aside', () => {
+test('readLimits reads a saved limit below its floor as the floor, silently and with no copy kept aside', () => {
   const key = { maxHeight: MAX_HEIGHT_KEY, maxWidth: MAX_WIDTH_KEY }
   for (const name of ['maxWidth', 'maxHeight']) {
     for (const value of [100, LIMIT_FLOORS[name] - 1, LIMIT_FLOORS[name]]) {
       // Saved in its envelope, as an older version with a lower floor saved it.
       const store = fakeStore({ [key[name]]: { v: 0, data: value } })
       const { result, warnings } = quietly(() => readLimits(store))
-      const pasted = readPaste(JSON.stringify({ [key[name]]: value })).values[key[name]]
       assert.equal(result[name], LIMIT_FLOORS[name], `${name} ${value}`)
       assert.deepEqual(warnings, [], `${name} ${value}`)
       assert.equal(`${key[name]}_unreadable` in store.data, false, `${name} ${value}`)
-      assert.equal(pasted, LIMIT_FLOORS[name], `${name} ${value}`)
     }
+  }
+})
+
+test('a paste skips and counts a limit below its floor, as the dialog refuses a typed one; the floor itself is kept', () => {
+  const key = { maxHeight: MAX_HEIGHT_KEY, maxWidth: MAX_WIDTH_KEY }
+  for (const name of ['maxWidth', 'maxHeight']) {
+    for (const value of [100, 0, -3, LIMIT_FLOORS[name] - 1]) {
+      assert.deepEqual(readPaste(JSON.stringify({ [key[name]]: value })), { values: {}, skipped: 1 }, `${name} ${value}`)
+    }
+    assert.deepEqual(readPaste(JSON.stringify({ [key[name]]: LIMIT_FLOORS[name] })), { values: { [key[name]]: LIMIT_FLOORS[name] }, skipped: 0 }, name)
   }
 })
 
@@ -750,10 +758,10 @@ test('copiedSettings: both limits in force, null for no limit', () => {
   assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [MAX_HEIGHT_KEY]: 500 }))), { [MAX_WIDTH_KEY]: null, [MAX_HEIGHT_KEY]: 500 })
 })
 
-test('pastedSettings: a whole number of pixels or null is kept (one below its floor as the floor), anything else is skipped and counted, other keys are ignored', () => {
+test('pastedSettings: a whole number of pixels at or above its floor, or null, is kept; anything else is skipped and counted, other keys are ignored', () => {
   assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null, DarkPage_color: '#ffffff' })), { values: { [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null }, skipped: 0 })
   assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: 700.4, [MAX_HEIGHT_KEY]: 'tall' })), { values: {}, skipped: 2 })
-  assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: true, [MAX_HEIGHT_KEY]: -3 })), { values: { [MAX_HEIGHT_KEY]: LIMIT_FLOORS.maxHeight }, skipped: 1 })
+  assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: true, [MAX_HEIGHT_KEY]: -3 })), { values: {}, skipped: 2 })
 })
 
 test('the script has no pointerover or pointerout listener', () => {
